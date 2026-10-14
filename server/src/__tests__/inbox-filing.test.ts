@@ -128,6 +128,21 @@ describe('POST /v1/inbox/{id}/file-as-expense', () => {
     expect(await s.expenses(s.p.id)).toHaveLength(0);
   });
 
+  it('answers 422 CATEGORY_NOT_FOUND and keeps the entry when a type change deletes the category mid-filing (MUT-182 R17)', async () => {
+    const s = await setup();
+    // The race made deterministic: the route's check still finds the category, the write's foreign key does not.
+    const ghost = '00000000-0000-4000-8000-0000000000c5';
+    const getById = s.h.store.expenseCategories.getById;
+    s.h.store.expenseCategories.getById = async (organizationId, id) =>
+      id === ghost ? { id: ghost, organizationId, name: 'Gone', color: null, archivedAt: null, version: 1, createdAt: new Date(), updatedAt: new Date() } : getById(organizationId, id);
+    const entry = await s.capture(EXPENSE_ENTRY);
+    const filed = await s.fileExpense(entry.id, { categoryId: ghost });
+    expect(filed.status).toBe(422);
+    expect((await read(filed)).error.details).toMatchObject({ reason: 'CATEGORY_NOT_FOUND', field: 'categoryId' });
+    expect((await s.listInbox()).map((e) => e.id)).toContain(entry.id);
+    expect(await s.expenses(s.p.id)).toHaveLength(0);
+  });
+
   it('validates links and categories exactly as POST /v1/expenses does', async () => {
     const s = await setup();
     const ghost = '00000000-0000-4000-8000-000000000000';

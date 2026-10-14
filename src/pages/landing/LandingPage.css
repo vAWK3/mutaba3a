@@ -292,6 +292,11 @@ html:has(.landing-header) {
   color: var(--text);
 }
 
+/* Start-aligned section heading, for pages that read like a document (/hosted, MUT-186) */
+.landing-section-headline--start {
+  text-align: start;
+}
+
 :lang(ar) .landing-section-headline {
   font-family: var(--font-heading-ar);
   letter-spacing: 0;

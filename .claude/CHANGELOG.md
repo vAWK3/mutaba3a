@@ -28,18 +28,18 @@
 
 ---
 
-## [Unreleased] - 2026-10-14 — Edit and delete a logged currency conversion (MUT-194, API 1.22.0-mut194)
+## [Unreleased] - 2026-10-14 — Edit and delete a logged currency conversion (MUT-194, API 1.23.0-mut194)
 
 **Why:** ADR-070 §2 made hosted conversions create + read only, so a mistyped rate or the wrong currency could only be "fixed" with a reversing entry and a corrected one. Malafat's `GET /v1/audit` also listed `conversion.created`. ADR-075 supersedes ADR-070 §2. Brief: `.claude/designs/mut-194-conversion-edit-delete.md`; tests: `-tests.md`.
 
 ### Added
 - **Server:** `PATCH /v1/conversions/{conversionId}` (If-Match on `version`; 409 `VERSION_MISMATCH` with `currentVersion`; a currency only with its amount, 422 `AMOUNT_REQUIRED`; amounts parsed in the merged currency; `SAME_CURRENCY` on the merged pair; `occurredOn` checked against today only when sent) and `DELETE /v1/conversions/{conversionId}` (soft; 204, 204 again, 404 unknown). Session and device-session only; audited `conversion.updated` / `conversion.deleted`. `Conversion` responses carry `version` and `updatedAt`.
-- **Data:** `Conversion.version`, `updatedAt`, `deletedAt`; migration `20261014120000_mut194_conversion_versions` backfills version 1 and `updatedAt = createdAt`, then drops the temporary default. `ConversionRepository.update` / `softDelete` in both stores; get, list and `anchor` hide deleted rows; the store guard classifies both as conversions writes.
+- **Data:** `Conversion.version`, `updatedAt`, `deletedAt`; migration `20261014180000_mut194_conversion_versions` backfills version 1 and `updatedAt = createdAt`, then drops the temporary default. `ConversionRepository.update` / `softDelete` in both stores; get, list and `anchor` hide deleted rows; the store guard classifies both as conversions writes.
 - **Portal:** a conversion row click, or Enter/Space on its row button, opens `?conversion=<id>`. `ConversionDrawer` edit mode prefills both legs, the date and the notes, PATCHes both legs at the loaded version, and on 409 refetches and refills the form while the conflict toast shows and the drawer stays open (D6). Delete confirms naming both legs (new en/ar `hosted.conversions.drawer.deleteConfirm`, D7); deleting the anchored conversion drops the anchor. New en/ar `hosted.conversions.drawer.editTitle`.
 - **Portal:** `HostedTable` rows with `onRowClick` get a `row-link` button in the first cell (D8, eng D11), which also makes the expense list keyboard-reachable.
 
 ### Changed
-- `API_VERSION` 1.21.0-mut91 → 1.22.0-mut194; `server/openapi/openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+- `API_VERSION` 1.22.0-mut182 → 1.23.0-mut194 (MUT-182 took 1.22.0 on main first); `server/openapi/openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
 - The hosted conversion form takes JOD with per-leg, currency-aware decimals; the portal's currency filters offer JOD (closes TD-117).
 
 ### Fixed
@@ -48,6 +48,68 @@
 ### Technical
 - Tests: `store-contract-conversions.ts` (memory + Postgres), `migration-mut194.test.ts`, `conversions/__tests__/compose.test.ts` (`conversionPatch`), `routes-conversions.test.ts`, `route-security.test.ts`, `conversions-invisible.test.ts` (new), `HostedTable.test.tsx` (new), `ConversionDrawer.test.tsx`, `conversionFormSchema.test.ts`, `ConversionsList.test.tsx`, `filters.test.ts`. The "has no row click" list test is intentionally replaced.
 - Stale "create + read only" comments fixed in `schema.prisma`, `ports.ts`, `store-guard.ts`, `writability.ts`, `schemas.ts`, `routes/conversions.ts`, `api/client.ts`, `conversionQueries.ts`, `ConversionDrawer.tsx`, `ConversionsList.tsx`, `filters.ts`.
+
+---
+
+## [Unreleased] - 2026-10-14 — MUT-182: people create and manage their own hosted profiles (API 1.22.0-mut182)
+
+**Why:** a hosted user got exactly one personal profile (MUT-120); any other profile needed an operator. A freelancer with a second business had nowhere to record it. Epic MUT-181; brief and eng review `.claude/designs/mut-182-profile-management-api.md`; ADR-037 and ADR-066 amended.
+
+### Added
+- `POST /v1/profiles` — a signed-in person (cookie or device session) creates a **standalone** profile they own: name, type (PERSONAL | BUSINESS), default currency, IANA timezone. Identity-keyed idempotency, audited as the person. Up to 6 owned profiles, the personal one counted (409 `PROFILE_LIMIT`).
+- `PATCH /v1/profiles/{profileId}` — one If-Match write for name, default currency and type. A type change replaces the profile's expense categories with the new type's preset (user's language) and leaves categorized expenses uncategorized; the response reports the counts. The built-in personal profile can be renamed but not retyped (409 `DEFAULT_PERSONAL_PROFILE`). Member-not-owner → 403 `READ_ONLY_PROFILE` / `NOT_OWNER`; non-member → 404.
+- `GET /v1/profiles/{profileId}/type-change?to=` — previews those counts.
+- `GET /v1/me`: `owned`, `type`, `version` per profile and `limits { ownedProfiles, maxOwnedProfiles }`; order firms → created → personal.
+
+### Changed
+- **Standalone guarantee:** every profile a person owns is refused an API key, refused by API-key authentication (so never bound to Malafat), never granted to or provisioned into another user and never revoked from its owner — one helper, `ownedProfileConflict` (`PERSONAL_PROFILE` on the built-in profile, `OWNED_PROFILE` on a created one).
+- The expense preset keys on the profile type (ADR-066 amendment); seeding and a type change hold the organization row, so they never mix presets.
+- Portal: `incomeAffordancesFor` and `ReadOnlyNotice` key on `owned`, so Add income and Record payment work on a created business profile exactly as on the personal one.
+- An expense create/update/filing whose category was deleted by a concurrent type change answers 422 `CATEGORY_NOT_FOUND`, not 500.
+
+### Technical
+- Migration `20261014120000_mut182_owned_profiles`: `ProfileType` enum; `organizations.ownerUserId` (indexed FK, not unique), `profileType`, `version`; backfill of every MUT-120 profile as owned + PERSONAL; two CHECKs. `post-roll` creates personal profiles owned + PERSONAL and copies settings only from operator firms.
+- Store: `organizations.createOwned` (cap counted under a user-row lock), `countOwnedBy`, `updateOwned` (single versioned transaction, D4), `typeChangeImpact`; all `sessionOnly` in the store guard. Memory store mirrors the expense-category FK; Prisma P2003 names its constraint.
+- `hostedProfileFor` (serializers.ts) is the one builder for `/v1/me`, POST and PATCH. Matrix `identity` row covers `/v1/profiles*`.
+- Older migration tests (MUT-59/61/100) write organizations/users as raw rows (`fixtures/raw-rows.ts`): today's client selects columns their schemas lack.
+- **Tests:** `store-contract-profiles.ts` (memory + Postgres incl. two races), `migration-mut182.test.ts`, `routes-profiles.test.ts`, `routes-owned-profiles-standalone.test.ts`, R17 in `routes-expenses.test.ts`, `post-roll.test.ts`, `presets.test.ts`, route-security inventory, portal `incomeAffordances`/`views`.
+
+### Fixed in qa-reconcile (2026-10-14, owner answers D1–D7)
+- **Old-revision personal profiles (D1).** The CHECKs pass an unstamped personal profile (SQL NULL), which the old revision writes during the roll window or after a rollback. One helper, `profileOwnerOf`/`profileTypeOf` (`personal-profile.ts`), now answers "whose profile, what type" everywhere (key issue, key auth, grant/revoke/provision, `/v1/me`, cap count, PATCH, first category seed); the owner's first PATCH stamps it and post-roll's new `repairPersonalOwnership` stamps the rest. The CHECK spells the tolerance out. DEPLOYMENT.md: "Roll back past MUT-182" and "Delete a user who owns profiles" rows.
+- **Locks (D2, D5).** `FOR NO KEY UPDATE` on the user and organization rows, so foreign-key inserts are never blocked. Category create/rename take the organization lock; a type change locks the categorised expense rows, then the categories (the expense writers' own order, so no deadlock), and a category update no longer crashes when a type change deleted its row.
+- **Audit in the transaction (D3, D4).** `createOwned`/`updateOwned` write their audit rows inside their transactions (a failed audit can no longer leave a profile for a retry to duplicate), in distinct milliseconds; `organization.type_changed` now lists the removed categories and each expense's lost category (TD-133: unbounded, accepted).
+- **Contract.** `ProfileType`/`ProfileTypeChange` components are non-null again; the 403 NOT_OWNER doc wins; the preview refuses what PATCH refuses; `/admin` organizations show `ownerUserId`/`profileType`; `expenses_categoryId_idx` for the delete cascade; `/v1/me` sorts on rank only (D7).
+- **Tests:** unstamped-profile guards, `/me`, seed and post-roll repair; audit rows in both stores; D2 refusal leaves categories/expenses/audit intact; inbox filing race (R17); C11 category-create race and C12 expense-move race (Postgres); `/me` order. C12 does not reproduce the old deadlock deterministically, so the lock-order fix rests on its reasoning.
+
+---
+
+## [Unreleased] - 2026-10-14 — /hosted: the case for a hosted account, and a request form (MUT-186)
+
+**Why:** free users had no way to learn that a paid hosted tier exists or to ask for it (epic MUT-185, "one front door, not one bundle"). Brief, eng review (D1–D5), design review (1A–9A) and the approved wireframe: `.claude/designs/mut-186-hosted-offer-page.md`, `mut-186-hosted-offer-wireframe.html`.
+
+### Added
+- `/hosted` on the web build (`HostedOfferPage`, mounted in `src/main.tsx` like `/privacy`): a hero that names the trade, beside the same client balance on a laptop and a phone (`HostedDevicesMock`); a free-vs-hosted comparison table that stacks per row on phones; the migration promise ("we'll move them… by hand") in the inverted privacy band; the request form.
+- `HostedRequestForm`: name and email required, everything else optional; inline errors with focus on the first; a disabled "Sending…" button; on failure an alert beside "Try again" with the answers kept; on success the visitor's own name and email, the 2-working-day reply promise, "edit and send again" and a link back to the free app; a privacy notice under the button; 44px device pills; a hidden honeypot; the page language sent as a hidden field.
+- `hostedRequest.ts`: the form's contract with Netlify Forms (name, fields, honeypot, POST to `/__forms.html`, 15 s timeout).
+- `vite.config.ts` (web only): `netlifyForms()` emits the hidden static twin `__forms.html` (noindex, out of the SW precache); `hostedOfferDevRoute()` serves the app shell for `/hosted` in dev, where Vite's HTML fallback would otherwise serve the portal's `hosted.html`.
+- `download-config.ts`: `HOSTED_OFFER_URL` and `MOBILE_APP_LINKS` (availability flags; `/hosted` never links a store, 9A).
+- Privacy policy: a section on what the request form collects, that Netlify receives and emails it, and what it is for.
+
+### Technical
+- **Tests:** `hostedRequest.test.ts` (20), `HostedOfferPage.test.tsx` (27, under `LandingProviders`), `hostedOfferKeys.test.ts` (EN/AR parity and placeholders), `PrivacyPolicyPage.test.tsx` (+1), `vite-config.test.ts` (+7; the web snapshot gains two plugin names). QA: `@web.landing.hosted` (axe light and dark, every form state) and `@web.landing.hosted-375` (Arabic at 375).
+- **Found in the browser, fixed:** the dev `/hosted`→`hosted.html` collision; the failure alert off-screen above the form (moved beside the button); two phone rules out-ranked by two-class base selectors; an in-text link told apart by colour alone (axe `link-in-text-block`).
+- **Manual, before the first deploy:** Netlify form detection and the `hosted-request` email notification (INFRA §1).
+- **/qa-reconcile fixes (2026-10-14):**
+  - **Spam-trap field.** The honeypot is now Netlify's `bot-field`, hidden with `hidden`. Off-screen `company-website` could be autofilled, silently dropping real requests.
+  - **Request id.** A hidden `request-id` is shared by retries and "edit and send again", so duplicates can be matched.
+  - **Length limits.** name 200, email 254, phone 40, message 4000, both as `maxLength` and in validation.
+  - **Language.** It's read once, at send time.
+  - **Trailing slash.** `/hosted/`, `/privacy/` and `/download/` open their pages (`marketingPath`).
+  - **Link preview.** `/hosted` gets its own card: `hosted-offer.html`, served by a `netlify.toml` rewrite.
+  - **Privacy policy.** It names Netlify and Akismet, the IP and browser details, and 12-month retention. Scope and Network now treat the website form as the explicit exception.
+  - **Design.** Success-panel link colour after a visit, hover and keyboard-only focus rings, laptop mock row alignment, and the hero stacks at ≤900px.
+  - **Operator steps.** INFRA §1 adds the Spam tab, a usage alert and deletion steps. Spam protection with Turnstile is ticketed as MUT-197.
+- **Files:** `src/main.tsx`, `vite.config.ts`, `src/content/download-config.ts`, `src/pages/landing/{HostedOfferPage.tsx,HostedOfferPage.css,hostedRequest.ts,PrivacyPolicyPage.tsx}`, `src/pages/landing/components/{HostedRequestForm.tsx,mocks/HostedDevicesMock.tsx,mocks/index.ts}`, `en.json`, `ar.json`, tests above, `qa/specs/web/landing.spec.ts`.
 
 ---
 

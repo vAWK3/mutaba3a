@@ -23,6 +23,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// MUT-182: an owned profile's kind. Only selects the expense-category preset;
+/// BUSINESS is not a firm, a Malafat tenant or a shared organization.
+enum ProfileType {
+  PERSONAL
+  BUSINESS
+}
+
 /// Which deployment issued a key. A "test" key is rejected by a "live"
 /// deployment and vice versa (see config.API_KEY_ENVIRONMENT).
 enum ApiKeyEnvironment {
@@ -148,20 +155,30 @@ enum SupplementDistribution {
 }
 
 model Organization {
-  id                  String   @id @default(uuid()) @db.Uuid
+  id                  String       @id @default(uuid()) @db.Uuid
   name                String
-  slug                String   @unique
+  slug                String       @unique
   /// ISO 4217. Default for new projects; each project still carries its own.
-  defaultCurrency     String   @db.VarChar(3)
+  defaultCurrency     String       @db.VarChar(3)
   /// IANA zone used by the recurring-charge scheduler (plan §5.4).
   timezone            String
   /// MUT-120: set on a user's one personal organization (created with the
   /// user), null on every firm. Unique, so a user has at most one; such an
   /// organization is never bound to Malafat, issued an API key or shared.
-  personalOwnerUserId String?  @unique @db.Uuid
-  personalOwner       User?    @relation("PersonalProfile", fields: [personalOwnerUserId], references: [id], onDelete: Restrict)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  personalOwnerUserId String?      @unique @db.Uuid
+  personalOwner       User?        @relation("PersonalProfile", fields: [personalOwnerUserId], references: [id], onDelete: Restrict)
+  /// MUT-182: the user who owns and controls this profile — one they created
+  /// with POST /v1/profiles, or their MUT-120 personal one. Null on every
+  /// operator-provisioned firm. Not unique: up to MAX_OWNED_PROFILES per user.
+  /// An owned profile is standalone: never keyed, bound to Malafat or shared.
+  ownerUserId         String?      @db.Uuid
+  owner               User?        @relation("OwnedProfiles", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  /// MUT-182: set exactly when ownerUserId is (CHECK); picks the expense preset.
+  profileType         ProfileType?
+  /// MUT-182: If-Match for PATCH /v1/profiles/{id}.
+  version             Int          @default(1)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   apiKeys            ApiKey[]
   integrations       Integration[]
@@ -184,6 +201,7 @@ model Organization {
   expenseReceipts   ExpenseReceipt[]
   conversions       Conversion[]
 
+  @@index([ownerUserId])
   @@map("organizations")
 }
 
@@ -239,15 +257,17 @@ model User {
   memberships     Membership[]
   sessions        Session[]
   /// MUT-120: the organization created with this user as their personal profile.
-  personalProfile Organization? @relation("PersonalProfile")
+  personalProfile Organization?  @relation("PersonalProfile")
+  /// MUT-182: every profile this user owns, the personal one included.
+  ownedProfiles   Organization[] @relation("OwnedProfiles")
 
-  expenses        Expense[]
-  expenseReceipts ExpenseReceipt[]
-  conversions     Conversion[]
+  expenses            Expense[]
+  expenseReceipts     ExpenseReceipt[]
+  conversions         Conversion[]
   /// MUT-65: income captured by this person.
-  payments        Payment[]
+  payments            Payment[]
   /// MUT-66: this person's unsorted captures, owned by them and by no profile.
-  inboxEntries    InboxEntry[]
+  inboxEntries        InboxEntry[]
   /// MUT-131: this person's idempotency claims for organization-independent writes.
   userIdempotencyKeys UserIdempotencyKey[]
 
@@ -863,32 +883,32 @@ enum FeeProposalStatus {
 /// project, serialised by the project row lock in the repository. Amounts are
 /// minor units in the project currency; dates are organization calendar dates.
 model FeeProposal {
-  id                  String            @id @default(uuid()) @db.Uuid
-  organizationId      String            @db.Uuid
-  organization        Organization      @relation(fields: [organizationId], references: [id])
-  projectId           String            @db.Uuid
-  customerId          String            @db.Uuid
-  currency            String            @db.VarChar(3)
-  status              FeeProposalStatus @default(PROPOSED)
-  pricingBasis        PricingBasis
-  proposedAmountMinor BigInt
-  proposedOn          String            @db.VarChar(10)
-  note                String?
-  clientApprovedOn    String?           @db.VarChar(10)
-  clientApprovalNote  String?
+  id                        String            @id @default(uuid()) @db.Uuid
+  organizationId            String            @db.Uuid
+  organization              Organization      @relation(fields: [organizationId], references: [id])
+  projectId                 String            @db.Uuid
+  customerId                String            @db.Uuid
+  currency                  String            @db.VarChar(3)
+  status                    FeeProposalStatus @default(PROPOSED)
+  pricingBasis              PricingBasis
+  proposedAmountMinor       BigInt
+  proposedOn                String            @db.VarChar(10)
+  note                      String?
+  clientApprovedOn          String?           @db.VarChar(10)
+  clientApprovalNote        String?
   /// Null while PROPOSED / WITHDRAWN; the final amount once APPROVED.
-  agreedAmountMinor   BigInt?
-  withdrawnAt         DateTime?
-  withdrawnReason     String?
+  agreedAmountMinor         BigInt?
+  withdrawnAt               DateTime?
+  withdrawnReason           String?
   /// The agreement the approval created (APPROVED).
-  agreementId         String?           @unique @db.Uuid
+  agreementId               String?           @unique @db.Uuid
   /// MUT-107: both set on a contingency proposal, both null on a FIXED one (CHECK in migration).
   commissionRateBasisPoints Int?
   upfrontTreatment          UpfrontTreatment?
-  requestId           String?
-  version             Int               @default(1)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @default(now())
+  requestId                 String?
+  version                   Int               @default(1)
+  createdAt                 DateTime          @default(now())
+  updatedAt                 DateTime          @default(now())
 
   @@index([organizationId, projectId])
   @@index([organizationId, customerId])
@@ -934,6 +954,8 @@ model Expense {
   @@index([organizationId, projectId, occurredOn])
   /// Whether a category is in use.
   @@index([organizationId, categoryId])
+  /// MUT-182: a type change deletes categories; ON DELETE SET NULL then probes expenses by categoryId alone.
+  @@index([categoryId])
   @@map("expenses")
 }
 

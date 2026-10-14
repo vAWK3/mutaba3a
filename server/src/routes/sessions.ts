@@ -4,12 +4,12 @@ import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { signIn, warmDummyHash } from '../auth/sign-in.js';
 import { clientIp, isSameOriginRequest, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
 import type { PasswordHasher } from '../auth/users.js';
-import { sessionAccessFor, WRITABILITY_MATRIX } from '../auth/writability.js';
-import { incomeCaptureRulesFor } from '../income/compose.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore, UserRecord } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema, MeSchema, SignInRequestSchema } from '../schemas.js';
+import { hostedProfileFor } from '../serializers.js';
+import { MAX_OWNED_PROFILES } from './profiles.js';
 
 /**
  * Sign-in, sign-out and the signed-in person (MUT-38, hosted-portal.md §4, §6).
@@ -125,25 +125,16 @@ export async function buildMe(store: LedgerStore, user: UserRecord) {
     const organization = await store.organizations.getById(membership.organizationId);
     if (!organization) continue;
     const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
-    const writerOfRecord = malafat?.status === 'CONNECTED' ? ('MALAFAT' as const) : null;
-    // MUT-65: per-organization, not a constant — three rows' access depend on whether a Malafat writer of record feeds this profile (not on isPersonalDefault).
-    const access = Object.fromEntries(WRITABILITY_MATRIX.map((row) => [row.domain, sessionAccessFor(row.domain, writerOfRecord)]));
-    profiles.push({
-      id: organization.id,
-      name: organization.name,
-      source: 'hosted' as const,
-      defaultCurrency: organization.defaultCurrency as 'ILS' | 'USD' | 'EUR',
-      timezone: organization.timezone,
-      writerOfRecord,
-      access,
-      // MUT-61: the same rules POST /v1/income enforces, so the app reads them instead of inferring them.
-      income: incomeCaptureRulesFor(writerOfRecord),
-      // MUT-120: explicit, from the row already loaded; another user's personal profile is never this user's default.
-      isPersonalDefault: organization.personalOwnerUserId === user.id,
-    });
+    profiles.push(hostedProfileFor(organization, malafat?.status === 'CONNECTED' ? 'MALAFAT' : null, user.id));
   }
   // MUT-120: the personal membership is created in the same instant as the firm's, so membership order alone ties on a
-  // random id. Firms keep membership order and the caller's personal profile goes last (stable sort); the portal opens profiles[0].
-  profiles.sort((a, b) => Number(a.isPersonalDefault) - Number(b.isPersonalDefault));
-  return { user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale }, profiles };
+  // random id. A stable sort on rank keeps membership order (oldest first) inside each group: firms, then the profiles
+  // the caller created (MUT-182), then the caller's personal profile last. The portal opens profiles[0].
+  const rank = (p: { isPersonalDefault: boolean; owned: boolean }) => (p.isPersonalDefault ? 2 : p.owned ? 1 : 0);
+  profiles.sort((a, b) => rank(a) - rank(b));
+  return {
+    user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale },
+    profiles,
+    limits: { ownedProfiles: await store.organizations.countOwnedBy(user.id), maxOwnedProfiles: MAX_OWNED_PROFILES },
+  };
 }

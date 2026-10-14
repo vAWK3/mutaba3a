@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MUT-186 /hosted wireframe (proposal)</title>
+<style>
+/* Fonts and tokens copied from src/styles/brand/ (Brand v2, MUT-102). Wireframe only. */
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Regular.otf");font-weight:400}
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Medium.otf");font-weight:500}
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Bold.otf");font-weight:700}
+@font-face{font-family:"Thmanyah Serif Display";src:url("../../src/assets/fonts/thmanyah-serif-display-bold.otf");font-weight:700}
+:root{
+  --canvas:#FCF6ED;--surface:#FFFCF7;--line:#E6E2ED;--field:#F4F2FB;--ink:#392F4B;--ink2:#564E68;
+  --primary:#795DBA;--primary-hover:#5E439E;--lavender:#E0D7FF;--lavender-ink:#4D387E;
+  --mint:#BAEBD4;--mint-ink:#00513E;--rose:#FFCED5;--rose-ink:#742B35;
+  --display:"Thmanyah Serif Display",serif;--body:"Thmanyah Sans",sans-serif;--num:"IBM Plex Mono","Thmanyah Sans",monospace;
+  --shadow-card:0 1px 2px rgba(80,60,110,.06),0 12px 40px rgba(80,60,110,.07);
+}
+[data-theme=dark]{
+  --canvas:#221B2D;--surface:#2E273C;--line:#4B435A;--field:#3B334C;--ink:#F4EEE4;--ink2:#BAB3C8;
+  --primary:#BCA9F7;--primary-hover:#C8B7FF;--lavender:#453A64;--lavender-ink:#DBCEFF;
+  --mint:#134E39;--mint-ink:#A5E9CA;--rose:#62313A;--rose-ink:#FFC2CB;--shadow-card:0 1px 2px rgba(0,0,0,.4),0 12px 40px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#8883;font-family:var(--body);color:var(--ink)}
+::selection{background:var(--lavender);color:var(--lavender-ink)}
+/* Review toolbar (not part of the design) */
+.wf-bar{position:sticky;top:0;z-index:10;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;background:#1d1d1f;color:#fff;font:13px system-ui}
+.wf-bar button{font:inherit;border:1px solid #555;background:#2c2c2e;color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer}
+.wf-bar button[aria-pressed=true]{background:#fff;color:#000}
+.wf-bar .note{opacity:.7;margin-inline-start:auto}
+.frame{margin:0 auto;background:var(--canvas);transition:max-width .2s}
+.frame.phone{max-width:390px;outline:1px solid #0003}
+.tag{display:inline-block;font:11px/1 system-ui;background:#ff0;color:#000;padding:3px 6px;border-radius:4px;margin:0 0 6px;direction:ltr}
+
+/* Page */
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+header.site{position:sticky;top:41px;z-index:5;background:color-mix(in oklab,var(--canvas) 85%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+header.site .wrap{display:flex;justify-content:space-between;align-items:center;padding-block:12px}
+.brand{font-family:var(--display);font-weight:700;font-size:20px;color:var(--ink);text-decoration:none;display:flex;gap:8px;align-items:center}
+.dot{width:22px;height:22px;border-radius:50%;background:var(--primary)}
+.lang{font-size:14px;color:var(--ink2)}
+section{padding:112px 0}
+h1,h2{font-family:var(--display);font-weight:700;color:var(--ink);margin:0}
+:lang(ar) h1,:lang(ar) h2{line-height:1.35;letter-spacing:0}
+/* Hero: text start-aligned, two-screen anchor beside it */
+.hero{padding-top:88px}
+.hero .wrap{display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center}
+.hero h1{font-size:clamp(40px,5vw,56px);line-height:1.08;letter-spacing:-.02em}
+.hero p.sub{font-size:20px;line-height:1.55;color:var(--ink2);margin:20px 0 32px;max-width:34ch}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 24px;border-radius:999px;background:var(--primary-hover);color:var(--canvas);font:500 16px var(--body);text-decoration:none;border:0;cursor:pointer}
+[data-theme=dark] .btn{color:#221B2D}
+.btn:focus-visible{outline:3px solid var(--primary);outline-offset:3px}
+.btn[disabled]{opacity:.6;cursor:progress}
+.hero .noprice{display:block;margin-top:14px;font-size:14px;color:var(--ink2)}
+/* Anchor: the same client balance on a laptop and a phone */
+.anchor{position:relative;height:340px}
+.laptop{position:absolute;inset-inline-start:0;top:0;width:72%;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-card);overflow:hidden}
+.laptop .chrome{height:28px;border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;padding-inline:12px}
+.laptop .chrome i{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.screen{padding:20px}
+.who{font:500 13px var(--body);color:var(--ink2)}
+.cname{font-family:var(--display);font-weight:700;font-size:22px;margin:4px 0 14px}
+.owed-label{font-size:13px;color:var(--ink2)}
+.owed{font:500 34px var(--num);font-variant-numeric:tabular-nums;color:var(--ink);direction:ltr;unicode-bidi:isolate}
+.rows{margin-top:14px;border-top:1px solid var(--line)}
+.rows div{display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px solid var(--line);color:var(--ink2)}
+.rows b{font:500 13px var(--num);color:var(--ink);direction:ltr;unicode-bidi:isolate}
+.phone-dev{position:absolute;inset-inline-end:0;bottom:0;width:150px;height:290px;background:var(--surface);border:1px solid var(--line);border-radius:30px;box-shadow:var(--shadow-card);padding:34px 14px 14px}
+.phone-dev .owed{font-size:24px}
+.phone-dev .cname{font-size:17px}
+.sync-note{position:absolute;inset-inline-start:0;bottom:6px;font-size:13px;color:var(--ink2);max-width:52%}
+/* Comparison: a table, not cards */
+.compare h2{font-size:clamp(32px,3.5vw,40px);text-align:start;margin-bottom:8px}
+.compare .lead{color:var(--ink2);font-size:18px;margin:0 0 40px;max-width:52ch}
+table.cmp{width:100%;border-collapse:collapse;font-size:16px}
+.cmp th,.cmp td{text-align:start;padding:16px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.cmp thead th{font:500 14px var(--body);color:var(--ink2);border-bottom:2px solid var(--ink)}
+.cmp thead th.h{color:var(--lavender-ink);background:var(--lavender);border-radius:12px 12px 0 0}
+.cmp tbody th{font-weight:500;color:var(--ink);width:26%}
+.cmp td{color:var(--ink2)}
+.cmp td.h{color:var(--ink);background:color-mix(in oklab,var(--lavender) 35%,transparent)}
+.cmp .none{color:var(--ink2);opacity:.7}
+.soon{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--field);color:var(--ink2);margin-inline-start:6px}
+/* Migration band: reuses landing-privacy-band (inverted) */
+.band{background:var(--ink);color:var(--canvas);text-align:center}
+.band h2{color:var(--canvas);font-size:clamp(32px,4vw,40px);max-width:24ch;margin:0 auto 20px}
+.band p{font-size:20px;line-height:1.6;max-width:52ch;margin:0 auto;opacity:.85}
+/* Form */
+.req .wrap{max-width:560px}
+.req h2{font-size:clamp(32px,3.5vw,40px)}
+.req .lead{color:var(--ink2);font-size:18px;margin:8px 0 32px}
+.field{margin-bottom:20px}
+.field label,.field legend{display:block;font:500 15px var(--body);margin-bottom:6px;color:var(--ink)}
+.field .opt{font-weight:400;color:var(--ink2)}
+.field input[type=text],.field input[type=email],.field input[type=tel],.field select,.field textarea{width:100%;min-height:48px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--field);color:var(--ink);font:16px var(--body)}
+.field textarea{min-height:110px;resize:vertical}
+.field input:focus-visible,.field select:focus-visible,.field textarea:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--primary)}
+.field [aria-invalid=true]{border-color:var(--rose-ink);box-shadow:inset 0 0 0 1px var(--rose-ink)}
+.ferr{color:var(--rose-ink);font-size:14px;margin-top:6px}
+fieldset{border:0;padding:0;margin:0 0 20px}
+.checks{display:flex;flex-wrap:wrap;gap:10px}
+.checks label{display:inline-flex;gap:8px;align-items:center;min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font:400 15px var(--body);cursor:pointer}
+.checks input{accent-color:var(--primary-hover);width:18px;height:18px}
+.ltr{direction:ltr;text-align:start}
+:lang(ar) .ltr{text-align:right}
+.alert{background:var(--rose);color:var(--rose-ink);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:15px}
+.notice{font-size:14px;color:var(--ink2);margin-top:14px}
+.notice a,.link{color:var(--primary-hover);text-underline-offset:3px}
+.notice a:visited{color:var(--lavender-ink)}
+.success{background:var(--mint);color:var(--mint-ink);border-radius:24px;padding:32px}
+.success h3{font-family:var(--display);font-size:28px;margin:0 0 8px;color:var(--mint-ink)}
+.success p{margin:0 0 16px;font-size:17px;line-height:1.6}
+.success a{color:var(--mint-ink);font-weight:500}
+footer.site{border-top:1px solid var(--line);padding:24px 0;font-size:14px;color:var(--ink2)}
+/* Phone layout (≤640): applied by the toolbar's Phone toggle and by the real media query */
+@media (max-width:640px){.hero .wrap{grid-template-columns:1fr}}
+.phone .wrap{padding:0 16px}
+.phone section{padding:64px 0}
+.phone .hero{padding-top:40px}
+.phone .hero .wrap{grid-template-columns:1fr;gap:32px}
+.phone .hero h1{font-size:40px}
+.phone .hero p.sub{font-size:18px}
+.phone .btn.full{width:100%}
+.phone .anchor{height:auto}
+.phone .laptop{display:none}
+.phone .phone-dev{position:relative;inset:auto;margin:0 auto}
+.phone .sync-note{display:none}
+.phone table.cmp thead{display:none}
+.phone table.cmp,.phone .cmp tbody,.phone .cmp tr{display:block;width:100%}
+.phone .cmp tr{padding:14px 0;border-bottom:1px solid var(--line)}
+.phone .cmp th,.phone .cmp td{display:block;border:0;padding:4px 0;width:auto;background:none}
+.phone .cmp td::before{content:attr(data-col);display:block;font-size:12px;color:var(--ink2);margin-bottom:2px}
+.phone .cmp td.h{color:var(--ink)}
+.phone .band p,.phone .band h2{text-align:start}
+.phone .band{text-align:start}
+</style>
+</head>
+<body>
+<div class="wf-bar" dir="ltr">
+  <strong>MUT-186 /hosted, APPROVED 2026-10-14 (1A–9A)</strong>
+  <button data-lang="en" aria-pressed="true">EN</button><button data-lang="ar" aria-pressed="false">AR</button>
+  <button data-th="light" aria-pressed="true">Light</button><button data-th="dark" aria-pressed="false">Dark</button>
+  <button data-w="desk" aria-pressed="true">Desktop</button><button data-w="phone" aria-pressed="false">Phone 390</button>
+  Form:
+  <button data-st="idle" aria-pressed="true">Idle</button><button data-st="invalid" aria-pressed="false">Invalid</button><button data-st="sending" aria-pressed="false">Sending</button><button data-st="error" aria-pressed="false">Error</button><button data-st="success" aria-pressed="false">Success</button>
+  <span class="note">Yellow tags = review decision numbers</span>
+</div>
+
+<div class="frame" id="frame">
+<header class="site"><div class="wrap">
+  <a class="brand" href="#"><span class="dot"></span><span data-t="brand"></span></a>
+  <span class="lang" data-t="langToggle"></span>
+</div></header>
+
+<main>
+<section class="hero"><div class="wrap">
+  <div>
+    <span class="tag">D? hero copy + no header CTA</span>
+    <h1 data-t="h1"></h1>
+    <p class="sub" data-t="sub"></p>
+    <a class="btn full" href="#request" data-t="cta"></a>
+    <span class="noprice" data-t="noprice"></span>
+  </div>
+  <div class="anchor" aria-hidden="true">
+    <span class="tag">D? visual anchor: same balance, two screens</span>
+    <div class="laptop"><div class="chrome"><i></i><i></i><i></i></div>
+      <div class="screen"><div class="who" data-t="client"></div><div class="cname" data-t="cname"></div>
+        <div class="owed-label" data-t="owedNow"></div><div class="owed">$1,850.00</div>
+        <div class="rows"><div><span data-t="r1"></span><b>$1,200.00</b></div><div><span data-t="r2"></span><b>$650.00</b></div></div>
+      </div></div>
+    <div class="phone-dev"><div class="who" data-t="client"></div><div class="cname" data-t="cname"></div><div class="owed-label" data-t="owedNow"></div><div class="owed">$1,850.00</div></div>
+    <p class="sync-note" data-t="sameNumbers"></p>
+  </div>
+</div></section>
+
+<section class="compare" style="background:var(--surface)"><div class="wrap">
+  <span class="tag">D? free vs hosted comparison (replaces a 5-card grid)</span>
+  <h2 data-t="cmpTitle"></h2>
+  <p class="lead" data-t="cmpLead"></p>
+  <table class="cmp">
+    <thead><tr><th></th><th data-t="colFree"></th><th class="h" data-t="colHosted"></th></tr></thead>
+    <tbody id="cmpBody"></tbody>
+  </table>
+</div></section>
+
+<section class="band"><div class="wrap">
+  <span class="tag">D? migration band voice</span>
+  <h2 data-t="bandTitle"></h2>
+  <p data-t="bandBody"></p>
+</div></section>
+
+<section class="req" id="request"><div class="wrap">
+  <span class="tag">D? form lead + reply expectation</span>
+  <h2 data-t="formTitle"></h2>
+  <p class="lead" data-t="formLead"></p>
+  <div id="formArea"></div>
+</div></section>
+</main>
+<footer class="site"><div class="wrap" data-t="footer"></div></footer>
+</div>
+
+<script>
+const T={
+ en:{brand:"Mutaba3a",langToggle:"English · العربية",h1:"Your records, on every device.",
+  sub:"The free app keeps everything on this one device. Hosted keeps it on our servers, behind your sign-in, so your phone and your laptop show the same numbers.",
+  cta:"Request an account",noprice:"No price list. Tell us what you need and we'll send you an offer.",
+  client:"Client",cname:"Rami Haddad",owedNow:"Owed now",r1:"Logo design · due 3 Nov",r2:"Brand guide · due 20 Nov",sameNumbers:"Logged on the phone, there on the laptop.",
+  cmpTitle:"Free or hosted",cmpLead:"Same app, same screens. What changes is where your records live.",colFree:"Free app",colHosted:"Hosted",
+  rows:[["Where your records live","In this browser or on this computer","On our servers, behind your sign-in"],
+        ["Devices","This one device","Every device you sign in on"],
+        ["Phone app","—","iPhone app for logging income and expenses in seconds|Android coming soon"],
+        ["If your laptop is lost","Your records go with it, unless you exported them","Sign in anywhere and they're there"],
+        ["Malafat","—","Connected to Malafat, for lawyers and accountants"],
+        ["Account","None","We set one up for you"],
+        ["Price","Free","An offer for what you need"]],
+  bandTitle:"Already using the free app? Your records come with you.",bandBody:"We'll move them into your hosted account with you, by hand. Nothing to type again.",
+  formTitle:"Request an account",formLead:"Tell us about your work. We'll reply by email within 2 working days with an offer.",
+  name:"Name",email:"Email",phone:"WhatsApp or phone",optional:"(optional)",prof:"What do you do?",profOpts:["Choose…","Freelancer","Lawyer","Accountant","Something else"],
+  devices:"Where do you want to use it?",devOpts:["iPhone","Android","Computer"],message:"Anything else we should know?",
+  send:"Send request",sending:"Sending…",retry:"Try again",
+  errName:"Enter your name.",errEmail:"Enter an email address like name@example.com.",
+  alert:"Couldn't send. Check your connection and try again. Your answers are still here.",
+  notice:"We use these details only to reply with an offer.",privacy:"Privacy policy",
+  okTitle:"Request sent.",okBody:"Thanks, Lina. We'll reply to lina@example.com within 2 working days with an offer.",okEdit:"Wrong email? Edit and send again",okLink:"Keep using the free app meanwhile",
+  footer:"© Mutaba3a · Privacy"},
+ ar:{brand:"متابعة",langToggle:"English · العربية",h1:"سجلّاتك، على كل أجهزتك.",
+  sub:"التطبيق المجاني يحفظ كل شيء على هذا الجهاز وحده. أما الحساب المستضاف فيحفظه على خوادمنا، خلف تسجيل دخولك، فيعرض هاتفك وحاسوبك الأرقام نفسها.",
+  cta:"اطلب حسابًا",noprice:"لا توجد قائمة أسعار. أخبرنا بما تحتاجه ونرسل لك عرضًا.",
+  client:"العميل",cname:"رامي حداد",owedNow:"المستحق الآن",r1:"تصميم شعار · يستحق 3 نوفمبر",r2:"دليل الهوية · يستحق 20 نوفمبر",sameNumbers:"تسجّله على الهاتف، فتجده على الحاسوب.",
+  cmpTitle:"مجاني أم مستضاف",cmpLead:"التطبيق نفسه والشاشات نفسها. الذي يتغيّر هو مكان حفظ سجلّاتك.",colFree:"التطبيق المجاني",colHosted:"المستضاف",
+  rows:[["أين تُحفَظ سجلّاتك","في هذا المتصفح أو على هذا الحاسوب","على خوادمنا، خلف تسجيل دخولك"],
+        ["الأجهزة","هذا الجهاز وحده","كل جهاز تسجّل الدخول منه"],
+        ["تطبيق الهاتف","—","تطبيق iPhone لتسجيل الدخل والمصاريف في ثوانٍ|Android قريبًا"],
+        ["إن ضاع حاسوبك","تضيع سجلّاتك معه، إلا إن كنت صدّرتها","سجّل الدخول من أي جهاز وستجدها"],
+        ["Malafat","—","متصل بـ Malafat، للمحامين والمحاسبين"],
+        ["الحساب","لا يوجد","ننشئه نحن لك"],
+        ["السعر","مجاني","عرض يناسب احتياجك"]],
+  bandTitle:"تستخدم التطبيق المجاني؟ سجلّاتك تنتقل معك.",bandBody:"ننقلها معك إلى حسابك المستضاف يدويًا. لا حاجة لإدخال أي شيء من جديد.",
+  formTitle:"اطلب حسابًا",formLead:"أخبرنا عن عملك، ونردّ عليك بالبريد الإلكتروني خلال يومَي عمل بعرض.",
+  name:"الاسم",email:"البريد الإلكتروني",phone:"واتساب أو هاتف",optional:"(اختياري)",prof:"ماذا تعمل؟",profOpts:["اختر…","مستقل","محامٍ","محاسب","غير ذلك"],
+  devices:"أين تريد استخدامه؟",devOpts:["iPhone","Android","حاسوب"],message:"هل من شيء آخر نحتاج معرفته؟",
+  send:"أرسل الطلب",sending:"جارٍ الإرسال…",retry:"حاول مجددًا",
+  errName:"اكتب اسمك.",errEmail:"اكتب بريدًا إلكترونيًا مثل name@example.com.",
+  alert:"تعذّر الإرسال. تحقّق من اتصالك وحاول مجددًا. إجاباتك ما زالت هنا.",
+  notice:"نستخدم هذه البيانات فقط للرد عليك بعرض.",privacy:"سياسة الخصوصية",
+  okTitle:"تم إرسال الطلب.",okBody:"شكرًا يا لينا. سنرد على lina@example.com خلال يومَي عمل بعرض.",okEdit:"البريد خاطئ؟ عدّل وأرسل مجددًا",okLink:"تابع استخدام التطبيق المجاني في الأثناء",
+  footer:"© متابعة · الخصوصية"}};
+let S={lang:"en",th:"light",w:"desk",st:"idle"};
+function render(){
+  const t=T[S.lang];document.documentElement.lang=S.lang;
+  const fr=document.getElementById("frame");fr.dir=S.lang==="ar"?"rtl":"ltr";fr.lang=S.lang;
+  document.documentElement.dataset.theme=S.th;fr.classList.toggle("phone",S.w==="phone");
+  document.querySelectorAll("[data-t]").forEach(e=>e.textContent=t[e.dataset.t]);
+  document.getElementById("cmpBody").innerHTML=t.rows.map(r=>{const[h,soon]=r[2].split("|");
+    return `<tr><th scope="row">${r[0]}</th><td data-col="${t.colFree}" class="${r[1]==="—"?"none":""}">${r[1]}</td><td class="h" data-col="${t.colHosted}">${h}${soon?` <span class="soon">${soon}</span>`:""}</td></tr>`}).join("");
+  const inv=S.st==="invalid",dis=S.st==="sending";
+  const fa=document.getElementById("formArea");
+  if(S.st==="success"){fa.innerHTML=`<div class="success" role="status"><h3>${t.okTitle}</h3><p>${t.okBody}</p><a href="#">${t.okEdit}</a><br><a href="#">${t.okLink} ${S.lang==="ar"?"←":"→"}</a></div>`;return}
+  fa.innerHTML=`${S.st==="error"?`<div class="alert" role="alert">${t.alert}</div>`:""}
+  <form novalidate>
+   <div class="field"><label for="n">${t.name}</label><input id="n" type="text" autocomplete="name" ${inv?'aria-invalid="true" aria-describedby="en"':'value="'+(S.st==="idle"?"":S.lang==="ar"?"لينا":"Lina")+'"'}>${inv?`<div class="ferr" id="en">${t.errName}</div>`:""}</div>
+   <div class="field"><label for="e">${t.email}</label><input id="e" class="ltr" type="email" dir="ltr" autocomplete="email" ${inv?'aria-invalid="true" aria-describedby="ee" value="lina@"':S.st==="idle"?"":'value="lina@example.com"'}>${inv?`<div class="ferr" id="ee">${t.errEmail}</div>`:""}</div>
+   <div class="field"><label for="p">${t.phone} <span class="opt">${t.optional}</span></label><input id="p" class="ltr" type="tel" dir="ltr" autocomplete="tel"></div>
+   <div class="field"><label for="w">${t.prof} <span class="opt">${t.optional}</span></label><select id="w">${t.profOpts.map(o=>`<option>${o}</option>`).join("")}</select></div>
+   <fieldset class="field"><legend>${t.devices} <span class="opt">${t.optional}</span></legend><div class="checks">${t.devOpts.map(o=>`<label><input type="checkbox">${o}</label>`).join("")}</div></fieldset>
+   <div class="field"><label for="m">${t.message} <span class="opt">${t.optional}</span></label><textarea id="m"></textarea></div>
+   <button class="btn full" type="button" ${dis?"disabled":""}>${dis?t.sending:S.st==="error"?t.retry:t.send}</button>
+   <p class="notice">${t.notice} <a href="#">${t.privacy}</a></p>
+  </form>`;
+}
+document.querySelector(".wf-bar").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  const k=Object.keys(b.dataset)[0],map={lang:"lang",th:"th",w:"w",st:"st"};S[map[k]]=b.dataset[k];
+  b.parentNode.querySelectorAll(`[data-${k}]`).forEach(x=>x.setAttribute("aria-pressed",x===b));render()});
+render();
+</script>
+</body>
+</html>

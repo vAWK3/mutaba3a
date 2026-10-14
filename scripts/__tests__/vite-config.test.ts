@@ -2,7 +2,24 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
 import { existsSync } from 'node:fs';
-import configFn, { PWA_INCLUDE_ASSETS, PWA_MANIFEST, PWA_WORKBOX, socialMetaTags } from '../../vite.config';
+import configFn, {
+  HOSTED_OFFER_FILE,
+  HOSTED_OFFER_PAGE,
+  HOSTED_OFFER_TITLE,
+  PWA_INCLUDE_ASSETS,
+  PWA_MANIFEST,
+  PWA_WORKBOX,
+  netlifyFormsHtml,
+  socialMetaTags,
+  withPageMeta,
+} from '../../vite.config';
+import { readFileSync } from 'node:fs';
+import {
+  HONEYPOT_FIELD,
+  HOSTED_REQUEST_FIELDS,
+  HOSTED_REQUEST_FORM_NAME,
+  NETLIFY_FORMS_PATH,
+} from '../../src/pages/landing/hostedRequest';
 import ar from '../../src/lib/i18n/translations/ar.json';
 import tokens from '../../src/styles/brand/mutaba3a.tokens.json';
 import { repoPath } from '../../src/test/css/brandCss';
@@ -138,7 +155,9 @@ describe('vite.config', () => {
               headlineLine2: '"quoted" & ampersand',
               subheadline: 'sub & "quoted" <b>bold</b>',
             },
+            hostedOffer: { hero: { title: 'h', sub: 's' }, meta: { title: 'm' } },
           },
+          common: { pageTitle: '{page}' },
         },
       }));
       try {
@@ -161,6 +180,142 @@ describe('vite.config', () => {
         vi.doUnmock('../../src/lib/i18n/translations/ar.json');
         vi.resetModules();
       }
+    });
+  });
+
+  describe('Netlify form twin (MUT-186)', () => {
+    const plugin = () => {
+      const found = (resolve('web').plugins ?? []).flat().find((p) => p && typeof p === 'object' && 'name' in p && p.name === 'mutaba3a:netlify-forms');
+      if (!found) throw new Error('netlify-forms plugin missing from the web build');
+      return found as { generateBundle: (this: { emitFile: (file: unknown) => void }) => void };
+    };
+    const html = () => netlifyFormsHtml();
+    const formTag = () => html().match(/<form\b[^>]*>/)?.[0] ?? '';
+    const formBody = () => html().match(/<form\b[^>]*>([\s\S]*?)<\/form>/)?.[1] ?? '';
+
+    it('declares the request form for Netlify, hidden, with its honeypot', () => {
+      expect(formTag()).toContain(`name="${HOSTED_REQUEST_FORM_NAME}"`);
+      expect(formTag()).toContain('data-netlify="true"');
+      expect(formTag()).toContain(`netlify-honeypot="${HONEYPOT_FIELD}"`);
+      expect(formTag()).toMatch(/\bhidden\b/);
+    });
+
+    it('names exactly the fields the page posts, so Netlify keeps every one', () => {
+      const names = [...formBody().matchAll(/\bname="([^"]+)"/g)].map((m) => m[1]);
+      expect(names).toEqual([...HOSTED_REQUEST_FIELDS]);
+    });
+
+    it('asks search engines not to index the bare form page (D2)', () => {
+      expect(html()).toContain('<meta name="robots" content="noindex">');
+    });
+
+    it('emits the twin as __forms.html, the path the page posts to', () => {
+      const emitFile = vi.fn();
+      plugin().generateBundle.call({ emitFile });
+      expect(emitFile).toHaveBeenCalledWith({ type: 'asset', fileName: NETLIFY_FORMS_PATH.slice(1), source: netlifyFormsHtml() });
+    });
+
+    it('runs in the web build only: desktop and the portal are not served by Netlify', () => {
+      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:netlify-forms');
+      expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:netlify-forms');
+    });
+
+    it('serves the app shell for /hosted in dev, not the portal entry hosted.html beside it', () => {
+      const found = (resolve('web').plugins ?? []).flat().find((p) => p && typeof p === 'object' && 'name' in p && p.name === 'mutaba3a:hosted-offer-dev-route');
+      if (!found) throw new Error('hosted-offer-dev-route plugin missing from the web build');
+      let handler: ((req: { url?: string }, res: unknown, next: () => void) => void) | undefined;
+      (found as { configureServer: (server: unknown) => void }).configureServer({ middlewares: { use: (fn: typeof handler) => (handler = fn) } });
+      const route = (url: string) => {
+        const req = { url };
+        handler!(req, {}, () => {});
+        return req.url;
+      };
+      expect(route('/hosted')).toBe('/index.html');
+      expect(route('/hosted?x=1')).toBe('/index.html?x=1');
+      expect(route('/hosted.html')).toBe('/hosted.html');
+      expect(route('/app/hosted')).toBe('/app/hosted');
+      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:hosted-offer-dev-route');
+      expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:hosted-offer-dev-route');
+    });
+
+    it('keeps the twin out of the service worker precache (D2)', () => {
+      expect(PWA_WORKBOX?.globIgnores).toContain(NETLIFY_FORMS_PATH.slice(1));
+    });
+  });
+
+  describe('/hosted link preview (MUT-186 review, F7)', () => {
+    const meta = (tags: ReturnType<typeof socialMetaTags>) =>
+      Object.fromEntries(tags.map(({ attrs }) => [String(attrs?.property ?? attrs?.name), String(attrs?.content)]));
+
+    it('builds the /hosted card from the Arabic /hosted hero, pointing at /hosted', () => {
+      const tags = meta(socialMetaTags('https://mutaba3a.app', HOSTED_OFFER_PAGE));
+      expect(tags['og:url']).toBe('https://mutaba3a.app/hosted');
+      expect(tags['og:title']).toBe(ar.landing.hostedOffer.hero.title);
+      expect(tags['og:description']).toBe(ar.landing.hostedOffer.hero.sub);
+      expect(tags['twitter:title']).toBe(tags['og:title']);
+      expect(tags['og:image']).toBe('https://mutaba3a.app/og-card-ar-1200x630.png');
+    });
+
+    it('keeps the home card as it was when no page is given', () => {
+      expect(meta(socialMetaTags('https://mutaba3a.app'))['og:url']).toBe('https://mutaba3a.app/');
+    });
+
+    const INDEX = [
+      '<!doctype html><html lang="en"><head><meta charset="UTF-8" /><title>متابعة</title>',
+      '<meta property="og:url" content="https://mutaba3a.app/">',
+      '<meta property="og:title" content="home">',
+      '<meta name="twitter:title" content="home">',
+      '<script type="module" src="/assets/index-abc.js"></script></head><body><div id="root"></div></body></html>',
+    ].join('\n');
+
+    it('swaps every link-preview tag and the title, and keeps the app\'s scripts', () => {
+      const html = withPageMeta(INDEX, socialMetaTags('https://mutaba3a.app', HOSTED_OFFER_PAGE), HOSTED_OFFER_TITLE, 'https://mutaba3a.app/hosted');
+      expect(html).not.toContain('content="home"');
+      expect(html).not.toContain('content="https://mutaba3a.app/"');
+      expect(html).toContain('<meta property="og:url" content="https://mutaba3a.app/hosted">');
+      expect(html).toContain(`<title>${HOSTED_OFFER_TITLE}</title>`);
+      expect(html).toContain('<link rel="canonical" href="https://mutaba3a.app/hosted">');
+      expect(html).toContain('<script type="module" src="/assets/index-abc.js"></script>');
+      expect(html.match(/property="og:title"/g)).toHaveLength(1);
+    });
+
+    it('escapes what it writes into attributes and the title', () => {
+      const html = withPageMeta(INDEX, [{ tag: 'meta', attrs: { property: 'og:title', content: '"<b>&' } }], 'a<b>&"', 'https://x.test/');
+      expect(html).toContain('content="&quot;&lt;b&gt;&amp;"');
+      expect(html).toContain('<title>a&lt;b&gt;&amp;&quot;</title>');
+    });
+
+    it('writes a $ in copy literally, never as a replacement pattern', () => {
+      const html = withPageMeta(INDEX, [{ tag: 'meta', attrs: { property: 'og:title', content: "$& $` $' $1" } }], 'from $&', 'https://x.test/');
+      expect(html).toContain("content=\"$&amp; $` $' $1\"");
+      expect(html).toContain('<title>from $&amp;</title>');
+      expect(html.match(/<\/head>/g)).toHaveLength(1);
+    });
+
+    it('describes the share image for what it shows (the home card), on every page', () => {
+      const alt = meta(socialMetaTags('https://mutaba3a.app', HOSTED_OFFER_PAGE))['og:image:alt'];
+      expect(alt).toBe(meta(socialMetaTags('https://mutaba3a.app'))['og:image:alt']);
+      expect(alt).toContain(ar.landing.hero.headlineLine1);
+    });
+
+    it('emits the page as hosted-offer.html beside index.html, in the web build only', () => {
+      const found = (resolve('web').plugins ?? []).flat().find((p) => p && typeof p === 'object' && 'name' in p && p.name === 'mutaba3a:hosted-offer-html');
+      if (!found) throw new Error('hosted-offer-html plugin missing from the web build');
+      const emitFile = vi.fn();
+      const bundle = { 'index.html': { type: 'asset', fileName: 'index.html', source: INDEX } };
+      (found as { generateBundle: (this: unknown, o: unknown, b: unknown) => void }).generateBundle.call({ emitFile }, {}, bundle);
+      expect(emitFile).toHaveBeenCalledWith(expect.objectContaining({ type: 'asset', fileName: HOSTED_OFFER_FILE }));
+      expect(String(emitFile.mock.calls[0][0].source)).toContain('content="https://mutaba3a.app/hosted"');
+      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:hosted-offer-html');
+      expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:hosted-offer-html');
+    });
+
+    it('is served at /hosted by Netlify, ahead of the SPA catch-all, and never precached', () => {
+      const toml = readFileSync(repoPath('netlify.toml'), 'utf8');
+      const hostedRule = toml.indexOf(`from = "/hosted"\n  to = "/${HOSTED_OFFER_FILE}"\n  status = 200`);
+      expect(hostedRule).toBeGreaterThan(-1);
+      expect(hostedRule).toBeLessThan(toml.indexOf('from = "/*"'));
+      expect(PWA_WORKBOX?.globIgnores).toContain(HOSTED_OFFER_FILE);
     });
   });
 

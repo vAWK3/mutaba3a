@@ -17,6 +17,7 @@ const SECTION_KEYS = [
   'mobileDeletion',
   'children',
   'changes',
+  'hostedRequest',
   'contact',
 ] as const;
 

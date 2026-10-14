@@ -44,6 +44,9 @@ import type {
   CreateApiKeyInput,
   CreateCustomerInput,
   CreateOrganizationInput,
+  CreateOwnedOrganizationInput,
+  ProfileTypeChange,
+  UpdateOwnedOrganizationPatch,
   CreateProjectInput,
   CreateUserInput,
   CreateSessionInput,
@@ -113,6 +116,7 @@ import type {
 } from './ports.js';
 import { CAPTURE_UNDO_REASON } from './ports.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
+import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 
@@ -164,14 +168,89 @@ export class MemoryLedgerStore implements LedgerStore {
       if (input.personalOwnerUserId && !this.people.has(input.personalOwnerUserId)) {
         throw new ForeignKeyViolation('organizations.personalOwnerUserId');
       }
-      const org: Organization = { id: randomUUID(), ...input, personalOwnerUserId: input.personalOwnerUserId ?? null, createdAt: new Date() };
+      const org: Organization = { id: randomUUID(), ...input, personalOwnerUserId: input.personalOwnerUserId ?? null, ownerUserId: null, profileType: null, version: 1, createdAt: new Date() };
       this.orgs.set(org.id, org);
       return { ...org };
     },
     getById: async (id) => clone(this.orgs.get(id)),
     getBySlug: async (slug) => clone([...this.orgs.values()].find((o) => o.slug === slug)),
     list: async () => [...this.orgs.values()].map((o) => ({ ...o })), // insertion order = creation order
+    createOwned: async (ownerUserId, input: CreateOwnedOrganizationInput, cap, audit) => {
+      if (!this.people.has(ownerUserId)) throw new ForeignKeyViolation('organizations.ownerUserId');
+      if ([...this.orgs.values()].some((o) => o.slug === input.slug)) throw new UniqueViolation('organizations.slug');
+      const count = this.ownedCount(ownerUserId);
+      if (count >= cap) return { kind: 'limit', count };
+      const { at, ...fields } = input;
+      const organization: Organization = { id: randomUUID(), ...fields, personalOwnerUserId: null, ownerUserId, version: 1, createdAt: at };
+      const membership: MembershipRecord = { userId: ownerUserId, organizationId: organization.id, createdAt: at };
+      this.orgs.set(organization.id, organization);
+      this.members.set(membershipKey(ownerUserId, organization.id), membership);
+      for (const event of ownedProfileCreatedAudit(organization, audit)) await this.audit.append(event);
+      return { kind: 'created', organization: { ...organization }, membership: { ...membership } };
+    },
+    countOwnedBy: async (userId) => this.ownedCount(userId),
+    updateOwned: async (id, ownerUserId, expectedVersion, patch: UpdateOwnedOrganizationPatch, preset, at, audit) => {
+      const org = this.orgs.get(id);
+      if (!org || profileOwnerOf(org) !== ownerUserId) return { kind: 'not_found' };
+      if (org.version !== expectedVersion) return { kind: 'stale', record: { ...org } };
+      // Postgres' organizations_personal_owned_check (eng review D2), checked before any write.
+      if (org.personalOwnerUserId && patch.profileType && patch.profileType !== 'PERSONAL') {
+        throw new StateConflict('organizations', 'the built-in personal profile is always PERSONAL');
+      }
+      const from = profileTypeOf(org);
+      const retype = patch.profileType !== undefined && patch.profileType !== from;
+      const typeChange = retype ? this.replaceCategories(id, preset ?? [], at) : null;
+      // qa-reconcile D1: a MUT-120 profile the old revision wrote without an owner gets stamped on its first update.
+      if (org.ownerUserId === null) Object.assign(org, { ownerUserId, profileType: from });
+      if (patch.name !== undefined) org.name = patch.name;
+      if (patch.defaultCurrency !== undefined) org.defaultCurrency = patch.defaultCurrency;
+      if (patch.profileType !== undefined) org.profileType = patch.profileType;
+      org.version += 1;
+      const events = ownedProfileUpdatedAudit(id, { from, to: org.profileType }, audit, typeChange && { ...typeChange, seeded: preset?.length ?? 0 });
+      for (const event of events) await this.audit.append(event);
+      return { kind: 'updated', record: { ...org }, typeChange: typeChange?.impact ?? null };
+    },
+    typeChangeImpact: async (id) => this.typeChangeImpactOf(id),
   };
+
+  private ownedCount(userId: string): number {
+    return [...this.orgs.values()].filter((o) => profileOwnerOf(o) === userId).length;
+  }
+
+  private typeChangeImpactOf(organizationId: string): ProfileTypeChange {
+    return {
+      uncategorizedExpenses: [...this.exps.values()].filter((e) => e.organizationId === organizationId && !e.deletedAt && e.categoryId !== null).length,
+      deletedCategories: [...this.expCats.values()].filter((c) => c.organizationId === organizationId).length,
+    };
+  }
+
+  /** MUT-182: a type change — every expense uncategorized (deleted ones too, so none points at a removed row), every category gone, `preset` in. */
+  private replaceCategories(organizationId: string, preset: readonly ExpenseCategoryInput[], at: Date): { impact: ProfileTypeChange; detail: TypeChangeDetail } {
+    const impact = this.typeChangeImpactOf(organizationId);
+    const detail: TypeChangeDetail = {
+      removedCategories: [...this.expCats.values()]
+        .filter((c) => c.organizationId === organizationId)
+        .sort(compareByCreatedAtThenId)
+        .map((c) => ({ id: c.id, name: c.name, color: c.color, archived: c.archivedAt !== null })),
+      uncategorized: [],
+    };
+    for (const e of this.exps.values()) {
+      if (e.organizationId !== organizationId || e.categoryId === null) continue;
+      detail.uncategorized.push({ expenseId: e.id, categoryId: e.categoryId });
+      Object.assign(e, { categoryId: null, version: e.version + 1, updatedAt: at });
+    }
+    for (const [key, c] of this.expCats) if (c.organizationId === organizationId) this.expCats.delete(key);
+    this.insertPreset(organizationId, preset, at);
+    return { impact, detail };
+  }
+
+  private insertPreset(organizationId: string, preset: readonly ExpenseCategoryInput[], at: Date): void {
+    // Same instant for the whole preset; the 1 ms steps keep creation order equal to preset order.
+    preset.forEach((p, i) => {
+      const record: ExpenseCategoryRecord = { id: randomUUID(), organizationId, name: p.name, color: p.color, archivedAt: null, version: 1, createdAt: new Date(at.getTime() + i), updatedAt: at };
+      this.expCats.set(record.id, record);
+    });
+  }
 
   readonly apiKeys: ApiKeyRepository = {
     create: async (input: CreateApiKeyInput) => {
@@ -235,7 +314,7 @@ export class MemoryLedgerStore implements LedgerStore {
         updatedAt: input.at,
       };
       // Every check above runs before the first write, so a refusal leaves nothing behind (the Prisma transaction's guarantee).
-      const personalOrganization: Organization = { id: randomUUID(), ...input.personal, personalOwnerUserId: user.id, createdAt: new Date() };
+      const personalOrganization: Organization = { id: randomUUID(), ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL', version: 1, createdAt: new Date() };
       const memberships: MembershipRecord[] = [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])].map((organizationId) => ({
         userId: user.id,
         organizationId,
@@ -1179,6 +1258,8 @@ export class MemoryLedgerStore implements LedgerStore {
   readonly expenses: ExpenseRepository = {
     create: async (input: CreateExpenseInput, at) => {
       if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('expenses.organizationId');
+      // The Postgres foreign key (MUT-182 R17: a type change can delete a category between a route's check and this insert).
+      if (input.categoryId !== null && !this.expCats.has(input.categoryId)) throw new ForeignKeyViolation('expenses_categoryId_fkey');
       const record: ExpenseRecord = { id: randomUUID(), ...input, version: 1, createdAt: at, updatedAt: at, deletedAt: null };
       this.exps.set(record.id, record);
       return { ...record };
@@ -1200,6 +1281,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const e = this.exps.get(id);
       if (!e || e.organizationId !== organizationId || e.deletedAt) return { kind: 'not_found' };
       if (e.version !== expectedVersion) return { kind: 'stale', record: { ...e } };
+      if (patch.categoryId && !this.expCats.has(patch.categoryId)) throw new ForeignKeyViolation('expenses_categoryId_fkey');
       Object.assign(e, definedOnly(patch));
       e.version += 1;
       e.updatedAt = at;
@@ -1273,11 +1355,7 @@ export class MemoryLedgerStore implements LedgerStore {
         .map((c) => ({ ...c })),
     seed: async (organizationId, preset, at) => {
       if ([...this.expCats.values()].some((c) => c.organizationId === organizationId)) return false;
-      // Same instant for the whole preset; the 1 ms steps keep creation order equal to preset order.
-      preset.forEach((p, i) => {
-        const record: ExpenseCategoryRecord = { id: randomUUID(), organizationId, name: p.name, color: p.color, archivedAt: null, version: 1, createdAt: new Date(at.getTime() + i), updatedAt: at };
-        this.expCats.set(record.id, record);
-      });
+      this.insertPreset(organizationId, preset, at);
       return true;
     },
     update: async (organizationId, id, expectedVersion, patch: UpdateExpenseCategoryPatch, at) => {

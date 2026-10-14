@@ -19,10 +19,12 @@ const url = process.env.MUTABA3A_TEST_DATABASE_URL;
 const SERVER = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const MIGRATIONS = join(SERVER, 'prisma/migrations');
 const PRISMA = join(SERVER, 'node_modules/.bin/prisma');
-const MUT194 = '20261014120000_mut194_conversion_versions';
+const MUT194 = '20261014180000_mut194_conversion_versions';
 
 const migrationDirs = () => readdirSync(MIGRATIONS, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
 const sqlOf = (dir: string) => readFileSync(join(MIGRATIONS, dir, 'migration.sql'), 'utf8');
+// One BEGIN/COMMIT per file, as `prisma migrate deploy` applies them, in a single `prisma db execute` (as migration-mut182.test.ts).
+const inTransactions = (dirs: string[]) => dirs.map((dir) => `BEGIN;\n${sqlOf(dir)}\n;\nCOMMIT;`).join('\n');
 
 function execute(dbUrl: string, sql: string): void {
   execFileSync(PRISMA, ['db', 'execute', '--stdin', '--url', dbUrl], { input: sql, cwd: SERVER, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -55,9 +57,8 @@ if (!url) {
       clients.push(db);
 
       const dirs = migrationDirs();
-      // One transaction per file, in one call: a later migration (MUT-100) uses an enum value an earlier one
-      // added, which Postgres refuses inside the same transaction, so the history can't run as one plain batch.
-      execute(dbUrl, dirs.slice(0, dirs.indexOf(MUT194)).map((dir) => `BEGIN;\n${sqlOf(dir)}\n;\nCOMMIT;`).join('\n'));
+      // Not one plain batch: a later migration (MUT-100) uses an enum value an earlier one added, which Postgres refuses in one transaction.
+      execute(dbUrl, inTransactions(dirs.slice(0, dirs.indexOf(MUT194))));
 
       // Tables this migration does not touch can be written by today's store; conversions take raw SQL,
       // since today's client already knows the new columns and the pre-migration table doesn't.
@@ -77,7 +78,7 @@ if (!url) {
       const older = await insert('2026-10-05T08:00:00.000Z');
       const newer = await insert('2026-10-13T16:30:00.123Z');
 
-      execute(dbUrl, `BEGIN;\n${sqlOf(MUT194)}\n;\nCOMMIT;`);
+      execute(dbUrl, inTransactions([MUT194]));
 
       const rows = await db.$queryRawUnsafe<Array<{ id: string; version: number; createdAt: Date; updatedAt: Date; deletedAt: Date | null }>>(
         `SELECT id::text, version, "createdAt", "updatedAt", "deletedAt" FROM conversions`,
@@ -90,7 +91,8 @@ if (!url) {
       expect(byId[newer]!.updatedAt.toISOString()).toBe('2026-10-13T16:30:00.123Z');
 
       // The rest of the history, one transaction per file as `prisma migrate deploy` applies it, ends at the schema.
-      for (const dir of dirs.slice(dirs.indexOf(MUT194) + 1)) execute(dbUrl, `BEGIN;\n${sqlOf(dir)}\n;\nCOMMIT;`);
+      const rest = dirs.slice(dirs.indexOf(MUT194) + 1);
+      if (rest.length > 0) execute(dbUrl, inTransactions(rest));
       execFileSync(PRISMA, ['migrate', 'diff', '--from-url', dbUrl, '--to-schema-datamodel', join(SERVER, 'prisma/schema.prisma'), '--exit-code'], { cwd: SERVER, stdio: 'pipe' });
     });
   });

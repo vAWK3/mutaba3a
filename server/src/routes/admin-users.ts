@@ -2,8 +2,8 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
 import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from '../auth/users.js';
-import { ApiError, personalProfileConflict } from '../errors.js';
-import { personalProfileFor } from '../personal-profile.js';
+import { ApiError, ownedProfileConflict } from '../errors.js';
+import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
 import { ForeignKeyViolation, UniqueViolation } from '../repositories/memory.js';
 import type { JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
@@ -109,7 +109,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       responses: {
         201: { description: 'Created', content: { 'application/json': { schema: CreateUserResponseSchema } } },
         404: { description: 'Unknown organization', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
-        409: { description: 'Email already in use, or organizationId is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        409: { description: 'Email already in use, or organizationId is a profile a person owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         422: { description: 'Validation failed', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
       },
@@ -119,7 +119,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       const email = normalizeEmail(body.email);
       const firm = body.organizationId ? await store.organizations.getById(body.organizationId) : null;
       if (body.organizationId && !firm) throw new ApiError('NOT_FOUND', 'Organization not found');
-      if (firm?.personalOwnerUserId) throw personalProfileConflict('A personal profile belongs to one user and cannot be anyone else’s organization');
+      if (firm && profileOwnerOf(firm)) throw ownedProfileConflict(firm, 'A profile a person owns belongs to them and cannot be anyone else’s organization');
       const settings = resolvePersonalSettings(body, firm);
       if (!settings) throw new ApiError('VALIDATION_FAILED', 'defaultCurrency and timezone are required when no organizationId is given');
       const initialPassword = generateOneTimePassword();
@@ -223,7 +223,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
         201: { description: 'Granted', content: { 'application/json': { schema: GrantMembershipResponseSchema } } },
         200: { description: 'Already granted', content: { 'application/json': { schema: GrantMembershipResponseSchema } } },
         404: notFound,
-        409: { description: 'The organization is another user’s personal profile (CONFLICT, details.reason PERSONAL_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        409: { description: 'The organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
       },
     }),
@@ -232,8 +232,9 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       const { organizationId } = c.req.valid('json');
       const org = await store.organizations.getById(organizationId);
       if (!org) throw new ApiError('NOT_FOUND', 'Organization not found');
-      if (org.personalOwnerUserId && org.personalOwnerUserId !== user.id) {
-        throw personalProfileConflict('A personal profile belongs to one user and cannot be granted to another');
+      const owner = profileOwnerOf(org);
+      if (owner && owner !== user.id) {
+        throw ownedProfileConflict(org, 'A profile a person owns belongs to them and cannot be granted to another');
       }
       const { membership, created } = await store.memberships.grant(user.id, organizationId, c.get('now')());
       if (created) await audit(c, [organizationId], user.id, 'membership.granted');
@@ -252,16 +253,17 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       responses: {
         200: { description: 'Removed, or there was nothing to remove', content: { 'application/json': { schema: RemoveMembershipResponseSchema } } },
         404: notFound,
-        409: { description: 'The organization is this user’s own personal profile (CONFLICT, details.reason PERSONAL_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        409: { description: 'The organization is a profile this user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
       },
     }),
     async (c) => {
       const { userId, organizationId } = c.req.valid('param');
       const user = await mustGetUser(userId);
-      // MUT-120: a user always keeps their own personal profile; it cannot be revoked away from them.
-      if ((await store.organizations.getById(organizationId))?.personalOwnerUserId === user.id) {
-        throw personalProfileConflict('A user keeps their own personal profile; it cannot be revoked');
+      // MUT-120/182: a user always keeps a profile they own; it cannot be revoked away from them.
+      const owned = await store.organizations.getById(organizationId);
+      if (owned && profileOwnerOf(owned) === user.id) {
+        throw ownedProfileConflict(owned, 'A user keeps the profiles they own; they cannot be revoked');
       }
       const removed = await store.memberships.revoke(user.id, organizationId);
       if (removed) await audit(c, [organizationId], user.id, 'membership.revoked');

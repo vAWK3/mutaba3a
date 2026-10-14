@@ -5,8 +5,12 @@ import { categoryNameKey } from '../expenses/names.js';
 import { ForeignKeyViolation, InsufficientCapacity, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
+import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import type {
   AttachmentFilter,
+  AuditEventInput,
+  ExpenseCategoryInput,
+  ProfileTypeChange,
   AttachmentRepository,
   AuditEventRecord,
   CreditRecord,
@@ -117,6 +121,49 @@ export class PrismaLedgerStore implements LedgerStore {
     getById: (id) => this.prisma.organization.findUnique({ where: { id } }),
     getBySlug: (slug) => this.prisma.organization.findUnique({ where: { slug } }),
     list: () => this.prisma.organization.findMany({ orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+    createOwned: (ownerUserId, input, cap, audit) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // MUT-182: the user's row is what two concurrent creates queue on, so the count below can never be raced past the cap.
+          // NO KEY UPDATE (qa-reconcile D2): it still queues two creates, but no longer blocks every insert that references the user.
+          await tx.$queryRaw`SELECT id FROM users WHERE id = ${ownerUserId}::uuid FOR NO KEY UPDATE`;
+          const count = await tx.organization.count({ where: ownedBy(ownerUserId) });
+          if (count >= cap) return { kind: 'limit' as const, count };
+          const { at, ...fields } = input;
+          const organization = await tx.organization.create({ data: { ...fields, ownerUserId, createdAt: at } });
+          const membership = toMembership(await tx.membership.create({ data: { userId: ownerUserId, organizationId: organization.id, createdAt: at } }));
+          // qa-reconcile D3: committed with the profile, so a failed audit can never leave a profile behind for a retry to duplicate.
+          await tx.auditEvent.createMany({ data: auditRows(ownedProfileCreatedAudit(organization, audit), at) });
+          return { kind: 'created' as const, organization, membership };
+        }),
+      ),
+    countOwnedBy: (userId) => this.prisma.organization.count({ where: ownedBy(userId) }),
+    updateOwned: (id, ownerUserId, expectedVersion, patch, preset, at, audit) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // MUT-182, in order (eng review D3/D4): hold the row, check owner and version, retype (uncategorize, delete,
+          // seed), set the fields, bump the version once, audit (qa-reconcile D3). organizations_personal_owned_check
+          // refuses a BUSINESS MUT-120 profile.
+          await lockOrganization(tx, id);
+          const current = await tx.organization.findFirst({ where: { id, ...ownedBy(ownerUserId) } });
+          if (!current) return { kind: 'not_found' as const };
+          if (current.version !== expectedVersion) return { kind: 'stale' as const, record: current };
+          const from = profileTypeOf(current);
+          const retype = patch.profileType !== undefined && patch.profileType !== from;
+          const typeChange = retype ? await replaceCategories(tx, id, preset ?? [], at) : null;
+          const data: Prisma.OrganizationUncheckedUpdateInput = { version: { increment: 1 } };
+          // qa-reconcile D1: a MUT-120 profile the old revision wrote without an owner gets stamped on its first update.
+          if (current.ownerUserId === null) Object.assign(data, { ownerUserId, profileType: from });
+          if (patch.name !== undefined) data.name = patch.name;
+          if (patch.defaultCurrency !== undefined) data.defaultCurrency = patch.defaultCurrency;
+          if (patch.profileType !== undefined) data.profileType = patch.profileType;
+          const record = await tx.organization.update({ where: { id }, data });
+          const events = ownedProfileUpdatedAudit(id, { from, to: record.profileType }, audit, typeChange && { ...typeChange, seeded: preset?.length ?? 0 });
+          await tx.auditEvent.createMany({ data: auditRows(events, at) });
+          return { kind: 'updated' as const, record, typeChange: typeChange?.impact ?? null };
+        }),
+      ),
+    typeChangeImpact: (id) => typeChangeImpactOf(this.prisma, id),
   };
 
   readonly apiKeys: ApiKeyRepository = {
@@ -150,7 +197,7 @@ export class PrismaLedgerStore implements LedgerStore {
               updatedAt: input.at,
             },
           });
-          const personalOrganization = await tx.organization.create({ data: { ...input.personal, personalOwnerUserId: user.id } });
+          const personalOrganization = await tx.organization.create({ data: { ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL' } });
           const memberships = [];
           for (const organizationId of [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])]) {
             memberships.push(toMembership(await tx.membership.create({ data: { userId: user.id, organizationId, createdAt: input.at } })));
@@ -1110,7 +1157,15 @@ export class PrismaLedgerStore implements LedgerStore {
 
   readonly expenseCategories: ExpenseCategoryRepository = {
     create: async (organizationId, input, at) =>
-      toExpenseCategory(await translate(() => this.prisma.expenseCategory.create({ data: { organizationId, name: input.name, nameKey: categoryNameKey(input.name), color: input.color, createdAt: at, updatedAt: at } }))),
+      toExpenseCategory(
+        await translate(() =>
+          this.prisma.$transaction(async (tx) => {
+            // qa-reconcile D5: waits out a type change, so a new category can't land between its delete and its reseed.
+            await lockOrganization(tx, organizationId);
+            return tx.expenseCategory.create({ data: { organizationId, name: input.name, nameKey: categoryNameKey(input.name), color: input.color, createdAt: at, updatedAt: at } });
+          }),
+        ),
+      ),
     getById: async (organizationId, id) => mapNullable(await this.prisma.expenseCategory.findFirst({ where: { id, organizationId } }), toExpenseCategory),
     list: async (organizationId, options) =>
       (
@@ -1121,28 +1176,34 @@ export class PrismaLedgerStore implements LedgerStore {
       ).map(toExpenseCategory),
     seed: (organizationId, preset, at) =>
       this.prisma.$transaction(async (tx) => {
+        // MUT-182 D3: a type change holds this row while it replaces the categories, so a seed of the old preset waits,
+        // then finds the new rows and does nothing — instead of slipping its own preset in beside them.
+        await lockOrganization(tx, organizationId);
         if ((await tx.expenseCategory.count({ where: { organizationId } })) > 0) return false;
         // A racing seed blocks on the unique index and then skips every row, so the preset lands once.
-        const { count } = await tx.expenseCategory.createMany({
-          data: preset.map((p, i) => ({ organizationId, name: p.name, nameKey: categoryNameKey(p.name), color: p.color, createdAt: new Date(at.getTime() + i), updatedAt: at })),
-          skipDuplicates: true,
-        });
+        const { count } = await tx.expenseCategory.createMany({ data: presetRows(organizationId, preset, at), skipDuplicates: true });
         return count > 0;
       }),
-    update: async (organizationId, id, expectedVersion, patch, at) => {
-      const current = await this.prisma.expenseCategory.findFirst({ where: { id, organizationId } });
-      if (!current) return { kind: 'not_found' };
-      const data: Prisma.ExpenseCategoryUpdateManyMutationInput = { version: { increment: 1 }, updatedAt: at };
-      if (patch.name !== undefined) {
-        data.name = patch.name;
-        data.nameKey = categoryNameKey(patch.name);
-      }
-      if (patch.color !== undefined) data.color = patch.color;
-      if (patch.archived !== undefined) data.archivedAt = patch.archived ? (current.archivedAt ?? at) : null;
-      const { count } = await translate(() => this.prisma.expenseCategory.updateMany({ where: { id, organizationId, version: expectedVersion }, data }));
-      const record = toExpenseCategory((await this.prisma.expenseCategory.findFirst({ where: { id, organizationId } }))!);
-      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
-    },
+    update: (organizationId, id, expectedVersion, patch, at) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx): Promise<UpdateResult<ExpenseCategoryRecord>> => {
+          // qa-reconcile D5: waits out a type change, which may delete this very row (categories are no longer only archived).
+          await lockOrganization(tx, organizationId);
+          const current = await tx.expenseCategory.findFirst({ where: { id, organizationId } });
+          if (!current) return { kind: 'not_found' };
+          const data: Prisma.ExpenseCategoryUpdateManyMutationInput = { version: { increment: 1 }, updatedAt: at };
+          if (patch.name !== undefined) {
+            data.name = patch.name;
+            data.nameKey = categoryNameKey(patch.name);
+          }
+          if (patch.color !== undefined) data.color = patch.color;
+          if (patch.archived !== undefined) data.archivedAt = patch.archived ? (current.archivedAt ?? at) : null;
+          const { count } = await tx.expenseCategory.updateMany({ where: { id, organizationId, version: expectedVersion }, data });
+          const record = await tx.expenseCategory.findFirst({ where: { id, organizationId } });
+          if (!record) return { kind: 'not_found' };
+          return count === 1 ? { kind: 'updated', record: toExpenseCategory(record) } : { kind: 'stale', record: toExpenseCategory(record) };
+        }),
+      ),
   };
 
   readonly expenseReceipts: ExpenseReceiptRepository = {
@@ -1216,6 +1277,73 @@ export class PrismaLedgerStore implements LedgerStore {
           throw err;
         }
       }
+    },
+  };
+}
+
+/**
+ * Takes the organization's row lock for the rest of the transaction (MUT-182 D3). NO KEY UPDATE (qa-reconcile D2):
+ * it queues the writers that must not interleave (seed, type change, category create/rename) on each other, but not
+ * the many inserts whose foreign key only needs the row to exist (expenses, audit rows, idempotency keys).
+ */
+async function lockOrganization(tx: Tx, organizationId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${organizationId}::uuid FOR NO KEY UPDATE`;
+}
+
+/** A profile `userId` owns, an unstamped MUT-120 one included (qa-reconcile D1; `profileOwnerOf` in SQL). */
+function ownedBy(userId: string): Prisma.OrganizationWhereInput {
+  return { OR: [{ ownerUserId: userId }, { ownerUserId: null, personalOwnerUserId: userId }] };
+}
+
+/**
+ * Audit rows written together in one createMany. Each gets its own millisecond, in order: `audit.list` sorts on
+ * (createdAt, random id), so equal timestamps would list them in any order — unlike the memory store (re-review).
+ */
+function auditRows(events: AuditEventInput[], at: Date): Prisma.AuditEventCreateManyInput[] {
+  return events.map((event, i) => ({
+    ...event,
+    metadata: event.metadata === undefined ? Prisma.JsonNull : (event.metadata as Prisma.InputJsonValue),
+    createdAt: new Date(at.getTime() + i),
+  }));
+}
+
+/** Same instant for the whole preset; the 1 ms steps keep creation order equal to preset order. */
+function presetRows(organizationId: string, preset: readonly ExpenseCategoryInput[], at: Date) {
+  return preset.map((p, i) => ({ organizationId, name: p.name, nameKey: categoryNameKey(p.name), color: p.color, createdAt: new Date(at.getTime() + i), updatedAt: at }));
+}
+
+async function typeChangeImpactOf(db: Tx | PrismaClient, organizationId: string): Promise<ProfileTypeChange> {
+  const [uncategorizedExpenses, deletedCategories] = await Promise.all([
+    db.expense.count({ where: { organizationId, deletedAt: null, categoryId: { not: null } } }),
+    db.expenseCategory.count({ where: { organizationId } }),
+  ]);
+  return { uncategorizedExpenses, deletedCategories };
+}
+
+/**
+ * MUT-182: a type change replaces the profile's categories. Every expense
+ * loses its category first — deleted ones too, so none points at a removed
+ * row — and bumps its version, then every category goes and `preset` comes in.
+ */
+async function replaceCategories(tx: Tx, organizationId: string, preset: readonly ExpenseCategoryInput[], at: Date): Promise<{ impact: ProfileTypeChange; detail: TypeChangeDetail }> {
+  // qa-reconcile D5, in the order every expense writer locks: the categorised expense rows first, then the categories.
+  // An expense PATCH locks its own row and then (foreign key) the category it names, so taking categories first would
+  // deadlock against one moving an expense between two categories (re-review). Holding the categories, an expense write
+  // naming one waits and then fails cleanly at 422, instead of committing between our clear and our delete and losing
+  // its category to ON DELETE SET NULL without a version bump. Both reads are also the D4 record of what is removed.
+  const pairs = await tx.$queryRaw<Array<{ id: string; categoryId: string }>>`
+    SELECT id::text, "categoryId"::text FROM expenses WHERE "organizationId" = ${organizationId}::uuid AND "categoryId" IS NOT NULL ORDER BY id FOR NO KEY UPDATE`;
+  const categories = await tx.$queryRaw<Array<{ id: string; name: string; color: string | null; archivedAt: Date | null }>>`
+    SELECT id::text, name, color, "archivedAt" FROM expense_categories WHERE "organizationId" = ${organizationId}::uuid ORDER BY "createdAt", id FOR UPDATE`;
+  const impact = await typeChangeImpactOf(tx, organizationId);
+  await tx.expense.updateMany({ where: { organizationId, categoryId: { not: null } }, data: { categoryId: null, version: { increment: 1 }, updatedAt: at } });
+  await tx.expenseCategory.deleteMany({ where: { organizationId } });
+  await tx.expenseCategory.createMany({ data: presetRows(organizationId, preset, at) });
+  return {
+    impact,
+    detail: {
+      removedCategories: categories.map((c) => ({ id: c.id, name: c.name, color: c.color, archived: c.archivedAt !== null })),
+      uncategorized: pairs.map((e) => ({ expenseId: e.id, categoryId: e.categoryId })),
     },
   };
 }
@@ -1543,7 +1671,8 @@ async function translate<T>(op: () => Promise<T>): Promise<T> {
     return await op();
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError) {
-      const target = Array.isArray(err.meta?.target) ? (err.meta.target as string[]).join('_') : String(err.meta?.target ?? '');
+      // P2002 names its columns in `target`; P2003 names its constraint in `constraint` (e.g. "expenses_categoryId_fkey").
+      const target = Array.isArray(err.meta?.target) ? (err.meta.target as string[]).join('_') : String(err.meta?.target ?? err.meta?.constraint ?? '');
       if (err.code === 'P2002') throw new UniqueViolation(target);
       if (err.code === 'P2003') throw new ForeignKeyViolation(target);
     }

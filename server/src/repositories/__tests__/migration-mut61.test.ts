@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { PrismaLedgerStore } from '../prisma.js';
+import { insertFirmRow, insertUserWithPersonalRow } from './fixtures/raw-rows.js';
 
 /**
  * MUT-61: payments gain `origin` and `captureSource`. Every payment a person
@@ -62,9 +63,10 @@ if (!url) {
       // Tables this migration does not touch can be written by today's store.
       const store = PrismaLedgerStore.connect(dbUrl);
       const at = new Date('2026-10-12T08:00:00Z');
-      const org = await store.organizations.create({ name: 'Firm', slug: `firm-${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+      // Organizations and users go in as raw rows: today's client selects columns this older schema lacks (MUT-182).
+      const org = await insertFirmRow(db);
       const customer = await store.customers.create({ organizationId: org.id, name: 'Haddad', email: null, phone: null, notes: null }, at);
-      const { user } = await store.users.create({ email: `n-${randomUUID().slice(0, 8)}@firm.ps`, displayName: 'Nour', passwordHash: 'x', locale: 'en', organizationId: org.id, personal: { name: 'Personal', slug: `personal-${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at });
+      const user = { id: (await insertUserWithPersonalRow(db, [org.id])).userId };
       await store.disconnect();
 
       const insert = async (number: string, createdByUserId: string | null) => {

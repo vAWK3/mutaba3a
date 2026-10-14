@@ -62,7 +62,7 @@ audit route only excludes `EXPENSE_ENTITY_TYPES`.
 `SESSION_ONLY_ENTITY_TYPES = [...EXPENSE_ENTITY_TYPES, 'conversion']`, passed by `routes/audit.ts`.
 
 ### Contract
-OpenAPI + `src/hosted/api/schema.d.ts` regenerated; `API_VERSION` `1.21.0-mut91` → `1.22.0-mut194`.
+OpenAPI + `src/hosted/api/schema.d.ts` regenerated; `API_VERSION` `1.22.0-mut182` (MUT-182, merged first) → `1.23.0-mut194`.
 
 ## Hosted portal
 

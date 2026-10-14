@@ -1,4 +1,7 @@
 import { maskApiKey } from './auth/api-key.js';
+import { sessionAccessFor, WRITABILITY_MATRIX, type ProfileWriter } from './auth/writability.js';
+import { incomeCaptureRulesFor } from './income/compose.js';
+import { profileOwnerOf, profileTypeOf } from './personal-profile.js';
 import type { IsoDate } from './dates.js';
 import { formatMoney, type Currency } from './money.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
@@ -44,7 +47,37 @@ export function serializeOrganization(o: Organization) {
     defaultCurrency: o.defaultCurrency as 'ILS' | 'USD' | 'EUR',
     timezone: o.timezone,
     personalOwnerUserId: o.personalOwnerUserId,
+    ownerUserId: o.ownerUserId,
+    profileType: o.profileType,
     createdAt: o.createdAt.toISOString(),
+  };
+}
+
+/**
+ * One hosted profile as GET /v1/me lists it, and as POST and PATCH
+ * /v1/profiles return it (MUT-182, eng review D1: one builder, so the three
+ * can never drift). `writerOfRecord` is MALAFAT when a CONNECTED Malafat
+ * integration feeds the organization; an owned profile never has one.
+ */
+export function hostedProfileFor(organization: Organization, writerOfRecord: ProfileWriter, userId: string) {
+  return {
+    id: organization.id,
+    name: organization.name,
+    source: 'hosted' as const,
+    defaultCurrency: organization.defaultCurrency as 'ILS' | 'USD' | 'EUR',
+    timezone: organization.timezone,
+    writerOfRecord,
+    // MUT-65: per-organization, not a constant — three rows' access depend on whether a Malafat writer of record feeds this profile (not on isPersonalDefault).
+    access: Object.fromEntries(WRITABILITY_MATRIX.map((row) => [row.domain, sessionAccessFor(row.domain, writerOfRecord)])),
+    // MUT-61: the same rules POST /v1/income enforces, so the app reads them instead of inferring them.
+    income: incomeCaptureRulesFor(writerOfRecord),
+    // MUT-120: explicit, from the row already loaded; another user's personal profile is never this user's default.
+    isPersonalDefault: organization.personalOwnerUserId === userId,
+    // MUT-182: the caller's own (theirs to rename and retype), its type, and the If-Match for doing so.
+    // profileOwnerOf / profileTypeOf: an unstamped MUT-120 profile the old revision wrote is still the caller's, PERSONAL (qa-reconcile D1).
+    owned: profileOwnerOf(organization) === userId,
+    type: profileTypeOf(organization),
+    version: organization.version,
   };
 }
 

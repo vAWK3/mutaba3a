@@ -1,4 +1,4 @@
-import type { ExpenseCategoryInput } from '../repositories/ports.js';
+import type { ExpenseCategoryInput, ProfileType } from '../repositories/ports.js';
 import type { ProfileWriter } from '../auth/writability.js';
 
 /**
@@ -10,7 +10,8 @@ import type { ProfileWriter } from '../auth/writability.js';
  *
  * A hosted profile's first category list seeds one of them in the signed-in
  * user's language: law-firm where Malafat is the writer of record, personal on
- * a person's own profile (MUT-120), general on any other firm.
+ * a PERSONAL profile (MUT-120's, or one a person created as personal, MUT-182),
+ * general on a BUSINESS one or any other firm.
  */
 export interface CategoryTemplate {
   name: string;
@@ -81,10 +82,13 @@ export type PresetName = 'lawFirm' | 'personal' | 'general';
 const PRESETS: Record<PresetName, readonly CategoryTemplate[]> = { lawFirm: LAW_FIRM_PRESET, personal: PERSONAL_PRESET, general: GENERAL_PRESET };
 
 /**
- * `personal` is the organization's MUT-120 mark (`personalOwnerUserId` set),
- * not "no Malafat link": a firm without one keeps the general preset.
+ * The profile's type picks the preset (MUT-182): PERSONAL — the MUT-120
+ * profile, or one a person created as personal — gets the personal preset;
+ * BUSINESS and every operator firm (type null) get the general one. Not "no
+ * Malafat link" (ADR-066): a firm without one keeps the general preset, and
+ * Malafat as writer of record wins over everything.
  */
-export function presetFor(profile: { writerOfRecord: ProfileWriter; personal: boolean }, locale: 'en' | 'ar'): { preset: PresetName; categories: ExpenseCategoryInput[] } {
-  const preset: PresetName = profile.writerOfRecord === 'MALAFAT' ? 'lawFirm' : profile.personal ? 'personal' : 'general';
+export function presetFor(profile: { writerOfRecord: ProfileWriter; profileType: ProfileType | null }, locale: 'en' | 'ar'): { preset: PresetName; categories: ExpenseCategoryInput[] } {
+  const preset: PresetName = profile.writerOfRecord === 'MALAFAT' ? 'lawFirm' : profile.profileType === 'PERSONAL' ? 'personal' : 'general';
   return { preset, categories: PRESETS[preset].map((t) => ({ name: locale === 'ar' ? t.nameAr : t.name, color: t.color })) };
 }

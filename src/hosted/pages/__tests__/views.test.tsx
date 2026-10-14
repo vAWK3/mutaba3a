@@ -211,7 +211,7 @@ describe('Receivables', () => {
 
   it('keeps the phone-app sentence, reworded, for a personal profile whose rules offer no income writes (MUT-93 fallback)', async () => {
     portal(`/p/${ORG_A}/receivables`, {}, [
-      profile({ writerOfRecord: null, isPersonalDefault: true, access: { payments: 'read-write', expenses: 'read-write' } }),
+      profile({ writerOfRecord: null, isPersonalDefault: true, owned: true, type: 'PERSONAL', access: { payments: 'read-write', expenses: 'read-write' } }),
     ]);
     // No capture access, so MUT-133 offers nothing here and the fallback copy stays.
     expect(await screen.findByRole('note')).toHaveTextContent('Income on this profile is recorded from the phone app.');
@@ -335,10 +335,12 @@ describe('Profile switcher', () => {
 const PERSONAL = profile({
   writerOfRecord: null,
   isPersonalDefault: true,
+  owned: true,
+  type: 'PERSONAL',
   access: { payments: 'read-write', capture: 'read-write', expenses: 'read-write' },
   income: { received: true, owed: true, customer: 'optional' },
 });
-const WRITER_NULL_FIRM = { ...PERSONAL, isPersonalDefault: false };
+const WRITER_NULL_FIRM = { ...PERSONAL, isPersonalDefault: false, owned: false, type: null };
 const adjustment = (id: string, customerId: string, projectId: string, outstanding: string, status: string) => ({
   ...receivable(id, customerId, projectId, outstanding, status),
   origin: 'ADJUSTMENT' as const,
@@ -359,6 +361,14 @@ describe('Income writes on a personal profile (MUT-133)', () => {
     expect(buttons).toHaveLength(2);
     expect(buttons[0]).toHaveAccessibleName('Record payment for Al-Quds Bakery, remaining: ₪1,170.00');
     expect(within(table).getByRole('columnheader', { name: 'Actions' })).toHaveClass('hp-sticky-end');
+  });
+
+  it('treats a business profile the user created exactly like the personal one: no lock notice, Add income offered (MUT-182)', async () => {
+    const business = { ...PERSONAL, isPersonalDefault: false, owned: true, type: 'BUSINESS' as const };
+    portal(`/p/${ORG_A}/receivables`, { 'GET /v1/receivables': () => ok(page(OPEN_OWED)) }, [business]);
+    await screen.findByRole('table', { name: 'Receivables' });
+    expect(screen.queryByRole('note')).toBeNull();
+    expect(screen.getByRole('button', { name: '+ Add income' })).toBeInTheDocument();
   });
 
   it('opens Record payment through the URL without refetching the list, and closes the same way (R1)', async () => {

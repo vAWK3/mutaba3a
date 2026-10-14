@@ -6,7 +6,7 @@ import { checkFile, receiptStorageKey } from '../attachments/rules.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import { endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
-import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, parseExpenseAmount, requestedLinks, resolveLinks } from '../expenses/compose.js';
+import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, parseExpenseAmount, requestedLinks, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
 import { summarizeExpenses } from '../expenses/summary.js';
 import { idempotent } from '../idempotency.js';
@@ -142,9 +142,11 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const amountMinor = parseExpenseAmount(body.amount, body.currency);
       const links = await resolveLinks(store, organization.id, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
       if (body.categoryId) await assertCategoryChoosable(store, organization.id, body.categoryId);
-      const expense = await store.expenses.create(
-        { organizationId: organization.id, occurredOn, amountMinor, currency: body.currency, title: body.title ?? null, vendor: body.vendor ?? null, categoryId: body.categoryId ?? null, ...links, notes: body.notes ?? null, createdByUserId: user.id },
-        c.get('now')(),
+      const expense = await withCategoryForeignKey(() =>
+        store.expenses.create(
+          { organizationId: organization.id, occurredOn, amountMinor, currency: body.currency, title: body.title ?? null, vendor: body.vendor ?? null, categoryId: body.categoryId ?? null, ...links, notes: body.notes ?? null, createdByUserId: user.id },
+          c.get('now')(),
+        ),
       );
       await audit(c, 'expense.created', 'expense', expense.id, { currency: expense.currency, occurredOn, ...(body.captureSource ? { captureSource: body.captureSource } : {}) });
       return c.json(serializeExpense(expense), 201);
@@ -171,7 +173,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const links = requestedLinks(existing, body);
       if (links) Object.assign(patch, await resolveLinks(store, organization.id, links));
       if (patch.categoryId && patch.categoryId !== existing.categoryId) await assertCategoryChoosable(store, organization.id, patch.categoryId);
-      const result = await store.expenses.update(organization.id, existing.id, c.get('expectedVersion'), patch, c.get('now')());
+      const result = await withCategoryForeignKey(() => store.expenses.update(organization.id, existing.id, c.get('expectedVersion'), patch, c.get('now')()));
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such expense');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
       await audit(c, 'expense.updated', 'expense', result.record.id, { fields: Object.keys(body), version: result.record.version });
