@@ -51,7 +51,7 @@ export const WRITABILITY_MATRIX: readonly MatrixRow[] = [
   // row so it never widens `payments`: Owed, settle, credits and allocations stay the payments row's business.
   { domain: 'capture', scopes: ['capture:write'], routes: '/v1/income*', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
   { domain: 'identity', scopes: [], routes: '/v1/me, /v1/sessions/current', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
-  // MUT-161: logged currency conversions. Session-only, same shape as `expenses` — create + read only, no API key access.
+  // MUT-161: logged currency conversions. Session-only, same shape as `expenses` (full CRUD since MUT-194), no API key access.
   { domain: 'conversions', scopes: ['conversions:read', 'conversions:write'], routes: '/v1/conversions*', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
 ];
 
