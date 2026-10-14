@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Landing: the phone logs, the portal shows (MUT-173)
+
+**Why:** since MUT-172 the Get it section says a phone app and a hosted account exist, then stops: nothing on the landing said what the phone app is for, what the portal is for, or where to get the phone app. Epic MUT-171. Brief, eng review and outside voice: `.claude/designs/mut-173-phone-portal-section.md`.
+
+### Added
+- **The phone chapter** (`PhoneSection`, `data-part="phone"`, after Get it, before the FAQ; the page now has eight parts): "Log it on your phone. See it all in your hosted account." The paragraph says the phone app is for logging (income or expense in seconds, even offline) and the portal, your hosted account in a browser, is where you see every client, what they owe and what they've paid. No reports or analytics claim (tested). `/hosted`'s laptop-and-phone mock is the picture.
+- Under the paragraph: "Both come with a hosted account." with one underlined "See hosted accounts" link → `/hosted`, and a "Phone apps" list with one line per platform read from `MOBILE_APP_LINKS` (download-config.ts, never hardcoded): a store link in a new tab once a `url` is set (`.landing-phone-store`, 44 px pill, presses like every landing control); the name beside "with your hosted account" while the app has no public link (iPhone today); "{platform} coming soon" while it does not exist (Android today). Only a real store link looks like a control.
+- `ChapterSection` gains an optional `extra` slot (rendered under the paragraph, in the copy column). `IosIcon` (outlined phone) and `AndroidIcon` (robot head, CC BY 3.0 attribution) in `PlatformIcons`.
+- EN/AR `landing.phone.*` (title, body, hint, hintLink, storesLabel, store.ios/android, withAccount); platform names and "coming soon" reuse `landing.hostedOffer.platform.*` so `/` and `/hosted` agree.
+
+### Technical
+- `HostedDevicesMock`'s base CSS moved from `HostedOfferPage.css` to the **end of `LandingPage.css`** (both pages load it): a `width: 100%; max-width: 560px` on `.hosted-devices` (inside the chapter's flex figure an all-absolute box had zero width) and the two frames at `(0,2,0)` so the rules out-rank `.landing-mock` wherever they sit. `/hosted`'s phone-only ≤640 px rule stays in `HostedOfferPage.css`; the landing chapter stacks laptop, phone and caption on phones.
+- Tests first: `LandingPage.test.tsx` (structure → eight parts; a "phone and portal" block with the config swapped through a getter mock as `HostedOfferPage.test.tsx` does; honesty with the mock stripped), `ChapterSection.test.tsx` (`extra`), `landingCss.test.ts` (press and dim enumerations). QA: `qa/features/web/landing.yaml` `phone` + `@web.landing.phone` EN/AR (chapter whole at 1280 and 375, platform states from the config, link to `/hosted`), passing on a built web preview with the neighbouring landing cases.
+- **qa-reconcile fixes** (pre-landing review): `storeLinkUrl(link)` in `download-config.ts` is the one reading of a store link (available **and** a real `https:` URL; a placeholder such as `TBD` or a URL on an unavailable app never becomes a link, so `/` can never contradict `/hosted`), with its own unit test; the laptop frame is bounded to `min(72%, calc(100% - 140px))` so the phone frame never covers its amounts in a narrow column (it did at 901–1180 px on `/`, and had on `/hosted`), proved by a 1024 px QA step; the 560 px cap applies only inside the chapter, so `/hosted` keeps its full-width anchor at 641–900 px; `/hosted`'s phone-only ≤640 px override is scoped under `.hosted-hero-layout` (0,3,0) so it wins by weight, not stylesheet order; a space between the app name and "with your hosted account" for assistive tech; `landingCss.test.ts` pins the store link's hover colour; the QA case asserts `dir` and the icons.
+- Store URLs stay `null` until Basel sets them (ticket). Auto-decided readings of the AC (no new config file; three states; the balance mock with "is for logging" copy) are on the ticket for him.
+
+---
+
 ## [Unreleased] - 2026-10-14 — Hosted portal: profile management, new/rename/currency/type (MUT-183, ADR-037 amendment)
 
 **Why:** MUT-182 shipped the API for a person to create and manage their own standalone profiles, with no portal surface to use it — a freelancer with a second business had to ask an operator. Epic MUT-181. Brief, eng and design reviews: `.claude/designs/mut-183-portal-profile-management.md`.

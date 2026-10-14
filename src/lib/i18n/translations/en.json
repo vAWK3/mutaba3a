@@ -1257,6 +1257,18 @@
         "cta": "See hosted accounts"
       }
     },
+    "phone": {
+      "title": "Log it on your phone. See it all in your hosted account.",
+      "body": "The phone app is for logging: an income or an expense in seconds, even with no signal. The portal, your hosted account in a browser, is where you see it all: every client, what they owe and what they’ve paid, on any computer.",
+      "hint": "Both come with a hosted account.",
+      "hintLink": "See hosted accounts",
+      "storesLabel": "Phone apps",
+      "store": {
+        "ios": "iPhone, on the App Store",
+        "android": "Android, on Google Play"
+      },
+      "withAccount": "with your hosted account"
+    },
     "faq": {
       "headline": "Questions",
       "q1": "Is it free?",

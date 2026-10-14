@@ -408,15 +408,21 @@ Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`
 
 ### ChapterSection
 **Location**: `src/pages/landing/components/ChapterSection.tsx`
-**Purpose**: One landing chapter — a big line, a short paragraph and one visual, with `flip` to put the visual first. Renders `<section data-part aria-labelledby>`; the page-structure test reads `data-part`.
+**Purpose**: One landing chapter — a big line, a short paragraph and one visual, with `flip` to put the visual first. Renders `<section data-part aria-labelledby>`; the page-structure test reads `data-part`. Since MUT-173 an optional `extra` renders under the paragraph, inside the copy column (the phone chapter's platform lines).
 
 ```tsx
 <ChapterSection part="chapter-clients" title={t('…title')} body={t('…body')} visual={<ClientProfileMock />} />
+<ChapterSection part="phone" … visual={<HostedDevicesMock />} flip extra={<PhoneExtra />} />
 ```
+
+### PhoneSection
+**Location**: `src/pages/landing/components/PhoneSection.tsx`
+**Purpose**: The chapter after Get it (`data-part="phone"`, MUT-173): "Log it on your phone. See it all in your hosted account.", `HostedDevicesMock` as the picture, and under the paragraph a hint with one underlined link to `/hosted` plus a `<ul aria-label="Phone apps">` with one line per platform read from `MOBILE_APP_LINKS` (never hardcoded) through `storeLinkUrl` (download-config.ts: available **and** a real `https:` URL, else null): a store link (`.landing-phone-store`, a 44 px pill, new tab, `noopener noreferrer`); `available` with no `url` → the name beside "with your hosted account" as plain text; not `available` → "{platform} coming soon". Only a real store link looks like a control (D9). Names and the coming-soon phrase are `landing.hostedOffer.platform.*`, so `/` and `/hosted` agree; the rest is `landing.phone.*`. Unlike `/hosted` (9A), the landing may link a store: the sentence above has said the app needs a hosted account.
+Tests: `LandingPage.test.tsx` › phone and portal; `@web.landing.phone`.
 
 ### Landing mock-ups (`ClientProfileMock`, `RecordPaymentMock`, `ProfileSwitcherMock`, `HostedDevicesMock`)
 **Location**: `src/pages/landing/components/mocks/`
-**Purpose**: Static HTML pictures of the product for the landing page. Data comes from `src/pages/landing/sampleData.ts` (fixed dates, i18n-keyed names, never the visitor's database); labels are the app's own i18n keys; money and dates format through `useMockFormat` (`formatAmount` / `formatDateShort` in the active locale). Keep them in step with the real screens when those change.
+**Purpose**: Static HTML pictures of the product for the landing page. Data comes from `src/pages/landing/sampleData.ts` (fixed dates, i18n-keyed names, never the visitor's database); labels are the app's own i18n keys; money and dates format through `useMockFormat` (`formatAmount` / `formatDateShort` in the active locale). Keep them in step with the real screens when those change. `HostedDevicesMock` is shared by `/hosted`'s hero and the phone chapter on `/` (MUT-173): its base `.hosted-devices*` rules sit at the **end of `LandingPage.css`** (a width on the root, frames at `(0,2,0)`, so they out-rank `.landing-mock` wherever they are); `/hosted`'s phone-only rule at ≤640 px stays in `HostedOfferPage.css`, while the landing chapter stacks laptop, phone and caption.
 
 ### ClientsListMock + CountUpAmount (hero)
 **Location**: `src/pages/landing/components/mocks/ClientsListMock.tsx`, `CountUpAmount.tsx`
@@ -428,7 +434,7 @@ Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`
 
 ### GetItSection / PrivacyBand / PlatformIcons
 **Location**: `src/pages/landing/components/`
-**Purpose**: `GetItSection` lists every way to get the app and gates each download on `useLatestRelease()` (ADR-041); since MUT-172 it ends with the paid half (`data-part="get-it-paid"`: hosted account + phone app come with a paid plan, one `.landing-get-it-paid-cta` link to `/hosted`, no heading, no box); `PrivacyBand` says privacy once; `PlatformIcons` holds the Apple/Windows/browser glyphs shared by the hero and Get it. Download URLs live in `src/content/download-config.ts` (`DOWNLOAD_URLS`, `WEB_APP_URL`, and since MUT-186 `HOSTED_OFFER_URL` and `MOBILE_APP_LINKS`), shared with `DownloadPage` and `/hosted`.
+**Purpose**: `GetItSection` lists every way to get the app and gates each download on `useLatestRelease()` (ADR-041); since MUT-172 it ends with the paid half (`data-part="get-it-paid"`: hosted account + phone app come with a paid plan, one `.landing-get-it-paid-cta` link to `/hosted`, no heading, no box); `PrivacyBand` says privacy once; `PlatformIcons` holds the Apple/Windows/browser glyphs shared by the hero and Get it, and since MUT-173 `IosIcon` (an outlined phone) and `AndroidIcon` (the robot head, with Google's CC BY 3.0 attribution in its docblock) for the phone chapter. Download URLs live in `src/content/download-config.ts` (`DOWNLOAD_URLS`, `WEB_APP_URL`, and since MUT-186 `HOSTED_OFFER_URL` and `MOBILE_APP_LINKS`), shared with `DownloadPage` and `/hosted`.
 
 ### PrivacyPolicyPage
 **Location**: `src/pages/landing/PrivacyPolicyPage.tsx` + `PrivacyPolicyPage.css`
