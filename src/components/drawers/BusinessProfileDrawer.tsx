@@ -15,6 +15,11 @@ import {
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 import type { Currency } from '../../types';
+import { getRepositories } from '../../db/provider';
+import { shouldMarkBusinessAdded } from '../../lib/malafatSuggestions';
+import { useMalafatMomentStore } from '../../lib/malafatMomentStore';
+import { useSampleSessionStore } from '../../demo/sampleSessionStore';
+import { useDemoStore } from '../../demo/demoStore';
 
 const schema = z.object({
   name: z.string().min(1, 'Business name is required'),
@@ -105,6 +110,12 @@ export function BusinessProfileDrawer() {
         await updateMutation.mutateAsync({ id: profileId, data: profileData });
       } else {
         await createMutation.mutateAsync(profileData);
+        // A second (or later) business: Settings › Businesses offers the Malafat note once (MUT-190)
+        const liveBusinesses = (await getRepositories().base.businessProfiles.list()).length;
+        const sample = useSampleSessionStore.getState().status !== 'none';
+        if (shouldMarkBusinessAdded({ liveBusinesses, sample, demo: useDemoStore.getState().isActive })) {
+          useMalafatMomentStore.getState().markBusinessAdded();
+        }
       }
       closeBusinessProfileDrawer();
     } catch (error) {

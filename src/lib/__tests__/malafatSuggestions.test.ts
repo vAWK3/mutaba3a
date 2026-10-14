@@ -5,6 +5,7 @@ import {
   malafatSuggestionsEnabled,
   pickClientsMoment,
   resolveMalafatSuggestions,
+  shouldMarkBusinessAdded,
   showBusinessAddedNote,
 } from '../malafatSuggestions';
 
@@ -84,5 +85,17 @@ describe('malafatSuggestionsEnabled', () => {
 
   it('is off where no build mode is defined (the test runner)', () => {
     expect(malafatSuggestionsEnabled()).toBe(false);
+  });
+});
+
+describe('shouldMarkBusinessAdded', () => {
+  it('marks a business added while another already exists, in the person\'s own data', () => {
+    expect(shouldMarkBusinessAdded({ liveBusinesses: 2, sample: false, demo: false })).toBe(true);
+  });
+
+  it('never for the first business (onboarding), nor inside the visitor sample or demo data', () => {
+    expect(shouldMarkBusinessAdded({ liveBusinesses: 1, sample: false, demo: false })).toBe(false);
+    expect(shouldMarkBusinessAdded({ liveBusinesses: 3, sample: true, demo: false })).toBe(false);
+    expect(shouldMarkBusinessAdded({ liveBusinesses: 3, sample: false, demo: true })).toBe(false);
   });
 });

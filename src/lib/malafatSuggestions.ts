@@ -78,3 +78,17 @@ export function showBusinessAddedNote({ suggestions, businessAdded, businessCoun
 export function malafatSuggestionsEnabled(): boolean {
   return typeof __BUILD_MODE__ !== 'undefined' && __BUILD_MODE__ === 'web';
 }
+
+interface MarkInput {
+  /** Live businesses after the create. */
+  liveBusinesses: number;
+  /** A visitor sample is open (MUT-78). */
+  sample: boolean;
+  /** Demo data is loaded. */
+  demo: boolean;
+}
+
+/** Whether a business just created should bring up the business-added note: never the first (onboarding), never in sample or demo data. */
+export function shouldMarkBusinessAdded({ liveBusinesses, sample, demo }: MarkInput): boolean {
+  return liveBusinesses >= 2 && !sample && !demo;
+}

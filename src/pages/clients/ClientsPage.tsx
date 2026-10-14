@@ -1,7 +1,9 @@
 import { useMemo, useCallback, useEffect, useRef, type KeyboardEvent } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { SearchInput } from '../../components/filters';
+import { SearchInput, type SearchInputRef } from '../../components/filters';
+import { MalafatClientsSuggestion } from './MalafatClientsSuggestion';
+import { malafatSuggestionsEnabled } from '../../lib/malafatSuggestions';
 import { EmptyState, SortableHeader } from '../../components/ui';
 import { OwedNowSummary } from '../../components/clients/OwedNowSummary';
 import {
@@ -79,6 +81,7 @@ export interface ClientsPageProps {
  * them, so they survive switching clients.
  */
 export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPageProps = {}) {
+  const searchRef = useRef<SearchInputRef>(null);
   const { openClientDrawer } = useDrawerStore();
   const navigate = useNavigate();
   const t = useT();
@@ -331,7 +334,7 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
   return (
     <div className="page-content">
       <div className="filters-row" onKeyDown={handleSearchKeyDown}>
-        <SearchInput value={search} onChange={setSearch} placeholder={t('clients.searchPlaceholder')} />
+        <SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder={t('clients.searchPlaceholder')} />
       </div>
 
       {isPending ? (
@@ -356,6 +359,10 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
         />
       ) : (
         <>
+          {/* One Malafat suggestion beside a real list: never while searching or with a client open beside it (MUT-190) */}
+          {malafatSuggestionsEnabled() && !search && !openClientId && (
+            <MalafatClientsSuggestion onGone={() => searchRef.current?.focus()} />
+          )}
           <div className="card clients-index-summary">
             <div className="clients-summary-count">
               {rows.length === 1

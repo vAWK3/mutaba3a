@@ -6,6 +6,7 @@ import { GO_HOSTED_DISMISSED_KEY, GO_HOSTED_SNOOZE_DAYS } from '../../../lib/goH
 import { HOSTED_OFFER_URL } from '../../../content/download-config';
 import { useSampleSessionStore } from '../../../demo/sampleSessionStore';
 import { GoHostedCard } from '../GoHostedCard';
+import { useMalafatMomentStore } from '../../../lib/malafatMomentStore';
 
 const LANGUAGE_KEY = 'mutaba3a-language';
 const DAY = 24 * 60 * 60 * 1000;
@@ -19,6 +20,7 @@ const card = () => screen.queryByRole('group', { name: en.nav.goHosted.label });
 beforeEach(() => {
   localStorage.clear();
   useSampleSessionStore.setState({ status: 'none' });
+  useMalafatMomentStore.getState().reset();
 });
 
 afterEach(() => {
@@ -114,5 +116,17 @@ describe('GoHostedCard (MUT-187)', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(xhrSpy).not.toHaveBeenCalled();
     expect(beacon).not.toHaveBeenCalled();
+  });
+});
+
+describe('GoHostedCard and the Malafat suggestions (MUT-190)', () => {
+  it('steps aside while a Malafat suggestion is on screen: one upsell at a time', () => {
+    localStorage.setItem(LANGUAGE_KEY, 'en');
+    const release = useMalafatMomentStore.getState().claimSlot();
+    const { rerender } = renderWithProviders(<GoHostedCard />);
+    expect(card()).toBeNull();
+    act(() => release());
+    rerender(<GoHostedCard />);
+    expect(card()).not.toBeNull();
   });
 });
