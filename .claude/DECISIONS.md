@@ -3003,3 +3003,28 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - A version re-read at save time (expense edit's mobile behaviour): rejected for conversions (eng D3); If-Match would catch nothing.
 - A focusable `<tr>` for keyboard rows (design D8's first text): rejected (eng D11); it loses row semantics or isn't announced as actionable.
 - JOD conversions read-only in the portal: rejected (eng D7); web users couldn't fix them.
+
+---
+
+## ADR-076: The Free Web App's "Go hosted" CTA — a Build-Time Portal URL, a localStorage Snooze, and a Web-Only Gate Read at Render Time
+
+**Status**: Active
+**Date**: 2026-10-14
+**Context**: MUT-187 (epic MUT-185). Free web users never learned hosted exists, and hosted users had no way from the free app to the portal. The CTA needs the portal's address (today the bare Cloud Run `run.app` URL, no custom domain), must ship in the web build only (desktop is retired until v2), must make no network call (ADR-024), and must not crowd the core four (ADR-034). Brief, eng review and design review: `.claude/designs/mut-187-go-hosted-cta.md`; wireframe `mut-187-go-hosted-wireframe.html`.
+
+**Decision**:
+1. **The portal URL is a build-time value.** `MUTABA3A_PORTAL_URL` overrides `DEFAULT_PORTAL_URL` in `vite.config.ts` (the Cloud Run service that serves the portal) and is injected as `__PORTAL_URL__`: the URL in the web build, `""` in desktop. `portalUrl()` accepts only a bare https origin, so a bad value fails the build; the check (`assertHttpsOrigin`) is shared with `MUTABA3A_PUBLIC_ORIGIN`. The origin is in `scripts/bundle-origins.json` as a link target, never fetched. MUT-112 (custom domain) changes the default and the allowlist.
+2. **The card's dismissal is a per-browser preference in localStorage** (`mutaba3a-go-hosted-dismissed-at`, epoch ms), not the database, so it never travels in backups. It returns after `GO_HOSTED_SNOOZE_DAYS = 30`. A missing, unparseable or future value counts as due, so no stored value can hide it for good; a storage that throws shows the card and lets a dismissal hide it for that tab.
+3. **Gates are read at render time through a typeof guard** (`goHostedEnabled()`, `hostedPortalUrl()` in `src/lib/goHosted.ts`). Vitest defines neither constant, so every existing test sees the app without the CTA, and new tests stub them per case. Rollup can't fold a function call, so the desktop bundle keeps the card's never-rendered code (TD-134).
+4. **Where it shows**: the sidebar card at the top of the footer (web build, expanded rail, no visitor sample, window ≥ 641 px tall); the "Hosted account" row at the end of Settings › Businesses (web build). Sign-in lives only in the Settings row. Links are plain anchors in a new tab, because the router's `/app` basepath would rewrite `/hosted`.
+
+**Consequences**:
+- A deploy to a new portal host is a one-constant (or one-env-var) change plus the allowlist, and the vite-config snapshot shows it.
+- A second tab keeps showing the card until it remounts (no storage listener).
+- Users who keep the rail collapsed, or whose window is short, meet hosted only in Settings.
+
+**Alternatives considered**:
+- Env only, set in `netlify.toml`, no default (eng D2 B): rejected; local and preview builds would lose the sign-in link silently.
+- Dismissal in Dexie settings: rejected; it would travel in backups and needs no query.
+- Inline `__BUILD_MODE__ === 'web'` checks (foldable): rejected; vitest has no such global, so every test rendering the sidebar or Settings would throw.
+- A lavender card or an icon on the collapsed rail (design D2 C, eng D4 B): rejected; they read as an active nav item.

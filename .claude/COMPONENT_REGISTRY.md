@@ -1946,3 +1946,15 @@ await importProfileFile(file, existing ? { mode: 'merge', profileId: existing.id
 ### Retained document schema (MUT-145)
 **Location**: `src/db/retained/documentSchema.ts`
 **Purpose**: Types the retained `documents`/`documentSequences` tables (ADR-029/066). Only the indexed and linking keys are typed. Nothing renders these rows; the type exists for the Dexie tables, backup and the profile export/import. Same pattern as `engagementSchema.ts` and `monthCloseSchema.ts`.
+
+## Go hosted CTA (`src/components/layout`, `src/pages/settings`, `src/lib`) — MUT-187
+
+### GoHostedCard — `src/components/layout/GoHostedCard.tsx`
+**Purpose**: The free web app's dismissible "Go hosted" card in the sidebar footer. Reads its own due state on mount (`isGoHostedCardDue`), hides itself during a visitor sample, fades for `GO_HOSTED_EXIT_MS` (160) on dismiss. Props: `onDismissed?()` (the sidebar moves focus). The sidebar decides where it may render (`goHostedEnabled() && !collapsed`). CSS hides it under `max-height: 640px`.
+**Usage**: `{goHostedEnabled() && !collapsed && <GoHostedCard onDismissed={focusSettings} />}`
+
+### HostedAccountEntry — `src/pages/settings/HostedAccountEntry.tsx`
+**Purpose**: Settings › Businesses' "Hosted account" row: a sentence, a link to `/hosted`, and (when the build set a portal URL) "Already have an account? Sign in". No props. SettingsPage gates it with `goHostedEnabled()`.
+
+### goHosted helpers — `src/lib/goHosted.ts`
+`GO_HOSTED_SNOOZE_DAYS`, `GO_HOSTED_DISMISSED_KEY`, `isGoHostedCardDue(dismissedAt, now)`, `readDismissedAt()`, `writeDismissedAt(at)`, `goHostedEnabled()`, `hostedPortalUrl()`. Reuse `goHostedEnabled()`'s typeof-guard shape for any other web-only UI (MUT-190, MUT-90) rather than a bare `__BUILD_MODE__` read.

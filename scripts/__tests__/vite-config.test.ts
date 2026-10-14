@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
 import { existsSync } from 'node:fs';
 import configFn, {
+  DEFAULT_PORTAL_URL,
   HOSTED_OFFER_FILE,
   HOSTED_OFFER_PAGE,
   HOSTED_OFFER_TITLE,
@@ -10,6 +11,7 @@ import configFn, {
   PWA_MANIFEST,
   PWA_WORKBOX,
   netlifyFormsHtml,
+  portalUrl,
   socialMetaTags,
   withPageMeta,
 } from '../../vite.config';
@@ -181,6 +183,29 @@ describe('vite.config', () => {
         vi.resetModules();
       }
     });
+  });
+
+  describe('portal sign-in link (MUT-187)', () => {
+    it('defines the portal URL for the web build and leaves the desktop build without one', () => {
+      expect(resolve('web').define?.__PORTAL_URL__).toBe(JSON.stringify(DEFAULT_PORTAL_URL));
+      expect(resolve('desktop').define?.__PORTAL_URL__).toBe(JSON.stringify(''));
+    });
+
+    it('defaults to the Cloud Run service that serves the portal', () => {
+      expect(portalUrl(undefined)).toBe(DEFAULT_PORTAL_URL);
+      expect(DEFAULT_PORTAL_URL).toMatch(/^https:\/\/[^/]+\.run\.app$/);
+    });
+
+    it('takes MUTABA3A_PORTAL_URL over the default and drops a trailing slash', () => {
+      expect(portalUrl('https://portal.mutaba3a.app/')).toBe('https://portal.mutaba3a.app');
+    });
+
+    it.each(['http://portal.mutaba3a.app', 'portal.mutaba3a.app', '', 'https://', 'https://portal.mutaba3a.app/sign-in'])(
+      'refuses %j as the portal URL, failing the build',
+      (value) => {
+        expect(() => portalUrl(value)).toThrow(/MUTABA3A_PORTAL_URL/);
+      },
+    );
   });
 
   describe('Netlify form twin (MUT-186)', () => {

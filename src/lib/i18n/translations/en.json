@@ -41,7 +41,8 @@
       "netHigh": "Net (High to Low)",
       "netLow": "Net (Low to High)"
     },
-    "pageTitle": "Mutaba3a — {page}"
+    "pageTitle": "Mutaba3a — {page}",
+    "opensInNewTab": "(opens in a new tab)"
   },
   "currency": {
     "USD": "USD",
@@ -83,6 +84,12 @@
       "project": "Add Project",
       "transaction": "New Transaction",
       "conversion": "Add Conversion"
+    },
+    "goHosted": {
+      "label": "Hosted account",
+      "text": "Your records, on every device.",
+      "cta": "Go hosted",
+      "dismiss": "Hide for 30 days"
     }
   },
   "addMenu": {
@@ -473,7 +480,14 @@
       "default": "Default",
       "confirmArchive": "Are you sure you want to archive this business profile?",
       "actionsFor": "Actions for {name}",
-      "empty": "No business profiles yet. Create one to start recording income."
+      "empty": "No business profiles yet. Create one to start recording income.",
+      "hosted": {
+        "title": "Hosted account",
+        "description": "The free app keeps everything on this device. A hosted account keeps it on our servers, so your phone and laptop show the same numbers.",
+        "cta": "See hosted accounts",
+        "signInPrompt": "Already have an account?",
+        "signIn": "Sign in"
+      }
     },
     "preferences": {
       "title": "General",

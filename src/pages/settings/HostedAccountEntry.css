@@ -1,0 +1,28 @@
+/* Settings › Businesses' "Hosted account" row (MUT-187): under the business
+   list, divided from it like one more item, text above its two links. */
+.hosted-account-entry {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+  padding-block-start: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.hosted-account-entry-text {
+  margin: 0;
+  color: var(--muted);
+}
+
+.hosted-account-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+/* Purple carries text at primary-hover, which clears AA on every surface (Brand v2) */
+.hosted-account-entry-signin {
+  color: var(--accent-text);
+  font-weight: var(--weight-medium);
+  text-underline-offset: 3px;
+}

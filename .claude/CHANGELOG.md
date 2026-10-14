@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — "Go hosted" in the free web app (MUT-187, ADR-076)
+
+**Why:** free web users never learned that hosted exists, and hosted users had no way from the free app to the portal. Epic MUT-185 (after MUT-186's `/hosted` page). Brief, eng and design reviews: `.claude/designs/mut-187-go-hosted-cta.md`; wireframe `mut-187-go-hosted-wireframe.html`.
+
+### Added
+- **Sidebar card** (`GoHostedCard`): an outlined card at the top of the sidebar footer, "Your records, on every device." with a Go hosted button that opens `/hosted` in a new tab. The × ("Hide for 30 days", 44px) hides it for 30 days with a 160ms fade and moves focus to Settings. Web build only, expanded rail only, never during a visitor sample, hidden on windows 640px tall or less.
+- **Settings › Businesses "Hosted account" row** (`HostedAccountEntry`): one sentence on hosted, "See hosted accounts" (to `/hosted`) and "Already have an account? Sign in" (to the portal), both in a new tab. Web build only.
+- `src/lib/goHosted.ts`: the 30-day snooze rule, localStorage read/write that survive blocked storage, and the render-time gates `goHostedEnabled()` / `hostedPortalUrl()`.
+- EN/AR strings `nav.goHosted.*`, `settings.profile.hosted.*`, `common.opensInNewTab`.
+
+### Technical
+- `MUTABA3A_PORTAL_URL` (build-time, validated https origin, default the portal's Cloud Run URL) → `__PORTAL_URL__`; `assertHttpsOrigin` now shared with `MUTABA3A_PUBLIC_ORIGIN`. Documented in `.env.example`; origin added to `scripts/bundle-origins.json`. The web/desktop vite-config snapshots gain the define.
+- Tests: `goHosted.test.ts`, `GoHostedCard.test.tsx` (EN/AR, keyboard, 30-day return, blocked storage, sample session, no fetch/XHR/beacon), `SidebarNav.goHosted.test.tsx` (web/desktop/collapsed, order, focus), `HostedAccountEntry.test.tsx`, `SettingsPage.goHosted.test.tsx`, `vite-config.test.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-14 — Run qa/ specs with Playwright directly (no QA_CONTEXT)
 
 **Why:** without `QA_CONTEXT`, `qa/support/qa.ts` fell back to `require('../qa.config.mjs')` and `__dirname`. Playwright loads the file as ESM (`"type": "module"`), so a direct `npx playwright test -c qa/playwright.config.ts …` crashed on load with "require is not defined in ES module scope". Until now the only workaround was building `QA_CONTEXT` JSON by hand.
