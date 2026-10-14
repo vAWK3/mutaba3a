@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { openFreshApp, logIncome, openNewIncomeDrawer, switchToArabic } from '../../support/app';
+import { openFreshApp, logIncome, openNewIncomeDrawer, switchToArabic, addSecondBusiness } from '../../support/app';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { ar } from '../../support/i18n';
 
@@ -288,3 +288,47 @@ test(
     });
   },
 );
+
+
+test('with a second business, Clients shows one Malafat suggestion; its link opens Malafat and retires it for good (MUT-190)', { tag: '@web.clients.malafat' }, async ({ page, context, step }) => {
+  const main = page.getByRole('main');
+  const card = main.getByRole('group', { name: 'A suggestion for law firms and accounting offices' });
+  const search = main.getByPlaceholder('Search clients...');
+  // Never reach the real site from QA: answer for it
+  await context.route('https://malafat.app/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Malafat</title>' }));
+
+  await step('Two businesses and a client in the working one; the Settings note is dismissed first', async () => {
+    await openFreshApp(page, '/income');
+    await logIncome(page, { title: 'Retainer', amount: '500', client: 'Nour Legal' });
+    await addSecondBusiness(page, 'مكتب المحاماة');
+    // The note right after adding speaks for this event; reload so the Clients card is the one in play
+    await page.reload();
+  });
+
+  await step('The Clients list shows one suggestion, tagged for the second business; none while searching', async () => {
+    await page.goto('/app/clients');
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('Running more than one office?');
+    await expect(card.getByRole('link')).toHaveAttribute('href', /utm_medium=web-local&utm_campaign=malafat-upsell&utm_content=second-business/);
+    await search.fill('Nour');
+    await expect(card).toHaveCount(0);
+    await search.fill('');
+    await expect(card).toBeVisible();
+  });
+
+  await step('Its link opens Malafat in a new tab, and the card goes', async () => {
+    const opened = context.waitForEvent('page');
+    await card.getByRole('link').click();
+    const malafat = await opened;
+    await expect(malafat).toHaveURL(/^https:\/\/malafat\.app\/en\/contact\?topic=mutaba3a&.*utm_content=second-business/);
+    await malafat.close();
+    await expect(card).toHaveCount(0);
+  });
+
+  await step('It stays gone after a reload: the click retired it', async () => {
+    await page.reload();
+    await expect(main.getByRole('table')).toBeVisible();
+    await page.waitForTimeout(1000);
+    await expect(card).toHaveCount(0);
+  });
+});

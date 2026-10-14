@@ -4,6 +4,7 @@ import { useT } from '../../lib/i18n';
 import { isGoHostedCardDue, readDismissedAt, writeDismissedAt } from '../../lib/goHosted';
 import { HOSTED_OFFER_URL } from '../../content/download-config';
 import { useSampleSessionStore } from '../../demo/sampleSessionStore';
+import { useMalafatMomentStore } from '../../lib/malafatMomentStore';
 import './GoHostedCard.css';
 
 /** How long the card fades before it unmounts; the CSS transition matches it (none under reduced motion). */
@@ -46,8 +47,10 @@ export function GoHostedCard({ onDismissed }: GoHostedCardProps) {
   const t = useT();
   const sampleStatus = useSampleSessionStore((s) => s.status);
   const { phase, dismiss } = useGoHostedCard();
+  // One upsell on screen at a time: a Malafat suggestion takes the turn (MUT-190, ADR-078)
+  const malafatShown = useMalafatMomentStore((s) => s.suggestionsShown > 0);
 
-  if (phase === 'gone' || sampleStatus !== 'none') return null;
+  if (phase === 'gone' || sampleStatus !== 'none' || malafatShown) return null;
 
   const handleDismiss = () => {
     dismiss();

@@ -104,3 +104,15 @@ features:
     expect:
       - The list column is to the right of the profile
       - ← moves focus into the profile; → returns it to the open client's row
+  - id: malafat
+    title: With a second business, the Clients list shows one Malafat suggestion; its link opens Malafat and retires it for good (MUT-190)
+    tier: secondary
+    legacy: [MUT-190]
+    paths:
+      - src/pages/clients/MalafatClientsSuggestion.tsx
+    steps:
+      - With two businesses and a client, open Clients, read the suggestion, search, follow its link, reload
+    expect:
+      - One card for law firms and accounting offices with a link tagged web-local and second-business; none while searching
+      - The link opens Malafat's contact page in a new tab; the card goes and stays gone after a reload
+

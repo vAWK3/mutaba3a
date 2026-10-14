@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Malafat suggestions in the web app (MUT-190, ADR-078)
+
+**Why:** the free app's law and accounting users never heard about Malafat inside the product. Epic MUT-189. Brief, eng review and outside voice: `.claude/designs/mut-190-malafat-suggestions-local.md`. **Release only after MAL-1153** (malafat.app recognising the referral).
+
+### Added
+- Settings › Businesses: a "Mutaba3a + Malafat" row (one link to Malafat's contact page, `utm_medium=web-local&utm_content=settings`) with a "Show Malafat suggestions" switch; the row stays when off.
+- Right after a second business is added (never the first, never in sample or demo data), that row's line becomes a note about the new business, with the same single link tagged `business-profile`.
+- Clients: one card at ten clients in the working business (`client-threshold`), else with a second business (`second-business`); only beside a non-empty list, never while searching or with a client open beside it.
+- "Don't show this again" retires a suggestion for good; a click on its link does too (the card hides right after the browser follows the link); retiring the note or the second-business card retires both, and the Clients card waits while the Settings note is due; a retired Clients suggestion leaves no other until the app reloads. While a Malafat suggestion is on screen, the Go hosted card steps aside. Copy for law firms and accounting offices, EN/AR; never "automatic" or "sync".
+
+### Technical
+- `src/lib/malafatSuggestions.ts` (pure rules, `MALAFAT_CLIENT_THRESHOLD = 10`), `useMalafatSuggestions.ts` (settings-row reads, fresh-row merged writes), `malafatMomentStore.ts` (session flag + one upsell slot); `MalafatSuggestionCard`, `MalafatClientsSuggestion`, `MalafatEntry`; `Settings.malafatSuggestions`. Web build only (`malafatSuggestionsEnabled()`). Links via `malafatUrl` (MUT-174). No network call.
+- Tests first (see TEST_PLAN); QA `@web.settings.malafat`, `@web.clients.malafat`. PATTERNS: permanent dismissal on the settings row vs snooze in localStorage; one upsell on screen.
+
+---
+
 ## [Unreleased] - 2026-10-14 — Landing: open in Arabic by default (MUT-202, ADR-077)
 
 **Why:** Basel asked for the landing to open in Arabic regardless of system language. Epic MUT-171. Brief: `.claude/designs/mut-202-landing-arabic-default.md`.

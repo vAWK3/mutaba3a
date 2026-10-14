@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useProfileStore } from '../lib/profileStore';
+import { useMalafatMomentStore } from '../lib/malafatMomentStore';
 import { useSampleSessionStore } from './sampleSessionStore';
 import { SAMPLE_QUERY_PARAM, readSampleSession } from './sampleSession';
 import { enterVisitorSample, leaveVisitorSample } from './visitorSample';
@@ -56,6 +57,7 @@ export function useLeaveSample(): () => Promise<void> {
   return useCallback(async () => {
     await leaveVisitorSample();
     resetProfile();
+    useMalafatMomentStore.getState().clearBusinessAdded();
     setStatus('none');
     await queryClient.invalidateQueries();
     navigate({ to: '/', replace: true });

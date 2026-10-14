@@ -18,6 +18,29 @@
 
 ## Open Debt
 
+### TD-138: Settings-row writes are read-then-put outside a transaction
+**Status**: Open
+**Ticket**: MUT-190 (found by its pre-landing review)
+**Added**: 2026-10-15
+**Priority**: Low
+**Impact**: `settingsRepo.update` reads the row and puts it back; the Malafat suggestion hooks (and `useSetFeatureEnabled`) read the fresh row, change one field and write it. Two writers within a few milliseconds (a dismissal and a switch, a backup timestamp) can each read before the other writes; the last write wins and the first change is lost.
+**Fix**: a transactional `settings.modify(fn)` on the repository (`db.transaction('rw', db.settings, …)`), used by every settings writer.
+
+### TD-139: The Malafat suggestion card repeats the Go hosted card's markup and CSS
+**Status**: Open
+**Ticket**: MUT-190
+**Added**: 2026-10-15
+**Priority**: Low
+**Impact**: `MalafatSuggestionCard` and `GoHostedCard` share the outlined object, the 44 px dismiss and most of their CSS (about 70% overlap). Left separate to avoid reworking MUT-187's card mid-epic.
+**Fix**: one `SuggestionCard` (group, text, action slot, dismiss) both render through; the slot claim and the snooze stay in their callers.
+
+### TD-140: Small gaps left by MUT-190's review
+**Status**: Accepted (for now)
+**Ticket**: MUT-190
+**Added**: 2026-10-15
+**Impact**: (1) A failed dismissal or switch write is silent (no `onError`); the card simply returns next visit. (2) The switch's description is not linked with `aria-describedby` (`Switch` has no prop for it; same in Advanced features). (3) The Go hosted card returns as soon as a Malafat suggestion goes. (4) The business-added flag is cleared on leaving the sample but not on delete-all or import; the note still needs two live businesses and no sample/demo at render. (5) The `landing`/`0.15em`-style literals in the card CSS (`flex-basis: 24rem`, `44px`) mirror GoHostedCard.
+
+
 ### TD-137: No `qa/` catalog entry for profile management (MUT-183)
 **Status**: Open
 **Added**: 2026-10-14 (MUT-183 qa-reconcile)

@@ -2408,3 +2408,16 @@ Run: `npx vitest run scripts/__tests__/vite-config.test.ts src/hosted/session/__
 
 Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 
+### MUT-190 — Malafat suggestions in the web app (2026-10-14)
+| File | Type | Covers |
+|------|------|--------|
+| `src/lib/__tests__/malafatSuggestions.test.ts` | Unit | resolve (missing → on; junk dropped; deduped); dismiss (switch kept; business-profile retires second-business); `pickClientsMoment` (9/10 boundary, C2 over C3, dismissed skipped, off); `showBusinessAddedNote`; `shouldMarkBusinessAdded` (first business, sample, demo); `malafatSuggestionsEnabled` web/desktop/undefined |
+| `src/lib/__tests__/useMalafatSuggestions.test.tsx` | Hook | null until loaded; dismiss keeps the switch and the switch keeps dismissals (nested replace); a moment recorded once; other settings untouched |
+| `src/lib/__tests__/malafatMomentStore.test.ts` | Unit | business-added flag; slot counting with idempotent release |
+| `src/components/malafat/__tests__/MalafatSuggestionCard.test.tsx` | Component | labelled group, new-tab link, named dismiss; holds/releases the slot; hides at once on dismiss and on link click, retires, hands focus |
+| `src/pages/clients/__tests__/MalafatClientsSuggestion.test.tsx` | Component | C2 at ten clients of the working business only, tags; C3 for a second business; nothing while loading, without a working business, off, sample, demo; AR |
+| `src/pages/settings/__tests__/MalafatEntry.test.tsx` | Component | one link tagged settings; row stays when off; switch writes; the business-added note replaces the line with one link tagged business-profile; dismiss retires, clears and focuses the row link; no note for one business / off / dismissed; AR |
+| `src/components/layout/__tests__/GoHostedCard.test.tsx` | Component | + steps aside while a Malafat suggestion holds the slot |
+| `qa/specs/web/settings.spec.ts` | E2E | `@web.settings.malafat`: row link tags; second business → note (business-profile) and Go hosted card hidden; dismiss → row back, link focused, gone after reload; switch off persists, row stays |
+| `qa/specs/web/clients.spec.ts` | E2E | `@web.clients.malafat`: two businesses + a client → one card (second-business tags), hidden while searching, dismiss → search focused, gone after reload |
+

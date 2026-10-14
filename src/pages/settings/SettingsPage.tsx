@@ -15,6 +15,8 @@ import { AdvancedFeaturesSection } from './AdvancedFeaturesSection';
 import { AboutSection } from './AboutSection';
 import { YourDataSection } from './YourDataSection';
 import { HostedAccountEntry } from './HostedAccountEntry';
+import { MalafatEntry } from './MalafatEntry';
+import { malafatSuggestionsEnabled } from '../../lib/malafatSuggestions';
 import { goHostedEnabled } from '../../lib/goHosted';
 import { useDrawerStore } from '../../lib/stores';
 import { Select } from '../../components/ui';
@@ -280,6 +282,8 @@ export function SettingsPage() {
 
             {/* Under the businesses: hosted, for the web build only (MUT-187) */}
             {goHostedEnabled() && <HostedAccountEntry />}
+            {/* Then Malafat, for law firms and accounting offices: web build only (MUT-190) */}
+            {malafatSuggestionsEnabled() && <MalafatEntry />}
           </div>
 
           {/* General (MUT-139 merged language, theme and currency into one card;

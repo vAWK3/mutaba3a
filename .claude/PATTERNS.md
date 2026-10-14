@@ -2273,3 +2273,13 @@ A "hide for N days" timestamp lives in localStorage (a UI preference, never in b
 When one surface needs a different default from another that shares a stored setting (the marketing site opens in Arabic; the app follows the system), pass the default into the shared provider (`LanguageProvider defaultLanguage`) and store nothing until the person chooses. Storing the default would silently change the other surface. A value a surface stored by detection is not a choice: mark real choices separately (`mutaba3a-language-chosen`) and let the default yield only to a marked value. Order: a marked choice → the surface's default → the system's. Tests seed a choice with `chooseLanguage()` (`src/test/language.ts`) and QA with `chooseLanguageScript` (`qa/support/i18n.ts`).
 **Instances**: `LandingProviders` (ADR-077). Tests: `core.test.tsx` › defaultLanguage, `LandingProviders.test.tsx`, `@web.landing.arabic-default`.
 
+## Patterns added by MUT-190 (2026-10-14)
+
+### Pattern: A permanent dismissal lives on the settings row; a snooze lives in localStorage
+A suggestion the person retires for good (Malafat suggestions) is a product preference: store it on the Dexie settings row next to the optional-area switches, so it travels with a backup. A "hide for N days" snooze (Go hosted) is a per-browser convenience and stays in localStorage. Either way, write by reading the fresh row and writing the whole nested field: `settingsRepo.update` replaces nested objects.
+**Instances**: `useMalafatSuggestions.ts` (ADR-078), `useFeatures.ts`, `goHosted.ts`.
+
+### Pattern: One upsell on screen
+Every in-product suggestion claims a slot while mounted (`useMalafatMomentStore.claimSlot()` in an effect); other upsells read `suggestionsShown > 0` and render nothing. A suggestion hides itself at once on dismiss or click (local state) and hands focus to a named target before it goes.
+**Instances**: `MalafatSuggestionCard` → `GoHostedCard`.
+

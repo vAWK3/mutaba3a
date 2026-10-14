@@ -1982,11 +1982,23 @@ await importProfileFile(file, existing ? { mode: 'merge', profileId: existing.id
 ## Go hosted CTA (`src/components/layout`, `src/pages/settings`, `src/lib`) — MUT-187
 
 ### GoHostedCard — `src/components/layout/GoHostedCard.tsx`
-**Purpose**: The free web app's dismissible "Go hosted" card in the sidebar footer. Reads its own due state on mount (`isGoHostedCardDue`), hides itself during a visitor sample, fades for `GO_HOSTED_EXIT_MS` (160) on dismiss. Props: `onDismissed?()` (the sidebar moves focus). The sidebar decides where it may render (`goHostedEnabled() && !collapsed`). CSS hides it under `max-height: 640px`.
+**Purpose**: The free web app's dismissible "Go hosted" card in the sidebar footer. Reads its own due state on mount (`isGoHostedCardDue`), hides itself during a visitor sample and while a Malafat suggestion is on screen (MUT-190), fades for `GO_HOSTED_EXIT_MS` (160) on dismiss. Props: `onDismissed?()` (the sidebar moves focus). The sidebar decides where it may render (`goHostedEnabled() && !collapsed`). CSS hides it under `max-height: 640px`.
 **Usage**: `{goHostedEnabled() && !collapsed && <GoHostedCard onDismissed={focusSettings} />}`
 
 ### HostedAccountEntry — `src/pages/settings/HostedAccountEntry.tsx`
 **Purpose**: Settings › Businesses' "Hosted account" row: a sentence, a link to `/hosted`, and (when the build set a portal URL) "Already have an account? Sign in". No props. SettingsPage gates it with `goHostedEnabled()`.
+
+### MalafatSuggestionCard — `src/components/malafat/MalafatSuggestionCard.tsx`
+**Purpose**: One inline Malafat suggestion (MUT-190): `role="group"` with a label, one line, a "See Malafat" new-tab link and a 44 px "Don't show this again". Holds the one upsell slot while shown (the Go hosted card steps aside); hides itself at once on dismiss or link click, then calls `onRetire()` and `onGone()` (move focus there). Props: `label`, `text`, `href` (a `malafatUrl`), `ctaLabel`, `dismissLabel`, `onRetire`, `onGone`, `variant: 'card' | 'note'`. Reuse it for MUT-191's portal moments only through a portal copy (the portal has its own components and i18n).
+
+### MalafatClientsSuggestion — `src/pages/clients/MalafatClientsSuggestion.tsx`
+**Purpose**: The Clients page's one Malafat card: `pickClientsMoment` over the working business's live clients (from the cached `useClients(undefined)`) and the live businesses; nothing until every read settles, in sample or demo data, or after a retire on this visit. ClientsPage places it only beside a non-empty list, with no search and no client open; `onGone` focuses the search box.
+
+### MalafatEntry — `src/pages/settings/MalafatEntry.tsx`
+**Purpose**: Settings › Businesses' "Mutaba3a + Malafat" row: one sentence, one link (`content: settings`), and the "Show Malafat suggestions" `Switch`. Right after a second business is added (`useMalafatMomentStore.businessAdded`) its line becomes the business-added note (same single link, `content: business-profile`); after the note goes, focus lands on the row's link. SettingsPage gates it with `malafatSuggestionsEnabled()`.
+
+### Malafat suggestion helpers — `src/lib/malafatSuggestions.ts`, `useMalafatSuggestions.ts`, `malafatMomentStore.ts`
+`MALAFAT_CLIENT_THRESHOLD`, `resolveMalafatSuggestions`, `dismissMoment` (retires `second-business` with `business-profile`), `toStored`, `pickClientsMoment`, `showBusinessAddedNote`, `shouldMarkBusinessAdded`, `malafatSuggestionsEnabled()` (web build). Hooks: `useMalafatSuggestions()` (null until loaded), `useDismissMalafatMoment()`, `useSetMalafatSuggestionsOn()` (fresh-row merged writes). Store: `businessAdded`, `markBusinessAdded`, `clearBusinessAdded`, `claimSlot`, `suggestionsShown`.
 
 ### goHosted helpers — `src/lib/goHosted.ts`
 `GO_HOSTED_SNOOZE_DAYS`, `GO_HOSTED_DISMISSED_KEY`, `isGoHostedCardDue(dismissedAt, now)`, `readDismissedAt()`, `writeDismissedAt(at)`, `goHostedEnabled()`, `hostedPortalUrl()`. Reuse `goHostedEnabled()`'s typeof-guard shape for any other web-only UI (MUT-190, MUT-90) rather than a bare `__BUILD_MODE__` read.

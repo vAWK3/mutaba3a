@@ -3069,3 +3069,26 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - The HTML shell still says `lang="en"` until React mounts; nothing renders before then.
 - Open: whether the web app should also default to Arabic is Basel's call (not done).
 
+---
+
+## ADR-078: Malafat Suggestions in the Web App — Where They Live, How They Are Retired, and One Upsell on Screen
+
+**Status**: Active
+**Date**: 2026-10-14
+**Context**: MUT-190 (epic MUT-189). Mutaba3a users who run a law or accounting office should hear about Malafat inside the product, without modals, toasts or nags, with an off switch, and with zero Mutaba3a-side telemetry (ADR-024). The free web app already shows the Go hosted card (MUT-187, ADR-076). Brief, eng review and outside voice: `.claude/designs/mut-190-malafat-suggestions-local.md`.
+
+**Decision**:
+1. **Moments.** S1: a static "Mutaba3a + Malafat" row in Settings › Businesses with the "Show Malafat suggestions" switch (the row ignores the switch). C1: right after a second or later business is added in the person's own data, the row's line becomes a note about it (session-only flag; never the first business, never in sample or demo data). C2/C3: one card on Clients at `MALAFAT_CLIENT_THRESHOLD` (10) live clients in the working business, else with ≥ 2 live businesses; only beside a non-empty list, never while searching or with a client open beside it.
+2. **Links.** Every surface uses `malafatUrl({ locale, medium: 'web-local', content, contact: true })`: MUT-189's CTA contract. Web build only (desktop retired until v2), so no `desktop` medium.
+3. **Retiring.** Dismissals are permanent and live on the Dexie settings row (`malafatSuggestions: { off, dismissed }`), like the optional-area switches, and travel with a backup; delete-all-data and the legacy import reset them (accepted). A click on a suggestion's link retires it too (seen and acted on). Retiring the business-added note also retires the second-business card (one event, one suggestion). Writes read the fresh row and write the whole field (the repository replaces nested objects).
+4. **One upsell on screen.** While a Malafat suggestion is mounted it holds a slot (`useMalafatMomentStore.claimSlot`) and the Go hosted card renders nothing. A Clients card that is retired leaves nothing else for the rest of that visit.
+5. **Copy.** For law firms and accounting offices; Malafat "connects to a Mutaba3a hosted account", never "automatically" or "sync" (the shipped capture stores payments unallocated, MUT-61).
+
+**Consequences**:
+- The local app needs no profile-type or Malafat-fed gate: local businesses carry neither (the rule matters for the portal, MUT-191).
+- Referrals are counted only once MAL-1153 ships on malafat.app; release after it.
+- The Go hosted card can be hidden for a whole Clients visit by a Malafat card; acceptable, it returns on any other screen.
+- Retiring either the business-added note or the second-business card retires both (one event). A Clients suggestion retired on a visit leaves no other until the app reloads (session store).
+- A failed dismissal write is silent; the suggestion returns next visit (TD-140). Settings writes are not transactional (TD-138).
+- "Skip for now" on the welcome dialog creates a placeholder business, so a person who skipped and then adds their real business gets the business-added note. Accepted; flagged to Basel on MUT-190.
+

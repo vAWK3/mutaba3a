@@ -15,6 +15,7 @@ import {
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 import type { Currency } from '../../types';
+import { noteBusinessCreated } from '../../lib/malafatBusinessAdded';
 
 const schema = z.object({
   name: z.string().min(1, 'Business name is required'),
@@ -107,6 +108,8 @@ export function BusinessProfileDrawer() {
         await createMutation.mutateAsync(profileData);
       }
       closeBusinessProfileDrawer();
+      // After the drawer has closed, and outside the save: a second business brings up the Malafat note (MUT-190)
+      if (mode !== 'edit') void noteBusinessCreated();
     } catch (error) {
       console.error('Failed to save business profile:', error);
     }
