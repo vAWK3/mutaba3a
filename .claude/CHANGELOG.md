@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Run qa/ specs with Playwright directly (no QA_CONTEXT)
+
+**Why:** without `QA_CONTEXT`, `qa/support/qa.ts` fell back to `require('../qa.config.mjs')` and `__dirname`. Playwright loads the file as ESM (`"type": "module"`), so a direct `npx playwright test -c qa/playwright.config.ts …` crashed on load with "require is not defined in ES module scope". Until now the only workaround was building `QA_CONTEXT` JSON by hand.
+
+### Fixed
+- `loadContext()` is async. The fallback finds the qa directory with `fileURLToPath(import.meta.url)` (the same way `qa/support/brand.ts` and `i18n.ts` do), loads the config with `await import('../qa.config.mjs')`, and the module awaits it at the top level. The `QA_CONTEXT` path that the release-qa engine uses is unchanged. Verified with a direct `--project=web settings.spec` run against `npm run dev -- --port 5173`: 3/3 passed. The same spec also passes with a hand-built `QA_CONTEXT`.
+
+### Technical
+- Files: `qa/support/qa.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-14 — Edit and delete a logged currency conversion (MUT-194, API 1.23.0-mut194)
 
 **Why:** ADR-070 §2 made hosted conversions create + read only, so a mistyped rate or the wrong currency could only be "fixed" with a reversing entry and a corrected one. Malafat's `GET /v1/audit` also listed `conversion.created`. ADR-075 supersedes ADR-070 §2. Brief: `.claude/designs/mut-194-conversion-edit-delete.md`; tests: `-tests.md`.

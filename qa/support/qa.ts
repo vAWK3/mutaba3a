@@ -10,6 +10,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
 
 export interface Persona {
@@ -31,16 +32,16 @@ interface QaContext {
   clientIpHeader?: string | null;
 }
 
-function loadContext(): QaContext {
+async function loadContext(): Promise<QaContext> {
   if (process.env.QA_CONTEXT) return JSON.parse(process.env.QA_CONTEXT) as QaContext;
   // Running Playwright directly (IDE, `npx playwright test`): fall back to qa.config.mjs.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const cfg = require('../qa.config.mjs').default;
+  // Playwright loads this file as ESM ("type": "module"), so no require/__dirname here.
+  const qaDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const cfg = (await import('../qa.config.mjs')).default;
   const apps: Record<string, AppContext> = {};
   for (const [key, app] of Object.entries<any>(cfg.apps)) {
     apps[key] = { baseURL: app.attachURL ?? app.baseURL, personas: app.personas ?? {} };
   }
-  const qaDir = path.resolve(__dirname, '..');
   return {
     apps,
     warmup: false,
@@ -51,7 +52,7 @@ function loadContext(): QaContext {
   };
 }
 
-const ctx = loadContext();
+const ctx = await loadContext();
 
 export const qa = {
   ...ctx,
