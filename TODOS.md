@@ -142,3 +142,17 @@
 **Context:** Found in MUT-182's eng review (2026-10-14, D5). Start at `organizations.createOwned` and `countOwnedBy` (the cap count would exclude archived profiles) and at `hostedProfileFor` in `server/src/serializers.ts`. The built-in Personal profile (MUT-120) must never be archivable.
 
 **Depends on / blocked by:** MUT-182.
+
+## 14. The portal always opens the first profile in the server's order, not the one you were using — ticketed as MUT-198
+
+**What:** `/` and `/capture` open `profiles[0]` (`FirstProfileRedirect`, `src/hosted/session/AuthGate.tsx`). The MUT-182 order puts owned BUSINESS profiles before the built-in Personal one. Once MUT-183 lets people create a Business profile, the portal opens it every time.
+
+**Why:** Someone with Personal and two businesses keeps landing on the first business instead of the profile they were working in.
+
+**Pros of fixing:** Small: one guarded storage read in `FirstProfileRedirect`, written when the active profile changes. Users land where they left off.
+
+**Cons / cost / risk:** It is per browser only. It is the portal's first stored value, which hosted-portal.md §8 allows only as a per-viewer convenience. Storage can throw (private windows), so every access needs a try/catch and the `profiles[0]` fallback. The server's order may be the behaviour Basel wants.
+
+**Context:** MUT-182 eng review R-4 left a "last opened" override to MUT-183 as an option. MUT-183's eng review (2026-10-14, D9) kept it out of scope. Start at `FirstProfileRedirect`; the stored id must be checked against `me.profiles`.
+
+**Depends on / blocked by:** MUT-183.
