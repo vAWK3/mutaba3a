@@ -18,13 +18,20 @@
 
 ## Open Debt
 
+### TD-131: A type change's audit row lists every expense it uncategorized, unbounded
+**Status**: Accepted
+**Added**: 2026-10-14 (MUT-182 qa-reconcile D4)
+**Priority**: Low
+**Impact**: `organization.type_changed` metadata carries `uncategorized: [{ expenseId, categoryId }]` for every categorised expense (about 80 bytes each), so a profile with thousands of them writes one large JSON row, which `GET /v1/audit`-style reads return whole. The owner chose this (D4 A) because it is the only record from which support can undo a mistaken type change.
+**Fix (if it bites)**: cap the list (first N pairs plus a total), or write one audit row per removed category with its expense ids.
+
 ### TD-130: Flutter still decides "personal" from `writerOfRecord == null`
 **Status**: Open
 **Added**: 2026-10-14 (MUT-182)
 **Ticket**: MUT-184
 **Priority**: Medium
 **Impact**: `/v1/me` now publishes `owned` and `type` per profile, but the phone app's `HostedProfile.isPersonal` (`mutaba3a-flutter/.../auth.dart:185`) is still writer-null. A business profile a person creates is writer-null too, so the app shows it the personal-only UI (category-first capture, MUT-163's File flow) — harmless for categories, wrong for the "personal" label and for client-first filing.
-**Fix**: in MUT-184, key personal-only UI on `type == PERSONAL` and ownership on `owned`; keep the writer-null fallback only for servers older than 1.22.0-mut182.
+**Fix**: in MUT-184, key personal-only UI on `type == PERSONAL` and ownership on `owned`; keep the writer-null fallback only for servers older than 1.22.0-mut182. Also in MUT-184 (qa-reconcile red team): an expense queued offline that names a category a type change has since deleted now gets 422 `CATEGORY_NOT_FOUND`, which the outbox treats as terminal (`core/errors.dart` validationFailed). The outbox should drop the category and retry instead of failing the capture.
 
 ### TD-129: `DownloadPage` still carries a dead checksum toast and unused CSS
 **Status**: Open

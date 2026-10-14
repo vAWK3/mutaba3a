@@ -2301,3 +2301,15 @@ Run: `npx vitest run src/hosted src/components/ui/__tests__` — 55 files / 704 
 
 Run: `npm --prefix server test` (88 files / 1697 tests), `MUTABA3A_TEST_DATABASE_URL=… npx vitest run` on a fresh migrated DB for the Postgres suites, `npx vitest run src/hosted` (30 files / 286 tests). Regression contract: MUT-120's existing tests (routes-users, routes, routes-sessions, store-contract-users) pass unchanged.
 
+### MUT-182 qa-reconcile additions (2026-10-14)
+| Suite | Cases |
+|---|---|
+| `store-contract-profiles.ts` | create writes `organization.created` + `membership.granted` as the person; type change records `removedCategories` + `uncategorized` pairs, `organization.updated` fields, SYSTEM seed; stale writes no audit; D2 refusal leaves categories, expense and audit untouched; **C11** category create racing a retype (PG); **C12** expense moving between categories racing a retype (PG, 5 rounds) |
+| `routes-owned-profiles-standalone.test.ts` | an unstamped personal profile is still refused a key and a grant (PERSONAL_PROFILE) and still counts — proven red on the old single-column guard |
+| `routes-profiles.test.ts` | `/me` order = membership order; unstamped personal shows owned + PERSONAL and its rename stamps it; its first category list seeds the personal preset (proven red on the old line); preview refuses the built-in profile (409) and a firm (403 NOT_OWNER) |
+| `inbox-filing.test.ts` | filing whose category a type change deleted → 422 CATEGORY_NOT_FOUND, entry kept, no expense |
+| `post-roll.test.ts` | `repairPersonalOwnership` stamps an unstamped personal profile, idempotent; `updateOwned` stamps it too |
+| `migration-mut182.test.ts` | an old-shape personal insert after the migration is accepted and stays unstamped |
+
+Run: targeted suites only (owner's request) — 23 files / 984 tests, then 12 files / 358 tests after cycle 2, on a freshly migrated `mutaba3a_test_mut182`; portal 30 files / 286.
+

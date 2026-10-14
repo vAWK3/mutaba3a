@@ -1862,6 +1862,7 @@ holds).
   - **`/v1/me`** publishes `owned`, `type`, `version` per profile and `limits`; order is firms, then created profiles (oldest first), then the personal profile last.
 - *Why*: a freelancer with a second business had nowhere to record it without an operator.
 - *Override log*: replaces "organizations are created only by `/admin` and the scripts" with "…except a person's own standalone profile, created by its owner's session". Date 2026-10-14; reason above; the operator path is unchanged for firms and Malafat tenants.
+- *qa-reconcile (2026-10-14, owner answers D1–D7)*: (1) **ownership is `profileOwnerOf(org)` = `ownerUserId ?? personalOwnerUserId`** at every door — the old revision still writes unstamped personal profiles after the migration (the CHECKs pass on NULL by design), post-roll stamps them; (2) the owned-profile writes **audit inside their own transactions**, and a type change records the removed categories and every lost expense→category pair; (3) row locks are `FOR NO KEY UPDATE`, and a type change locks expense rows before category rows.
 
 ---
 
