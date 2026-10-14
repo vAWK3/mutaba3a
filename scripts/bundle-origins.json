@@ -28,6 +28,7 @@
     "https://ko-fi.com",
     "https://mutaba3a-api-t5bzsudmja-zf.a.run.app",
     "https://mutaba3a.app",
+    "https://mutaba3a.netlify.app",
     "https://proconsult.co.il",
     "https://react.dev",
     "https://reactjs.org",
@@ -35,5 +36,5 @@
     "https://tanstack.com",
     "https://tinyurl.com"
   ],
-  "hosted": ["http://localhost", "http://www.w3.org", "http://json-schema.org", "https://json-schema.org", "https://react.dev", "https://tanstack.com"]
+  "hosted": ["http://json-schema.org", "http://localhost", "http://www.w3.org", "https://json-schema.org", "https://mutaba3a.netlify.app", "https://react.dev", "https://tanstack.com"]
 }

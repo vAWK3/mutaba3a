@@ -2360,3 +2360,17 @@ Run so far: server `typecheck`, `lint`, `openapi:check`, `npm test` (86 files, 1
 | Browser check (dev server, 2026-10-14) | 1440×800: card 111 px, nav 388 px; 1440×700: card shown, nav 288 px; 1440×640: card `display: none`; × 44×44; Arabic RTL with × at the inline end; dismiss stores the timestamp, focuses Settings, no network entries; Settings row in Arabic with `/hosted` and the run.app sign-in link, both `_blank` |
 
 Run: `npx vitest run src/lib/__tests__/goHosted.test.ts src/components/layout src/pages/settings scripts/__tests__/vite-config.test.ts`; `npm run test:bundles` for the origin allowlist.
+
+## MUT-188 — portal sign-in links out to /hosted (2026-10-14)
+
+| Suite | Cases |
+|---|---|
+| `scripts/__tests__/vite-config.test.ts` → "portal request link (MUT-188)" | hosted define = `DEFAULT_PUBLIC_ORIGIN + /hosted`; web and desktop define none; default pinned to a `.netlify.app` origin until MUT-112; override trims a trailing slash; `http://`, bare host, empty, `https://` and a path all throw naming `MUTABA3A_PUBLIC_ORIGIN`; the `/hosted` link-preview test reads the default instead of a literal |
+| `src/hosted/session/__tests__/auth-states.test.tsx` → S3b | EN: link "Request one" with the stubbed href, no `target`, the only link, "No account?" present, `BANNED` absent; AR: "اطلب حسابًا" / "ليس لديك حساب؟", `dir="rtl"`. S3's zero-links case is untouched (no global in Vitest) |
+| `scripts/__tests__/brand-head.test.ts` | `hosted.html` keeps `<meta name="referrer" content="same-origin">` |
+| `src/hosted/i18n/__tests__/parity.test.ts` | covers `hosted.auth.request.*` automatically |
+| `npm run test:bundles` | `dist-hosted` references only allowlisted origins (Netlify added) and no forbidden phrase; `dist-web` still carries the OAuth client id host |
+| QA `qa/specs/portal/signin.spec.ts` `@portal.signin.request-link` | EN and AR on the hosted dev/preview build: link visible, href matches `^https://[^/]+/hosted$`, no `target`, lead text visible, exactly one link, axe clean |
+
+Run: `npx vitest run scripts/__tests__/vite-config.test.ts src/hosted/session/__tests__/auth-states.test.tsx scripts/__tests__/brand-head.test.ts src/hosted/i18n`; `npm run test:bundles`.
+

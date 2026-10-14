@@ -13,3 +13,5 @@ declare const __APP_VERSION__: string;
 declare const __BUILD_MODE__: 'web' | 'desktop';
 /** The portal origin the web build's sign-in link opens; "" in the desktop build (MUT-187). */
 declare const __PORTAL_URL__: string;
+/** The landing's public /hosted page, set by the hosted build only (MUT-188); absent elsewhere. */
+declare const __HOSTED_OFFER_URL__: string;

@@ -43,7 +43,7 @@ The brief specifies the sign-in form, one failure sentence, the 429 sentence and
 - Password input: `autocomplete="current-password"`, `dir="ltr"`. The Show/Hide toggle is a `<button type="button">` with `aria-pressed` and `aria-controls`.
 - Email and password stay left-to-right in Arabic, because an address and a password are LTR strings. Labels, banner and help line follow the page direction.
 - The error banner is `role="alert"`; each input's `aria-describedby` points at its own field message and at the banner.
-- No "remember me" (brief §12). No link other than the language switch. The help line is plain text, not a link.
+- No "remember me" (brief §12). No link other than the language switch and, since MUT-188 (2026-10-14), one outward link under the help line to the landing's public `/hosted` offer page ("No account? Request one"). The help line itself is plain text. No inbound door (signup, reset, invite) exists.
 - Layout: a centred 360 px card on the page background, the wordmark above it, the help line below it, the language switch in the top inline-end corner. At phone width the card fills the width inside 16 px gutters.
 - Built from the existing tokens (`theme.css`) and the reusable `Button`, `Input` and `Card`. No new component except the sign-in page itself.
 

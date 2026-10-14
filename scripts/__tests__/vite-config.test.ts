@@ -4,9 +4,11 @@ import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
 import { existsSync } from 'node:fs';
 import configFn, {
   DEFAULT_PORTAL_URL,
+  DEFAULT_PUBLIC_ORIGIN,
   HOSTED_OFFER_FILE,
   HOSTED_OFFER_PAGE,
   HOSTED_OFFER_TITLE,
+  hostedOfferUrl,
   PWA_INCLUDE_ASSETS,
   PWA_MANIFEST,
   PWA_WORKBOX,
@@ -208,6 +210,30 @@ describe('vite.config', () => {
     );
   });
 
+  describe('portal request link (MUT-188)', () => {
+    it('gives the hosted build the public /hosted address, and the local builds none', () => {
+      expect(resolve('hosted').define?.__HOSTED_OFFER_URL__).toBe(JSON.stringify(`${DEFAULT_PUBLIC_ORIGIN}/hosted`));
+      expect(resolve('web').define).not.toHaveProperty('__HOSTED_OFFER_URL__');
+      expect(resolve('desktop').define).not.toHaveProperty('__HOSTED_OFFER_URL__');
+    });
+
+    it('defaults to the Netlify origin until the custom domain has DNS (MUT-112)', () => {
+      expect(hostedOfferUrl(undefined)).toBe(`${DEFAULT_PUBLIC_ORIGIN}/hosted`);
+      expect(DEFAULT_PUBLIC_ORIGIN).toMatch(/^https:\/\/[^/]+\.netlify\.app$/);
+    });
+
+    it('takes MUTABA3A_PUBLIC_ORIGIN over the default and drops a trailing slash', () => {
+      expect(hostedOfferUrl('https://staging.example/')).toBe('https://staging.example/hosted');
+    });
+
+    it.each(['http://x.example', 'x.example', '', 'https://', 'https://x.example/hosted'])(
+      'refuses %j as the public origin, failing the hosted build',
+      (value) => {
+        expect(() => hostedOfferUrl(value)).toThrow(/MUTABA3A_PUBLIC_ORIGIN/);
+      },
+    );
+  });
+
   describe('Netlify form twin (MUT-186)', () => {
     const plugin = () => {
       const found = (resolve('web').plugins ?? []).flat().find((p) => p && typeof p === 'object' && 'name' in p && p.name === 'mutaba3a:netlify-forms');
@@ -330,7 +356,7 @@ describe('vite.config', () => {
       const bundle = { 'index.html': { type: 'asset', fileName: 'index.html', source: INDEX } };
       (found as { generateBundle: (this: unknown, o: unknown, b: unknown) => void }).generateBundle.call({ emitFile }, {}, bundle);
       expect(emitFile).toHaveBeenCalledWith(expect.objectContaining({ type: 'asset', fileName: HOSTED_OFFER_FILE }));
-      expect(String(emitFile.mock.calls[0][0].source)).toContain('content="https://mutaba3a.app/hosted"');
+      expect(String(emitFile.mock.calls[0][0].source)).toContain(`content="${DEFAULT_PUBLIC_ORIGIN}/hosted"`);
       expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:hosted-offer-html');
       expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:hosted-offer-html');
     });

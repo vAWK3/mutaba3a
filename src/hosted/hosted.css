@@ -196,6 +196,9 @@
 .hp-block { width: 100%; margin-top: var(--space-1); justify-content: center; }
 .hp-inline-spinner { position: static; margin-inline-end: var(--space-2); }
 .hp-help { max-width: var(--hp-card-width); text-align: center; font-size: var(--text-label); color: var(--muted); margin: 0; }
+.hp-help + .hp-help { margin-top: var(--space-2); }
+/* A link inside running text needs more than colour to stand out (axe link-in-text-block, MUT-188) */
+.hp-help a { text-decoration: underline; text-underline-offset: 0.15em; }
 
 /* ---------- Shell ---------- */
 
