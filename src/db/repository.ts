@@ -393,7 +393,7 @@ export const transactionRepo = {
           const changes: Partial<Transaction> = { ...data };
           for (const key of PAYMENT_STATE_KEYS) delete changes[key];
           await db.transactions.update(id, { ...changes, updatedAt: nowISO() });
-          await this.markPaid(id, { paidAt: data.paidAt });
+          await markPaidCore(id, { paidAt: data.paidAt });
           return;
         }
         await db.transactions.update(id, { ...data, updatedAt: nowISO() });
@@ -422,24 +422,7 @@ export const transactionRepo = {
   },
 
   async markPaid(id: string, opts?: { paidAt?: string }): Promise<void> {
-    const tx = await db.transactions.get(id);
-    if (!tx) return;
-
-    const currentReceived = tx.receivedAmountMinor ?? 0;
-    const remaining = tx.amountMinor - currentReceived;
-
-    if (remaining > 0) {
-      // Create a payment record for the remaining amount; recalculateReceivedAmount
-      // (called by paymentRecordRepo.create) derives status/paidAt from it.
-      await paymentRecordRepo.create({
-        transactionId: id,
-        amountMinor: remaining,
-        paidAt: opts?.paidAt ?? nowISO(),
-      });
-    } else {
-      // Already fully covered by existing payment records; just finalize status.
-      await recalculateReceivedAmount(id);
-    }
+    await db.transaction('rw', [db.transactions, db.paymentRecords], () => markPaidCore(id, opts));
   },
 
   /**
@@ -456,7 +439,7 @@ export const transactionRepo = {
   ): Promise<Transaction> {
     return db.transaction('rw', [db.transactions, db.paymentRecords], async () => {
       const tx = await this.create({ ...data, status: 'unpaid' });
-      await this.markPaid(tx.id, { paidAt });
+      await markPaidCore(tx.id, { paidAt });
       return (await db.transactions.get(tx.id))!;
     });
   },
@@ -1113,6 +1096,82 @@ async function assertWithinTransactionTotal(
   }
 }
 
+/**
+ * Validates and writes a payment record, then recalculates the transaction's
+ * received total. Doesn't open its own db.transaction(): callers that aren't
+ * already inside one (paymentRecordRepo.create) wrap this; callers that are
+ * (markPaidCore, itself reused by createReceivedIncome) call it directly, so
+ * a record-backed create never nests a second db.transaction() inside the
+ * first -- that nesting + React's scheduler was intermittently racing fake-
+ * indexeddb's transaction auto-commit and hanging the test's refetch (seen
+ * flaking on MUT-5's "a Received create shows up in useIncome" test).
+ */
+async function writePaymentRecord(data: {
+  transactionId: string;
+  amountMinor: number;
+  paidAt: string;
+  notes?: string;
+}): Promise<PaymentRecord> {
+  if (data.amountMinor <= 0) {
+    throw new PaymentRecordError('Payment amount must be positive', { transactionId: data.transactionId });
+  }
+  // A payment can't have arrived before it was received (MUT-18)
+  if (isFuturePaymentDate(data.paidAt)) {
+    throw new PaymentRecordError('Payment date cannot be in the future', { transactionId: data.transactionId });
+  }
+
+  const tx = await db.transactions.get(data.transactionId);
+  if (!tx) {
+    throw new PaymentRecordError('Transaction not found', { transactionId: data.transactionId });
+  }
+  if (tx.kind !== 'income') {
+    throw new PaymentRecordError('Payment records only apply to income transactions', { transactionId: data.transactionId });
+  }
+
+  const now = nowISO();
+  const record: PaymentRecord = {
+    id: generateId(),
+    transactionId: data.transactionId,
+    amountMinor: data.amountMinor,
+    paidAt: data.paidAt,
+    notes: data.notes,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await assertWithinTransactionTotal(data.transactionId, data.amountMinor);
+  await db.paymentRecords.add(record);
+  await recalculateReceivedAmount(data.transactionId);
+
+  return record;
+}
+
+/**
+ * Core of transactionRepo.markPaid: assumes the caller already holds
+ * transactions + paymentRecords locked (its own db.transaction(), or the
+ * caller's). See writePaymentRecord for why this doesn't open one itself.
+ */
+async function markPaidCore(id: string, opts?: { paidAt?: string }): Promise<void> {
+  const tx = await db.transactions.get(id);
+  if (!tx) return;
+
+  const currentReceived = tx.receivedAmountMinor ?? 0;
+  const remaining = tx.amountMinor - currentReceived;
+
+  if (remaining > 0) {
+    // recalculateReceivedAmount (called by writePaymentRecord) derives
+    // status/paidAt from the record.
+    await writePaymentRecord({
+      transactionId: id,
+      amountMinor: remaining,
+      paidAt: opts?.paidAt ?? nowISO(),
+    });
+  } else {
+    // Already fully covered by existing payment records; just finalize status.
+    await recalculateReceivedAmount(id);
+  }
+}
+
 export const paymentRecordRepo = {
   async create(data: {
     transactionId: string;
@@ -1120,40 +1179,7 @@ export const paymentRecordRepo = {
     paidAt: string;
     notes?: string;
   }): Promise<PaymentRecord> {
-    if (data.amountMinor <= 0) {
-      throw new PaymentRecordError('Payment amount must be positive', { transactionId: data.transactionId });
-    }
-    // A payment can't have arrived before it was received (MUT-18)
-    if (isFuturePaymentDate(data.paidAt)) {
-      throw new PaymentRecordError('Payment date cannot be in the future', { transactionId: data.transactionId });
-    }
-
-    const tx = await db.transactions.get(data.transactionId);
-    if (!tx) {
-      throw new PaymentRecordError('Transaction not found', { transactionId: data.transactionId });
-    }
-    if (tx.kind !== 'income') {
-      throw new PaymentRecordError('Payment records only apply to income transactions', { transactionId: data.transactionId });
-    }
-
-    const now = nowISO();
-    const record: PaymentRecord = {
-      id: generateId(),
-      transactionId: data.transactionId,
-      amountMinor: data.amountMinor,
-      paidAt: data.paidAt,
-      notes: data.notes,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    await db.transaction('rw', [db.paymentRecords, db.transactions], async () => {
-      await assertWithinTransactionTotal(data.transactionId, data.amountMinor);
-      await db.paymentRecords.add(record);
-      await recalculateReceivedAmount(data.transactionId);
-    });
-
-    return record;
+    return db.transaction('rw', [db.paymentRecords, db.transactions], () => writePaymentRecord(data));
   },
 
   async update(id: string, data: {
