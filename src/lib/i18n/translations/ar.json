@@ -40,7 +40,8 @@
       "activityOldest": "النشاط الأقدم",
       "netHigh": "الصافي (الأعلى أولاً)",
       "netLow": "الصافي (الأقل أولاً)"
-    }
+    },
+    "pageTitle": "متابعة — {page}"
   },
   "currency": {
     "USD": "دولار",
@@ -123,6 +124,8 @@
       "history": "سجل الدفعات",
       "noPayments": "لا توجد دفعات مسجلة بعد",
       "editPayment": "تعديل الدفعة",
+      "loadFailed": "تعذّر تحميل دفعات هذا البند.",
+      "choosePayment": "اختر الدفعة التي تريد تعديلها.",
       "updatePayment": "تحديث الدفعة",
       "deletePayment": "حذف الدفعة",
       "deleteConfirm": "هل أنت متأكد من حذف هذه الدفعة؟",
@@ -989,7 +992,9 @@
       "moreDetails": "تفاصيل إضافية",
       "chooseBusinessFirst": "اختر الملف التجاري أولاً لإضافة عميل جديد.",
       "lessDetails": "تفاصيل أقل",
-      "paymentsRecordedHint": "تم تسجيل دفعات لهذا البند، لذا تتبع حالته هذه الدفعات. أدِر الدفعات من صفحة العميل.",
+      "paymentsRecordedHint": "تم تسجيل دفعات لهذا البند، لذا تتبع حالته هذه الدفعات.",
+      "lastPayment": "آخر دفعة {date}",
+      "saveBeforePayment": "احفظ تغييراتك لتعديل الدفعة",
       "currencyLockedHint": "تم تسجيل دفعات بعملة {currency}، لذا لا يمكن تغيير العملة.",
       "savePaymentsChanged": "تغيّرت دفعات هذا البند أثناء فتحه. أعد فتحه لرؤية آخر التحديثات.",
       "saveFailed": "تعذّر حفظ هذا البند. حاول مرة أخرى.",
@@ -1221,9 +1226,22 @@
   },
   "landing": {
     "skipToContent": "تخطَّ إلى المحتوى الرئيسي",
+    "meta": {
+      "title": "متابعة — تابع مالك، بأمان"
+    },
+    "header": {
+      "wordmark": "Mutaba3a · متابعة",
+      "wordmarkShort": "متابعة",
+      "cta": {
+        "mac": "تحميل",
+        "windows": "تحميل",
+        "web": "تطبيق الويب"
+      }
+    },
     "langToggle": {
       "en": "EN",
-      "ar": "ع"
+      "ar": "ع",
+      "label": "تغيير اللغة"
     },
     "hero": {
       "headlineLine1": "تابع مالك،",

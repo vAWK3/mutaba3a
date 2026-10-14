@@ -18,9 +18,11 @@ export interface ClientPickerProps {
   onChange: (customerId: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  /** The input's id, so the drawer's `<label htmlFor>` names it. */
+  id?: string;
 }
 
-export function ClientPicker({ profileId, value, onChange, placeholder, disabled }: ClientPickerProps) {
+export function ClientPicker({ profileId, value, onChange, placeholder, disabled, id }: ClientPickerProps) {
   const { data: customers } = useCustomerDirectory(profileId);
   const [inputValue, setInputValue] = useState('');
   const prevValue = useRef(value);
@@ -60,6 +62,7 @@ export function ClientPicker({ profileId, value, onChange, placeholder, disabled
       }}
       placeholder={placeholder}
       disabled={disabled}
+      id={id}
     />
   );
 }

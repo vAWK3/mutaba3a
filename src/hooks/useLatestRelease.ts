@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 const GITHUB_API_URL = 'https://api.github.com/repos/vAWK3/mutaba3a/releases/latest';
 const CACHE_KEY = 'latest-release-info';
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
+/** A stalled GitHub call gives up after this, so the shared in-flight request always settles. */
+const FETCH_TIMEOUT_MS = 10_000;
 
 interface CachedRelease {
   version: string;
@@ -49,14 +51,46 @@ function setCachedRelease(release: ReleaseInfo): void {
     ...release,
     timestamp: Date.now(),
   };
-  sessionStorage.setItem(CACHE_KEY, JSON.stringify(cached));
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify(cached));
+  } catch {
+    // Storage full or blocked: the release is still good, only the cache is lost.
+  }
 }
 
-export async function fetchLatestRelease(): Promise<ReleaseInfo> {
+/** The GitHub call already on its way, shared by every caller that asks before it settles. */
+let inFlight: Promise<ReleaseInfo> | null = null;
+
+/**
+ * The latest release, one GitHub call per burst of callers: the landing hero,
+ * its header button and Get it all ask on first paint, and GitHub allows 60
+ * unauthenticated calls an hour per IP (MUT-77). Cleared once it settles, so a
+ * failure can be retried and a later check asks again; a stalled call times
+ * out, so it always settles.
+ */
+export function fetchLatestRelease(): Promise<ReleaseInfo> {
+  inFlight ??= requestLatestRelease().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function requestLatestRelease(): Promise<ReleaseInfo> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await readLatestRelease(controller.signal);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function readLatestRelease(signal: AbortSignal): Promise<ReleaseInfo> {
   const response = await fetch(GITHUB_API_URL, {
     headers: {
       Accept: 'application/vnd.github.v3+json',
     },
+    signal,
   });
 
   if (!response.ok) {

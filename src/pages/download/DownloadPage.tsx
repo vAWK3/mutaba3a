@@ -6,6 +6,7 @@ import { useLatestRelease } from '../../hooks/useLatestRelease';
 import { DOWNLOAD_URLS, PLATFORM_CONFIG } from '../../content/download-config';
 import { currentDevice } from '../../lib/platform';
 import { useT } from '../../lib/i18n';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import './DownloadPage.css';
 
 type OS = 'mac' | 'windows' | 'unknown';
@@ -129,6 +130,7 @@ export function DownloadPage() {
   const detectedOS = useMemo(() => detectOS(), []);
   const { release, isLoading } = useLatestRelease();
   const t = useT();
+  useDocumentTitle(t('common.pageTitle', { page: t('download.title') }));
 
   const handleToastClose = useCallback(() => {
     setToastVisible(false);

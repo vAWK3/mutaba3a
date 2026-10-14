@@ -120,7 +120,7 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
         )}
       </QueryView>
       <SavedNotice kind="conversion" message={t('hosted.savedFlash.conversionSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} listInError={list.isError} />
-      {filters.newConversion && <ConversionDrawer profileId={profile.id} onClose={closeDrawer} />}
+      {filters.newConversion && <ConversionDrawer profileId={profile.id} timezone={profile.timezone} onClose={closeDrawer} />}
     </>
   );
 }

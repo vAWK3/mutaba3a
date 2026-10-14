@@ -18,7 +18,7 @@
 
 ## Open Debt
 
-### TD-123: Two local-app controls press on their own `transform`, outside the `.press` rule (ADR-074)
+### TD-127: Two local-app controls press on their own `transform`, outside the `.press` rule (ADR-074)
 **Status**: Open
 **Ticket**: MUT-91 (found by its /review red team)
 **Added**: 2026-10-14
@@ -26,7 +26,7 @@
 **Impact**: ADR-074 makes `.btn`/`.press` with the CSS `scale` property the one press rule. `.update-banner-cta:active { transform: scale(0.98) }` (`UpdateBanner.css:65`) has no reduced-motion override, so it ignores `prefers-reduced-motion`. `.sample-bar-action/-secondary:active { transform: scale(0.97) }` (`SampleDataBar.css:51`) carries its own. MUT-77's landing branch also presses with `transform: scale(var(--press-scale))`; when it merges, `pressFeedback.test.ts` fails on it by design.
 **Fix**: Give these controls `.press` and delete their own `:active` transforms and transform transitions. MUT-77 adopts `.press`, and its E2E reads `getComputedStyle(el).scale`, not `transform`.
 
-### TD-124: The portal's after-save notice: overlap with the error toast, focus after "Show latest", Show replaces the filtered URL
+### TD-128: The portal's after-save notice: overlap with the error toast, focus after "Show latest", Show replaces the filtered URL
 **Status**: Open
 **Ticket**: MUT-91 (design review findings, kept by D5)
 **Added**: 2026-10-14
@@ -47,6 +47,49 @@
 - Lowercase the anchor in `parseExpenses`/`parseConversions`.
 - When the filters already equal `{ anchor }`, have Show re-arm and refetch directly.
 - Render the hidden status only in the render where a re-armed save resolves.
+
+### TD-126: A recorded payment can't be corrected or reversed from any session
+**Status**: Open — follow-up ticket to be filed (MUT-133 design 6A)
+**Added**: 2026-10-14 (MUT-133)
+**Priority**: Medium — a typo on the most frequent money action is permanent
+**Impact**: A payment created by `POST /v1/receivables/{id}/settle` carries an allocation, so `DELETE /v1/income/{id}` refuses it (409), and personal profiles refuse API keys (409 `PERSONAL_PROFILE`), so the Malafat reverse route can't reach it either. The portal's Record payment drawer says "Check the amount: a recorded payment can't be changed yet." and the live line blocks amounts over what's left; smaller mistakes still stick.
+**Fix**: a session-side reversal (or correction) for a person's own captured payments on a personal profile — server route + phone + portal — then remove the drawer note (`hosted.settle.honest`).
+
+### TD-125: Portal money-input helpers exist in several local copies
+**Status**: Open
+**Added**: 2026-10-14 (MUT-133, eng review D1 chose not to extract)
+**Priority**: Low
+**Impact**: four portal currency lists (`FilterControls` and `conversionFormSchema` lack JOD; `ExpenseDrawer` and `incomeForm` include it), two amount validators (ExpenseDrawer's strict currency-aware regex vs `incomeForm.parseIncomeAmount`'s lenient parse, R5), and three copies of `reasonOf`/`fieldOf` (`expenseApiErrors`, `conversionApiErrors`, `incomeApiErrors`). The expense and conversion drawers also pass English zod messages straight to Arabic users (income uses i18n keys), and `ExpenseDrawer`'s client/matter `<label htmlFor>` still names nothing (the pickers accept an `id` since MUT-133; ExpenseDrawer doesn't pass it).
+**Fix**: one `src/hosted/format/currencies.ts` (the wire enum), move expense/conversion to `parseIncomeAmount`'s lenient-in/canonical-out helper and i18n-key messages, share `reasonOf`/`fieldOf`, and pass `id` to the pickers in ExpenseDrawer. Overlaps TD-117 (conversion JOD).
+
+### TD-124: Only the portal's row action grows to 44px on touch screens
+**Status**: Open
+**Added**: 2026-10-14 (MUT-133, design 10A)
+**Priority**: Low
+**Impact**: `Button` `btn-sm` is 32px tall everywhere. MUT-133 scoped a `@media (pointer: coarse)` rule to the portal's Record payment row button (`.hp-row-action`); the local app's `RecordPaymentButton` and every other small button stay under the 44px touch minimum on tablets.
+**Fix**: an app-wide coarse-pointer pass in `Button.css` (and an axe/visual check on tablet width), then drop `.hp-row-action`'s override.
+
+### TD-123: A personal-profile receivable 404 invalidates `/v1/me`
+**Status**: Accepted
+**Added**: 2026-10-14 (MUT-133)
+**Priority**: Low
+**Impact**: `RecordPaymentDrawer` renders through `QueryView`, which treats any 404 as a possibly lost profile and invalidates `ME_KEY`. A receivable that was removed since the page loaded therefore refetches `/v1/me` once. Harmless (one extra GET, same profile), but not what the 404 means here.
+**Fix**: if it ever matters, let `QueryView` take a `notFoundMeansProfile={false}` flag for entity reads.
+### TD-122: The global `a:hover` rule out-ranks every single-class link styled as a control
+**Status**: Open (task chip offered 2026-10-14)
+**Ticket**: MUT-77 (found by `@web.landing.hover-light`)
+**Added**: 2026-10-14
+**Priority**: Medium
+**Impact**: `theme.css` `a:hover { color: var(--link-hover) }` and `index.css` `a:hover { text-decoration: underline }` are (0,1,1), so a link styled by one class, such as a CTA, turns link-coloured and underlined on hover unless it sets its own `:hover`. On the landing page that made the hero button's label purple on its purple fill. MUT-77 fixed the landing controls only.
+**Fix**: Scope both rules to `a:not([class]):hover`, as `theme.css` already does for `:visited`. Then audit every classed `<a>` in the app, the portal and the landing page for the hover each one actually wants, and prove it in Playwright.
+
+### TD-121: Safari ignores `prefers-reduced-transparency`, so the landing bar stays frosted there
+**Status**: Accepted (MUT-77 D3), re-check when Safari ships the query
+**Ticket**: MUT-77
+**Added**: 2026-10-14
+**Priority**: Low
+**Impact**: The landing header is an 85% `--bg` frost with `backdrop-filter`, made solid under `@media (prefers-reduced-transparency: reduce)`. Chromium reports the setting; Safari reportedly doesn't. So a Mac or iPhone Safari visitor who turned on Reduce Transparency still sees the frost. The 85% base keeps text readable.
+**Fix**: When Safari supports the media feature, open the landing page in Safari with Reduce Transparency on and confirm the bar is solid. The CSS needs no change. The Chromium proof is `@web.landing.transparency`, through CDP emulation.
 
 ### TD-120: A retainer's schedule skips months when it starts on the 29th–31st (or on the 1st, west of UTC)
 **Status**: Resolved 2026-10-14. `generateSchedule` steps an integer month index (`year * 12 + month`) from the start date's own year and month, builds each period with `getMonthlyPeriod`/`getQuarterlyPeriod`/`getPaymentDate`, and stops when the period start is past `horizon` (string compare). Four `retainerRepo.test.ts` cases pin it (31st monthly, leap February, 31st quarterly, 1st in New York).
@@ -640,7 +683,7 @@ guard so the four fixes stayed reviewable:
 that file. Nothing here blocks MUT-65 shipping.
 
 ### TD-056: The hosted portal's "income isn't recorded" copy is now false for personal profiles
-**Status**: Open — follow-up filed, MUT-93
+**Status**: Resolved 2026-10-14. MUT-93 fixed the copy; MUT-133 gave a personal profile its write affordances (Add income, Record payment) and removed its notice.
 **Added**: 2026-10-12 (MUT-65)
 **Priority**: Medium — a false statement in the product's own UI
 **Impact**: `hosted-portal.md` §7.4 and `src/hosted/i18n/en.json:85` hard-code

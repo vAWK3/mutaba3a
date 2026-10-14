@@ -23,7 +23,6 @@ import { render, screen, fireEvent, within, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClientsPage } from '../ClientsPage';
 import * as useQueries from '../../../hooks/useQueries';
-import { formatDate } from '../../../lib/utils';
 import { combineOwed } from '../../../db/aggregations';
 import { owedEntriesSearch } from '../../../lib/incomeSearch';
 import { useProfileStore, useOwedScreenStore } from '../../../lib/profileStore';
@@ -283,7 +282,8 @@ describe('ClientsPage', () => {
     it('shows last payment as date and amount, and "Never paid" when there is none', () => {
       renderPage();
       const paid = within(rowFor('Acme')).getByTestId('client-last-payment');
-      expect(paid).toHaveTextContent(formatDate('2026-10-05', 'en-US'));
+      // The payment's own day in every timezone (MUT-169: formatPaymentDate)
+      expect(paid).toHaveTextContent('Oct 5, 2026');
       expect(paid).toHaveTextContent('$200');
       expect(within(rowFor('Gamma')).getByTestId('client-last-payment')).toHaveTextContent('Never paid');
     });

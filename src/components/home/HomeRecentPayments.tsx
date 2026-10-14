@@ -11,7 +11,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useRecentPayments } from '../../hooks/useQueries';
 import { useSavedFlashRows } from '../../lib/useSavedFlash';
 import { useDrawerStore } from '../../lib/stores';
-import { formatAmount, formatDate, cn } from '../../lib/utils';
+import { formatAmount, formatPaymentDate, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { BusinessTags } from '../ui/ProfileBadge';
 import type { BusinessProfile, ProfileScope, RecentPaymentRow } from '../../types';
@@ -70,7 +70,7 @@ export function HomeRecentPayments({ profileId, businesses }: HomeRecentPayments
                       <BusinessTags profileIds={[payment.profileId]} profilesById={businesses} className="home-row-business" />
                     )}
                   </td>
-                  <td className="home-row-date">{formatDate(payment.paidAt, locale)}</td>
+                  <td className="home-row-date">{formatPaymentDate(payment.paidAt, locale)}</td>
                   <td className="amount-cell amount-positive">
                     <bdi dir="ltr">{formatAmount(payment.amountMinor, payment.currency, locale)}</bdi>
                   </td>

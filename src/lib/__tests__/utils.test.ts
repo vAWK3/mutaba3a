@@ -10,6 +10,7 @@ import {
   parseCurrencyInput,
   formatCurrencyInput,
   formatDate,
+  formatPaymentDate,
   formatDateShort,
   formatDateCompact,
   formatRelativeDate,
@@ -367,6 +368,33 @@ describe('utils', () => {
       const result = formatDate('2024-01-15T10:30:00Z', 'ar');
       // Arabic should use different month names
       expect(result).toBeTruthy();
+    });
+  });
+
+  // MUT-169 (D7): every edit saves paidAt date-only. new Date('YYYY-MM-DD') is
+  // UTC midnight, which west of UTC is the evening before.
+  describe('formatPaymentDate', () => {
+    function inTimeZone(timeZone: string, fn: () => void) {
+      const savedTz = process.env.TZ;
+      process.env.TZ = timeZone;
+      try {
+        fn();
+      } finally {
+        if (savedTz === undefined) delete process.env.TZ;
+        else process.env.TZ = savedTz;
+      }
+    }
+
+    it('shows a date-only payment on its own day west of UTC', () => {
+      inTimeZone('America/New_York', () => {
+        expect(formatPaymentDate('2026-10-13', 'en-US')).toBe('Oct 13, 2026');
+      });
+    });
+
+    it("shows a timestamped payment on its local day", () => {
+      inTimeZone('Asia/Jerusalem', () => {
+        expect(formatPaymentDate('2026-10-13T22:30:00.000Z', 'en-US')).toBe('Oct 14, 2026');
+      });
     });
   });
 

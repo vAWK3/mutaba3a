@@ -9,6 +9,7 @@ export { FolderIcon } from './FolderIcon';
 export { LockIcon } from './LockIcon';
 export { MoreIcon } from './MoreIcon';
 export { DownloadIcon } from './DownloadIcon';
+export { PencilIcon } from './PencilIcon';
 export { PlusIcon } from './PlusIcon';
 export { PrintIcon } from './PrintIcon';
 export { TrashIcon } from './TrashIcon';

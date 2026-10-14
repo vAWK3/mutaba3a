@@ -15,7 +15,7 @@ import { usePaymentsByClient } from '../../hooks/useQueries';
 import { useSavedFlashRows } from '../../lib/useSavedFlash';
 import { RowActionsMenu, RowActionsHeader, AmountWithConversion, type RowAction } from '../ui';
 import { useDrawerStore } from '../../lib/stores';
-import { formatDate, cn } from '../../lib/utils';
+import { formatPaymentDate, cn } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { MIGRATED_PAYMENT_NOTE } from '../../db/database';
 import type { PaymentByClientRow } from '../../types';
@@ -87,7 +87,7 @@ export function ClientPaymentsSection({ clientId }: ClientPaymentsSectionProps) 
                   className={cn('clickable', isFlashed(payment.id) && 'row-flash')}
                   onClick={() => openPayment(payment)}
                 >
-                  <td className="client-work-date">{formatDate(payment.paidAt, locale)}</td>
+                  <td className="client-work-date">{formatPaymentDate(payment.paidAt, locale)}</td>
                   <td className="amount-cell">
                     <AmountWithConversion amountMinor={payment.amountMinor} currency={payment.currency} type="income" />
                   </td>

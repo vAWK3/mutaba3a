@@ -48,3 +48,19 @@ export function formatSize(bytes: number, language: Language): string {
   }
   return new Intl.NumberFormat(locale, { style: 'unit', unit: 'megabyte', maximumFractionDigits: 1 }).format(bytes / MIB);
 }
+
+/**
+ * Today's calendar date in an IANA zone, `YYYY-MM-DD` (MUT-133, R3). The server
+ * refuses a future `occurredOn`/`paidAt` against the profile's zone
+ * (`todayIn(organization.timezone)`), so a date default or `max` that predicts
+ * that check must use the same zone, not the browser's. An unknown zone falls
+ * back to the browser calendar rather than throwing inside a form.
+ */
+export function todayInZone(timeZone: string, now: Date = new Date()): string {
+  try {
+    // en-CA formats a calendar date as YYYY-MM-DD.
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  } catch {
+    return todayLocalISO(now);
+  }
+}

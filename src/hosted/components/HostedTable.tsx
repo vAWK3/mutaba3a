@@ -13,6 +13,13 @@ export interface Column<Row> {
   header: string;
   cell: (row: Row) => ReactNode;
   numeric?: boolean;
+  /** Pinned to the table's inline end while the other columns scroll (MUT-133, design 8A): the row action stays in view on a narrow window. */
+  stickyEnd?: boolean;
+}
+
+function cellClass<Row>(column: Column<Row>): string | undefined {
+  const classes = [column.numeric && 'hp-num', column.stickyEnd && 'hp-sticky-end'].filter(Boolean);
+  return classes.length ? classes.join(' ') : undefined;
 }
 
 interface HostedTableProps<Row> {
@@ -34,7 +41,7 @@ export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowCl
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column.key} scope="col" className={column.numeric ? 'hp-num' : undefined}>
+              <th key={column.key} scope="col" className={cellClass(column)}>
                 {column.header}
               </th>
             ))}
@@ -48,7 +55,7 @@ export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowCl
               <Fragment key={rowKey(row)}>
                 <tr className={className} onClick={onRowClick ? () => onRowClick(row) : undefined}>
                   {columns.map((column) => (
-                    <td key={column.key} className={column.numeric ? 'hp-num' : undefined}>
+                    <td key={column.key} className={cellClass(column)}>
                       {column.cell(row)}
                     </td>
                   ))}

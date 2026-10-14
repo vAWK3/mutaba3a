@@ -2165,3 +2165,40 @@ To land on a record that may sit past the first page, pass `anchor=<id>` instead
 
 When Show changes the same page's filters instead of navigating, re-arm the saved flash in an effect that sees the new filter value, not in the click handler. Otherwise the list's next render, still on its old filters, reports "settled, not here" and resolves the save as unclaimed. See `SavedNotice` (`src/hosted/components/SavedNotice.tsx`).
 
+### Pattern: Visibility from IntersectionObserver, never from scroll listeners (MUT-77)
+
+**When**: UI reacts to whether something is on screen. Examples: a header button that appears once the hero's has scrolled away, a scroll-edge fade, a reveal on entry.
+
+**How**:
+- Use `useInView(ref)` and decide what `null` (unknown) means for your case.
+  - Where showing something is optional, unknown means "don't show".
+  - Where hiding content is the risky side, unknown means "show".
+- For "has the page scrolled", observe a 1px sentinel at the very top of the page.
+- When a sticky bar covers the top of the viewport, give the observer a negative top `rootMargin` of at least the bar's height. Otherwise an element under the bar still counts as on screen.
+- For a reveal, set the hidden state only when all of these hold: the element starts below the fold, motion is allowed, and an observer exists to bring it back. Set it as a DOM attribute in a layout effect, not React state, because it needs layout and must never re-hide.
+
+**Never**: attach `scroll` listeners, or hide content before you know something will un-hide it.
+
+**Instances**: `LandingHeader` (sentinel + `showCta`), `LandingPage` (hero button), `ChapterSection` (reveal).
+
+### Pattern: Press feedback comes from the motion tokens; text links dim instead (MUT-77)
+
+**How**:
+- Buttons and button-like links add `scale var(--duration-press) var(--ease-spring)` to their own `transition` list and `:active { scale: var(--press-scale) }`: the `scale` property, never `transform` (ADR-074; moved off `transform` when MUT-91 merged). In the app and portal, a `Button` or `.press` gets this from `src/index.css`; the landing keeps its own selectors because its controls are not `Button`s.
+- The tokens zero under reduced motion, so a rule needs no reduced-motion override.
+- Text links and full-width rows (the FAQ questions) use `:active { opacity: var(--landing-press-dim) }`. Scaling a line of text, or a row whose text is start-aligned, reads as a glitch.
+- On iOS, `:active` needs a touch listener on the page: a passive no-op `touchstart` on `document`.
+- A classed link that looks like a control must also set its own `:hover` colour and `text-decoration`, because the global `a:hover` out-ranks one class (TD-122).
+
+**Instances**: the landing page (`HeroSection.css`, `LandingPage.css`, `FAQSection.css`), guarded by `landingCss.test.ts` and `@web.landing.press`.
+## Hosted portal patterns added by MUT-133 (2026-10-14)
+
+- **Idempotency-Key per save attempt, not per click** (`src/hosted/data/attemptKey.ts`). `useAttemptKey()` returns `keyFor(body)` and `succeeded()`: the same key while the serialized body is unchanged (a retry after a timeout that landed replays the first result), a new key when the body changes (the server refuses a reused key with a different body) or after success. Every portal create uses it: income, settle, expenses, conversions. Never mint `crypto.randomUUID()` inside a `mutationFn`.
+- **Pages own drawers; lists report picks.** A page parses its drawer params beside its list filters (`splitIncomeDrawer`) and mounts the drawer itself; the list takes a callback (`onRecordPayment(id)`) and an empty-state action. Drawer params must never enter a list's filters object, because `useCursorList` keys on it.
+- **A client date default or `max` that predicts a server date check uses the profile's zone**: `todayInZone(profile.timezone)` (`src/hosted/format/dates.ts`), never the browser calendar.
+- **Money input: lenient in, canonical out.** `parseIncomeAmount(text, currency)` (`src/hosted/components/incomeForm.ts`) reads commas, a matching symbol and Arabic-Indic digits via `parseAmountInput`, refuses a different typed currency, and produces a canonical decimal with exactly the currency's digits. Live feedback, validation and the request body all use the same parse.
+- **Focus after an action that removes its own trigger**: move focus to the replacement target *before* closing the drawer (`focusAfterSettle`), because `useDrawerFocus` restores the trigger on unmount unless focus is already outside the panel (ADR-055 §6 in the portal).
+- **Never key a form by an entity's version.** A refetch that bumps it (a race re-read, a focus refetch) remounts the form and throws away what was typed and any inline server error. Key by id, keep user-typed state above the remount boundary, and re-judge it against the fresh entity (`RecordPaymentDrawer`).
+- **A pending submit button is `aria-disabled`, not `disabled`, inside a drawer.** Disabling the focused button blurs it in Chromium, and `useDrawerFocus` then can't hand focus back; guard the handler instead.
+- **A polite status that must be announced lives in a region rendered from the start** (`aria-live="polite"`, filled later). It carries no `role="status"` while empty, so it isn't a landmark when there's nothing to say.
+

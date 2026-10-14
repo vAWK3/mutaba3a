@@ -80,7 +80,77 @@
   - A claimed save settled within its 1.5s tint no longer leaves the row tinted for good. The tint timer keys on the save's ids, not the object.
   - A list in error reports no rows, so stale data can't claim an edit and hide D4's notice.
   - The stale-anchor drop navigates once.
-- **New debt:** TD-123 (two local controls press outside `.press`; MUT-77) and TD-124 (portal notice follow-ups).
+- **New debt:** TD-127 (local controls that press outside `.press`) and TD-128 (portal notice follow-ups). MUT-77's landing press rules moved onto `scale` in the merge (see below).
+
+---
+
+## [Unreleased] - 2026-10-14 — Hosted portal: add income and record payments on a personal profile (MUT-133)
+
+**Why:** a personal hosted profile's session could already write income (MUT-65), but the portal rendered no affordance, so a freelancer had to pick up the phone to log what a client owes or paid. MUT-93 fixed the copy and deferred this.
+
+### Added
+- **Add income** (`IncomeCaptureDrawer`): Received or Owed via `POST /v1/income`, from Receivables, Payments and Client detail (client prefilled). Fast path (kind, amount, client, what it was for) with the rest behind "More details" and a defaults summary; it opens on a hidden-field error.
+- **Record payment** (`RecordPaymentDrawer`): settles an open Owed entry via `POST /v1/receivables/{id}/settle`. The title carries what's left; a live line says paid in full / still owed / exceeds, and blocks Save when over; a note says a recorded payment can't be changed yet.
+- One gate, `incomeAffordancesFor`: personal profile only (`isPersonalDefault`); Malafat-fed and non-personal profiles stay exactly as read-only as before (tested).
+- A polite "Saved · …" status for each income save (Toast `info` tone in a persistent `aria-live` region).
+- `todayInZone`, `useAttemptKey`, `HostedTable` `stickyEnd`, an optional `id` on `EntityTypeahead` and the portal pickers.
+
+### Changed
+- `ReadOnlyNotice` shows nothing on a writable personal profile; its fallback copy drops "This view is read-only".
+- Receivables/Payments/Client detail parse `?newIncome=` / `?settle=` beside their filters and own the drawers; lists take `onRecordPayment` and an empty-state action.
+
+### Fixed
+- Expense and conversion creates were not retry-safe: a Save retried after a timeout that landed recorded twice. All portal creates now reuse one Idempotency-Key per save attempt (D5).
+- Expense and conversion drawers default the date to the profile's calendar day (the server checks dates in that zone).
+- Pre-landing review (qa-reconcile): Record payment kept its form keyed by receivable *version*, so the re-read after a race (or a focus refetch) remounted it, dropped the typed amount and the "more than what's left now" error, and refilled the new outstanding. The amount now lives in the drawer (keyed by receivable), the sent value is pinned on submit, and Save stays blocked against the fresh figure. Also: an error in collapsed More details reopens it; pending Save is `aria-disabled` (a disabled focused button loses focus in Chromium); after Add, focus returns to the header Add button; an empty Paid on says "Choose a date"; identical Saved messages are re-announced; row buttons name the client.
+
+### Technical
+- en/ar keys under `hosted.income.*` and `hosted.settle.*`. ADR-037 MUT-133 amendment; hosted-portal.md §7.4 rewritten; PATTERNS (attempt key, pages own drawers, zone dates, lenient money input, focus before close, pre-rendered live region); TD-056 resolved; TD-123..TD-126 added.
+- Plan, reviews and wireframe: `.claude/designs/mut-133-portal-personal-income.md`, `mut-133-portal-income-wireframe.html`.
+## [Unreleased] - 2026-10-14 — Edit a payment's date from the ledger and the entry (MUT-169)
+
+**Why:** Fast-added Received income is dated *now* (`nowISO()`), and users fix the date hours or days later from `/income`. A fully paid row there had no way to reach its payment (its Record Payment button hides and its menu had only Duplicate). The income drawer told people to manage payments from the client page. Plan and eng-review decisions D1–D7: `.claude/designs/mut-169-edit-payment-from-ledger.md`.
+
+### Added
+- **The payment drawer's `editPayment` intent** (`partialPaymentDrawer.intent`, `PartialPaymentIntent` in `lib/stores.ts`). An entry with one payment opens straight into its edit, with the date open and focused (D3). Several payments are listed to pick from, with no create form. With none, it says so. Saving one payment closes the drawer; with several, the list comes back. `editPaymentRecord` keeps the intent for the same entry, as it does `onRecorded`.
+- **/income row menu → Edit Payment** on any row with money received (`IncomeRow.canEditPayment`), paid or part-paid.
+- **Income drawer: "Last payment {date} · Edit Payment"** up front on an entry with payments. It hands over to the payment drawer with the intent. While the form has unsaved changes, the button is disabled and a hint says to save first (D2). New `drawer-notice--info` variant (neutral, one row).
+- `paymentLocalDay` (`lib/dates.ts`) and `formatPaymentDate` (`lib/utils.ts`).
+
+### Fixed
+- **The edit form prefilled a payment's UTC day.** A fast-add saved between local midnight and ~03:00 in Israel opened a day early, and any save moved it back a day. It now prefills the local day (D1).
+- **A date-only payment showed a day early west of UTC** in the payment drawer's history and the client's Payments list (`new Date('YYYY-MM-DD')` is UTC midnight). Both now use `formatPaymentDate` (D5).
+- Under the intent, a failed payment-records read shows the load-failed notice with Try again, never "No payments recorded yet" (D7).
+
+### Changed
+- `drawer.income.paymentsRecordedHint` no longer says "Manage payments from the client page" (en, ar). New keys: `drawer.income.lastPayment`, `drawer.income.saveBeforePayment`.
+
+### Technical
+- Tests: drawer intent (1/several/none/loading/failed, save/cancel paths, focus, local-day prefill, future date), store intent, `canEditPayment`, the ledger menu, the income-drawer link and its dirty guard, `paymentLocalDay`/`formatPaymentDate` in UTC+ and UTC− zones, the client Payments list west of UTC, and entry recalculation after a date move (`paymentRecords.test.ts`, D4). QA: `@web.record-payment.edit-payment-date` and `-rtl`.
+- Files: `src/lib/{stores,dates,utils}.ts`, `src/components/drawers/{PartialPaymentDrawer.tsx,PartialPaymentDrawer.css,IncomeDrawer.tsx}`, `src/pages/income/{incomeRows.ts,IncomePage.tsx}`, `src/components/clients/ClientPaymentsSection.tsx`, `src/index.css`, `src/lib/i18n/translations/{en,ar}.json`, `qa/specs/web/record-payment.spec.ts`, `qa/features/web/record-payment.yaml`.
+
+### Fixed in pre-landing review (2026-10-14)
+- **Editing an unpaid entry to Received now records a payment** (`transactionRepo.update`, no-records branch → `markPaid`), like a Received create (MUT-60). Before this, the edit wrote status/paidAt/received straight onto the entry, so Edit Payment opened on an entry with nothing to edit (TD-029 on the edit path).
+- **An edit saves only what changed.** An untouched date keeps its stored instant: a no-op save no longer turns a fast-add's UTC timestamp into a day, which could move it across a month boundary for readers that use the UTC day. A legacy entry recorded over its total (ADR-030) can have its date fixed without tripping the overpayment check.
+- **Payment dates show the user's own day everywhere:** Home's Recent payments, the Clients index's Last payment and the CSV export's `paidAt` now go through `formatPaymentDate`/`paymentLocalDay`. `paymentLocalDay` also reads non-ISO stored dates (a CSV import's `1/15/2024`) instead of producing "Invalid Date".
+- **Edit Payment from the income drawer:**
+  - The guard also waits for a client name typed but not picked.
+  - The button uses `aria-disabled`, so it stays focusable and its hint is read.
+  - The hand-over opens the payment drawer a tick later, so closing it returns focus to the row that opened the income drawer.
+  - "Last payment" breaks a same-day tie by the stored value, so list order never decides.
+- **Payment drawer:**
+  - A failed records read has its own copy (`transactions.partialPayment.loadFailed`; the income drawer's said "can't be saved yet").
+  - Retry shows that it is loading and can't be clicked twice.
+  - A failed background refetch keeps the records already loaded.
+  - The picker says "Choose the payment to edit."
+  - The record row's edit/delete buttons have accessible names.
+  - The ledger's Edit Payment has a pencil icon (new `PencilIcon`).
+- **Tests are stable under `npm run test:tz`:** the Jerusalem-specific cases pin their zone, and two expectations that encoded the old UTC-midnight output now name the day.
+
+### Known, not fixed here
+- The repository orders a transaction's records by raw string (`recalculateReceivedAmount`, `listByTransaction`). West of UTC, a timestamp record and a date-only record on adjacent days can sort against their local days.
+- The single-record edit is derived on each render: if another window adds or removes a payment while the form is open, it switches to the picker.
+- `OrphanedRecordsDrawer.test.tsx` fails under `npm run test:tz` on main too (unrelated).
 
 ---
 
@@ -135,6 +205,49 @@
 - `retainerRepo.test.ts`: the refresh-due-states test is deterministic (01:30 on 2026-10-14 in Jerusalem), and five new cases pin the other paths at the same instant. All six fail on the old code and pass in Jerusalem, New York, UTC and UTC+14 host timezones.
 - `.claude/TECH_DEBT.md`: TD-014 updated (the retainer copy is gone; `recurringExpenseService.ts` keeps its copy). New TD-120: the schedule's month cursor (`new Date(startDate)` + local `setMonth`) skips February for a start on the 29th–31st, and skips a month west of UTC for a start on the 1st. Found here, not fixed here.
 - `.claude/PATTERNS.md`: the date pattern's Testing note points at `atInstantIn` for "today" bugs.
+
+---
+
+## [Unreleased] - 2026-10-14 — MUT-77: the landing page's frosted sticky header and restrained motion
+
+**Why:** The landing page had only a floating language toggle: no product name above the fold, an overlap with the hero at 375 in Arabic, no press feedback on most buttons, and an Arabic tab title in English. On top of that, hovering the hero button in OS light mode turned its label purple on its purple fill. MUT-77 (epic MUT-74, Brand v2 re-cut) carries out brief L9/L10 with the MUT-102 tokens. Plan and eng review: `.claude/designs/mut-77-landing-header-motion.md` (D1–D10).
+
+### Added
+- **The header bar** (`LandingHeader`):
+  - A slim sticky frosted bar with the Brand v2 wordmark, the language switch, and the hero's device-matched button.
+  - The button shows only once the hero's own has scrolled out of view, which `useInView` (IntersectionObserver) reports.
+  - The background is an 85% `--bg` frost with `backdrop-filter`. It turns solid under `prefers-reduced-transparency` and without `backdrop-filter` support (D3).
+  - A top sentinel drives a scroll-edge fade instead of a border.
+  - There are no section links.
+- `useInView` (`src/hooks`), `useDocumentTitle` (`src/hooks`), `useHeroCta` (`src/pages/landing`), `FakeIntersectionObserver` (`src/test/intersectionObserver.ts`).
+- **Chapter visuals rise and fade in once** (`--stagger-rise` over `--duration-nav` on `--ease-spring`):
+  - Only below the fold, with motion allowed, and with an observer present to bring them back.
+  - **Deviation from L10's "cross-fades only":** under reduced motion the visuals are simply there, with no animation (D4). `theme.css` forces every transition to be instant under reduced motion, so a cross-fade would need an `!important` override.
+- **Tab titles follow the language** on `/` (D6), and on `/privacy` and `/download` (D8). The `/privacy` and `/download` titles are Basel's call and go beyond the ticket's AC.
+- `qa/specs/web/landing.spec.ts`, covering 375 and 320 in EN and AR, and the privacy bar. `brand.spec.ts` also runs axe with the bar over a chapter.
+- i18n keys in EN and AR: `landing.meta.title`, `common.pageTitle`, `landing.header.{wordmark,wordmarkShort,cta.*}` and `landing.langToggle.label`. The web short label is "Web app" / "تطبيق الويب", which keeps it part of the accessible name (WCAG 2.5.3).
+- **Pre-landing review fixes** (/review: 5 specialists, red team and an adversarial pass):
+  - **The bar on phones:** it keeps its padding. Its rule is now two classes, because the phone `.landing-container` rule out-ranked it. Phones get 44px tap targets, and at 360px and below the bar's button shows only its icon.
+  - **Button placement:** the bar's button sits before the language switch, so the switch holds the end edge while the button is hidden.
+  - **No dead zone:** the hero button is watched below the bar (`rootMargin` -72px). Without that there was a stretch of scroll where the hero button sat under the bar and neither button was usable.
+  - **`/privacy`:** the bar has no button and makes no GitHub call, and the wordmark links home (`homeHref`).
+  - **Hover:** only the shown button dims on hover, so hovering never blocks its fade-out.
+  - **FAQ rows** dim on press rather than scaling.
+  - **Release fetch:** it times out after 10s, so the shared request always settles, and a failed cache write keeps the release.
+  - **Smaller items:** the dims come from `--landing-press-dim` / `--landing-hover-dim`; the blur is lighter (12px); unrevealed visuals still print; `scroll-padding-top` keeps jumps below the bar.
+
+### Changed
+- **Press feedback:** every landing button presses in with `--press-scale` / `--duration-press`, zeroed under reduced motion. That covers the hero and bar buttons, the language switch, the Get it cards and the FAQ questions; the literal 0.97/0.98 values are gone. Text links dim on press instead.
+- **Release fetch:** `fetchLatestRelease` shares one GitHub call between concurrent callers and clears it on settle (D2). A first visit now makes one call instead of two. The contract is pinned first in `useLatestRelease.test.ts` (D7).
+- **`Wordmark`** moves from the portal to `src/components/brand`, with the name and classes as props. The portal's `Wordmark` keeps its API.
+- **Hero top padding** drops to `--space-16` / `--space-10`, because the bar now sits in the flow.
+
+### Fixed
+- **Hover:** `theme.css` `a:hover` (0,1,1) out-ranks a single-class link. The hero button, the bar's button, the wordmark link and the Get it cards now hold their own hover colour and no underline. The app-wide rule is TD-122.
+- **The 375 overlap:** the bar is in the flow. Below 480px the wordmark shows only the active language's name, so it never runs under the switch.
+
+### Removed
+- The unused `.transition-all` utility (`transition: all`) from `theme.css`.
 
 ---
 

@@ -87,6 +87,34 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ## Current Test Coverage
 
+### Landing header and motion (MUT-77, added 2026-10-14)
+| File | Type | Covers |
+|------|------|--------|
+| `src/hooks/__tests__/useLatestRelease.test.ts` | Unit (hook) | R6 contract: cache hit → no fetch; concurrent mounts → one fetch; shared failure → error to both, then the next call retries; `useCheckForUpdates` still fetches after a settle; a stalled call times out at 10s and the next call asks again; a failed cache write keeps the release |
+| `src/hooks/__tests__/useInView.test.ts` | Unit (hook) | null until the first report or without IntersectionObserver; in/out; options passed through; once → disconnect and stay true; disconnect on unmount |
+| `src/hooks/__tests__/useDocumentTitle.test.ts` | Unit (hook) | Sets and follows the title |
+| `src/components/brand/__tests__/Wordmark.test.tsx` | Component | Name + decorative mark at size; caller classes |
+| `src/pages/landing/__tests__/LandingHeader.test.tsx` | Component | Wordmark link to `#top` (full + phone names); switch named in EN/AR with its letters; switches language; `data-visible` contract; same href as the hero for mac/windows/iPhone; short label + full accessible name, AR too; shown by default; scroll-edge fade from the sentinel |
+| `src/pages/landing/__tests__/LandingPage.test.tsx` › header button, title | Integration | Hidden while unknown, shown only when the hero button is out of view, hidden again; hidden without IntersectionObserver; title EN → AR |
+| `src/pages/landing/__tests__/ChapterSection.test.tsx` | Component | Below the fold → pending → done once; never pending in view, under reduced motion, or without IntersectionObserver |
+| `src/pages/landing/__tests__/landingCss.test.ts` | Unit (node, CSS) | No `transition: all` (landing + theme); no `[data-theme` in landing CSS; press tokens on 5 buttons, no literal scale; text links dim; sticky 85% frost with the -webkit- prefix; solid under reduced transparency and `@supports not`; hidden button uses visibility; AR tracking 0; reveal uses `--stagger-rise`, zeroed under reduced motion |
+| `PrivacyPolicyPage.test.tsx`, `src/pages/download/__tests__/DownloadPage.test.tsx` | Component | Tab title EN/AR |
+| `qa/specs/web/landing.spec.ts` | E2E (Playwright, preview build) | `@web.landing.header-cta`, `.transparency` (CDP), `.press` (buttons scale, FAQ dims, + reduced motion), `.hover-light` (contrast + colour held), `.375` at 375/320 EN/AR (no overlap, wordmark not clipped, fits, 44px target, `#get-it` jump lands below the bar), `.title`, `.reveal` (+ reduced motion), `.privacy-bar` (no button, no GitHub call, home link) |
+| `qa/specs/web/brand.spec.ts` › contrast-landing | E2E | Axe light/dark also with the bar and its button over a chapter |
+| Manual (TD-121) | — | Safari with Reduce Transparency |
+
+### Edit a payment from the ledger (MUT-169, added 2026-10-14)
+| File | Type | Covers |
+|------|------|--------|
+| `src/components/drawers/__tests__/PartialPaymentDrawer.test.tsx` › edit intent | Component | One payment opens on its edit (date focused, local-day prefill of a UTC instant); Update closes; Cancel closes; future date refused; several → picker, pencil edits, Update returns to the list with the intent; none → empty state; loading → nothing; failed read → notice + Retry |
+| `src/lib/__tests__/stores.test.ts` › intent | Unit | Intent travels with open, kept for the same entry's record edit, dropped for another entry, cleared on close |
+| `src/pages/income/__tests__/incomeRows.test.ts`, `IncomePage.test.tsx` › Edit Payment | Unit + Component | `canEditPayment` on paid/part-paid only; the row menu opens the drawer with the intent on paid and part-paid rows, not unpaid |
+| `src/components/__tests__/IncomeDrawer.test.tsx` › Edit payment | Component (Dexie) | "Last payment {date}" + Edit Payment up front; hand-over closes the income drawer and opens the payment drawer with the intent; disabled with the hint while dirty; absent on new/unpaid entries; status hint copy |
+| `src/lib/__tests__/dates.test.ts` › paymentLocalDay, `utils.test.ts` › formatPaymentDate | Unit | Local day of a UTC instant (Jerusalem, New York); date-only passthrough; date-only shown on its own day west of UTC |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | Component | Client Payments row on its own day west of UTC |
+| `src/db/__tests__/paymentRecords.test.ts` › update | Integration (Dexie) | Moving a payment's date re-dates a fully paid entry (stays paid, same received); a part-paid entry stays part-paid |
+| `qa/specs/web/record-payment.spec.ts` | E2E (release-qa) | `@web.record-payment.edit-payment-date` (row menu → date focused → Enter updates, never a second payment) and `-rtl` |
+
 ### Craft-fix bundle (MUT-92, added 2026-10-14)
 | File | Type | Covers |
 |------|------|--------|
@@ -2229,3 +2257,23 @@ Full suite (Node 22): 3751 passed, 4 skipped, 262/262 files. `lint` 0 errors (6 
 | Monthly, starts 2026-01-01 | 2026-01-10, America/New_York | 13 consecutive months, first paid 2026-01-15 |
 
 `retainerRepo.test.ts` (39) passes with host `TZ` = Asia/Jerusalem, America/New_York, UTC, Pacific/Kiritimati and Pacific/Honolulu. Related suites (RetainerDrawer, useRetainerQueries, gating/reconcile/probes, provider, migration-safety): 55/55. Full suite not run at the user's request; `lint` 0 errors (6 pre-existing warnings, none in touched files), `typecheck` clean, `openapi:check` up to date.
+
+## MUT-133 — portal income writes on a personal profile (2026-10-14)
+
+| Suite | Cases |
+|---|---|
+| `src/hosted/format/__tests__/format.test.tsx` › todayInZone | zone ahead of UTC, behind UTC, exact local midnight, unknown zone → browser calendar |
+| `src/hosted/data/__tests__/attemptKey.test.ts` | same body → same key; changed body → new key; after success → new key; stable across renders |
+| `src/hosted/data/__tests__/incomeAffordances.test.ts` | personal → both kinds + settle; **Malafat-fed (received: true) → nothing**; writer-null non-personal → nothing; capture vs payments access; rules without Owed; `isSettleable` origin × status |
+| `src/hosted/data/__tests__/filters.test.ts` | `newIncome` received/owed only; `settle` uuid only; page parsers; `splitIncomeDrawer` keeps drawer state out of filters |
+| `src/hosted/components/__tests__/incomeForm.test.ts` | lenient amounts (commas, ₪, Arabic-Indic, JOD 3 decimals) → canonical; currency mismatch; invalid/zero/negative/blank; schema (Owed needs client, Received rules, future date); request builder isolates kind fields; live line |
+| `src/hosted/components/__tests__/incomeApiErrors.test.ts` | every reason → field or toast; READ_ONLY_PROFILE uses the §7.4 sentence; settle race → inline + re-read; NOT_FOUND / RECEIVABLE_NOT_OPEN / VERSION_MISMATCH → toast + re-read |
+| `src/hosted/components/__tests__/Toast.test.tsx` | empty polite region exists with no status role; info fills it; message-only keeps the alert |
+| `src/hosted/components/__tests__/IncomeCaptureDrawer.test.tsx` | Owed POST with profile header, key and canonical body + Saved status; Owed needs client; Received with method, no Owed fields; defaults summary and auto-open on server DATE_INVALID; profile-zone date cap; retry reuses key, edit mints new; double-click → one POST; kinds follow rules; currency mismatch; Arabic |
+| `src/hosted/components/__tests__/RecordPaymentDrawer.test.tsx` | skeleton + disabled Save then title with what's left and context line; full settle sends amount + zone date; partial line + body; over blocks Save; race → new figure + re-read; inline race error; PAID / 404 → nothing left; 500 → unreachable; 409 → toast + re-read; Method radiogroup |
+| `src/hosted/pages/__tests__/views.test.tsx` › MUT-133 | personal: no notice, Add, Record payment only on open ADJUSTMENT rows, sticky Actions column; opening/closing the drawer doesn't refetch the list; full settle → row gone, status, focus on next row's button; partial → Partly paid, focus kept; Add Owed → list re-reads, status; Payments defaults to Received + empty-state action; Client detail prefill + tab settle. **Regression**: Malafat-fed and writer-null non-personal → no button, no column, deep links inert, Malafat notice unchanged |
+| `ExpenseDrawer.test.tsx`, `ConversionDrawer.test.tsx` (D5) | retry after a network failure resends the same key; default date in the profile's zone |
+| Review fixes (qa-reconcile) | race re-read with a **new version** keeps the typed amount, the inline error and the Save block; an untouched full payment keeps the sent amount after a race; empty Paid on → "Choose a date"; collapsed More details reopens on a hidden error; pending Save is `aria-disabled` and still sends one POST; after Add from the empty state focus is on the header Add button; an identical second info toast re-renders; row button names the client |
+
+Run: `npx vitest run src/hosted src/components/ui/__tests__` — 55 files / 704 tests green after the review fixes. Full suite not run at the user's request; `lint`, `typecheck` and `openapi:check` run.
+

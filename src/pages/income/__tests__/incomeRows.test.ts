@@ -79,6 +79,14 @@ describe('toIncomeRow (MUT-62)', () => {
     expect(toIncomeRow(entry({ status: 'paid', paymentStatus: 'paid' })).canMarkPaid).toBe(false);
     expect(toIncomeRow(entry({ status: 'unpaid', paymentStatus: 'paid' })).canMarkPaid).toBe(false);
   });
+
+  // MUT-169: a payment's date can be fixed from the ledger once money came in
+  it('offers Edit payment on an entry with money received, paid or part-paid', () => {
+    expect(toIncomeRow(entry({ status: 'paid', paymentStatus: 'paid', receivedAmountMinor: 30000 })).canEditPayment).toBe(true);
+    expect(toIncomeRow(entry({ paymentStatus: 'partial', receivedAmountMinor: 10000 })).canEditPayment).toBe(true);
+    expect(toIncomeRow(entry({ receivedAmountMinor: 0 })).canEditPayment).toBe(false);
+    expect(toIncomeRow(entry()).canEditPayment).toBe(false);
+  });
 });
 
 describe('incomeColumns (MUT-62)', () => {

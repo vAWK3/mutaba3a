@@ -2,6 +2,7 @@
  * CSV generation and download utilities
  */
 import { currencyExponent } from '../lib/utils';
+import { paymentLocalDay } from '../lib/dates';
 import type { Currency } from '../types';
 import { VALID_CURRENCIES } from './csvValidation';
 
@@ -544,7 +545,8 @@ export function exportDataToCSV(data: {
       status: tx.status || '',
       date: formatDate(tx.occurredAt),
       dueDate: formatDate(tx.dueDate),
-      paidAt: formatDate(tx.paidAt),
+      // The user's own day, not the UTC one of a fast-add's timestamp (MUT-169)
+      paidAt: typeof tx.paidAt === 'string' ? paymentLocalDay(tx.paidAt) : formatDate(tx.paidAt),
       category: tx.categoryId || '',
       notes: tx.notes || '',
     });

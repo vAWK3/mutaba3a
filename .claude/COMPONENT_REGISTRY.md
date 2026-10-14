@@ -74,9 +74,20 @@
 
 ### BrandMark
 **Location**: `src/components/brand/BrandMark.tsx`
-**Purpose**: The Brand v2 mark (MUT-104, ADR-073): `mark.svg` on the light canvas, `mark-dark.svg` (butter dot) on the dark one, chosen from `useTheme().resolvedTheme`, so Light, Dark and System (live OS changes included) all follow ThemeToggle. Decorative (`alt=""`): the link or heading around it carries the name. Props: `size` (px), `className`. Used by `SidebarNav`'s brand link and the portal `Wordmark` (`src/hosted/components/Brand.tsx`, imported by direct path).
+**Purpose**: The Brand v2 mark (MUT-104, ADR-073): `mark.svg` on the light canvas, `mark-dark.svg` (butter dot) on the dark one, chosen from `useTheme().resolvedTheme`, so Light, Dark and System (live OS changes included) all follow ThemeToggle. Decorative (`alt=""`): the link or heading around it carries the name. Props: `size` (px), `className`. Used by `SidebarNav`'s brand link and the shared `Wordmark` (`src/components/brand/Wordmark.tsx`), which the portal and the landing header use.
 
 Tests: `src/components/brand/__tests__/BrandMark.test.tsx`, `SidebarNav.brand.test.tsx`, `src/hosted/components/__tests__/Brand.test.tsx`.
+
+### Wordmark
+**Location**: `src/components/brand/Wordmark.tsx`
+**Purpose**: The Brand v2 lockup: `BrandMark` beside the product name. It was moved from the portal for MUT-77. Props:
+- `name` (ReactNode: each surface passes its own copy key, or spans for a responsive name);
+- `markSize` (default 28);
+- `className` and `markClassName` (added to `wordmark` / `wordmark-mark`).
+
+Used by the portal's `Wordmark` (`src/hosted/components/Brand.tsx`, same API as before) and the landing header. `SidebarNav` keeps its own inline lockup, because it collapses to the mark.
+
+Tests: `src/components/brand/__tests__/Wordmark.test.tsx`, `src/hosted/components/__tests__/Brand.test.tsx`.
 
 ### ThemeToggle
 **Location**: `src/components/layout/ThemeToggle.tsx`
@@ -153,6 +164,29 @@ const reduced = usePrefersReducedMotion();
 ```
 
 Tests: `src/hooks/__tests__/usePrefersReducedMotion.test.ts`.
+
+### useInView
+**Location**: `src/hooks/useInView.ts`
+**Purpose**: Whether a ref's element is in the viewport, from an IntersectionObserver. Never use scroll listeners for this (MUT-77, L10: nothing scroll-linked).
+- `null` means not known yet: before the first report, or for good when there is no IntersectionObserver. The caller picks the safe reading.
+- Options: `once` (stop after the first sighting and stay true), `rootMargin`, `threshold`.
+- The observer disconnects on unmount.
+
+```ts
+const shown = useInView(ref, { once: true, threshold: 0.15 });
+```
+
+Tests: `src/hooks/__tests__/useInView.test.ts`. For tests, use `installFakeIntersectionObserver()` / `FakeIntersectionObserver.reportFor(el, bool)` from `src/test/intersectionObserver.ts`.
+
+### useDocumentTitle
+**Location**: `src/hooks/useDocumentTitle.ts`
+**Purpose**: Keeps `document.title` in step with a translated string, so the tab follows the language (MUT-77: `/`, `/privacy`, `/download`). `index.html`'s `متابعة` stays as the no-JS default.
+Tests: `src/hooks/__tests__/useDocumentTitle.test.ts`.
+
+### useHeroCta
+**Location**: `src/pages/landing/useHeroCta.ts`
+**Purpose**: The landing page's one device-matched button (L4): `{ href, Icon, label, hint, shortLabel, alternative }`. Each `shortLabel` must be part of its `label`, because the bar's button uses the label as its accessible name (WCAG 2.5.3, tested). It is shared by `HeroSection` and `LandingHeader`, so both always go to the same place. Both read the release through `useLatestRelease`, which shares one GitHub call.
+Tests: `LandingHeader.test.tsx`, `HeroSection.test.tsx`.
 
 ### detectDevice / currentDevice
 **Location**: `src/lib/platform.ts`
@@ -506,6 +540,7 @@ openIncomeDrawer({ mode: 'create', duplicateFromId });
 openPartialPaymentDrawer({ transactionId });                    // create: remaining amount + today prefilled
 openPartialPaymentDrawer({ transactionId, onRecorded });        // also hear the PaymentRecord a save created (MUT-82)
 editPaymentRecord({ transactionId, paymentRecordId });          // edit one recorded payment
+openPartialPaymentDrawer({ transactionId, intent: 'editPayment' }); // edit a payment: the only one, or pick (MUT-169)
 // Row affordance: <RecordPaymentButton transaction={tx} onRecordPayment={() => openPartialPaymentDrawer({ transactionId: tx.id })} />
 ```
 
@@ -523,6 +558,8 @@ editPaymentRecord({ transactionId, paymentRecordId });          // edit one reco
 - Dates go through `isFuturePaymentDate` (`lib/dates.ts`), the same helper the repository uses.
 
 **Behaviour**: Record closes the drawer. Update returns to the entry's create view. An edit waits for its record to load before showing the form.
+
+**Edit intent** (MUT-169; opened by the /income row menu and the income drawer's "Edit Payment"): the drawer never offers to record a payment. With one record, it opens on that record's edit, with the date open and focused (`PaymentForm` `focusDate`). With several, the history alone is the picker. With none, it shows "No payments recorded yet". A failed records read shows `drawer.income.paymentsLoadFailed` with Try again. Update or Cancel closes the drawer (one record) or brings the list back (several), all through one `leaveEdit()`. The edit prefill and the history dates use the payment's local day (`paymentLocalDay`, `formatPaymentDate`).
 
 **Props**: `transactionId`, `onClose`, and `onRecorded?: (record: PaymentRecord) => void` (MUT-82, ADR-055). `onRecorded` hears the record a save created, just before the drawer closes; an update or a delete is never reported. The store carries it in `partialPaymentDrawer.onRecorded` and `AppShell` passes it on. Editing a record of the same entry, and returning to the entry, keep it.
 
@@ -1708,6 +1745,24 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `data/queries.ts` | query hooks (`useOrganizationSummary`, `useCustomerSummary`, `useCustomer`, `useCustomerDirectory`, `useProjectDirectory`, `useReceivables`, `usePayments`, `useAttachments`), `useCursorList` (exported for reuse), filter models and parsers, `downloadNavigator` | views, router, `data/expenseQueries.ts` |
 | `data/expenseQueries.ts` (MUT-44) | `useExpenses`, `useExpense`, `useExpenseCategories`, `useCreateExpense`/`useUpdateExpense`/`useDeleteExpense`, `useAddReceipt`/`useDeleteReceipt` — the portal's only mutations | `ExpensesList`, `ExpenseDrawer`, `ReceiptUploader` |
 | `pages/views/` | `OverviewPage`, `ClientsPage`, `ClientDetailPage`, `ReceivablesList`/`Page`, `PaymentsList`/`Page`, `DocumentsList`/`Page` (lists take `fixedCustomerId` for client tabs), `ExpensesList`/`Page` (MUT-44), `StatusBadge`, `ShowMore`, `PageHeader`, `NoMatch` | router |
+
+### Portal income writes (MUT-133)
+
+| Unit | Purpose |
+|---|---|
+| `data/incomeAffordances.ts` `incomeAffordancesFor(profile)`, `isSettleable(receivable)` | The one gate for portal income writes (personal profile only; `kinds`, `customer`, `canSettle`) and which rows the settle route accepts. Views never branch on `isPersonalDefault` themselves. |
+| `data/attemptKey.ts` `useAttemptKey()` / `createAttemptKey()` | Idempotency-Key per save attempt (see PATTERNS). Used by income, settle, expense and conversion creates. |
+| `data/incomeQueries.ts` `useReceivable`, `useCreateIncome`, `useSettleReceivable`, `settleMutationKey` | Fresh receivable read; income/settle writes that invalidate receivables, payments, the receivable and summaries. |
+| `data/filters.ts` `parseIncomeDrawer`, `splitIncomeDrawer`, `parseReceivablesPage`, `parsePaymentsPage` | `?newIncome=` / `?settle=` URL state, parsed beside list filters. |
+| `components/incomeForm.ts` `parseIncomeAmount`, `minorToDecimal`, `incomeFormSchema`, `toCreateIncomeRequest`, `settleLine`, `INCOME_CURRENCIES`, `PAYMENT_METHODS` | Income form logic; messages are i18n keys. |
+| `components/incomeApiErrors.ts` `mapIncomeError`, `mapSettleError` | Server reasons → inline field errors or a toast (+ re-read hint for settle). |
+| `components/IncomeCaptureDrawer.tsx` | Add income (fast path + More details, SegmentedControl kinds/method, Saved status). |
+| `components/RecordPaymentDrawer.tsx` | Record payment (title with what's left, live line, honest note, skeleton, race handling). |
+| `components/IncomeDrawerHost.tsx` `IncomeDrawerHost`, `focusAfterSettle`, `SETTLE_BUTTON_ATTR` | The drawers a page mounts; focus rule after a full payment. |
+| `components/Toast.tsx` `show(message, { tone: 'info' })` | Info tone in a persistent polite live region; message-only calls keep the error alert. MUT-91 extends the same options object. |
+| `components/HostedTable.tsx` `Column.stickyEnd` | Pins a column to the inline end (row actions on narrow windows). |
+| `components/ClientPicker.tsx`, `ProjectPicker.tsx`, `components/ui/EntityTypeahead.tsx` `id` prop | Lets a `<label htmlFor>` name the typeahead input. |
+| `format/dates.ts` `todayInZone(timeZone, now?)` | Today's calendar date in an IANA zone; browser-calendar fallback for an unknown zone. |
 
 ## Hosted API modules (`server/src`) — reusable across milestones
 

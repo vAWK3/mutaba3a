@@ -15,7 +15,8 @@ import { ProjectPicker } from './ProjectPicker';
 import { ReceiptUploader } from './ReceiptUploader';
 import { Drawer } from './Drawer';
 import { applyExpenseApiError } from './expenseApiErrors';
-import { todayLocalISO } from '../format/dates';
+import { todayInZone, todayLocalISO } from '../format/dates';
+import { useAttemptKey } from '../data/attemptKey';
 import type { CreateExpenseRequest, UpdateExpenseRequest } from '../api/client';
 
 /**
@@ -50,11 +51,12 @@ const hostedExpenseSchema = expenseFormFieldsSchema.extend({
 
 export type HostedExpenseFormValues = z.infer<typeof hostedExpenseSchema>;
 
-function emptyValues(): HostedExpenseFormValues {
+function emptyValues(timezone?: string): HostedExpenseFormValues {
   return {
     amount: '',
     currency: 'USD',
-    occurredAt: todayLocalISO(),
+    // MUT-133 D5: the profile's calendar day when the list passes its zone (R3).
+    occurredAt: timezone ? todayInZone(timezone) : todayLocalISO(),
     title: '',
     vendor: '',
     clientId: '',
@@ -69,11 +71,13 @@ export interface ExpenseDrawerProps {
   mode: 'create' | 'edit';
   expenseId?: string;
   onClose: () => void;
+  /** The profile's IANA zone, for the default date (MUT-133 D5); the browser calendar when absent. */
+  timezone?: string;
   /** Called instead of `onClose` after a delete, so the list can drop an anchor on the deleted record (MUT-91). */
   onDeleted?: (expenseId: string) => void;
 }
 
-export function ExpenseDrawer({ profileId, mode, expenseId, onClose, onDeleted }: ExpenseDrawerProps) {
+export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted }: ExpenseDrawerProps) {
   // After-save feedback (R1 via HP1, MUT-91): always from the drawer, the one
   // place that knows a save happened (ADR-057 §4). Delete marks nothing.
   const markSaved = (id: string) => useSavedFlashStore.getState().markSaved({ kind: 'expense', ids: [id], profileId });
@@ -84,12 +88,13 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, onDeleted }
   const { data: existingExpense, isLoading: expenseLoading } = useExpense(profileId, expenseId ?? '');
 
   const createMutation = useCreateExpense(profileId);
+  const attempt = useAttemptKey();
   const updateMutation = useUpdateExpense(profileId);
   const deleteMutation = useDeleteExpense(profileId);
 
   const form = useForm<HostedExpenseFormValues>({
     resolver: zodResolver(hostedExpenseSchema),
-    defaultValues: emptyValues(),
+    defaultValues: emptyValues(timezone),
   });
   const { control, handleSubmit, reset, setError, formState } = form;
   const selectedClientId = useWatch({ control, name: 'clientId' });
@@ -168,7 +173,8 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, onDeleted }
           projectId: values.projectId || undefined,
           notes: values.notes || undefined,
         };
-        const created = await createMutation.mutateAsync(body);
+        const created = await createMutation.mutateAsync({ body, idempotencyKey: attempt.keyFor(body) });
+        attempt.succeeded();
         markSaved(created.id);
       }
       onClose();

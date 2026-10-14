@@ -29,6 +29,8 @@ export interface IncomeRow {
   partialReceivedMinor?: number;
   /** Unpaid and not yet fully received, so the row offers Mark paid */
   canMarkPaid: boolean;
+  /** Money has come in, so the row offers Edit payment (MUT-169) */
+  canEditPayment: boolean;
 }
 
 export function toIncomeRow(tx: TransactionDisplay): IncomeRow {
@@ -48,6 +50,7 @@ export function toIncomeRow(tx: TransactionDisplay): IncomeRow {
     currency: tx.currency,
     partialReceivedMinor: tx.paymentStatus === 'partial' && received > 0 ? received : undefined,
     canMarkPaid: tx.status === 'unpaid' && tx.paymentStatus !== 'paid',
+    canEditPayment: received > 0,
   };
 }
 

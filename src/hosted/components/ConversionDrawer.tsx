@@ -8,7 +8,8 @@ import { useToast } from './Toast';
 import { Drawer } from './Drawer';
 import { applyConversionApiError } from './conversionApiErrors';
 import { conversionFormSchema, CURRENCY_OPTIONS, impliedRate, type ConversionFormValues } from './conversionFormSchema';
-import { todayLocalISO } from '../format/dates';
+import { todayInZone, todayLocalISO } from '../format/dates';
+import { useAttemptKey } from '../data/attemptKey';
 import type { CreateConversionRequest } from '../api/client';
 
 /**
@@ -18,21 +19,25 @@ import type { CreateConversionRequest } from '../api/client';
  * ExpenseFormFields; built standalone like the local app's own
  * ConversionDrawer, with no client/project linking (out of scope).
  */
-function emptyValues(): ConversionFormValues {
-  return { fromAmount: '', fromCurrency: 'USD', toAmount: '', toCurrency: 'ILS', occurredAt: todayLocalISO(), notes: '' };
+function emptyValues(timezone?: string): ConversionFormValues {
+  // MUT-133 D5: the profile's calendar day when the list passes its zone (R3).
+  return { fromAmount: '', fromCurrency: 'USD', toAmount: '', toCurrency: 'ILS', occurredAt: timezone ? todayInZone(timezone) : todayLocalISO(), notes: '' };
 }
 
 export interface ConversionDrawerProps {
   profileId: string;
   onClose: () => void;
+  /** The profile's IANA zone, for the default date (MUT-133 D5); the browser calendar when absent. */
+  timezone?: string;
 }
 
-export function ConversionDrawer({ profileId, onClose }: ConversionDrawerProps) {
+export function ConversionDrawer({ profileId, onClose, timezone }: ConversionDrawerProps) {
   const { t } = useLanguage();
   const showToast = useToast();
   const createMutation = useCreateConversion(profileId);
+  const attempt = useAttemptKey();
 
-  const form = useForm<ConversionFormValues>({ resolver: zodResolver(conversionFormSchema), defaultValues: emptyValues() });
+  const form = useForm<ConversionFormValues>({ resolver: zodResolver(conversionFormSchema), defaultValues: emptyValues(timezone) });
   const { control, handleSubmit, setError, formState } = form;
   const fromAmount = useWatch({ control, name: 'fromAmount' });
   const fromCurrency = useWatch({ control, name: 'fromCurrency' });
@@ -59,7 +64,8 @@ export function ConversionDrawer({ profileId, onClose }: ConversionDrawerProps) 
         toCurrency: values.toCurrency,
         notes: values.notes || undefined,
       };
-      const created = await createMutation.mutateAsync(body);
+      const created = await createMutation.mutateAsync({ body, idempotencyKey: attempt.keyFor(body) });
+      attempt.succeeded();
       // After-save feedback (MUT-91, eng review D7), from the drawer as for expenses.
       useSavedFlashStore.getState().markSaved({ kind: 'conversion', ids: [created.id], profileId });
       onClose();
