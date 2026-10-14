@@ -345,6 +345,7 @@
       },
       "drawer": {
         "newTitle": "Log conversion",
+        "editTitle": "Edit conversion",
         "fromAmount": "From amount",
         "fromCurrency": "From currency",
         "toAmount": "To amount",
@@ -353,7 +354,8 @@
         "date": "Date",
         "notes": "Notes",
         "notesPlaceholder": "Optional notes",
-        "impliedRate": "Implied rate: 1 {from} = {rate} {to}"
+        "impliedRate": "Implied rate: 1 {from} = {rate} {to}",
+        "deleteConfirm": "Delete this conversion ({from} → {to})? This can't be undone."
       },
       "errors": {
         "amountInvalid": "Enter a valid amount",

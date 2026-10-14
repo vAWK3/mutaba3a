@@ -4,7 +4,7 @@ import { ORG_A, emptyProfileRoutes, locationOf, me, ok, profile, renderPortal, s
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import { page } from './fixtures';
 
-/** MUT-161: the conversions list and the create-only drawer it opens. */
+/** MUT-161: the conversions list and the drawer it opens; MUT-194 adds the edit drawer, delete and JOD. */
 
 beforeEach(() => {
   localStorage.clear();
@@ -22,7 +22,9 @@ function conversion(overrides: Record<string, unknown> = {}) {
     toCurrency: 'ILS',
     notes: null,
     createdByUserId: 'u1',
+    version: 1,
     createdAt: '',
+    updatedAt: '',
     ...overrides,
   };
 }
@@ -84,11 +86,60 @@ describe('ConversionsList', () => {
     await waitFor(() => expect(locationOf(router)).not.toContain('newConversion'));
   });
 
-  it('has no row click — there is nothing to edit', async () => {
-    portal(`/p/${ORG_A}/conversions`, { 'GET /v1/conversions': () => ok(page([conversion()])) });
+  it('opens the edit drawer by clicking a row, with ?conversion=<id> (MUT-194)', async () => {
+    const { user, router } = portal(`/p/${ORG_A}/conversions`, { 'GET /v1/conversions': () => ok(page([conversion()])), 'GET /v1/conversions/c1': () => ok(conversion()) });
     const table = await screen.findByRole('table', { name: 'Conversions' });
-    const row = within(table).getAllByRole('row')[1]!;
-    expect(row.className).not.toContain('clickable');
+    await user.click(within(table).getAllByRole('row')[1]!);
+    expect(await screen.findByText('Edit conversion', { selector: '.drawer-title' })).toBeInTheDocument();
+    expect(locationOf(router)).toContain('conversion=c1');
+    expect((screen.getByLabelText('From amount') as HTMLInputElement).value).toBe('100.00');
+  });
+
+  it('opens the edit drawer with Enter on the focused row button (D8/D11)', async () => {
+    const { user, router } = portal(`/p/${ORG_A}/conversions`, { 'GET /v1/conversions': () => ok(page([conversion()])), 'GET /v1/conversions/c1': () => ok(conversion()) });
+    const table = await screen.findByRole('table', { name: 'Conversions' });
+    const rowButton = within(within(table).getAllByRole('row')[1]!).getByRole('button');
+    rowButton.focus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText('Edit conversion', { selector: '.drawer-title' })).toBeInTheDocument();
+    expect(locationOf(router)).toContain('conversion=c1');
+  });
+
+  it('closing the edit drawer clears ?conversion', async () => {
+    const { user, router } = portal(`/p/${ORG_A}/conversions?conversion=c0000000-0000-4000-8000-000000000001`, {
+      'GET /v1/conversions': () => ok(page([conversion({ id: 'c0000000-0000-4000-8000-000000000001' })])),
+      'GET /v1/conversions/c0000000-0000-4000-8000-000000000001': () => ok(conversion({ id: 'c0000000-0000-4000-8000-000000000001' })),
+    });
+    await screen.findByText('Edit conversion', { selector: '.drawer-title' });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(locationOf(router)).not.toContain('conversion='));
+  });
+
+  it('deleting the anchored conversion drops the anchor and closes the drawer', async () => {
+    const ID = 'c0000000-0000-4000-8000-000000000002';
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    let deleted = false;
+    const { user, router, api } = portal(`/p/${ORG_A}/conversions?anchor=${ID}&conversion=${ID}`, {
+      'GET /v1/conversions': () => ok(page(deleted ? [] : [conversion({ id: ID })])),
+      [`GET /v1/conversions/${ID}`]: () => ok(conversion({ id: ID })),
+      [`DELETE /v1/conversions/${ID}`]: () => {
+        deleted = true;
+        return new Response(null, { status: 204 });
+      },
+    });
+    await screen.findByText('Edit conversion', { selector: '.drawer-title' });
+    await waitFor(() => expect((screen.getByLabelText('From amount') as HTMLInputElement).value).toBe('100.00'));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(locationOf(router)).not.toContain('anchor='));
+    expect(locationOf(router)).not.toContain('conversion=');
+    expect(api.count(`DELETE /v1/conversions/${ID}`)).toBe(1);
+  });
+
+  it('offers JOD in the currency filter (D7, TD-117)', async () => {
+    portal(`/p/${ORG_A}/conversions`, { 'GET /v1/conversions': () => ok(page([conversion()])) });
+    await screen.findByRole('table', { name: 'Conversions' });
+    const filter = screen.getByLabelText('Currency') as HTMLSelectElement;
+    expect(Array.from(filter.options).map((o) => o.value)).toContain('JOD');
   });
 
   it('has a Conversions entry in the sidebar nav', async () => {

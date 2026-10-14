@@ -17,10 +17,11 @@ import { useProfile } from '../../session/me';
 import { NoMatch, PageHeader, ShowMore } from './shared';
 
 /**
- * Conversions (MUT-161): create + read only, the hosted counterpart of the
- * local app's /conversions page. List is read-only presentation; the drawer
- * is the one write surface, opened via `?newConversion=1`. No row click —
- * there is nothing to edit.
+ * Conversions (MUT-161), the hosted counterpart of the local app's
+ * /conversions page. List is read-only presentation; the drawer is the write
+ * surface, opened via `?newConversion=1` to log one and, since MUT-194
+ * (ADR-075), `?conversion=<id>` to edit or delete one — a row click, or Enter
+ * on the row's button (HostedTable row-link), like the expenses list.
  */
 
 interface ConversionRow {
@@ -62,7 +63,7 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
   const ids = useMemo(() => (list.isError ? [] : rows?.map((r) => r.id) ?? []), [rows, list.isError]);
   const anchored = useAnchoredList(filters, setFilters, list.error);
   // The list's own filters only: opening the drawer is not a filter change.
-  const filtersKey = JSON.stringify({ ...filters, newConversion: undefined });
+  const filtersKey = JSON.stringify({ ...filters, newConversion: undefined, conversion: undefined });
   const flashed = useSavedFlashRows('hosted-conversions', ids, { isLoading: !rows && !list.isError, isFetching: list.isFetching });
 
   const columns = useMemo<Column<ConversionRow>[]>(
@@ -76,8 +77,12 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
   );
 
   const patch = (change: Partial<ConversionsPageSearch>) => setFilters({ ...filters, ...change });
-  const openNew = () => setFilters({ ...filters, newConversion: true });
-  const closeDrawer = () => setFilters({ ...filters, newConversion: undefined });
+  const openNew = () => setFilters({ ...filters, newConversion: true, conversion: undefined });
+  const openEdit = (row: ConversionRow) => setFilters({ ...filters, conversion: row.id, newConversion: undefined });
+  const closeDrawer = () => setFilters({ ...filters, newConversion: undefined, conversion: undefined });
+  // An anchored list can't start at a record that no longer exists (the server would 404): drop the anchor with it.
+  const afterDelete = (id: string) =>
+    setFilters({ ...filters, newConversion: undefined, conversion: undefined, anchor: filters.anchor === id ? undefined : filters.anchor });
 
   const recordButton = (
     <Button variant="primary" size="sm" onClick={openNew}>
@@ -99,7 +104,7 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
         data={anchored.staleAnchor ? undefined : rows}
         isEmpty={(r) => r.length === 0}
         empty={
-          isNarrowed(filters, { newConversion: undefined }) ? (
+          isNarrowed(filters, { newConversion: undefined, conversion: undefined }) ? (
             <NoMatch onClear={() => setFilters({})} />
           ) : (
             <Empty title={t('hosted.conversions.empty.title')} body={t('hosted.conversions.empty.body')} action={recordButton} />
@@ -113,6 +118,7 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
               columns={columns}
               rows={r}
               rowKey={(row) => row.id}
+              onRowClick={openEdit}
               rowClassName={(row) => (flashed(row.id) ? 'row-flash' : undefined)}
             />
             <ShowMore hasMore={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
@@ -121,6 +127,9 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
       </QueryView>
       <SavedNotice kind="conversion" message={t('hosted.savedFlash.conversionSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} listInError={list.isError} />
       {filters.newConversion && <ConversionDrawer profileId={profile.id} timezone={profile.timezone} onClose={closeDrawer} />}
+      {filters.conversion && (
+        <ConversionDrawer key={filters.conversion} profileId={profile.id} mode="edit" conversionId={filters.conversion} timezone={profile.timezone} onClose={closeDrawer} onDeleted={afterDelete} />
+      )}
     </>
   );
 }

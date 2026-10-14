@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { DECIMAL_AMOUNT } from '../../components/expenses/expenseFormSchema';
 import { currencyExponent, parseAmountInput } from '../../lib/utils';
 
 /**
@@ -8,23 +7,41 @@ import { currencyExponent, parseAmountInput } from '../../lib/utils';
  * ConversionDrawer (src/components/drawers/conversionFormSchema.ts) predates
  * this ticket and stays untouched (it's the local/offline app's own
  * Dexie-backed surface), so there is no existing local schema to share with.
- * Two currency/amount legs, each validated with the same stricter decimal
- * check the hosted expense drawer already applies (USD/ILS/EUR, two decimal
- * places — the hosted portal has no JOD support yet, a pre-existing gap this
- * ticket doesn't extend).
+ * Two currency/amount legs. MUT-194 (D7, closes TD-117): JOD joins the set,
+ * now that a conversion logged on a phone (JOD included) can be edited here,
+ * and each leg's decimal places follow its own currency via `currencyExponent`
+ * — the hosted ExpenseDrawer's pattern (7428c63) — instead of a fixed
+ * two-decimal regex.
  */
-export const CURRENCY_OPTIONS = ['USD', 'ILS', 'EUR'] as const;
+export const CURRENCY_OPTIONS = ['USD', 'ILS', 'EUR', 'JOD'] as const;
+
+type HostedCurrency = (typeof CURRENCY_OPTIONS)[number];
+
+/** A non-negative decimal with at most the currency's fractional digits (no sign, no exponent). */
+function fitsCurrency(amount: string, currency: HostedCurrency): boolean {
+  return new RegExp(`^\\d+(\\.\\d{1,${currencyExponent(currency)}})?$`).test(amount);
+}
 
 export const conversionFormSchema = z
   .object({
-    fromAmount: z.string().min(1, 'Amount is required').regex(DECIMAL_AMOUNT, 'Invalid amount'),
+    fromAmount: z.string().min(1, 'Amount is required'),
     fromCurrency: z.enum(CURRENCY_OPTIONS),
-    toAmount: z.string().min(1, 'Amount is required').regex(DECIMAL_AMOUNT, 'Invalid amount'),
+    toAmount: z.string().min(1, 'Amount is required'),
     toCurrency: z.enum(CURRENCY_OPTIONS),
     occurredAt: z.string().min(1, 'Date is required'),
     notes: z.string().optional(),
   })
-  .refine((data) => data.fromCurrency !== data.toCurrency, { message: 'Choose a different currency to convert to', path: ['toCurrency'] });
+  .superRefine((data, ctx) => {
+    if (data.fromAmount && !fitsCurrency(data.fromAmount, data.fromCurrency)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid amount', path: ['fromAmount'] });
+    }
+    if (data.toAmount && !fitsCurrency(data.toAmount, data.toCurrency)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid amount', path: ['toAmount'] });
+    }
+    if (data.fromCurrency === data.toCurrency) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Choose a different currency to convert to', path: ['toCurrency'] });
+    }
+  });
 
 export type ConversionFormValues = z.infer<typeof conversionFormSchema>;
 
@@ -36,7 +53,7 @@ export type ConversionFormValues = z.infer<typeof conversionFormSchema>;
  * `parseAmountInput`/`currencyExponent` (src/lib/utils.ts), never a bare
  * `Number()`/`parseFloat` (eslint.config.js bans both inside the portal).
  */
-export function impliedRate(fromAmount: string, fromCurrency: (typeof CURRENCY_OPTIONS)[number], toAmount: string, toCurrency: (typeof CURRENCY_OPTIONS)[number]): number | null {
+export function impliedRate(fromAmount: string, fromCurrency: HostedCurrency, toAmount: string, toCurrency: HostedCurrency): number | null {
   const fromMinor = parseAmountInput(fromAmount, { currency: fromCurrency });
   const toMinor = parseAmountInput(toAmount, { currency: toCurrency });
   if (fromMinor === null || toMinor === null || fromMinor <= 0) return null;

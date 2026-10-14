@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseClientDetail, parseIncomeDrawer, parsePaymentsPage, parseReceivablesPage, splitIncomeDrawer } from '../filters';
+import { parseClientDetail, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseReceivablesPage, splitIncomeDrawer } from '../filters';
 
 const R = 'b1111111-1111-4111-8111-111111111111';
 
@@ -26,4 +26,23 @@ describe('income drawer URL state (MUT-133)', () => {
     expect(filters).toEqual({ status: 'OPEN', customerId: 'x' });
     expect(drawer).toEqual({ newIncome: 'owed', settle: R });
   });
+});
+
+describe('conversions page URL state (MUT-194)', () => {
+  const ID = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+
+  it('keeps a uuid ?conversion=<id> to edit, and drops a malformed one', () => {
+    expect(parseConversionsPage({ conversion: ID })).toEqual({ conversion: ID });
+    expect(parseConversionsPage({ conversion: 'not-an-id' })).toEqual({});
+  });
+
+  it('keeps the create flag beside it', () => {
+    expect(parseConversionsPage({ newConversion: '1' })).toEqual({ newConversion: true });
+  });
+
+  it('keeps a JOD currency filter (D7, TD-117)', () => {
+    expect(parseConversionsPage({ currency: 'JOD' })).toEqual({ currency: 'JOD' });
+    expect(parseConversionsPage({ currency: 'GBP' })).toEqual({});
+  });
+
 });
