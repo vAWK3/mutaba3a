@@ -2206,7 +2206,16 @@ When Show changes the same page's filters instead of navigating, re-arm the save
 
 ### Pattern: Marketing pages render only landing chrome, and are tested under `LandingProviders` (2026-10-14)
 `/`, `/download` and `/privacy` mount in `src/main.tsx` outside the router and `QueryClientProvider`, and never open the database. So they use `LandingHeader`/`LandingFooter`, never app layout (`TopBar`, `SidebarNav`, anything calling `useQuery`, router hooks or `getRepositories()`). Their component tests render through `LandingProviders`, the same wrapper `main.tsx` uses, and never mock app layout away: that mock is how `/download`'s crash went unnoticed.
-**Instances**: `PrivacyPolicyPage`, `DownloadPage`; guarded by `DownloadPage.test.tsx` and `@web.landing.download`.
+**Instances**: `PrivacyPolicyPage`, `DownloadPage`, `HostedOfferPage` (MUT-186); guarded by `DownloadPage.test.tsx`, `HostedOfferPage.test.tsx`, `@web.landing.download` and `@web.landing.hosted`.
+### Pattern: Netlify Forms in a shared-index SPA — a build-emitted static twin, posted to by path (MUT-186)
+Netlify registers only forms it finds in deployed HTML, and a React form isn't there. The web and desktop builds share `index.html` and `public/`, so the hidden twin can't go in either. Instead:
+- One module (`src/pages/landing/hostedRequest.ts`) owns the form name, the field list and the honeypot, with no React or DOM imports.
+- A web-only Vite plugin (`netlifyForms()` in `vite.config.ts`) emits `__forms.html` from those constants in `generateBundle`, marked `noindex` and added to `PWA_WORKBOX.globIgnores`.
+- The page POSTs `application/x-www-form-urlencoded` (Netlify takes no JSON) to `/__forms.html`, a real file, so no SPA rewrite catches the POST.
+- Netlify UI steps (form detection, notifications) are recorded in INFRA §1, because `netlify.toml` can't set them.
+**Instances**: the `/hosted` request form; guarded by `vite-config.test.ts` (the twin names exactly `HOSTED_REQUEST_FIELDS`) and `hostedRequest.test.ts`.
+**Gotcha**: in dev, Vite's HTML fallback serves `/<name>` from a root `<name>.html`. `/hosted` hit the portal's `hosted.html`, so `hostedOfferDevRoute()` rewrites it to the app shell. Check for a same-named root HTML file before adding a marketing route.
+
 
 ## Hosted portal patterns added by MUT-133 (2026-10-14)
 

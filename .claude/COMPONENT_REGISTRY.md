@@ -414,7 +414,7 @@ Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`
 <ChapterSection part="chapter-clients" title={t('…title')} body={t('…body')} visual={<ClientProfileMock />} />
 ```
 
-### Landing mock-ups (`ClientProfileMock`, `RecordPaymentMock`, `ProfileSwitcherMock`)
+### Landing mock-ups (`ClientProfileMock`, `RecordPaymentMock`, `ProfileSwitcherMock`, `HostedDevicesMock`)
 **Location**: `src/pages/landing/components/mocks/`
 **Purpose**: Static HTML pictures of the product for the landing page. Data comes from `src/pages/landing/sampleData.ts` (fixed dates, i18n-keyed names, never the visitor's database); labels are the app's own i18n keys; money and dates format through `useMockFormat` (`formatAmount` / `formatDateShort` in the active locale). Keep them in step with the real screens when those change.
 
@@ -428,7 +428,7 @@ Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`
 
 ### GetItSection / PrivacyBand / PlatformIcons
 **Location**: `src/pages/landing/components/`
-**Purpose**: `GetItSection` lists every way to get the app and gates each download on `useLatestRelease()` (ADR-041); `PrivacyBand` says privacy once; `PlatformIcons` holds the Apple/Windows/browser glyphs shared by the hero and Get it. Download URLs live in `src/content/download-config.ts` (`DOWNLOAD_URLS`, `WEB_APP_URL`), shared with `DownloadPage`.
+**Purpose**: `GetItSection` lists every way to get the app and gates each download on `useLatestRelease()` (ADR-041); `PrivacyBand` says privacy once; `PlatformIcons` holds the Apple/Windows/browser glyphs shared by the hero and Get it. Download URLs live in `src/content/download-config.ts` (`DOWNLOAD_URLS`, `WEB_APP_URL`, and since MUT-186 `HOSTED_OFFER_URL` and `MOBILE_APP_LINKS`), shared with `DownloadPage` and `/hosted`.
 
 ### PrivacyPolicyPage
 **Location**: `src/pages/landing/PrivacyPolicyPage.tsx` + `PrivacyPolicyPage.css`
@@ -436,9 +436,21 @@ Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`
 
 Tests: `src/pages/landing/__tests__/`.
 
+### HostedOfferPage (`/hosted`)
+**Location**: `src/pages/landing/HostedOfferPage.tsx` + `HostedOfferPage.css`
+**Purpose**: The case for a hosted account and the request form (MUT-186). Landing chrome only, mounted in `src/main.tsx` at `HOSTED_OFFER_URL`. Sections (`data-part`): `hero` (copy + `HostedDevicesMock`), `compare` (a real `<table>`, Hosted column tinted, rows stacked on phones), `band` (reuses `.landing-privacy-band`), `request` (`HostedRequestForm`). Adds `.landing-section-headline--start` for start-aligned section headings. Never links an app store (9A).
+
+### HostedRequestForm
+**Location**: `src/pages/landing/components/HostedRequestForm.tsx`
+**Purpose**: The hosted-account request form: `idle → sending → success | error`, posting through `submitHostedRequest`. Uses `Input`/`Select`/`Textarea`; device choices are 44px pill labels around native checkboxes; the honeypot sits in an `aria-hidden` box. On success it shows the visitor's own name and email (FSI-isolated) with "edit and send again". Props: `titleId` (the heading that names the form).
+
+### hostedRequest.ts (Netlify Forms contract)
+**Location**: `src/pages/landing/hostedRequest.ts`
+**Purpose**: The one definition of the request form for both the page and the build: `HOSTED_REQUEST_FORM_NAME`, `HOSTED_REQUEST_FIELDS`, `HONEYPOT_FIELD`, `NETLIFY_FORMS_PATH`, `SUBMIT_TIMEOUT_MS`, `PROFESSIONS`, `DEVICES`, plus pure `validateHostedRequest`, `encodeHostedRequest` and `submitHostedRequest(values, fetchImpl?)` (never throws; `'ok' | 'error'`). No React or DOM imports: `vite.config.ts` loads it to emit `__forms.html`.
+
 ### LandingProviders
 **Location**: `src/pages/landing/LandingProviders.tsx`
-**Purpose**: The one wrapper `src/main.tsx` gives the web build's marketing routes (`/`, `/download`, `/privacy`): `ThemeProvider` + `LanguageProvider`, nothing of the app's (no React Query, router or database). Tests render those pages through it, so a component that needs app context fails in Vitest as it does in production.
+**Purpose**: The one wrapper `src/main.tsx` gives the web build's marketing routes (`/`, `/download`, `/privacy`, `/hosted`): `ThemeProvider` + `LanguageProvider`, nothing of the app's (no React Query, router or database). Tests render those pages through it, so a component that needs app context fails in Vitest as it does in production.
 
 ```tsx
 render(<LandingProviders><DownloadPage /></LandingProviders>);

@@ -255,6 +255,13 @@ The page speaks as "we" throughout, like the rest of the landing page. The migra
 - `HostedRequestForm`'s success panel has an "edit and send again" path that returns to the form with values kept (2A). The page test asserts it.
 - The device pills' CSS lives in `HostedOfferPage.css` (7A).
 
+### As built (MUT-186 build, 2026-10-14)
+
+- **Added during the build:** `hostedOfferDevRoute()` in `vite.config.ts`. In dev, Vite served `/hosted` from the portal's root `hosted.html`; production is unaffected, because the web build has no `hosted.html`. Covered in `vite-config.test.ts`.
+- **Changed from the approved states table (2A row "Error"):** the failure alert sits directly above the submit button, not above the form. In the browser it was off-screen for a visitor at the button.
+- **Not done as planned:** no `qa/features/web/landing.yaml`. No landing spec is catalogued yet, so this is TD-130 instead of a one-feature area.
+- **Found by axe in QA:** in-text links on the page are underlined (`link-in-text-block`).
+
 ---
 
 # Eng review (/plan-eng-review, 2026-10-14)

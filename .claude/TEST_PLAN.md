@@ -2286,3 +2286,15 @@ Full suite (Node 22): 3751 passed, 4 skipped, 262/262 files. `lint` 0 errors (6 
 
 Run: `npx vitest run src/hosted src/components/ui/__tests__` — 55 files / 704 tests green after the review fixes. Full suite not run at the user's request; `lint`, `typecheck` and `openapi:check` run.
 
+## MUT-186 — /hosted offer page and request form (2026-10-14)
+
+| Suite | Cases |
+|---|---|
+| `src/pages/landing/__tests__/hostedRequest.test.ts` | validate: required name/email, whitespace-only, 5 bad emails, trimmed email; encode: form-name + exact field order, trimming, joined devices, language (D4), honeypot as typed, profession code; submit: POST url-encoded to `/__forms.html`, 500 → error, thrown → error, **15 s timeout aborts → error (D5)** |
+| `src/pages/landing/__tests__/HostedOfferPage.test.tsx` | structure (4 parts in landing chrome), hero names the trade (3A), CTA → `#request`, no-price line, mock aria-hidden with equal balances (5A), tab title; comparison headers and 7 row headers (1A), "Not included" for screen readers, Android coming soon on/off, **no store anchors even with URLs (9A)**; honesty EN/AR (no checkout, price, reports, backup, automatic, sync, sign-up, profiles); form: required vs optional, LTR email/phone in Arabic, hidden honeypot, notice + /privacy (D3), empty submit → errors + focus, email-only focus, error clears on edit, Sending… disabled + one POST, full Arabic body incl. language, success with name/email/2-day promise/focus/free-app link (2A/4A), edit-and-resend keeps answers, failure keeps answers + retry; Arabic RTL with no raw keys |
+| `src/pages/landing/__tests__/hostedOfferKeys.test.ts` | `landing.hostedOffer` EN/AR key parity, non-empty, matching placeholders; privacy section in both; 2-working-day promise in lead and success |
+| `src/pages/landing/__tests__/PrivacyPolicyPage.test.tsx` | the request-form section names Netlify, its purpose and the contact address |
+| `scripts/__tests__/vite-config.test.ts` | twin declares form/netlify/honeypot/hidden; names exactly the posted fields; noindex (D2); emitted as `__forms.html`; web only; out of the SW precache (D2); dev route `/hosted` → `/index.html` (query kept), `/hosted.html` and `/app/hosted` untouched, web only |
+| `qa/specs/web/landing.spec.ts` | `@web.landing.hosted`: landing chrome, axe light + dark, empty → errors + focus, 500 → alert in view beside Try again, retry → focused confirmation with the email, body has form-name + language; `@web.landing.hosted-375`: Arabic at 375 fits, laptop hidden, phone shown, thead hidden, full-width row headers, pills ≥ 44px |
+
+Run: `npx vitest run src/pages/landing scripts/__tests__/vite-config.test.ts`; QA on a dev or preview server with `QA_CONTEXT` pointing `web` at it. **Not testable locally:** Netlify registering the form and emailing it (INFRA §1, post-deploy check).

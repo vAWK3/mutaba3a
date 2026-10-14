@@ -12,6 +12,14 @@
 |--------|------|------------|
 | PWA + landing | Netlify (`mutaba3a.app`) | `netlify.toml` |
 | macOS / Windows installers | GitHub Releases, Tauri updater | `.github/workflows/build-windows.yml`, `deploy.sh` (macOS, operator) |
+| `/hosted` request form | Netlify Forms (free tier: 100 submissions/month) | `vite.config.ts` `netlifyForms()` emits `__forms.html` (MUT-186) |
+
+**Netlify Forms — operator steps, not settable from `netlify.toml` (MUT-186):**
+1. Site → Forms → **Enable form detection**, once, before the deploy that first ships `__forms.html`; otherwise `hosted-request` is never registered and every POST 404s (visitors see the retry state).
+2. Site → Forms → `hosted-request` → **Form notifications** → email Basel.
+3. After that deploy, send one request from production and confirm the email arrives.
+
+Form data (name, email, optional phone/profession/devices/message, page language) is stored by Netlify and emailed; the privacy policy says so.
 
 Zero cloud infrastructure; no telemetry; data stays on the device (ADR-001,
 ADR-013). See `.claude/CI_CD.md`.
