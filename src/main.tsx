@@ -17,6 +17,7 @@ import { initDatabase } from "./db";
 import { LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";
 import { LandingProviders } from "./pages/landing/LandingProviders";
+import { HOSTED_OFFER_URL } from "./content/download-config";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import "./components/ui/ErrorBoundary.css";
@@ -53,6 +54,15 @@ const PrivacyPolicyPage =
     ? lazy(() =>
         import("./pages/landing/PrivacyPolicyPage").then((m) => ({
           default: m.PrivacyPolicyPage,
+        })),
+      )
+    : null;
+
+const HostedOfferPage =
+  __BUILD_MODE__ === "web"
+    ? lazy(() =>
+        import("./pages/landing/HostedOfferPage").then((m) => ({
+          default: m.HostedOfferPage,
         })),
       )
     : null;
@@ -105,6 +115,16 @@ function App() {
         <LandingProviders>
           <Suspense fallback={<LandingLoader />}>
             <PrivacyPolicyPage />
+          </Suspense>
+        </LandingProviders>
+      );
+    }
+
+    if (path === HOSTED_OFFER_URL && HostedOfferPage) {
+      return (
+        <LandingProviders>
+          <Suspense fallback={<LandingLoader />}>
+            <HostedOfferPage />
           </Suspense>
         </LandingProviders>
       );
