@@ -1,10 +1,11 @@
 import { useT } from '../../../lib/i18n';
 import { useLatestRelease } from '../../../hooks/useLatestRelease';
-import { DOWNLOAD_URLS, WEB_APP_URL } from '../../../content/download-config';
+import { DOWNLOAD_URLS, HOSTED_OFFER_URL, WEB_APP_URL } from '../../../content/download-config';
 import { AppleIcon, BrowserIcon, WindowsIcon } from './PlatformIcons';
 
 /**
- * Every way to get the app, free during early access. The Windows installer is
+ * Every way to get the app: the free apps first, then the paid hosted account
+ * and phone app with one link to /hosted (MUT-172). The Windows installer is
  * offered only when the latest release actually has one; while the release is
  * unknown the stable redirect is offered, because it usually resolves.
  */
@@ -66,6 +67,14 @@ export function GetItSection() {
             </span>
           )}
         </p>
+
+        <div className="landing-get-it-paid" data-part="get-it-paid">
+          <p className="landing-get-it-paid-lead">{t('landing.getIt.paid.lead')}</p>
+          <p className="landing-get-it-paid-hint">{t('landing.getIt.paid.hint')}</p>
+          <a href={HOSTED_OFFER_URL} className="landing-get-it-paid-cta">
+            {t('landing.getIt.paid.cta')}
+          </a>
+        </div>
       </div>
     </section>
   );
