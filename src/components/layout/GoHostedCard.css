@@ -1,0 +1,57 @@
+/* The free web app's "Go hosted" card (MUT-187, design review variant B):
+   an outlined object on the sidebar surface, never the selected-nav lavender. */
+.go-hosted-card {
+  position: relative;
+  margin-block-end: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  transition: opacity 160ms ease-out;
+}
+
+.go-hosted-card.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.go-hosted-card-text {
+  margin: 0 0 var(--space-2);
+  padding-inline-end: var(--space-6);
+  font-size: var(--text-body);
+  line-height: 1.4;
+}
+
+/* A 44px hit area at the inline end (design review D6); the glyph stays small */
+.go-hosted-card-dismiss {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.go-hosted-card-dismiss:hover {
+  color: var(--text);
+}
+
+/* Never squeeze the nav on a short window (ADR-034, eng review D6) */
+@media (max-height: 640px) {
+  .go-hosted-card {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .go-hosted-card {
+    transition: none;
+  }
+}

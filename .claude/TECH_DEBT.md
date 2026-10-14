@@ -18,6 +18,20 @@
 
 ## Open Debt
 
+### TD-135: The web app still offers the retired Mac app beside the Go hosted card
+**Status**: Open
+**Added**: 2026-10-14 (MUT-187 browser check)
+**Priority**: Low
+**Impact**: The bottom banner "Get the native Mac app for a better experience" (`desktopBanner` strings) still shows in the free web app, though desktop is retired until v2. With the Go hosted card, a first visit shows two calls to action at once, against the epic's one-suggestion-at-a-time rule.
+**Fix**: in the desktop-retirement ticket (none filed yet), remove or gate the banner.
+
+### TD-134: The desktop bundle keeps the Go hosted card's code
+**Status**: Accepted
+**Added**: 2026-10-14 (MUT-187, ADR-076 §3)
+**Priority**: Low
+**Impact**: `goHostedEnabled()` is a function call, which Rollup doesn't fold, so `GoHostedCard`, `HostedAccountEntry` and their CSS ship in `dist-desktop`, never rendered (desktop's `__PORTAL_URL__` is `""`, so no portal origin). A few KB.
+**Fix (if it matters)**: inline-define a boolean (`__GO_HOSTED__`) and stub it in vitest's config, or drop with desktop's removal.
+
 ### TD-133: A type change's audit row lists every expense it uncategorized, unbounded
 **Status**: Accepted
 **Added**: 2026-10-14 (MUT-182 qa-reconcile D4)

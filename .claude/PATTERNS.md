@@ -2250,3 +2250,14 @@ Netlify registers only forms it finds in deployed HTML, and a React form isn't t
 - **Audit inside the transaction when a retry could duplicate.** A create guarded by an idempotency key that releases on 5xx must commit its audit rows with the record (`auditRows` in `prisma.ts`, distinct milliseconds so `(createdAt, id)` order is stable), or a failed append turns the client's retry into a second record.
 - **A new NOT-NULL-ish invariant on a column the old revision doesn't write**: make the CHECK tolerate the old shape explicitly (`… OR "ownerUserId" IS NULL OR …`), read through one helper that falls back to the old column (`profileOwnerOf`), and stamp the stragglers in post-roll. Never a CHECK the previous image can't satisfy: migrations run before the roll.
 
+
+## App patterns added by MUT-187 (2026-10-14)
+
+### Pattern: A link out of the `/app` basepath is a plain anchor
+The web router's basepath is `/app`, so `<Link to="/hosted">` resolves to `/app/hosted`. Links to marketing pages (`/hosted`, `/download`, `/privacy`) or another origin (the portal) are `<a href=… target="_blank" rel="noopener noreferrer">`, with a `.sr-only` "(opens in a new tab)" (`common.opensInNewTab`) after a JSX space (the i18n strings carry no leading space).
+
+### Pattern: Read a Vite build constant through a typeof guard at render time
+Vitest defines no `__BUILD_MODE__` / `__PORTAL_URL__`; a component that reads one bare throws in every existing test that renders it. Read it in a function called at render (`goHostedEnabled()`, `hostedPortalUrl()` in `src/lib/goHosted.ts`) with `typeof X !== 'undefined'`, and stub it per test with `vi.stubGlobal`. The cost: Rollup won't fold the call, so the other build keeps the dead branch (TD-134). Module-scope reads (`router.tsx`, `main.tsx`) still need the stub before import.
+
+### Pattern: A dismissible suggestion snoozes in localStorage and fails open
+A "hide for N days" timestamp lives in localStorage (a UI preference, never in backups). Unparseable, missing or future values count as due, so a skewed clock or a hand edit can't hide it forever; a storage that throws shows the suggestion and the dismissal holds for the tab.

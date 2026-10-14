@@ -46,6 +46,26 @@ function emitHostedEntryAsIndex(): Plugin {
 /** Where the landing page is served; override with MUTABA3A_PUBLIC_ORIGIN (e.g. a staging host). */
 const DEFAULT_PUBLIC_ORIGIN = "https://mutaba3a.app";
 
+/**
+ * Where the free web app's "Already have an account? Sign in" link goes: the
+ * Cloud Run service that serves the portal (no custom domain yet, MUT-112).
+ * Override with MUTABA3A_PORTAL_URL (MUT-187).
+ */
+export const DEFAULT_PORTAL_URL = "https://mutaba3a-api-t5bzsudmja-zf.a.run.app";
+
+/** `value` without its trailing slash; throws, naming `envVar`, unless it is a bare https origin. */
+function assertHttpsOrigin(envVar: string, value: string): string {
+  if (!/^https:\/\/[^/\s]+\/?$/.test(value)) {
+    throw new Error(`${envVar} must be an https origin, got ${JSON.stringify(value)}`);
+  }
+  return value.replace(/\/$/, "");
+}
+
+/** The portal origin the web build links to; a bad MUTABA3A_PORTAL_URL fails the build (MUT-187). */
+export function portalUrl(override: string | undefined): string {
+  return assertHttpsOrigin("MUTABA3A_PORTAL_URL", override ?? DEFAULT_PORTAL_URL);
+}
+
 /** A page with its own link preview: where it lives and what its card says. */
 export interface SocialPage {
   path: string;
@@ -83,10 +103,7 @@ const SOCIAL_CARD = { path: "/og-card-ar-1200x630.png", width: 1200, height: 630
  * instead of shipping broken cards. Vite escapes the attribute values.
  */
 export function socialMetaTags(origin: string, page: SocialPage = HOME_PAGE): HtmlTagDescriptor[] {
-  if (!/^https:\/\/[^/\s]+\/?$/.test(origin)) {
-    throw new Error(`MUTABA3A_PUBLIC_ORIGIN must be an https origin, got ${JSON.stringify(origin)}`);
-  }
-  const base = origin.replace(/\/$/, "");
+  const base = assertHttpsOrigin("MUTABA3A_PUBLIC_ORIGIN", origin);
   const { title, description: subheadline } = page;
   const image = `${base}${SOCIAL_CARD.path}`;
   const og = {
@@ -326,6 +343,8 @@ export default defineConfig(({ mode }) => {
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
       __BUILD_MODE__: JSON.stringify(buildMode),
+      // The free web app's portal sign-in link (MUT-187); desktop carries no portal address
+      __PORTAL_URL__: JSON.stringify(buildMode === "web" ? portalUrl(process.env.MUTABA3A_PORTAL_URL) : ""),
     },
   plugins: [
     react(),

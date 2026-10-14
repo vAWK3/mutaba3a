@@ -35,6 +35,7 @@ exports[`vite.config > leaves the desktop build exactly as it was 1`] = `
   "define": {
     "__APP_VERSION__": "<package.json version>",
     "__BUILD_MODE__": ""desktop"",
+    "__PORTAL_URL__": """",
   },
   "plugins": [
     "vite:react-babel",
@@ -111,6 +112,7 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
   "define": {
     "__APP_VERSION__": "<package.json version>",
     "__BUILD_MODE__": ""web"",
+    "__PORTAL_URL__": ""https://mutaba3a-api-t5bzsudmja-zf.a.run.app"",
   },
   "plugins": [
     "vite:react-babel",

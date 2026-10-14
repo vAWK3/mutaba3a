@@ -14,6 +14,8 @@ import { DeleteAllDataModal } from '../../components/modals';
 import { AdvancedFeaturesSection } from './AdvancedFeaturesSection';
 import { AboutSection } from './AboutSection';
 import { YourDataSection } from './YourDataSection';
+import { HostedAccountEntry } from './HostedAccountEntry';
+import { goHostedEnabled } from '../../lib/goHosted';
 import { useDrawerStore } from '../../lib/stores';
 import { Select } from '../../components/ui';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
@@ -275,6 +277,9 @@ export function SettingsPage() {
                 ))}
               </div>
             )}
+
+            {/* Under the businesses: hosted, for the web build only (MUT-187) */}
+            {goHostedEnabled() && <HostedAccountEntry />}
           </div>
 
           {/* General (MUT-139 merged language, theme and currency into one card;
