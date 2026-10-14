@@ -464,3 +464,72 @@
 @media (pointer: coarse) {
   .hp-row-action.btn-sm { height: 44px; padding-inline: var(--space-4); }
 }
+
+/* ---------- Profile management (MUT-183) ---------- */
+
+/* Switcher: New profile / Manage profiles below the profile list. */
+.hp-popover-sep { height: 1px; background: var(--divider); margin: var(--space-1-5) var(--space-2-5); }
+.hp-option-action .hp-option-line { color: var(--accent-text); }
+.hp-option-action[aria-disabled='true'] { cursor: not-allowed; }
+.hp-option-action[aria-disabled='true'] .hp-option-line { color: var(--muted); }
+
+/* Small text-button links inside drawers (Change, Reload, back to the list). */
+.hp-link-button { font: inherit; font-size: var(--text-label); font-weight: var(--weight-medium); color: var(--accent-text); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.hp-link-button:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: 2px; border-radius: var(--radius-xs); }
+.hp-link { color: var(--accent-text); font-weight: var(--weight-medium); text-underline-offset: 2px; }
+.hp-pane-back { margin-bottom: var(--space-4); }
+.hp-pane-back::before { content: '‹ '; }
+[dir='rtl'] .hp-pane-back::before { content: '› '; }
+
+/* Fact rows: the time zone the browser reported, read-only values. */
+.hp-fact-row { margin: 0; overflow-wrap: anywhere; }
+.hp-facts { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-4); font-size: var(--text-label); background: var(--surface-2); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); margin: 0 0 var(--space-4); }
+.hp-facts dt { color: var(--muted); }
+.hp-facts dd { margin: 0; }
+
+/* Design review Issue 7: Personal | Business as radio cards that say what they seed. */
+.hp-type-cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.hp-type-card { display: flex; gap: var(--space-2); align-items: flex-start; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3); background: var(--surface); cursor: pointer; }
+.hp-type-card input { margin-top: 0.3em; accent-color: var(--btn-primary-bg, var(--accent)); }
+.hp-type-card:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hp-type-card-on { border-color: var(--accent-text); background: color-mix(in oklab, var(--accent-subtle) 45%, var(--surface)); }
+.hp-type-card-text { min-width: 0; }
+.hp-type-card-label { display: block; font-weight: var(--weight-medium); }
+.hp-type-card-seed { display: block; font-size: var(--text-label); color: var(--muted); }
+[aria-invalid='true'] > .hp-type-card { border-color: var(--error-muted); }
+.hp-type-group { border-top: 1px solid var(--divider); padding-top: var(--space-4); }
+
+/* Design review Issue 8: the one destructive step looks destructive. */
+.hp-confirm { border: 1px solid var(--error-muted); border-radius: var(--radius-md); padding: var(--space-4); background: color-mix(in oklab, var(--error-subtle) 25%, var(--surface)); }
+.hp-confirm h3 { font-family: var(--font-heading); font-size: var(--text-headline); margin: 0 0 var(--space-2); }
+.hp-confirm h3:focus { outline: none; }
+.hp-confirm p { margin: 0 0 var(--space-2); }
+.hp-confirm-count { font-weight: var(--weight-medium); }
+
+/* Design review Issue 1: the Manage list. */
+.hp-profiles { display: flex; flex-direction: column; gap: var(--space-4); }
+.hp-profiles-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); font-size: var(--text-label); }
+.hp-profile-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.hp-profile-list li + li { border-top: 1px solid var(--border); }
+.hp-profile-row { display: flex; gap: var(--space-3); align-items: center; width: 100%; min-height: 56px; padding: var(--space-3) var(--space-4); text-align: start; font: inherit; color: var(--text); background: transparent; border: 0; }
+button.hp-profile-row { cursor: pointer; }
+button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: var(--surface-hover); outline: none; }
+.hp-profile-row-text { flex: 1; min-width: 0; }
+.hp-profile-row-line { display: flex; gap: var(--space-2); align-items: center; font-weight: var(--weight-medium); min-width: 0; }
+.hp-profile-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hp-profile-row-reason { display: flex; gap: var(--space-1); align-items: center; }
+.hp-profile-row-reason .hp-banner-icon { margin-top: 0; }
+.hp-profile-row-currency { font-family: var(--font-mono); font-size: var(--text-label); color: var(--muted); }
+.hp-profile-row-chevron { color: var(--muted); }
+[dir='rtl'] .hp-profile-row-chevron { transform: scaleX(-1); }
+.hp-pill-open { flex: none; font-size: var(--text-micro); font-weight: var(--weight-medium); padding: 0 var(--space-2); border-radius: var(--radius-pill); background: var(--success-subtle, var(--accent-subtle)); color: var(--success, var(--accent-text)); }
+
+.hp-empty-actions { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; }
+
+/* Design review Issue 9: type cards stack on a phone, and drawer buttons are 44px on touch. */
+@media (max-width: 760px) {
+  .hp-type-cards { grid-template-columns: 1fr; }
+}
+@media (pointer: coarse) {
+  .drawer-footer .btn { min-height: 44px; }
+}

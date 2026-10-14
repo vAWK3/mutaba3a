@@ -162,7 +162,7 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave }: Profi
   return (
     <>
       {footerSlot && createPortal(footer, footerSlot)}
-      <button type="button" className="hp-link-button hp-back" onClick={() => onLeave(null)}>
+      <button type="button" className="hp-link-button hp-pane-back" onClick={() => onLeave(null)}>
         {t('hosted.profiles.back')}
       </button>
       {banner && (
