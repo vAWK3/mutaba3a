@@ -43,8 +43,13 @@ function emitHostedEntryAsIndex(): Plugin {
   };
 }
 
-/** Where the landing page is served; override with MUTABA3A_PUBLIC_ORIGIN (e.g. a staging host). */
-const DEFAULT_PUBLIC_ORIGIN = "https://mutaba3a.app";
+/**
+ * Where the landing page is served; override with MUTABA3A_PUBLIC_ORIGIN (e.g. a
+ * staging host). The Netlify origin until the custom domain has DNS (MUT-112):
+ * it feeds the link-preview tags, the /hosted canonical and the portal's
+ * sign-in link (MUT-188), all of which must point at a host that answers.
+ */
+export const DEFAULT_PUBLIC_ORIGIN = "https://mutaba3a.netlify.app";
 
 /**
  * Where the free web app's "Already have an account? Sign in" link goes: the
@@ -64,6 +69,11 @@ function assertHttpsOrigin(envVar: string, value: string): string {
 /** The portal origin the web build links to; a bad MUTABA3A_PORTAL_URL fails the build (MUT-187). */
 export function portalUrl(override: string | undefined): string {
   return assertHttpsOrigin("MUTABA3A_PORTAL_URL", override ?? DEFAULT_PORTAL_URL);
+}
+
+/** The public /hosted page the portal's sign-in links to; a bad MUTABA3A_PUBLIC_ORIGIN fails the build (MUT-188). */
+export function hostedOfferUrl(override: string | undefined): string {
+  return `${assertHttpsOrigin("MUTABA3A_PUBLIC_ORIGIN", override ?? DEFAULT_PUBLIC_ORIGIN)}${HOSTED_OFFER_URL}`;
 }
 
 /** A page with its own link preview: where it lives and what its card says. */
@@ -303,6 +313,8 @@ function hostedConfig(): UserConfig {
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
       __BUILD_MODE__: JSON.stringify("hosted"),
+      // The sign-in page's "No account? Request one" link (MUT-188): the landing's /hosted page
+      __HOSTED_OFFER_URL__: JSON.stringify(hostedOfferUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
     },
     plugins: [react(), emitHostedEntryAsIndex()],
     clearScreen: false,
