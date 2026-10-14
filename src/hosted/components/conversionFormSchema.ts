@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { currencyExponent, parseAmountInput } from '../../lib/utils';
+import { HOSTED_CURRENCIES, type HostedCurrency } from '../format/currencies';
 
 /**
  * The hosted conversion drawer's own schema (MUT-161) — not extracted into a
@@ -13,9 +14,6 @@ import { currencyExponent, parseAmountInput } from '../../lib/utils';
  * — the hosted ExpenseDrawer's pattern (7428c63) — instead of a fixed
  * two-decimal regex.
  */
-export const CURRENCY_OPTIONS = ['USD', 'ILS', 'EUR', 'JOD'] as const;
-
-type HostedCurrency = (typeof CURRENCY_OPTIONS)[number];
 
 /** A non-negative decimal with at most the currency's fractional digits (no sign, no exponent). */
 function fitsCurrency(amount: string, currency: HostedCurrency): boolean {
@@ -25,9 +23,9 @@ function fitsCurrency(amount: string, currency: HostedCurrency): boolean {
 export const conversionFormSchema = z
   .object({
     fromAmount: z.string().min(1, 'Amount is required'),
-    fromCurrency: z.enum(CURRENCY_OPTIONS),
+    fromCurrency: z.enum(HOSTED_CURRENCIES),
     toAmount: z.string().min(1, 'Amount is required'),
-    toCurrency: z.enum(CURRENCY_OPTIONS),
+    toCurrency: z.enum(HOSTED_CURRENCIES),
     occurredAt: z.string().min(1, 'Date is required'),
     notes: z.string().optional(),
   })
