@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { useMalafatPortalMoments } from '../session/malafatMoments';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from '@tanstack/react-router';
@@ -75,6 +76,8 @@ export function ProfileCreateDrawer({ active, onClose }: ProfileCreateDrawerProp
   /** The one success path, so MUT-191 (a note after a Business profile) can extend it. */
   const onCreated = (profile: HostedProfile) => {
     showToast(t('hosted.profiles.created', { name: profile.name }), { tone: 'info' });
+    // A business profile: its page shows the Malafat note once, on arrival (MUT-191)
+    if (profile.type === 'BUSINESS') useMalafatPortalMoments.getState().markBusinessCreated(profile.id);
     void navigate({ to: `/p/${profile.id}` });
   };
 

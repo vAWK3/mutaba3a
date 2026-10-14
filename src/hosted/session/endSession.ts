@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { AnyRouter } from '@tanstack/react-router';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
+import { useMalafatPortalMoments } from './malafatMoments';
 
 /**
  * End the session on this tab (mut-43-auth-states.md E1–E3): drop every cached
@@ -10,5 +11,7 @@ import { useSavedFlashStore } from '../../lib/savedFlashStore';
 export function endSession(queryClient: QueryClient, router: AnyRouter, search: { reason: 'expired' | 'signed_out'; next?: string }) {
   queryClient.clear();
   useSavedFlashStore.getState().clear();
+  // MUT-191: the next person in this tab starts with no Malafat moment pending
+  useMalafatPortalMoments.getState().reset();
   void router.navigate({ to: '/sign-in', search, replace: true });
 }

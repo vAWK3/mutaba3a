@@ -51,7 +51,7 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
           </nav>
         )}
         <div className="hp-spacer" />
-        <UserMenu />
+        <UserMenu profile={profile} />
       </aside>
       <main className="hp-page">{children}</main>
       {/* MUT-183: New profile / Manage profiles, opened by URL from the switcher or the empty state. */}

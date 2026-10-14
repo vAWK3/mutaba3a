@@ -3,6 +3,8 @@ import { LanguageSwitch } from '../components/Brand';
 import { useMe } from '../session/me';
 import { useSignOut } from '../session/useSignOut';
 import { usePopover } from './usePopover';
+import { MalafatMenuItems } from '../components/MalafatPortal';
+import type { HostedProfile } from '../api/client';
 
 const INITIALS = 2;
 
@@ -16,8 +18,8 @@ function initialsOf(name: string): string {
     .toUpperCase();
 }
 
-/** The account menu (hosted-portal.md §7.1): who is signed in, the language, and Sign out. */
-export function UserMenu() {
+/** The account menu (hosted-portal.md §7.1): who is signed in, the language, Sign out, and on an eligible profile Malafat (MUT-191). */
+export function UserMenu({ profile = null }: { profile?: HostedProfile | null }) {
   const t = useT();
   const { user } = useMe();
   const { signOut, signingOut } = useSignOut();
@@ -52,6 +54,8 @@ export function UserMenu() {
           <button type="button" role="menuitem" className="hp-menu-item press" disabled={signingOut} onClick={() => void signOut()}>
             {t('hosted.auth.signOut')}
           </button>
+          {/* After Sign out, so Sign out stays the menu's first item (focus on open) */}
+          <MalafatMenuItems profile={profile} />
         </div>
       )}
     </div>

@@ -267,6 +267,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/malafat-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * The person's Malafat suggestion preferences (MUT-191)
+         * @description `off` replaces the switch; `dismiss` adds moments to what is stored (never removes one), so two devices never undo each other. Idempotent by construction, so no Idempotency-Key. Writes no audit row: a preference is not an event a firm sees.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MalafatSuggestionsChange"];
+                };
+            };
+            responses: {
+                /** @description The preferences now stored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MalafatSuggestions"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Invalid body */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/v1/device-sessions": {
         parameters: {
             query?: never;
@@ -9312,12 +9382,19 @@ export interface components {
                 email: string;
                 displayName: string;
                 locale: components["schemas"]["UserLocale"];
+                malafatSuggestions: components["schemas"]["MalafatSuggestions"];
             };
             profiles: components["schemas"]["HostedProfile"][];
             limits: components["schemas"]["ProfileLimits"];
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
+        MalafatSuggestions: {
+            off: boolean;
+            dismissed: components["schemas"]["MalafatMoment"][];
+        };
+        /** @enum {string} */
+        MalafatMoment: "business-profile" | "client-threshold" | "second-business";
         HostedProfile: {
             /** Format: uuid */
             id: string;
@@ -9362,6 +9439,10 @@ export interface components {
         SignInRequest: {
             email: string;
             password: string;
+        };
+        MalafatSuggestionsChange: {
+            off?: boolean;
+            dismiss?: components["schemas"]["MalafatMoment"][];
         };
         DeviceSession: components["schemas"]["Me"] & {
             token: string;
@@ -11119,7 +11200,7 @@ export interface components {
             /** Format: email */
             email: string;
             displayName: string;
-            locale?: components["schemas"]["UserLocale"];
+            locale?: components["schemas"]["UserLocale"] & unknown;
             /** Format: uuid */
             organizationId?: string;
             defaultCurrency?: components["schemas"]["Currency"];

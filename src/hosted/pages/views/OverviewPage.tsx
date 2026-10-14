@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { MalafatCreatedNote } from '../../components/MalafatPortal';
 import { Link } from '@tanstack/react-router';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -54,6 +55,8 @@ export function OverviewPage({ filters, setFilters }: OverviewPageProps) {
   return (
     <>
       <PageHeader title={t('hosted.overview.title')} />
+      {/* Right after a business profile is created, once (MUT-191) */}
+      <MalafatCreatedNote />
       <QueryView
         queries={[summary, directory]}
         data={data}
