@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Settings no longer scrolls sideways at 375 px (MUT-187 follow-up)
+
+**Why:** `@web.brand.layout` failed in all four 375 px variants on Settings ("406px content in 375px"; 460 px in Arabic), found while merging MUT-209.
+
+### Fixed
+- Settings › Businesses' Hosted account row fits the Settings column at phone width. Its "See hosted accounts" button (`.btn`, nowrap at a fixed 32 px) widened the row's auto grid track to 150 px (EN) / 187 px (AR) inside a 45 px column. The page itself scrolled because the visually hidden "(opens in a new tab)" spans are `position: absolute` with no positioned ancestor: they escaped `.page-content`'s clipping and sat at 405 px (EN) / −85 px (AR).
+- `HostedAccountEntry.css`: the row is `position: relative` with one `minmax(0, 1fr)` track and `overflow-wrap: break-word`; the button (`.hosted-account-entry-cta`) wraps and grows taller (`white-space: normal`, `block-size: auto`, `min-block-size: var(--space-8)`); `border-top` became `border-block-start`.
+
+### Technical
+- Test: `src/pages/settings/__tests__/HostedAccountEntry.css.test.ts` pins the rules and logical-properties-only. QA: `web.brand.layout` now maps `HostedAccountEntry.tsx/.css`; all 8 cases pass on a built web preview. TD-141 logs the app-wide `.sr-only` escape.
+
+---
+
 ## [Unreleased] - 2026-10-15 — Arabic by default in the web app and the hosted portal (MUT-209, ADR-077 amended)
 
 **Why:** Basel: "everything should default to arabic". Brief: `.claude/designs/mut-209-arabic-default-everywhere.md`.

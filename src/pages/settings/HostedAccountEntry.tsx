@@ -20,7 +20,7 @@ export function HostedAccountEntry() {
       <div className="settings-label">{t('settings.profile.hosted.title')}</div>
       <p className="hosted-account-entry-text">{t('settings.profile.hosted.description')}</p>
       <div className="hosted-account-entry-actions">
-        <a href={HOSTED_OFFER_URL} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-secondary">
+        <a href={HOSTED_OFFER_URL} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-secondary hosted-account-entry-cta">
           {t('settings.profile.hosted.cta')} {newTab}
         </a>
         {portalUrl && (

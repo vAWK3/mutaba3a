@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-141: `.sr-only` text escapes `.page-content`'s clipping and can make the page scroll sideways
+**Status**: Open
+**Ticket**: none (found fixing Settings at 375 px, 2026-10-15)
+**Added**: 2026-10-15
+**Priority**: Low
+**Impact**: `.sr-only` (`src/styles/theme.css`) is `position: absolute`, and nothing between `.page-content` and the root is positioned, so a hidden span's containing block is the viewport. When content overflows its column (likely at phone width while the sidebar never collapses, TD-083), the 1 px span sits at its static position past the window edge, `.main-content`'s `overflow: hidden` and `.page-content`'s scroll don't clip it, and the document scrolls sideways. Fixed locally for the Hosted account row (`position: relative` on the row); any other row with an "(opens in a new tab)" span can repeat it.
+**Fix**: `position: relative` on `.page-content` after auditing its absolutely positioned descendants (menus, popovers, count-up overlays), so every `.sr-only` in a page is clipped by the page's own scroll box.
+
 ### TD-138: Settings-row writes are read-then-put outside a transaction
 **Status**: Open
 **Ticket**: MUT-190 (found by its pre-landing review)

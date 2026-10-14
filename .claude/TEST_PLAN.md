@@ -2432,3 +2432,9 @@ Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 | `qa/specs/portal/signin.spec.ts` | E2E | `@portal.signin.arabic-default`: `en-US` browser, nothing chosen → Arabic sign-in, nothing stored |
 | `qa/support/app.ts` | QA helper | `openFreshApp` chooses English once (only when no choice exists), so English specs keep their labels and `switchToArabic` still wins |
 
+
+### Settings at 375 px — Hosted account row fits its column (2026-10-15, MUT-187 follow-up)
+| File | Type | Covers |
+|------|------|--------|
+| `src/pages/settings/__tests__/HostedAccountEntry.css.test.ts` | Unit (stylesheet) | the row is `position: relative` with a `minmax(0, 1fr)` track; its button wraps (`white-space: normal`, `block-size: auto`, `min-block-size: var(--space-8)`, `max-inline-size: 100%`); no physical properties in the file |
+| `qa/specs/web/brand.spec.ts` | E2E | `@web.brand.layout` (now maps `HostedAccountEntry.tsx/.css`): Settings fits 375 px in light/dark × English/Arabic |
