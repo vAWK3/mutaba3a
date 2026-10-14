@@ -14,7 +14,7 @@ import { insertFirmRow, insertUserWithPersonalRow } from './fixtures/raw-rows.js
  * The two CHECKs then hold every later write to that shape. Runs on a scratch
  * database built from the migrations before it (eng review M1, automated).
  */
-vi.setConfig({ testTimeout: 60_000 });
+vi.setConfig({ testTimeout: 120_000 });
 
 const url = process.env.MUTABA3A_TEST_DATABASE_URL;
 const SERVER = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -24,6 +24,9 @@ const MUT182 = '20261014120000_mut182_owned_profiles';
 
 const migrationDirs = () => readdirSync(MIGRATIONS, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
 const sqlOf = (dir: string) => readFileSync(join(MIGRATIONS, dir, 'migration.sql'), 'utf8');
+
+/** Each migration file in its own transaction, the way `prisma migrate deploy` applies them, as one script. */
+const inTransactions = (dirs: string[]) => dirs.map((dir) => `BEGIN;\n${sqlOf(dir)}\n;\nCOMMIT;`).join('\n');
 
 function execute(dbUrl: string, sql: string): void {
   execFileSync(PRISMA, ['db', 'execute', '--stdin', '--url', dbUrl], { input: sql, cwd: SERVER, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -56,8 +59,9 @@ if (!url) {
       clients.push(db);
 
       const dirs = migrationDirs();
-      // One transaction per file, as `prisma migrate deploy` applies them: MUT-100 adds an enum value its next file uses.
-      for (const dir of dirs.slice(0, dirs.indexOf(MUT182))) execute(dbUrl, `BEGIN;\n${sqlOf(dir)}\n;\nCOMMIT;`);
+      // One transaction per file, as `prisma migrate deploy` applies them (MUT-100 adds an enum value its next file
+      // uses), but one `prisma db execute` process for the lot: a process per file took over a minute under load.
+      execute(dbUrl, inTransactions(dirs.slice(0, dirs.indexOf(MUT182))));
       const firm = await insertFirmRow(db);
       const nour = await insertUserWithPersonalRow(db, [firm.id]);
       const rana = await insertUserWithPersonalRow(db, []);
@@ -76,7 +80,8 @@ if (!url) {
       await expect(db.$executeRawUnsafe(`UPDATE organizations SET "profileType" = 'BUSINESS' WHERE id = '${nour.personalId}'`)).rejects.toThrow(/organizations_personal_owned_check/);
       await expect(db.$executeRawUnsafe(`UPDATE organizations SET "ownerUserId" = '${nour.userId}' WHERE id = '${firm.id}'`)).rejects.toThrow(/organizations_owner_type_check/);
 
-      for (const dir of dirs.slice(dirs.indexOf(MUT182) + 1)) execute(dbUrl, `BEGIN;\n${sqlOf(dir)}\n;\nCOMMIT;`);
+      const rest = dirs.slice(dirs.indexOf(MUT182) + 1);
+      if (rest.length > 0) execute(dbUrl, inTransactions(rest));
       execFileSync(PRISMA, ['migrate', 'diff', '--from-url', dbUrl, '--to-schema-datamodel', join(SERVER, 'prisma/schema.prisma'), '--exit-code'], { cwd: SERVER, stdio: 'pipe' });
     });
   });
