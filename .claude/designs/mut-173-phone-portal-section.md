@@ -97,3 +97,112 @@ Business / product impact
 - Every visitor now learns the one thing that makes the paid tier different from the free apps in practice: log on the phone, see it in the portal. Without it, "phone app" in Get it is a name with no job.
 - Epic MUT-171's second of three stories; it uses MUT-186's config so the day Basel sets a store URL the landing links it with no code change.
 - Risk: copy and chips; the honesty test keeps "reports" out and the three-state test keeps dead links out.
+
+---
+
+# Eng review (/plan-eng-review, 2026-10-14, non-interactive by Basel's instruction: the whole epic runs autonomously)
+
+Target: this plan. Reviewer: Claude (native) + an in-host Plan subagent as the outside voice (Codex not installed). Decision gates were auto-decided on the recommended option and are listed under "Unresolved decisions" for Basel. Search check: no new architectural pattern, infrastructure component or concurrency approach (a chapter, a config-driven list, a CSS move), so no web research was run.
+
+## Scope Challenge
+
+**A. Assess.** Already solving each sub-problem: `ChapterSection` (layout, reveal, flip); `HostedDevicesMock` (the picture) and its `.hosted-devices*` rules (`HostedOfferPage.css:48-128`, `:365-392`); `MOBILE_APP_LINKS` + `landing.hostedOffer.platform.*` (availability and its words); `HOSTED_OFFER_URL`; `AppleIcon`; the `.hosted-device-pill` recipe (44 px pill); `landingCopy.test.ts` parity; `HostedOfferPage.test.tsx:8-19` (the exact `vi.mock` getter pattern for swapping `MOBILE_APP_LINKS`); the landing QA harness. Complexity: 14 files touched (7 source incl. 1 new component, 2 dictionaries, 3 tests, 1 feature file, 1 spec) + knowledge files; 1 new module (`PhoneSection`). TODOS.md: nothing overlaps (its items are payment dates, audit ordering, hosted profiles). Distribution: Netlify builds `main`; no CI change. Minimum change: nothing deferrable without failing an AC; the one conscious extra is the CSS move (D3), which the reuse needs.
+
+**B. Complexity gate** (14 files ≥ 8, 1 new module): structure question, **D1 auto-decided → Original arrangement.** Smaller arrangement considered: fold `PhoneExtra` into `LandingPage.tsx` and skip `PhoneSection` (−1 file). Rejected: the page component is a composition list and every other part is its own component; the chips' three-state logic needs a home that the test can render alone. No cut keeps the Phase 5 feature file and spec, which CLAUDE.md requires. Scope record: feature answers: none proposed; structure: A (Original); accepted scope: §2 as written, amended by R1 below; pending remedies: none.
+
+**C. Findings**
+
+| # | Sev | Conf | Where | Finding | Disposition |
+|---|---|---|---|---|---|
+| S1 | P1 | 9/10 | plan §2 `HostedOfferPage.css` row (D3) | The `≤640px` block (`HostedOfferPage.css:379-392`) hides the laptop and the caption and keeps only the phone frame. Moved to `LandingPage.css` as planned, it applies on `/` too: on a phone, the chapter whose idea is "the phone logs, the portal shows" would show a phone displaying a client balance and nothing of the portal, the opposite of the words beside it. On `/hosted` that trade is right (the hero's point is "on your phone too"). | **accepted (R1)**: move only the base rules; the `≤640px` overrides stay in `HostedOfferPage.css`, which `/` never loads. The landing adds its own `≤640px` rule scoped to `.landing-chapter .hosted-devices`: the mock leaves `position: absolute`, the laptop becomes full-width and in flow, the phone follows below it centred, the caption stays. `landing.spec.ts:385-386` (`@web.landing.hosted-375`) keeps asserting the phone-only hero on `/hosted` and stays green. |
+| S2 | P2 | 9/10 | plan §2 test row | The plan says "a hoisted `vi.mock` … the same shape as the `release` mock". The repo already has the exact shape: `HostedOfferPage.test.tsx:8-19` spreads `importOriginal` and exposes `MOBILE_APP_LINKS` through a getter on a hoisted `apps.links`. Copy it verbatim; a plain spread with a mutable object would freeze the first value. | **accepted**: the plan names the pattern and file. |
+| S3 | P3 | 8/10 | plan §2 `PlatformIcons.tsx` row | The Android robot is Google's work under CC BY 3.0; the attribution sentence belongs in the icon's docblock, as it does wherever the mark is reproduced. | **accepted**: docblock carries the attribution line. |
+| S4 | P3 | 7/10 | plan §2 hint link | `.landing-phone-hint a` is an unclassed link, so `index.css:83` `a:not([class]):hover` underlines it on hover only; running-text links need a permanent underline (axe link-in-text-block, the `.landing-get-it-meta a` precedent). The plan says so; make the rule explicit: `color: var(--accent-text); text-decoration: underline; text-underline-offset: 0.15em`, hover thickness 2px, `:active { opacity: var(--landing-press-dim) }`, and add `.landing-phone-hint a:active` to `landingCss.test.ts`'s `it.each` of dimming text links (`:95`). | **accepted**. |
+
+Result: **scope accepted as-is** (R1 is an arrangement of the same CSS, not a scope change). MODE = FULL_REVIEW.
+
+## Decision ledger
+
+### R1: the mock on phones, on `/`
+Finding: S1, P1, 9/10, plan §2, Claude
+Plan baseline: move every `.hosted-devices*` rule, including the `≤640px` block, to `LandingPage.css`
+Runtime evidence: `HostedOfferPage.css:379-392` (`.hosted-devices { min-height: 0 }`, laptop + caption `display: none`, phone `position: relative; margin-inline: auto`); `landing.spec.ts:385-386` asserts exactly that on `/hosted` at 375 px; `HostedOfferPage.tsx:108-119` mounts the mock inside `.hosted-hero-layout`; `LandingPage.css:918-921` stacks `.landing-chapter-layout` to one column at the same breakpoint.
+Comparison grid:
+
+| Choice | Current plan | A) Phone-only everywhere | B) Base rules shared, each page owns its `≤640px` |
+|---|---|---|---|
+| What a phone visitor sees on `/` | — | a phone frame with a balance; no portal in the picture | laptop (portal) above, phone below, caption kept |
+| `/hosted` at 375 px | unchanged | unchanged | unchanged (its overrides stay in its own file) |
+| CSS | 1 move | 1 move | 1 move + ~10 declarations on the landing |
+
+Question D2: On phones, should the landing's copy of the mock keep the laptop?
+Header: Mock on phones
+Options:
+A) Phone-only everywhere ✅ one media block, identical on both pages ✅ nothing new to test ❌ on `/` the picture contradicts the sentence beside it for the device most visitors use.
+B) Each page owns its `≤640px` rule (recommended) ✅ the chapter's picture matches its words on phones ✅ `/hosted`'s hero and its QA case are untouched ❌ one more landing rule to keep in step with the mock.
+Completeness: A=6/10, B=10/10.
+State: approved
+Actual answer: B (auto, non-interactive run)
+Accepted scope: §2 `LandingPage.css` and `HostedOfferPage.css` rows as amended by S1.
+
+## 1. Architecture review
+- **[P1] (9/10) plan §2** — the mock's phone rule on `/` → R1 (accepted).
+- Boundaries: one new component, one slot on an existing one, two stylesheets, two dictionaries; no router, app, portal or server. The config read is a module constant; the only runtime dependence is `useT`.
+- Data flow: none beyond render. Diagram of the chip decision, which is the one branch:
+
+```
+MOBILE_APP_LINKS[platform]
+  ├─ url set ──────────────► <a target=_blank> "iPhone, on the App Store"   (A2)
+  ├─ available, url null ──► <span> "iPhone"                               (A3: no dead link)
+  └─ not available ────────► <span --soon> "Android coming soon"           (A3)
+```
+- One production failure per new path: Basel sets a store `url` before the listing is public → the store shows "not available" (a 404 outside the site). No code can verify a store listing; the ticket makes the URL Basel's and the plan keeps it `null` until then. Not silent (the store says so), not ours to handle. Second: a translation key missing in one language → `useT` renders the key; `landingCopy.test.ts` parity catches it before merge.
+- Distribution: Netlify builds `main`; no CI, bundle or deploy change. No new artifact.
+
+Dispositions: A1 accepted (R1).
+
+## 2. Code quality review
+- Organisation: `PhoneSection` beside `GetItSection`; the chip logic is a `PLATFORMS.map` with one three-way branch, rendered and tested through the page. Extracting `storeState(link)` as a pure function would add a module for three lines with one caller; rejected under the rubric (no second caller, no net saving).
+- Shared code: `ChapterSection.extra` is the one extraction, with two verified callers' worth of layout already in the component (`ChapterSection.tsx:46-66`) and one new caller. The alternative, a copied chapter layout in `PhoneSection`, would duplicate 20 lines and the reveal effect. Net: −20 lines, one optional prop.
+- **[P2] (9/10) plan §2 test row** — mock pattern (S2) → accepted.
+- **[P3] (8/10)** icon attribution (S3) → accepted. **[P3] (7/10)** hint link rule + CSS test (S4) → accepted.
+- Error handling: none needed; no state, no I/O.
+- Diagrams: the `LandingPage.tsx` docblock's part list is the page's diagram; the plan updates it.
+
+Dispositions: Q1 (S2) accepted, Q2 (S3) accepted, Q3 (S4) accepted.
+
+## 3. Test review
+Framework: Vitest + Playwright QA (CLAUDE.md Phase 4/5).
+
+```
+CODE PATHS                                                      USER FLOWS
+[+] PhoneSection.tsx                                            [+] Learn what the phone and the portal each do
+  ├── [GAP→new] title/body/hint + /hosted link — LandingPage.test  ├── [GAP→new] EN: section after Get it, words, link — LandingPage.test
+  ├── [GAP→new] url set → store link, _blank, noopener             ├── [GAP→new] AR: title + link name — LandingPage.test
+  ├── [GAP→new] available + null → plain chip, no link             ├── [GAP→new][→E2E] chips follow config; 44px; /hosted — @web.landing.phone
+  ├── [GAP→new] unavailable → "coming soon", no link               ├── [GAP→new][→E2E] 375 AR no overflow; laptop kept on / — same case
+  └── [GAP→new] honesty: no reports/price words EN+AR              └── [★★★ TESTED] no Buy/$49/Universal on main — existing honesty cases
+[+] ChapterSection.extra                                         [+] Catalogue
+  └── [GAP→new] renders after body; absent by default — ChapterSection.test   └── [GAP→new] release-qa lint 0 errors; `phone` feature
+[+] LandingPage.css (.landing-phone-*, .hosted-devices base + landing ≤640)
+  ├── [★★★ TESTED] no literal scale/opacity; token dims — landingCss.test
+  └── [GAP→new] .landing-phone-hint a:active dims — landingCss.test it.each
+[+] HostedOfferPage.css (≤640 overrides stay)
+  └── [★★★ TESTED] phone-only hero at 375 — @web.landing.hosted-375 (unchanged)
+[+] en/ar landing.phone.*
+  └── [★★★ TESTED] key parity — landingCopy.test
+[+] LandingPage structure
+  └── [★★★ TESTED→updated] eight parts in order — LandingPage.test
+COVERAGE (before build): 5/16 (31%) | after the planned tests: 16/16
+QUALITY: ★★★:5 | GAPS: 11 (2 E2E)
+```
+Legend: ★★★ behavior + edge + error | ★★ happy path | ★ smoke | [→E2E] integration
+
+Value cards: three-state chips (protects=no dead store link, ever; fails_when=a null url renders an `<a>`, or an unavailable platform loses its note; why_new=no test reads the landing's chips; seam=none). Honesty words (protects=no reports/analytics/price claim, EN+AR; fails_when=copy drifts; why_new=existing cases ban Buy/$49 only; seam=none). `extra` slot (protects=the chips sit in the copy column under the body; fails_when=a refactor drops the slot; why_new=new prop; seam=none). QA phone (protects=the real page's chips, 44 px targets, the laptop kept on `/` at 375 while `/hosted` stays phone-only; fails_when=CSS move or breakpoint rule regresses; why_new=jsdom has no stylesheets; seam=none). Regression rule: the hosted-375 case, the get-it-paid case and the free Get it cases stay untouched. Tests made obsolete: none.
+
+Test plan artifact: not written to `$GSTACK_STATE_ROOT` (non-interactive run); §4 and §4b of this brief are the test plan `/qa-reconcile` reads.
+
+Test gaps identified: 11, all planned.
+
+## 4. Performance review
+No issues found. Static markup; the landing chunk grows by one component, one icon and ~60 lines of CSS, of which ~80 lines leave `HostedOfferPage.css` (loaded on `/hosted` only), so `/hosted` loads the same bytes and `/` a few more.
