@@ -79,25 +79,6 @@
   margin: 0;
 }
 
-/* Legacy single-card styles */
-.download-card {
-  max-width: 480px;
-  width: 100%;
-}
-
-.download-header {
-  text-align: center;
-  margin-block-end: var(--space-6);
-}
-
-.download-title {
-  font-family: var(--font-heading);
-  font-size: var(--text-headline);
-  font-weight: var(--weight-semibold);
-  color: var(--text);
-  margin: 0;
-}
-
 /* Primary CTA */
 .download-cta-wrapper {
   display: flex;
