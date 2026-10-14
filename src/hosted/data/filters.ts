@@ -217,3 +217,37 @@ export function isStaleAnchor(error: unknown): boolean {
   const details = (error as { details?: unknown }).details;
   return Boolean(details && typeof details === 'object' && (details as { reason?: unknown }).reason === 'ANCHOR_NOT_FOUND');
 }
+
+/**
+ * The profile drawers' URL state (MUT-183, ADR-008): `?newProfile=true` opens
+ * New profile, `?manageProfiles=true` the Manage list, `?editProfile=<id>` one
+ * profile's edit pane. The shell owns them, on every page. TanStack carries
+ * every raw key into each route's search, and pages feed theirs whole into
+ * list query keys and `isNarrowed`, so the router strips these at the page
+ * boundary with `omitShellOverlay` (the MUT-44 e0ed4fd lesson, shell-wide).
+ */
+export interface ProfileDrawerSearch {
+  newProfile?: true;
+  manageProfiles?: true;
+  editProfile?: string;
+}
+export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile'] as const;
+
+const flag = (value: unknown): true | undefined => (value === true || value === 'true' || value === 1 || value === '1' ? true : undefined);
+
+export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
+  compact({ newProfile: flag(raw.newProfile), manageProfiles: flag(raw.manageProfiles), editProfile: id(raw.editProfile) });
+
+/** A page's search without the shell's keys, so no list ever sees them. */
+export function omitShellOverlay<T extends object>(search: T): T {
+  const rest = { ...search } as Raw;
+  for (const key of SHELL_OVERLAY_KEYS) delete rest[key];
+  return rest as T;
+}
+
+/** The shell's own keys out of a raw search, so a page rewrite can carry them forward untouched. */
+export function pickShellOverlay(search: Raw): Partial<ProfileDrawerSearch> {
+  const picked: Raw = {};
+  for (const key of SHELL_OVERLAY_KEYS) if (search[key] !== undefined) picked[key] = search[key];
+  return picked as Partial<ProfileDrawerSearch>;
+}

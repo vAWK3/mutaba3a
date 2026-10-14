@@ -1876,6 +1876,16 @@ holds).
 - *Override log*: replaces "organizations are created only by `/admin` and the scripts" with "…except a person's own standalone profile, created by its owner's session". Date 2026-10-14; reason above; the operator path is unchanged for firms and Malafat tenants.
 - *qa-reconcile (2026-10-14, owner answers D1–D7)*: (1) **ownership is `profileOwnerOf(org)` = `ownerUserId ?? personalOwnerUserId`** at every door — the old revision still writes unstamped personal profiles after the migration (the CHECKs pass on NULL by design), post-roll stamps them; (2) the owned-profile writes **audit inside their own transactions**, and a type change records the removed categories and every lost expense→category pair; (3) row locks are `FOR NO KEY UPDATE`, and a type change locks expense rows before category rows.
 
+**Amendment (MUT-183, 2026-10-14) — the portal itself creates and edits owned profiles.** Approved by the owner with `.claude/designs/mut-183-portal-profile-management.md` (eng review D2–D10, design review Issues 1–12 and R1–R8). Builds on MUT-182's API; no server change.
+- *Decision*:
+  - **`ProfileSwitcher`** gets "+ New profile" (disabled + "N of M" at the cap) and "Manage profiles" below the profile list. The empty-state copy changes from "ask your operator" to "You don't have a profile yet", with a "+ New profile" action — the no-profile and no-session states no longer look alike.
+  - **One drawer tree, URL-driven (ADR-008)**: `?newProfile=1` (create), `?manageProfiles=1` (list), `?editProfile=<id>` (one profile's edit pane) — never a route, so there is still no create page. The shell's keys are stripped at every page boundary (`omitShellOverlay`) and merged back on every page-driven search rewrite (`pickShellOverlay`; PATTERNS).
+  - **Create** takes name/type/currency/timezone; type has no default and is required (a missed-default type was rejected — a type silently defaults to something the user didn't choose). The 201 response is written straight into the `/v1/me` cache so the new profile appears immediately, with a background refetch reconciling it.
+  - **Edit** snapshots `version` at open (`If-Match`); a type change runs an inline confirm step against the server's uncategorized-expense-count preview (`GET /v1/profiles/{id}/type-change`) before sending the PATCH, and refetches expense categories after.
+  - **Every create and edit attempt is Idempotency-Key scoped to the attempt**, reusing the key on a retry of the same body (D4/R6), consistent with MUT-133's rule.
+- *Why*: MUT-182 shipped the API with no portal surface to use it — a freelancer could create a second business profile only by asking an operator.
+- *Known limits, tracked, not built here*: no archive/delete for an owned profile (MUT-193); the portal doesn't remember the last-opened profile across sign-ins, so a newly created profile becomes `/`'s default landing rather than the personal one (MUT-198 / TODOS #14).
+
 ---
 
 ## ADR-038: A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer

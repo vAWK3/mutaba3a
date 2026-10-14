@@ -1,5 +1,5 @@
 import type { UseFormSetError } from 'react-hook-form';
-import { ApiError } from '../api/client';
+import { ApiError, apiErrorReason } from '../api/client';
 import type { ConversionFormValues } from './conversionFormSchema';
 
 /**
@@ -15,11 +15,6 @@ export interface ConversionErrorLabels {
   sameCurrency: string;
   conflict: string;
   network: string;
-}
-
-function reasonOf(error: ApiError): string | undefined {
-  const details = error.details as { reason?: unknown } | null;
-  return typeof details?.reason === 'string' ? details.reason : undefined;
 }
 
 function fieldOf(error: ApiError): string | undefined {
@@ -38,7 +33,7 @@ export function applyConversionApiError(
     return;
   }
 
-  const reason = reasonOf(error);
+  const reason = apiErrorReason(error);
 
   if (error.code === 'VALIDATION_FAILED') {
     switch (reason) {

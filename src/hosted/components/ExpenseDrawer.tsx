@@ -18,6 +18,7 @@ import { applyExpenseApiError } from './expenseApiErrors';
 import { todayInZone, todayLocalISO } from '../format/dates';
 import { useAttemptKey } from '../data/attemptKey';
 import type { CreateExpenseRequest, UpdateExpenseRequest } from '../api/client';
+import { HOSTED_CURRENCIES } from '../format/currencies';
 
 /**
  * The hosted portal's expense capture (MUT-44). Builds on
@@ -27,7 +28,6 @@ import type { CreateExpenseRequest, UpdateExpenseRequest } from '../api/client';
  * (read-only directories, no create-new), and its own CreateExpense/
  * UpdateExpense/DeleteExpense wiring. See mut-44-expense-capture.md §3/§6a.
  */
-const CURRENCY_OPTIONS = ['USD', 'ILS', 'EUR', 'JOD'] as const;
 
 // The shared schema caps currency at USD/ILS/EUR and its amount field has no
 // precision check -- this widens currency to JOD (MUT-140 scoped that out of
@@ -35,7 +35,7 @@ const CURRENCY_OPTIONS = ['USD', 'ILS', 'EUR', 'JOD'] as const;
 // see server/src/money.ts) and replaces the fixed 2-decimal DECIMAL_AMOUNT
 // regex with a currency-aware check, since JOD needs 3.
 const hostedExpenseSchema = expenseFormFieldsSchema.extend({
-  currency: z.enum(CURRENCY_OPTIONS),
+  currency: z.enum(HOSTED_CURRENCIES),
   amount: z.string().min(1, 'Amount is required'),
   vendor: z.string().optional(),
   clientId: z.string().optional(),
@@ -238,7 +238,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
           control={control}
           errors={formState.errors}
           categories={categories ?? []}
-          currencyOptions={CURRENCY_OPTIONS}
+          currencyOptions={HOSTED_CURRENCIES}
           amountInputMode="decimalText"
           labels={labels}
           vendorField={

@@ -10,7 +10,8 @@ import { useToast } from './Toast';
 import { Drawer } from './Drawer';
 import { Empty, Unreachable } from './QueryView';
 import { applyConversionApiError } from './conversionApiErrors';
-import { conversionFormSchema, CURRENCY_OPTIONS, impliedRate, type ConversionFormValues } from './conversionFormSchema';
+import { conversionFormSchema, impliedRate, type ConversionFormValues } from './conversionFormSchema';
+import { HOSTED_CURRENCIES } from '../format/currencies';
 import { formatDecimal } from '../format/DecimalAmount';
 import { todayInZone, todayLocalISO } from '../format/dates';
 import { useAttemptKey } from '../data/attemptKey';
@@ -234,7 +235,7 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
               control={control}
               render={({ field }) => (
                 <select id="hosted-conversion-from-currency" className="input" {...field}>
-                  {CURRENCY_OPTIONS.map((code) => (
+                  {HOSTED_CURRENCIES.map((code) => (
                     <option key={code} value={code}>
                       {code}
                     </option>
@@ -276,7 +277,7 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
               control={control}
               render={({ field }) => (
                 <select id="hosted-conversion-to-currency" className="input" {...field}>
-                  {CURRENCY_OPTIONS.map((code) => (
+                  {HOSTED_CURRENCIES.map((code) => (
                     <option key={code} value={code}>
                       {code}
                     </option>

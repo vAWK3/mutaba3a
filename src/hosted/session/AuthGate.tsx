@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import { Navigate, Outlet, useNavigate, useRouter } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useT } from '../../lib/i18n/core';
@@ -7,6 +7,7 @@ import { ApiError } from '../api/client';
 import { useAdoptAccountLocale } from '../i18n/HostedLanguageProvider';
 import { BootUnreachable, CheckingSession } from '../pages/auth/BootScreens';
 import { HostedShell } from '../shell/HostedShell';
+import { useProfileDrawers } from '../shell/ProfileDrawers';
 import { MeProvider, ProfileProvider, meQuery, useMe } from './me';
 import { useSignOut } from './useSignOut';
 
@@ -77,18 +78,21 @@ export function CaptureRedirect() {
   return <FirstProfileRedirect to="/expenses" />;
 }
 
+/**
+ * S11, MUT-183: no profile yet. Since MUT-182 a person can create their own,
+ * so the empty state offers New profile (the shell's drawer) beside Sign out
+ * instead of sending them to whoever set up the account.
+ */
 function NoProfiles() {
   const t = useT();
   const { signOut, signingOut } = useSignOut();
   return (
     <HostedShell profile={null}>
-      <div className="hp-empty">
-        <h2>{t('hosted.auth.noProfiles.title')}</h2>
-        <p>{t('hosted.auth.noProfiles.body')}</p>
+      <NoProfilesBody>
         <Button variant="secondary" onClick={() => void signOut()} disabled={signingOut}>
           {t('hosted.auth.signOut')}
         </Button>
-      </div>
+      </NoProfilesBody>
     </HostedShell>
   );
 }
@@ -131,12 +135,17 @@ function ProfileUnavailable() {
   );
 }
 
-function NoProfilesBody() {
+function NoProfilesBody({ children }: { children?: ReactNode }) {
   const t = useT();
+  const { openNew } = useProfileDrawers();
   return (
     <div className="hp-empty">
       <h2>{t('hosted.auth.noProfiles.title')}</h2>
       <p>{t('hosted.auth.noProfiles.body')}</p>
+      <div className="hp-empty-actions">
+        <Button onClick={openNew}>{t('hosted.shell.switcher.newProfile')}</Button>
+        {children}
+      </div>
     </div>
   );
 }

@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Hosted portal: profile management, new/rename/currency/type (MUT-183, ADR-037 amendment)
+
+**Why:** MUT-182 shipped the API for a person to create and manage their own standalone profiles, with no portal surface to use it — a freelancer with a second business had to ask an operator. Epic MUT-181. Brief, eng and design reviews: `.claude/designs/mut-183-portal-profile-management.md`.
+
+### Added
+- **`ProfileSwitcher`** gains "+ New profile" (disabled with "N of M" at the 6-profile cap) and "Manage profiles", behind a separator after the profile list. Sub-lines are corrected via `profileKindKey`: Malafat-fed, "Your built-in profile", "Personal", "Business" or "Expenses only" (operator firm), so the switcher and the Manage list never disagree.
+- **`ProfileCreateDrawer`**: name/type (required radio cards, no default)/currency/timezone (browser-prefilled fact row, Change reveals the select); the 201 writes straight into the `/v1/me` cache so the new profile appears at once, with a background refetch; attempt-scoped Idempotency-Key.
+- **`ProfilesManageDrawer` / `ProfileEditForm`**: one drawer, list → edit pane. Every profile is listed; owned ones are clickable, Malafat/firm ones show their reason instead. Edit snapshots `version` at open (`If-Match`), renames/changes currency directly; a type change runs an inline confirm step against the server's uncategorized-expense-count preview before saving, then refetches expense categories.
+- The empty-state copy changes from asking an operator to "You don't have a profile yet", with "+ New profile".
+- All three drawers are URL-driven (`?newProfile=1` / `?manageProfiles=1` / `?editProfile=<id>`, ADR-008) — still no create page.
+- EN/AR strings throughout; RTL verified.
+
+### Fixed
+- **A page's own filter rewrite no longer closes a drawer the shell opened** (qa-reconcile finding): `useReplaceSearch` replaced the whole URL search, so a background `setFilters()` call (e.g. an anchored list's stale-anchor refetch) silently dropped an open `newProfile`/`manageProfiles`/`editProfile` key. Fixed with a new `pickShellOverlay`, merged the same way `ProfileDrawers.go()` already did.
+
+### Technical
+- `src/hosted/data/filters.ts`: `SHELL_OVERLAY_KEYS`, `omitShellOverlay` (strip at the page boundary) and the new `pickShellOverlay` (carry the shell's keys through a page's own search rewrite).
+- `src/hosted/data/profileRules.ts`: `canCreateProfile`, `profileEditability`, `profileKindKey`, `changedFields` — the one source for who can create/edit what, and why not.
+- `src/hosted/format/timezones.ts`, `src/hosted/format/currencies.ts` (`HOSTED_CURRENCIES`, shared by Expense/Conversion/profile forms, `satisfies readonly Currency[]`), `src/hosted/api/client.ts` (`apiErrorReason`, replacing three near-identical inline reads).
+- Tests: `profileRules.test.ts`, `timezones.test.ts`, `profileFormSchema.test.ts`, `profileApiErrors.test.ts`, `ProfileCreateDrawer.test.tsx`, `ProfilesManageDrawer.test.tsx` (incl. the type-change confirm), `auth-states.test.tsx` (edited in place), `filters.test.ts`, `views.test.tsx` — see TEST_PLAN.md for the full table. `npx vitest run src/hosted`: 304 files, 4312 passed.
+- **Known gap**: no `qa/` catalog entry yet for the new profile-management surface (plan §5) — see TECH_DEBT TD-137. Minor DRY cleanup from the qa-reconcile pass tracked as TD-136; TD-125 partially resolved (R3/R4).
+
+---
+
 ## [Unreleased] - 2026-10-14 — Portal sign-in links out to /hosted (MUT-188)
 
 **Why:** someone who reached the portal's sign-in page without an account hit a dead end. Epic MUT-185, after MUT-186 (`/hosted`) and MUT-187 (the in-app CTA). Brief, eng review and outside voice: `.claude/designs/mut-188-portal-request-link.md`.

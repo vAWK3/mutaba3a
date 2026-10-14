@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { api, ApiError, request, setUnauthorisedHandler } from '../client';
+import { api, ApiError, apiErrorReason, request, setUnauthorisedHandler } from '../client';
 
 const fetchMock = vi.fn();
 
@@ -198,5 +198,50 @@ describe('unauthorised handler', () => {
     fetchMock.mockResolvedValue(json(401, envelope('UNAUTHENTICATED')));
     await api.me().catch(() => {});
     expect(handler).not.toHaveBeenCalled();
+  });
+});
+
+describe('apiErrorReason (MUT-183 R3)', () => {
+  const error = (details: unknown) => new ApiError(409, 'CONFLICT', 'm', details);
+
+  it('returns details.reason when it is a string', () => {
+    expect(apiErrorReason(error({ reason: 'PROFILE_LIMIT', limit: 6 }))).toBe('PROFILE_LIMIT');
+  });
+
+  it('returns undefined for a missing, non-string or absent reason', () => {
+    expect(apiErrorReason(error({ limit: 6 }))).toBeUndefined();
+    expect(apiErrorReason(error({ reason: 42 }))).toBeUndefined();
+    expect(apiErrorReason(error(null))).toBeUndefined();
+    expect(apiErrorReason(error(undefined))).toBeUndefined();
+  });
+});
+
+describe('profile operations (MUT-183)', () => {
+  const P = '33333333-3333-4333-8333-333333333333';
+
+  it('creates with the Idempotency-Key and no profile header', async () => {
+    fetchMock.mockResolvedValue(json(201, { id: P }));
+    await api.createProfile({ name: 'Studio', type: 'BUSINESS', defaultCurrency: 'USD', timezone: 'Asia/Jerusalem' }, 'key-1');
+    const { url, init, headers } = lastCall();
+    expect(url).toBe('/v1/profiles');
+    expect(init.method).toBe('POST');
+    expect(headers.get('Idempotency-Key')).toBe('key-1');
+    expect(headers.has('X-Mutaba3a-Profile')).toBe(false);
+  });
+
+  it('patches with the version it was given as If-Match', async () => {
+    fetchMock.mockResolvedValue(json(200, { profile: { id: P }, typeChange: null }));
+    await api.updateProfile(P, { name: 'Renamed' }, 3);
+    const { url, init, headers } = lastCall();
+    expect(url).toBe(`/v1/profiles/${P}`);
+    expect(init.method).toBe('PATCH');
+    expect(headers.get('If-Match')).toBe('3');
+    expect(JSON.parse(String(init.body))).toEqual({ name: 'Renamed' });
+  });
+
+  it('previews a type change with ?to=', async () => {
+    fetchMock.mockResolvedValue(json(200, { uncategorizedExpenses: 12, deletedCategories: 9, preset: 'general' }));
+    await expect(api.profileTypeChangePreview(P, 'BUSINESS')).resolves.toEqual({ uncategorizedExpenses: 12, deletedCategories: 9, preset: 'general' });
+    expect(lastCall().url).toBe(`/v1/profiles/${P}/type-change?to=BUSINESS`);
   });
 });

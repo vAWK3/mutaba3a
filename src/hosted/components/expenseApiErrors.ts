@@ -1,5 +1,5 @@
 import type { UseFormSetError } from 'react-hook-form';
-import { ApiError } from '../api/client';
+import { ApiError, apiErrorReason } from '../api/client';
 import type { HostedExpenseFormValues } from './ExpenseDrawer';
 
 /**
@@ -20,11 +20,6 @@ export interface ExpenseErrorLabels {
   network: string;
 }
 
-function reasonOf(error: ApiError): string | undefined {
-  const details = error.details as { reason?: unknown } | null;
-  return typeof details?.reason === 'string' ? details.reason : undefined;
-}
-
 export function applyExpenseApiError(
   error: unknown,
   setError: UseFormSetError<HostedExpenseFormValues>,
@@ -36,7 +31,7 @@ export function applyExpenseApiError(
     return;
   }
 
-  const reason = reasonOf(error);
+  const reason = apiErrorReason(error);
 
   if (error.code === 'VALIDATION_FAILED') {
     switch (reason) {

@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MUT-183 Profiles Wireframe</title>
+<style>
+/* Brand v2 primitives copied from src/styles/brand/mutaba3a-theme.css (MUT-102), mapped as src/styles/theme.css maps them. Same block as mut-133-portal-income-wireframe.html. */
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Regular.otf");font-weight:400;font-display:swap}
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Medium.otf");font-weight:500;font-display:swap}
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Bold.otf");font-weight:700;font-display:swap}
+@font-face{font-family:"Thmanyah Serif Display";src:url("../../src/assets/fonts/thmanyah-serif-display-bold.otf");font-weight:700;font-display:swap}
+:root{
+  --m-canvas:oklch(0.975 0.014 80);--m-surface:oklch(0.993 0.008 80);--m-line:oklch(0.92 0.015 300);--m-field-bg:oklch(0.965 0.012 300);
+  --m-ink:oklch(0.33 0.05 300);--m-ink2:oklch(0.442 0.043 298.7);--m-primary:oklch(0.55 0.14 295);--m-primary-hover:oklch(0.46 0.142 293.8);
+  --m-on-primary:oklch(0.98 0.012 80);--m-focus:oklch(0.6 0.13 295);--m-lavender:oklch(0.9 0.06 295);--m-lavender-ink:oklch(0.401 0.114 294.5);
+  --m-mint:oklch(0.9 0.06 165);--m-mint-ink:oklch(0.387 0.076 170.2);--m-rose:oklch(0.9 0.06 10);--m-rose-ink:oklch(0.398 0.103 14.8);
+  --m-peach:oklch(0.9 0.06 55);--m-peach-ink:oklch(0.4 0.104 50.8);--m-butter:oklch(0.93 0.07 95);--m-butter-ink:oklch(0.419 0.083 74.8);
+  --m-shadow-tint:oklch(0.45 0.08 300);
+  --font-body:"Thmanyah Sans",system-ui,sans-serif;--font-display:"Thmanyah Serif Display",serif;--font-num:"IBM Plex Mono","Thmanyah Sans",ui-monospace,monospace;
+  --text-micro:.6875rem;--text-label:.8125rem;--text-body:1rem;--text-headline:1.25rem;--text-title:2rem;
+  --space-1:.25rem;--space-2:.5rem;--space-3:.75rem;--space-4:1rem;--space-5:1.25rem;--space-6:1.5rem;--space-8:2rem;
+  --radius-xs:4px;--radius-sm:12px;--radius-md:14px;--radius-lg:18px;--radius-pill:999px;
+  --bg:var(--m-canvas);--surface:var(--m-surface);--surface-2:var(--m-field-bg);--text:var(--m-ink);--muted:var(--m-ink2);--border:var(--m-line);
+  --btn-fill:var(--m-primary-hover);
+  --shadow-drawer:0 1px 2px color-mix(in oklch,var(--m-shadow-tint) 6%,transparent),0 12px 40px color-mix(in oklch,var(--m-shadow-tint) 12%,transparent);
+}
+[data-theme="dark"]{
+  --m-canvas:oklch(0.24 0.035 300);--m-surface:oklch(0.29 0.04 300);--m-line:oklch(0.4 0.04 300);--m-field-bg:oklch(0.34 0.045 300);
+  --m-ink:oklch(0.95 0.015 80);--m-ink2:oklch(0.78 0.03 300);--m-primary:oklch(0.78 0.11 295);--m-primary-hover:oklch(0.82 0.1 295);
+  --m-on-primary:oklch(0.27 0.06 300);--m-focus:oklch(0.75 0.12 295);--m-lavender:oklch(0.38 0.07 295);--m-lavender-ink:oklch(0.88 0.08 295);
+  --m-mint:oklch(0.38 0.07 165);--m-mint-ink:oklch(0.88 0.08 165);--m-rose:oklch(0.38 0.07 10);--m-rose-ink:oklch(0.88 0.08 10);
+  --m-peach:oklch(0.38 0.07 55);--m-peach-ink:oklch(0.88 0.08 55);--m-butter:oklch(0.4 0.06 85);--m-butter-ink:oklch(0.9 0.09 95);
+  --m-shadow-tint:oklch(0.15 0.03 300);
+}
+*{box-sizing:border-box}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:var(--text-body);line-height:1.5}
+::selection{background:var(--m-lavender);color:var(--m-lavender-ink)}
+.wrap{max-width:1240px;margin:0 auto;padding:var(--space-6) var(--space-4) var(--space-8)}
+.toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;padding:var(--space-3) var(--space-4);background:var(--surface);border-bottom:1px solid var(--border)}
+.toolbar strong{margin-inline-end:auto;font-size:var(--text-label)}
+.toolbar button{font:inherit;font-size:var(--text-label);padding:var(--space-1) var(--space-3);border:1px solid var(--border);border-radius:var(--radius-pill);background:var(--surface-2);color:var(--text);cursor:pointer}
+h1.doc{font-family:var(--font-display);font-size:var(--text-title);font-weight:700;margin:var(--space-4) 0 var(--space-1)}
+.lede{color:var(--muted);max-width:72ch;margin:0 0 var(--space-6)}
+h2.sec{font-family:var(--font-display);font-size:var(--text-headline);font-weight:700;margin:var(--space-8) 0 var(--space-2)}
+.note{color:var(--muted);font-size:var(--text-label);max-width:80ch;margin:0 0 var(--space-3)}
+.tag{display:inline-block;font-size:var(--text-micro);font-weight:500;padding:0 var(--space-2);border-radius:var(--radius-pill);vertical-align:middle;margin-inline-start:var(--space-2);font-family:var(--font-body)}
+.tag-gap{background:var(--m-butter);color:var(--m-butter-ink)}
+.tag-prop{background:var(--m-lavender);color:var(--m-lavender-ink)}
+.tag-ok{background:var(--m-mint);color:var(--m-mint-ink)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-5);align-items:flex-start}
+.col{flex:1 1 360px;min-width:0;max-width:440px}
+.cap{font-size:var(--text-label);color:var(--muted);margin:0 0 var(--space-2)}
+/* Switcher */
+.pop{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-drawer);padding:var(--space-1);width:300px;max-width:100%}
+.opt{display:flex;gap:var(--space-2);align-items:flex-start;padding:var(--space-2) var(--space-2-5,.625rem);border-radius:var(--radius-sm)}
+.opt.on{background:var(--surface-2)}
+.check{width:1rem;flex:none;color:var(--m-primary-hover)}
+.otext{flex:1;min-width:0}
+.oline{display:flex;gap:var(--space-2);align-items:center;font-weight:500}
+.oname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.chip{flex:none;font-size:var(--text-micro);font-weight:500;padding:0 var(--space-2);border-radius:var(--radius-pill);background:var(--m-lavender);color:var(--m-lavender-ink)}
+.osub{display:block;font-size:var(--text-label);color:var(--muted)}
+.sep{height:1px;background:var(--border);margin:var(--space-1) var(--space-2)}
+.act{display:block;padding:var(--space-2) var(--space-2-5,.625rem);border-radius:var(--radius-sm);font-weight:500;color:var(--m-primary-hover)}
+.act[aria-disabled="true"]{color:var(--muted)}
+.act .osub{font-weight:400}
+.foot{border-top:1px solid var(--border);margin:var(--space-1) 0 0;padding:var(--space-2) var(--space-2-5,.625rem) var(--space-1);font-size:var(--text-label);color:var(--muted)}
+/* Drawer */
+.drawer{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-drawer);display:flex;flex-direction:column;min-height:520px}
+.dh{display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-5);border-bottom:1px solid var(--border)}
+.dh h4{font-family:var(--font-display);font-size:var(--text-headline);font-weight:700;margin:0;min-width:0;overflow-wrap:anywhere}
+.x{font-size:var(--text-headline);color:var(--muted)}
+.db{padding:var(--space-4) var(--space-5);flex:1;display:flex;flex-direction:column;gap:var(--space-4)}
+.df{padding:var(--space-3) var(--space-5);border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:var(--space-2)}
+.fg label,.fg .lbl{display:block;font-size:var(--text-label);font-weight:500;margin-bottom:var(--space-1)}
+.input{width:100%;font:inherit;font-size:var(--text-body);color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);min-height:44px}
+.hint{font-size:var(--text-label);color:var(--muted);margin-top:var(--space-1)}
+.err{font-size:var(--text-label);color:var(--m-rose-ink);margin-top:var(--space-1)}
+.btn{font:inherit;font-size:var(--text-label);font-weight:500;border-radius:var(--radius-sm);padding:var(--space-2) var(--space-4);border:1px solid transparent;min-height:36px;cursor:pointer}
+.btn-primary{background:var(--btn-fill);color:var(--m-on-primary)}
+.btn-secondary{background:var(--surface);color:var(--text);border-color:var(--border)}
+.btn-danger{background:var(--m-rose-ink);color:var(--m-on-primary)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.link{font:inherit;font-size:var(--text-label);font-weight:500;color:var(--m-primary-hover);background:none;border:0;padding:0;cursor:pointer}
+/* Type radio cards (proposal D2) */
+.types{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)}
+.tcard{display:flex;gap:var(--space-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-3);background:var(--surface);cursor:pointer}
+.tcard input{margin-top:.3rem;accent-color:var(--m-primary-hover)}
+.tcard b{display:block;font-weight:500}
+.tcard span{display:block;font-size:var(--text-label);color:var(--muted)}
+.tcard.on{border-color:var(--m-primary-hover);background:color-mix(in oklch,var(--m-lavender) 45%,var(--surface))}
+/* Banners */
+.banner{display:flex;gap:var(--space-2);align-items:flex-start;font-size:var(--text-label);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3)}
+.b-info{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+.b-err{background:var(--m-rose);color:var(--m-rose-ink)}
+/* Manage list */
+.count{font-size:var(--text-label);color:var(--muted)}
+.list{border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden}
+.li{display:flex;gap:var(--space-3);align-items:center;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--border);min-height:56px}
+.li:last-child{border-bottom:0}
+.li .otext{min-width:0}
+.li .chev{color:var(--muted)}
+.li.ro .osub{display:flex;gap:var(--space-1);align-items:center}
+.cur{font-family:var(--font-num);font-size:var(--text-label);color:var(--muted)}
+.open{font-size:var(--text-micro);font-weight:500;padding:0 var(--space-2);border-radius:var(--radius-pill);background:var(--m-mint);color:var(--m-mint-ink)}
+.back{font-size:var(--text-label)}
+.group{border-top:1px solid var(--border);padding-top:var(--space-4)}
+.group h5{font-size:var(--text-label);font-weight:500;margin:0 0 var(--space-2);color:var(--muted)}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:var(--space-1) var(--space-4);font-size:var(--text-label);background:var(--surface-2);border-radius:var(--radius-sm);padding:var(--space-3) var(--space-4)}
+.facts dt{color:var(--muted)}.facts dd{margin:0}
+/* Confirm step */
+.confirm{border:1px solid var(--m-rose);border-radius:var(--radius-md);padding:var(--space-4);background:color-mix(in oklch,var(--m-rose) 25%,var(--surface))}
+.confirm h5{font-family:var(--font-display);font-size:var(--text-headline);margin:0 0 var(--space-2)}
+.confirm p{margin:0 0 var(--space-2)}
+.confirm .n{font-family:var(--font-num);font-weight:500}
+.toast{display:inline-flex;gap:var(--space-2);align-items:center;font-size:var(--text-label);background:var(--m-mint);color:var(--m-mint-ink);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-4)}
+/* Empty state */
+.page{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-8) var(--space-5)}
+.empty{max-width:480px;margin:0 auto;text-align:center}
+.empty h3{font-size:var(--text-body);margin:0 0 var(--space-1)}
+.empty p{color:var(--muted);margin:0 0 var(--space-4)}
+.empty .acts{display:flex;gap:var(--space-2);justify-content:center}
+/* Phone frame */
+.phone{width:375px;max-width:100%;border:1px solid var(--border);border-radius:28px;overflow:hidden;background:var(--bg)}
+.phone .drawer{border-radius:0;border:0;box-shadow:none;min-height:640px}
+.phone .types{grid-template-columns:1fr}
+:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--m-focus)}
+[dir="rtl"] .chev{transform:scaleX(-1)}
+</style>
+</head>
+<body>
+<div class="toolbar" role="toolbar" aria-label="Wireframe controls">
+  <strong>MUT-183 · Profiles (wireframe, real Brand v2 tokens)</strong>
+  <button type="button" id="lang">العربية</button>
+  <button type="button" id="theme">Dark</button>
+</div>
+<main class="wrap">
+  <h1 class="doc" data-en="Profile management in the hosted portal" data-ar="إدارة الملفات في البوابة المستضافة">Profile management in the hosted portal</h1>
+  <p class="lede">Every surface MUT-183 adds, drawn with the portal's real classes and tokens. <span class="tag tag-ok">Approved</span> marks eng-review decisions (D1–D10). <span class="tag tag-ok">Approved · Issue n</span> marks a design-review decision (Issues 1–11, all answered 2026-10-14). <span class="tag tag-gap">Gap</span> marks something the plan doesn't specify yet. Copy is drafted in both languages; switch with the toolbar.</p>
+
+  <h2 class="sec">1 · Switcher menu</h2>
+  <p class="note">The existing <code>hp-switcher-panel</code>, plus a separator and two entries. Sub-lines come from <code>profileKindKey</code>. Owned profiles stop saying "Expenses only". Names truncate to one line, and the full name is in <code>title</code>.</p>
+  <div class="row">
+    <div class="col">
+      <p class="cap">Normal (3 of 6 owned)</p>
+      <div class="pop" role="menu">
+        <div class="opt"><span class="check"></span><span class="otext"><span class="oline"><span class="oname">Haddad &amp; Partners</span><span class="chip" data-en="Hosted" data-ar="مستضاف">Hosted</span></span><span class="osub" data-en="Income recorded by Malafat" data-ar="الإيرادات تُسجَّل في «ملفات»">Income recorded by Malafat</span></span></div>
+        <div class="opt on"><span class="check">✓</span><span class="otext"><span class="oline"><span class="oname" title="Nour Studio — Branding &amp; Web Design for Small Businesses in Ramallah">Nour Studio — Branding &amp; Web Design for Small Businesses in Ramallah</span><span class="chip" data-en="Hosted" data-ar="مستضاف">Hosted</span></span><span class="osub" data-en="Business" data-ar="أعمال">Business</span></span></div>
+        <div class="opt"><span class="check"></span><span class="otext"><span class="oline"><span class="oname" data-en="Personal" data-ar="شخصي">Personal</span><span class="chip" data-en="Hosted" data-ar="مستضاف">Hosted</span></span><span class="osub" data-en="Your built-in profile" data-ar="ملفك الأساسي">Your built-in profile</span></span></div>
+        <div class="sep" role="separator"></div>
+        <span class="act" role="menuitem" data-en="+ New profile" data-ar="+ ملف جديد">+ New profile</span>
+        <span class="act" role="menuitem" data-en="Manage profiles" data-ar="إدارة الملفات">Manage profiles</span>
+        <p class="foot" data-en="Your local profiles stay in the Mutaba3a app on your device. They aren't shown here and never leave it." data-ar="ملفاتك المحلية تبقى في تطبيق متابعة على جهازك، ولا تظهر هنا ولا تغادره أبداً.">Your local profiles stay in the Mutaba3a app on your device. They aren't shown here and never leave it.</p>
+      </div>
+      <p class="note"><span class="tag tag-gap">Gap</span> The built-in Personal profile's sub-line now reads "Your built-in profile", not a second "Personal" (Issue 4 = A). <span class="tag tag-ok">Approved · Issue 4</span></p>
+    </div>
+    <div class="col">
+      <p class="cap">At the cap (6 of 6)</p>
+      <div class="pop" role="menu">
+        <div class="opt on"><span class="check">✓</span><span class="otext"><span class="oline"><span class="oname">Nour Studio</span><span class="chip" data-en="Hosted" data-ar="مستضاف">Hosted</span></span><span class="osub" data-en="Business" data-ar="أعمال">Business</span></span></div>
+        <div class="opt"><span class="check"></span><span class="otext"><span class="oline"><span class="oname">…5 more</span></span></span></div>
+        <div class="sep" role="separator"></div>
+        <span class="act" role="menuitem" aria-disabled="true"><span data-en="+ New profile" data-ar="+ ملف جديد">+ New profile</span><span class="osub" data-en="Your profiles: 6 of 6" data-ar="ملفاتك: 6 من 6">Your profiles: 6 of 6</span></span>
+        <span class="act" role="menuitem" data-en="Manage profiles" data-ar="إدارة الملفات">Manage profiles</span>
+      </div>
+      <p class="note">The item uses <code>aria-disabled</code>, not <code>disabled</code>, so it stays focusable and is announced with its reason (plan §4).</p>
+    </div>
+  </div>
+
+  <h2 class="sec">2 · New profile drawer</h2>
+  <p class="note">The <code>Drawer</code> (DrawerFrame) is opened by <code>?newProfile=1</code> <span class="tag tag-ok">Approved D2</span>. Type has no preselection and is required <span class="tag tag-ok">Approved D7</span>. The existing <code>SegmentedControl</code> takes a required <code>value</code>, so it can't show "nothing chosen". These radio cards say what each type seeds. <span class="tag tag-ok">Approved · Issue 7</span></p>
+  <div class="row">
+    <div class="col">
+      <p class="cap">Fresh</p>
+      <div class="drawer">
+        <div class="dh"><h4 data-en="New profile" data-ar="ملف جديد">New profile</h4><span class="x">×</span></div>
+        <div class="db">
+          <div class="fg"><label data-en="Name" data-ar="الاسم">Name</label><input class="input" dir="auto" placeholder=""></div>
+          <div class="fg"><span class="lbl" id="t-l" data-en="Type" data-ar="النوع">Type</span>
+            <div class="types" role="radiogroup" aria-labelledby="t-l">
+              <label class="tcard"><input type="radio" name="t1"><span><b data-en="Personal" data-ar="شخصي">Personal</b><span data-en="Groceries, rent, car, health…" data-ar="البقالة، الإيجار، السيارة، الصحة…">Groceries, rent, car, health…</span></span></label>
+              <label class="tcard"><input type="radio" name="t1"><span><b data-en="Business" data-ar="أعمال">Business</b><span data-en="Office rent, software, travel, taxes…" data-ar="إيجار المكتب، البرمجيات، السفر، الضرائب…">Office rent, software, travel, taxes…</span></span></label>
+            </div>
+            <p class="hint" data-en="Sets the starting expense categories. Changing it later replaces them." data-ar="يحدد تصنيفات المصاريف الأولى. تغييره لاحقاً يستبدلها.">Sets the starting expense categories. Changing it later replaces them.</p>
+          </div>
+          <div class="fg"><label data-en="Currency" data-ar="العملة">Currency</label><select class="input"><option>ILS</option></select><p class="hint" data-en="New records start in this currency." data-ar="تبدأ السجلات الجديدة بهذه العملة.">New records start in this currency.</p></div>
+          <div class="fg"><span class="lbl" data-en="Time zone" data-ar="المنطقة الزمنية">Time zone</span><p style="margin:0">Asia/Jerusalem <span class="hint" style="display:inline" data-en="(this browser)" data-ar="(هذا المتصفح)">(this browser)</span> · <button class="link" data-en="Change" data-ar="تغيير">Change</button></p><p class="hint" data-en="It can't be changed later." data-ar="لا يمكن تغييرها لاحقاً.">It can't be changed later.</p></div>
+        </div>
+        <div class="df"><button class="btn btn-secondary" data-en="Cancel" data-ar="إلغاء">Cancel</button><button class="btn btn-primary" data-en="Create profile" data-ar="إنشاء الملف">Create profile</button></div>
+      </div>
+    </div>
+    <div class="col">
+      <p class="cap">Saved without a type · Saving · Cap reached · Offline</p>
+      <div class="drawer">
+        <div class="dh"><h4 data-en="New profile" data-ar="ملف جديد">New profile</h4><span class="x">×</span></div>
+        <div class="db">
+          <div class="banner b-info" data-en="You've reached your profile limit (6)." data-ar="وصلت إلى الحد الأقصى للملفات (6).">You've reached your profile limit (6).</div>
+          <div class="fg"><span class="lbl" data-en="Type" data-ar="النوع">Type</span>
+            <div class="types"><label class="tcard"><input type="radio" name="t2"><span><b data-en="Personal" data-ar="شخصي">Personal</b></span></label><label class="tcard"><input type="radio" name="t2"><span><b data-en="Business" data-ar="أعمال">Business</b></span></label></div>
+            <p class="err" data-en="Choose Personal or Business" data-ar="اختر شخصي أو أعمال">Choose Personal or Business</p></div>
+          <div class="banner b-err" data-en="Can't reach Mutaba3a. Nothing was saved. Try again." data-ar="تعذّر الوصول إلى متابعة. لم يُحفظ شيء. حاول مجدداً.">Can't reach Mutaba3a. Nothing was saved. Try again.</div>
+          <p class="note"><span class="tag tag-gap">Gap</span> The plan doesn't say where the cap banner sits (top of body), what Save says while pending ("Creating…"), or whether the offline message is a toast or inline. The eng table says inline. <span class="tag tag-ok">Approved · Issue 5</span></p>
+        </div>
+        <div class="df"><button class="btn btn-secondary" data-en="Cancel" data-ar="إلغاء">Cancel</button><button class="btn btn-primary" disabled data-en="Creating…" data-ar="جارٍ الإنشاء…">Creating…</button></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">3 · Manage profiles</h2>
+  <p class="note">One drawer with two panes. <code>?manageProfiles=1</code> shows the list, and <code>?editProfile=&lt;id&gt;</code> shows the edit pane with a back link <span class="tag tag-ok">Approved D2</span>. Row anatomy: name on line 1, kind on line 2, currency trailing, then a chevron for editable rows or a lock and reason for read-only ones. <span class="tag tag-ok">Approved · Issue 1 · Issue 3</span></p>
+  <div class="row">
+    <div class="col">
+      <p class="cap">List pane</p>
+      <div class="drawer">
+        <div class="dh"><h4 data-en="Profiles" data-ar="الملفات">Profiles</h4><span class="x">×</span></div>
+        <div class="db">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-2)"><span class="count" data-en="Your profiles: 3 of 6" data-ar="ملفاتك: 3 من 6">Your profiles: 3 of 6</span><button class="btn btn-secondary" data-en="+ New profile" data-ar="+ ملف جديد">+ New profile</button></div>
+          <div class="list">
+            <div class="li"><span class="otext"><span class="oline"><span class="oname">Nour Studio</span><span class="open" data-en="Open now" data-ar="مفتوح الآن">Open now</span></span><span class="osub" data-en="Business" data-ar="أعمال">Business</span></span><span class="cur">USD</span><span class="chev">›</span></div>
+            <div class="li"><span class="otext"><span class="oline"><span class="oname">Side gigs</span></span><span class="osub" data-en="Personal" data-ar="شخصي">Personal</span></span><span class="cur">ILS</span><span class="chev">›</span></div>
+            <div class="li"><span class="otext"><span class="oline"><span class="oname" data-en="Personal" data-ar="شخصي">Personal</span></span><span class="osub" data-en="Your built-in profile" data-ar="ملفك الأساسي">Your built-in profile</span></span><span class="cur">ILS</span><span class="chev">›</span></div>
+            <div class="li ro"><span class="otext"><span class="oline"><span class="oname">Haddad &amp; Partners</span></span><span class="osub">🔒 <span data-en="Managed in Malafat. Change it there." data-ar="يُدار من «ملفات». عدّله هناك.">Managed in Malafat. Change it there.</span></span></span><span class="cur">ILS</span></div>
+            <div class="li ro"><span class="otext"><span class="oline"><span class="oname">Khalil Accounting</span></span><span class="osub">🔒 <span data-en="Set up for you by your account administrator." data-ar="أعدّه لك مسؤول حسابك.">Set up for you by your account administrator.</span></span></span><span class="cur">USD</span></div>
+          </div>
+          <p class="note">🔒 stands in for the portal's <code>LockIcon</code>; no emoji ships. The counter counts owned profiles only, because firm profiles don't count toward the cap (MUT-181 decision 2). <span class="tag tag-gap">Gap</span> The plan's "4 of 6 profiles" doesn't say which profiles the number counts. <span class="tag tag-ok">Approved · Issue 3</span></p>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <p class="cap">Edit pane</p>
+      <div class="drawer">
+        <div class="dh"><h4>Side gigs</h4><span class="x">×</span></div>
+        <div class="db">
+          <button class="link back" data-en="‹ All profiles" data-ar="› كل الملفات">‹ All profiles</button>
+          <div class="fg"><label data-en="Name" data-ar="الاسم">Name</label><input class="input" dir="auto" value="Side gigs"></div>
+          <div class="fg"><label data-en="Currency" data-ar="العملة">Currency</label><select class="input"><option>ILS</option></select><p class="hint" data-en="Only new records use it. Existing ones keep their currency." data-ar="تستخدمها السجلات الجديدة فقط. تبقى السجلات الحالية بعملتها.">Only new records use it. Existing ones keep their currency.</p></div>
+          <dl class="facts"><dt data-en="Time zone" data-ar="المنطقة الزمنية">Time zone</dt><dd>Asia/Jerusalem</dd></dl>
+          <div class="group"><h5 data-en="Profile type" data-ar="نوع الملف">Profile type</h5>
+            <div class="types"><label class="tcard on"><input type="radio" name="t3" checked><span><b data-en="Personal" data-ar="شخصي">Personal</b></span></label><label class="tcard"><input type="radio" name="t3"><span><b data-en="Business" data-ar="أعمال">Business</b></span></label></div>
+            <p class="hint" data-en="Changing it replaces this profile's expense categories." data-ar="تغييره يستبدل تصنيفات المصاريف في هذا الملف.">Changing it replaces this profile's expense categories.</p>
+          </div>
+          <p class="note">Routine edits come first. The destructive type change sits last, in its own group. <span class="tag tag-ok">Approved · Issue 2</span> On the built-in Personal profile the group shows "Your built-in Personal profile is always Personal." instead (MUT-182 D2).</p>
+        </div>
+        <div class="df"><button class="btn btn-secondary" data-en="Cancel" data-ar="إلغاء">Cancel</button><button class="btn btn-primary" data-en="Save" data-ar="حفظ">Save</button></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">4 · Type-change confirm (inline step)</h2>
+  <p class="note">The confirm replaces the edit form's body; there is no modal and no <code>window.confirm</code>. The count comes from the server preview. The destructive button is <code>Button variant="danger"</code>, as the expense and conversion deletes already use. <span class="tag tag-ok">Approved · Issue 8</span></p>
+  <div class="row">
+    <div class="col">
+      <div class="drawer" style="min-height:0">
+        <div class="dh"><h4>Side gigs</h4><span class="x">×</span></div>
+        <div class="db">
+          <div class="confirm" role="group" aria-labelledby="c-h">
+            <h5 id="c-h" tabindex="-1" data-en="Switch to Business?" data-ar="التحويل إلى أعمال؟">Switch to Business?</h5>
+            <p data-en="This profile's expense categories will be replaced with the Business set." data-ar="ستُستبدل تصنيفات المصاريف في هذا الملف بمجموعة الأعمال.">This profile's expense categories will be replaced with the Business set.</p>
+            <p><b><span data-en="Expenses that will become uncategorized:" data-ar="المصاريف التي ستصبح بلا تصنيف:">Expenses that will become uncategorized:</span> <span class="n">12</span></b></p>
+          </div>
+        </div>
+        <div class="df"><button class="btn btn-secondary" data-en="Back" data-ar="رجوع">Back</button><button class="btn btn-danger" data-en="Switch to Business" data-ar="التحويل إلى أعمال">Switch to Business</button></div>
+      </div>
+    </div>
+    <div class="col">
+      <p class="cap">After confirming: banner in the Manage list (Issue 6 = A)</p>
+      <div class="banner b-info"><span data-en="Now Business. Uncategorized expenses: 12" data-ar="أصبح الملف أعمالاً. المصاريف بلا تصنيف: 12">Now Business. Uncategorized expenses: 12</span> <button class="link" data-en="Open Expenses" data-ar="فتح المصاريف">Open Expenses</button></div>
+      <p class="note" style="margin-top:var(--space-3)"><span class="tag tag-gap">Gap</span> After the toast the user can't see which expenses lost their category, and nothing points them to Expenses to re-file them. <span class="tag tag-ok">Approved · Issue 6</span></p>
+    </div>
+  </div>
+
+  <h2 class="sec">5 · Empty state (zero profiles)</h2>
+  <div class="page"><div class="empty">
+    <h3 data-en="You don't have a profile yet" data-ar="ليس لديك ملف بعد">You don't have a profile yet</h3>
+    <p data-en="Create one to start recording income and expenses." data-ar="أنشئ ملفاً لتبدأ بتسجيل الدخل والمصاريف.">Create one to start recording income and expenses.</p>
+    <div class="acts"><button class="btn btn-primary" data-en="+ New profile" data-ar="+ ملف جديد">+ New profile</button><button class="btn btn-secondary" data-en="Sign out" data-ar="تسجيل الخروج">Sign out</button></div>
+  </div></div>
+
+  <h2 class="sec">6 · Phone (375px)</h2>
+  <p class="note">The shell already becomes a top bar under 760px (<code>hosted.css:423</code>). <span class="tag tag-gap">Gap</span> The plan doesn't say how the drawer, the type cards or the footer behave on a phone. This frame assumes a full-height sheet, type cards stacked, and the footer pinned. <span class="tag tag-ok">Approved · Issue 9</span></p>
+  <div class="phone"><div class="drawer">
+    <div class="dh"><h4 data-en="New profile" data-ar="ملف جديد">New profile</h4><span class="x">×</span></div>
+    <div class="db">
+      <div class="fg"><label data-en="Name" data-ar="الاسم">Name</label><input class="input"></div>
+      <div class="fg"><span class="lbl" data-en="Type" data-ar="النوع">Type</span><div class="types"><label class="tcard"><input type="radio" name="t4"><span><b data-en="Personal" data-ar="شخصي">Personal</b><span data-en="Groceries, rent, car, health…" data-ar="البقالة، الإيجار، السيارة، الصحة…">Groceries, rent, car, health…</span></span></label><label class="tcard"><input type="radio" name="t4"><span><b data-en="Business" data-ar="أعمال">Business</b><span data-en="Office rent, software, travel, taxes…" data-ar="إيجار المكتب، البرمجيات، السفر، الضرائب…">Office rent, software, travel, taxes…</span></span></label></div></div>
+    </div>
+    <div class="df"><button class="btn btn-secondary" style="min-height:44px" data-en="Cancel" data-ar="إلغاء">Cancel</button><button class="btn btn-primary" style="min-height:44px" data-en="Create profile" data-ar="إنشاء الملف">Create profile</button></div>
+  </div></div>
+</main>
+<script>
+(function(){
+  var html=document.documentElement;
+  document.getElementById('lang').addEventListener('click',function(){
+    var ar=html.lang!=='ar';html.lang=ar?'ar':'en';html.dir=ar?'rtl':'ltr';this.textContent=ar?'English':'العربية';
+    document.querySelectorAll('[data-en]').forEach(function(el){el.textContent=el.getAttribute(ar?'data-ar':'data-en');});
+  });
+  document.getElementById('theme').addEventListener('click',function(){
+    var dark=html.getAttribute('data-theme')!=='dark';html.setAttribute('data-theme',dark?'dark':'light');this.textContent=dark?'Light':'Dark';
+  });
+})();
+</script>
+</body>
+</html>

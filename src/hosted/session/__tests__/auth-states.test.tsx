@@ -247,16 +247,29 @@ describe('S9/S10 arrival notes', () => {
 });
 
 describe('S11 no profiles', () => {
-  it('offers only Sign out', async () => {
+  // MUT-183 (R7): the copy changes and New profile is added; no nav and Sign out stay.
+  it('offers New profile and Sign out', async () => {
     stubApi({ 'GET /v1/me': () => ok(me([])) });
-    renderPortal('/');
-    expect(await screen.findByText("Your account isn't connected to a profile yet")).toBeInTheDocument();
+    const { user, router } = renderPortal('/');
+    expect(await screen.findByText("You don't have a profile yet")).toBeInTheDocument();
+    expect(screen.getByText('Create one to start recording income and expenses.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Sections' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: '+ New profile' }));
+    expect(await screen.findByRole('dialog', { name: 'New profile' })).toBeInTheDocument();
+    expect(locationOf(router)).toBe('/?newProfile=true');
   });
 });
 
 describe('S12 profile unavailable', () => {
+  it('EM2: with no profiles left, offers New profile instead of asking an operator (MUT-183)', async () => {
+    stubApi({ 'GET /v1/me': () => ok(me([])) });
+    const { user } = renderPortal(`/p/${ORG_B}`);
+    expect(await screen.findByText("You don't have a profile yet")).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '+ New profile' }));
+    expect(await screen.findByRole('dialog', { name: 'New profile' })).toBeInTheDocument();
+  });
+
   it('offers the first remaining profile for an unknown id', async () => {
     signedIn();
     const { user, router } = renderPortal(`/p/${ORG_B}`);
@@ -397,11 +410,13 @@ describe('MUT-111 /capture web fallback', () => {
     expect(locationOf(router)).toBe(`/p/${ORG_A}/expenses`);
   });
 
-  it('signed-in with no profiles: offers only Sign out, same as S11, not a crash or 404', async () => {
+  it('signed-in with no profiles: offers New profile and Sign out, same as S11, not a crash or 404', async () => {
     stubApi({ 'GET /v1/me': () => ok(me([])) });
-    renderPortal('/capture');
-    expect(await screen.findByText("Your account isn't connected to a profile yet")).toBeInTheDocument();
+    const { user } = renderPortal('/capture');
+    expect(await screen.findByText("You don't have a profile yet")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '+ New profile' }));
+    expect(await screen.findByRole('dialog', { name: 'New profile' })).toBeInTheDocument();
   });
 });
 
