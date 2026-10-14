@@ -1,6 +1,6 @@
 # MUT-173 — Landing: the phone app logs it, the portal shows it
 
-Status: **PLANNED (2026-10-14)**, branch `feature/mut-171-landing` (epic worktree `.claude/worktrees/mut-171-landing`, one worktree for the whole of MUT-171).
+Status: **BUILT (2026-10-14)**, branch `feature/mut-171-landing` (epic worktree `.claude/worktrees/mut-171-landing`, one worktree for the whole of MUT-171).
 Ticket: MUT-173 (Story) · parent epic MUT-171 (landing: hosted, mobile, Malafat). Siblings: MUT-172 (free vs. paid split, merged 8368aa3, In Review), MUT-174 (Malafat section, Backlog, next). Relates to MUT-63 (capture app epic) and MUT-114 (Android prep, In Progress). No `is blocked by` link and none in the prose; MUT-114 only changes the Android package, not what the landing may say.
 Tracker: Jira · barmajiyat.atlassian.net · MUT via atlassian-barmajiyat · Backlog = planning allowed when Basel asks (he asked for the whole epic) · finished → In Review after /qa-reconcile.
 

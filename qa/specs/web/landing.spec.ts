@@ -4,6 +4,7 @@ import { attachScreenshot, expectNoHorizontalOverflow } from '../../support/bran
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { ar, en } from '../../support/i18n';
 import { contrast, parseColor } from '../../../src/test/css/brandCss';
+import { MOBILE_APP_LINKS } from '../../../src/content/download-config';
 
 /**
  * The landing page's frosted bar and restrained motion (MUT-77, brief L9/L10),
@@ -432,6 +433,76 @@ for (const language of ['en', 'ar'] as const) {
 
       await step('It opens /hosted in the same tab', async () => {
         await cta.click();
+        await expect(page).toHaveURL(/\/hosted$/);
+        await expect(page.locator('#hosted-title')).toBeVisible();
+      });
+    },
+  );
+}
+
+for (const language of ['en', 'ar'] as const) {
+  test(
+    `${language === 'en' ? 'English' : 'Arabic'}: the phone chapter says the phone logs and the hosted account shows, and names each app from its config (MUT-173)`,
+    { tag: '@web.landing.phone' },
+    async ({ page, step }) => {
+      const dict = (language === 'ar' ? ar : en).landing;
+      const copy = dict.phone as { title: string; hintLink: string; storesLabel: string; withAccount: string; store: Record<string, string> };
+      const platformNames = dict.hostedOffer.platform as { ios: string; android: string; comingSoon: string };
+      const chapter = page.locator('[data-part="phone"]');
+      const stores = chapter.getByRole('list', { name: copy.storesLabel });
+      const hintLink = chapter.getByRole('link', { name: copy.hintLink });
+
+      await step('After Get it, the chapter states the split with the laptop-and-phone picture whole', async () => {
+        await openLanding(page, language);
+        await chapter.scrollIntoViewIfNeeded();
+        await expect(chapter.getByRole('heading', { level: 2 })).toHaveText(copy.title);
+        await expect(chapter.locator('.hosted-devices-laptop')).toBeVisible();
+        await expect(chapter.locator('.hosted-devices-phone')).toBeVisible();
+        await expect(chapter.locator('.hosted-devices-caption')).toBeVisible();
+        expect((await chapter.locator('.hosted-devices-laptop').boundingBox())!.width).toBeGreaterThan(300);
+        await expect(chapter.getByText(/report|analytic|dashboard/i)).toHaveCount(0);
+        await attachScreenshot(page, `phone-${language}`);
+      });
+
+      await step('Each phone app reads its state from the config: a store link, a name, or coming soon', async () => {
+        for (const platform of ['ios', 'android'] as const) {
+          const link = MOBILE_APP_LINKS[platform];
+          if (link.url) {
+            const store = stores.getByRole('link', { name: copy.store[platform] });
+            await expect(store).toHaveAttribute('href', link.url);
+            await expect(store).toHaveAttribute('target', '_blank');
+            expect((await store.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+            await expectPressed(page, store, 'scale', PRESSED, `${platform} store link`);
+            const before = await readColours(store);
+            await store.hover();
+            await expect.poll(() => store.evaluate((el) => el.matches(':hover'))).toBe(true);
+            expect((await readColours(store)).color).toBe(before.color);
+          } else if (link.available) {
+            const named = stores.locator('.landing-phone-platform', { hasText: platformNames[platform] });
+            await expect(named).toBeVisible();
+            await expect(named).toContainText(copy.withAccount);
+          } else {
+            await expect(stores.getByText(platformNames.comingSoon.replace('{platform}', platformNames[platform]))).toBeVisible();
+          }
+        }
+        const expectedLinks = (['ios', 'android'] as const).filter((p) => MOBILE_APP_LINKS[p].url).length;
+        await expect(stores.getByRole('link')).toHaveCount(expectedLinks);
+      });
+
+      await step('At 375 px the chapter fits and keeps the whole picture', async () => {
+        await page.setViewportSize({ width: 375, height: 812 });
+        await chapter.scrollIntoViewIfNeeded();
+        await expectNoHorizontalOverflow(page, `phone 375 ${language}`);
+        await expect(chapter.locator('.hosted-devices-laptop')).toBeVisible();
+        await expect(chapter.locator('.hosted-devices-phone')).toBeVisible();
+        await expect(chapter.locator('.hosted-devices-caption')).toBeVisible();
+        await attachScreenshot(page, `phone-${language}-375`);
+      });
+
+      await step('The underlined link in the hint opens /hosted', async () => {
+        await expect(hintLink).toHaveAttribute('href', '/hosted');
+        expect((await readColours(hintLink)).decoration).toBe('underline');
+        await hintLink.click();
         await expect(page).toHaveURL(/\/hosted$/);
         await expect(page.locator('#hosted-title')).toBeVisible();
       });

@@ -111,3 +111,13 @@ features:
     expect:
       - The lead says the hosted account and the phone app come with a paid plan, with no price, no checkout and no platform name
       - The button is the block's only link, presses like every landing control, keeps its colour on hover, and opens /hosted in the same tab
+  - id: phone
+    title: The phone chapter says the phone logs and the hosted account shows, and names each phone app from its config (MUT-173)
+    tier: secondary
+    legacy: [MUT-173]
+    steps:
+      - Open the landing page, scroll past Get Mutaba3a to the phone chapter, read it and the two platform lines, press "See hosted accounts"; same in Arabic, also at 375 px
+    expect:
+      - The chapter says the phone app is for logging and the portal, your hosted account in a browser, is where you see every client, what they owe and what they paid; it claims no reports
+      - Today iPhone is named with "with your hosted account" and no link, and Android says "coming soon"; a store link appears only once one is configured, and then presses and keeps its colour like every landing control
+      - The laptop-and-phone picture stays whole, also on a phone; the underlined link opens /hosted
