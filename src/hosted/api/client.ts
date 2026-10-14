@@ -77,6 +77,16 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Why the server refused: `details.reason` on a 409 CONFLICT or 422
+ * VALIDATION_FAILED, which carry the specific reason there, not in `code`.
+ * One reader for every error mapper (MUT-183 R3, TD-125).
+ */
+export function apiErrorReason(error: ApiError): string | undefined {
+  const details = error.details as { reason?: unknown } | null;
+  return typeof details?.reason === 'string' ? details.reason : undefined;
+}
+
 type UnauthorisedHandler = (error: ApiError) => void;
 let unauthorisedHandler: UnauthorisedHandler | null = null;
 

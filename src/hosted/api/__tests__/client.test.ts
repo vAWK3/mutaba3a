@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { api, ApiError, request, setUnauthorisedHandler } from '../client';
+import { api, ApiError, apiErrorReason, request, setUnauthorisedHandler } from '../client';
 
 const fetchMock = vi.fn();
 
@@ -198,5 +198,20 @@ describe('unauthorised handler', () => {
     fetchMock.mockResolvedValue(json(401, envelope('UNAUTHENTICATED')));
     await api.me().catch(() => {});
     expect(handler).not.toHaveBeenCalled();
+  });
+});
+
+describe('apiErrorReason (MUT-183 R3)', () => {
+  const error = (details: unknown) => new ApiError(409, 'CONFLICT', 'm', details);
+
+  it('returns details.reason when it is a string', () => {
+    expect(apiErrorReason(error({ reason: 'PROFILE_LIMIT', limit: 6 }))).toBe('PROFILE_LIMIT');
+  });
+
+  it('returns undefined for a missing, non-string or absent reason', () => {
+    expect(apiErrorReason(error({ limit: 6 }))).toBeUndefined();
+    expect(apiErrorReason(error({ reason: 42 }))).toBeUndefined();
+    expect(apiErrorReason(error(null))).toBeUndefined();
+    expect(apiErrorReason(error(undefined))).toBeUndefined();
   });
 });

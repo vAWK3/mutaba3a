@@ -1,4 +1,4 @@
-import { ApiError } from '../api/client';
+import { ApiError, apiErrorReason } from '../api/client';
 
 /**
  * Maps the income/settle error vocabulary (MUT-65, MUT-61) onto the drawers,
@@ -7,8 +7,8 @@ import { ApiError } from '../api/client';
  * READ_ONLY_PROFILE (a stale UI: the profile changed under the page) reuses
  * the hosted-portal.md §7.4 sentence for the profile's writer of record.
  *
- * reasonOf/fieldOf are a third local copy of expenseApiErrors' and
- * conversionApiErrors' helpers by choice (eng review D1, TECH_DEBT).
+ * The reason comes from the shared apiErrorReason (MUT-183 R3); fieldOf is
+ * still a local copy of conversionApiErrors' helper (TD-125).
  */
 
 export interface FieldError {
@@ -24,11 +24,6 @@ export interface MappedError {
   toast?: string;
   /** The drawer should re-read the receivable (settle only). */
   reread?: boolean;
-}
-
-function reasonOf(error: ApiError): string | undefined {
-  const details = error.details as { reason?: unknown } | null;
-  return typeof details?.reason === 'string' ? details.reason : undefined;
 }
 
 function fieldOf(error: ApiError): string | undefined {
@@ -59,7 +54,7 @@ export function mapIncomeError(error: unknown): MappedError {
   const early = nonValidation(error);
   if (early) return early;
   const apiError = error as ApiError;
-  const reason = reasonOf(apiError);
+  const reason = apiErrorReason(apiError);
   if (apiError.code === 'VALIDATION_FAILED') {
     if (reason === 'AMOUNT_INVALID') return { fields: [{ field: 'amount', key: 'hosted.income.errors.amountInvalid' }] };
     if (reason === 'DATE_INVALID') {
@@ -75,7 +70,7 @@ export function mapSettleError(error: unknown): MappedError {
   const early = nonValidation(error);
   if (early) return early;
   const apiError = error as ApiError;
-  const reason = reasonOf(apiError);
+  const reason = apiErrorReason(apiError);
   if (apiError.code === 'VALIDATION_FAILED') {
     if (reason === 'AMOUNT_INVALID') return { fields: [{ field: 'amount', key: 'hosted.income.errors.amountInvalid' }] };
     if (reason === 'ALLOCATION_EXCEEDS_OUTSTANDING') {
