@@ -15,8 +15,19 @@ export const HOSTED_REQUEST_FORM_NAME = 'hosted-request';
 /** The emitted static twin. Posting to a real file sidesteps the SPA's `/*` rewrite. */
 export const NETLIFY_FORMS_PATH = '/__forms.html';
 
-/** Netlify drops any submission that fills this field; people never see it. */
-export const HONEYPOT_FIELD = 'company-website';
+/** The twin's file name in the build output (the path without its leading slash). */
+export const NETLIFY_FORMS_FILE = NETLIFY_FORMS_PATH.slice(1);
+
+/**
+ * Netlify drops any submission that fills this field; people never see it.
+ * Netlify's own name: a name that looks like contact data (company, website…)
+ * gets autofilled for real visitors, whose requests would then vanish.
+ */
+export const HONEYPOT_FIELD = 'bot-field';
+
+/** Longest accepted answer per field; the inputs carry these as maxLength too. */
+export const FIELD_MAX_LENGTH = { name: 200, email: 254, phone: 40, message: 4000 } as const;
+type LimitedField = keyof typeof FIELD_MAX_LENGTH;
 
 /** A request with no answer by then shows the retry state instead of hanging (D5). */
 export const SUBMIT_TIMEOUT_MS = 15_000;
@@ -36,8 +47,12 @@ export const HOSTED_REQUEST_FIELDS = [
   'devices',
   'message',
   'language',
+  'request-id',
   HONEYPOT_FIELD,
 ] as const;
+
+/** Fields the twin declares as a <textarea>; everything else is an <input>. */
+export const MULTILINE_FIELDS: ReadonlySet<string> = new Set(['message']);
 
 export interface HostedRequestValues {
   name: string;
@@ -48,22 +63,41 @@ export interface HostedRequestValues {
   message: string;
   /** The page language, so Basel replies in it (D4). Never typed by the visitor. */
   language: Language;
+  /** One id per form, kept across retries and corrections, so Basel can match duplicates. */
+  requestId: string;
   honeypot: string;
 }
 
-/** Only the two required fields can be wrong. */
-export type HostedRequestErrors = Partial<Record<'name' | 'email', true>>;
+/** What the visitor types; the language and request id are added at send time. */
+export type HostedRequestAnswers = Omit<HostedRequestValues, 'language' | 'requestId'>;
+
+export const EMPTY_HOSTED_ANSWERS: HostedRequestAnswers = {
+  name: '',
+  email: '',
+  phone: '',
+  profession: '',
+  devices: [],
+  message: '',
+  honeypot: '',
+};
+
+export type HostedRequestError = 'required' | 'invalid' | 'tooLong';
+export type HostedRequestErrors = Partial<Record<LimitedField, HostedRequestError>>;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function emptyHostedRequest(language: Language): HostedRequestValues {
-  return { name: '', email: '', phone: '', profession: '', devices: [], message: '', language, honeypot: '' };
+export function emptyHostedRequest(language: Language, requestId: string): HostedRequestValues {
+  return { ...EMPTY_HOSTED_ANSWERS, language, requestId };
 }
 
-export function validateHostedRequest(values: HostedRequestValues): HostedRequestErrors {
+export function validateHostedRequest(values: HostedRequestAnswers): HostedRequestErrors {
   const errors: HostedRequestErrors = {};
-  if (!values.name.trim()) errors.name = true;
-  if (!EMAIL_PATTERN.test(values.email.trim())) errors.email = true;
+  if (!values.name.trim()) errors.name = 'required';
+  if (!values.email.trim()) errors.email = 'required';
+  else if (!EMAIL_PATTERN.test(values.email.trim())) errors.email = 'invalid';
+  for (const field of Object.keys(FIELD_MAX_LENGTH) as LimitedField[]) {
+    if (values[field].trim().length > FIELD_MAX_LENGTH[field]) errors[field] = 'tooLong';
+  }
   return errors;
 }
 
@@ -76,6 +110,7 @@ export function encodeHostedRequest(values: HostedRequestValues): URLSearchParam
     devices: values.devices.join(', '),
     message: values.message.trim(),
     language: values.language,
+    'request-id': values.requestId,
     [HONEYPOT_FIELD]: values.honeypot,
   };
   const body = new URLSearchParams({ 'form-name': HOSTED_REQUEST_FORM_NAME });

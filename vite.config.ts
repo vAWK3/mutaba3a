@@ -8,7 +8,8 @@ import {
   HONEYPOT_FIELD,
   HOSTED_REQUEST_FIELDS,
   HOSTED_REQUEST_FORM_NAME,
-  NETLIFY_FORMS_PATH,
+  MULTILINE_FIELDS,
+  NETLIFY_FORMS_FILE,
 } from "./src/pages/landing/hostedRequest";
 import { HOSTED_OFFER_URL } from "./src/content/download-config";
 
@@ -45,6 +46,33 @@ function emitHostedEntryAsIndex(): Plugin {
 /** Where the landing page is served; override with MUTABA3A_PUBLIC_ORIGIN (e.g. a staging host). */
 const DEFAULT_PUBLIC_ORIGIN = "https://mutaba3a.app";
 
+/** A page with its own link preview: where it lives, what its card says, and its static tab title. */
+export interface SocialPage {
+  path: string;
+  title: string;
+  description: string;
+  documentTitle: string;
+}
+
+/** The landing page's card (MUT-104): the Arabic hero. */
+const HOME_PAGE: SocialPage = {
+  path: "/",
+  title: `${ar.landing.hero.headlineLine1} ${ar.landing.hero.headlineLine2}`,
+  description: ar.landing.hero.subheadline,
+  documentTitle: "متابعة", // index.html's own <title>; the home page is never rewritten
+};
+
+/** /hosted's card, so a shared link previews the offer, not the home page (MUT-186, F7). */
+export const HOSTED_OFFER_PAGE: SocialPage = {
+  path: HOSTED_OFFER_URL,
+  title: ar.landing.hostedOffer.hero.title,
+  description: ar.landing.hostedOffer.hero.sub,
+  documentTitle: ar.common.pageTitle.replace("{page}", ar.landing.hostedOffer.meta.title),
+};
+
+/** The built copy of index.html that carries /hosted's card; netlify.toml serves it at /hosted. */
+export const HOSTED_OFFER_FILE = "hosted-offer.html";
+
 /** The share card in `public/`: Claude Design's Arabic card, 1.91:1 so feeds show it large (MUT-104, D9). */
 const SOCIAL_CARD = { path: "/og-card-ar-1200x630.png", width: 1200, height: 630 };
 
@@ -55,18 +83,17 @@ const SOCIAL_CARD = { path: "/og-card-ar-1200x630.png", width: 1200, height: 630
  * origin that isn't https, so a bad MUTABA3A_PUBLIC_ORIGIN fails the build
  * instead of shipping broken cards. Vite escapes the attribute values.
  */
-export function socialMetaTags(origin: string): HtmlTagDescriptor[] {
+export function socialMetaTags(origin: string, page: SocialPage = HOME_PAGE): HtmlTagDescriptor[] {
   if (!/^https:\/\/[^/\s]+\/?$/.test(origin)) {
     throw new Error(`MUTABA3A_PUBLIC_ORIGIN must be an https origin, got ${JSON.stringify(origin)}`);
   }
   const base = origin.replace(/\/$/, "");
-  const { headlineLine1, headlineLine2, subheadline } = ar.landing.hero;
-  const title = `${headlineLine1} ${headlineLine2}`;
+  const { title, description: subheadline } = page;
   const image = `${base}${SOCIAL_CARD.path}`;
   const og = {
     "og:type": "website",
     "og:site_name": PWA_MANIFEST.name,
-    "og:url": `${base}/`,
+    "og:url": `${base}${page.path}`,
     "og:title": title,
     "og:description": subheadline,
     "og:locale": "ar_AR",
@@ -103,7 +130,7 @@ function socialMeta(): Plugin {
  */
 export function netlifyFormsHtml(): string {
   const fields = HOSTED_REQUEST_FIELDS.map((name) =>
-    name === "message" ? `<textarea name="${name}"></textarea>` : `<input name="${name}">`,
+    MULTILINE_FIELDS.has(name) ? `<textarea name="${name}"></textarea>` : `<input name="${name}">`,
   ).join("");
   return (
     `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex">` +
@@ -132,12 +159,54 @@ function hostedOfferDevRoute(): Plugin {
   };
 }
 
+const escapeHtml = (value: string) =>
+  value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * `html` with its Open Graph / Twitter tags and its <title> replaced by
+ * `tags` and `documentTitle`; everything else (the app's scripts) untouched.
+ */
+export function withPageMeta(html: string, tags: HtmlTagDescriptor[], documentTitle: string): string {
+  const serialized = tags
+    .map(({ attrs }) => {
+      const pairs = Object.entries(attrs ?? {}).map(([key, value]) => `${key}="${escapeHtml(String(value))}"`);
+      return `<meta ${pairs.join(" ")}>`;
+    })
+    .join("\n    ");
+  return html
+    .replace(/<meta\s+(?:property|name)="(?:og|twitter):[^"]*"\s+content="[^"]*"\s*\/?>\s*/g, "")
+    .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(documentTitle)}</title>`)
+    .replace("</head>", `    ${serialized}\n  </head>`);
+}
+
+/**
+ * Emits hosted-offer.html: the built index.html with /hosted's link preview
+ * (MUT-186, F7). Crawlers run no JavaScript, so the one shared index.html
+ * would preview every /hosted link as the home page. Web build only.
+ */
+function hostedOfferHtml(): Plugin {
+  const tags = socialMetaTags(process.env.MUTABA3A_PUBLIC_ORIGIN ?? DEFAULT_PUBLIC_ORIGIN, HOSTED_OFFER_PAGE);
+  return {
+    name: "mutaba3a:hosted-offer-html",
+    enforce: "post",
+    generateBundle(_options, bundle) {
+      const index = bundle["index.html"];
+      if (!index || index.type !== "asset") throw new Error("mutaba3a:hosted-offer-html: the build emitted no index.html");
+      this.emitFile({
+        type: "asset",
+        fileName: HOSTED_OFFER_FILE,
+        source: withPageMeta(String(index.source), tags, HOSTED_OFFER_PAGE.documentTitle),
+      });
+    },
+  };
+}
+
 /** Emits the form twin at the path the page posts to. Web build only: Netlify serves only the web build. */
 function netlifyForms(): Plugin {
   return {
     name: "mutaba3a:netlify-forms",
     generateBundle() {
-      this.emitFile({ type: "asset", fileName: NETLIFY_FORMS_PATH.slice(1), source: netlifyFormsHtml() });
+      this.emitFile({ type: "asset", fileName: NETLIFY_FORMS_FILE, source: netlifyFormsHtml() });
     },
   };
 }
@@ -160,7 +229,8 @@ export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
   globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
   // Share cards are for crawlers, never shown in the app (MUT-104)
   // The Netlify form twin is a bare form for the deploy bot, never opened in the app (MUT-186, D2)
-  globIgnores: ["og-*.png", NETLIFY_FORMS_PATH.slice(1)],
+  // /hosted's page copy is served by Netlify, never from the cache (MUT-186, F7)
+  globIgnores: ["og-*.png", NETLIFY_FORMS_FILE, HOSTED_OFFER_FILE],
   runtimeCaching: [
     {
       urlPattern: ({ request }) => request.destination === "font",
@@ -256,7 +326,7 @@ export default defineConfig(({ mode }) => {
     },
   plugins: [
     react(),
-    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), hostedOfferDevRoute()] : []),
+    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), hostedOfferDevRoute(), hostedOfferHtml()] : []),
     VitePWA({
       disable: isTauri, // Disable PWA for desktop builds
       registerType: "autoUpdate",

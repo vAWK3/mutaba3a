@@ -1273,7 +1273,7 @@
       "backLink": "Back to the homepage",
       "scope": {
         "title": "The short version",
-        "body": "On Mac, Windows, and in the browser, Mutaba3a keeps your business data on your own device. There's no account, and nothing you enter is sent to us. The iPhone and Android apps work differently: you sign in with an account, and what you enter is saved to Mutaba3a's servers. None of our apps use analytics, ads, or tracking, and we never sell your data."
+        "body": "On Mac, Windows, and in the browser, Mutaba3a keeps your business data on your own device. There's no account, and nothing you enter in the app is sent to us. The one thing our website can send us is the hosted-account request form, and only if you fill it in and press Send. The iPhone and Android apps work differently: you sign in with an account, and what you enter is saved to Mutaba3a's servers. None of our apps use analytics, ads, or tracking, and we never sell your data."
       },
       "dataStorage": {
         "title": "Mac, Windows, and the browser: your data stays on your device",
@@ -1289,11 +1289,11 @@
       },
       "network": {
         "title": "What reaches the network",
-        "body": "On Mac, Windows, and in the browser, the app makes two kinds of outbound requests, and neither includes anything you've entered: it asks a public exchange-rate service (Frankfurter) for currency conversion rates, and the download page checks GitHub for the latest release version. The mobile apps connect only to Mutaba3a's servers and to the private storage that holds your receipts, always over encrypted connections."
+        "body": "On Mac, Windows, and in the browser, the app makes two kinds of outbound requests, and neither includes anything you've entered: it asks a public exchange-rate service (Frankfurter) for currency conversion rates, and the download page checks GitHub for the latest release version. Separately, the website's hosted-account request form sends what you type in it to Netlify when you press Send. The mobile apps connect only to Mutaba3a's servers and to the private storage that holds your receipts, always over encrypted connections."
       },
       "sharing": {
         "title": "Who else handles your data",
-        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
+        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Our website runs on Netlify, which receives the hosted-account request form and checks each request for spam with Akismet (made by Automattic). If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
       },
       "security": {
         "title": "Keeping the mobile apps secure",
@@ -1321,7 +1321,7 @@
       },
       "hostedRequest": {
         "title": "When you ask for a hosted account",
-        "body": "If you send the request form on our website, Netlify, which hosts the website, receives what you type: your name, your email and anything else you choose to add, plus the language the page was in. Netlify emails it to us. We use it only to reply with an offer and, if you go ahead, to set up your account. Write to info@malafat.app and we'll delete it."
+        "body": "If you send the request form on our website, Netlify, which hosts the website, receives what you type: your name, your email and anything else you choose to add, plus the language the page was in and a random request number. Netlify also records technical details such as your IP address and browser, and checks the request for spam with Akismet. Netlify then emails it to us. We use it only to reply with an offer and, if you go ahead, to set up your account. We delete requests within 12 months; write to info@malafat.app and we'll delete yours sooner."
       },
       "contact": {
         "title": "Contact",
@@ -1421,6 +1421,7 @@
         "retry": "Try again",
         "errName": "Enter your name.",
         "errEmail": "Enter an email address like {example}.",
+        "errTooLong": "Keep this under {max} characters.",
         "errorAlert": "Couldn't send. Check your connection and try again. Your answers are still here.",
         "notice": "We use these details only to reply with an offer.",
         "privacyLink": "Privacy policy"

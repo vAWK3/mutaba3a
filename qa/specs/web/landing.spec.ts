@@ -393,3 +393,9 @@ test('at 375 in Arabic the hosted page fits, stacks the comparison and keeps 44p
   }
   await attachScreenshot(page, 'hosted-ar-375');
 });
+
+test('a /hosted link that gained a trailing slash still opens the offer page', { tag: '@web.landing.hosted-slash' }, async ({ page }) => {
+  await page.goto('/hosted/');
+  await expect(page.getByRole('heading', { level: 1, name: 'Your records, on every device.' })).toBeVisible();
+  await expect(page.locator('input[name="bot-field"]')).toBeHidden();
+});

@@ -2,7 +2,17 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
 import { existsSync } from 'node:fs';
-import configFn, { PWA_INCLUDE_ASSETS, PWA_MANIFEST, PWA_WORKBOX, netlifyFormsHtml, socialMetaTags } from '../../vite.config';
+import configFn, {
+  HOSTED_OFFER_FILE,
+  HOSTED_OFFER_PAGE,
+  PWA_INCLUDE_ASSETS,
+  PWA_MANIFEST,
+  PWA_WORKBOX,
+  netlifyFormsHtml,
+  socialMetaTags,
+  withPageMeta,
+} from '../../vite.config';
+import { readFileSync } from 'node:fs';
 import {
   HONEYPOT_FIELD,
   HOSTED_REQUEST_FIELDS,
@@ -144,7 +154,9 @@ describe('vite.config', () => {
               headlineLine2: '"quoted" & ampersand',
               subheadline: 'sub & "quoted" <b>bold</b>',
             },
+            hostedOffer: { hero: { title: 'h', sub: 's' }, meta: { title: 'm' } },
           },
+          common: { pageTitle: '{page}' },
         },
       }));
       try {
@@ -227,6 +239,68 @@ describe('vite.config', () => {
 
     it('keeps the twin out of the service worker precache (D2)', () => {
       expect(PWA_WORKBOX?.globIgnores).toContain(NETLIFY_FORMS_PATH.slice(1));
+    });
+  });
+
+  describe('/hosted link preview (MUT-186 review, F7)', () => {
+    const meta = (tags: ReturnType<typeof socialMetaTags>) =>
+      Object.fromEntries(tags.map(({ attrs }) => [String(attrs?.property ?? attrs?.name), String(attrs?.content)]));
+
+    it('builds the /hosted card from the Arabic /hosted hero, pointing at /hosted', () => {
+      const tags = meta(socialMetaTags('https://mutaba3a.app', HOSTED_OFFER_PAGE));
+      expect(tags['og:url']).toBe('https://mutaba3a.app/hosted');
+      expect(tags['og:title']).toBe(ar.landing.hostedOffer.hero.title);
+      expect(tags['og:description']).toBe(ar.landing.hostedOffer.hero.sub);
+      expect(tags['twitter:title']).toBe(tags['og:title']);
+      expect(tags['og:image']).toBe('https://mutaba3a.app/og-card-ar-1200x630.png');
+    });
+
+    it('keeps the home card as it was when no page is given', () => {
+      expect(meta(socialMetaTags('https://mutaba3a.app'))['og:url']).toBe('https://mutaba3a.app/');
+    });
+
+    const INDEX = [
+      '<!doctype html><html lang="en"><head><meta charset="UTF-8" /><title>متابعة</title>',
+      '<meta property="og:url" content="https://mutaba3a.app/">',
+      '<meta property="og:title" content="home">',
+      '<meta name="twitter:title" content="home">',
+      '<script type="module" src="/assets/index-abc.js"></script></head><body><div id="root"></div></body></html>',
+    ].join('\n');
+
+    it('swaps every link-preview tag and the title, and keeps the app\'s scripts', () => {
+      const html = withPageMeta(INDEX, socialMetaTags('https://mutaba3a.app', HOSTED_OFFER_PAGE), HOSTED_OFFER_PAGE.documentTitle);
+      expect(html).not.toContain('content="home"');
+      expect(html).not.toContain('content="https://mutaba3a.app/"');
+      expect(html).toContain('<meta property="og:url" content="https://mutaba3a.app/hosted">');
+      expect(html).toContain(`<title>${HOSTED_OFFER_PAGE.documentTitle}</title>`);
+      expect(html).toContain('<script type="module" src="/assets/index-abc.js"></script>');
+      expect(html.match(/property="og:title"/g)).toHaveLength(1);
+    });
+
+    it('escapes what it writes into attributes and the title', () => {
+      const html = withPageMeta(INDEX, [{ tag: 'meta', attrs: { property: 'og:title', content: '"<b>&' } }], 'a<b>&"');
+      expect(html).toContain('content="&quot;&lt;b&gt;&amp;"');
+      expect(html).toContain('<title>a&lt;b&gt;&amp;&quot;</title>');
+    });
+
+    it('emits the page as hosted-offer.html beside index.html, in the web build only', () => {
+      const found = (resolve('web').plugins ?? []).flat().find((p) => p && typeof p === 'object' && 'name' in p && p.name === 'mutaba3a:hosted-offer-html');
+      if (!found) throw new Error('hosted-offer-html plugin missing from the web build');
+      const emitFile = vi.fn();
+      const bundle = { 'index.html': { type: 'asset', fileName: 'index.html', source: INDEX } };
+      (found as { generateBundle: (this: unknown, o: unknown, b: unknown) => void }).generateBundle.call({ emitFile }, {}, bundle);
+      expect(emitFile).toHaveBeenCalledWith(expect.objectContaining({ type: 'asset', fileName: HOSTED_OFFER_FILE }));
+      expect(String(emitFile.mock.calls[0][0].source)).toContain('content="https://mutaba3a.app/hosted"');
+      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:hosted-offer-html');
+      expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:hosted-offer-html');
+    });
+
+    it('is served at /hosted by Netlify, ahead of the SPA catch-all, and never precached', () => {
+      const toml = readFileSync(repoPath('netlify.toml'), 'utf8');
+      const hostedRule = toml.indexOf(`from = "/hosted"\n  to = "/${HOSTED_OFFER_FILE}"\n  status = 200`);
+      expect(hostedRule).toBeGreaterThan(-1);
+      expect(hostedRule).toBeLessThan(toml.indexOf('from = "/*"'));
+      expect(PWA_WORKBOX?.globIgnores).toContain(HOSTED_OFFER_FILE);
     });
   });
 

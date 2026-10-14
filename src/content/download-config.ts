@@ -32,9 +32,9 @@ export const DOWNLOAD_URLS = {
 export const WEB_APP_URL = '/app/clients?sample=1';
 
 /**
- * The hosted offer page and its request form (MUT-186). The landing page's
- * paid callout (MUT-172) and the free app's "Go hosted" card (MUT-187) link
- * here too, so the address lives in one place.
+ * The hosted offer page and its request form (MUT-186). One constant so the
+ * landing page's paid callout (MUT-172) and the free app's "Go hosted" card
+ * (MUT-187) can link here once they are built.
  */
 export const HOSTED_OFFER_URL = '/hosted';
 

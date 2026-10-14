@@ -18,6 +18,7 @@ import { LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";
 import { LandingProviders } from "./pages/landing/LandingProviders";
 import { HOSTED_OFFER_URL } from "./content/download-config";
+import { marketingPath } from "./pages/landing/marketingPath";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import "./components/ui/ErrorBoundary.css";
@@ -88,7 +89,7 @@ const LandingLoader = () => (
 function App() {
   // Web build: handle landing routes outside router
   if (__BUILD_MODE__ === "web") {
-    const path = window.location.pathname;
+    const path = marketingPath(window.location.pathname);
 
     if (path === "/" && LandingPage) {
       return (

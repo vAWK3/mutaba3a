@@ -6,14 +6,16 @@ import { isolate } from '../../../lib/utils';
 import { WEB_APP_URL } from '../../../content/download-config';
 import {
   DEVICES,
+  FIELD_MAX_LENGTH,
   HONEYPOT_FIELD,
   PROFESSIONS,
-  emptyHostedRequest,
+  EMPTY_HOSTED_ANSWERS,
   submitHostedRequest,
   validateHostedRequest,
   type Device,
+  type HostedRequestAnswers,
+  type HostedRequestError,
   type HostedRequestErrors,
-  type HostedRequestValues,
   type Profession,
 } from '../hostedRequest';
 
@@ -33,25 +35,30 @@ const T = 'landing.hostedOffer';
 export function HostedRequestForm({ titleId }: { titleId: string }) {
   const t = useT();
   const { language } = useLanguage();
-  const [values, setValues] = useState<HostedRequestValues>(() => emptyHostedRequest(language));
+  const [values, setValues] = useState<HostedRequestAnswers>(EMPTY_HOSTED_ANSWERS);
   const [errors, setErrors] = useState<HostedRequestErrors>({});
   const [status, setStatus] = useState<Status>('idle');
+  // One id for this form's life: retries and corrections of one request share it
+  const [requestId] = useState(() => crypto.randomUUID());
   const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const successRef = useRef<HTMLHeadingElement>(null);
+  const alertRef = useRef<HTMLParagraphElement>(null);
   const focusEmailOnReturn = useRef(false);
 
   useEffect(() => {
     if (status === 'success') successRef.current?.focus();
+    // The alert pushes the button down; bring both into view wherever the page was scrolled
+    if (status === 'error') alertRef.current?.scrollIntoView?.({ block: 'nearest' });
     if (status === 'idle' && focusEmailOnReturn.current) {
       focusEmailOnReturn.current = false;
       emailRef.current?.focus();
     }
   }, [status]);
 
-  const update = <K extends keyof HostedRequestValues>(key: K, value: HostedRequestValues[K]) => {
+  const update = <K extends keyof HostedRequestAnswers>(key: K, value: HostedRequestAnswers[K]) => {
     setValues((current) => ({ ...current, [key]: value }));
-    if (key === 'name' || key === 'email') setErrors((current) => ({ ...current, [key]: undefined }));
+    if (key in FIELD_MAX_LENGTH) setErrors((current) => ({ ...current, [key]: undefined }));
   };
 
   const toggleDevice = (device: Device) =>
@@ -67,7 +74,8 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
       return;
     }
     setStatus('sending');
-    const result = await submitHostedRequest({ ...values, language });
+    // The language the page is in now, not when the form mounted (D4)
+    const result = await submitHostedRequest({ ...values, language, requestId });
     setStatus(result === 'ok' ? 'success' : 'error');
   };
 
@@ -98,6 +106,11 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
   }
 
   const optional = (label: string) => `${t(`${T}.form.${label}`)} ${t(`${T}.form.optional`)}`;
+  const errorText = (field: keyof typeof FIELD_MAX_LENGTH, error: HostedRequestError | undefined) => {
+    if (!error) return undefined;
+    if (error === 'tooLong') return t(`${T}.form.errTooLong`, { max: FIELD_MAX_LENGTH[field] });
+    return field === 'name' ? t(`${T}.form.errName`) : t(`${T}.form.errEmail`, { example: isolate(EXAMPLE_EMAIL) });
+  };
   const sending = status === 'sending';
 
   return (
@@ -109,9 +122,10 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
         label={t(`${T}.form.name`)}
         autoComplete="name"
         required
+        maxLength={FIELD_MAX_LENGTH.name}
         value={values.name}
         onChange={(e) => update('name', e.target.value)}
-        error={errors.name ? t(`${T}.form.errName`) : undefined}
+        error={errorText('name', errors.name)}
       />
       <Input
         ref={emailRef}
@@ -122,9 +136,10 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
         label={t(`${T}.form.email`)}
         autoComplete="email"
         required
+        maxLength={FIELD_MAX_LENGTH.email}
         value={values.email}
         onChange={(e) => update('email', e.target.value)}
-        error={errors.email ? t(`${T}.form.errEmail`, { example: isolate(EXAMPLE_EMAIL) }) : undefined}
+        error={errorText('email', errors.email)}
       />
       <Input
         id="hosted-phone"
@@ -133,8 +148,10 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
         dir="ltr"
         label={optional('phone')}
         autoComplete="tel"
+        maxLength={FIELD_MAX_LENGTH.phone}
         value={values.phone}
         onChange={(e) => update('phone', e.target.value)}
+        error={errorText('phone', errors.phone)}
       />
       <Select
         id="hosted-profession"
@@ -172,10 +189,13 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
         name="message"
         label={optional('message')}
         rows={4}
+        maxLength={FIELD_MAX_LENGTH.message}
         value={values.message}
         onChange={(e) => update('message', e.target.value)}
+        error={errorText('message', errors.message)}
       />
-      <div className="hosted-honeypot" aria-hidden="true">
+      {/* hidden = display: none, which autofill skips; off-screen alone gets filled */}
+      <div className="hosted-honeypot" hidden aria-hidden="true">
         <label htmlFor="hosted-honeypot">{t(`${T}.form.honeypot`)}</label>
         <input
           id="hosted-honeypot"
@@ -188,7 +208,7 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
       </div>
       {/* Beside the button, where the visitor is looking when it fails (moved from above the form after the browser check) */}
       {status === 'error' && (
-        <p className="hosted-alert" role="alert">
+        <p ref={alertRef} className="hosted-alert" role="alert">
           {t(`${T}.form.errorAlert`)}
         </p>
       )}

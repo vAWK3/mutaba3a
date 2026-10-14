@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
+  FIELD_MAX_LENGTH,
   HONEYPOT_FIELD,
   HOSTED_REQUEST_FIELDS,
   HOSTED_REQUEST_FORM_NAME,
@@ -13,7 +14,7 @@ import {
 } from '../hostedRequest';
 
 function values(overrides: Partial<HostedRequestValues> = {}): HostedRequestValues {
-  return { ...emptyHostedRequest('en'), name: 'Lina Haddad', email: 'lina@example.com', ...overrides };
+  return { ...emptyHostedRequest('en', 'req-1'), name: 'Lina Haddad', email: 'lina@example.com', ...overrides };
 }
 
 afterEach(() => {
@@ -26,15 +27,26 @@ describe('validateHostedRequest', () => {
   });
 
   it('requires a name and an email', () => {
-    expect(validateHostedRequest(values({ name: '', email: '' }))).toEqual({ name: true, email: true });
+    expect(validateHostedRequest(values({ name: '', email: '' }))).toEqual({ name: 'required', email: 'required' });
   });
 
   it('counts whitespace-only answers as empty', () => {
-    expect(validateHostedRequest(values({ name: '   ', email: '\t ' }))).toEqual({ name: true, email: true });
+    expect(validateHostedRequest(values({ name: '   ', email: '\t ' }))).toEqual({ name: 'required', email: 'required' });
   });
 
   it.each(['lina@', 'lina', 'lina@example', '@example.com', 'li na@example.com'])('rejects %j as an email', (email) => {
-    expect(validateHostedRequest(values({ email }))).toEqual({ email: true });
+    expect(validateHostedRequest(values({ email }))).toEqual({ email: 'invalid' });
+  });
+
+  it.each(Object.entries(FIELD_MAX_LENGTH))('accepts %s at its limit and refuses one character more', (field, max) => {
+    const at = field === 'email' ? `${'a'.repeat(max - '@example.com'.length)}@example.com` : 'a'.repeat(max);
+    const over = field === 'email' ? `a${at}` : `${at}a`;
+    expect(validateHostedRequest(values({ [field]: at }))).toEqual({});
+    expect(validateHostedRequest(values({ [field]: over }))).toEqual({ [field]: 'tooLong' });
+  });
+
+  it('caps the fields at 200 / 254 / 40 / 4000 characters', () => {
+    expect(FIELD_MAX_LENGTH).toEqual({ name: 200, email: 254, phone: 40, message: 4000 });
   });
 
   it('accepts an email with spaces around it, since they are trimmed before sending', () => {
@@ -66,6 +78,10 @@ describe('encodeHostedRequest', () => {
     expect(encodeHostedRequest(values({ language: 'ar' })).get('language')).toBe('ar');
   });
 
+  it('sends the request id, so retries and corrections of one request can be matched up', () => {
+    expect(encodeHostedRequest(values({ requestId: 'abc-123' })).get('request-id')).toBe('abc-123');
+  });
+
   it('sends the honeypot as typed: empty for people, filled for bots Netlify then drops', () => {
     expect(encodeHostedRequest(values()).get(HONEYPOT_FIELD)).toBe('');
     expect(encodeHostedRequest(values({ honeypot: 'http://spam.test' })).get(HONEYPOT_FIELD)).toBe('http://spam.test');
@@ -73,6 +89,15 @@ describe('encodeHostedRequest', () => {
 
   it('sends the profession code, not its label', () => {
     expect(encodeHostedRequest(values({ profession: 'lawyer' })).get('profession')).toBe('lawyer');
+  });
+});
+
+describe('honeypot', () => {
+  // Autofill fills fields whose names look like contact data (company, website, url, name, email, tel…),
+  // which would silently drop a real visitor's request.
+  it('has a name browsers never autofill: Netlify\'s own bot-field', () => {
+    expect(HONEYPOT_FIELD).toBe('bot-field');
+    expect(HONEYPOT_FIELD).not.toMatch(/company|organi[sz]ation|url|website|site|name|mail|tel|phone|address|org/i);
   });
 });
 

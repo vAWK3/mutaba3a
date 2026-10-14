@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import { LandingProviders } from '../LandingProviders';
 import { HostedOfferPage } from '../HostedOfferPage';
-import { NETLIFY_FORMS_PATH } from '../hostedRequest';
+import { FIELD_MAX_LENGTH, NETLIFY_FORMS_PATH } from '../hostedRequest';
 import { WEB_APP_URL } from '../../../content/download-config';
 
 const apps = vi.hoisted(() => ({
@@ -179,11 +179,28 @@ describe('HostedRequestForm', () => {
     expect(screen.getByLabelText('واتساب أو هاتف (اختياري)')).toHaveAttribute('dir', 'ltr');
   });
 
-  it('hides the honeypot from people and screen readers', () => {
+  it('hides the honeypot from people, screen readers and autofill (display: none via hidden)', () => {
     renderPage();
-    const trap = document.querySelector<HTMLInputElement>('input[name="company-website"]')!;
+    const trap = document.querySelector<HTMLInputElement>('input[name="bot-field"]')!;
     expect(trap.tabIndex).toBe(-1);
+    expect(trap.closest('[hidden]')).not.toBeNull();
     expect(trap.closest('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('caps every typed field at its limit', () => {
+    renderPage();
+    expect(screen.getByLabelText('Name')).toHaveAttribute('maxLength', String(FIELD_MAX_LENGTH.name));
+    expect(screen.getByLabelText('Email')).toHaveAttribute('maxLength', String(FIELD_MAX_LENGTH.email));
+    expect(screen.getByLabelText('WhatsApp or phone (optional)')).toHaveAttribute('maxLength', String(FIELD_MAX_LENGTH.phone));
+    expect(screen.getByLabelText('Anything else we should know? (optional)')).toHaveAttribute('maxLength', String(FIELD_MAX_LENGTH.message));
+  });
+
+  it('refuses an over-long value that got past the attribute, saying how long is allowed', () => {
+    renderPage();
+    fillRequired('a'.repeat(FIELD_MAX_LENGTH.name + 1));
+    submit();
+    expect(screen.getByText(`Keep this under ${FIELD_MAX_LENGTH.name} characters.`)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('says where the details go, right under the button (D3)', () => {
@@ -251,8 +268,29 @@ describe('HostedRequestForm', () => {
       profession: 'lawyer',
       devices: 'iphone, computer',
       language: 'ar',
-      'company-website': '',
+      'bot-field': '',
     });
+    expect(body.get('request-id')).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('sends the language the page is in at send time, not the one it opened in (D4)', async () => {
+    renderPage('en');
+    fireEvent.click(screen.getByRole('button', { name: /Switch language/ }));
+    fireEvent.change(screen.getByLabelText('الاسم'), { target: { value: 'لينا' } });
+    fireEvent.change(screen.getByLabelText('البريد الإلكتروني'), { target: { value: 'lina@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'أرسل الطلب' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(new URLSearchParams(String(fetchMock.mock.calls[0][1]?.body)).get('language')).toBe('ar');
+  });
+
+  it('ignores a second submit while the first is in flight, whatever triggers it', async () => {
+    fetchMock.mockReturnValue(new Promise<Response>(() => {}));
+    renderPage();
+    fillRequired();
+    submit();
+    await screen.findByRole('button', { name: 'Sending…' });
+    fireEvent.submit(screen.getByRole('form', { name: 'Request an account' }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('confirms with the visitor’s own name and email, the reply window and focus on the heading (2A, 4A)', async () => {
@@ -282,7 +320,10 @@ describe('HostedRequestForm', () => {
     fireEvent.change(email, { target: { value: 'lina@gmail.com' } });
     submit();
     await screen.findByRole('heading', { name: 'Request sent.' });
-    expect(new URLSearchParams(String(fetchMock.mock.calls[1][1]?.body)).get('email')).toBe('lina@gmail.com');
+    const [first, second] = fetchMock.mock.calls.map(([, init]) => new URLSearchParams(String(init?.body)));
+    expect(second.get('email')).toBe('lina@gmail.com');
+    // One request id for the typo'd send and its correction, so Basel can tell they are one request
+    expect(second.get('request-id')).toBe(first.get('request-id'));
   });
 
   it('keeps the answers and offers a retry when sending fails', async () => {
@@ -295,6 +336,8 @@ describe('HostedRequestForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await screen.findByRole('heading', { name: 'Request sent.' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    const ids = fetchMock.mock.calls.map(([, init]) => new URLSearchParams(String(init?.body)).get('request-id'));
+    expect(ids[1]).toBe(ids[0]);
   });
 });
 
