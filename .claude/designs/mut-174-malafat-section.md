@@ -154,3 +154,103 @@ Value cards: URL builder (protects=MUT-189's vocabulary in one place; fails_when
 
 ## 4. Performance review
 No issues found. Static copy, one `<a>`.
+
+## Outside voice (native fallback, Claude Plan subagent on Opus; Codex not installed)
+
+Provider: codex not installed → native in-host fallback (first attempt stopped on a model rate limit before reading anything; re-run on Opus). Outside coverage: **unavailable** (no external provider). Ten findings, all accepted; three verified independently before acceptance (O3 allowlist, O4 contract text on MUT-189, O10 production version).
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| O1 | High | "Mutaba3a is already inside it" restates MUT-25's idea ("a money module in Malafat") without its words, over-claims (a firm on Malafat does not get Mutaba3a without operator setup), and the AR pronoun binds to مكتبك ("inside your office"); أصلًا is colloquial. | **accepted (R2)**: title uses `/hosted`'s fact, "connects"; honesty bans "inside / built into / part of Malafat" |
+| O2 | High | The body says a payment logged in Mutaba3a lands in Malafat with no qualifier, three bands after "No account… nothing is sent anywhere". Only the phone app with a hosted account on a Malafat-linked profile does it (the portal offers no capture there; the free app never connects). | **accepted (R3)**: "With a hosted account, a payment you log in the Mutaba3a phone app…"; a test asserts the band names the hosted account |
+| O3 | High | `https://malafat.app` is a new origin in `dist-web`; `scripts/bundle-origins.json` does not list it, so `npm run test:bundles` fails; the gate omitted `test:bundles`. | **accepted (verified)**: add it to `local`; `test:bundles` joins the gate; note for MUT-191 (`hosted` list) |
+| O4 | Med-High | MUT-189's contract is `/<locale>/contact?topic=mutaba3a&…` with `utm_medium ∈ web-local|desktop|portal|ios|android` and `utm_content ∈ settings|business-profile|client-threshold|second-business`; the plan invented `landing`/`landing-section` and untyped strings. | **accepted (R4, verified)**: typed unions = the contract + an explicit `'landing'`/`'landing-section'` extension, recorded as an amendment comment on MUT-189 (MAL-1153's recognition must learn it); `topic` first |
+| O5 | Medium | "Waiting for the matter it belongs to" misdescribes MUT-61 (the client is required; the matter is a hint; what waits is allocation); AR ملف means *profile* in this product and is the name Malafat; "Nothing to type twice" reads like sync. | **accepted (R3)** |
+| O6 | Medium | Honesty regexes drop MUT-173's `chart`/`إحصاء|رسوم` and miss auto-/seamless/instant/real-time, AR verb forms of زامن, and آلي. | **accepted**: shared `BANNED_CLAIMS_EN/AR` constants in the test file, reused by the phone block |
+| O7 | Medium | `--focus-ring` is an inset ring in `--m-focus`; on the ink band it is ~3:1 (light) and ~2:1 (dark), failing 1.4.11; the planned rule only restated the global one. | **accepted**: `.landing-band-link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; box-shadow: none }`; QA tabs to the link and checks the outline colour equals the link colour |
+| O8 | Low-Med | Undoing `.landing-privacy-body`'s 0.8 opacity on the link line works only by source order; `readColours` reads the link's own transparent background. | **accepted**: the link line has its own class (`.landing-malafat-link-line`: margin + font-size tokens, incl. the ≤640 `--text-body` step), never `landing-privacy-body`; QA compares the link colour with the section's background |
+| O9 | Low | ~370-character body packs seven claims into a band designed for two lines; "contingency"/"matter" are legal-only for an accountants framing. | **accepted (R3)**: two sentences |
+| O10 | Low | Production record in INFRA/DEPLOYMENT is stale (ced04f7). | **verified, no change to the plan**: production `/health` reports `eb4a9c8` (current main, 2026-10-14), which carries MUT-61/100/107; INFRA's record gets a one-line correction in the knowledge step |
+
+Also confirmed by the outside voice: no test or QA case locates `.landing-privacy-band`; axe has no issue with two labelled bands; use `useLanguage().language`, **not** `getLocale` (returns `en-US`); nothing else builds UTM links.
+
+Cross-model tension: none. The native pass found S1–S4; the outside voice found the copy, allowlist and contract problems the native pass missed.
+
+## Amended plan (supersedes the §2 rows named below; §3 decisions D3/D4 read with these)
+
+- **Dictionary row (R2/R3):**
+  - `landing.malafat.title` = "Run a law firm or accounting office on Malafat? Mutaba3a connects to it." / "مكتبك يعمل على Malafat؟ متابعة متّصلة به."
+  - `body` = "Malafat keeps each firm's fee proposals and agreements, and what every client owes and has paid. With a hosted account, a payment you log in the Mutaba3a phone app reaches Malafat under its client, unallocated, for the firm to apply to what's owed." / "يحفظ Malafat عروض أتعاب كل مكتب واتفاقياته، وما على كل عميل وما دفعه. ومع حساب مستضاف، تصل الدفعة التي تسجّلها في تطبيق متابعة على الهاتف إلى Malafat باسم العميل، غير مخصَّصة، ليخصّصها المكتب لما هو مستحق."
+  - `link` = "See Malafat" / "اطّلع على Malafat" (unchanged).
+- **`malafatLinks.ts` row (R4):** `type MalafatMedium = 'web-local' | 'desktop' | 'portal' | 'ios' | 'android' | 'landing'`; `type MalafatContent = 'settings' | 'business-profile' | 'client-threshold' | 'second-business' | 'landing-section'`; `malafatUrl({ locale, medium, content, contact? })`: `contact: true` → `/<locale>/contact?topic=mutaba3a&utm_source=…` (the MUT-189 contract, for MUT-190/191); without it → `/<locale>?utm_source=…` (the landing). Query order fixed: `topic` (when present), `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`.
+- **`scripts/bundle-origins.json`:** `"https://malafat.app"` added to `local`.
+- **CSS row (O7/O8):** link line `<p className="landing-malafat-link-line">` (no `landing-privacy-body`): `margin: var(--space-5) 0 0; font-size: var(--text-headline)`, and `--text-body` at ≤640 px; `.landing-band-link` as planned plus `:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; box-shadow: none }`.
+- **Tests (O2/O6):** `BANNED_CLAIMS_EN = /report|analytic|dashboard|statistic|chart|\bprice\b|checkout|sign ?up|\$\d|\b(sync\w*|automatic\w*|auto-\w+|seamless\w*|instant\w*|real[- ]time)\b|\b(module|core|engine)\b|inside|built into|part of malafat/i`, `BANNED_CLAIMS_AR = /تقارير|تحليل|إحصاء|رسوم|سعر|اشترك|زامن|تلقائ|آلي|بداخل/`; the Malafat block asserts the body names "hosted account" / "حساب مستضاف" and "phone app" / "تطبيق متابعة على الهاتف"; the phone block's honesty case reuses the constants. Structure test renamed to nine parts.
+- **QA (O7/O8):** the link's colour equals the section's computed `background-color`'s contrast partner (`--bg`) and is ≥4.5:1 against the section background (`contrast()` from `brandCss`); Tab to the link and assert `outline-style: solid` and `outline-color` = the link's colour, in light and dark.
+- **Gate:** adds `npm run test:bundles`.
+
+## Final planning decisions
+
+TODOS.md updates: none. Approval readiness: PASS — R1 (factual), R2–R3 (factual copy corrections against shipped behaviour), R4 (D2 auto: typed contract + explicit landing extension recorded on MUT-189), O3/O6/O7/O8 factual. Actual answers: D1 structure B (auto), D2 contract extension A (auto).
+
+### R4: the link's vocabulary (O4)
+Question D2: Should the landing link use MUT-189's contract as-is, or extend it with a landing value?
+Options: A) Extend with `'landing'`/`'landing-section'`, typed, recorded on MUT-189 (recommended) ✅ Malafat can tell landing referrals from in-app ones ✅ the in-app contract is unchanged ❌ MAL-1153 must learn two more values. B) No UTM on the landing link ✅ nothing to amend ❌ landing referrals invisible to Malafat. Completeness: A=10/10, B=6/10. Actual answer: A (auto, non-interactive run). State: approved.
+
+## NOT in scope
+- A Malafat mock or logo; the in-app moments (MUT-189); MUT-25's spike; any change to `/hosted`.
+- MUT-189's pitch text says payments flow "automatically"; MUT-190's plan must reconcile that with the shipped unallocated capture (flagged, not changed here).
+
+## Failure modes
+| Path | Failure | Handling | User sees |
+|---|---|---|---|
+| malafat.app drops `/<locale>` | Malafat 404 | one constant; not silent | Malafat's 404 |
+| new origin not allowlisted | `test:bundles` fails | allowlist entry + gate | n/a |
+| copy drifts into a claim | honesty test fails | shared banned-claims constants | n/a |
+No critical gaps.
+
+Worktree parallelization: Sequential implementation, no parallelization opportunity.
+
+## Implementation Tasks
+- [ ] **T1 (P1, human: ~1h / CC: ~5min)** — copy — title and two-sentence body per R2/R3, EN/AR. Verify: LandingPage.test Malafat block.
+- [ ] **T2 (P1, human: ~1h / CC: ~5min)** — `malafatLinks.ts` typed per R4 + unit test; MUT-189 amendment comment. Verify: malafatLinks.test.
+- [ ] **T3 (P1, human: ~10min / CC: ~1min)** — `bundle-origins.json` local += malafat.app. Verify: `npm run test:bundles`.
+- [ ] **T4 (P2, human: ~45min / CC: ~5min)** — CSS link line + focus outline (O7/O8). Verify: landingCss.test, QA focus step light/dark.
+- [ ] **T5 (P2, human: ~30min / CC: ~3min)** — shared banned-claims constants (O6), hosted-account assertion (O2). Verify: LandingPage.test.
+- [ ] **T6 (P3, human: ~10min / CC: ~1min)** — INFRA production record → eb4a9c8 (O10).
+
+## Unresolved decisions that may bite you later
+- D1 — structure: no `Band` component; the band classes are reused inline (auto).
+- D2 — the landing link extends MUT-189's UTM vocabulary with `landing`/`landing-section` (auto); MAL-1153 must recognise them.
+
+## Completion summary
+- Step 0: Scope Challenge — scope accepted as-is (4 findings, all accepted)
+- Architecture Review: 1 issue found (R1)
+- Code Quality Review: 2 issues found (S2, S4)
+- Test Review: diagram produced, 10 gaps identified (all planned)
+- Performance Review: 0 issues found
+- NOT in scope: written
+- What already exists: written (§5)
+- TODOS.md updates: 0 items proposed to user
+- Failure modes: 0 critical gaps flagged
+- Unresolved decisions: 2 in this review (auto-decided, listed for Basel)
+- Outside voice: provider codex not installed; native fallback (Claude Plan subagent, Opus) completed, 10 findings, all accepted; outside coverage unavailable
+- Parallelization: 1 lane, 0 parallel / 1 sequential
+- Lake Score: 1/1
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | not run | — |
+| Outside Review | native fallback (Claude Plan subagent, Opus); codex not installed | Independent 2nd opinion | 1 | unavailable (native fallback completed) | 10 findings, 10 accepted |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | ISSUES OPEN (all mapped to tasks T1–T6) | 3 issues, 0 critical gaps |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | not run | — |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | not run | — |
+
+- **OUTSIDE COVERAGE:** provider codex, phase plan-review, not installed → native fallback completed with 10 findings (no external coverage credit).
+- **VERDICT:** ENG REVIEWED — issues mapped to tasks; ready to implement with the amended plan. eng review required (status issues_open, mapped work).
+
+**UNRESOLVED DECISIONS:**
+- D1 structure: band classes reused inline, no Band component (auto)
+- D2 landing link extends MUT-189's UTM vocabulary (auto)
