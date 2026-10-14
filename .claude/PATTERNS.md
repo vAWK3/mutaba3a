@@ -2219,3 +2219,12 @@ When Show changes the same page's filters instead of navigating, re-arm the save
 - **A pending submit button is `aria-disabled`, not `disabled`, inside a drawer.** Disabling the focused button blurs it in Chromium, and `useDrawerFocus` then can't hand focus back; guard the handler instead.
 - **A polite status that must be announced lives in a region rendered from the start** (`aria-live="polite"`, filled later). It carries no `role="status"` while empty, so it isn't a landmark when there's nothing to say.
 
+## Server patterns added by MUT-182 (2026-10-14)
+
+- **A destructive replace and a lazy create of the same rows hold the same parent row.** `expenseCategories.seed` and `organizations.updateOwned` both start with `SELECT id FROM organizations WHERE id = $1 FOR UPDATE` (`lockOrganization`). `skipDuplicates` only dedups identical names; two *different* presets racing need the lock, or a profile keeps a mixed set forever.
+- **A capped create counts under a lock on the owner's row** (`organizations.createOwned`: `SELECT … FROM users … FOR UPDATE`, then `count`, then insert), so two concurrent requests can't both pass the cap. The memory store needs nothing (single-threaded).
+- **One versioned store call per PATCH**, even when the body spans several concerns (name, currency, a type change that rewrites child rows): one transaction, one version bump. Two calls sharing one `If-Match` half-apply and then report a stale version.
+- **A foreign key that a concurrent destructive write can trip maps to the validator's own 422** (`withCategoryForeignKey` in `expenses/compose.ts`), so the race answers exactly like the up-front check. The memory store mirrors the FK so the route test runs without Postgres.
+- **Migration tests write `organizations` and `users` as raw rows** (`repositories/__tests__/fixtures/raw-rows.ts`) on a database built from the migrations before the one under test: today's Prisma client selects every column the current schema declares and fails on an older one. Replay earlier migrations one transaction per file (MUT-100 adds an enum value its next file uses).
+- **One builder for a published shape** reached by several routes (`hostedProfileFor` in `serializers.ts`, used by `/v1/me`, POST and PATCH `/v1/profiles`).
+

@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-130: Flutter still decides "personal" from `writerOfRecord == null`
+**Status**: Open
+**Added**: 2026-10-14 (MUT-182)
+**Ticket**: MUT-184
+**Priority**: Medium
+**Impact**: `/v1/me` now publishes `owned` and `type` per profile, but the phone app's `HostedProfile.isPersonal` (`mutaba3a-flutter/.../auth.dart:185`) is still writer-null. A business profile a person creates is writer-null too, so the app shows it the personal-only UI (category-first capture, MUT-163's File flow) — harmless for categories, wrong for the "personal" label and for client-first filing.
+**Fix**: in MUT-184, key personal-only UI on `type == PERSONAL` and ownership on `owned`; keep the writer-null fallback only for servers older than 1.22.0-mut182.
+
 ### TD-129: `DownloadPage` still carries a dead checksum toast and unused CSS
 **Status**: Open
 **Added**: 2026-10-14 (the /download crash fix)
@@ -1746,9 +1754,11 @@ The only consumer change was `!!existingDoc` in the two document forms'
 (PATTERNS.md, Query Hooks rule; CHANGELOG 2026-10-10).
 
 ### TD-018: Organizations and API Keys Are Operator-Provisioned Only
-**Status**: Accepted
+**Status**: Accepted (partly reversed by MUT-182, 2026-10-14)
 **Decided**: 2026-10-08 by the product owner
 **Original Priority**: Medium
+
+**MUT-182 (2026-10-14):** a signed-in person may now create their own *standalone* profiles (`POST /v1/profiles`, ≤ 6 owned). Firms, Malafat tenants, API keys and memberships for anyone else stay operator-only; an owned profile can never hold a key (ADR-037 MUT-182 amendment).
 
 Keys stay operator-issued through `/admin/v1/*` and `npm run provision`; there
 will be no self-serve account, organization or key-management flow. Mutaba3a

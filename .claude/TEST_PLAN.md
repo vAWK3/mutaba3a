@@ -2286,3 +2286,18 @@ Full suite (Node 22): 3751 passed, 4 skipped, 262/262 files. `lint` 0 errors (6 
 
 Run: `npx vitest run src/hosted src/components/ui/__tests__` — 55 files / 704 tests green after the review fixes. Full suite not run at the user's request; `lint`, `typecheck` and `openapi:check` run.
 
+## MUT-182 — profile management API (2026-10-14)
+
+| Suite | Cases |
+|---|---|
+| `server/src/repositories/__tests__/store-contract-profiles.ts` (memory + Postgres) | MUT-120 profile owned + PERSONAL at v1; firms unowned; createOwned + membership; cap counts personal, refuses past it writing nothing; granted firm not counted; **C4** two concurrent creates at cap−1 → one created (PG); **C10** type change racing the first seed → one preset (PG, D3); updateOwned versioned, stale; not_found for another owner and a firm; type change uncategorizes live + deleted expenses (version bump), deletes custom + archived categories, seeds preset; same type keeps categories; name + type one bump (D4); stale changes nothing; built-in personal can't become BUSINESS (D2); expense with missing category → FK |
+| `server/src/repositories/__tests__/migration-mut182.test.ts` (PG) | backfill: personal → owned + PERSONAL, firm untouched; both CHECKs fire; rest of history ends at the schema (`migrate diff --exit-code`) |
+| `server/src/__tests__/routes-profiles.test.ts` | R1 shape + ownership; R2 replay / key reuse / missing key; R3 seven invalid bodies; R4 audit; R5 cap 409 PROFILE_LIMIT (firm member); device session creates; R6/R7 rename + currency, project keeps its currency; R8 stale/garbage If-Match; empty body; R9 type change: preset in Arabic, expense uncategorized, audit rows; R16 name + type together; R11 404 stranger/unknown, 403 NOT_OWNER on a firm; R15 personal: 409 retype, rename OK; R10 preview == result, same type zeros, 404/422; R13 `/v1/me` owned/type/version/order/limits; R14 owned BUSINESS takes customer, project, received, owed, settle, expense |
+| `server/src/__tests__/routes-owned-profiles-standalone.test.ts` | BUSINESS and extra PERSONAL: no API key (S1), planted key refused at bind and on a ledger route (S2/S3), no grant to another user (S4), not a provisioning target (S5), owner's membership not revocable (S5); built-in profile still PERSONAL_PROFILE |
+| `server/src/__tests__/routes-expenses.test.ts` › R17 | category deleted between check and write → 422 CATEGORY_NOT_FOUND on create and PATCH |
+| `server/src/scripts/__tests__/post-roll.test.ts` (PG) | backfilled personal profile owned + PERSONAL; settings taken from an operator firm, never an owned profile |
+| `server/src/expenses/__tests__/presets.test.ts` | selector by type: PERSONAL → personal, BUSINESS / null → general, Malafat wins |
+| `src/hosted/data/__tests__/incomeAffordances.test.ts`, `src/hosted/pages/__tests__/views.test.tsx` | created BUSINESS profile → both kinds + settle, no lock notice, Add income; writer-null firm (not owned) → nothing |
+
+Run: `npm --prefix server test` (88 files / 1697 tests), `MUTABA3A_TEST_DATABASE_URL=… npx vitest run` on a fresh migrated DB for the Postgres suites, `npx vitest run src/hosted` (30 files / 286 tests). Regression contract: MUT-120's existing tests (routes-users, routes, routes-sessions, store-contract-users) pass unchanged.
+

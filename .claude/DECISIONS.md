@@ -1851,6 +1851,18 @@ holds).
 - *Why*: a freelancer on a personal profile could only log income from the phone; MUT-93 fixed the copy and deferred these affordances to this ticket.
 - *Known limit*: a recorded payment cannot be reversed by any session (DELETE /v1/income refuses an allocated payment; personal profiles refuse API keys). The drawer says so; a correction path is a follow-up ticket (TD-126).
 
+**Amendment (MUT-182, 2026-10-14) — a person may create their own standalone profiles.** Approved by the owner with `.claude/designs/mut-182-profile-management-api.md` (eng review D1–D5; epic MUT-181, owner comment 11494). *Overrides* decision 1's "organizations are operator-only" for one narrow case, and the MUT-39 as-built note that `organizations.create` is the only way an organization comes to exist.
+- *Decision*:
+  - **`POST /v1/profiles`** (session or device session; no `X-Mutaba3a-Profile`; `identityIdempotent`) creates an organization **owned** by the caller plus its membership. `PATCH /v1/profiles/{profileId}` renames it, changes its default currency (records keep their own) and its **type**; `GET /v1/profiles/{profileId}/type-change` previews a type change.
+  - **Standalone only, never a Malafat organization** (owner ruling). An owned profile is refused at every door MUT-120 shut on the personal one — no API key issued or accepted (so `/v1/integration/bind` is unreachable), never granted to or provisioned into another user, never revoked from its owner — through one helper, `ownedProfileConflict`: `PERSONAL_PROFILE` on the built-in profile (MUT-120's published reason), `OWNED_PROFILE` on a created one. Malafat-integrated organizations stay operator-provisioned (`npm run provision` + key + bind).
+  - **Ownership is a column, not a table** (decision 2 holds): `Organization.ownerUserId` (not unique; ≤ `MAX_OWNED_PROFILES` = 6 per user, the personal one counted, firms not) and `profileType` (`PERSONAL | BUSINESS`, set exactly when owned). `personalOwnerUserId` stays unique and keeps marking the account's built-in personal profile; the migration backfills it as owned + PERSONAL and a CHECK keeps it PERSONAL forever (D2: renamable, never retyped, 409 `DEFAULT_PERSONAL_PROFILE`).
+  - **Type only picks the expense preset** (ADR-066 amendment). BUSINESS is not a firm, a tenant or a shared organization.
+  - **Writability is unchanged on the server**: an owned profile has no Malafat writer, so MUT-65's writer-null rows already make it read-write. The portal's MUT-133 gate moves from `isPersonalDefault` to `owned`.
+  - **Store guard**: the four new organization methods are `sessionOnly`; `organizations.create` stays `operator`. Decision 1's "no signup, invite or password-reset route" is untouched — `/v1/profiles` creates no account and grants nothing to anyone else (`no-self-registration.test.ts` still passes).
+  - **`/v1/me`** publishes `owned`, `type`, `version` per profile and `limits`; order is firms, then created profiles (oldest first), then the personal profile last.
+- *Why*: a freelancer with a second business had nowhere to record it without an operator.
+- *Override log*: replaces "organizations are created only by `/admin` and the scripts" with "…except a person's own standalone profile, created by its owner's session". Date 2026-10-14; reason above; the operator path is unchanged for firms and Malafat tenants.
+
 ---
 
 ## ADR-038: A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer
@@ -2725,6 +2737,8 @@ The phone app is going hosted-only (MUT-63), so nothing on the roadmap needs it.
 **Alternatives considered**:
 - Key on writer-null, the ticket's literal wording: rejected — a firm with no Malafat link would get Groceries and Gifts instead of Office Rent and Bank Fees, permanently.
 - Mirror the personal preset into `src/db/defaultExpenseCategories.ts` to keep D2's parity rule universal: rejected — dead code in the desktop bundle, one careless edit away from the fallback picker.
+
+**Amendment (MUT-182, 2026-10-14)**: the selector is the profile's **type**, not `personalOwnerUserId`: `presetFor({ writerOfRecord, profileType })` → law-firm when Malafat writes, personal when `profileType === 'PERSONAL'` (the MUT-120 profile, now backfilled PERSONAL, or one a person created as personal), general for BUSINESS and every operator firm (type null). Decision 3's "seeds once" now reads **seeds once per type**: changing an owned profile's type (`PATCH /v1/profiles/{id}`) replaces every category — custom and archived ones included — with the new type's preset in the user's language and leaves each expense that had one uncategorized, in one transaction that holds the organization row; the lazy seed takes the same lock, so the two can never leave a mixed set (eng review D3). The owner chose replace over merge.
 
 ## ADR-067: Document Generation Is Retired; Its Tables Stay, Its Lock Is Unwound in Code, Its Profile Fields Go (Supersedes ADR-014; Narrow Override of ADR-032 and MUT-13)
 

@@ -675,6 +675,17 @@ None.
 - Parallelization: 1 lane, 0 parallel / 1 sequential.
 - Lake Score: 3/3. D2, D3 and D4 each picked the 10/10 or highest-scored option. D1 and D5 had no score.
 
+## As built (`/eng-build`, 2026-10-14)
+
+Deviations from the plan above, each smaller than or equal to what was approved:
+
+- **No new `profiles` matrix row.** The `identity` row's "Routes covered" cell gains `/v1/profiles*` instead (`writability.ts`, `hosted-portal.md` §5). A new domain would have added a key to the `access` map `/v1/me` publishes to every client; the routes are the person's own, exactly like `/v1/me`, and carry no scope.
+- **M1 is automated**, not manual: `migration-mut182.test.ts` replays the history on a scratch database, inserts a MUT-120 user, applies the migration and asserts the backfill, both CHECKs and zero drift. Doing so showed the MUT-59/61/100 migration tests wrote organizations through today's client, which now selects columns their older schemas lack; they write raw rows now (`fixtures/raw-rows.ts`).
+- **Version always bumps on a successful PATCH** (even when the type is unchanged), matching every other PATCH in the server.
+- **R17 covers three writes**: expense create, expense update and inbox file-as-expense share `withCategoryForeignKey`. The memory store now mirrors the expense-category FK; Prisma's P2003 meta names the constraint in `constraint`, which `translate` now reads.
+- **Paths use `{profileId}`** (the server's `{customerId}`-style convention).
+- **Postgres suites** were run on a fresh migrated database (`mutaba3a_test_mut182`), because the shared `mutaba3a_test` database has no migration history (P3005).
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |

@@ -28,6 +28,31 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — MUT-182: people create and manage their own hosted profiles (API 1.22.0-mut182)
+
+**Why:** a hosted user got exactly one personal profile (MUT-120); any other profile needed an operator. A freelancer with a second business had nowhere to record it. Epic MUT-181; brief and eng review `.claude/designs/mut-182-profile-management-api.md`; ADR-037 and ADR-066 amended.
+
+### Added
+- `POST /v1/profiles` — a signed-in person (cookie or device session) creates a **standalone** profile they own: name, type (PERSONAL | BUSINESS), default currency, IANA timezone. Identity-keyed idempotency, audited as the person. Up to 6 owned profiles, the personal one counted (409 `PROFILE_LIMIT`).
+- `PATCH /v1/profiles/{profileId}` — one If-Match write for name, default currency and type. A type change replaces the profile's expense categories with the new type's preset (user's language) and leaves categorized expenses uncategorized; the response reports the counts. The built-in personal profile can be renamed but not retyped (409 `DEFAULT_PERSONAL_PROFILE`). Member-not-owner → 403 `READ_ONLY_PROFILE` / `NOT_OWNER`; non-member → 404.
+- `GET /v1/profiles/{profileId}/type-change?to=` — previews those counts.
+- `GET /v1/me`: `owned`, `type`, `version` per profile and `limits { ownedProfiles, maxOwnedProfiles }`; order firms → created → personal.
+
+### Changed
+- **Standalone guarantee:** every profile a person owns is refused an API key, refused by API-key authentication (so never bound to Malafat), never granted to or provisioned into another user and never revoked from its owner — one helper, `ownedProfileConflict` (`PERSONAL_PROFILE` on the built-in profile, `OWNED_PROFILE` on a created one).
+- The expense preset keys on the profile type (ADR-066 amendment); seeding and a type change hold the organization row, so they never mix presets.
+- Portal: `incomeAffordancesFor` and `ReadOnlyNotice` key on `owned`, so Add income and Record payment work on a created business profile exactly as on the personal one.
+- An expense create/update/filing whose category was deleted by a concurrent type change answers 422 `CATEGORY_NOT_FOUND`, not 500.
+
+### Technical
+- Migration `20261014120000_mut182_owned_profiles`: `ProfileType` enum; `organizations.ownerUserId` (indexed FK, not unique), `profileType`, `version`; backfill of every MUT-120 profile as owned + PERSONAL; two CHECKs. `post-roll` creates personal profiles owned + PERSONAL and copies settings only from operator firms.
+- Store: `organizations.createOwned` (cap counted under a user-row lock), `countOwnedBy`, `updateOwned` (single versioned transaction, D4), `typeChangeImpact`; all `sessionOnly` in the store guard. Memory store mirrors the expense-category FK; Prisma P2003 names its constraint.
+- `hostedProfileFor` (serializers.ts) is the one builder for `/v1/me`, POST and PATCH. Matrix `identity` row covers `/v1/profiles*`.
+- Older migration tests (MUT-59/61/100) write organizations/users as raw rows (`fixtures/raw-rows.ts`): today's client selects columns their schemas lack.
+- **Tests:** `store-contract-profiles.ts` (memory + Postgres incl. two races), `migration-mut182.test.ts`, `routes-profiles.test.ts`, `routes-owned-profiles-standalone.test.ts`, R17 in `routes-expenses.test.ts`, `post-roll.test.ts`, `presets.test.ts`, route-security inventory, portal `incomeAffordances`/`views`.
+
+---
+
 ## [Unreleased] - 2026-10-14 — /download renders again: landing chrome instead of the app's TopBar
 
 **Why:** in the web build `/download` crashed into the error boundary ("No QueryClient set"). `src/main.tsx` mounts the marketing routes outside the router and React Query, but `DownloadPage` rendered the app's `TopBar`, which since MUT-79 reads React Query (`FxRateReadout`) and the router (`useActiveProfile` → `useMatches`). The component test mocked TopBar away, so nothing caught it. Brief: `.claude/designs/download-page-crash.md`.
