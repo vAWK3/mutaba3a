@@ -5,6 +5,7 @@ import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { ar, en } from '../../support/i18n';
 import { contrast, parseColor } from '../../../src/test/css/brandCss';
 import { MOBILE_APP_LINKS } from '../../../src/content/download-config';
+import { malafatUrl } from '../../../src/content/malafatLinks';
 
 /**
  * The landing page's frosted bar and restrained motion (MUT-77, brief L9/L10),
@@ -517,6 +518,65 @@ for (const language of ['en', 'ar'] as const) {
         await hintLink.click();
         await expect(page).toHaveURL(/\/hosted$/);
         await expect(page.locator('#hosted-title')).toBeVisible();
+      });
+    },
+  );
+}
+
+for (const language of ['en', 'ar'] as const) {
+  test(
+    `${language === 'en' ? 'English' : 'Arabic'}: the Malafat band speaks to firms on Malafat and links to Malafat in the page's language (MUT-174)`,
+    { tag: '@web.landing.malafat' },
+    async ({ page, step }) => {
+      const copy = (language === 'ar' ? ar : en).landing.malafat as { title: string; link: string };
+      const band = page.locator('[data-part="malafat"]');
+      const link = band.getByRole('link', { name: copy.link });
+      const bandBackground = () => band.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+      await step('After the phone chapter, the band names the firms and the condition, with one link out', async () => {
+        await openLanding(page, language);
+        await band.scrollIntoViewIfNeeded();
+        await expect(band.getByRole('heading', { level: 2 })).toHaveText(copy.title);
+        await expect(band.getByRole('link')).toHaveCount(1);
+        await expect(link).toHaveAttribute('href', malafatUrl({ locale: language, medium: 'landing', content: 'landing-section' }));
+        await expect(link).toHaveAttribute('target', '_blank');
+        await expect(band.getByText(language === 'ar' ? /تلقائ|زامن|تقرير|تقارير|داخل/ : /automatic|sync|report|inside/i)).toHaveCount(0);
+        await attachScreenshot(page, `malafat-${language}`);
+      });
+
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await step(`In ${colorScheme} mode the link reads on the band, keeps its colour on hover and rings in its own colour`, async () => {
+          // Reduced motion zeroes the global a { transition: color }, so the link's colour is read settled, not mid-fade
+          await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+          await band.scrollIntoViewIfNeeded();
+          const before = await readColours(link);
+          expect(contrast(parseColor(before.color), parseColor(await bandBackground()))).toBeGreaterThanOrEqual(4.5);
+          expect(before.decoration).toBe('underline');
+          await link.hover();
+          await expect.poll(() => link.evaluate((el) => el.matches(':hover'))).toBe(true);
+          expect((await readColours(link)).color).toBe(before.color);
+          await page.mouse.move(1, 1);
+          await link.focus();
+          await page.keyboard.press('Shift+Tab');
+          await page.keyboard.press('Tab');
+          await expect(link).toBeFocused();
+          const ring = await link.evaluate((el) => {
+            const style = getComputedStyle(el);
+            return { style: style.outlineStyle, colour: style.outlineColor, text: style.color };
+          });
+          expect(ring.style).toBe('solid');
+          expect(ring.colour).toBe(ring.text);
+        });
+      }
+
+      await step('At 375 px the band fits', async () => {
+        await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'no-preference' });
+        await page.setViewportSize({ width: 375, height: 812 });
+        await band.scrollIntoViewIfNeeded();
+        await expect(page.locator('html')).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr');
+        await expectNoHorizontalOverflow(page, `malafat 375 ${language}`);
+        await expectOnlyKnownAxeViolations(page, 'landing');
+        await attachScreenshot(page, `malafat-${language}-375`);
       });
     },
   );

@@ -98,6 +98,7 @@ describe('landing CSS', () => {
     '.landing-footer-links a:active',
     '.landing-get-it-meta a:active',
     '.landing-phone-hint a:active',
+    '.landing-band-link:active',
     '.landing-faq-question:active',
   ])(
     'dims %s on press instead of scaling it (text links, and the full-width FAQ rows)',
@@ -113,6 +114,13 @@ describe('landing CSS', () => {
     expect(baseDeclarations(landingPageCss, 'a.landing-phone-store:hover')).toMatchObject({
       color: 'var(--text)',
       'text-decoration': 'none',
+    });
+  });
+
+  it('rings a link on the ink band in its own colour, which the inset brand ring would not show there (MUT-174)', () => {
+    expect(baseDeclarations(landingPageCss, '.landing-band-link:focus-visible')).toMatchObject({
+      outline: '2px solid currentColor',
+      'box-shadow': 'none',
     });
   });
 

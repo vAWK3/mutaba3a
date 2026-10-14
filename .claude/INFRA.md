@@ -40,6 +40,8 @@ the hosted epic's server side, i.e. users and sessions, server-enforced
 writability, and expenses. Database migrations are applied through
 `mut42_expenses`.
 
+> **Observed 2026-10-14 (MUT-174 planning):** production `GET /health` reports `version: eb4a9c8` (main at the `release: api v0.3.7` commit), so production now carries everything on main through MUT-194, including MUT-61 capture and MUT-100/107 contingency. The rows below still show the last *recorded* deploy; whoever deploys next should refresh them.
+
 One known defect: production applied the **original** M7 migration, so the
 fee-proposal enum probably predates M8. The check and the fix are in
 `server/DEPLOYMENT.md` §7. The revision history is there too.

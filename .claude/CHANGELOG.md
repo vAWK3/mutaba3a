@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Landing: a Malafat band for law firms and accounting offices (MUT-174)
+
+**Why:** the landing never mentioned Malafat, although Malafat's Money section runs on the hosted API in production and a firm's partner can log a payment in the phone app that Malafat then allocates. Epic MUT-171 (last story). Brief, eng review and outside voice: `.claude/designs/mut-174-malafat-section.md`.
+
+### Added
+- **The Malafat band** (`MalafatSection`, `data-part="malafat"`, after the phone chapter, before the FAQ; the page now has nine parts), in the privacy band's look: "Run a law firm or accounting office on Malafat? Mutaba3a connects to it." Malafat keeps each firm's fee proposals and agreements and what every client owes and has paid; with a hosted account linked to the firm's Malafat, a payment logged in the phone app reaches Malafat under its client, unallocated, for the firm to apply. The Arabic title names law and accounting offices too. One link, "See Malafat", to malafat.app in the page's language, new tab (announced to screen readers with `common.opensInNewTab`). EN/AR `landing.malafat.*`.
+- **`malafatUrl`** (`src/content/malafatLinks.ts`): the one builder for links to Malafat, typed to MUT-189's CTA contract (`/<locale>/contact?topic=mutaba3a&utm_…` with `contact: true`) plus the landing's own `utm_medium=landing`, `utm_content=landing-section` (home page, no topic). MUT-190/191 reuse it. No Mutaba3a-side measurement (ADR-024).
+
+### Technical
+- Honesty: `LandingPage.test.tsx` gains shared `BANNED_CLAIMS_EN/AR` (reports, price/pricing/per month/subscription/sign-up, currency amounts, sync/automated/automation/seamless/instant/real-time; AR matched with diacritics stripped by `bare()`, incl. تقرير/إحصا/أسعار/اشتراك/زامن/تلقائ/آليا/فوري/لحظي, while رسوم الأتعاب and آليّة stay allowed), used by the phone and Malafat blocks, plus `MONEY_CORE_EN/AR` (MUT-25's module/core/engine, inside/within/part of Malafat, built into, embedded; داخل/ضمن/جزء من/مدمج/وحدة/نواة/محرك) for the Malafat block only; a self-test proves each regex catches the spellings that slipped past the first draft.
+- `.landing-band-link`: a link on the ink band in the page colour, underlined, with its own line (never the body's 0.8 dim) and a `2px solid currentColor` focus outline, because the inset purple brand ring is near-invisible on ink (~2:1 in dark mode). `landingCss.test.ts` pins the dim and the ring.
+- `scripts/bundle-origins.json`: `https://malafat.app` joins `local` (a new origin otherwise fails `test:bundles`); MUT-191 must add it to `hosted`.
+- QA: `qa/features/web/landing.yaml` `malafat` (+ `src/content/malafatLinks.ts` in the area paths) and `@web.landing.malafat` EN/AR: href from `malafatUrl`, ≥4.5:1 on the band and colour kept on hover, keyboard ring in the link's own colour, in light and dark; 375 px fit; axe.
+- INFRA §2: production observed at `eb4a9c8` (2026-10-14).
+
+---
+
 ## [Unreleased] - 2026-10-14 — Landing: the phone logs, the portal shows (MUT-173)
 
 **Why:** since MUT-172 the Get it section says a phone app and a hosted account exist, then stops: nothing on the landing said what the phone app is for, what the portal is for, or where to get the phone app. Epic MUT-171. Brief, eng review and outside voice: `.claude/designs/mut-173-phone-portal-section.md`.
