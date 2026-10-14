@@ -98,10 +98,19 @@ the M1 exit criterion, the e2e scripts above are the Money v1 one.
 | `src/pages/landing/__tests__/LandingPage.test.tsx` › header button, title | Integration | Hidden while unknown, shown only when the hero button is out of view, hidden again; hidden without IntersectionObserver; title EN → AR |
 | `src/pages/landing/__tests__/ChapterSection.test.tsx` | Component | Below the fold → pending → done once; never pending in view, under reduced motion, or without IntersectionObserver |
 | `src/pages/landing/__tests__/landingCss.test.ts` | Unit (node, CSS) | No `transition: all` (landing + theme); no `[data-theme` in landing CSS; press tokens on 5 buttons, no literal scale; text links dim; sticky 85% frost with the -webkit- prefix; solid under reduced transparency and `@supports not`; hidden button uses visibility; AR tracking 0; reveal uses `--stagger-rise`, zeroed under reduced motion |
-| `PrivacyPolicyPage.test.tsx`, `src/pages/download/__tests__/DownloadPage.test.tsx` | Component | Tab title EN/AR |
-| `qa/specs/web/landing.spec.ts` | E2E (Playwright, preview build) | `@web.landing.header-cta`, `.transparency` (CDP), `.press` (buttons scale, FAQ dims, + reduced motion), `.hover-light` (contrast + colour held), `.375` at 375/320 EN/AR (no overlap, wordmark not clipped, fits, 44px target, `#get-it` jump lands below the bar), `.title`, `.reveal` (+ reduced motion), `.privacy-bar` (no button, no GitHub call, home link) |
+| `PrivacyPolicyPage.test.tsx` | Component | Tab title EN/AR |
+| `src/pages/download/__tests__/DownloadPage.test.tsx` | Component | Renders under `LandingProviders` with no app mocks (only the GitHub release is stubbed); landing chrome (skip link, bar home to `/`, `main#main-content`, footer); no `.topbar`; AR/RTL with no raw keys; tab title EN/AR |
+| `src/pages/download/__tests__/downloadCss.test.ts` | Unit (node, CSS) | One top-level `.download-title` rule |
+| `qa/specs/web/landing.spec.ts` | E2E (Playwright, preview build) | `@web.landing.header-cta`, `.transparency` (CDP), `.press` (buttons scale, FAQ dims, + reduced motion), `.hover-light` (contrast + colour held), `.375` at 375/320 EN/AR (no overlap, wordmark not clipped, fits, 44px target, `#get-it` jump lands below the bar), `.title`, `.reveal` (+ reduced motion), `.privacy-bar` (no button, no GitHub call, home link), `.download` (renders: h1, a platform button, bar home to `/` with no button, footer, no `.topbar`, no page errors; red on a main build) |
 | `qa/specs/web/brand.spec.ts` › contrast-landing | E2E | Axe light/dark also with the bar and its button over a chapter |
 | Manual (TD-121) | — | Safari with Reduce Transparency |
+
+### Classed-link hover (TD-122, added 2026-10-14)
+| File | Type | Covers |
+|------|------|--------|
+| `src/styles/__tests__/brand.test.ts` › tokens | Unit (node, CSS) | No stylesheet in `src/` has a bare `a:hover`; `theme.css` and `index.css` each have exactly `a:not([class]):hover` |
+| `src/styles/__tests__/brand.test.ts` › classed text links | Unit (node, CSS) | Each audited text link's `:hover` declares a `var(--…)` colour and `text-decoration: underline` (8 classes, portal `.hp-back` included) |
+| `qa/specs/web/link-hover.spec.ts` (`@web.brand.link-hover`) | E2E (Playwright, preview build), light + dark | Controls keep their label colour with no underline: hero button, Get it card, sidebar mark, Needs attention client link, About `.btn-secondary`, and `.btn-ghost` (goes to its own `--text`). Text links underline: hero alt, privacy back, Clients name, breadcrumb. An injected unclassed link still takes `--link-hover` and an underline. On /download (since the crash fix): the platform button keeps its colours and the back link underlines |
 
 ### Edit a payment from the ledger (MUT-169, added 2026-10-14)
 | File | Type | Covers |

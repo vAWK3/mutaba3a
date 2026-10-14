@@ -303,3 +303,18 @@ test('the privacy policy has the bar without the button, and its wordmark goes h
   await expect(header(page).locator('.landing-header-brand')).toHaveAttribute('href', '/');
   expect(releaseCalls).toBe(0);
 });
+
+test('the download page renders with the landing bar and footer, not the app’s top bar', { tag: '@web.landing.download' }, async ({ page }) => {
+  // It mounts outside the router and React Query (src/main.tsx), so anything of the app's crashes it into the error boundary
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
+  await page.goto('/download');
+  await expect(page.getByRole('heading', { level: 1, name: 'Download' })).toBeVisible();
+  await expect(page.locator('a.download-cta').first()).toBeVisible();
+  await expect(header(page).locator('.landing-header-brand')).toHaveAttribute('href', '/');
+  await expect(headerCta(page)).toHaveCount(0);
+  await expect(page.getByRole('contentinfo')).toBeVisible();
+  await expect(page.locator('.topbar')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

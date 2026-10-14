@@ -18,6 +18,13 @@
 
 ## Open Debt
 
+### TD-129: `DownloadPage` still carries a dead checksum toast and unused CSS
+**Status**: Open
+**Added**: 2026-10-14 (the /download crash fix)
+**Priority**: Low
+**Impact**: `DownloadPage` keeps `toastVisible` state and a `<Toast message="download.checksumCopied">` that nothing ever shows, and `DownloadPage.css` keeps `.download-checksum*` and `.download-links` with no markup. The crash fix deleted only the dead block that collided with its new title.
+**Fix**: Delete the toast, its state and handler, the unused CSS and, if nothing else reads it, `download.checksumCopied` in `en.json`/`ar.json`.
+
 ### TD-127: Two local-app controls press on their own `transform`, outside the `.press` rule (ADR-074)
 **Status**: Open
 **Ticket**: MUT-91 (found by its /review red team)
@@ -75,13 +82,14 @@
 **Priority**: Low
 **Impact**: `RecordPaymentDrawer` renders through `QueryView`, which treats any 404 as a possibly lost profile and invalidates `ME_KEY`. A receivable that was removed since the page loaded therefore refetches `/v1/me` once. Harmless (one extra GET, same profile), but not what the 404 means here.
 **Fix**: if it ever matters, let `QueryView` take a `notFoundMeansProfile={false}` flag for entity reads.
+
 ### TD-122: The global `a:hover` rule out-ranks every single-class link styled as a control
-**Status**: Open (task chip offered 2026-10-14)
+**Status**: Resolved 2026-10-14 on `fix/td-122-classed-link-hover`, landed with `fix/download-page-crash`. Both global rules read `a:not([class]):hover`. The audit of every classed `<a>` (`.claude/designs/td-122-classed-link-hover.md`) found 8 inline text links that relied on the global hover; each now declares its own colour and underline. The proofs are `brand.test.ts` and `qa/specs/web/link-hover.spec.ts` (`@web.brand.link-hover`). The entry was first filed on the MUT-77 branch; when that branch merges, keep this resolved copy.
 **Ticket**: MUT-77 (found by `@web.landing.hover-light`)
 **Added**: 2026-10-14
 **Priority**: Medium
-**Impact**: `theme.css` `a:hover { color: var(--link-hover) }` and `index.css` `a:hover { text-decoration: underline }` are (0,1,1), so a link styled by one class, such as a CTA, turns link-coloured and underlined on hover unless it sets its own `:hover`. On the landing page that made the hero button's label purple on its purple fill. MUT-77 fixed the landing controls only.
-**Fix**: Scope both rules to `a:not([class]):hover`, as `theme.css` already does for `:visited`. Then audit every classed `<a>` in the app, the portal and the landing page for the hover each one actually wants, and prove it in Playwright.
+**Impact**: `theme.css` `a:hover { color: var(--link-hover) }` and `index.css` `a:hover { text-decoration: underline }` are (0,1,1), so they beat a single-class link's base rule. A link styled as a control turned link-coloured and underlined on hover unless it set its own `:hover`. That put a purple label on a purple fill: the hero button, Settings › About's `.btn` links, and /download's buttons. The sidebar mark and Home's Needs attention client link also turned purple and underlined.
+**Fix**: Done as described in Status.
 
 ### TD-121: Safari ignores `prefers-reduced-transparency`, so the landing bar stays frosted there
 **Status**: Accepted (MUT-77 D3), re-check when Safari ships the query

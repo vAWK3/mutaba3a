@@ -1,15 +1,29 @@
-/* Download Page Styles */
+/* Download Page Styles: the landing page's chrome (LandingHeader, LandingFooter,
+   .landing-container from LandingPage.css), so it mounts without the app's providers. */
 
 .download-page {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding-block: var(--space-8);
+  padding-block: var(--space-12) var(--space-16);
 }
 
 .download-container {
-  width: 100%;
   max-width: 900px;
+}
+
+/* Same type as the privacy policy's title */
+.download-title {
+  font-family: var(--font-heading);
+  font-size: clamp(var(--text-title), 3.5vw, var(--text-figure));
+  font-weight: var(--weight-semibold);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-align: center;
+  margin: 0 0 var(--space-10);
+  color: var(--text);
+}
+
+:lang(ar) .download-title {
+  font-family: var(--font-heading-ar);
+  letter-spacing: 0;
 }
 
 /* Two-card layout */
@@ -58,25 +72,6 @@
 }
 
 .download-platform-title {
-  font-family: var(--font-heading);
-  font-size: var(--text-headline);
-  font-weight: var(--weight-semibold);
-  color: var(--text);
-  margin: 0;
-}
-
-/* Legacy single-card styles */
-.download-card {
-  max-width: 480px;
-  width: 100%;
-}
-
-.download-header {
-  text-align: center;
-  margin-block-end: var(--space-6);
-}
-
-.download-title {
   font-family: var(--font-heading);
   font-size: var(--text-headline);
   font-weight: var(--weight-semibold);
@@ -283,6 +278,7 @@
 
 .download-alt-link:hover {
   color: var(--link-hover);
+  text-decoration: underline;
 }
 
 /* Footer Links */
@@ -310,6 +306,7 @@
 
 .download-link:hover {
   color: var(--link-hover);
+  text-decoration: underline;
 }
 
 .download-link:visited {

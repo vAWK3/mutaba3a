@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo } from 'react';
-import { TopBar } from '../../components/layout';
 import { Card } from '../../components/ui/Card';
 import { Toast } from '../../components/ui/Toast';
 import { useLatestRelease } from '../../hooks/useLatestRelease';
@@ -7,6 +6,9 @@ import { DOWNLOAD_URLS, PLATFORM_CONFIG } from '../../content/download-config';
 import { currentDevice } from '../../lib/platform';
 import { useT } from '../../lib/i18n';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { LandingHeader } from '../landing/components/LandingHeader';
+import { LandingFooter } from '../landing/components/LandingFooter';
+import '../landing/LandingPage.css';
 import './DownloadPage.css';
 
 type OS = 'mac' | 'windows' | 'unknown';
@@ -147,10 +149,16 @@ export function DownloadPage() {
   const releaseNotesUrl = release?.releaseNotesUrl || DOWNLOAD_URLS.releaseNotes;
 
   return (
-    <>
-      <TopBar title={t('download.title')} hideAddMenu />
-      <div className="page-content download-page">
-        <div className="download-container">
+    // The landing page's chrome, not the app's TopBar: this page mounts outside the
+    // router and React Query (src/main.tsx), and TopBar needs both.
+    <div className="landing-page">
+      <a href="#main-content" className="landing-skip-link">
+        {t('landing.skipToContent')}
+      </a>
+      <LandingHeader homeHref="/" />
+      <main id="main-content" className="download-page">
+        <div className="landing-container download-container">
+          <h1 className="download-title">{t('download.title')}</h1>
           <div className="download-cards">
             {platformOrder.map((platform) => (
               <PlatformCard
@@ -187,13 +195,14 @@ export function DownloadPage() {
             </a>
           </div>
         </div>
-      </div>
+      </main>
+      <LandingFooter />
 
       <Toast
         message={t('download.checksumCopied')}
         isVisible={toastVisible}
         onClose={handleToastClose}
       />
-    </>
+    </div>
   );
 }

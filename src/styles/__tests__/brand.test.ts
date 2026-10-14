@@ -553,12 +553,61 @@ describe('tokens', () => {
     expect(visited).toEqual(['a:not([class]):visited']);
   });
 
+  it('colours and underlines hovered links only when they carry no class, so a styled link (a button) keeps its label (TD-122)', () => {
+    const globalHover: string[] = [];
+    for (const file of sourceFiles().filter((f) => f.endsWith('.css'))) {
+      parseCss(file).walkRules((rule) => {
+        for (const selector of rule.selectors) {
+          if (/^a(:[^\s.#[]+|:not\(\[class\]\))*:hover$/.test(selector.trim())) globalHover.push(`${basename(file)}: ${selector.trim()}`);
+        }
+      });
+    }
+    expect(globalHover.sort()).toEqual(['index.css: a:not([class]):hover', 'theme.css: a:not([class]):hover']);
+  });
+
   it('retires the Inter-only font-feature-settings', () => {
     let found = false;
     themeRoot.walkDecls('font-feature-settings', () => {
       found = true;
     });
     expect(found).toBe(false);
+  });
+});
+
+/**
+ * TD-122: a classed link is a control and owns its hover. The audited inline
+ * text links keep a link hover by declaring it themselves; the browser proof
+ * is qa/specs/web/link-hover.spec.ts.
+ */
+describe('classed text links', () => {
+  const TEXT_LINKS = [
+    '.breadcrumb-link',
+    '.client-index-name',
+    '.feature-notice-banner-action',
+    '.hp-back',
+    '.hero-cta-alt',
+    '.privacy-policy-back',
+    '.download-link',
+    '.download-alt-link',
+  ];
+
+  function hoverDecls(className: string): Record<string, string> {
+    const decls: Record<string, string> = {};
+    for (const file of sourceFiles().filter((f) => f.endsWith('.css'))) {
+      parseCss(file).walkRules((rule) => {
+        if (!rule.selectors.some((sel) => sel.trim() === `${className}:hover`)) return;
+        rule.walkDecls((decl) => {
+          decls[decl.prop] = decl.value;
+        });
+      });
+    }
+    return decls;
+  }
+
+  it.each(TEXT_LINKS)('%s:hover declares its own colour and underline', (className) => {
+    const decls = hoverDecls(className);
+    expect(decls.color, `${className}:hover color`).toMatch(/^var\(--/);
+    expect(decls['text-decoration'], `${className}:hover text-decoration`).toBe('underline');
   });
 });
 
