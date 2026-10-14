@@ -312,6 +312,13 @@ Changes under `server/` also run what server CI runs: `npm --prefix server run t
 
 No task is “done” until all pass.
 
+### Phase 5: Release-QA coverage (every new feature)
+Every new feature is specced so the `/release-qa` skill can test it on **web** (Playwright, recorded video). Engine and format: `~/.claude/skills/release-qa/SKILL.md`.
+1. The design brief carries a **QA scenarios** section: each user-visible flow, its steps as the user would say them, and the outcome it promises.
+2. Each scenario becomes a feature in `qa/features/<app>/<area>.yaml` (`web` for the app, `portal` for `src/hosted/**`): `id`, `title`, `tier`, `steps`, `expect`, and `paths` that cover the new code. `tier: core` only if everyone is broken when it breaks.
+3. Automate it: one `test` per feature in `qa/specs/<app>/<area>.spec.ts`, tagged `@<app>.<area>.<id>`, every user-visible action wrapped in `step(...)`, ending on the `expect` outcome. Run it once until it passes (`release-qa run --attach --only <id>`); a spec that has never passed is not done. `manual: true` only when it genuinely cannot be automated.
+4. `release-qa lint` reports no errors and no new unmapped files.
+
 ⸻
 
 📐 CODE STANDARDS & DESIGN PATTERNS
@@ -498,6 +505,7 @@ Before considering ANY task complete:
 □ Lint passes
 □ Build succeeds
 □ Typecheck passes
+□ Release-QA: feature in qa/features/<app>/*.yaml with paths covering the new code, a passing tagged spec in qa/specs/<app>/, release-qa lint clean
 □ CHANGELOG updated
 □ SYSTEM_OVERVIEW updated (if needed)
 □ DECISIONS/PATTERNS/TECH_DEBT/TEST_PLAN updated (if needed)
