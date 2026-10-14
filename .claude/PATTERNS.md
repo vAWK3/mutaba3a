@@ -2191,6 +2191,10 @@ When Show changes the same page's filters instead of navigating, re-arm the save
 - A classed link that looks like a control must also set its own `:hover` colour and `text-decoration`, because the global `a:hover` out-ranks one class (TD-122).
 
 **Instances**: the landing page (`HeroSection.css`, `LandingPage.css`, `FAQSection.css`), guarded by `landingCss.test.ts` and `@web.landing.press`.
+### Pattern: Marketing pages render only landing chrome, and are tested under `LandingProviders` (2026-10-14)
+`/`, `/download` and `/privacy` mount in `src/main.tsx` outside the router and `QueryClientProvider`, and never open the database. So they use `LandingHeader`/`LandingFooter`, never app layout (`TopBar`, `SidebarNav`, anything calling `useQuery`, router hooks or `getRepositories()`). Their component tests render through `LandingProviders`, the same wrapper `main.tsx` uses, and never mock app layout away: that mock is how `/download`'s crash went unnoticed.
+**Instances**: `PrivacyPolicyPage`, `DownloadPage`; guarded by `DownloadPage.test.tsx` and `@web.landing.download`.
+
 ## Hosted portal patterns added by MUT-133 (2026-10-14)
 
 - **Idempotency-Key per save attempt, not per click** (`src/hosted/data/attemptKey.ts`). `useAttemptKey()` returns `keyFor(body)` and `succeeded()`: the same key while the serialized body is unchanged (a retry after a timeout that landed replays the first result), a new key when the body changes (the server refuses a reused key with a different body) or after success. Every portal create uses it: income, settle, expenses, conversions. Never mint `crypto.randomUUID()` inside a `mutationFn`.

@@ -18,6 +18,13 @@
 
 ## Open Debt
 
+### TD-129: `DownloadPage` still carries a dead checksum toast and unused CSS
+**Status**: Open
+**Added**: 2026-10-14 (the /download crash fix)
+**Priority**: Low
+**Impact**: `DownloadPage` keeps `toastVisible` state and a `<Toast message="download.checksumCopied">` that nothing ever shows, and `DownloadPage.css` keeps `.download-checksum*` and `.download-links` with no markup. The crash fix deleted only the dead block that collided with its new title.
+**Fix**: Delete the toast, its state and handler, the unused CSS and, if nothing else reads it, `download.checksumCopied` in `en.json`/`ar.json`.
+
 ### TD-127: Two local-app controls press on their own `transform`, outside the `.press` rule (ADR-074)
 **Status**: Open
 **Ticket**: MUT-91 (found by its /review red team)

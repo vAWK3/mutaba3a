@@ -436,6 +436,20 @@ Tests: `src/components/onboarding/__tests__/OnboardingOverlay.projects.test.tsx`
 
 Tests: `src/pages/landing/__tests__/`.
 
+### LandingProviders
+**Location**: `src/pages/landing/LandingProviders.tsx`
+**Purpose**: The one wrapper `src/main.tsx` gives the web build's marketing routes (`/`, `/download`, `/privacy`): `ThemeProvider` + `LanguageProvider`, nothing of the app's (no React Query, router or database). Tests render those pages through it, so a component that needs app context fails in Vitest as it does in production.
+
+```tsx
+render(<LandingProviders><DownloadPage /></LandingProviders>);
+```
+
+### DownloadPage
+**Location**: `src/pages/download/DownloadPage.tsx` + `DownloadPage.css`
+**Purpose**: `/download` (web build only): one card per desktop platform, the visitor's first, each gated on `useLatestRelease()`. Wears the landing chrome like `PrivacyPolicyPage` (`LandingHeader homeHref="/"` with no device button, `LandingFooter`, `.landing-page`/`.landing-container`), never the app's `TopBar`, which needs React Query and the router.
+
+Tests: `src/pages/download/__tests__/`, `qa/specs/web/landing.spec.ts` `@web.landing.download`.
+
 ---
 
 ## Drawer Components

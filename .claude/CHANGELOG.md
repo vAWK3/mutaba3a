@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — /download renders again: landing chrome instead of the app's TopBar
+
+**Why:** in the web build `/download` crashed into the error boundary ("No QueryClient set"). `src/main.tsx` mounts the marketing routes outside the router and React Query, but `DownloadPage` rendered the app's `TopBar`, which since MUT-79 reads React Query (`FxRateReadout`) and the router (`useActiveProfile` → `useMatches`). The component test mocked TopBar away, so nothing caught it. Brief: `.claude/designs/download-page-crash.md`.
+
+### Fixed
+- `/download` wears the landing page's chrome, like `/privacy`: skip link, `LandingHeader` (wordmark home to `/`, no device button), its own `<h1>`, `LandingFooter`. No app provider is pulled onto a marketing page.
+- The dead "Legacy single-card styles" in `DownloadPage.css` are gone; their later `.download-title` rule reset the new heading to 20px with no margin.
+
+### Changed
+- `src/main.tsx`: `/`, `/download` and `/privacy` share one `LandingProviders` wrapper (theme + language), which tests now render through.
+
+### Technical
+- **Tests:** `DownloadPage.test.tsx` drops its TopBar mock and renders under `LandingProviders` (red on main with the production error): landing chrome, no `.topbar`, AR/RTL, tab title. `downloadCss.test.ts`: one `.download-title` rule.
+- **Browser:** `qa/specs/web/landing.spec.ts` `@web.landing.download` (bar, footer, CTA, no `.topbar`, no page errors), on a web preview build: red on main, green here; all 12 `@web.landing` cases pass. TD-122's `link-hover.spec.ts` /download case, with its `test.fixme` dropped, passes in light and dark on a scratch merge of both branches.
+- **Files:** `src/main.tsx`, `src/pages/landing/LandingProviders.tsx` (new), `src/pages/download/DownloadPage.tsx`, `DownloadPage.css`, `src/pages/download/__tests__/DownloadPage.test.tsx`, `downloadCss.test.ts` (new), `qa/specs/web/landing.spec.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-14 — The portal presses, tints and shows where a save landed (MUT-91)
 
 **Why:** HP1 of the Apple-design brief: the hosted portal is a separate build, so without this the app and the portal feel like two products. Spring drawers (R2) were already shared by MUT-80. Press feedback (L10) existed nowhere, though its MUT-102 tokens did. After-save feedback (R1) was app-only. Plan and eng review D1–D10: `.claude/designs/mut-91-portal-shared-motion.md`.
