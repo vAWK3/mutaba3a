@@ -30,3 +30,27 @@ export const DOWNLOAD_URLS = {
  * browser that already holds the person's own data just opens on it.
  */
 export const WEB_APP_URL = '/app/clients?sample=1';
+
+/**
+ * The hosted offer page and its request form (MUT-186). The landing page's
+ * paid callout (MUT-172) and the free app's "Go hosted" card (MUT-187) link
+ * here too, so the address lives in one place.
+ */
+export const HOSTED_OFFER_URL = '/hosted';
+
+export interface MobileAppLink {
+  /** Whether the app can be installed today. /hosted reads only this. */
+  available: boolean;
+  /** Store listing, for people who already have an account (MUT-173, welcome emails). */
+  url: string | null;
+}
+
+/**
+ * The phone apps. Both sign in with a hosted account only, so a page aimed at
+ * people without one (/hosted) shows availability and never links a store:
+ * installing first would end at a sign-in screen they cannot pass (MUT-186, 9A).
+ */
+export const MOBILE_APP_LINKS: Record<'ios' | 'android', MobileAppLink> = {
+  ios: { available: true, url: null },
+  android: { available: false, url: null },
+};
