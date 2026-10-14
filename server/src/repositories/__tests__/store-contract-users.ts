@@ -127,6 +127,35 @@ export function describeLedgerStoreUsersContract(name: string, makeStore: () => 
       expect(await store.users.setPassword('00000000-0000-4000-8000-000000000000', 'x', at(5))).toBeNull();
     });
 
+    it('stores Malafat suggestions: none at first, dismissals added to what is stored, the switch last-write-wins (MUT-191)', async () => {
+      const store = await makeStore();
+      const o = await org(store);
+      const { user } = await store.users.create(input(o.id));
+      expect((await store.users.getById(user.id))?.malafatSuggestions).toBeNull();
+      expect(await store.users.updateMalafatSuggestions(user.id, { dismiss: ['client-threshold'] }, at(1))).toMatchObject({
+        malafatSuggestions: { off: false, dismissed: ['client-threshold'] },
+      });
+      expect(await store.users.updateMalafatSuggestions(user.id, { off: true, dismiss: ['second-business', 'client-threshold'] }, at(2))).toMatchObject({
+        malafatSuggestions: { off: true, dismissed: ['client-threshold', 'second-business'] },
+      });
+      expect(await store.users.updateMalafatSuggestions(user.id, { off: false }, at(3))).toMatchObject({
+        malafatSuggestions: { off: false, dismissed: ['client-threshold', 'second-business'] },
+      });
+      expect(await store.users.updateMalafatSuggestions('00000000-0000-4000-8000-000000000000', { off: true }, at(3))).toBeNull();
+    });
+
+    it('never loses a dismissal to a concurrent change (MUT-191)', async () => {
+      const store = await makeStore();
+      const o = await org(store);
+      const { user } = await store.users.create(input(o.id));
+      await Promise.all([
+        store.users.updateMalafatSuggestions(user.id, { dismiss: ['client-threshold'] }, at(1)),
+        store.users.updateMalafatSuggestions(user.id, { dismiss: ['second-business'] }, at(1)),
+        store.users.updateMalafatSuggestions(user.id, { off: true }, at(1)),
+      ]);
+      expect((await store.users.getById(user.id))?.malafatSuggestions).toEqual({ off: true, dismissed: ['client-threshold', 'second-business'] });
+    });
+
     it('setStatus toggles ACTIVE and DISABLED', async () => {
       const store = await makeStore();
       const o = await org(store);

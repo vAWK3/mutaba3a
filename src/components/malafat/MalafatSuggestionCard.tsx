@@ -1,6 +1,7 @@
 import { useLayoutEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
-import { useT } from '../../lib/i18n';
+// core, not the index: the portal may not import the app's language provider (MUT-191)
+import { useT } from '../../lib/i18n/core';
 import { useMalafatMomentStore } from '../../lib/malafatMomentStore';
 import './MalafatSuggestionCard.css';
 

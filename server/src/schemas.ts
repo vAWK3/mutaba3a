@@ -332,9 +332,44 @@ export const HostedProfileSchema = z
   })
   .openapi('HostedProfile');
 
+/** MUT-191: a contextual Malafat suggestion a person can retire (epic MUT-189). */
+export const MalafatMomentSchema = z.enum(['business-profile', 'client-threshold', 'second-business']).openapi('MalafatMoment');
+
+export const MalafatSuggestionsSchema = z
+  .object({
+    /** The "Show Malafat suggestions" switch, off. */
+    off: z.boolean(),
+    /** Moments retired for good; only ever grows. */
+    dismissed: z.array(MalafatMomentSchema),
+  })
+  .openapi('MalafatSuggestions');
+
+export const MalafatSuggestionsChangeSchema = z
+  .object({
+    off: z.boolean().optional(),
+    dismiss: z
+      .array(MalafatMomentSchema)
+      .min(1)
+      .max(3)
+      .refine((moments) => new Set(moments).size === moments.length, 'each moment once')
+      .openapi({ uniqueItems: true })
+      .optional(),
+  })
+  .strict()
+  .refine((change) => change.off !== undefined || change.dismiss !== undefined, 'off or dismiss')
+  // The generated spec says what the refinements enforce, so a client built from it sends nothing the server refuses
+  .openapi('MalafatSuggestionsChange', { minProperties: 1 });
+
 export const MeSchema = z
   .object({
-    user: z.object({ id: z.string().uuid(), email: z.string(), displayName: z.string(), locale: UserLocaleSchema }),
+    user: z.object({
+      id: z.string().uuid(),
+      email: z.string(),
+      displayName: z.string(),
+      locale: UserLocaleSchema,
+      /** MUT-191: on, nothing dismissed, until the person changes it. */
+      malafatSuggestions: MalafatSuggestionsSchema,
+    }),
     /** Firm profiles in membership order (oldest first), then profiles the caller created (oldest first), then their own personal profile last (MUT-120, MUT-182). */
     profiles: z.array(HostedProfileSchema),
     /** MUT-182: how many profiles the caller owns (the personal one included) and how many they may. */

@@ -2421,6 +2421,17 @@ Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 | `qa/specs/web/settings.spec.ts` | E2E | `@web.settings.malafat`: row link tags; second business → note (business-profile) and Go hosted card hidden; dismiss → row back, link focused, gone after reload; switch off persists, row stays |
 | `qa/specs/web/clients.spec.ts` | E2E | `@web.clients.malafat`: two businesses + a client → one card (second-business tags), hidden while searching, dismiss → search focused, gone after reload |
 
+### MUT-191 — Malafat suggestions in the hosted portal (2026-10-15)
+| File | Type | Covers |
+|------|------|--------|
+| `server/src/__tests__/routes-sessions.test.ts` | Integration | `/v1/me` resolves `malafatSuggestions`; PATCH sets `off`, unions dismissals, rejects an empty, unknown, duplicate or oversized body (422), works with a device session, refuses an API key, leaves other users untouched; version pin 1.25.0-mut191 |
+| `server/src/__tests__/store-contract-users.ts` (memory + Postgres) | Contract | `updateMalafatSuggestions` unions, keeps `off` when absent, stamps `updatedAt` |
+| `server/src/__tests__/route-security.test.ts` | Integration | the route is session, identity and device-identity scoped |
+| `src/hosted/data/__tests__/malafatSuggestions.test.ts` | Unit | eligibility (owned business only; firms, personal and Malafat-fed never), Malafat customer, business count, `retireChange`, the hook's PATCH and `ME_KEY` write |
+| `src/hosted/components/__tests__/MalafatPortal.test.tsx` | Component | menu items (link href, switch PATCH, nothing on personal or for Malafat customers); Clients card C2 at 10 active (archived not counted), C3 at two businesses, hidden while searching, suppressed while C1 is due, dismiss → PATCH + `onGone` + nothing more this visit, Arabic; created note on the marked profile only, not when dismissed, survives StrictMode and is gone after leaving |
+| `src/hosted/shell/__tests__/UserMenu.malafat.test.tsx`, `components/__tests__/ProfileCreateDrawer.test.tsx` (CR3c/CR3d), `session/__tests__/endSession.test.ts` | Integration | through the real router: menu order and in-place toggle; a new Business profile lands with the note, a Personal one without; sign-out resets the moment store |
+| `qa/specs/portal/malafat.spec.ts` | E2E | `@portal.malafat.menu` (axe on the menu), `@portal.malafat.clients` (EN two offices + search + dismiss + reload, axe on the card; AR ten clients RTL), `@portal.malafat.created`, `@portal.malafat.none` |
+
 ### MUT-209 — Arabic by default in the web app and the portal (2026-10-15)
 | File | Type | Covers |
 |------|------|--------|

@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import type { AnyRouter } from '@tanstack/react-router';
 import { endSession } from '../endSession';
 import { useSavedFlashStore } from '../../../lib/savedFlashStore';
+import { useMalafatPortalMoments } from '../malafatMoments';
 
 /** E1–E3: ending a session drops every cached figure; MUT-91 adds the after-save store to that set. */
 describe('endSession', () => {
@@ -15,5 +16,12 @@ describe('endSession', () => {
     expect(queryClient.getQueryCache().getAll()).toEqual([]);
     expect(useSavedFlashStore.getState().pending).toBeNull();
     expect(navigate).toHaveBeenCalledWith({ to: '/sign-in', search: { reason: 'expired' }, replace: true });
+  });
+
+  it('MUT-191: the next person in this tab starts with no Malafat moment pending', () => {
+    useMalafatPortalMoments.getState().markBusinessCreated('p-1');
+    useMalafatPortalMoments.getState().markClientsRetired();
+    endSession(new QueryClient(), { navigate: vi.fn() } as unknown as AnyRouter, { reason: 'expired' });
+    expect(useMalafatPortalMoments.getState()).toMatchObject({ businessCreatedId: null, clientsRetiredThisVisit: false });
   });
 });

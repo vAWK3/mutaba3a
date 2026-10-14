@@ -1128,8 +1128,25 @@ export interface UserRecord {
   lockedUntil: Date | null;
   passwordChangedAt: Date;
   lastSignInAt: Date | null;
+  /** MUT-191: the Malafat suggestion preferences; null until the person first changes them (= on, nothing dismissed). */
+  malafatSuggestions: MalafatSuggestionsRecord | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** A contextual Malafat suggestion a person can retire (MUT-189). */
+export type MalafatMoment = 'business-profile' | 'client-threshold' | 'second-business';
+
+export interface MalafatSuggestionsRecord {
+  off: boolean;
+  /** Retired for good; only ever grows. Stored in the moments' fixed order. */
+  dismissed: MalafatMoment[];
+}
+
+/** One change: switch on/off, and/or retire moments (added to what is stored, never replacing it). */
+export interface MalafatSuggestionsChange {
+  off?: boolean;
+  dismiss?: MalafatMoment[];
 }
 
 /**
@@ -1170,6 +1187,11 @@ export interface UserRepository {
   recordFailedSignIn(id: string, at: Date, lockUntil: Date | null): Promise<UserRecord | null>;
   /** MUT-38: stamps lastSignInAt and clears failedSignIns / lockedUntil. */
   recordSignIn(id: string, at: Date): Promise<UserRecord | null>;
+  /**
+   * MUT-191: applies one change atomically: `off` replaces, `dismiss` is unioned into what is stored, so two
+   * devices or tabs never undo each other's dismissals. Null for an unknown user.
+   */
+  updateMalafatSuggestions(id: string, change: MalafatSuggestionsChange, at: Date): Promise<UserRecord | null>;
 }
 
 export interface MembershipRepository {

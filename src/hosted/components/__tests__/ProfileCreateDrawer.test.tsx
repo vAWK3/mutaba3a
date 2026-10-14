@@ -90,6 +90,45 @@ describe('New profile drawer (MUT-183)', () => {
     await waitFor(() => expect(api.count('GET /v1/me')).toBeGreaterThanOrEqual(2));
   });
 
+  it('CR3c (MUT-191): a new Business profile opens with the Malafat note; a Personal one never does', async () => {
+    let list = [builtIn];
+    const { user } = portal(`/p/${ORG_A}`, {
+      'GET /v1/me': () => ok(me(list)),
+      'POST /v1/profiles': () => {
+        list = [created('Nour Studio'), builtIn];
+        return ok(created('Nour Studio'), 201);
+      },
+    });
+    await openFromSwitcher(user);
+    await fill(user, 'Nour Studio');
+    await user.click(screen.getByRole('button', { name: 'Create profile' }));
+    const note = await screen.findByRole('group', { name: 'A suggestion for law firms and accounting offices' });
+    expect(within(note).getByRole('link').getAttribute('href')).toContain('utm_medium=portal');
+    expect(within(note).getByRole('link').getAttribute('href')).toContain('utm_content=business-profile');
+    // Dismissed, focus lands on the page's heading rather than the body
+    await user.click(within(note).getByRole('button', { name: "Don't show this again" }));
+    expect(screen.queryByRole('group', { name: 'A suggestion for law firms and accounting offices' })).toBeNull();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveFocus();
+  });
+
+  it('CR3d (MUT-191): a new Personal profile gets no Malafat note', async () => {
+    const personal = profile({ id: NEW_ID, name: 'Home', writerOfRecord: null, owned: true, type: 'PERSONAL', isPersonalDefault: false, defaultCurrency: 'USD' });
+    let list = [builtIn];
+    const { user, router } = portal(`/p/${ORG_A}`, {
+      'GET /v1/me': () => ok(me(list)),
+      'POST /v1/profiles': () => {
+        list = [personal, builtIn];
+        return ok(personal, 201);
+      },
+    });
+    await openFromSwitcher(user);
+    await fill(user, 'Home', 'Personal');
+    await user.click(screen.getByRole('button', { name: 'Create profile' }));
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${NEW_ID}`));
+    expect(await screen.findByText('Home is ready')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'A suggestion for law firms and accounting offices' })).toBeNull();
+  });
+
   it('CR3b (R2): a failed me refetch after the 201 still lands on the new profile', async () => {
     let meCalls = 0;
     const { user, router } = portal(`/p/${ORG_A}`, {

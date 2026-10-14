@@ -1,0 +1,57 @@
+app: portal
+area: malafat
+title: Malafat suggestions in the portal
+tier: secondary
+paths:
+  - src/hosted/components/MalafatPortal.tsx
+  - src/hosted/data/malafatSuggestions.ts
+  - src/hosted/session/malafatMoments.ts
+  - src/hosted/shell/UserMenu.tsx
+  - src/hosted/pages/views/ClientsPage.tsx
+  - src/hosted/pages/views/OverviewPage.tsx
+  - src/hosted/components/ProfileCreateDrawer.tsx
+  - src/components/malafat/**
+  - src/lib/malafatSuggestions.ts
+  - src/content/malafatLinks.ts
+features:
+  - id: menu
+    title: The account menu offers Malafat after Sign out on an owned business profile, and its switch turns suggestions off for the account (MUT-191)
+    tier: secondary
+    legacy: [MUT-191]
+    steps:
+      - Sign in and open an owned business profile
+      - Open the account menu
+      - Turn "Show Malafat suggestions" off
+    expect:
+      - Sign out stays the first item; the Malafat link opens malafat.app's contact page with utm_medium=portal and utm_content=settings in a new tab
+      - The switch reads off, the menu stays open, and the choice is saved through PATCH /v1/me/malafat-suggestions
+  - id: clients
+    title: Clients suggests Malafat at ten active clients or with a second business profile, never while searching, and a dismissal is kept (MUT-191)
+    tier: secondary
+    legacy: [MUT-191]
+    steps:
+      - Open Clients on one of two owned business profiles
+      - Type in the search box, then clear it
+      - Choose "Don't show this again", then reload
+      - In Arabic, open Clients with ten active clients
+    expect:
+      - One card names the second office and links with utm_content=second-business; it hides while searching
+      - Dismissing removes it, focuses the search box, and saves the dismissal; after a reload it stays gone
+      - In Arabic the card reads right to left and links to /ar/contact with utm_content=client-threshold
+  - id: created
+    title: A business profile just created opens with a one-line Malafat note (MUT-191)
+    tier: secondary
+    legacy: [MUT-191]
+    steps:
+      - Create a Business profile from the profile switcher
+    expect:
+      - The new profile's page shows the note, linking with utm_content=business-profile
+  - id: none
+    title: Someone already on Malafat sees no Malafat suggestion, in the menu or on Clients (MUT-191)
+    tier: secondary
+    legacy: [MUT-191]
+    steps:
+      - Sign in as a member of a Malafat-fed firm who also owns two business profiles with twelve clients
+      - Open Clients on an owned office, then the account menu on the firm
+    expect:
+      - No Malafat card and no Malafat menu item

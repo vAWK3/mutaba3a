@@ -6,7 +6,8 @@
     "delete": "Delete",
     "close": "Close",
     "loading": "Loading...",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "opensInNewTab": "(opens in a new tab)"
   },
   "hosted": {
     "brand": "Mutaba3a",
@@ -530,6 +531,17 @@
         "network": "Can't reach Mutaba3a. Nothing was saved. Try again.",
         "generic": "Something went wrong. Nothing was saved."
       }
+    },
+    "malafat": {
+      "label": "A suggestion for law firms and accounting offices",
+      "businessCreated": "Is this business a law firm or an accounting office? Malafat manages its clients, documents and fee agreements, and connects to your Mutaba3a account.",
+      "clientThreshold": "Lots of clients to keep track of? If you run a law firm or an accounting office, Malafat manages clients, documents and fee agreements, and connects to your Mutaba3a account.",
+      "secondBusiness": "Running more than one office? If one of them is a law firm or an accounting office, Malafat manages clients, documents and fee agreements, and connects to your Mutaba3a account.",
+      "cta": "See Malafat",
+      "dismiss": "Don't show this again",
+      "menuLink": "Malafat, for law firms and accounting offices",
+      "menuSwitch": "Show Malafat suggestions",
+      "saveFailed": "Couldn't save. Try again."
     }
   }
 }

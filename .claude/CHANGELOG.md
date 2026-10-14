@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Malafat suggestions in the hosted portal (MUT-191, API 1.25.0-mut191)
+
+**Why:** epic MUT-189: people on the hosted portal who run a law firm or an accounting office should meet Malafat at the moments it helps, with one switch to turn it off, and the choice should follow the account (and the phone app next, MUT-192).
+
+### Added
+- Account menu (owned business profile only): after Sign out, a "Malafat, for law firms and accounting offices" link (new tab) and a "Show Malafat suggestions" `menuitemcheckbox` that toggles without closing the menu.
+- Clients: one card at ten active clients of the profile, else with two or more owned business profiles ("Running more than one office?"); never while searching; a retired card leaves nothing else on that visit; focus returns to the search box.
+- A business profile just created opens with a one-line note on its Overview, once.
+- Nothing for anyone who belongs to a Malafat-fed firm (they already use Malafat), nor on personal profiles or firms.
+- Server: `User.malafatSuggestions Json?` (migration `20261015090000_mut191_user_malafat_suggestions`); `/v1/me` carries the resolved `user.malafatSuggestions { off, dismissed }`; `PATCH /v1/me/malafat-suggestions { off?, dismiss? }` (session or device session, organization-independent) unions dismissals under a row lock, `off` last-write-wins; no audit row.
+
+### Technical
+- `src/hosted/components/MalafatPortal.tsx` (`MalafatMenuItems`, `MalafatClientsCard`, `MalafatCreatedNote`), `src/hosted/data/malafatSuggestions.ts`, `src/hosted/session/malafatMoments.ts` (reset by `endSession`). The shared `MalafatSuggestionCard` now imports `useT` from `lib/i18n/core`. `bundle-origins.json` hosted += malafat.app; portal QA watches the shared Malafat files.
+- QA: `qa/support/portal.ts` (a signed-in portal with /v1 stubbed), `qa/specs/portal/malafat.spec.ts` (`@portal.malafat.menu|clients|created|none`), `KNOWN_AXE_VIOLATIONS.portalSignedIn` (TD-142).
+
+---
+
 ## [Unreleased] - 2026-10-15 — Settings no longer scrolls sideways at 375 px (MUT-187 follow-up)
 
 **Why:** `@web.brand.layout` failed in all four 375 px variants on Settings ("406px content in 375px"; 460 px in Arabic), found while merging MUT-209.

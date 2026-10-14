@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { Link } from '@tanstack/react-router';
 import { SearchInput } from '../../../components/filters/SearchInput';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -9,6 +9,7 @@ import type { ClientsFilters } from '../../data/filters';
 import { useCustomerDirectory, useOrganizationSummary } from '../../data/queries';
 import { DecimalAmount, isZeroDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
+import { MalafatClientsCard } from '../../components/MalafatPortal';
 import { useProfile } from '../../session/me';
 import { PageHeader, ShowMore, StatusBadge, laterDay } from './shared';
 
@@ -54,11 +55,12 @@ export function ClientsPage({ filters, setFilters }: { filters: ClientsFilters; 
   const directory = useCustomerDirectory(profile.id);
   const summary = useOrganizationSummary(profile.id);
   const data = directory.data && summary.data ? { customers: directory.data, summary: summary.data } : undefined;
+  const searchBox = useRef<HTMLDivElement>(null);
 
   return (
     <>
       <PageHeader title={t('hosted.clients.title')}>
-        <div className="hp-search">
+        <div className="hp-search" ref={searchBox}>
           <SearchInput value={filters.q ?? ''} onChange={(q) => setFilters({ ...filters, q: q || undefined })} placeholder={t('hosted.clients.search')} />
         </div>
       </PageHeader>
@@ -68,7 +70,13 @@ export function ClientsPage({ filters, setFilters }: { filters: ClientsFilters; 
         isEmpty={({ customers }) => customers.size === 0}
         empty={<Empty title={t('hosted.clients.empty.title')} body={t('hosted.clients.empty.body')} />}
       >
-        {({ customers, summary: s }) => <ClientsTable customers={customers} summary={s} query={filters.q} />}
+        {({ customers, summary: s }) => (
+          <>
+            {/* One Malafat suggestion beside a loaded list, never while searching (MUT-191) */}
+            <MalafatClientsCard customers={customers} query={filters.q} onGone={() => searchBox.current?.querySelector('input')?.focus()} />
+            <ClientsTable customers={customers} summary={s} query={filters.q} />
+          </>
+        )}
       </QueryView>
     </>
   );
