@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseClientDetail, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseReceivablesPage, splitIncomeDrawer } from '../filters';
+import { omitShellOverlay, parseClientDetail, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseReceivablesPage, splitIncomeDrawer } from '../filters';
 
 const R = 'b1111111-1111-4111-8111-111111111111';
 
@@ -45,4 +45,15 @@ describe('conversions page URL state (MUT-194)', () => {
     expect(parseConversionsPage({ currency: 'GBP' })).toEqual({});
   });
 
+});
+
+describe('shell overlay keys (MUT-183 R1)', () => {
+  it('drops the profile drawers\' keys and keeps every other key', () => {
+    const search = { status: 'OPEN', customerId: 'x', settle: R, newProfile: 1, manageProfiles: '1', editProfile: R };
+    expect(omitShellOverlay(search)).toEqual({ status: 'OPEN', customerId: 'x', settle: R });
+  });
+
+  it('returns the same keys when there is nothing to drop', () => {
+    expect(omitShellOverlay({ tab: 'receivables' })).toEqual({ tab: 'receivables' });
+  });
 });

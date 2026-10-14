@@ -527,3 +527,22 @@ describe('Income writes stay off everywhere else (MUT-133 regression contract)',
   });
 });
 
+
+// ---------------------------------------------------------------- MUT-183
+
+describe('Shell overlay keys never reach a list (MUT-183 R1)', () => {
+  it('a profile-drawer key in the URL leaves Receivables and Payments unfiltered', async () => {
+    portal(`/p/${ORG_A}/receivables?newProfile=1`);
+    expect(await screen.findByText('Nothing is owed on this profile right now')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing matches these filters.')).toBeNull();
+  });
+
+  it('adding a profile-drawer key does not refetch the list behind it', async () => {
+    const { router, api } = portal(`/p/${ORG_A}/payments`);
+    expect(await screen.findByText('No payments recorded on this profile yet')).toBeInTheDocument();
+    await act(() => router.navigate({ to: '.', search: (prev: Record<string, unknown>) => ({ ...prev, manageProfiles: true }) } as never));
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}/payments?manageProfiles=true`));
+    expect(screen.getByText('No payments recorded on this profile yet')).toBeInTheDocument();
+    expect(api.count('GET /v1/payments')).toBe(1);
+  });
+});

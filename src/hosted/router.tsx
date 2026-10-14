@@ -4,7 +4,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
 import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './session/AuthGate';
 import { SessionBridge } from './session/SessionBridge';
-import { parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseOverview, parsePaymentsPage, parseReceivablesPage } from './data/filters';
+import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseOverview, parsePaymentsPage, parseReceivablesPage } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
 import { ClientsPage } from './pages/views/ClientsPage';
 import { ClientDetailPage } from './pages/views/ClientDetailPage';
@@ -19,7 +19,9 @@ import { ConversionsPage } from './pages/views/ConversionsList';
  * The active profile is in the path, so it is deep-linkable and safe across
  * tabs; each list view's filters are its search params. The router is built by
  * a factory and never registered globally: `src` is one TypeScript program, and
- * a global registration would retype the app's own navigation.
+ * a global registration would retype the app's own navigation. Every page
+ * route hands its component `omitShellOverlay(search)`: the profile drawers'
+ * keys belong to the shell, and must never reach a list (MUT-183 R1).
  */
 
 type Raw = Record<string, unknown>;
@@ -79,7 +81,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     path: '/',
     validateSearch: parseOverview,
     component: function Overview() {
-      return <OverviewPage filters={overviewRoute.useSearch()} setFilters={useReplaceSearch()} />;
+      return <OverviewPage filters={omitShellOverlay(overviewRoute.useSearch())} setFilters={useReplaceSearch()} />;
     },
   });
 
@@ -88,7 +90,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     path: '/clients',
     validateSearch: parseClients,
     component: function Clients() {
-      return <ClientsPage filters={clientsRoute.useSearch()} setFilters={useReplaceSearch()} />;
+      return <ClientsPage filters={omitShellOverlay(clientsRoute.useSearch())} setFilters={useReplaceSearch()} />;
     },
   });
 
@@ -98,7 +100,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     validateSearch: parseClientDetail,
     component: function Client() {
       const { customerId } = clientRoute.useParams();
-      return <ClientDetailPage key={customerId} customerId={customerId} search={clientRoute.useSearch()} setSearch={useReplaceSearch()} />;
+      return <ClientDetailPage key={customerId} customerId={customerId} search={omitShellOverlay(clientRoute.useSearch())} setSearch={useReplaceSearch()} />;
     },
   });
 
@@ -107,7 +109,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     path: '/receivables',
     validateSearch: parseReceivablesPage,
     component: function Receivables() {
-      return <ReceivablesPage search={receivablesRoute.useSearch()} setSearch={useReplaceSearch()} />;
+      return <ReceivablesPage search={omitShellOverlay(receivablesRoute.useSearch())} setSearch={useReplaceSearch()} />;
     },
   });
 
@@ -116,7 +118,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     path: '/payments',
     validateSearch: parsePaymentsPage,
     component: function Payments() {
-      return <PaymentsPage search={paymentsRoute.useSearch()} setSearch={useReplaceSearch()} />;
+      return <PaymentsPage search={omitShellOverlay(paymentsRoute.useSearch())} setSearch={useReplaceSearch()} />;
     },
   });
 
@@ -125,7 +127,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     path: '/documents',
     validateSearch: parseDocuments,
     component: function Documents() {
-      return <DocumentsPage filters={documentsRoute.useSearch()} setFilters={useReplaceSearch()} />;
+      return <DocumentsPage filters={omitShellOverlay(documentsRoute.useSearch())} setFilters={useReplaceSearch()} />;
     },
   });
 
@@ -134,7 +136,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     path: '/expenses',
     validateSearch: parseExpensesPage,
     component: function Expenses() {
-      return <ExpensesPage filters={expensesRoute.useSearch()} setFilters={useReplaceSearch()} />;
+      return <ExpensesPage filters={omitShellOverlay(expensesRoute.useSearch())} setFilters={useReplaceSearch()} />;
     },
   });
 
@@ -143,7 +145,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     path: '/conversions',
     validateSearch: parseConversionsPage,
     component: function Conversions() {
-      return <ConversionsPage filters={conversionsRoute.useSearch()} setFilters={useReplaceSearch()} />;
+      return <ConversionsPage filters={omitShellOverlay(conversionsRoute.useSearch())} setFilters={useReplaceSearch()} />;
     },
   });
 
