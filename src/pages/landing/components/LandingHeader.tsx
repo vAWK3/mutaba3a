@@ -3,6 +3,7 @@ import { useT, useLanguage } from '../../../lib/i18n';
 import { Wordmark } from '../../../components/brand/Wordmark';
 import { useInView } from '../../../hooks/useInView';
 import { useHeroCta } from '../useHeroCta';
+import { hostedPortalUrl } from '../../../lib/goHosted';
 
 /** The mark's size in the bar, about the cap height of the name beside it. */
 const BAR_MARK_SIZE = 24;
@@ -45,6 +46,7 @@ export function LandingHeader({ showCta, homeHref = '#top' }: LandingHeaderProps
   const { language, setLanguage } = useLanguage();
   const topRef = useRef<HTMLDivElement>(null);
   const scrolled = useInView(topRef) === false;
+  const portalUrl = hostedPortalUrl();
 
   const toggleLanguage = useCallback(() => {
     setLanguage(language === 'en' ? 'ar' : 'en');
@@ -76,6 +78,11 @@ export function LandingHeader({ showCta, homeHref = '#top' }: LandingHeaderProps
             />
           </a>
           <div className="landing-header-actions">
+            {portalUrl && (
+              <a href={portalUrl} target="_blank" rel="noopener noreferrer" className="landing-header-signin">
+                {t('landing.header.signIn')} <span className="sr-only">{t('common.opensInNewTab')}</span>
+              </a>
+            )}
             {/* Before the switch, so while it is hidden its reserved slot reads as gap and the switch keeps the end edge */}
             {showCta !== undefined && <HeaderCta visible={showCta} />}
             <button type="button" className="landing-lang-toggle" onClick={toggleLanguage}>
