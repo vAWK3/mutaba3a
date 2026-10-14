@@ -1002,7 +1002,10 @@ model Conversion {
   notes           String?
   createdByUserId String       @db.Uuid
   createdBy       User         @relation(fields: [createdByUserId], references: [id])
+  version         Int          @default(1)
   createdAt       DateTime
+  updatedAt       DateTime
+  deletedAt       DateTime?
 
   /// The ledger: newest first by date within an organization.
   @@index([organizationId, occurredOn(sort: Desc), id(sort: Desc)])

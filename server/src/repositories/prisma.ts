@@ -1078,20 +1078,33 @@ export class PrismaLedgerStore implements LedgerStore {
     },
   };
 
-  // ---- MUT-161: conversions (create + read only) ----------------------------
+  // ---- MUT-161: conversions; MUT-194: versioned update and soft delete ------
 
   readonly conversions: ConversionRepository = {
-    create: (input, at) => translate(() => this.prisma.conversion.create({ data: { ...input, createdAt: at } })),
-    getById: (organizationId, id) => this.prisma.conversion.findFirst({ where: { id, organizationId } }),
+    create: (input, at) => translate(() => this.prisma.conversion.create({ data: { ...input, createdAt: at, updatedAt: at } })),
+    getById: (organizationId, id) => this.prisma.conversion.findFirst({ where: { id, organizationId, deletedAt: null } }),
     list: async (organizationId, filter, page) => {
       const rows: ConversionRecord[] = await this.prisma.conversion.findMany({
-        where: { organizationId, ...conversionWhere(filter), ...conversionCursorWhere(page.cursor) },
+        where: { organizationId, deletedAt: null, ...conversionWhere(filter), ...conversionCursorWhere(page.cursor) },
         orderBy: [{ occurredOn: 'desc' }, { id: 'desc' }],
         take: page.limit + 1,
       });
       const items = rows.slice(0, page.limit);
       const last = items[items.length - 1];
       return { items, nextCursor: rows.length > page.limit && last ? { occurredOn: last.occurredOn, id: last.id } : null };
+    },
+    update: async (organizationId, id, expectedVersion, patch, at) => {
+      const data: Prisma.ConversionUncheckedUpdateManyInput = { version: { increment: 1 }, updatedAt: at };
+      for (const [k, v] of Object.entries(patch)) if (v !== undefined) (data as Record<string, unknown>)[k] = v;
+      const { count } = await translate(() => this.prisma.conversion.updateMany({ where: { id, organizationId, deletedAt: null, version: expectedVersion }, data }));
+      const record = await this.prisma.conversion.findFirst({ where: { id, organizationId, deletedAt: null } });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
+    softDelete: async (organizationId, id, at) => {
+      const { count } = await this.prisma.conversion.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
+      const record = await this.prisma.conversion.findFirst({ where: { id, organizationId } });
+      return record ? { record, changed: count === 1 } : null;
     },
   };
 

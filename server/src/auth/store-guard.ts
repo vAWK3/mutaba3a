@@ -180,11 +180,13 @@ export const STORE_ACCESS: StoreAccess = {
     fileAsExpense: { write: 'expenses' },
     fileAsIncome: { write: 'payments' },
   },
-  // MUT-161: create + read only — no update/delete method exists to classify.
+  // MUT-161; MUT-194 (ADR-075) adds the optimistic update and the soft delete.
   conversions: {
     create: { write: 'conversions' },
     getById: { read: 'conversions' },
     list: { read: 'conversions' },
+    update: { write: 'conversions' },
+    softDelete: { write: 'conversions' },
   },
 };
 
