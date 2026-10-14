@@ -103,10 +103,7 @@ for (const scheme of SCHEMES) {
     },
   );
 
-  // /download crashes on load ("No QueryClient set": it renders TopBar outside the
-  // QueryClientProvider, src/main.tsx), so its links can't be hovered yet. The CSS is
-  // guarded in brand.test.ts; drop the fixme once the page renders.
-  test.fixme(
+  test(
     `${scheme} mode: on the download page, a hovered platform button keeps its colours and the footer links underline`,
     { tag: '@web.brand.link-hover' },
     async ({ page }) => {
