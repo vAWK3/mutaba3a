@@ -66,7 +66,7 @@ It has its own shell, routes and query hooks over a typed HTTP client. It **neve
 
 | Model | Fields | Notes |
 |---|---|---|
-| `User` | `id uuid`, `email` (unique, stored lower-cased and NFKC-normalised), `displayName`, `passwordHash` (argon2id PHC string), `locale 'en'\|'ar'`, `status ACTIVE\|DISABLED`, `failedSignIns int`, `lockedUntil?`, `passwordChangedAt`, `lastSignInAt?`, `createdAt`, `updatedAt` | Not organization-scoped: one person can belong to several firms. No self-service field exists. |
+| `User` | `id uuid`, `email` (unique, stored lower-cased and NFKC-normalised), `displayName`, `passwordHash` (argon2id PHC string), `locale 'en'\|'ar'`, `status ACTIVE\|DISABLED`, `failedSignIns int`, `lockedUntil?`, `passwordChangedAt`, `lastSignInAt?`, `createdAt`, `updatedAt` | Not organization-scoped: one person can belong to several firms. The one self-service field is `malafatSuggestions Json?` (MUT-191: `{ off, dismissed }`, changed through `PATCH /v1/me/malafat-suggestions`). |
 | `Membership` | `userId`, `organizationId`, `createdAt`; PK `(userId, organizationId)` | Access/no-access only. Roles and per-user permissions are out (MUT-39). |
 | `Session` | `id uuid`, `userId`, `tokenDigest` (unique, HMAC-SHA256 hex), `createdAt`, `lastSeenAt`, `idleExpiresAt`, `absoluteExpiresAt`, `revokedAt?`, `revokedReason?`, `userAgent?` (truncated 200) | The token itself is never stored, logged or placed in a URL. Pruned 30 days after expiry by the existing `reconcile` run. |
 | `AuditActorType` | gains `USER` (`actorId` = user id) | Published enum change (§4.6). |

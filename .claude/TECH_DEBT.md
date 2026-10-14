@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-142: The portal's account menu holds a Language row that is no menu child
+**Status**: Open
+**Ticket**: none (found by MUT-191's axe check, 2026-10-15)
+**Added**: 2026-10-15
+**Priority**: Low
+**Impact**: `UserMenu`'s panel is `role="menu"`, but its first row is the Language label and `LanguageSwitch` buttons, which are not `menuitem*`/`group`/`separator`. axe reports `aria-required-children` on the panel with or without MUT-191's items; screen readers may announce the menu's structure oddly. Recorded as `KNOWN_AXE_VIOLATIONS.portalSignedIn`.
+**Fix**: make the panel a labelled `dialog`/disclosure with ordinary buttons, or give the language choice `menuitemradio` items inside a `group`; then drop the known rule.
+
 ### TD-141: `.sr-only` text escapes `.page-content`'s clipping and can make the page scroll sideways
 **Status**: Open
 **Ticket**: none (found fixing Settings at 375 px, 2026-10-15)

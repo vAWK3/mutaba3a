@@ -1,6 +1,6 @@
 # MUT-191 — Malafat suggestions in the hosted portal
 
-Status: **PLANNED (2026-10-15)**, branch `feature/mut-189-malafat-upsell` (epic worktree; MUT-190 merged to main from it).
+Status: **BUILT (2026-10-15)**, branch `feature/mut-189-malafat-upsell` (epic worktree; MUT-190 merged to main from it).
 Ticket: MUT-191 (Story) · epic MUT-189. Blocked by MAL-1153 (malafat.app recognising the referral; Basel sequences the release himself, 2026-10-15) and, for C1, MUT-183 (merged, In Review). Builds on MUT-190 (ADR-078: rules, copy, one suggestion per event) and MUT-174 (`malafatUrl`).
 
 ## 1. Acceptance criteria
