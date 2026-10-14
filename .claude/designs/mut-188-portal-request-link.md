@@ -1,6 +1,6 @@
 # MUT-188 — Portal sign-in: "No account? Request one" link to `/hosted`
 
-Status: **Planned, eng-reviewed (2026-10-14)**. Not built. Review ledger and findings at the end of this file; D1/D2 were auto-decided (non-interactive run).
+Status: **BUILT and reconciled (2026-10-14)**, branch `feature/mut-185-go-hosted` (epic worktree). Review ledger, findings and the qa-reconcile record are at the end of this file; D1/D2 were auto-decided (non-interactive run).
 Ticket: MUT-188 (Task) · Epic MUT-185 · Blocked by MUT-186 (merged to local main a7d5068, Jira In Review → gate passes). Siblings: MUT-187 (merged, 11e9f0a), MUT-197 (Backlog, conditional), MUT-172 (landing, under MUT-171).
 Tracker: Jira · barmajiyat.atlassian.net · MUT via atlassian-barmajiyat · Backlog = planning allowed · finished → In Review after /qa-reconcile.
 
@@ -342,6 +342,26 @@ Auto-decided in this non-interactive run; overturn before /eng-build if wrong:
 ## Suppressed findings (appendix)
 - (4/10) `tsconfig.app.json` may already include `src/vite-env.d.ts`; if not, the app program never sees the new declaration, which is harmless either way. Verified at build by `npm run typecheck`.
 - (3/10) Two stacked `.hp-help` lines may read as one block on a 320 px viewport; the adjacency margin should be enough. Visual check during QA.
+
+## qa-reconcile (2026-10-14)
+
+Three sources: ticket MUT-188 (A1–A3), this plan (as amended by the eng review), the diff `main...feature/mut-185-go-hosted` (8 commits, 23 files).
+
+| Criterion | In plan? | In code? | Verdict |
+|---|---|---|---|
+| A1 link "No account? Request one" → /hosted, URL from config | yes (§2, R2) | `SignInPage.tsx` `hostedOfferHref()` + `<a href>`; `vite.config.ts` `hostedOfferUrl()` → `__HOSTED_OFFER_URL__`; `MUTABA3A_PUBLIC_ORIGIN` documented | MET |
+| A2 outward only; ADR-037 route-inventory and bundle tests pass; no signup route | yes (§2, R3/R4) | no server change; `npm run test:bundles` green with the Netlify origin allowlisted; S3 zero-links case untouched; `BANNED` asserted in S3b | MET |
+| A3 EN + AR in `src/hosted/i18n` | yes | `hosted.auth.request.{lead,link}` in `en.json`/`ar.json`; parity test green; S3b runs in `ar` | MET |
+| D1 default origin → Netlify (plan, not ticket) | yes (R2 auto) | `DEFAULT_PUBLIC_ORIGIN` exported and changed; `og:url` test reads the constant | DRIFT from the ticket's literal wording, conscious (R2); flagged for Basel |
+| Underlined link | no (found by QA) | `.hp-help a { text-decoration: underline }` | DRIFT, accepted: axe `link-in-text-block` failed in the Arabic run without it |
+| Spec amendments (R4) | yes | `mut-43-auth-states.md` §4, `hosted-portal.md` §7.6, ADR-037 note | MET |
+| QA feature + spec (CLAUDE.md Phase 5) | yes (§4b) | `@portal.signin.request-link`, EN/AR, 6/6 portal sign-in cases pass on a built preview | MET |
+
+Scope creep: none. Gaps: none blocking. `release-qa lint` reports 12 pre-existing `@web.landing.*` errors (TD-130), none from the portal; this ticket's entries lint clean.
+
+Gate (Node 22): `npm run lint` 0 errors (6 pre-existing warnings in drawer files); `npm run typecheck` clean; `npm run test:run` 297 files / 4255 passed, 4 skipped; `npm run build` ok; `npm run test:bundles` passed. Code review (medium): 0 correctness findings, 4 cleanups (getter renamed to `hostedOfferHref`, spec parses each dictionary once; portal-wide underline rule skipped as out of scope; TD-130 cited).
+
+Verdict: **PASS** (with the two auto-decisions D1/D2 to confirm).
 
 ## Completion summary
 - Step 0: Scope Challenge — scope accepted as-is (smaller arrangement, same scope)

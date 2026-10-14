@@ -33,7 +33,7 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * (ADR-076): the test runner defines none, so the line renders only where a
  * build set it, and a test can stub the global before rendering.
  */
-function hostedOfferUrl(): string {
+function hostedOfferHref(): string {
   return typeof __HOSTED_OFFER_URL__ !== 'undefined' ? __HOSTED_OFFER_URL__ : '';
 }
 const SECONDS_PER_MINUTE = 60;
@@ -108,7 +108,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
   }
 
   const pending = signIn.isPending;
-  const offerUrl = hostedOfferUrl();
+  const offerUrl = hostedOfferHref();
   const bannerId = `${ids}-banner`;
   const describedBy = (field: string, error?: FieldError) =>
     [error ? `${ids}-${field}-error` : null, banner ? bannerId : null].filter(Boolean).join(' ') || undefined;

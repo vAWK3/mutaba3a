@@ -19,8 +19,9 @@ const PORTAL_LANGUAGE_KEY = 'mutaba3a-portal-language';
 const portalI18n = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/hosted/i18n');
 type AuthCopy = { hosted: { auth: { title: string; request: { lead: string; link: string } } } };
 const auth = (language: 'en' | 'ar') => (JSON.parse(fs.readFileSync(path.join(portalI18n, `${language}.json`), 'utf8')) as AuthCopy).hosted.auth;
-const HEADING = { en: auth('en').title, ar: auth('ar').title } as const;
-const REQUEST = { en: auth('en').request, ar: auth('ar').request } as const;
+const AUTH = { en: auth('en'), ar: auth('ar') } as const;
+const HEADING = { en: AUTH.en.title, ar: AUTH.ar.title } as const;
+const REQUEST = { en: AUTH.en.request, ar: AUTH.ar.request } as const;
 
 async function openSignIn(page: Page, language: 'en' | 'ar') {
   await page.route('**/v1/**', (route) =>
