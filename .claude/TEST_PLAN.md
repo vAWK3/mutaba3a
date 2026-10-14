@@ -2346,3 +2346,17 @@ Run: targeted suites only (owner's request) — 23 files / 984 tests, then 12 fi
 | Regression | `ExpensesList.test.tsx` row-click test unchanged and green |
 
 Run so far: server `typecheck`, `lint`, `openapi:check`, `npm test` (86 files, 1675 passed, 21 skipped) and `test:db` against a scratch Postgres database (107 files, 1819 passed); `npx vitest run src/hosted` (31 files, 311 passed). The root `lint`/`typecheck`/`test:run`/`build`/`hosted:types:check` set was not run on the final tree in this pass.
+
+## MUT-187 — "Go hosted" in the free web app (2026-10-14, ADR-076)
+
+| Suite | Cases |
+|---|---|
+| `src/lib/__tests__/goHosted.test.ts` | due when never dismissed; hidden at 0 and at 30 d minus 1 h; due at exactly 30 d and later; future → due; storage round-trip; 5 garbage values → never dismissed; read and write survive a throwing storage; `goHostedEnabled()` off when undefined/desktop, on for web; `hostedPortalUrl()` "" or the stubbed URL |
+| `src/components/layout/__tests__/GoHostedCard.test.tsx` | EN and AR: group label, text, Go hosted → `/hosted`, `_blank`, `noopener noreferrer`, sr-only new-tab text, × named and titled "Hide for 30 days"; Tab reaches link then ×, Enter dismisses and calls `onDismissed`; dismissal stored, hidden at 29 d, back at 30 d (fake Date); blocked storage still hides for the tab; hidden while a sample is `preparing` or `active`; no fetch, XHR or sendBeacon across show/click/dismiss |
+| `src/components/layout/__tests__/SidebarNav.goHosted.test.tsx` | web: card after Home/Clients/Income and before Settings; desktop: none; collapsed: none; dismiss focuses Settings |
+| `src/pages/settings/__tests__/HostedAccountEntry.test.tsx` | EN and AR: title, sentence, prompt, "See hosted accounts" → `/hosted` and "Sign in" → portal URL, both new tab; no sign-in line when the build set no portal URL |
+| `src/pages/settings/__tests__/SettingsPage.goHosted.test.tsx` | web: the row is inside the Businesses section; desktop: no row |
+| `scripts/__tests__/vite-config.test.ts` | web define = default portal URL, desktop ""; default is a run.app origin; override with trailing slash dropped; 5 bad values throw naming `MUTABA3A_PORTAL_URL`; web/desktop snapshots updated for the new define |
+| Browser check (dev server, 2026-10-14) | 1440×800: card 111 px, nav 388 px; 1440×700: card shown, nav 288 px; 1440×640: card `display: none`; × 44×44; Arabic RTL with × at the inline end; dismiss stores the timestamp, focuses Settings, no network entries; Settings row in Arabic with `/hosted` and the run.app sign-in link, both `_blank` |
+
+Run: `npx vitest run src/lib/__tests__/goHosted.test.ts src/components/layout src/pages/settings scripts/__tests__/vite-config.test.ts`; `npm run test:bundles` for the origin allowlist.
