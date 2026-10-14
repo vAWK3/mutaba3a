@@ -26,13 +26,16 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
   });
   const preset = (labels: string[]): ExpenseCategoryInput[] => labels.map((n) => ({ name: n, color: '#123456' }));
   const GENERAL = preset(['Office Rent', 'Software', 'Other']);
+  const AUDIT = { actorId: '', requestId: 'req-mut182' };
+  const by = (userId: string) => ({ ...AUDIT, actorId: userId });
+  const upd = (userId: string, fields: string[] = ['name'], presetName: string | null = null) => ({ ...by(userId), fields, preset: presetName ? { name: presetName, locale: 'en' } : null });
 
   async function owner(store: LedgerStore) {
     return store.users.create(userInput());
   }
 
   async function createOwned(store: LedgerStore, userId: string, profileType: 'PERSONAL' | 'BUSINESS' = 'BUSINESS') {
-    const result = await store.organizations.createOwned(userId, { ...owned(), profileType }, CAP);
+    const result = await store.organizations.createOwned(userId, { ...owned(), profileType }, CAP, by(userId));
     if (result.kind !== 'created') throw new Error(`expected created, got ${result.kind}`);
     return result.organization;
   }
@@ -55,7 +58,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const store = await makeStore();
       const { user } = await owner(store);
       const input = { ...owned('Design Studio'), profileType: 'BUSINESS' as const };
-      const result = await store.organizations.createOwned(user.id, input, CAP);
+      const result = await store.organizations.createOwned(user.id, input, CAP, by(user.id));
       expect(result.kind).toBe('created');
       if (result.kind !== 'created') return;
       expect(result.organization).toMatchObject({ name: 'Design Studio', slug: input.slug, ownerUserId: user.id, profileType: 'BUSINESS', personalOwnerUserId: null, version: 1 });
@@ -69,7 +72,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const { user } = await owner(store);
       for (let i = 1; i < CAP; i++) await createOwned(store, user.id);
       expect(await store.organizations.countOwnedBy(user.id)).toBe(CAP);
-      const refused = await store.organizations.createOwned(user.id, { ...owned(), profileType: 'BUSINESS' }, CAP);
+      const refused = await store.organizations.createOwned(user.id, { ...owned(), profileType: 'BUSINESS' }, CAP, by(user.id));
       expect(refused).toEqual({ kind: 'limit', count: CAP });
       expect(await store.organizations.countOwnedBy(user.id)).toBe(CAP);
       expect(await store.memberships.listByUser(user.id)).toHaveLength(CAP);
@@ -88,8 +91,8 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
         const { user } = await owner(store);
         for (let i = 2; i < CAP; i++) await createOwned(store, user.id);
         const results = await Promise.all([
-          store.organizations.createOwned(user.id, { ...owned(), profileType: 'BUSINESS' }, CAP),
-          store.organizations.createOwned(user.id, { ...owned(), profileType: 'BUSINESS' }, CAP),
+          store.organizations.createOwned(user.id, { ...owned(), profileType: 'BUSINESS' }, CAP, by(user.id)),
+          store.organizations.createOwned(user.id, { ...owned(), profileType: 'BUSINESS' }, CAP, by(user.id)),
         ]);
         expect(results.map((r) => r.kind).sort()).toEqual(['created', 'limit']);
         expect(await store.organizations.countOwnedBy(user.id)).toBe(CAP);
@@ -101,7 +104,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
         const profile = await createOwned(store, user.id, 'PERSONAL');
         const personalPreset = preset(['Groceries', 'Rent', 'Other']);
         await Promise.all([
-          store.organizations.updateOwned(profile.id, user.id, 1, { profileType: 'BUSINESS' }, GENERAL, at(2)),
+          store.organizations.updateOwned(profile.id, user.id, 1, { profileType: 'BUSINESS' }, GENERAL, at(2), upd(user.id, ['type'], 'general')),
           store.expenseCategories.seed(profile.id, personalPreset, at(2)),
         ]);
         // Seed first: the type change then replaces it. Type change first: the seed finds categories and does nothing.
@@ -109,15 +112,48 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
         const names = (await store.expenseCategories.list(profile.id, { includeArchived: true })).map((c) => c.name).sort();
         expect(names).toEqual(['Office Rent', 'Other', 'Software']);
       });
+
+      it('never deadlocks a type change against an expense moving between two categories (C12, re-review)', async () => {
+        for (let round = 0; round < 5; round++) {
+          const store = await makeStore();
+          const { user } = await owner(store);
+          const profile = await createOwned(store, user.id, 'PERSONAL');
+          await store.expenseCategories.seed(profile.id, preset(['Alpha', 'Beta']), at(1));
+          const [alpha, beta] = await store.expenseCategories.list(profile.id, { includeArchived: true });
+          const e = await store.expenses.create({ organizationId: profile.id, occurredOn: '2026-10-10', amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: alpha!.id, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at(1));
+          const [retyped, moved] = await Promise.all([
+            store.organizations.updateOwned(profile.id, user.id, 1, { profileType: 'BUSINESS' }, GENERAL, at(2), upd(user.id, ['type'], 'general')),
+            store.expenses.update(profile.id, e.id, 1, { categoryId: beta!.id }, at(2)).catch((err: unknown) => err),
+          ]);
+          expect(retyped.kind).toBe('updated');
+          // The move either landed first (and the type change then cleared it) or found Beta gone (422 at the route) — never a deadlock.
+          if (moved instanceof Error) expect(moved.name).toBe('ForeignKeyViolation');
+          expect(await store.expenses.getById(profile.id, e.id)).toMatchObject({ categoryId: null });
+        }
+      });
+
+      it('serializes a custom category create with a type change, so the reseed never clashes on a name (C11, qa-reconcile D5)', async () => {
+        const store = await makeStore();
+        const { user } = await owner(store);
+        const profile = await createOwned(store, user.id, 'PERSONAL');
+        await store.expenseCategories.seed(profile.id, preset(['Groceries']), at(1));
+        // 'Other' is also in the preset the type change seeds: interleaved between its delete and its insert, it would clash.
+        const [retyped] = await Promise.all([
+          store.organizations.updateOwned(profile.id, user.id, 1, { profileType: 'BUSINESS' }, GENERAL, at(2), upd(user.id, ['type'], 'general')),
+          store.expenseCategories.create(profile.id, { name: 'Other', color: null }, at(2)).catch((err: unknown) => err),
+        ]);
+        expect(retyped.kind).toBe('updated');
+        expect((await store.expenseCategories.list(profile.id, { includeArchived: true })).map((c) => c.name).sort()).toEqual(['Office Rent', 'Other', 'Software']);
+      });
     }
 
     it('updates name and currency under If-Match, once per call (C5)', async () => {
       const store = await makeStore();
       const { user } = await owner(store);
       const profile = await createOwned(store, user.id);
-      const result = await store.organizations.updateOwned(profile.id, user.id, 1, { name: 'Renamed', defaultCurrency: 'USD' }, null, at(2));
+      const result = await store.organizations.updateOwned(profile.id, user.id, 1, { name: 'Renamed', defaultCurrency: 'USD' }, null, at(2), upd(user.id, ['name', 'defaultCurrency'], null));
       expect(result).toMatchObject({ kind: 'updated', record: { name: 'Renamed', defaultCurrency: 'USD', version: 2 }, typeChange: null });
-      expect(await store.organizations.updateOwned(profile.id, user.id, 1, { name: 'Again' }, null, at(3))).toMatchObject({ kind: 'stale', record: { name: 'Renamed', version: 2 } });
+      expect(await store.organizations.updateOwned(profile.id, user.id, 1, { name: 'Again' }, null, at(3), upd(user.id, ['name'], null))).toMatchObject({ kind: 'stale', record: { name: 'Renamed', version: 2 } });
     });
 
     it('answers not_found for someone else’s profile and for an operator firm (C5, C9)', async () => {
@@ -125,9 +161,9 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const { user } = await owner(store);
       const { user: other } = await owner(store);
       const profile = await createOwned(store, user.id);
-      expect(await store.organizations.updateOwned(profile.id, other.id, 1, { name: 'Mine now' }, null, at(2))).toEqual({ kind: 'not_found' });
+      expect(await store.organizations.updateOwned(profile.id, other.id, 1, { name: 'Mine now' }, null, at(2), upd(other.id, ['name'], null))).toEqual({ kind: 'not_found' });
       const firm = await store.organizations.create({ name: 'Firm', slug: `firm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
-      expect(await store.organizations.updateOwned(firm.id, user.id, 1, { name: 'Mine now' }, null, at(2))).toEqual({ kind: 'not_found' });
+      expect(await store.organizations.updateOwned(firm.id, user.id, 1, { name: 'Mine now' }, null, at(2), upd(user.id, ['name'], null))).toEqual({ kind: 'not_found' });
       expect((await store.organizations.getById(profile.id))?.name).toBe('Studio');
     });
 
@@ -149,7 +185,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const untouched = await expense(null);
 
       expect(await store.organizations.typeChangeImpact(profile.id)).toEqual({ uncategorizedExpenses: 2, deletedCategories: 4 });
-      const result = await store.organizations.updateOwned(profile.id, user.id, 1, { profileType: 'BUSINESS' }, GENERAL, at(5));
+      const result = await store.organizations.updateOwned(profile.id, user.id, 1, { profileType: 'BUSINESS' }, GENERAL, at(5), upd(user.id, ['type'], 'general'));
       expect(result).toMatchObject({ kind: 'updated', record: { profileType: 'BUSINESS', version: 2 }, typeChange: { uncategorizedExpenses: 2, deletedCategories: 4 } });
 
       expect((await store.expenseCategories.list(profile.id, { includeArchived: true })).map((c) => c.name)).toEqual(['Office Rent', 'Software', 'Other']);
@@ -163,7 +199,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const { user } = await owner(store);
       const profile = await createOwned(store, user.id, 'BUSINESS');
       await store.expenseCategories.seed(profile.id, GENERAL, at(1));
-      const result = await store.organizations.updateOwned(profile.id, user.id, 1, { name: 'Same type', profileType: 'BUSINESS' }, GENERAL, at(2));
+      const result = await store.organizations.updateOwned(profile.id, user.id, 1, { name: 'Same type', profileType: 'BUSINESS' }, GENERAL, at(2), upd(user.id, ['name', 'type'], 'general'));
       expect(result).toMatchObject({ kind: 'updated', record: { name: 'Same type', version: 2 }, typeChange: null });
       expect(await store.expenseCategories.list(profile.id, { includeArchived: true })).toHaveLength(GENERAL.length);
     });
@@ -172,7 +208,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const store = await makeStore();
       const { user } = await owner(store);
       const profile = await createOwned(store, user.id, 'PERSONAL');
-      const result = await store.organizations.updateOwned(profile.id, user.id, 1, { name: 'Now a business', profileType: 'BUSINESS' }, GENERAL, at(2));
+      const result = await store.organizations.updateOwned(profile.id, user.id, 1, { name: 'Now a business', profileType: 'BUSINESS' }, GENERAL, at(2), upd(user.id, ['name', 'type'], 'general'));
       expect(result).toMatchObject({ kind: 'updated', record: { name: 'Now a business', profileType: 'BUSINESS', version: 2 } });
     });
 
@@ -181,16 +217,73 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const { user } = await owner(store);
       const profile = await createOwned(store, user.id, 'PERSONAL');
       await store.expenseCategories.seed(profile.id, preset(['Groceries']), at(1));
-      expect(await store.organizations.updateOwned(profile.id, user.id, 7, { profileType: 'BUSINESS' }, GENERAL, at(2))).toMatchObject({ kind: 'stale' });
+      expect(await store.organizations.updateOwned(profile.id, user.id, 7, { profileType: 'BUSINESS' }, GENERAL, at(2), upd(user.id, ['type'], 'general'))).toMatchObject({ kind: 'stale' });
       expect((await store.expenseCategories.list(profile.id, { includeArchived: true })).map((c) => c.name)).toEqual(['Groceries']);
       expect(await store.organizations.getById(profile.id)).toMatchObject({ profileType: 'PERSONAL', version: 1 });
     });
 
-    it('refuses to make the built-in personal profile BUSINESS (D2)', async () => {
+    it('refuses to make the built-in personal profile BUSINESS, leaving its categories, expenses and audit untouched (D2)', async () => {
       const store = await makeStore();
-      const { user, personalOrganization } = await owner(store);
-      await expect(store.organizations.updateOwned(personalOrganization.id, user.id, 1, { profileType: 'BUSINESS' }, GENERAL, at(2))).rejects.toThrow();
-      expect(await store.organizations.getById(personalOrganization.id)).toMatchObject({ profileType: 'PERSONAL', version: 1 });
+      const { user, personalOrganization: p } = await owner(store);
+      await store.expenseCategories.seed(p.id, preset(['Groceries']), at(1));
+      const [category] = await store.expenseCategories.list(p.id, { includeArchived: true });
+      const e = await store.expenses.create({ organizationId: p.id, occurredOn: '2026-10-10', amountMinor: 1000n, currency: 'ILS', title: null, vendor: null, categoryId: category!.id, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at(1));
+      const auditBefore = (await store.audit.listByOrganization(p.id, 100)).length;
+      await expect(store.organizations.updateOwned(p.id, user.id, 1, { profileType: 'BUSINESS' }, GENERAL, at(2), upd(user.id, ['type'], 'general'))).rejects.toThrow();
+      expect(await store.organizations.getById(p.id)).toMatchObject({ profileType: 'PERSONAL', version: 1 });
+      expect((await store.expenseCategories.list(p.id, { includeArchived: true })).map((c) => c.name)).toEqual(['Groceries']);
+      expect(await store.expenses.getById(p.id, e.id)).toMatchObject({ categoryId: category!.id, version: 1 });
+      expect(await store.audit.listByOrganization(p.id, 100)).toHaveLength(auditBefore);
+    });
+
+    it('writes the create’s audit rows with the profile, as the person (qa-reconcile D3)', async () => {
+      const store = await makeStore();
+      const { user } = await owner(store);
+      const profile = await createOwned(store, user.id);
+      const rows = (await store.audit.listByOrganization(profile.id, 10)).map((e) => [e.action, e.actorType, e.actorId, e.requestId, e.metadata ?? null]).sort();
+      expect(rows).toEqual([
+        ['membership.granted', 'USER', user.id, 'req-mut182', null],
+        ['organization.created', 'USER', user.id, 'req-mut182', { owned: true, profileType: 'BUSINESS' }],
+      ]);
+    });
+
+    it('records a type change with every removed category and each expense’s lost category (qa-reconcile D3/D4)', async () => {
+      const store = await makeStore();
+      const { user } = await owner(store);
+      const profile = await createOwned(store, user.id, 'PERSONAL');
+      await store.expenseCategories.seed(profile.id, preset(['Groceries', 'Rent']), at(1));
+      const [groceries, rent] = await store.expenseCategories.list(profile.id, { includeArchived: false });
+      await store.expenseCategories.update(profile.id, rent!.id, 1, { archived: true }, at(1));
+      const e = await store.expenses.create({ organizationId: profile.id, occurredOn: '2026-10-10', amountMinor: 500n, currency: 'ILS', title: null, vendor: null, categoryId: groceries!.id, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at(1));
+      await store.organizations.updateOwned(profile.id, user.id, 1, { name: 'Shop', profileType: 'BUSINESS' }, GENERAL, at(3), upd(user.id, ['name', 'type'], 'general'));
+      const events = await store.audit.listByOrganization(profile.id, 20);
+      expect(events.find((ev) => ev.action === 'organization.updated')?.metadata).toEqual({ fields: ['name', 'type'] });
+      expect(events.find((ev) => ev.action === 'organization.type_changed')).toMatchObject({
+        actorType: 'USER',
+        actorId: user.id,
+        metadata: {
+          from: 'PERSONAL',
+          to: 'BUSINESS',
+          uncategorizedExpenses: 1,
+          deletedCategories: 2,
+          preset: 'general',
+          removedCategories: [
+            { id: groceries!.id, name: 'Groceries', color: '#123456', archived: false },
+            { id: rent!.id, name: 'Rent', color: '#123456', archived: true },
+          ],
+          uncategorized: [{ expenseId: e.id, categoryId: groceries!.id }],
+        },
+      });
+      expect(events.find((ev) => ev.action === 'expense_category.seeded')).toMatchObject({ actorType: 'SYSTEM', metadata: { preset: 'general', count: GENERAL.length, locale: 'en' } });
+    });
+
+    it('writes no audit row when the update is stale', async () => {
+      const store = await makeStore();
+      const { user } = await owner(store);
+      const profile = await createOwned(store, user.id);
+      const before = (await store.audit.listByOrganization(profile.id, 20)).length;
+      await store.organizations.updateOwned(profile.id, user.id, 9, { name: 'x' }, null, at(2), upd(user.id));
+      expect(await store.audit.listByOrganization(profile.id, 20)).toHaveLength(before);
     });
 
     it('rejects an expense whose category does not exist (R17: the store’s foreign key)', async () => {
@@ -198,7 +291,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const { user, personalOrganization } = await owner(store);
       await expect(
         store.expenses.create({ organizationId: personalOrganization.id, occurredOn: '2026-10-10', amountMinor: 1000n, currency: 'ILS', title: null, vendor: null, categoryId: '00000000-0000-4000-8000-000000000000', customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at(1)),
-      ).rejects.toMatchObject({ constraint: expect.stringContaining('category') });
+      ).rejects.toMatchObject({ constraint: expect.stringContaining('categoryId') }); // the exact predicate withCategoryForeignKey matches
     });
   });
 }

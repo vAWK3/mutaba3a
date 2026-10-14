@@ -4,6 +4,7 @@ import type { MiddlewareHandler } from 'hono';
 import { generateApiKey, type ApiKeyEnvironment } from '../auth/api-key.js';
 import type { AppEnv } from '../auth/middleware.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
+import { profileOwnerOf } from '../personal-profile.js';
 import { UniqueViolation } from '../repositories/memory.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import {
@@ -147,7 +148,7 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
       const body = c.req.valid('json');
       const org = await store.organizations.getById(organizationId);
       if (!org) throw new ApiError('NOT_FOUND', 'Organization not found');
-      if (org.ownerUserId) throw ownedProfileConflict(org, 'A profile a person owns cannot hold an API key');
+      if (profileOwnerOf(org)) throw ownedProfileConflict(org, 'A profile a person owns cannot hold an API key');
       const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
       if (expiresAt && expiresAt.getTime() <= c.get('now')().getTime()) {
         throw new ApiError('VALIDATION_FAILED', 'expiresAt must be in the future');

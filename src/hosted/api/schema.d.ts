@@ -8125,7 +8125,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Key lacks the required scope */
+                /** @description READ_ONLY_PROFILE with details.reason NOT_OWNER: a firm the caller belongs to but does not own */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -8183,7 +8183,7 @@ export interface paths {
         };
         /**
          * Preview what changing a profile’s type would do
-         * @description The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type.
+         * @description The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type. Refused exactly where PATCH is (409 DEFAULT_PERSONAL_PROFILE on the built-in personal profile).
          */
         get: {
             parameters: {
@@ -8216,7 +8216,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Key lacks the required scope */
+                /** @description READ_ONLY_PROFILE with details.reason NOT_OWNER: a firm the caller belongs to but does not own */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -8227,6 +8227,15 @@ export interface paths {
                 };
                 /** @description No such entity in this organization */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -9171,7 +9180,8 @@ export interface components {
             income: components["schemas"]["IncomeCaptureRules"];
             isPersonalDefault: boolean;
             owned: boolean;
-            type: components["schemas"]["ProfileType"];
+            /** @enum {string|null} */
+            type: "PERSONAL" | "BUSINESS" | null;
             version: number;
         };
         /** @enum {string} */
@@ -9182,8 +9192,6 @@ export interface components {
             /** @enum {string} */
             customer: "optional" | "linked-required";
         };
-        /** @enum {string|null} */
-        ProfileType: "PERSONAL" | "BUSINESS" | null;
         ProfileLimits: {
             ownedProfiles: number;
             maxOwnedProfiles: number;
@@ -9227,6 +9235,10 @@ export interface components {
             timezone: string;
             /** Format: uuid */
             personalOwnerUserId: string | null;
+            /** Format: uuid */
+            ownerUserId: string | null;
+            /** @enum {string|null} */
+            profileType: "PERSONAL" | "BUSINESS" | null;
             /** Format: date-time */
             createdAt: string;
         };
@@ -10855,20 +10867,27 @@ export interface components {
             defaultCurrency: components["schemas"]["Currency"];
             timezone: string;
         };
+        /** @enum {string} */
+        ProfileType: "PERSONAL" | "BUSINESS";
         UpdateProfileResponse: {
             profile: components["schemas"]["HostedProfile"];
-            typeChange: components["schemas"]["ProfileTypeChange"];
+            typeChange: {
+                uncategorizedExpenses: number;
+                deletedCategories: number;
+                /** @enum {string} */
+                preset: "lawFirm" | "personal" | "general";
+            } | null;
+        };
+        UpdateProfileRequest: {
+            name?: string;
+            defaultCurrency?: components["schemas"]["Currency"];
+            type?: components["schemas"]["ProfileType"];
         };
         ProfileTypeChange: {
             uncategorizedExpenses: number;
             deletedCategories: number;
             /** @enum {string} */
             preset: "lawFirm" | "personal" | "general";
-        } | null;
-        UpdateProfileRequest: {
-            name?: string;
-            defaultCurrency?: components["schemas"]["Currency"];
-            type?: components["schemas"]["ProfileType"];
         };
         CreateOrganizationRequest: {
             name: string;

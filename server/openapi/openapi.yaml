@@ -211,7 +211,12 @@ components:
         owned:
           type: boolean
         type:
-          $ref: "#/components/schemas/ProfileType"
+          type: string
+          nullable: true
+          enum:
+            - PERSONAL
+            - BUSINESS
+            - null
         version:
           type: integer
           minimum: 1
@@ -251,13 +256,6 @@ components:
         - received
         - owed
         - customer
-    ProfileType:
-      type: string
-      nullable: true
-      enum:
-        - PERSONAL
-        - BUSINESS
-        - null
     ProfileLimits:
       type: object
       properties:
@@ -394,6 +392,17 @@ components:
           type: string
           nullable: true
           format: uuid
+        ownerUserId:
+          type: string
+          nullable: true
+          format: uuid
+        profileType:
+          type: string
+          nullable: true
+          enum:
+            - PERSONAL
+            - BUSINESS
+            - null
         createdAt:
           type: string
           format: date-time
@@ -404,6 +413,8 @@ components:
         - defaultCurrency
         - timezone
         - personalOwnerUserId
+        - ownerUserId
+        - profileType
         - createdAt
     ApiKeySummary:
       type: object
@@ -4726,19 +4737,53 @@ components:
         - defaultCurrency
         - timezone
       additionalProperties: false
+    ProfileType:
+      type: string
+      enum:
+        - PERSONAL
+        - BUSINESS
     UpdateProfileResponse:
       type: object
       properties:
         profile:
           $ref: "#/components/schemas/HostedProfile"
         typeChange:
-          $ref: "#/components/schemas/ProfileTypeChange"
+          type: object
+          nullable: true
+          properties:
+            uncategorizedExpenses:
+              type: integer
+              minimum: 0
+            deletedCategories:
+              type: integer
+              minimum: 0
+            preset:
+              type: string
+              enum:
+                - lawFirm
+                - personal
+                - general
+          required:
+            - uncategorizedExpenses
+            - deletedCategories
+            - preset
       required:
         - profile
         - typeChange
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        defaultCurrency:
+          $ref: "#/components/schemas/Currency"
+        type:
+          $ref: "#/components/schemas/ProfileType"
+      additionalProperties: false
     ProfileTypeChange:
       type: object
-      nullable: true
       properties:
         uncategorizedExpenses:
           type: integer
@@ -4756,18 +4801,6 @@ components:
         - uncategorizedExpenses
         - deletedCategories
         - preset
-    UpdateProfileRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 80
-        defaultCurrency:
-          $ref: "#/components/schemas/Currency"
-        type:
-          $ref: "#/components/schemas/ProfileType"
-      additionalProperties: false
     CreateOrganizationRequest:
       type: object
       properties:
@@ -10805,7 +10838,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
-          description: Key lacks the required scope
+          description: "READ_ONLY_PROFILE with details.reason NOT_OWNER: a firm the caller belongs to but does not own"
           content:
             application/json:
               schema:
@@ -10839,7 +10872,7 @@ paths:
       tags:
         - Profiles
       summary: Preview what changing a profile’s type would do
-      description: "The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type."
+      description: "The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type. Refused exactly where PATCH is (409 DEFAULT_PERSONAL_PROFILE on the built-in personal profile)."
       security:
         - session: []
         - deviceSession: []
@@ -10869,13 +10902,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
-          description: Key lacks the required scope
+          description: "READ_ONLY_PROFILE with details.reason NOT_OWNER: a firm the caller belongs to but does not own"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
           content:
             application/json:
               schema:

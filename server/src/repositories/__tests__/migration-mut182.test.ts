@@ -76,6 +76,14 @@ if (!url) {
       expect(byId[rana.personalId]).toEqual({ id: rana.personalId, ownerUserId: rana.userId, profileType: 'PERSONAL', version: 1 });
       expect(byId[firm.id]).toEqual({ id: firm.id, ownerUserId: null, profileType: null, version: 1 });
 
+      // The old revision still serves after this migration (roll window, rollback) and writes personal profiles
+      // without the new columns: the CHECKs let that through on purpose, for post-roll to stamp (qa-reconcile D1).
+      const legacy = await insertUserWithPersonalRow(db, []);
+      const [legacyRow] = await db.$queryRawUnsafe<Array<{ ownerUserId: string | null; profileType: string | null }>>(
+        `SELECT "ownerUserId"::text, "profileType"::text FROM organizations WHERE id = '${legacy.personalId}'`,
+      );
+      expect(legacyRow).toEqual({ ownerUserId: null, profileType: null });
+
       // The built-in personal profile can never become BUSINESS (D2), and owner and type travel together.
       await expect(db.$executeRawUnsafe(`UPDATE organizations SET "profileType" = 'BUSINESS' WHERE id = '${nour.personalId}'`)).rejects.toThrow(/organizations_personal_owned_check/);
       await expect(db.$executeRawUnsafe(`UPDATE organizations SET "ownerUserId" = '${nour.userId}' WHERE id = '${firm.id}'`)).rejects.toThrow(/organizations_owner_type_check/);

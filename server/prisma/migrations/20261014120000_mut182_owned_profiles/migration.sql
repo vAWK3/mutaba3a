@@ -1,5 +1,5 @@
 -- MUT-182: users create and manage their own hosted profiles.
--- Additive: a new enum, three columns, one index, one foreign key and two CHECKs.
+-- Additive: a new enum, three columns, two indexes, one foreign key and two CHECKs.
 --
 -- `ownerUserId` (not unique, up to MAX_OWNED_PROFILES per user) says who owns
 -- and controls a profile; `personalOwnerUserId` (unique) stays the MUT-120
@@ -15,6 +15,7 @@
 --   ALTER TABLE "organizations" DROP CONSTRAINT "organizations_personal_owned_check";
 --   ALTER TABLE "organizations" DROP CONSTRAINT "organizations_owner_type_check";
 --   ALTER TABLE "organizations" DROP CONSTRAINT "organizations_ownerUserId_fkey";
+--   DROP INDEX "expenses_categoryId_idx";
 --   DROP INDEX "organizations_ownerUserId_idx";
 --   ALTER TABLE "organizations" DROP COLUMN "version", DROP COLUMN "profileType", DROP COLUMN "ownerUserId";
 --   DROP TYPE "ProfileType";
@@ -33,11 +34,18 @@ UPDATE "organizations" SET "ownerUserId" = "personalOwnerUserId", "profileType" 
 -- CreateIndex
 CREATE INDEX "organizations_ownerUserId_idx" ON "organizations"("ownerUserId");
 
+-- CreateIndex: a type change hard-deletes categories (the first path that does), and each delete's ON DELETE SET NULL
+-- looks expenses up by categoryId alone; the (organizationId, categoryId) index can't serve that.
+CREATE INDEX "expenses_categoryId_idx" ON "expenses"("categoryId");
+
 -- AddForeignKey
 ALTER TABLE "organizations" ADD CONSTRAINT "organizations_ownerUserId_fkey" FOREIGN KEY ("ownerUserId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- An owned profile always has a type, and only an owned one does.
 ALTER TABLE "organizations" ADD CONSTRAINT "organizations_owner_type_check" CHECK (("ownerUserId" IS NULL) = ("profileType" IS NULL));
 
--- The built-in personal profile is owned by its user and is always PERSONAL.
-ALTER TABLE "organizations" ADD CONSTRAINT "organizations_personal_owned_check" CHECK ("personalOwnerUserId" IS NULL OR ("ownerUserId" = "personalOwnerUserId" AND "profileType" = 'PERSONAL'));
+-- The built-in personal profile, once stamped, is owned by its user and is always PERSONAL. "Once stamped" on purpose
+-- (qa-reconcile D1): the old revision, serving between this migration and the roll or again after a rollback, still
+-- inserts personal profiles with neither column; post-roll's repairPersonalOwnership stamps them, and until then
+-- profileOwnerOf() reads personalOwnerUserId, so no guard treats them as firms.
+ALTER TABLE "organizations" ADD CONSTRAINT "organizations_personal_owned_check" CHECK ("personalOwnerUserId" IS NULL OR "ownerUserId" IS NULL OR ("ownerUserId" = "personalOwnerUserId" AND "profileType" = 'PERSONAL'));

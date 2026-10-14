@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, describe, expect, it } from 'vitest';
 import { PrismaLedgerStore } from '../../repositories/prisma.js';
-import { backfillPersonalProfiles, repairCaptureOrigins } from '../post-roll.js';
+import { backfillPersonalProfiles, repairPersonalOwnership, repairCaptureOrigins } from '../post-roll.js';
 
 /**
  * deploy.sh step 6 (MUT-61): the migration backfills `origin` before the new
@@ -105,6 +105,23 @@ if (!url) {
 
       await backfillPersonalProfiles(db, at);
       expect(await db.organization.findUniqueOrThrow({ where: { personalOwnerUserId: user.id } })).toMatchObject({ defaultCurrency: 'USD', timezone: 'Asia/Gaza' });
+    });
+
+    it('stamps a personal profile the old revision wrote without an owner; until then it still counts and can be updated (MUT-182, qa-reconcile D1)', async () => {
+      const tag = randomUUID().slice(0, 8);
+      const { user, personalOrganization } = await store.users.create({ email: `old-rev-${tag}@me.ps`, displayName: 'Old', passwordHash: 'x', locale: 'en', personal: { name: 'Personal', slug: `personal-${tag}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at });
+      // The shape a pre-MUT-182 revision writes after the migration: the CHECKs let it through.
+      await db.organization.update({ where: { id: personalOrganization.id }, data: { ownerUserId: null, profileType: null } });
+      expect(await store.organizations.countOwnedBy(user.id)).toBe(1);
+
+      expect(await repairPersonalOwnership(db)).toBeGreaterThanOrEqual(1);
+      expect(await db.organization.findUniqueOrThrow({ where: { id: personalOrganization.id } })).toMatchObject({ ownerUserId: user.id, profileType: 'PERSONAL' });
+      expect(await repairPersonalOwnership(db)).toBe(0);
+
+      // And without post-roll: the owner's first update stamps it.
+      await db.organization.update({ where: { id: personalOrganization.id }, data: { ownerUserId: null, profileType: null } });
+      const updated = await store.organizations.updateOwned(personalOrganization.id, user.id, 1, { name: 'Home' }, null, at, { actorId: user.id, requestId: null, fields: ['name'], preset: null });
+      expect(updated).toMatchObject({ kind: 'updated', record: { name: 'Home', ownerUserId: user.id, profileType: 'PERSONAL' }, typeChange: null });
     });
 
     it('skips and reports a legacy user with no firm to take a currency and timezone from', async () => {

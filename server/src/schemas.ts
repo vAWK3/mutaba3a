@@ -36,8 +36,12 @@ export const OrganizationSchema = z
     slug: z.string(),
     defaultCurrency: CurrencySchema,
     timezone: z.string(),
-    /** MUT-120: the owning user on their personal profile; null on every firm. */
+    /** MUT-120: the owning user on their built-in personal profile; null on every other organization. */
     personalOwnerUserId: z.string().uuid().nullable(),
+    /** MUT-182: the user who owns this profile (their personal one or one they created); null on an operator firm. An owned profile is never keyed, bound or shared. */
+    ownerUserId: z.string().uuid().nullable(),
+    /** MUT-182: PERSONAL or BUSINESS on an owned profile; null on a firm. */
+    profileType: z.enum(['PERSONAL', 'BUSINESS']).nullable(),
     createdAt: z.string().datetime(),
   })
   .openapi('Organization');
@@ -320,8 +324,8 @@ export const HostedProfileSchema = z
     isPersonalDefault: z.boolean(),
     /** MUT-182: true on a profile the caller owns (their personal one and any they created) — theirs to rename and retype with PATCH /v1/profiles/{id}. */
     owned: z.boolean(),
-    /** MUT-182: PERSONAL or BUSINESS on an owned profile (it picks the expense categories); null on a firm. */
-    type: ProfileTypeSchema.nullable(),
+    /** MUT-182: PERSONAL or BUSINESS on an owned profile (it picks the expense categories); null on a firm. Unnamed, so the request-side ProfileType component stays non-null. */
+    type: z.enum(['PERSONAL', 'BUSINESS']).nullable(),
     /** MUT-182: send as If-Match on PATCH /v1/profiles/{id}. */
     version: z.number().int().min(1),
   })
@@ -362,19 +366,19 @@ export const ProfileIdParamSchema = z.object({ profileId: z.string().uuid().open
 export const ProfileTypeChangeQuerySchema = z.object({ to: ProfileTypeSchema });
 
 /** MUT-182: what changing a profile's type does — or did — to its expenses and categories. */
-export const ProfileTypeChangeSchema = z
-  .object({
-    /** Live expenses that had a category and are left uncategorized. */
-    uncategorizedExpenses: z.number().int().min(0),
-    /** Every category the profile had, custom and archived ones included. */
-    deletedCategories: z.number().int().min(0),
-    /** The preset that replaces them. */
-    preset: z.enum(['lawFirm', 'personal', 'general']),
-  })
-  .openapi('ProfileTypeChange');
+const profileTypeChangeShape = {
+  /** Live expenses that had a category and are left uncategorized. */
+  uncategorizedExpenses: z.number().int().min(0),
+  /** Every category the profile had, custom and archived ones included. */
+  deletedCategories: z.number().int().min(0),
+  /** The preset that replaces them. */
+  preset: z.enum(['lawFirm', 'personal', 'general']),
+};
+export const ProfileTypeChangeSchema = z.object(profileTypeChangeShape).openapi('ProfileTypeChange');
 
 export const UpdateProfileResponseSchema = z
-  .object({ profile: HostedProfileSchema, typeChange: ProfileTypeChangeSchema.nullable() })
+  // An unnamed copy, so making it nullable here can't make the preview's ProfileTypeChange component nullable too.
+  .object({ profile: HostedProfileSchema, typeChange: z.object(profileTypeChangeShape).nullable() })
   .openapi('UpdateProfileResponse');
 
 /** POST /v1/device-sessions response (MUT-64): the bearer token a native app stores, plus the same Me payload the portal gets from its cookie. */

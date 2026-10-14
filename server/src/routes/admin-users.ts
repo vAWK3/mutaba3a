@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
 import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
-import { personalProfileFor } from '../personal-profile.js';
+import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
 import { ForeignKeyViolation, UniqueViolation } from '../repositories/memory.js';
 import type { JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
@@ -119,7 +119,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       const email = normalizeEmail(body.email);
       const firm = body.organizationId ? await store.organizations.getById(body.organizationId) : null;
       if (body.organizationId && !firm) throw new ApiError('NOT_FOUND', 'Organization not found');
-      if (firm?.ownerUserId) throw ownedProfileConflict(firm, 'A profile a person owns belongs to them and cannot be anyone else’s organization');
+      if (firm && profileOwnerOf(firm)) throw ownedProfileConflict(firm, 'A profile a person owns belongs to them and cannot be anyone else’s organization');
       const settings = resolvePersonalSettings(body, firm);
       if (!settings) throw new ApiError('VALIDATION_FAILED', 'defaultCurrency and timezone are required when no organizationId is given');
       const initialPassword = generateOneTimePassword();
@@ -232,7 +232,8 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       const { organizationId } = c.req.valid('json');
       const org = await store.organizations.getById(organizationId);
       if (!org) throw new ApiError('NOT_FOUND', 'Organization not found');
-      if (org.ownerUserId && org.ownerUserId !== user.id) {
+      const owner = profileOwnerOf(org);
+      if (owner && owner !== user.id) {
         throw ownedProfileConflict(org, 'A profile a person owns belongs to them and cannot be granted to another');
       }
       const { membership, created } = await store.memberships.grant(user.id, organizationId, c.get('now')());
@@ -261,7 +262,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       const user = await mustGetUser(userId);
       // MUT-120/182: a user always keeps a profile they own; it cannot be revoked away from them.
       const owned = await store.organizations.getById(organizationId);
-      if (owned && owned.ownerUserId === user.id) {
+      if (owned && profileOwnerOf(owned) === user.id) {
         throw ownedProfileConflict(owned, 'A user keeps the profiles they own; they cannot be revoked');
       }
       const removed = await store.memberships.revoke(user.id, organizationId);

@@ -1,6 +1,7 @@
 import { maskApiKey } from './auth/api-key.js';
 import { sessionAccessFor, WRITABILITY_MATRIX, type ProfileWriter } from './auth/writability.js';
 import { incomeCaptureRulesFor } from './income/compose.js';
+import { profileOwnerOf, profileTypeOf } from './personal-profile.js';
 import type { IsoDate } from './dates.js';
 import { formatMoney, type Currency } from './money.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
@@ -46,6 +47,8 @@ export function serializeOrganization(o: Organization) {
     defaultCurrency: o.defaultCurrency as 'ILS' | 'USD' | 'EUR',
     timezone: o.timezone,
     personalOwnerUserId: o.personalOwnerUserId,
+    ownerUserId: o.ownerUserId,
+    profileType: o.profileType,
     createdAt: o.createdAt.toISOString(),
   };
 }
@@ -71,8 +74,9 @@ export function hostedProfileFor(organization: Organization, writerOfRecord: Pro
     // MUT-120: explicit, from the row already loaded; another user's personal profile is never this user's default.
     isPersonalDefault: organization.personalOwnerUserId === userId,
     // MUT-182: the caller's own (theirs to rename and retype), its type, and the If-Match for doing so.
-    owned: organization.ownerUserId === userId,
-    type: organization.profileType,
+    // profileOwnerOf / profileTypeOf: an unstamped MUT-120 profile the old revision wrote is still the caller's, PERSONAL (qa-reconcile D1).
+    owned: profileOwnerOf(organization) === userId,
+    type: profileTypeOf(organization),
     version: organization.version,
   };
 }

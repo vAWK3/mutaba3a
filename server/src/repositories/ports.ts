@@ -159,6 +159,24 @@ export interface CreateOwnedOrganizationInput {
   at: Date;
 }
 
+/**
+ * MUT-182 (qa-reconcile D3): who is acting, for the audit rows createOwned and
+ * updateOwned write inside their own transaction — so a profile, or a type
+ * change, never commits without its record, and a failed audit can never
+ * turn a client's retry into a second profile.
+ */
+export interface OwnedProfileAudit {
+  actorId: string;
+  requestId: string | null;
+}
+
+export interface UpdateOwnedProfileAudit extends OwnedProfileAudit {
+  /** The request body's keys, for `organization.updated`. */
+  fields: string[];
+  /** The preset a type change seeds, for `organization.type_changed` and `expense_category.seeded`; null without a type change. */
+  preset: { name: string; locale: string } | null;
+}
+
 export type CreateOwnedOrganizationResult =
   | { kind: 'created'; organization: Organization; membership: MembershipRecord }
   /** The user already owns `count` profiles, the cap or more; nothing was written. */
@@ -194,9 +212,13 @@ export interface OrganizationRepository {
   /**
    * MUT-182: the profile and its owner's membership, in one transaction that
    * counts the user's owned profiles (MUT-120's included) under a lock on the
-   * user's row, so two concurrent creates can never both pass `cap`.
+   * user's row, so two concurrent creates can never both pass `cap`. The cap
+   * guards creation only: post-roll's personal-profile backfill for a legacy
+   * user with none (MUT-120) does not consult it, so such a user can end one
+   * over (accepted; the backfill is a one-time repair).
    */
-  createOwned(ownerUserId: string, input: CreateOwnedOrganizationInput, cap: number): Promise<CreateOwnedOrganizationResult>;
+  createOwned(ownerUserId: string, input: CreateOwnedOrganizationInput, cap: number, audit: OwnedProfileAudit): Promise<CreateOwnedOrganizationResult>;
+  /** Profiles the user owns: `ownerUserId`, or a MUT-120 profile the old revision wrote before post-roll stamped it (qa-reconcile D1). */
   countOwnedBy(userId: string): Promise<number>;
   /**
    * MUT-182 (eng review D4): the one versioned write behind PATCH
@@ -205,8 +227,20 @@ export interface OrganizationRepository {
    * changes — every expense's category cleared, every category deleted and
    * `preset` inserted. One version bump. Throws when asked to make the
    * MUT-120 profile anything but PERSONAL (a CHECK constraint in Postgres).
+   * A MUT-120 profile the old revision wrote without an owner (qa-reconcile
+   * D1) is owned through `personalOwnerUserId` and gets stamped on its first
+   * update. Audit rows go in the same transaction (D3); a type change's row
+   * lists the removed categories and each expense's lost category (D4).
    */
-  updateOwned(id: string, ownerUserId: string, expectedVersion: number, patch: UpdateOwnedOrganizationPatch, preset: readonly ExpenseCategoryInput[] | null, at: Date): Promise<UpdateOwnedOrganizationResult>;
+  updateOwned(
+    id: string,
+    ownerUserId: string,
+    expectedVersion: number,
+    patch: UpdateOwnedOrganizationPatch,
+    preset: readonly ExpenseCategoryInput[] | null,
+    at: Date,
+    audit: UpdateOwnedProfileAudit,
+  ): Promise<UpdateOwnedOrganizationResult>;
   /** What a type change would do right now (the preview). */
   typeChangeImpact(id: string): Promise<ProfileTypeChange>;
 }

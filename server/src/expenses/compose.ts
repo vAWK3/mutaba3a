@@ -61,7 +61,6 @@ export function requestedLinks(existing: ExpenseRecord, body: { customerId?: str
   return { customerId, projectId };
 }
 
-/** A category chosen for an expense must be the profile's and not archived. */
 /**
  * MUT-182 R17: changing a profile's type deletes its categories, so one can
  * vanish between `assertCategoryChoosable` and the write that names it. The
@@ -78,6 +77,7 @@ export async function withCategoryForeignKey<T>(write: () => Promise<T>): Promis
   }
 }
 
+/** A category chosen for an expense must be the profile's and not archived. */
 export async function assertCategoryChoosable(store: LedgerStore, organizationId: string, categoryId: string): Promise<void> {
   const category = await store.expenseCategories.getById(organizationId, categoryId);
   if (!category) throw validationError('CATEGORY_NOT_FOUND', 'No such category in this profile', { field: 'categoryId' });

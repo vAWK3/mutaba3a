@@ -25,6 +25,20 @@ export async function repairCaptureOrigins(db: PrismaClient): Promise<number> {
   return db.$executeRaw`UPDATE "payments" SET "origin" = 'CAPTURE' WHERE "origin" = 'INTEGRATION' AND "createdByUserId" IS NOT NULL`;
 }
 
+/**
+ * MUT-182 (qa-reconcile D1): the migration stamps every existing MUT-120
+ * profile owned + PERSONAL, but the old revision — serving between the
+ * migration and the roll, or again after a rollback — writes new ones with
+ * neither. Its row passes the CHECKs (they allow an unstamped personal
+ * profile; SQL treats the NULL comparison as passing). `profileOwnerOf`
+ * already treats such a row as its owner's, so this is housekeeping that
+ * lets one column answer again. Run after the personal-profile backfill,
+ * which writes stamped rows itself.
+ */
+export async function repairPersonalOwnership(db: PrismaClient): Promise<number> {
+  return db.$executeRaw`UPDATE "organizations" SET "ownerUserId" = "personalOwnerUserId", "profileType" = 'PERSONAL' WHERE "personalOwnerUserId" IS NOT NULL AND "ownerUserId" IS NULL`;
+}
+
 export interface PersonalProfileBackfill {
   created: { userId: string; organizationId: string }[];
   /** NO_FIRM: nothing to take a currency and timezone from. INVALID_TIMEZONE: the firm's zone is not IANA (TD-091). */
@@ -115,6 +129,8 @@ if (isMain) {
     for (const { userId, organizationId } of personal.created) console.log(`post-roll: personal profile ${organizationId} created for user ${userId}`);
     for (const { userId, reason } of personal.skipped) console.warn(`post-roll: user ${userId} still has no personal profile (${reason}); provision one by hand`);
     console.log(`post-roll: ${personal.created.length} personal profile(s) backfilled, ${personal.skipped.length} skipped`);
+    const stamped = await repairPersonalOwnership(db);
+    console.log(`post-roll: ${stamped} personal profile(s) stamped owned + PERSONAL`);
   } catch (err) {
     console.error('post-roll: failed', err);
     process.exitCode = 1;

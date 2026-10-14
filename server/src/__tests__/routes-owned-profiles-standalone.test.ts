@@ -53,7 +53,7 @@ async function user(h: Harness) {
 }
 
 async function ownedProfile(h: Harness, ownerId: string, profileType: ProfileType) {
-  const result = await h.store.organizations.createOwned(ownerId, { name: 'Studio', slug: `p-${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', profileType, at: h.clock.now }, 6);
+  const result = await h.store.organizations.createOwned(ownerId, { name: 'Studio', slug: `p-${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', profileType, at: h.clock.now }, 6, { actorId: ownerId, requestId: null });
   if (result.kind !== 'created') throw new Error('cap');
   return result.organization.id;
 }
@@ -115,6 +115,33 @@ describe.each(['BUSINESS', 'PERSONAL'] as const)('an owned %s profile is standal
     expect(res.status).toBe(409);
     expect((await read(res)).error).toMatchObject(OWNED);
     expect(await h.store.memberships.find(owner, id)).not.toBeNull();
+  });
+});
+
+describe('a personal profile the old revision wrote without an owner stays protected (qa-reconcile D1)', () => {
+  /** The shape a pre-MUT-182 revision writes during a deploy's roll window or after a rollback: personalOwnerUserId only. */
+  async function unstampedPersonal(h: Harness) {
+    const owner = await user(h);
+    const id = (await h.store.memberships.listByUser(owner))[0]!.organizationId;
+    const row = (h.store as unknown as { orgs: Map<string, { ownerUserId: string | null; profileType: string | null }> }).orgs.get(id)!;
+    Object.assign(row, { ownerUserId: null, profileType: null });
+    return { owner, id };
+  }
+
+  it('is still refused an API key and a grant to anyone else, as PERSONAL_PROFILE', async () => {
+    const h = harness();
+    const { id } = await unstampedPersonal(h);
+    const key = await h.app.request(`/admin/v1/organizations/${id}/api-keys`, json({ name: 'Malafat', scopes: SCOPES }, admin));
+    expect((await read(key)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
+    const other = await user(h);
+    const grant = await h.app.request(`/admin/v1/users/${other}/memberships`, json({ organizationId: id }, admin));
+    expect((await read(grant)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PERSONAL_PROFILE' } });
+  });
+
+  it('still counts toward its owner’s cap', async () => {
+    const h = harness();
+    const { owner } = await unstampedPersonal(h);
+    expect(await h.store.organizations.countOwnedBy(owner)).toBe(1);
   });
 });
 

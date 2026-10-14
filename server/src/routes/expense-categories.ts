@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { presetFor } from '../expenses/presets.js';
+import { profileTypeOf } from '../personal-profile.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { UniqueViolation } from '../repositories/memory.js';
@@ -55,7 +56,8 @@ export function expenseCategoryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization, user, writerOfRecord } = sessionAuth(c);
       const now = c.get('now')();
       if ((await store.expenseCategories.list(organization.id, { includeArchived: true })).length === 0) {
-        const { preset, categories } = presetFor({ writerOfRecord, profileType: organization.profileType }, user.locale);
+        // profileTypeOf: a MUT-120 profile the old revision wrote unstamped is still PERSONAL (qa-reconcile D1); it seeds once, so it must be right.
+        const { preset, categories } = presetFor({ writerOfRecord, profileType: profileTypeOf(organization) }, user.locale);
         if (await store.expenseCategories.seed(organization.id, categories, now)) {
           await store.audit.append({ organizationId: organization.id, actorType: 'SYSTEM', actorId: null, action: 'expense_category.seeded', entityType: 'expense_category', entityId: null, metadata: { preset, count: categories.length, locale: user.locale }, requestId: c.get('requestId') });
         }

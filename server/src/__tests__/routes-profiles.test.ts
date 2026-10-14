@@ -267,6 +267,19 @@ describe('GET /v1/profiles/{profileId}/type-change', () => {
     expect(done.typeChange).toEqual(shown);
   });
 
+  it('refuses to preview a change PATCH would refuse: the built-in personal profile, and a firm the caller only belongs to', async () => {
+    const h = harness();
+    const theFirm = await firm(h);
+    const u = await person(h, { firmId: theFirm.id });
+    const personal = await h.app.request(`/v1/profiles/${u.personalId}/type-change?to=BUSINESS`, { headers: u.me() });
+    expect(personal.status).toBe(409);
+    expect((await read(personal)).error.details).toMatchObject({ reason: 'DEFAULT_PERSONAL_PROFILE' });
+    expect((await h.app.request(`/v1/profiles/${u.personalId}/type-change?to=PERSONAL`, { headers: u.me() })).status).toBe(200);
+    const onFirm = await h.app.request(`/v1/profiles/${theFirm.id}/type-change?to=BUSINESS`, { headers: u.me() });
+    expect(onFirm.status).toBe(403);
+    expect((await read(onFirm)).error).toMatchObject({ code: 'READ_ONLY_PROFILE', details: { reason: 'NOT_OWNER' } });
+  });
+
   it('answers 404 off-limits and 422 without a target type', async () => {
     const { h, preview, create } = await setup();
     const other = await person(h);
@@ -292,6 +305,43 @@ describe('GET /v1/me (MUT-182 fields)', () => {
     ]);
     expect(me.profiles.every((p: Loose) => p.version === 1)).toBe(true);
     expect(me.limits).toEqual({ ownedProfiles: 3, maxOwnedProfiles: MAX_OWNED_PROFILES });
+  });
+});
+
+describe('GET /v1/me ordering and the old-revision shape', () => {
+  it('lists created profiles oldest first (membership order), whatever their names', async () => {
+    const h = harness();
+    const u = await person(h);
+    const zed = await read(await h.app.request('/v1/profiles', json({ ...STUDIO, name: 'Zed' }, u.me(idem()))));
+    h.clock.now = new Date('2026-10-14T10:00:00Z');
+    const alpha = await read(await h.app.request('/v1/profiles', json({ ...STUDIO, name: 'Alpha' }, u.me(idem()))));
+    const me = await read(await h.app.request('/v1/me', { headers: u.me() }));
+    expect(me.profiles.map((p: Loose) => p.id)).toEqual([zed.id, alpha.id, u.personalId]);
+  });
+
+  it('still shows a personal profile the old revision wrote without an owner as owned and PERSONAL (qa-reconcile D1)', async () => {
+    const h = harness();
+    const u = await person(h);
+    const row = (h.store as unknown as { orgs: Map<string, { ownerUserId: string | null; profileType: string | null }> }).orgs.get(u.personalId)!;
+    Object.assign(row, { ownerUserId: null, profileType: null });
+    const me = await read(await h.app.request('/v1/me', { headers: u.me() }));
+    expect(me.profiles).toEqual([expect.objectContaining({ id: u.personalId, owned: true, type: 'PERSONAL', isPersonalDefault: true })]);
+    expect(me.limits.ownedProfiles).toBe(1);
+    // Its owner can still rename it, which stamps it.
+    const renamed = await h.app.request(`/v1/profiles/${u.personalId}`, json({ name: 'Home' }, u.me({ 'if-match': '1' }), 'PATCH'));
+    expect(renamed.status).toBe(200);
+    expect(row).toMatchObject({ ownerUserId: u.userId, profileType: 'PERSONAL' });
+  });
+});
+
+describe('the first category list on an unstamped personal profile', () => {
+  it('seeds the personal preset, not the general one (re-review: D1 left this door open)', async () => {
+    const h = harness();
+    const u = await person(h);
+    const row = (h.store as unknown as { orgs: Map<string, { ownerUserId: string | null; profileType: string | null }> }).orgs.get(u.personalId)!;
+    Object.assign(row, { ownerUserId: null, profileType: null });
+    const categories = await read(await h.app.request('/v1/expense-categories', { headers: u.me({ 'x-mutaba3a-profile': u.personalId }) }));
+    expect(categories.items.map((c: Loose) => c.name)).toEqual(PERSONAL_PRESET.map((c) => c.name));
   });
 });
 

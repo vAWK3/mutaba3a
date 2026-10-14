@@ -6,7 +6,7 @@ import { clientIp, isSameOriginRequest, sessionCookieName, type SignInThrottle }
 import type { PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
+import type { LedgerStore, UserRecord } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema, MeSchema, SignInRequestSchema } from '../schemas.js';
 import { hostedProfileFor } from '../serializers.js';
 import { MAX_OWNED_PROFILES } from './profiles.js';
@@ -120,21 +120,21 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
 
 /** Exported for routes/device-sessions.ts (MUT-64): both sign-in surfaces return the same Me shape. */
 export async function buildMe(store: LedgerStore, user: UserRecord) {
-  const listed: Array<{ organization: Organization; profile: ReturnType<typeof hostedProfileFor> }> = [];
+  const profiles = [];
   for (const membership of await store.memberships.listByUser(user.id)) {
     const organization = await store.organizations.getById(membership.organizationId);
     if (!organization) continue;
     const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
-    listed.push({ organization, profile: hostedProfileFor(organization, malafat?.status === 'CONNECTED' ? 'MALAFAT' : null, user.id) });
+    profiles.push(hostedProfileFor(organization, malafat?.status === 'CONNECTED' ? 'MALAFAT' : null, user.id));
   }
   // MUT-120: the personal membership is created in the same instant as the firm's, so membership order alone ties on a
-  // random id. Firms keep membership order, then the profiles the caller created, oldest first (MUT-182), then the
-  // caller's personal profile last (stable sort); the portal opens profiles[0].
-  const rank = ({ profile }: { profile: ReturnType<typeof hostedProfileFor> }) => (profile.isPersonalDefault ? 2 : profile.owned ? 1 : 0);
-  listed.sort((a, b) => rank(a) - rank(b) || (rank(a) === 1 ? a.organization.createdAt.getTime() - b.organization.createdAt.getTime() : 0));
+  // random id. A stable sort on rank keeps membership order (oldest first) inside each group: firms, then the profiles
+  // the caller created (MUT-182), then the caller's personal profile last. The portal opens profiles[0].
+  const rank = (p: { isPersonalDefault: boolean; owned: boolean }) => (p.isPersonalDefault ? 2 : p.owned ? 1 : 0);
+  profiles.sort((a, b) => rank(a) - rank(b));
   return {
     user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale },
-    profiles: listed.map((l) => l.profile),
+    profiles,
     limits: { ownedProfiles: await store.organizations.countOwnedBy(user.id), maxOwnedProfiles: MAX_OWNED_PROFILES },
   };
 }

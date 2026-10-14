@@ -115,6 +115,7 @@ import type {
 } from './ports.js';
 import { CAPTURE_UNDO_REASON } from './ports.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
+import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 
@@ -173,7 +174,7 @@ export class MemoryLedgerStore implements LedgerStore {
     getById: async (id) => clone(this.orgs.get(id)),
     getBySlug: async (slug) => clone([...this.orgs.values()].find((o) => o.slug === slug)),
     list: async () => [...this.orgs.values()].map((o) => ({ ...o })), // insertion order = creation order
-    createOwned: async (ownerUserId, input: CreateOwnedOrganizationInput, cap) => {
+    createOwned: async (ownerUserId, input: CreateOwnedOrganizationInput, cap, audit) => {
       if (!this.people.has(ownerUserId)) throw new ForeignKeyViolation('organizations.ownerUserId');
       if ([...this.orgs.values()].some((o) => o.slug === input.slug)) throw new UniqueViolation('organizations.slug');
       const count = this.ownedCount(ownerUserId);
@@ -183,30 +184,36 @@ export class MemoryLedgerStore implements LedgerStore {
       const membership: MembershipRecord = { userId: ownerUserId, organizationId: organization.id, createdAt: at };
       this.orgs.set(organization.id, organization);
       this.members.set(membershipKey(ownerUserId, organization.id), membership);
+      for (const event of ownedProfileCreatedAudit(organization, audit)) await this.audit.append(event);
       return { kind: 'created', organization: { ...organization }, membership: { ...membership } };
     },
     countOwnedBy: async (userId) => this.ownedCount(userId),
-    updateOwned: async (id, ownerUserId, expectedVersion, patch: UpdateOwnedOrganizationPatch, preset, at) => {
+    updateOwned: async (id, ownerUserId, expectedVersion, patch: UpdateOwnedOrganizationPatch, preset, at, audit) => {
       const org = this.orgs.get(id);
-      if (!org || org.ownerUserId !== ownerUserId) return { kind: 'not_found' };
+      if (!org || profileOwnerOf(org) !== ownerUserId) return { kind: 'not_found' };
       if (org.version !== expectedVersion) return { kind: 'stale', record: { ...org } };
       // Postgres' organizations_personal_owned_check (eng review D2), checked before any write.
       if (org.personalOwnerUserId && patch.profileType && patch.profileType !== 'PERSONAL') {
         throw new StateConflict('organizations', 'the built-in personal profile is always PERSONAL');
       }
-      const retype = patch.profileType !== undefined && patch.profileType !== org.profileType;
+      const from = profileTypeOf(org);
+      const retype = patch.profileType !== undefined && patch.profileType !== from;
       const typeChange = retype ? this.replaceCategories(id, preset ?? [], at) : null;
+      // qa-reconcile D1: a MUT-120 profile the old revision wrote without an owner gets stamped on its first update.
+      if (org.ownerUserId === null) Object.assign(org, { ownerUserId, profileType: from });
       if (patch.name !== undefined) org.name = patch.name;
       if (patch.defaultCurrency !== undefined) org.defaultCurrency = patch.defaultCurrency;
       if (patch.profileType !== undefined) org.profileType = patch.profileType;
       org.version += 1;
-      return { kind: 'updated', record: { ...org }, typeChange };
+      const events = ownedProfileUpdatedAudit(id, { from, to: org.profileType }, audit, typeChange && { ...typeChange, seeded: preset?.length ?? 0 });
+      for (const event of events) await this.audit.append(event);
+      return { kind: 'updated', record: { ...org }, typeChange: typeChange?.impact ?? null };
     },
     typeChangeImpact: async (id) => this.typeChangeImpactOf(id),
   };
 
   private ownedCount(userId: string): number {
-    return [...this.orgs.values()].filter((o) => o.ownerUserId === userId).length;
+    return [...this.orgs.values()].filter((o) => profileOwnerOf(o) === userId).length;
   }
 
   private typeChangeImpactOf(organizationId: string): ProfileTypeChange {
@@ -217,15 +224,23 @@ export class MemoryLedgerStore implements LedgerStore {
   }
 
   /** MUT-182: a type change — every expense uncategorized (deleted ones too, so none points at a removed row), every category gone, `preset` in. */
-  private replaceCategories(organizationId: string, preset: readonly ExpenseCategoryInput[], at: Date): ProfileTypeChange {
+  private replaceCategories(organizationId: string, preset: readonly ExpenseCategoryInput[], at: Date): { impact: ProfileTypeChange; detail: TypeChangeDetail } {
     const impact = this.typeChangeImpactOf(organizationId);
+    const detail: TypeChangeDetail = {
+      removedCategories: [...this.expCats.values()]
+        .filter((c) => c.organizationId === organizationId)
+        .sort(compareByCreatedAtThenId)
+        .map((c) => ({ id: c.id, name: c.name, color: c.color, archived: c.archivedAt !== null })),
+      uncategorized: [],
+    };
     for (const e of this.exps.values()) {
       if (e.organizationId !== organizationId || e.categoryId === null) continue;
+      detail.uncategorized.push({ expenseId: e.id, categoryId: e.categoryId });
       Object.assign(e, { categoryId: null, version: e.version + 1, updatedAt: at });
     }
     for (const [key, c] of this.expCats) if (c.organizationId === organizationId) this.expCats.delete(key);
     this.insertPreset(organizationId, preset, at);
-    return impact;
+    return { impact, detail };
   }
 
   private insertPreset(organizationId: string, preset: readonly ExpenseCategoryInput[], at: Date): void {

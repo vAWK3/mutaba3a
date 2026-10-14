@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { presetFor } from '../expenses/presets.js';
+import { profileOwnerOf, profileTypeOf } from '../personal-profile.js';
 import { identityIdempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
-import type { JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
+import type { LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
 import {
   CreateProfileRequestSchema,
   HostedProfileSchema,
@@ -47,19 +47,21 @@ const forbiddenResponse = { 403: { description: 'READ_ONLY_PROFILE with details.
 export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
-  function audit(c: Context<AppEnv>, organizationId: string, action: string, entityType: string, entityId: string, metadata?: JsonObject) {
-    const { user } = c.get('identity');
-    return store.audit.append({ organizationId, actorType: 'USER', actorId: user.id, action, entityType, entityId, ...(metadata ? { metadata } : {}), requestId: c.get('requestId') });
-  }
-
   /** The profile at `profileId`, if the caller owns it: 404 when they cannot see it at all, 403 when it is a firm they only belong to. */
   async function ownedBy(user: UserRecord, profileId: string): Promise<Organization> {
     const organization = await store.organizations.getById(profileId);
     if (!organization || !(await store.memberships.find(user.id, profileId))) throw new ApiError('NOT_FOUND', 'Profile not found');
-    if (organization.ownerUserId !== user.id) {
+    if (profileOwnerOf(organization) !== user.id) {
       throw new ApiError('READ_ONLY_PROFILE', 'Only the person who owns a profile can change it; this one is your firm’s', { reason: 'NOT_OWNER' });
     }
     return organization;
+  }
+
+  /** The built-in personal profile is always PERSONAL (eng review D2): PATCH refuses to retype it, and the preview of that change says the same. */
+  function assertRetypable(organization: Organization, type: 'PERSONAL' | 'BUSINESS' | undefined) {
+    if (type && type !== 'PERSONAL' && organization.personalOwnerUserId) {
+      throw new ApiError('CONFLICT', 'Your built-in personal profile is always Personal; create another profile for a business', { reason: 'DEFAULT_PERSONAL_PROFILE' });
+    }
   }
 
   app.openapi(
@@ -81,14 +83,13 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         user.id,
         { name: body.name, slug: `p-${randomUUID()}`, defaultCurrency: body.defaultCurrency, timezone: body.timezone, profileType: body.type, at: c.get('now')() },
         MAX_OWNED_PROFILES,
+        // Written inside the create's transaction (qa-reconcile D3): no profile without its record, no duplicate on retry.
+        { actorId: user.id, requestId: c.get('requestId') },
       );
       if (result.kind === 'limit') {
         throw new ApiError('CONFLICT', `You already have ${result.count} profiles, the most one person can own`, { reason: 'PROFILE_LIMIT', limit: MAX_OWNED_PROFILES });
       }
-      const { organization } = result;
-      await audit(c, organization.id, 'organization.created', 'organization', organization.id, { owned: true, profileType: body.type });
-      await audit(c, organization.id, 'membership.granted', 'user', user.id);
-      return c.json(hostedProfileFor(organization, null, user.id), 201);
+      return c.json(hostedProfileFor(result.organization, null, user.id), 201);
     },
   );
 
@@ -105,20 +106,19 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       request: { params: ProfileIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateProfileRequestSchema) },
       responses: {
         200: { description: 'Updated', content: { 'application/json': { schema: UpdateProfileResponseSchema } } },
-        ...forbiddenResponse,
         ...notFoundResponse,
         ...conflictResponse,
         ...validationResponse,
         ...errorResponses,
+        // Last, so it replaces errorResponses' API-key 403 text: these routes refuse keys before any scope check.
+        ...forbiddenResponse,
       },
     }),
     async (c) => {
       const { user } = c.get('identity');
       const body = c.req.valid('json');
       const current = await ownedBy(user, c.req.valid('param').profileId);
-      if (body.type && body.type !== 'PERSONAL' && current.personalOwnerUserId) {
-        throw new ApiError('CONFLICT', 'Your built-in personal profile is always Personal; create another profile for a business', { reason: 'DEFAULT_PERSONAL_PROFILE' });
-      }
+      assertRetypable(current, body.type);
       const target = body.type ? presetFor({ writerOfRecord: null, profileType: body.type }, user.locale) : null;
       const now = c.get('now')();
       const result = await store.organizations.updateOwned(
@@ -128,15 +128,12 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         { ...(body.name !== undefined ? { name: body.name } : {}), ...(body.defaultCurrency !== undefined ? { defaultCurrency: body.defaultCurrency } : {}), ...(body.type !== undefined ? { profileType: body.type } : {}) },
         target?.categories ?? null,
         now,
+        // Audited inside the same transaction (qa-reconcile D3), the type change with what it removed (D4).
+        { actorId: user.id, requestId: c.get('requestId'), fields: Object.keys(body), preset: target ? { name: target.preset, locale: user.locale } : null },
       );
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'Profile not found');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
-      await audit(c, current.id, 'organization.updated', 'organization', current.id, { fields: Object.keys(body) });
       const typeChange = result.typeChange && target ? { ...result.typeChange, preset: target.preset } : null;
-      if (typeChange && target) {
-        await audit(c, current.id, 'organization.type_changed', 'organization', current.id, { from: current.profileType, to: body.type ?? null, ...typeChange });
-        await store.audit.append({ organizationId: current.id, actorType: 'SYSTEM', actorId: null, action: 'expense_category.seeded', entityType: 'expense_category', entityId: null, metadata: { preset: target.preset, count: target.categories.length, locale: user.locale }, requestId: c.get('requestId') });
-      }
       return c.json({ profile: hostedProfileFor(result.record, null, user.id), typeChange }, 200);
     },
   );
@@ -147,17 +144,18 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/profiles/{profileId}/type-change',
       tags: ['Profiles'],
       summary: 'Preview what changing a profile’s type would do',
-      description: 'The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type.',
+      description: 'The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type. Refused exactly where PATCH is (409 DEFAULT_PERSONAL_PROFILE on the built-in personal profile).',
       security: SESSION_ONLY,
       request: { params: ProfileIdParamSchema, query: ProfileTypeChangeQuerySchema },
-      responses: { 200: { description: 'Preview', content: { 'application/json': { schema: ProfileTypeChangeSchema } } }, ...forbiddenResponse, ...notFoundResponse, ...validationResponse, ...errorResponses },
+      responses: { 200: { description: 'Preview', content: { 'application/json': { schema: ProfileTypeChangeSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...forbiddenResponse },
     }),
     async (c) => {
       const { user } = c.get('identity');
       const current = await ownedBy(user, c.req.valid('param').profileId);
       const to = c.req.valid('query').to;
+      assertRetypable(current, to);
       const { preset } = presetFor({ writerOfRecord: null, profileType: to }, user.locale);
-      const impact = to === current.profileType ? { uncategorizedExpenses: 0, deletedCategories: 0 } : await store.organizations.typeChangeImpact(current.id);
+      const impact = to === profileTypeOf(current) ? { uncategorizedExpenses: 0, deletedCategories: 0 } : await store.organizations.typeChangeImpact(current.id);
       return c.json({ ...impact, preset }, 200);
     },
   );

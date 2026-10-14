@@ -23,8 +23,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Which deployment issued a key. A "test" key is rejected by a "live"
-/// deployment and vice versa (see config.API_KEY_ENVIRONMENT).
 /// MUT-182: an owned profile's kind. Only selects the expense-category preset;
 /// BUSINESS is not a firm, a Malafat tenant or a shared organization.
 enum ProfileType {
@@ -32,6 +30,8 @@ enum ProfileType {
   BUSINESS
 }
 
+/// Which deployment issued a key. A "test" key is rejected by a "live"
+/// deployment and vice versa (see config.API_KEY_ENVIRONMENT).
 enum ApiKeyEnvironment {
   live
   test
@@ -954,6 +954,8 @@ model Expense {
   @@index([organizationId, projectId, occurredOn])
   /// Whether a category is in use.
   @@index([organizationId, categoryId])
+  /// MUT-182: a type change deletes categories; ON DELETE SET NULL then probes expenses by categoryId alone.
+  @@index([categoryId])
   @@map("expenses")
 }
 
