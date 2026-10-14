@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Malafat in the phone app's Settings (MUT-192, mutaba3a-flutter)
+
+**Why:** epic MUT-189's last surface. Recorded here because ADR-078 lives here; the code is in the mutaba3a-flutter repo (`feature/mut-192-malafat-suggestions`).
+
+### Added
+- The app's Settings shows a Malafat section (link + "Show Malafat suggestions") on iOS and Android to anyone who owns a business profile and is not on Malafat; it uses this server's `PATCH /v1/me/malafat-suggestions`. No server change.
+
+---
+
 ## [Unreleased] - 2026-10-15 — Malafat suggestions in the hosted portal (MUT-191, API 1.25.0-mut191)
 
 **Why:** epic MUT-189: people on the hosted portal who run a law firm or an accounting office should meet Malafat at the moments it helps, with one switch to turn it off, and the choice should follow the account (and the phone app next, MUT-192).

@@ -3095,6 +3095,13 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - A failed dismissal write is silent; the suggestion returns next visit (TD-140). Settings writes are not transactional (TD-138).
 - "Skip for now" on the welcome dialog creates a placeholder business, so a person who skipped and then adds their real business gets the business-added note. Accepted; flagged to Basel on MUT-190.
 
+**Amendment (2026-10-15, MUT-192 — the phone app, mutaba3a-flutter)**:
+- **S1 only.** Settings gains a Malafat section (a link that opens malafat.app in the browser, `utm_medium=ios|android`, `utm_content=settings`, and the account's switch through the same `PATCH /v1/me/malafat-suggestions` with the device session). C1 waits for profile creation in the app (MUT-184); C2 waits for a Clients screen (the only client list is the capture flow's picker, where suggestions are banned).
+- **Account-wide eligibility.** Settings is not per-profile, so the section shows when any of the person's profiles is eligible, never for a Malafat customer.
+- **No macOS.** The referral contract has no medium for it; the section shows on iOS and Android only.
+- **"Malafat" stays Latin in Arabic** in the section, though the app's existing profile badge writes ملفات (left alone).
+- The app parses `malafatSuggestions` tolerantly (unknown moments kept as strings; anything malformed is the default), so a server change can never sign anyone out.
+
 **Amendment (2026-10-15, MUT-191 — the hosted portal)**:
 - **Stored on the server, per user**, not in the browser: the portal keeps nothing but the language in the browser (hosted-portal.md §7.1), and a server preference follows the account to other browsers and to the phone app (MUT-192). `User.malafatSuggestions` (nullable JSON) is read through `/v1/me` (`user.malafatSuggestions`, resolved to `{ off: false, dismissed: [] }`) and changed with `PATCH /v1/me/malafat-suggestions { off?, dismiss? }`: dismissals are unioned under a row lock so two tabs never lose one; `off` is last-write-wins. Idempotent, so no Idempotency-Key.
 - **No audit row.** Firm audit logs are readable by Malafat; a row per dismissal would be a click log of the upsell (telemetry, ADR-024).
