@@ -489,9 +489,21 @@ for (const language of ['en', 'ar'] as const) {
         await expect(stores.getByRole('link')).toHaveCount(expectedLinks);
       });
 
+      await step('At 1024 px the phone frame covers none of the laptop\u2019s amounts', async () => {
+        await page.setViewportSize({ width: 1024, height: 768 });
+        await chapter.scrollIntoViewIfNeeded();
+        const phone = (await chapter.locator('.hosted-devices-phone').boundingBox())!;
+        for (const money of await chapter.locator('.hosted-devices-laptop .landing-mock-money').all()) {
+          const box = (await money.boundingBox())!;
+          const overlaps = box.x < phone.x + phone.width && box.x + box.width > phone.x;
+          expect(overlaps, `amount under the phone at 1024 (${language})`).toBe(false);
+        }
+      });
+
       await step('At 375 px the chapter fits and keeps the whole picture', async () => {
         await page.setViewportSize({ width: 375, height: 812 });
         await chapter.scrollIntoViewIfNeeded();
+        await expect(page.locator('html')).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr');
         await expectNoHorizontalOverflow(page, `phone 375 ${language}`);
         await expect(chapter.locator('.hosted-devices-laptop')).toBeVisible();
         await expect(chapter.locator('.hosted-devices-phone')).toBeVisible();

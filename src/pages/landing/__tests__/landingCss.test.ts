@@ -109,6 +109,13 @@ describe('landing CSS', () => {
     },
   );
 
+  it('keeps a store link\'s label colour and no underline on hover, like every landing control (TD-122)', () => {
+    expect(baseDeclarations(landingPageCss, 'a.landing-phone-store:hover')).toMatchObject({
+      color: 'var(--text)',
+      'text-decoration': 'none',
+    });
+  });
+
   it('dims hover and press from the page\'s two dim values, never a literal opacity', () => {
     const offenders: string[] = [];
     for (const { file, root } of landingRoots) {

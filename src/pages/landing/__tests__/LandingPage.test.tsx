@@ -241,9 +241,18 @@ describe('LandingPage phone and portal (MUT-173)', () => {
   it('names an available app without a link while no store URL is set, never a dead link', () => {
     renderLanding('en');
     const list = stores();
-    expect(list).toHaveTextContent('iPhone');
-    expect(list).toHaveTextContent('with your hosted account');
+    expect(list).toHaveTextContent('iPhone with your hosted account');
     expect(within(list).queryAllByRole('link')).toHaveLength(0);
+    expect(list.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(2);
+  });
+
+  it('never links a placeholder that is not an https URL, nor an app that is not available', () => {
+    apps.links = { ios: { available: true, url: 'TBD' }, android: { available: false, url: 'https://play.google.com/x' } };
+    renderLanding('en');
+    const list = stores();
+    expect(within(list).queryAllByRole('link')).toHaveLength(0);
+    expect(list).toHaveTextContent('iPhone with your hosted account');
+    expect(list).toHaveTextContent('Android coming soon');
   });
 
   it('says a platform is coming soon while it is not available, and drops the note once it is', () => {

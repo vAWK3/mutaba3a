@@ -1,6 +1,6 @@
 # MUT-173 — Landing: the phone app logs it, the portal shows it
 
-Status: **BUILT (2026-10-14)**, branch `feature/mut-171-landing` (epic worktree `.claude/worktrees/mut-171-landing`, one worktree for the whole of MUT-171).
+Status: **BUILT and reconciled (2026-10-14)**, branch `feature/mut-171-landing`; the qa-reconcile record is at the end of this file (epic worktree `.claude/worktrees/mut-171-landing`, one worktree for the whole of MUT-171).
 Ticket: MUT-173 (Story) · parent epic MUT-171 (landing: hosted, mobile, Malafat). Siblings: MUT-172 (free vs. paid split, merged 8368aa3, In Review), MUT-174 (Malafat section, Backlog, next). Relates to MUT-63 (capture app epic) and MUT-114 (Android prep, In Progress). No `is blocked by` link and none in the prose; MUT-114 only changes the Android package, not what the landing may say.
 Tracker: Jira · barmajiyat.atlassian.net · MUT via atlassian-barmajiyat · Backlog = planning allowed when Basel asks (he asked for the whole epic) · finished → In Review after /qa-reconcile.
 
@@ -358,3 +358,37 @@ Auto-decided on the recommended option (non-interactive run), for Basel to confi
 - D1 structure: original arrangement (auto)
 - D2 mock on phones on `/`: keep laptop + caption (auto)
 - D3 plain chip state: three states with "with your hosted account" (auto)
+
+
+---
+
+# qa-reconcile record (2026-10-14, non-interactive)
+
+Branch `feature/mut-171-landing` vs `main` (0854624). Reviewer: Claude + an independent in-host reviewer on the diff (ran typecheck, lint, the landing/i18n/content suites, the build, and measured `/` and `/hosted` in a browser at 1280/1024/800/375, EN and AR).
+
+| Criterion (ticket) | In plan? | In code? | Verdict |
+|---|---|---|---|
+| New section states the phone-does-entry / portal-does-viewing split plainly | yes (§2, D1) | `PhoneSection.tsx`, `LandingPage.tsx` (after Get it); `landing.phone.title/body` | MET |
+| Store links sourced from config constants, not hardcoded in JSX | yes (D2) | `MOBILE_APP_LINKS` via `storeLinkUrl` (`download-config.ts`); no store host in any `.tsx` | MET (DRIFT, flagged: no new `app-store-config.ts`; the existing config is the config) |
+| Missing/placeholder config renders "coming soon", not a broken link | yes (D9) | three states; `storeLinkUrl` rejects placeholders and unavailable apps' URLs | MET (DRIFT, flagged: an available app with no URL is named with "with your hosted account", not "coming soon", so `/` agrees with `/hosted`) |
+| Section does not claim a reports/analytics feature | yes (D8) | copy; honesty test EN/AR; QA `getByText(/report|analytic|dashboard/)` = 0 | MET |
+| New iOS/Android icons alongside existing PlatformIcons | yes (D5) | `IosIcon`, `AndroidIcon` in `PlatformIcons.tsx`; two `svg[aria-hidden]` asserted | MET |
+| i18n EN/AR; tests added | yes | `landing.phone.*` both dictionaries (parity test); unit + QA EN/AR with `dir` asserted | MET |
+| Guardrails: Brand v2 tokens, one idea per section, RTL | yes | tokens only (`landingCss.test`), logical properties, chapter layout | MET |
+
+Scope creep: none. Conscious inclusions from the plan: `ChapterSection.extra` (needed by the section), the mock's CSS move (needed by the reuse), `storeLinkUrl` (needed by AC3).
+
+Pre-landing review findings and what changed:
+1. **P2, fixed** — at 901–1180 px the chapter's column is narrower than `/hosted`'s hero cell and the phone frame covered the laptop's amounts ("₪1,20"). The laptop is now `min(72%, calc(100% - 140px))` (the phone may cover the laptop's padding, never its amounts); a 1024 px QA step asserts no amount box intersects the phone box, EN and AR. `/hosted` had the same overlap at those widths and is fixed by the same rule.
+2. **P2, fixed** — any truthy `url` became a link, so a placeholder (`TBD`) or a URL on an unavailable app would have shipped a dead or contradictory link. `storeLinkUrl` (download-config.ts) requires `available` and a parseable `https:` URL; unit-tested (5 placeholder shapes) and covered in `LandingPage.test.tsx`.
+3. **P3, fixed** — no whitespace between "iPhone" and "with your hosted account" in the DOM text; a `{' '}` text node now separates them (the flex gap still draws the distance).
+4. **P3, fixed** — `/hosted`'s phone-only ≤640 px override tied with the mock's base rules at (0,2,0) and won only by stylesheet order; it is now scoped under `.hosted-hero-layout` (0,3,0). The LandingPage.css comment says so. `@web.landing.hosted-375` re-run: green.
+5. **P3, fixed** — the 560 px cap changed `/hosted`'s anchor at 641–900 px; it is now scoped to `.landing-chapter .hosted-devices`, so `/hosted` is unchanged there.
+6. **P3, fixed** — the store-link arm of the QA case cannot run while both URLs are `null`; `landingCss.test.ts` now pins `a.landing-phone-store:hover { color: var(--text); text-decoration: none }` so the hover promise has a test today. The catalogue wording already says the press/hover check applies once a link is configured.
+7. **P3, left** — new-tab store links carry no "opens in a new tab" cue; consistent with the release-notes link in Get it (project-wide, not this ticket).
+8. **P3, fixed** — `link.url!` is gone (the helper returns the URL). The "nothing extra by default" guard in `ChapterSection.test.tsx` stays as a cheap guard.
+Also added from the reviewer's criteria table: the AR QA step asserts `dir="rtl"` (and `ltr` in EN); the unit test asserts the two decorative SVGs.
+
+Gate on the final tree (Node 22): `npm run lint` 0 errors (6 pre-existing warnings outside this ticket); `npm run typecheck` pass; landing/content/i18n suites 25 files, 313 tests; full `npm run test:run` and `npm run build`: see the merge commit message; `release-qa lint`: no errors, no new unmapped file; Playwright on a built web preview: `@web.landing.phone` EN/AR, `hosted`, `hosted-375`, `get-it-paid`, `375`, `press`, `hover-light` — 12 passed. Browser check in the app's own pane at 1280 and 375 (EN and AR): chapter whole, RTL mirrored, no console errors.
+
+**Verdict: PASS.** Two readings of the AC's literal text (no new config file; the plain state's wording) are on the ticket for Basel. Jira → In Review.

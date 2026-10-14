@@ -1055,15 +1055,21 @@ a.landing-phone-store:focus-visible {
 /* ============================================
    The laptop-and-phone mock (HostedDevicesMock): /hosted's hero anchor, and since
    MUT-173 the phone chapter's picture on /. It sits last in this file so it keeps
-   out-ranking .landing-mock by source order, and the two frames are written at
-   (0,2,0) so their position never matters. /hosted's phone-only rule at ≤640px
-   stays in HostedOfferPage.css; on / the chapter keeps the whole picture.
+   out-ranking .landing-mock (0,1,0) by source order, and the two frames are written
+   at (0,2,0) so a .landing-mock rule can never out-rank them wherever they sit.
+   /hosted's phone-only rule at ≤640px stays in HostedOfferPage.css, scoped under
+   .hosted-hero-layout (0,3,0) so it wins by weight, not by stylesheet order; on /
+   the chapter keeps the whole picture.
    ============================================ */
 .hosted-devices {
   position: relative;
   width: 100%;
-  max-width: 560px;
   min-height: 340px;
+}
+
+/* In the chapter's column the picture is capped so laptop and phone stay together in a single column (641–900px) */
+.landing-chapter .hosted-devices {
+  max-width: 560px;
 }
 
 .hosted-devices .landing-mock {
@@ -1073,10 +1079,11 @@ a.landing-phone-store:focus-visible {
   gap: var(--space-1);
 }
 
+/* The phone (160px, at the inline end) may cover the laptop's padding, never its amounts: the laptop stops 140px short of the end */
 .hosted-devices .hosted-devices-laptop {
   inset-inline-start: 0;
   top: 0;
-  width: 72%;
+  width: min(72%, calc(100% - 140px));
   padding: 0;
   overflow: hidden;
 }

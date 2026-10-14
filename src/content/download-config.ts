@@ -57,3 +57,17 @@ export const MOBILE_APP_LINKS: Record<'ios' | 'android', MobileAppLink> = {
   ios: { available: true, url: null },
   android: { available: false, url: null },
 };
+
+/**
+ * The store listing a page may link, or null: only an available app with a real
+ * https URL (MUT-173). A placeholder string, or a URL on an app that is not yet
+ * available, never becomes a link, so / can't contradict /hosted or ship a dead one.
+ */
+export function storeLinkUrl(link: MobileAppLink): string | null {
+  if (!link.available || !link.url) return null;
+  try {
+    return new URL(link.url).protocol === 'https:' ? link.url : null;
+  } catch {
+    return null;
+  }
+}

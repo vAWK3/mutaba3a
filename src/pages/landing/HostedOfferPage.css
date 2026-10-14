@@ -294,17 +294,17 @@
     width: 100%;
   }
 
-  .hosted-devices {
+  /* Scoped under the hero (0,3,0): the mock's base rules in LandingPage.css are (0,2,0), so this wins by weight, not by stylesheet order */
+  .hosted-hero-layout .hosted-devices {
     min-height: 0;
   }
 
-  /* Two classes: the base .hosted-devices .landing-mock rule sets display too */
-  .hosted-devices .hosted-devices-laptop,
-  .hosted-devices .hosted-devices-caption {
+  .hosted-hero-layout .hosted-devices .hosted-devices-laptop,
+  .hosted-hero-layout .hosted-devices .hosted-devices-caption {
     display: none;
   }
 
-  .hosted-devices .hosted-devices-phone {
+  .hosted-hero-layout .hosted-devices .hosted-devices-phone {
     position: relative;
     inset: auto;
     margin-inline: auto;
