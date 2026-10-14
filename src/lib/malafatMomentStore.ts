@@ -9,6 +9,9 @@ import { create } from 'zustand';
 interface MalafatMomentState {
   businessAdded: boolean;
   suggestionsShown: number;
+  /** A Clients suggestion was retired on this visit: show no other until the app reloads. */
+  clientsRetiredThisVisit: boolean;
+  markClientsRetired: () => void;
   markBusinessAdded: () => void;
   clearBusinessAdded: () => void;
   /** Call while a suggestion is mounted; the returned release is safe to call more than once. */
@@ -19,6 +22,8 @@ interface MalafatMomentState {
 export const useMalafatMomentStore = create<MalafatMomentState>((set) => ({
   businessAdded: false,
   suggestionsShown: 0,
+  clientsRetiredThisVisit: false,
+  markClientsRetired: () => set({ clientsRetiredThisVisit: true }),
   markBusinessAdded: () => set({ businessAdded: true }),
   clearBusinessAdded: () => set({ businessAdded: false }),
   claimSlot: () => {
@@ -30,5 +35,5 @@ export const useMalafatMomentStore = create<MalafatMomentState>((set) => ({
       set((s) => ({ suggestionsShown: Math.max(0, s.suggestionsShown - 1) }));
     };
   },
-  reset: () => set({ businessAdded: false, suggestionsShown: 0 }),
+  reset: () => set({ businessAdded: false, suggestionsShown: 0, clientsRetiredThisVisit: false }),
 }));

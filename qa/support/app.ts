@@ -81,3 +81,14 @@ export async function enableOptionalArea(page: Page, label: 'Expenses' | 'Planni
   if ((await toggle.getAttribute('aria-checked')) !== 'true') await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
 }
+
+/** Adds a second business through Settings › Businesses (openFreshApp's "Skip for now" made the first). */
+export async function addSecondBusiness(page: Page, name: string): Promise<void> {
+  await page.goto('/app/settings');
+  await page.getByRole('main').getByRole('button', { name: '+ Add Profile' }).click();
+  const drawer = page.getByRole('dialog').filter({ hasText: 'New Business Profile' });
+  await drawer.getByLabel(/Business Name \(Arabic\)/).fill(name);
+  await drawer.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(drawer).toBeHidden();
+}
+

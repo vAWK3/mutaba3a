@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 import { useMalafatMomentStore } from '../../lib/malafatMomentStore';
@@ -41,7 +41,8 @@ export function MalafatSuggestionCard({
   const claimSlot = useMalafatMomentStore((s) => s.claimSlot);
   const [gone, setGone] = useState(false);
 
-  useEffect(() => (gone ? undefined : claimSlot()), [gone, claimSlot]);
+  // A layout effect, so the Go hosted card never paints a frame beside a Malafat suggestion
+  useLayoutEffect(() => (gone ? undefined : claimSlot()), [gone, claimSlot]);
 
   if (gone) return null;
 
@@ -51,10 +52,19 @@ export function MalafatSuggestionCard({
     onGone();
   };
 
+  // A click on the link counts as seen, but the anchor must outlive the click so the browser follows it
+  const followLink = () => {
+    onRetire();
+    setTimeout(() => {
+      setGone(true);
+      onGone();
+    });
+  };
+
   return (
     <div role="group" aria-label={label} className={cn('malafat-suggestion', `malafat-suggestion--${variant}`)}>
       <p className="malafat-suggestion-text">{text}</p>
-      <a href={href} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-secondary" onClick={retire}>
+      <a href={href} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-secondary" onClick={followLink}>
         {ctaLabel}{' '}
         <span className="sr-only">{t('common.opensInNewTab')}</span>
       </a>

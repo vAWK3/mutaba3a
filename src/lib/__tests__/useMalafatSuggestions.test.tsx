@@ -54,8 +54,8 @@ describe('useMalafatSuggestions', () => {
   it('records a moment once however often it is dismissed', async () => {
     const store = installFakeSettings();
     const { result } = renderHook(() => useDismissMalafatMoment(), { wrapper: wrapper() });
-    await act(() => result.current.mutateAsync('second-business'));
-    await act(() => result.current.mutateAsync('second-business'));
-    expect(store.read().malafatSuggestions?.dismissed).toEqual(['second-business']);
+    await act(() => result.current.mutateAsync('client-threshold'));
+    await act(() => result.current.mutateAsync('client-threshold'));
+    expect(store.read().malafatSuggestions?.dismissed).toEqual(['client-threshold']);
   });
 });

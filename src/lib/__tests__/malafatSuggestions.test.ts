@@ -27,11 +27,11 @@ describe('dismissMoment', () => {
     expect(next).toEqual({ on: false, dismissed: ['client-threshold'] });
   });
 
-  it('retires the second-business card with the business-added note: one event, one suggestion', () => {
-    expect(dismissMoment({ on: true, dismissed: [] }, 'business-profile').dismissed.sort()).toEqual([
-      'business-profile',
-      'second-business',
-    ]);
+  it('retires the business-added note and the second-business card together, from either one: one event, one suggestion', () => {
+    for (const moment of ['business-profile', 'second-business'] as const) {
+      expect(dismissMoment({ on: true, dismissed: [] }, moment).dismissed.sort()).toEqual(['business-profile', 'second-business']);
+    }
+    expect(dismissMoment({ on: true, dismissed: [] }, 'client-threshold').dismissed).toEqual(['client-threshold']);
   });
 });
 

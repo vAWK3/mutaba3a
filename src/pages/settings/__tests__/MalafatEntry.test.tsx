@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, renderWithProviders, screen, userEvent, createMockBusinessProfile } from '../../../test/utils';
 import type { MalafatSuggestions } from '../../../lib/malafatSuggestions';
 import { useMalafatMomentStore } from '../../../lib/malafatMomentStore';
+import { useDemoStore } from '../../../demo/demoStore';
+import { useSampleSessionStore } from '../../../demo/sampleSessionStore';
 import en from '../../../lib/i18n/translations/en.json';
 import ar from '../../../lib/i18n/translations/ar.json';
 import { MalafatEntry } from '../MalafatEntry';
@@ -31,6 +33,8 @@ beforeEach(() => {
   state.retire.mockReset();
   state.setOn.mockReset();
   useMalafatMomentStore.getState().reset();
+  useDemoStore.setState({ isActive: false });
+  useSampleSessionStore.setState({ status: 'none' });
 });
 
 /** Settings › Businesses' "Mutaba3a + Malafat" row (S1) and, right after a second business is added, its note (C1). MUT-190. */
@@ -87,6 +91,24 @@ describe('MalafatEntry', () => {
     state.suggestions = { on: true, dismissed: ['business-profile'] };
     renderWithProviders(<MalafatEntry />);
     expect(screen.queryByRole('group', { name: T.noteLabel })).toBeNull();
+  });
+
+  it('shows no note inside sample or demo data, whatever the flag says', () => {
+    state.profiles = [createMockBusinessProfile({ id: 'p1' }), createMockBusinessProfile({ id: 'p2' })];
+    act(() => useMalafatMomentStore.getState().markBusinessAdded());
+    useDemoStore.setState({ isActive: true });
+    renderWithProviders(<MalafatEntry />);
+    expect(screen.queryByRole('group', { name: T.noteLabel })).toBeNull();
+  });
+
+  it('keeps focus on the switch while the change is written (no native disabled mid-press)', async () => {
+    renderWithProviders(<MalafatEntry />);
+    const toggle = screen.getByRole('switch', { name: T.switchLabel });
+    toggle.focus();
+    await userEvent.keyboard(' ');
+    expect(state.setOn).toHaveBeenCalledWith(false);
+    expect(toggle).not.toBeDisabled();
+    expect(toggle).toHaveFocus();
   });
 
   it('reads in Arabic', () => {

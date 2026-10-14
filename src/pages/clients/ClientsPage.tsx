@@ -360,7 +360,7 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
       ) : (
         <>
           {/* One Malafat suggestion beside a real list: never while searching or with a client open beside it (MUT-190) */}
-          {malafatSuggestionsEnabled() && !search && !openClientId && (
+          {malafatSuggestionsEnabled() && rows.length > 0 && !search && !openClientId && (
             <MalafatClientsSuggestion onGone={() => searchRef.current?.focus()} />
           )}
           <div className="card clients-index-summary">

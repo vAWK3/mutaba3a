@@ -7,6 +7,8 @@ import { useMalafatMomentStore } from '../../lib/malafatMomentStore';
 import { malafatUrl } from '../../content/malafatLinks';
 import { Switch } from '../../components/ui/Switch';
 import { MalafatSuggestionCard } from '../../components/malafat/MalafatSuggestionCard';
+import { useSampleSessionStore } from '../../demo/sampleSessionStore';
+import { useDemoStore } from '../../demo/demoStore';
 import './MalafatEntry.css';
 
 const SWITCH_LABEL_ID = 'malafat-suggestions-label';
@@ -31,8 +33,12 @@ export function MalafatEntry() {
   const linkRef = useRef<HTMLAnchorElement>(null);
   const focusLinkNext = useRef(false);
 
+  const sampleOpen = useSampleSessionStore((s) => s.status !== 'none');
+  const demo = useDemoStore((s) => s.isActive);
+
   const live = profiles.filter((profile) => !profile.archivedAt).length;
-  const note = suggestions !== null && showBusinessAddedNote({ suggestions, businessAdded, businessCount: live });
+  const note =
+    suggestions !== null && !sampleOpen && !demo && showBusinessAddedNote({ suggestions, businessAdded, businessCount: live });
 
   // After the note goes, focus lands on the row's own link, which takes its place
   useEffect(() => {
@@ -84,9 +90,12 @@ export function MalafatEntry() {
         </div>
         <Switch
           checked={suggestions?.on ?? true}
-          onChange={(on) => setOn.mutate(on)}
+          // Ignored while a write is in flight rather than natively disabled, which would drop keyboard focus
+          onChange={(on) => {
+            if (!setOn.isPending) setOn.mutate(on);
+          }}
           labelledBy={SWITCH_LABEL_ID}
-          disabled={suggestions === null || setOn.isPending}
+          disabled={suggestions === null}
         />
       </div>
     </div>

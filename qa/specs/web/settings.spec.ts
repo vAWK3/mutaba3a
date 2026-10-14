@@ -1,5 +1,5 @@
 import { test, expect } from '../../support/qa';
-import { openFreshApp } from '../../support/app';
+import { addSecondBusiness, logIncome, openFreshApp, switchToArabic } from '../../support/app';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 
 test(
@@ -86,5 +86,67 @@ test('Your data exports one business', { tag: '@web.settings.export' }, async ({
     const download = page.waitForEvent('download');
     await dialog.getByRole('button', { name: 'Export Default Profile' }).click();
     expect((await download).suggestedFilename()).toMatch(/^mutaba3a-Default-Profile-\d{4}-\d{2}-\d{2}\.csv$/);
+  });
+});
+
+
+test('Settings offers Malafat, says so once after a second business, and the switch turns suggestions off (MUT-190)', { tag: '@web.settings.malafat' }, async ({ page, step }) => {
+  const main = page.getByRole('main');
+  const note = main.getByRole('group', { name: 'A suggestion for your new business' });
+  const clientsCard = main.getByRole('group', { name: 'A suggestion for law firms and accounting offices' });
+  const rowText = 'For law firms and accounting offices: Malafat manages your clients, documents and fee agreements, and connects to a Mutaba3a hosted account.';
+
+  await step('The Mutaba3a + Malafat row has one link to Malafat, tagged for Settings', async () => {
+    await openFreshApp(page, '/income');
+    await logIncome(page, { title: 'Retainer', amount: '500', client: 'Nour Legal' });
+    await page.goto('/app/settings');
+    await expect(main.getByText('Mutaba3a + Malafat')).toBeVisible();
+    await expect(main.getByText(rowText)).toBeVisible();
+    const link = main.getByRole('link', { name: /See Malafat/ });
+    await expect(link).toHaveCount(1);
+    await expect(link).toHaveAttribute('href', /malafat\.app\/en\/contact\?topic=mutaba3a&utm_source=mutaba3a&utm_medium=web-local&utm_campaign=malafat-upsell&utm_content=settings/);
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(page.locator('.go-hosted-card')).toBeVisible();
+  });
+
+  await step('After a second business, the row becomes a note about it, and the Go hosted card steps aside', async () => {
+    await addSecondBusiness(page, 'مكتب المحاسبة');
+    await expect(note).toBeVisible();
+    await expect(main.getByRole('link', { name: /See Malafat/ })).toHaveCount(1);
+    await expect(note.getByRole('link')).toHaveAttribute('href', /utm_content=business-profile/);
+    await expect(page.locator('.go-hosted-card')).toHaveCount(0);
+  });
+
+  await step('Dismissing it brings the row back with focus on its link', async () => {
+    await note.getByRole('button', { name: "Don't show this again" }).click();
+    await expect(note).toHaveCount(0);
+    await expect(main.getByText(rowText)).toBeVisible();
+    await expect(main.getByRole('link', { name: /See Malafat/ })).toBeFocused();
+  });
+
+  await step('The dismissal was saved: after a reload, Clients shows no second-business card either', async () => {
+    await page.goto('/app/clients');
+    await expect(main.getByRole('table')).toBeVisible();
+    // The card waits for the settings read, which can land after the table: give it the time it would need to appear
+    await page.waitForTimeout(1000);
+    await expect(clientsCard).toHaveCount(0);
+  });
+
+  await step('The switch turns suggestions off and stays off; the row stays', async () => {
+    await page.goto('/app/settings');
+    const toggle = main.getByRole('switch', { name: 'Show Malafat suggestions' });
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await page.reload();
+    await expect(main.getByRole('switch', { name: 'Show Malafat suggestions' })).toHaveAttribute('aria-checked', 'false');
+    await expect(main.getByText(rowText)).toBeVisible();
+  });
+
+  await step('In Arabic the row reads right to left and links to Malafat in Arabic', async () => {
+    await switchToArabic(page);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(main.getByText('متابعة + Malafat')).toBeVisible();
+    await expect(main.getByRole('link', { name: /اطّلع على Malafat/ })).toHaveAttribute('href', /malafat\.app\/ar\/contact/);
   });
 });

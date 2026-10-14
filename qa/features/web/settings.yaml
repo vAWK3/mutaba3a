@@ -34,3 +34,25 @@ features:
       - Export the default profile
     expect:
       - A CSV download starts, named mutaba3a-Default-Profile-<date>.csv
+  - id: malafat
+    title: Settings offers Malafat to law firms and accounting offices, and after a second business is added says so once; a switch turns the suggestions off (MUT-190)
+    tier: secondary
+    legacy: [MUT-190]
+    paths:
+      - src/pages/settings/MalafatEntry.tsx
+      - src/pages/settings/MalafatEntry.css
+      - src/components/malafat/**
+      - src/lib/malafatSuggestions.ts
+      - src/lib/useMalafatSuggestions.ts
+      - src/lib/malafatMomentStore.ts
+      - src/components/drawers/BusinessProfileDrawer.tsx
+      - src/components/layout/GoHostedCard.tsx
+    steps:
+      - Open Settings, read the Mutaba3a + Malafat row, add a second business, read the note, dismiss it, reload, switch the suggestions off
+    expect:
+      - The row has one link to Malafat's contact page tagged web-local and settings
+      - After the second business, the row's line becomes a note with one link tagged business-profile, and the Go hosted card steps aside
+      - Dismissing it brings the row's own line back with focus on its link, and the dismissal is saved (no second-business card on Clients after a reload)
+      - In Arabic the row reads right to left and links to Malafat in Arabic
+      - The switch turns suggestions off and stays off after a reload; the row stays
+

@@ -30,10 +30,11 @@ export function resolveMalafatSuggestions(stored: StoredMalafatSuggestions | und
 
 /**
  * Retires a moment. The business-added note and the second-business card are
- * one event (a second business), so retiring the note retires the card too.
+ * one event (a second business), so retiring either retires both.
  */
 export function dismissMoment(current: MalafatSuggestions, moment: MalafatMoment): MalafatSuggestions {
-  const retired = moment === 'business-profile' ? ['business-profile', 'second-business'] : [moment];
+  const oneEvent: MalafatMoment[] = ['business-profile', 'second-business'];
+  const retired = oneEvent.includes(moment) ? oneEvent : [moment];
   return { on: current.on, dismissed: MOMENTS.filter((m) => current.dismissed.includes(m) || retired.includes(m)) };
 }
 

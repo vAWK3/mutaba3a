@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderWithProviders, screen, userEvent } from '../../../test/utils';
+import { renderWithProviders, screen, userEvent, waitFor } from '../../../test/utils';
 import { useMalafatMomentStore } from '../../../lib/malafatMomentStore';
 import { MalafatSuggestionCard } from '../MalafatSuggestionCard';
 
@@ -54,6 +54,7 @@ describe('MalafatSuggestionCard', () => {
     link.addEventListener('click', (e) => e.preventDefault());
     await userEvent.click(link);
     expect(onRetire).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('group', { name: props.label })).toBeNull();
+    // The link is still there while the browser follows it; the card goes right after
+    await waitFor(() => expect(screen.queryByRole('group', { name: props.label })).toBeNull());
   });
 });

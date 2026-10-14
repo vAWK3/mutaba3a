@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderWithProviders, screen, createMockBusinessProfile, createMockClient } from '../../../test/utils';
+import { renderWithProviders, screen, userEvent, createMockBusinessProfile, createMockClient } from '../../../test/utils';
+import { useMalafatMomentStore } from '../../../lib/malafatMomentStore';
 import type { MalafatSuggestions } from '../../../lib/malafatSuggestions';
 import { useSampleSessionStore } from '../../../demo/sampleSessionStore';
 import { useDemoStore } from '../../../demo/demoStore';
@@ -40,6 +41,7 @@ beforeEach(() => {
   state.retire.mockReset();
   useSampleSessionStore.setState({ status: 'none' });
   useDemoStore.setState({ isActive: false });
+  useMalafatMomentStore.getState().reset();
 });
 
 const card = () => screen.queryByRole('group', { name: en.clients.malafat.label });
@@ -82,20 +84,41 @@ describe('MalafatClientsSuggestion', () => {
 
   it('shows nothing without a working business, when switched off, in the visitor sample, or in demo data', () => {
     state.clients = clientsFor('p1', 12);
-    state.activeProfileId = '';
-    const { unmount } = renderWithProviders(<MalafatClientsSuggestion onGone={vi.fn()} />);
+    const cases: Array<() => void> = [
+      () => (state.activeProfileId = ''),
+      () => (state.suggestions = { on: false, dismissed: [] }),
+      () => useSampleSessionStore.setState({ status: 'active' }),
+      () => useDemoStore.setState({ isActive: true }),
+    ];
+    for (const arrange of cases) {
+      state.activeProfileId = 'p1';
+      state.suggestions = { on: true, dismissed: [] };
+      useSampleSessionStore.setState({ status: 'none' });
+      useDemoStore.setState({ isActive: false });
+      arrange();
+      const { unmount } = renderWithProviders(<MalafatClientsSuggestion onGone={vi.fn()} />);
+      expect(card()).toBeNull();
+      unmount();
+    }
+  });
+
+  it('leaves a second business to the Settings note while that note is due: one event, one suggestion', () => {
+    state.profiles = [createMockBusinessProfile({ id: 'p1' }), createMockBusinessProfile({ id: 'p2' })];
+    useMalafatMomentStore.getState().markBusinessAdded();
+    renderWithProviders(<MalafatClientsSuggestion onGone={vi.fn()} />);
     expect(card()).toBeNull();
+  });
+
+  it('retires the moment on dismiss, hands focus back, and shows nothing more this visit even after a remount', async () => {
+    state.clients = clientsFor('p1', 10);
+    state.profiles = [createMockBusinessProfile({ id: 'p1' }), createMockBusinessProfile({ id: 'p2' })];
+    const onGone = vi.fn();
+    const { unmount } = renderWithProviders(<MalafatClientsSuggestion onGone={onGone} />);
+    await userEvent.click(screen.getByRole('button', { name: en.clients.malafat.dismiss }));
+    expect(state.retire).toHaveBeenCalledWith('client-threshold');
+    expect(onGone).toHaveBeenCalledTimes(1);
     unmount();
-    state.activeProfileId = 'p1';
-    state.suggestions = { on: false, dismissed: [] };
-    renderWithProviders(<MalafatClientsSuggestion onGone={vi.fn()} />).unmount();
-    expect(card()).toBeNull();
-    state.suggestions = { on: true, dismissed: [] };
-    useSampleSessionStore.setState({ status: 'active' });
-    renderWithProviders(<MalafatClientsSuggestion onGone={vi.fn()} />).unmount();
-    expect(card()).toBeNull();
-    useSampleSessionStore.setState({ status: 'none' });
-    useDemoStore.setState({ isActive: true });
+    // The second-business card would qualify, but not on the visit a suggestion was retired
     renderWithProviders(<MalafatClientsSuggestion onGone={vi.fn()} />);
     expect(card()).toBeNull();
   });

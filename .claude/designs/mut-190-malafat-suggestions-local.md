@@ -1,6 +1,6 @@
 # MUT-190 — Malafat suggestions in the local web app
 
-Status: **PLANNED (2026-10-14)**, branch `feature/mut-189-malafat-upsell` (one worktree for epic MUT-189: `.claude/worktrees/mut-189-malafat-upsell`).
+Status: **BUILT and reconciled (2026-10-15)**; the qa-reconcile record is at the end of this file, branch `feature/mut-189-malafat-upsell` (one worktree for epic MUT-189: `.claude/worktrees/mut-189-malafat-upsell`).
 Ticket: MUT-190 (Story) · epic MUT-189 (upsell Malafat inside Mutaba3a to lawyers and accountants). Siblings: MUT-191 (portal), MUT-192 (Flutter, other repo). Relates to MUT-174 (landing Malafat band; it shipped `malafatUrl`).
 Tracker: Jira · barmajiyat.atlassian.net · MUT via atlassian-barmajiyat · finished → In Review after /qa-reconcile.
 
@@ -127,3 +127,27 @@ Approval readiness: PASS — R1 (D1 auto: Malafat suggestion beats Go hosted car
 **UNRESOLVED DECISIONS:**
 - D1 Go hosted card yields to a Malafat suggestion (auto)
 - D2 link click retires the moment (auto)
+
+
+---
+
+# qa-reconcile record (2026-10-15, non-interactive)
+
+Branch `feature/mut-189-malafat-upsell` vs `main` (6e83aa3). Reviewer: Claude + an independent in-host reviewer on the diff (Opus; the first attempt stopped on a usage limit and was re-run).
+
+| Criterion (ticket) | In plan? | In code? | Verdict |
+|---|---|---|---|
+| Shared link builder (surface, placement, locale); URL and threshold in config | yes | `malafatUrl` (MUT-174) with `contact: true`; `MALAFAT_CLIENT_THRESHOLD` | MET (`malafatLinks.test`, `malafatSuggestions.test` threshold, hrefs in the component tests and both QA cases) |
+| `utm_medium` web-local on web, desktop on Tauri | yes (A2) | web build only | MET for web; **desktop out, confirmed by Basel 2026-10-15** |
+| Dismissals and switch persist locally; no network call but the click | yes (D1) | settings row, merged writes; no fetch anywhere | MET (hook tests; QA: switch survives reload, dismissal proven by Clients after reload, link click retires and survives reload) |
+| No suggestion on Malafat-fed profiles | yes (A4) | — | MET (vacuous locally: no type, no Malafat link on local businesses) |
+| EN/AR, RTL; Tauri system browser | yes | `settings.profile.malafat.*`, `clients.malafat.*` | MET (AR unit cases; QA Arabic step with `dir=rtl` and the `/ar/` link); Tauri n/a |
+| Nothing in empty states, onboarding or any save flow | yes | Clients card only beside client rows; never the first business; the note's mark runs after the drawer closed and never throws | MET (`noteBusinessCreated` tests, `MalafatClientsSuggestion` cases, drawer change) |
+
+Scope creep: none beyond the plan (the upsell slot in GoHostedCard is the plan's R1).
+
+Pre-landing review: 18 findings, no P1. Fixed: (1) the note's mark could throw inside the save and leave the drawer open on a saved business: it now runs after the drawer closes, in `noteBusinessCreated`, which never throws (tested); (2) a retired Clients card could be replaced by another on the same visit after a remount: the "retired this visit" flag lives in the session store (tested); (3) the link must outlive the click: the card hides on the next tick, and QA follows the link into a new tab (malafat.app stubbed) and asserts the URL; (4) the Settings reload check could not fail: the dismissal is now proven on Clients after a reload; (5) two unit assertions ran after unmount: rewritten, plus retire wiring and focus tests; (6) reload checks wait for the settings read; (7) the card is gated on client rows, not bucket rows; (8) the note checks sample/demo at render; (9) one event, one suggestion both ways (retire pairs; the Clients card waits while the Settings note is due); (11) the slot is claimed in a layout effect (no Go hosted flash); (12) the switch is never natively disabled mid-press; (15) CSS logical properties and tokens; (16) the QA helper moved to `qa/support/app.ts`; (17) Arabic copy ("حساب مستضاف في متابعة", "إن كان أحدها"), English C3 "If one of them is…"; (18) Arabic QA step. Recorded instead: (10) "Skip for now" creates a placeholder business, so the next real one triggers the note (flagged to Basel); (13) silent write failures, (12b) switch description, (11b) Go hosted returns after a Malafat card goes → TD-140; (14) non-transactional settings writes → TD-138; (16) card duplication with GoHostedCard → TD-139.
+
+Gate (Node 22): see the merge commit message for the final run. Known unrelated QA failures on main: `@web.landing.375` ×4 (main's header Sign in link, proposed as a separate session) and `@web.clients.owed-now-parity` (MUT-178, reads Home's Owed now before it renders).
+
+**Verdict: PASS.** Jira → In Review.

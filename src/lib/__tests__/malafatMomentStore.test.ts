@@ -25,4 +25,10 @@ describe('malafatMomentStore', () => {
     releaseB();
     expect(useMalafatMomentStore.getState().suggestionsShown).toBe(0);
   });
+
+  it('remembers that a Clients suggestion was retired this visit, so leaving and coming back never pops another', () => {
+    expect(useMalafatMomentStore.getState().clientsRetiredThisVisit).toBe(false);
+    useMalafatMomentStore.getState().markClientsRetired();
+    expect(useMalafatMomentStore.getState().clientsRetiredThisVisit).toBe(true);
+  });
 });
