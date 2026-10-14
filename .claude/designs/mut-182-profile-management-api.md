@@ -690,7 +690,7 @@ Deviations from the plan above, each smaller than or equal to what was approved:
 
 `/review` with seven specialists, a red team and a native adversarial pass (Codex unavailable), then a re-review of the fixes. The owner answered D1–D7 (all recommended). Highlights:
 - The "CHECK breaks the old revision" finding was **disproved by a probe**: an old-shape insert succeeds (a CHECK passes on NULL). The real defect was that guards keyed on `ownerUserId` alone would treat such a profile as a firm; fixed with `profileOwnerOf` + post-roll stamping (D1).
-- Audit rows moved inside the owned-profile transactions (D3) after the red team showed a failed post-commit audit could duplicate a profile on retry; the type-change row now records what it removed (D4, TD-131).
+- Audit rows moved inside the owned-profile transactions (D3) after the red team showed a failed post-commit audit could duplicate a profile on retry; the type-change row now records what it removed (D4, TD-133).
 - Lock strength and order (D2, D5): NO KEY UPDATE everywhere; expense rows before categories, after the re-review found the first D5 order could deadlock.
 - Full suite not run at the owner's request; targeted suites, lint, typecheck, OpenAPI and portal-types checks green.
 

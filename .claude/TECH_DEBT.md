@@ -18,14 +18,14 @@
 
 ## Open Debt
 
-### TD-131: A type change's audit row lists every expense it uncategorized, unbounded
+### TD-133: A type change's audit row lists every expense it uncategorized, unbounded
 **Status**: Accepted
 **Added**: 2026-10-14 (MUT-182 qa-reconcile D4)
 **Priority**: Low
 **Impact**: `organization.type_changed` metadata carries `uncategorized: [{ expenseId, categoryId }]` for every categorised expense (about 80 bytes each), so a profile with thousands of them writes one large JSON row, which `GET /v1/audit`-style reads return whole. The owner chose this (D4 A) because it is the only record from which support can undo a mistaken type change.
 **Fix (if it bites)**: cap the list (first N pairs plus a total), or write one audit row per removed category with its expense ids.
 
-### TD-130: Flutter still decides "personal" from `writerOfRecord == null`
+### TD-132: Flutter still decides "personal" from `writerOfRecord == null`
 **Status**: Open
 **Added**: 2026-10-14 (MUT-182)
 **Ticket**: MUT-184
