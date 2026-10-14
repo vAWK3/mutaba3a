@@ -48,6 +48,15 @@ describe('PrivacyPolicyPage', () => {
     expect(heading.parentElement?.textContent).toContain('info@malafat.app');
   });
 
+  it('says what the hosted-account request form collects, that Netlify receives it, and what it is for (MUT-186)', () => {
+    renderPage('en');
+    const heading = screen.getByRole('heading', { level: 2, name: /ask for a hosted account/ });
+    const section = heading.parentElement?.textContent ?? '';
+    expect(section).toContain('Netlify');
+    expect(section).toMatch(/only to reply with an offer/);
+    expect(section).toContain('info@malafat.app');
+  });
+
   it('gives a contact address', () => {
     renderPage('en');
     expect(document.querySelector('main')?.textContent).toContain('info@malafat.app');
