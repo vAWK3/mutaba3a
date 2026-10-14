@@ -38,6 +38,9 @@ export const WEB_APP_URL = '/app/clients?sample=1';
  */
 export const HOSTED_OFFER_URL = '/hosted';
 
+/** The built page copy with /hosted's own link preview; netlify.toml serves it at HOSTED_OFFER_URL. */
+export const HOSTED_OFFER_FILE = 'hosted-offer.html';
+
 export interface MobileAppLink {
   /** Whether the app can be installed today. /hosted reads only this. */
   available: boolean;

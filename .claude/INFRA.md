@@ -20,7 +20,7 @@
 3. After that deploy, send one request from production and confirm the email arrives.
 4. **Weekly:** open Forms › `hosted-request` › **Spam**. Akismet-flagged requests land there and no email is sent for them (short Arabic messages are plausible false positives). Mark real ones as verified and reply.
 5. Set a Forms **usage alert**, and check what your Netlify plan does once a month's submission allowance (100 on the free tier) runs out, so a spam burst can't quietly block real requests. If spam starts arriving, build the Turnstile follow-up (MUT-197).
-6. **Retention (privacy policy promise):** delete submissions older than 12 months from Forms › `hosted-request`, and any request a visitor asks you to delete (info@malafat.app).
+6. **Retention (privacy policy promise):** delete submissions older than 12 months from Forms › `hosted-request` **and the matching notification emails in your inbox**, and do the same for any request a visitor asks you to delete (info@malafat.app).
 
 Form data (name, email, optional phone/profession/devices/message, page language, a random request id) plus Netlify's own technical details (IP address, browser) is stored by Netlify, checked by Akismet and emailed; the privacy policy says so. Duplicates of one request (a retry after a timeout, or an "edit and send again" correction) share the same `request-id`.
 

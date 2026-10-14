@@ -8,6 +8,7 @@ import {
   DEVICES,
   FIELD_MAX_LENGTH,
   HONEYPOT_FIELD,
+  newRequestId,
   PROFESSIONS,
   EMPTY_HOSTED_ANSWERS,
   submitHostedRequest,
@@ -39,9 +40,11 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
   const [errors, setErrors] = useState<HostedRequestErrors>({});
   const [status, setStatus] = useState<Status>('idle');
   // One id for this form's life: retries and corrections of one request share it
-  const [requestId] = useState(() => crypto.randomUUID());
+  const [requestId] = useState(newRequestId);
   const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const messageRef = useRef<HTMLTextAreaElement>(null);
   const successRef = useRef<HTMLHeadingElement>(null);
   const alertRef = useRef<HTMLParagraphElement>(null);
   const focusEmailOnReturn = useRef(false);
@@ -69,8 +72,9 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
     if (status === 'sending') return;
     const found = validateHostedRequest(values);
     setErrors(found);
-    if (found.name || found.email) {
-      (found.name ? nameRef : emailRef).current?.focus();
+    const firstInvalid = (['name', 'email', 'phone', 'message'] as const).find((field) => found[field]);
+    if (firstInvalid) {
+      ({ name: nameRef, email: emailRef, phone: phoneRef, message: messageRef })[firstInvalid].current?.focus();
       return;
     }
     setStatus('sending');
@@ -142,6 +146,7 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
         error={errorText('email', errors.email)}
       />
       <Input
+        ref={phoneRef}
         id="hosted-phone"
         name="phone"
         type="tel"
@@ -185,6 +190,7 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
         </div>
       </fieldset>
       <Textarea
+        ref={messageRef}
         id="hosted-message"
         name="message"
         label={optional('message')}

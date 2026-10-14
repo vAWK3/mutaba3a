@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import configFn, {
   HOSTED_OFFER_FILE,
   HOSTED_OFFER_PAGE,
+  HOSTED_OFFER_TITLE,
   PWA_INCLUDE_ASSETS,
   PWA_MANIFEST,
   PWA_WORKBOX,
@@ -268,19 +269,33 @@ describe('vite.config', () => {
     ].join('\n');
 
     it('swaps every link-preview tag and the title, and keeps the app\'s scripts', () => {
-      const html = withPageMeta(INDEX, socialMetaTags('https://mutaba3a.app', HOSTED_OFFER_PAGE), HOSTED_OFFER_PAGE.documentTitle);
+      const html = withPageMeta(INDEX, socialMetaTags('https://mutaba3a.app', HOSTED_OFFER_PAGE), HOSTED_OFFER_TITLE, 'https://mutaba3a.app/hosted');
       expect(html).not.toContain('content="home"');
       expect(html).not.toContain('content="https://mutaba3a.app/"');
       expect(html).toContain('<meta property="og:url" content="https://mutaba3a.app/hosted">');
-      expect(html).toContain(`<title>${HOSTED_OFFER_PAGE.documentTitle}</title>`);
+      expect(html).toContain(`<title>${HOSTED_OFFER_TITLE}</title>`);
+      expect(html).toContain('<link rel="canonical" href="https://mutaba3a.app/hosted">');
       expect(html).toContain('<script type="module" src="/assets/index-abc.js"></script>');
       expect(html.match(/property="og:title"/g)).toHaveLength(1);
     });
 
     it('escapes what it writes into attributes and the title', () => {
-      const html = withPageMeta(INDEX, [{ tag: 'meta', attrs: { property: 'og:title', content: '"<b>&' } }], 'a<b>&"');
+      const html = withPageMeta(INDEX, [{ tag: 'meta', attrs: { property: 'og:title', content: '"<b>&' } }], 'a<b>&"', 'https://x.test/');
       expect(html).toContain('content="&quot;&lt;b&gt;&amp;"');
       expect(html).toContain('<title>a&lt;b&gt;&amp;&quot;</title>');
+    });
+
+    it('writes a $ in copy literally, never as a replacement pattern', () => {
+      const html = withPageMeta(INDEX, [{ tag: 'meta', attrs: { property: 'og:title', content: "$& $` $' $1" } }], 'from $&', 'https://x.test/');
+      expect(html).toContain("content=\"$&amp; $` $' $1\"");
+      expect(html).toContain('<title>from $&amp;</title>');
+      expect(html.match(/<\/head>/g)).toHaveLength(1);
+    });
+
+    it('describes the share image for what it shows (the home card), on every page', () => {
+      const alt = meta(socialMetaTags('https://mutaba3a.app', HOSTED_OFFER_PAGE))['og:image:alt'];
+      expect(alt).toBe(meta(socialMetaTags('https://mutaba3a.app'))['og:image:alt']);
+      expect(alt).toContain(ar.landing.hero.headlineLine1);
     });
 
     it('emits the page as hosted-offer.html beside index.html, in the web build only', () => {

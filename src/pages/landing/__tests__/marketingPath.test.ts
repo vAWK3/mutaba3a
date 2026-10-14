@@ -13,6 +13,10 @@ describe('marketingPath', () => {
     expect(marketingPath(pathname)).toBe(expected);
   });
 
+  it.each(['/hosted-offer.html', '/hosted-offer', '/hosted-offer/'])('reads the page copy\'s own address %s as /hosted', (pathname) => {
+    expect(marketingPath(pathname)).toBe('/hosted');
+  });
+
   it('strips only one slash: anything stranger is not a marketing page', () => {
     expect(marketingPath('/hosted//')).toBe('/hosted/');
   });

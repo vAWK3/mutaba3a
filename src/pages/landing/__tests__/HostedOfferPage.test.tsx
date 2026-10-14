@@ -199,7 +199,7 @@ describe('HostedRequestForm', () => {
     renderPage();
     fillRequired('a'.repeat(FIELD_MAX_LENGTH.name + 1));
     submit();
-    expect(screen.getByText(`Keep this under ${FIELD_MAX_LENGTH.name} characters.`)).toBeInTheDocument();
+    expect(screen.getByText(`Use ${FIELD_MAX_LENGTH.name} characters or fewer.`)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -271,6 +271,26 @@ describe('HostedRequestForm', () => {
       'bot-field': '',
     });
     expect(body.get('request-id')).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('refuses to send an over-long phone or message, and moves focus to it', () => {
+    renderPage();
+    fillRequired();
+    fireEvent.change(screen.getByLabelText('Anything else we should know? (optional)'), {
+      target: { value: 'a'.repeat(FIELD_MAX_LENGTH.message + 1) },
+    });
+    submit();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Anything else we should know? (optional)')).toHaveFocus();
+  });
+
+  it('still works where crypto.randomUUID is missing (plain http, older Safari)', async () => {
+    vi.stubGlobal('crypto', { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) });
+    renderPage();
+    fillRequired();
+    submit();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(new URLSearchParams(String(fetchMock.mock.calls[0][1]?.body)).get('request-id')).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('sends the language the page is in at send time, not the one it opened in (D4)', async () => {

@@ -1421,7 +1421,7 @@
         "retry": "Try again",
         "errName": "Enter your name.",
         "errEmail": "Enter an email address like {example}.",
-        "errTooLong": "Keep this under {max} characters.",
+        "errTooLong": "Use {max} characters or fewer.",
         "errorAlert": "Couldn't send. Check your connection and try again. Your answers are still here.",
         "notice": "We use these details only to reply with an offer.",
         "privacyLink": "Privacy policy"
