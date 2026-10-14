@@ -357,7 +357,9 @@ components:
             $ref: "#/components/schemas/MalafatMoment"
           minItems: 1
           maxItems: 3
+          uniqueItems: true
       additionalProperties: false
+      minProperties: 1
     DeviceSession:
       allOf:
         - $ref: "#/components/schemas/Me"

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { MalafatCreatedNote } from '../../components/MalafatPortal';
 import { Link } from '@tanstack/react-router';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
@@ -51,12 +51,13 @@ export function OverviewPage({ filters, setFilters }: OverviewPageProps) {
   const summary = useOrganizationSummary(profile.id);
   const directory = useCustomerDirectory(profile.id);
   const data = summary.data && directory.data ? { summary: summary.data, names: directory.data } : undefined;
+  const heading = useRef<HTMLHeadingElement>(null);
 
   return (
     <>
-      <PageHeader title={t('hosted.overview.title')} />
-      {/* Right after a business profile is created, once (MUT-191) */}
-      <MalafatCreatedNote />
+      <PageHeader title={t('hosted.overview.title')} headingRef={heading} />
+      {/* Right after a business profile is created, once (MUT-191); dismissed, focus goes to the heading */}
+      <MalafatCreatedNote onGone={() => heading.current?.focus()} />
       <QueryView
         queries={[summary, directory]}
         data={data}

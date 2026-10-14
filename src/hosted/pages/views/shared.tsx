@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Badge, type BadgeVariant } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { useT } from '../../../lib/i18n/core';
@@ -42,10 +42,13 @@ export function ShowMore({ hasMore, loading, onMore }: { hasMore: boolean; loadi
   );
 }
 
-export function PageHeader({ title, children }: { title: string; children?: ReactNode }) {
+export function PageHeader({ title, children, headingRef }: { title: string; children?: ReactNode; headingRef?: Ref<HTMLHeadingElement> }) {
   return (
     <header className="hp-page-header">
-      <h1>{title}</h1>
+      {/* A heading that takes focus (tabIndex -1) only when a caller needs somewhere to send it */}
+      <h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
+        {title}
+      </h1>
       {children}
     </header>
   );

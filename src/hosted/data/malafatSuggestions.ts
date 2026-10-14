@@ -37,8 +37,9 @@ export interface PortalMalafatState {
 /** The account's preferences, read from /v1/me. */
 export function usePortalMalafat(): PortalMalafatState {
   const me = useMe();
-  const stored = me.user.malafatSuggestions;
-  return { on: !stored.off, dismissed: stored.dismissed, allowed: !isMalafatCustomer(me) };
+  // Resolved here too: a server older than 1.25.0-mut191 sends no field, and the portal may ship first
+  const stored: Partial<MalafatSuggestions> | undefined = me.user.malafatSuggestions;
+  return { on: stored?.off !== true, dismissed: stored?.dismissed ?? [], allowed: !isMalafatCustomer(me) };
 }
 
 /** Send one change; the answer is written into the cached /v1/me, so every suggestion re-reads it. */
@@ -46,6 +47,8 @@ export function useChangeMalafatSuggestions() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (change: MalafatSuggestionsChange) => api.changeMalafatSuggestions(change),
+    // A /v1/me refetch already in flight (focus, staleness) would land after the answer and undo it
+    onMutate: () => queryClient.cancelQueries({ queryKey: ME_KEY }),
     onSuccess: (stored: MalafatSuggestions) => {
       queryClient.setQueryData<Me>(ME_KEY, (current) => (current ? { ...current, user: { ...current.user, malafatSuggestions: stored } } : current));
     },

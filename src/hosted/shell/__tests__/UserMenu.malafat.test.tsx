@@ -30,10 +30,13 @@ describe('Account menu, Malafat (MUT-191)', () => {
     expect(api.calls.find((c) => c.method === 'PATCH')?.body).toEqual({ off: true });
   });
 
-  it('carries nothing on a Malafat-fed firm', async () => {
-    stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me([profile({ id: ORG_A, writerOfRecord: 'MALAFAT' })])) });
+  it('carries nothing on their own business profile for someone who is also in a Malafat-fed firm', async () => {
+    const firm = profile({ id: '33333333-3333-4333-8333-333333333333', writerOfRecord: 'MALAFAT' });
+    stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me([business, firm])) });
     const { user } = renderPortal(`/p/${ORG_A}`);
     await user.click(await screen.findByRole('button', { name: /Account/ }));
-    expect(within(screen.getByRole('menu', { name: 'Account' })).queryByText(/Malafat/)).toBeNull();
+    const menu = screen.getByRole('menu', { name: 'Account' });
+    expect(within(menu).getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
+    expect(within(menu).queryByText(/Malafat/)).toBeNull();
   });
 });

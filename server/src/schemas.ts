@@ -352,11 +352,13 @@ export const MalafatSuggestionsChangeSchema = z
       .min(1)
       .max(3)
       .refine((moments) => new Set(moments).size === moments.length, 'each moment once')
+      .openapi({ uniqueItems: true })
       .optional(),
   })
   .strict()
   .refine((change) => change.off !== undefined || change.dismiss !== undefined, 'off or dismiss')
-  .openapi('MalafatSuggestionsChange');
+  // The generated spec says what the refinements enforce, so a client built from it sends nothing the server refuses
+  .openapi('MalafatSuggestionsChange', { minProperties: 1 });
 
 export const MeSchema = z
   .object({

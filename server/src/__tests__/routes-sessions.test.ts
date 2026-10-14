@@ -567,9 +567,12 @@ describe('Malafat suggestions on the account (MUT-191)', () => {
     const f = await firm(h);
     const p = await person(h, f.org.id);
     const { token } = await signIn(h, p.email, p.password);
-    const before = (await read(await h.app.request('/v1/audit', { headers: f.auth }))).items.length;
-    await h.app.request('/v1/me/malafat-suggestions', patch(token, { dismiss: ['client-threshold'] }));
-    expect((await read(await h.app.request('/v1/audit', { headers: f.auth }))).items.length).toBe(before);
+    const everyRow = () => (h.store as unknown as { events: unknown[] }).events.length;
+    const before = everyRow();
+    const res = await h.app.request('/v1/me/malafat-suggestions', patch(token, { dismiss: ['client-threshold'] }));
+    expect(res.status).toBe(200);
+    // Every organization's log, the person's own included, and rows with no organization
+    expect(everyRow()).toBe(before);
   });
 });
 

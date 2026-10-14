@@ -1,6 +1,6 @@
 # MUT-191 — Malafat suggestions in the hosted portal
 
-Status: **BUILT (2026-10-15)**, branch `feature/mut-189-malafat-upsell` (epic worktree; MUT-190 merged to main from it).
+Status: **BUILT (2026-10-15)** — §2–§3 are superseded where the eng-review ledger and amended plan below differ (PATCH not PUT, no audit row, `updateMalafatSuggestions`)., branch `feature/mut-189-malafat-upsell` (epic worktree; MUT-190 merged to main from it).
 Ticket: MUT-191 (Story) · epic MUT-189. Blocked by MAL-1153 (malafat.app recognising the referral; Basel sequences the release himself, 2026-10-15) and, for C1, MUT-183 (merged, In Review). Builds on MUT-190 (ADR-078: rules, copy, one suggestion per event) and MUT-174 (`malafatUrl`).
 
 ## 1. Acceptance criteria
@@ -8,8 +8,8 @@ Ticket: MUT-191 (Story) · epic MUT-189. Blocked by MAL-1153 (malafat.app recogn
 | # | AC (ticket) | Proved by |
 |---|---|---|
 | A1 | Reuses the shared link builder with `utm_medium=portal` | `malafatUrl({ locale, medium: 'portal', content, contact: true })`; component tests assert the href |
-| A2 | No suggestion on Malafat-fed or Personal-type profiles | `portalMalafatEligible(profile)` unit tests: `writerOfRecord === 'MALAFAT'` → no; `isPersonalDefault` or `type === 'PERSONAL'` → no; owned BUSINESS and firm (type null, not Malafat) → yes |
-| A3 | Dismissals and the switch persist (server per user, or browser; chosen here) | **Server, per user**: `/v1/me` carries `user.malafatSuggestions`; `PUT /v1/me/malafat-suggestions` stores it. Server route + repository contract tests (memory + Postgres); portal hook tests |
+| A2 | No suggestion on Malafat-fed or Personal-type profiles | `portalMalafatEligible(profile)` unit tests: only an owned BUSINESS profile that is not the personal default and has no writer of record; firms never; members of a Malafat-fed firm get nothing (O2, D7) |
+| A3 | Dismissals and the switch persist (server per user, or browser; chosen here) | **Server, per user**: `/v1/me` carries `user.malafatSuggestions`; `PATCH /v1/me/malafat-suggestions { off?, dismiss? }` changes it (O3). Server route + repository contract tests (memory + Postgres); portal hook tests |
 | A4 | Copy from the portal's own dictionaries, EN + AR, RTL | `hosted.malafat.*` in `src/hosted/i18n/{en,ar}.json` (parity test exists); AR component cases |
 | A5 | No modals or toasts, one suggestion at a time, never inside a save flow | inline only; one slot per screen; C1 renders on the new profile's page after the drawer has gone; component tests |
 
@@ -20,7 +20,7 @@ Ticket: MUT-191 (Story) · epic MUT-189. Blocked by MAL-1153 (malafat.app recogn
 - **D3 — C1 renders on the new profile's own page.** `ProfileCreateDrawer.onCreated` (the hook MUT-183 left for this) navigates to `/p/<id>`; when the created profile is a BUSINESS, it sets a session flag for that id, and the profile's home shows the note once (until dismissed or a reload). Its existing "created" toast is a save confirmation, not a suggestion, and stays.
 - **D4 — C2/C3 on Clients**, inside the loaded view before the table, never while searching or empty: C2 at `MALAFAT_CLIENT_THRESHOLD` (10) active customers of the profile; C3 when the person has ≥ 2 business profiles (owned BUSINESS). One card per visit (session flag), C1/C3 one event (MUT-190's `dismissMoment`).
 - **D5 — Reuse MUT-190.** The pure rules (`src/lib/malafatSuggestions.ts`) and the card (`MalafatSuggestionCard`) are reused; the card imports `useT` from `lib/i18n/core` instead of the index (the portal's import rule), and its slot claim is harmless in the portal.
-- **D6 — Firm profiles count as eligible** (type null, not Malafat-fed): operator-provisioned firms not yet on Malafat are exactly the audience. *Flagged for Basel.*
+- ~~D6 — Firm profiles count as eligible~~ — **reversed by O2**: firms are Malafat tenants; never eligible.
 
 ## 3. Where the code goes
 
@@ -83,3 +83,23 @@ Outside voice: 10 findings, all accepted.
 Approval readiness: PASS — R1–R4 factual or epic-defined; D7 (auto) flagged.
 
 **Unresolved decisions (auto, for Basel):** D7 — members of a Malafat-fed firm get no suggestions anywhere (they already use Malafat).
+
+---
+
+# Reconcile (2026-10-15)
+
+Pre-landing review (Opus, read-only): 1 High, 3 Medium, 5 Low; all fixed.
+
+| # | Finding | Fix |
+|---|---|---|
+| H1 | A server older than 1.25.0-mut191 sends no `malafatSuggestions`; Overview and Clients would throw | `usePortalMalafat` resolves a missing field to on / none dismissed; test |
+| M1 | C1 consumed on arrival, then C3 on Clients for the same event | `businessCreatedThisVisit` keeps C3 quiet until reload; reset on sign-out; test |
+| M2 | QA and unit "Malafat customer" checks ran on the firm (never eligible) and could pass with a closed menu | both now open the menu on the person's own office while they belong to a Malafat-fed firm, and assert Sign out is visible first |
+| M3 | Dismissing C1 dropped focus to the body | `PageHeader` takes `headingRef` (focusable only then); Overview focuses it; integration test |
+| L1 | A /v1/me refetch in flight could undo the switch; a failed save was silent | `cancelQueries(ME_KEY)` on mutate; inline `role="status"` "Couldn't save. Try again." in the menu (no toast); test |
+| L2 | The no-audit test read one log | counts every audit row in the store |
+| L3 | OpenAPI accepted `{}` and duplicate moments | `minProperties: 1`, `uniqueItems: true` in the spec |
+| L4 | `/v1/me*` would cover `/v1/members…` | `/v1/me, /v1/me/*` in code and §5 |
+| L5 | Brief top contradicted the build; "once" and link clicks unproven in a browser | brief corrected; QA proves the note is gone after Clients and back, and clicks See Malafat (new tab at the tagged URL, card retired) |
+
+Gate before fixes: all green (root lint/typecheck/test:run 4442/build/test:bundles/hosted:types:check/release-qa lint; server typecheck/lint/openapi:check/test 1761/test:db 1930). After fixes: portal suites 413/413, server route suites 253/253, server typecheck/lint/openapi:check, hosted:types:check, portal QA 6/6 (+ sign-in 7/7 earlier). Verdict: **PASS**.

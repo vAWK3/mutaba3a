@@ -540,7 +540,8 @@
       "cta": "See Malafat",
       "dismiss": "Don't show this again",
       "menuLink": "Malafat, for law firms and accounting offices",
-      "menuSwitch": "Show Malafat suggestions"
+      "menuSwitch": "Show Malafat suggestions",
+      "saveFailed": "Couldn't save. Try again."
     }
   }
 }

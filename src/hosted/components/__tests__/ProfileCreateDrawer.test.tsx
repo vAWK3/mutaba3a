@@ -105,6 +105,10 @@ describe('New profile drawer (MUT-183)', () => {
     const note = await screen.findByRole('group', { name: 'A suggestion for law firms and accounting offices' });
     expect(within(note).getByRole('link').getAttribute('href')).toContain('utm_medium=portal');
     expect(within(note).getByRole('link').getAttribute('href')).toContain('utm_content=business-profile');
+    // Dismissed, focus lands on the page's heading rather than the body
+    await user.click(within(note).getByRole('button', { name: "Don't show this again" }));
+    expect(screen.queryByRole('group', { name: 'A suggestion for law firms and accounting offices' })).toBeNull();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveFocus();
   });
 
   it('CR3d (MUT-191): a new Personal profile gets no Malafat note', async () => {

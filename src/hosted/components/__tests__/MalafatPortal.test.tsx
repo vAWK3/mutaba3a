@@ -57,6 +57,15 @@ describe('MalafatMenuItems (S1, in the account menu)', () => {
     expect(api.change).toHaveBeenCalledWith({ off: true });
   });
 
+  it('says so inline when the switch could not be saved, and keeps its state', async () => {
+    api.change.mockRejectedValueOnce(new TypeError('offline'));
+    wrap(me([business('a')]), business('a'), <div role="menu"><MalafatMenuItems profile={business('a')} /></div>);
+    const toggle = screen.getByRole('menuitemcheckbox', { name: 'Show Malafat suggestions' });
+    await userEvent.click(toggle);
+    expect(await screen.findByRole('status')).toHaveTextContent("Couldn't save. Try again.");
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
   it('shows nothing on a personal profile, on a firm, or to someone already on Malafat', () => {
     const personal = profile({ id: 'p', writerOfRecord: null, owned: true, isPersonalDefault: true, type: 'PERSONAL' });
     wrap(me([personal]), personal, <div role="menu"><MalafatMenuItems profile={personal} /></div>);
@@ -92,6 +101,23 @@ describe('MalafatClientsCard (C2/C3)', () => {
     useMalafatPortalMoments.getState().markBusinessCreated('b');
     wrap(me([business('a'), business('b')]), business('a'), <MalafatClientsCard customers={customers(2)} query={undefined} onGone={vi.fn()} />);
     expect(card()).toBeNull();
+  });
+
+  it('stays quiet for the rest of the visit once the created note has spoken for that business (one event, one suggestion)', () => {
+    useMalafatPortalMoments.getState().markBusinessCreated('b');
+    wrap(me([business('a'), business('b')]), business('b'), <MalafatCreatedNote />);
+    expect(card()).not.toBeNull();
+    expect(useMalafatPortalMoments.getState().businessCreatedId).toBeNull();
+    document.body.innerHTML = '';
+    wrap(me([business('a'), business('b')]), business('a'), <MalafatClientsCard customers={customers(2)} query={undefined} onGone={vi.fn()} />);
+    expect(card()).toBeNull();
+  });
+
+  it('does not break against a server older than 1.25.0-mut191, which sends no malafatSuggestions', () => {
+    const old = me([business('a')]);
+    delete (old.user as Partial<typeof old.user>).malafatSuggestions;
+    wrap(old, business('a'), <MalafatClientsCard customers={customers(10)} query={undefined} onGone={vi.fn()} />);
+    expect(card()).toHaveTextContent('Lots of clients to keep track of?');
   });
 
   it('never on a personal or Malafat-fed profile', () => {
@@ -171,6 +197,6 @@ describe('the portal moment store', () => {
     store.markBusinessCreated('a');
     store.markClientsRetired();
     store.reset();
-    expect(useMalafatPortalMoments.getState()).toMatchObject({ businessCreatedId: null, clientsRetiredThisVisit: false });
+    expect(useMalafatPortalMoments.getState()).toMatchObject({ businessCreatedId: null, businessCreatedThisVisit: false, clientsRetiredThisVisit: false });
   });
 });

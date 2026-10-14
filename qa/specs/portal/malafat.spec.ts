@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '../../support/qa';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
-import { FIRM, OFFICE_A, OFFICE_B, malafatFirm, office, openSignedInPortal } from '../../support/portal';
+import { OFFICE_A, OFFICE_B, malafatFirm, office, openSignedInPortal } from '../../support/portal';
 
 /**
  * Malafat suggestions in the hosted portal (MUT-191, epic MUT-189). The portal
@@ -86,6 +86,25 @@ test('in Arabic, Clients at ten active clients suggests Malafat right to left', 
   });
 });
 
+test('See Malafat on the Clients card opens malafat.app in a new tab and retires the card', { tag: '@portal.malafat.clients' }, async ({ page, step }) => {
+  await page.context().route('https://malafat.app/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<title>Malafat</title>' }));
+  const stub = await openSignedInPortal(page, { profiles: [office(OFFICE_A, 'Nour Studio')], clients: 10, path: `/p/${OFFICE_A}/clients` });
+  const card = page.getByRole('group', { name: EN.label });
+
+  await step('Choose See Malafat on the card', async () => {
+    await expect(card).toBeVisible();
+    const [tab] = await Promise.all([page.context().waitForEvent('page'), card.getByRole('link', { name: new RegExp(EN.cta) }).click()]);
+    await tab.waitForLoadState();
+    expect(tab.url()).toContain('https://malafat.app/en/contact?topic=mutaba3a&utm_source=mutaba3a&utm_medium=portal&utm_campaign=malafat-upsell&utm_content=client-threshold');
+    await tab.close();
+  });
+
+  await step('Back on Clients: the card has gone and its moment is retired for the account', async () => {
+    await expect(card).toHaveCount(0);
+    expect(stub.malafatChanges).toEqual([{ dismiss: ['client-threshold'] }]);
+  });
+});
+
 test('a new business profile opens with a one-line Malafat note', { tag: '@portal.malafat.created' }, async ({ page, step }) => {
   await openSignedInPortal(page, { profiles: [office(OFFICE_A, 'Nour Studio')], path: `/p/${OFFICE_A}` });
 
@@ -104,6 +123,15 @@ test('a new business profile opens with a one-line Malafat note', { tag: '@porta
     await expect(note.getByRole('link', { name: new RegExp(EN.cta) })).toHaveAttribute('href', /utm_content=business-profile/);
     await expect(page.getByRole('dialog', { name: 'New profile' })).toHaveCount(0);
   });
+
+  await step('Go to Clients and back to the overview: the note is not shown again, and Clients adds no second suggestion', async () => {
+    await page.getByRole('link', { name: 'Clients' }).first().click();
+    await expect(page.getByPlaceholder('Search clients')).toBeVisible();
+    await expect(page.getByRole('group', { name: EN.label })).toHaveCount(0);
+    await page.goBack();
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByRole('group', { name: EN.label })).toHaveCount(0);
+  });
 });
 
 test('someone already on Malafat sees no Malafat suggestion, in the menu or on Clients', { tag: '@portal.malafat.none' }, async ({ page, step }) => {
@@ -114,9 +142,10 @@ test('someone already on Malafat sees no Malafat suggestion, in the menu or on C
     await expect(page.getByRole('group', { name: EN.label })).toHaveCount(0);
   });
 
-  await step('The account menu carries no Malafat item, on the firm either', async () => {
-    await page.goto(`/p/${FIRM}`);
+  await step('Open the account menu on that same office: Sign out, and no Malafat item', async () => {
     await page.getByRole('button', { name: /Account/ }).click();
-    await expect(page.getByRole('menu', { name: 'Account' }).getByText(/Malafat/)).toHaveCount(0);
+    const menu = page.getByRole('menu', { name: 'Account' });
+    await expect(menu.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
+    await expect(menu.getByText(/Malafat/)).toHaveCount(0);
   });
 });

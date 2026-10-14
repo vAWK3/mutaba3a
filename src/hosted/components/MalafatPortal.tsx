@@ -57,6 +57,12 @@ export function MalafatMenuItems({ profile }: { profile: HostedProfile | null })
       >
         {t('hosted.malafat.menuSwitch')}
       </button>
+      {/* No toast: the menu says it in place, and the switch keeps the state the server has */}
+      {change.isError && (
+        <p role="status" className="hp-menu-note">
+          {t('hosted.malafat.saveFailed')}
+        </p>
+      )}
     </>
   );
 }
@@ -77,15 +83,15 @@ export function MalafatClientsCard({ customers, query, onGone }: ClientsCardProp
   const change = useChangeMalafatSuggestions();
   const link = useMalafatLink();
   const retiredThisVisit = useMalafatPortalMoments((s) => s.clientsRetiredThisVisit);
-  const businessCreatedId = useMalafatPortalMoments((s) => s.businessCreatedId);
+  const businessCreatedThisVisit = useMalafatPortalMoments((s) => s.businessCreatedThisVisit);
   const markClientsRetired = useMalafatPortalMoments((s) => s.markClientsRetired);
 
   if (!state.allowed || !portalMalafatEligible(profile) || query?.trim() || retiredThisVisit) return null;
 
   const activeClients = [...customers.values()].filter((customer) => customer.status === 'ACTIVE').length;
   const moment = pickClientsMoment({ suggestions: state, clientCount: activeClients, businessCount: businessProfileCount(me) });
-  // A business profile just created is the created note's to mention: one event, one suggestion
-  if (!moment || (moment === 'second-business' && businessCreatedId)) return null;
+  // A business profile created on this visit was the created note's to mention: one event, one suggestion
+  if (!moment || (moment === 'second-business' && businessCreatedThisVisit)) return null;
 
   return (
     <MalafatSuggestionCard

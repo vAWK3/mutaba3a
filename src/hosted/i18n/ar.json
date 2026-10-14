@@ -560,7 +560,8 @@
       "cta": "اطّلع على Malafat",
       "dismiss": "لا تُظهر هذا مجددًا",
       "menuLink": "Malafat، لمكاتب المحاماة والمحاسبة",
-      "menuSwitch": "إظهار اقتراحات Malafat"
+      "menuSwitch": "إظهار اقتراحات Malafat",
+      "saveFailed": "تعذّر الحفظ. حاول مرة أخرى."
     }
   }
 }
