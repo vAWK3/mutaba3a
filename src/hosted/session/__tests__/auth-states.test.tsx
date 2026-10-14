@@ -102,6 +102,33 @@ describe('S3 sign in', () => {
   });
 });
 
+describe('S3b no account (MUT-188)', () => {
+  const OFFER = 'https://landing.test/hosted';
+
+  it('offers one outward link to the public offer page and nothing else, in the same tab', async () => {
+    vi.stubGlobal('__HOSTED_OFFER_URL__', OFFER);
+    const { container } = await onSignIn();
+    const link = screen.getByRole('link', { name: 'Request one' });
+    expect(link).toHaveAttribute('href', OFFER);
+    expect(link).not.toHaveAttribute('target');
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(screen.getByText('No account?')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(BANNED);
+  });
+
+  it('reads the same in Arabic, right to left', async () => {
+    localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
+    vi.stubGlobal('__HOSTED_OFFER_URL__', OFFER);
+    stubApi({ 'GET /v1/me': () => fail(401, 'UNAUTHENTICATED') });
+    const { container } = renderPortal('/sign-in');
+    await screen.findByLabelText('البريد الإلكتروني');
+    expect(screen.getByRole('link', { name: 'اطلب حسابًا' })).toHaveAttribute('href', OFFER);
+    expect(screen.getByText('ليس لديك حساب؟')).toBeInTheDocument();
+    expect(document.documentElement.dir).toBe('rtl');
+    expect(container.textContent).not.toMatch(BANNED);
+  });
+});
+
 async function onSignIn(responses: Record<string, Parameters<typeof stubApi>[0][string]> = {}, path = '/sign-in') {
   const api = stubApi({ 'GET /v1/me': () => fail(401, 'UNAUTHENTICATED'), ...emptyProfileRoutes(), ...responses });
   const portal = renderPortal(path);

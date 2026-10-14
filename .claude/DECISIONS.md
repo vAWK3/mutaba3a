@@ -1664,6 +1664,15 @@ even expressible today.
 > local↔hosted sync is off the roadmap, so "neither syncs to the other" is now
 > permanent rather than a v1 deferral. TD-037 is resolved as moot.
 
+> **Note (2026-10-14, MUT-188).** Decision 1 stands: no signup, invite or
+> reset route exists. The portal's sign-in page may link **out** to the
+> landing's public `/hosted` offer page ("No account? Request one"), whose
+> address is a build-time value (`__HOSTED_OFFER_URL__` from
+> `MUTABA3A_PUBLIC_ORIGIN`, the ADR-076 shape). Nothing links **in**:
+> `HOSTED_RULES`, the no-self-registration test and the zero-links sign-in
+> test are unchanged. `mut-43-auth-states.md` §4 and `hosted-portal.md`
+> §7.6 carry the same amendment.
+
 **ADR-024's guarantee is demonstrated, not asserted**: the desktop/PWA bundles
 are checked to contain none of the portal's endpoints, cookie name or headers,
 and no new network origins; Dexie schema, profile types, profile store,

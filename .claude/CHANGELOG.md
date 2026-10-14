@@ -52,6 +52,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Portal sign-in links out to /hosted (MUT-188)
+
+**Why:** someone who reached the portal's sign-in page without an account hit a dead end. Epic MUT-185, after MUT-186 (`/hosted`) and MUT-187 (the in-app CTA). Brief, eng review and outside voice: `.claude/designs/mut-188-portal-request-link.md`.
+
+### Added
+- **Sign-in "No account? Request one"** (`SignInPage`): a second help line under "Can't sign in?" with one outward, underlined link to the landing's `/hosted` page, same tab (axe `link-in-text-block` flagged colour-only in the Arabic QA run). EN/AR `hosted.auth.request.{lead,link}`. The portal still has no inbound door: the bundle rules and the server's no-self-registration test are unchanged.
+- QA `@portal.signin.request-link` (EN and AR: the link is visible, its href ends in `/hosted`, it is the only link, axe still passes).
+
+### Changed
+- **`DEFAULT_PUBLIC_ORIGIN` is now `https://mutaba3a.netlify.app`.** `mutaba3a.app` has no DNS (checked 2026-10-14), so the landing's `og:url`/`og:image`, the `/hosted` canonical and the portal link all point at the host that answers. MUT-112 flips it back with the custom domain (inventory posted there). The Malafat OAuth client id (`public/.well-known/oauth-client.json`, `CIMD_CLIENT_ID`) keeps `mutaba3a.app` and stays allowlisted.
+- `mut-43-auth-states.md` §4 and `hosted-portal.md` §7.6: one outward link is permitted on sign-in; dated note under ADR-037.
+
+### Technical
+- `hostedOfferUrl()` in `vite.config.ts` (validated like `portalUrl()`) → `__HOSTED_OFFER_URL__` in the hosted build only, read at render time through a typeof guard (ADR-076 pattern). `https://mutaba3a.netlify.app` added to both lists in `scripts/bundle-origins.json`. `.env.example`, INFRA.md and SYSTEM_OVERVIEW.md name the Netlify origin.
+- Tests: `vite-config.test.ts` (hosted define, default pin, override, refusals, local builds carry none), `auth-states.test.tsx` S3b (EN/AR, exactly one link, no banned copy; S3's zero-links case untouched), `brand-head.test.ts` (`hosted.html` keeps `referrer=same-origin`).
+
+---
+
 ## [Unreleased] - 2026-10-14 — "Go hosted" in the free web app (MUT-187, ADR-076)
 
 **Why:** free web users never learned that hosted exists, and hosted users had no way from the free app to the portal. Epic MUT-185 (after MUT-186's `/hosted` page). Brief, eng and design reviews: `.claude/designs/mut-187-go-hosted-cta.md`; wireframe `mut-187-go-hosted-wireframe.html`.

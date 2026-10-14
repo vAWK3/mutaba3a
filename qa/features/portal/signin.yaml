@@ -35,3 +35,12 @@ features:
     expect:
       - The Wordmark shows the mark (mark-dark.svg on the dark canvas) beside the product name
       - Every icon link in the head points at /assets/*, and each returns 200
+  - id: request-link
+    title: Sign-in offers one outward "No account? Request one" link to the landing's /hosted page, in English and Arabic (MUT-188)
+    tier: core
+    steps:
+      - Stub /v1 to 401 and open /sign-in, in English then Arabic
+    expect:
+      - A link named from the portal dictionary (hosted.auth.request.link) is visible under the help line, with an https href ending in /hosted
+      - It is the only link on the page, and it opens in the same tab
+      - The page still passes axe

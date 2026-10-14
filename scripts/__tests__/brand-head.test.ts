@@ -78,6 +78,12 @@ describe('hosted.html (MUT-104, D3)', () => {
   });
 });
 
+describe('hosted.html referrer (MUT-188)', () => {
+  it('sends no referrer across origins, so the sign-in page can link out without leaking ?next= paths', () => {
+    expect(head('hosted.html').querySelector('meta[name="referrer"]')?.getAttribute('content')).toBe('same-origin');
+  });
+});
+
 describe('favicon.svg (MUT-104)', () => {
   const svg = readFileSync(repoPath('public/favicon.svg'), 'utf8');
   const style = /<style>([\s\S]*?)<\/style>/.exec(svg)?.[1] ?? '';

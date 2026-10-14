@@ -2377,3 +2377,16 @@ Run: `npx vitest run src/lib/__tests__/goHosted.test.ts src/components/layout sr
 | `src/hosted/pages/__tests__/views.test.tsx` (Profile switcher block, RT1/RT2/RT4/RT5) | SW1–SW4 switcher entries and sub-lines; RT1 route-inventory snapshot unchanged (no `/profiles/new`); RT2 (critical) opening "+ New profile" on `/receivables` or `/payments` fires no second list GET and keeps the unfiltered empty state; RT4 Back closes the drawer, a deep link opens it over an empty state; RT5 an `editProfile` id that isn't in `me` or isn't owned renders the list, never an edit form |
 
 Run: `npx vitest run src/hosted` — 304 files, 4312 passed, 4 skipped (post qa-reconcile fix). Root gate (`lint`, `typecheck`, `test:run`, `build`, `build:hosted`) all green. **Gap (plan §5, not built):** no `qa/` catalog entry yet for the new profile-management surface — see TECH_DEBT.
+
+## MUT-188 — portal sign-in links out to /hosted (2026-10-14)
+
+| Suite | Cases |
+|---|---|
+| `scripts/__tests__/vite-config.test.ts` → "portal request link (MUT-188)" | hosted define = `DEFAULT_PUBLIC_ORIGIN + /hosted`; web and desktop define none; default pinned to a `.netlify.app` origin until MUT-112; override trims a trailing slash; `http://`, bare host, empty, `https://` and a path all throw naming `MUTABA3A_PUBLIC_ORIGIN`; the `/hosted` link-preview test reads the default instead of a literal |
+| `src/hosted/session/__tests__/auth-states.test.tsx` → S3b | EN: link "Request one" with the stubbed href, no `target`, the only link, "No account?" present, `BANNED` absent; AR: "اطلب حسابًا" / "ليس لديك حساب؟", `dir="rtl"`. S3's zero-links case is untouched (no global in Vitest) |
+| `scripts/__tests__/brand-head.test.ts` | `hosted.html` keeps `<meta name="referrer" content="same-origin">` |
+| `src/hosted/i18n/__tests__/parity.test.ts` | covers `hosted.auth.request.*` automatically |
+| `npm run test:bundles` | `dist-hosted` references only allowlisted origins (Netlify added) and no forbidden phrase; `dist-web` still carries the OAuth client id host |
+| QA `qa/specs/portal/signin.spec.ts` `@portal.signin.request-link` | EN and AR on the hosted dev/preview build: link visible, href matches `^https://[^/]+/hosted$`, no `target`, lead text visible, exactly one link, axe clean |
+
+Run: `npx vitest run scripts/__tests__/vite-config.test.ts src/hosted/session/__tests__/auth-states.test.tsx scripts/__tests__/brand-head.test.ts src/hosted/i18n`; `npm run test:bundles`.
