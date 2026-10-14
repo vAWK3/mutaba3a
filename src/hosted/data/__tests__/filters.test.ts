@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { omitShellOverlay, parseClientDetail, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseReceivablesPage, splitIncomeDrawer } from '../filters';
+import { omitShellOverlay, parseClientDetail, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseReceivablesPage, pickShellOverlay, splitIncomeDrawer } from '../filters';
 
 const R = 'b1111111-1111-4111-8111-111111111111';
 
@@ -55,5 +55,24 @@ describe('shell overlay keys (MUT-183 R1)', () => {
 
   it('returns the same keys when there is nothing to drop', () => {
     expect(omitShellOverlay({ tab: 'receivables' })).toEqual({ tab: 'receivables' });
+  });
+
+  it('pickShellOverlay keeps only the drawer keys, dropping page filters', () => {
+    const search = { status: 'OPEN', customerId: 'x', newProfile: 1, manageProfiles: '1', editProfile: R };
+    expect(pickShellOverlay(search)).toEqual({ newProfile: 1, manageProfiles: '1', editProfile: R });
+  });
+
+  it('pickShellOverlay returns nothing when no drawer is open', () => {
+    expect(pickShellOverlay({ tab: 'receivables' })).toEqual({});
+  });
+
+  it('a page search rewrite carries an open drawer forward (router.tsx useReplaceSearch, review finding)', () => {
+    // Regression: useReplaceSearch used to replace the whole URL search, so a
+    // background setFilters() call (e.g. a stale-anchor refetch) silently
+    // closed whatever profile drawer the shell had open. The fix merges the
+    // shell's own keys back in — this is that merge, exercised directly.
+    const prev = { status: 'OPEN', customerId: 'x', manageProfiles: '1' };
+    const next = { status: 'PAID', customerId: 'x' };
+    expect({ ...pickShellOverlay(prev), ...next }).toEqual({ status: 'PAID', customerId: 'x', manageProfiles: '1' });
   });
 });

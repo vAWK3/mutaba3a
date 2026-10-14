@@ -244,3 +244,10 @@ export function omitShellOverlay<T extends object>(search: T): T {
   for (const key of SHELL_OVERLAY_KEYS) delete rest[key];
   return rest as T;
 }
+
+/** The shell's own keys out of a raw search, so a page rewrite can carry them forward untouched. */
+export function pickShellOverlay(search: Raw): Partial<ProfileDrawerSearch> {
+  const picked: Raw = {};
+  for (const key of SHELL_OVERLAY_KEYS) if (search[key] !== undefined) picked[key] = search[key];
+  return picked as Partial<ProfileDrawerSearch>;
+}

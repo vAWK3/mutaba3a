@@ -4,7 +4,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
 import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './session/AuthGate';
 import { SessionBridge } from './session/SessionBridge';
-import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseOverview, parsePaymentsPage, parseReceivablesPage } from './data/filters';
+import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseOverview, parsePaymentsPage, parseReceivablesPage, pickShellOverlay } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
 import { ClientsPage } from './pages/views/ClientsPage';
 import { ClientDetailPage } from './pages/views/ClientDetailPage';
@@ -32,10 +32,16 @@ function parseSignIn(raw: Raw): { next?: string; reason?: ArrivalReason } {
   return { ...(next ? { next } : {}), ...(reason ? { reason } : {}) };
 }
 
-/** Replace the route's search with `next` (one object, `replace` so filters never pile up in history). */
+/**
+ * Replace the route's search with `next` (one object, `replace` so filters never
+ * pile up in history). The shell's own drawer keys (`?newProfile=`, etc.) ride
+ * along unchanged — a page rewriting its own filters must never close a drawer
+ * the shell opened (MUT-183 review finding: this used to drop them).
+ */
 function useReplaceSearch<T extends object>() {
   const navigate = useNavigate();
-  return (next: T) => void navigate({ to: '.', search: next as Raw, replace: true });
+  return (next: T) =>
+    void navigate({ to: '.', search: (prev: Raw) => ({ ...pickShellOverlay(prev), ...next }), replace: true });
 }
 
 function RootLayout() {
