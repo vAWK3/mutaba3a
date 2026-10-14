@@ -47,7 +47,8 @@ export async function backfillPersonalProfiles(db: PrismaClient, at = new Date()
       id: true,
       locale: true,
       memberships: {
-        where: { organization: { personalOwnerUserId: null } },
+        // A firm: neither the user's personal profile nor one they created themselves (MUT-182) — only an operator firm has settings to copy.
+        where: { organization: { ownerUserId: null } },
         orderBy: [{ createdAt: 'asc' }, { organizationId: 'asc' }],
         take: 1,
         select: { organization: { select: { defaultCurrency: true, timezone: true } } },
@@ -81,7 +82,8 @@ async function createPersonalProfile(
 ): Promise<string | null> {
   try {
     return await db.$transaction(async (tx) => {
-      const organization = await tx.organization.create({ data: { ...personalProfileFor(locale, settings), personalOwnerUserId: userId } });
+      // MUT-182: owned and PERSONAL, as organizations_personal_owned_check requires of every MUT-120 profile.
+      const organization = await tx.organization.create({ data: { ...personalProfileFor(locale, settings), personalOwnerUserId: userId, ownerUserId: userId, profileType: 'PERSONAL' } });
       await tx.membership.create({ data: { userId, organizationId: organization.id, createdAt: at } });
       const audit = { organizationId: organization.id, actorType: 'SYSTEM' as const, actorId: null, createdAt: at };
       await tx.auditEvent.createMany({

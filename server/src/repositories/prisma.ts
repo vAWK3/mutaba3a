@@ -7,6 +7,8 @@ import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import type {
   AttachmentFilter,
+  ExpenseCategoryInput,
+  ProfileTypeChange,
   AttachmentRepository,
   AuditEventRecord,
   CreditRecord,
@@ -117,6 +119,40 @@ export class PrismaLedgerStore implements LedgerStore {
     getById: (id) => this.prisma.organization.findUnique({ where: { id } }),
     getBySlug: (slug) => this.prisma.organization.findUnique({ where: { slug } }),
     list: () => this.prisma.organization.findMany({ orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+    createOwned: (ownerUserId, input, cap) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // MUT-182: the user's row is what two concurrent creates queue on, so the count below can never be raced past the cap.
+          await tx.$queryRaw`SELECT id FROM users WHERE id = ${ownerUserId}::uuid FOR UPDATE`;
+          const count = await tx.organization.count({ where: { ownerUserId } });
+          if (count >= cap) return { kind: 'limit' as const, count };
+          const { at, ...fields } = input;
+          const organization = await tx.organization.create({ data: { ...fields, ownerUserId, createdAt: at } });
+          const membership = toMembership(await tx.membership.create({ data: { userId: ownerUserId, organizationId: organization.id, createdAt: at } }));
+          return { kind: 'created' as const, organization, membership };
+        }),
+      ),
+    countOwnedBy: (userId) => this.prisma.organization.count({ where: { ownerUserId: userId } }),
+    updateOwned: (id, ownerUserId, expectedVersion, patch, preset, at) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // MUT-182, in order (eng review D3/D4): hold the row, check owner and version, retype (uncategorize, delete,
+          // seed), set the fields, bump the version once. organizations_personal_owned_check refuses a BUSINESS MUT-120 profile.
+          await lockOrganization(tx, id);
+          const current = await tx.organization.findFirst({ where: { id, ownerUserId } });
+          if (!current) return { kind: 'not_found' as const };
+          if (current.version !== expectedVersion) return { kind: 'stale' as const, record: current };
+          const retype = patch.profileType !== undefined && patch.profileType !== current.profileType;
+          const typeChange = retype ? await replaceCategories(tx, id, preset ?? [], at) : null;
+          const data: Prisma.OrganizationUpdateInput = { version: { increment: 1 } };
+          if (patch.name !== undefined) data.name = patch.name;
+          if (patch.defaultCurrency !== undefined) data.defaultCurrency = patch.defaultCurrency;
+          if (patch.profileType !== undefined) data.profileType = patch.profileType;
+          const record = await tx.organization.update({ where: { id }, data });
+          return { kind: 'updated' as const, record, typeChange };
+        }),
+      ),
+    typeChangeImpact: (id) => typeChangeImpactOf(this.prisma, id),
   };
 
   readonly apiKeys: ApiKeyRepository = {
@@ -150,7 +186,7 @@ export class PrismaLedgerStore implements LedgerStore {
               updatedAt: input.at,
             },
           });
-          const personalOrganization = await tx.organization.create({ data: { ...input.personal, personalOwnerUserId: user.id } });
+          const personalOrganization = await tx.organization.create({ data: { ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL' } });
           const memberships = [];
           for (const organizationId of [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])]) {
             memberships.push(toMembership(await tx.membership.create({ data: { userId: user.id, organizationId, createdAt: input.at } })));
@@ -1108,12 +1144,12 @@ export class PrismaLedgerStore implements LedgerStore {
       ).map(toExpenseCategory),
     seed: (organizationId, preset, at) =>
       this.prisma.$transaction(async (tx) => {
+        // MUT-182 D3: a type change holds this row while it replaces the categories, so a seed of the old preset waits,
+        // then finds the new rows and does nothing — instead of slipping its own preset in beside them.
+        await lockOrganization(tx, organizationId);
         if ((await tx.expenseCategory.count({ where: { organizationId } })) > 0) return false;
         // A racing seed blocks on the unique index and then skips every row, so the preset lands once.
-        const { count } = await tx.expenseCategory.createMany({
-          data: preset.map((p, i) => ({ organizationId, name: p.name, nameKey: categoryNameKey(p.name), color: p.color, createdAt: new Date(at.getTime() + i), updatedAt: at })),
-          skipDuplicates: true,
-        });
+        const { count } = await tx.expenseCategory.createMany({ data: presetRows(organizationId, preset, at), skipDuplicates: true });
         return count > 0;
       }),
     update: async (organizationId, id, expectedVersion, patch, at) => {
@@ -1213,6 +1249,37 @@ export class PrismaLedgerStore implements LedgerStore {
  * transaction), MUT-66's filing passes its own open `tx` so the insert and the
  * inbox-entry delete commit or roll back together.
  */
+/** Takes the organization's row lock for the rest of the transaction (MUT-182 D3). */
+async function lockOrganization(tx: Tx, organizationId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${organizationId}::uuid FOR UPDATE`;
+}
+
+/** Same instant for the whole preset; the 1 ms steps keep creation order equal to preset order. */
+function presetRows(organizationId: string, preset: readonly ExpenseCategoryInput[], at: Date) {
+  return preset.map((p, i) => ({ organizationId, name: p.name, nameKey: categoryNameKey(p.name), color: p.color, createdAt: new Date(at.getTime() + i), updatedAt: at }));
+}
+
+async function typeChangeImpactOf(db: Tx | PrismaClient, organizationId: string): Promise<ProfileTypeChange> {
+  const [uncategorizedExpenses, deletedCategories] = await Promise.all([
+    db.expense.count({ where: { organizationId, deletedAt: null, categoryId: { not: null } } }),
+    db.expenseCategory.count({ where: { organizationId } }),
+  ]);
+  return { uncategorizedExpenses, deletedCategories };
+}
+
+/**
+ * MUT-182: a type change replaces the profile's categories. Every expense
+ * loses its category first — deleted ones too, so none points at a removed
+ * row — and bumps its version, then every category goes and `preset` comes in.
+ */
+async function replaceCategories(tx: Tx, organizationId: string, preset: readonly ExpenseCategoryInput[], at: Date): Promise<ProfileTypeChange> {
+  const impact = await typeChangeImpactOf(tx, organizationId);
+  await tx.expense.updateMany({ where: { organizationId, categoryId: { not: null } }, data: { categoryId: null, version: { increment: 1 }, updatedAt: at } });
+  await tx.expenseCategory.deleteMany({ where: { organizationId } });
+  await tx.expenseCategory.createMany({ data: presetRows(organizationId, preset, at) });
+  return impact;
+}
+
 function createExpenseRow(tx: Tx | PrismaClient, input: CreateExpenseInput, at: Date): Promise<ExpenseRecord> {
   return translate(() => tx.expense.create({ data: { ...input, createdAt: at, updatedAt: at } }));
 }
@@ -1530,7 +1597,8 @@ async function translate<T>(op: () => Promise<T>): Promise<T> {
     return await op();
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError) {
-      const target = Array.isArray(err.meta?.target) ? (err.meta.target as string[]).join('_') : String(err.meta?.target ?? '');
+      // P2002 names its columns in `target`; P2003 names its constraint in `constraint` (e.g. "expenses_categoryId_fkey").
+      const target = Array.isArray(err.meta?.target) ? (err.meta.target as string[]).join('_') : String(err.meta?.target ?? err.meta?.constraint ?? '');
       if (err.code === 'P2002') throw new UniqueViolation(target);
       if (err.code === 'P2003') throw new ForeignKeyViolation(target);
     }

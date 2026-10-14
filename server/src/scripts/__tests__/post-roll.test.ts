@@ -68,7 +68,8 @@ if (!url) {
       const created = first.created.find((c) => c.userId === user.id);
       expect(created).toBeDefined();
       const personal = await db.organization.findUniqueOrThrow({ where: { personalOwnerUserId: user.id } });
-      expect(personal).toMatchObject({ id: created?.organizationId, name: 'شخصي', defaultCurrency: 'USD', timezone: 'Asia/Gaza' });
+      // MUT-182: owned by the user and PERSONAL, as every MUT-120 profile must be.
+      expect(personal).toMatchObject({ id: created?.organizationId, name: 'شخصي', defaultCurrency: 'USD', timezone: 'Asia/Gaza', ownerUserId: user.id, profileType: 'PERSONAL' });
       expect(personal.slug).toMatch(/^personal-/);
       expect(await db.membership.findMany({ where: { userId: user.id }, orderBy: { organizationId: 'asc' } })).toHaveLength(2);
       expect(await db.membership.findUnique({ where: { userId_organizationId: { userId: user.id, organizationId: personal.id } } })).not.toBeNull();
@@ -91,6 +92,19 @@ if (!url) {
       const result = await backfillPersonalProfiles(db, at);
       expect([...result.created.map((c) => c.userId), ...result.skipped.map((s) => s.userId)]).not.toContain(user.id);
       expect(await db.organization.findUniqueOrThrow({ where: { personalOwnerUserId: user.id } })).toMatchObject({ id: personalOrganization.id });
+    });
+
+    it('takes settings only from an operator firm, never from a profile the user owns (MUT-182)', async () => {
+      const tag = randomUUID().slice(0, 8);
+      const user = await legacyUser(tag, 'en', null);
+      // A legacy user can't really own one without a personal profile, but the selector must not care how it got there.
+      const ownedProfile = await db.organization.create({ data: { name: 'Studio', slug: `owned-${tag}`, defaultCurrency: 'EUR', timezone: 'Europe/Berlin', ownerUserId: user.id, profileType: 'BUSINESS' } });
+      await db.membership.create({ data: { userId: user.id, organizationId: ownedProfile.id, createdAt: new Date(at.getTime() - 60_000) } });
+      const firm = await store.organizations.create({ name: 'Firm', slug: `backfill-firm-${tag}`, defaultCurrency: 'USD', timezone: 'Asia/Gaza' });
+      await db.membership.create({ data: { userId: user.id, organizationId: firm.id, createdAt: at } });
+
+      await backfillPersonalProfiles(db, at);
+      expect(await db.organization.findUniqueOrThrow({ where: { personalOwnerUserId: user.id } })).toMatchObject({ defaultCurrency: 'USD', timezone: 'Asia/Gaza' });
     });
 
     it('skips and reports a legacy user with no firm to take a currency and timezone from', async () => {

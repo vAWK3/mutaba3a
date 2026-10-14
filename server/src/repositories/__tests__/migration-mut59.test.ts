@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { PrismaLedgerStore } from '../prisma.js';
+import { insertFirmRow } from './fixtures/raw-rows.js';
 
 /**
  * MUT-59: production applied the ORIGINAL M7 migration (acb1144) before M8
@@ -87,11 +88,12 @@ if (!url) {
     }
   };
 
-  /** An organization with projects and one real agreement, written by today's store (those tables are the same in both shapes). */
-  async function firm(dbUrl: string) {
+  /** An organization with projects and one real agreement; everything but the organization row is written by today's store (those tables are the same in both shapes). */
+  async function firm(dbUrl: string, db: PrismaClient) {
     const store = PrismaLedgerStore.connect(dbUrl);
     const at = new Date('2026-10-09T08:00:00Z');
-    const org = await store.organizations.create({ name: 'Firm', slug: `firm-${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    // A raw row: today's client selects organization columns this older schema lacks (MUT-182).
+    const org = await insertFirmRow(db);
     const customer = await store.customers.create({ organizationId: org.id, name: 'Haddad', email: null, phone: null, notes: null }, at);
     const project = async (name: string) => store.projects.create({ organizationId: org.id, customerId: customer.id, name, currency: 'ILS' }, at);
     const [p1, p2, p3, p4, p5] = [await project('P1'), await project('P2'), await project('P3'), await project('P4'), await project('P5')];
@@ -116,7 +118,7 @@ if (!url) {
       const { dbUrl, db } = await scratch();
       execute(dbUrl, legacyHistory());
       expect(await enumLabels(db)).toEqual(['PROPOSED', 'CLIENT_APPROVED', 'AGREED', 'CONVERTED', 'WITHDRAWN']);
-      const f = await firm(dbUrl);
+      const f = await firm(dbUrl, db);
       const [p1, p2, p3, p4, p5] = f.projects;
       const open = await insertProposal(db, f, p1.id, 'PROPOSED');
       const clientApproved = await insertProposal(db, f, p2.id, 'CLIENT_APPROVED', { clientApprovedOn: '2026-10-09', clientApprovalNote: 'By phone' });
@@ -159,7 +161,7 @@ if (!url) {
     it('changes nothing the second time', async () => {
       const { dbUrl, db } = await scratch();
       execute(dbUrl, legacyHistory());
-      const f = await firm(dbUrl);
+      const f = await firm(dbUrl, db);
       await insertProposal(db, f, f.projects[0]!.id, 'AGREED', { agreedOn: '2026-10-10' });
       execute(dbUrl, sqlOf(REPAIR));
       const before = { rows: await rows(db), audit: (await repairs(db)).length };
@@ -173,7 +175,7 @@ if (!url) {
     ] as const)('refuses %s, and changes nothing', async (_label, proposals) => {
       const { dbUrl, db } = await scratch();
       execute(dbUrl, legacyHistory());
-      const f = await firm(dbUrl);
+      const f = await firm(dbUrl, db);
       for (const [status, project, extra] of proposals) await insertProposal(db, f, f.projects[project]!.id, status, extra);
       const before = await rows(db);
       expect(() => execute(dbUrl, sqlOf(REPAIR))).toThrow(/MUT-59 repair refused/);
