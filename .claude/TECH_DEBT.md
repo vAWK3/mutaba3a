@@ -38,6 +38,8 @@
 - The memory store looks anchors up by exact id while Postgres compares uuids case-insensitively. Ids are lowercase in practice.
 - Show on a list whose filters are already exactly `{ anchor: <that id> }` (and whose refetch errored or hit `MAX_WAIT_MS`) navigates to the same URL, so it neither re-arms nor refetches; the notice goes and the list stays as it was (re-review, confidence 5).
 - Coming back to `?anchor=<id>` (Back, a bookmark) after Show's claim can mount the hidden "Saved" status again (re-review, confidence 4).
+- During a stale-anchor 404 (the Skeleton shows, not Unreachable), `listInError` is true, so a claimed save's notice can flash for one commit before the anchor drops. Pass `listInError && !anchored.staleAnchor` (final pass, confidence 5).
+- No test covers Show re-opening a claim whose list failed (`store.rearm` branch in `SavedNotice`): make the GET succeed after Show and assert the anchored row tints (final pass).
 **Fix**:
 - Stack both toasts in one fixed flex column, or render the notice through `ToastProvider` with a variant.
 - Focus the page heading after "Show latest" (it needs `tabIndex={-1}`).
