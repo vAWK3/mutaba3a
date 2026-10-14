@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { ESLint } from 'eslint';
 
 // MUT-47 (D6): the lint rule that keeps storage behind getRepositories().
@@ -15,6 +15,14 @@ async function seamErrors(code: string, filePath: string): Promise<number> {
 const outside = 'src/components/clients/SeamProbe.tsx';
 
 describe('storage seam lint rule (MUT-47)', () => {
+  // ESLint's first lintText() pays a cold-start cost (resolving the TS
+  // project config) that can blow past the default test timeout under
+  // parallel load; warm it up here so the real assertions measure the
+  // steady-state cost instead.
+  beforeAll(async () => {
+    await seamErrors("export const x = 1;\n", outside);
+  }, 15000);
+
   it.each([
     ["import { db } from '../../db';", 'db from the barrel'],
     ["import { db } from '../../db/database';", 'db from database'],
