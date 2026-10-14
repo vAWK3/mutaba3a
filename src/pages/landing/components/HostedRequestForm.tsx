@@ -101,104 +101,103 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
   const sending = status === 'sending';
 
   return (
-    <>
+    <form className="hosted-form" aria-labelledby={titleId} noValidate onSubmit={handleSubmit}>
+      <Input
+        ref={nameRef}
+        id="hosted-name"
+        name="name"
+        label={t(`${T}.form.name`)}
+        autoComplete="name"
+        required
+        value={values.name}
+        onChange={(e) => update('name', e.target.value)}
+        error={errors.name ? t(`${T}.form.errName`) : undefined}
+      />
+      <Input
+        ref={emailRef}
+        id="hosted-email"
+        name="email"
+        type="email"
+        dir="ltr"
+        label={t(`${T}.form.email`)}
+        autoComplete="email"
+        required
+        value={values.email}
+        onChange={(e) => update('email', e.target.value)}
+        error={errors.email ? t(`${T}.form.errEmail`, { example: isolate(EXAMPLE_EMAIL) }) : undefined}
+      />
+      <Input
+        id="hosted-phone"
+        name="phone"
+        type="tel"
+        dir="ltr"
+        label={optional('phone')}
+        autoComplete="tel"
+        value={values.phone}
+        onChange={(e) => update('phone', e.target.value)}
+      />
+      <Select
+        id="hosted-profession"
+        name="profession"
+        label={optional('profession')}
+        value={values.profession}
+        onChange={(e) => update('profession', e.target.value as Profession | '')}
+      >
+        <option value="">{t(`${T}.form.professionPlaceholder`)}</option>
+        {PROFESSIONS.map((profession) => (
+          <option key={profession} value={profession}>
+            {t(`${T}.form.professions.${profession}`)}
+          </option>
+        ))}
+      </Select>
+      <fieldset className="hosted-devices-field">
+        <legend className="input-label">{optional('devices')}</legend>
+        <div className="hosted-device-pills">
+          {DEVICES.map((device) => (
+            <label key={device} className="hosted-device-pill">
+              <input
+                type="checkbox"
+                name="devices"
+                value={device}
+                checked={values.devices.includes(device)}
+                onChange={() => toggleDevice(device)}
+              />
+              {t(`${T}.form.deviceOptions.${device}`)}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <Textarea
+        id="hosted-message"
+        name="message"
+        label={optional('message')}
+        rows={4}
+        value={values.message}
+        onChange={(e) => update('message', e.target.value)}
+      />
+      <div className="hosted-honeypot" aria-hidden="true">
+        <label htmlFor="hosted-honeypot">{t(`${T}.form.honeypot`)}</label>
+        <input
+          id="hosted-honeypot"
+          name={HONEYPOT_FIELD}
+          tabIndex={-1}
+          autoComplete="off"
+          value={values.honeypot}
+          onChange={(e) => update('honeypot', e.target.value)}
+        />
+      </div>
+      {/* Beside the button, where the visitor is looking when it fails (moved from above the form after the browser check) */}
       {status === 'error' && (
         <p className="hosted-alert" role="alert">
           {t(`${T}.form.errorAlert`)}
         </p>
       )}
-      <form className="hosted-form" aria-labelledby={titleId} noValidate onSubmit={handleSubmit}>
-        <Input
-          ref={nameRef}
-          id="hosted-name"
-          name="name"
-          label={t(`${T}.form.name`)}
-          autoComplete="name"
-          required
-          value={values.name}
-          onChange={(e) => update('name', e.target.value)}
-          error={errors.name ? t(`${T}.form.errName`) : undefined}
-        />
-        <Input
-          ref={emailRef}
-          id="hosted-email"
-          name="email"
-          type="email"
-          dir="ltr"
-          label={t(`${T}.form.email`)}
-          autoComplete="email"
-          required
-          value={values.email}
-          onChange={(e) => update('email', e.target.value)}
-          error={errors.email ? t(`${T}.form.errEmail`, { example: isolate(EXAMPLE_EMAIL) }) : undefined}
-        />
-        <Input
-          id="hosted-phone"
-          name="phone"
-          type="tel"
-          dir="ltr"
-          label={optional('phone')}
-          autoComplete="tel"
-          value={values.phone}
-          onChange={(e) => update('phone', e.target.value)}
-        />
-        <Select
-          id="hosted-profession"
-          name="profession"
-          label={optional('profession')}
-          value={values.profession}
-          onChange={(e) => update('profession', e.target.value as Profession | '')}
-        >
-          <option value="">{t(`${T}.form.professionPlaceholder`)}</option>
-          {PROFESSIONS.map((profession) => (
-            <option key={profession} value={profession}>
-              {t(`${T}.form.professions.${profession}`)}
-            </option>
-          ))}
-        </Select>
-        <fieldset className="hosted-devices-field">
-          <legend className="input-label">{optional('devices')}</legend>
-          <div className="hosted-device-pills">
-            {DEVICES.map((device) => (
-              <label key={device} className="hosted-device-pill">
-                <input
-                  type="checkbox"
-                  name="devices"
-                  value={device}
-                  checked={values.devices.includes(device)}
-                  onChange={() => toggleDevice(device)}
-                />
-                {t(`${T}.form.deviceOptions.${device}`)}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <Textarea
-          id="hosted-message"
-          name="message"
-          label={optional('message')}
-          rows={4}
-          value={values.message}
-          onChange={(e) => update('message', e.target.value)}
-        />
-        <div className="hosted-honeypot" aria-hidden="true">
-          <label htmlFor="hosted-honeypot">{t(`${T}.form.honeypot`)}</label>
-          <input
-            id="hosted-honeypot"
-            name={HONEYPOT_FIELD}
-            tabIndex={-1}
-            autoComplete="off"
-            value={values.honeypot}
-            onChange={(e) => update('honeypot', e.target.value)}
-          />
-        </div>
-        <button type="submit" className="btn btn-primary btn-lg hosted-submit" disabled={sending}>
-          {t(`${T}.form.${sending ? 'sending' : status === 'error' ? 'retry' : 'send'}`)}
-        </button>
-        <p className="hosted-notice">
-          {t(`${T}.form.notice`)} <a href="/privacy">{t(`${T}.form.privacyLink`)}</a>
-        </p>
-      </form>
-    </>
+      <button type="submit" className="btn btn-primary btn-lg hosted-submit" disabled={sending}>
+        {t(`${T}.form.${sending ? 'sending' : status === 'error' ? 'retry' : 'send'}`)}
+      </button>
+      <p className="hosted-notice">
+        {t(`${T}.form.notice`)} <a href="/privacy">{t(`${T}.form.privacyLink`)}</a>
+      </p>
+    </form>
   );
 }

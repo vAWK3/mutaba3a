@@ -95,6 +95,11 @@
   border-radius: var(--radius-hero);
 }
 
+/* The phone is narrow: its figure steps down a size so a five-digit balance fits */
+.hosted-devices-phone .landing-mock-amount {
+  font-size: var(--text-headline);
+}
+
 .hosted-devices-client {
   font-family: var(--font-heading);
   font-weight: var(--weight-bold);
@@ -286,7 +291,7 @@
 }
 
 .hosted-alert {
-  margin: 0 0 var(--space-4);
+  margin: 0;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   background: var(--badge-overdue-bg);
@@ -360,8 +365,9 @@
     min-height: 0;
   }
 
-  .hosted-devices-laptop,
-  .hosted-devices-caption {
+  /* Two classes: the base .hosted-devices .landing-mock rule sets display too */
+  .hosted-devices .hosted-devices-laptop,
+  .hosted-devices .hosted-devices-caption {
     display: none;
   }
 
@@ -388,6 +394,7 @@
   }
 
   .hosted-compare-table th,
+  .hosted-compare-table tbody th,
   .hosted-compare-table td,
   .hosted-compare-table td.hosted-compare-hosted {
     display: block;

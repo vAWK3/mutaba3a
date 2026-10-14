@@ -207,6 +207,24 @@ describe('vite.config', () => {
       expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:netlify-forms');
     });
 
+    it('serves the app shell for /hosted in dev, not the portal entry hosted.html beside it', () => {
+      const found = (resolve('web').plugins ?? []).flat().find((p) => p && typeof p === 'object' && 'name' in p && p.name === 'mutaba3a:hosted-offer-dev-route');
+      if (!found) throw new Error('hosted-offer-dev-route plugin missing from the web build');
+      let handler: ((req: { url?: string }, res: unknown, next: () => void) => void) | undefined;
+      (found as { configureServer: (server: unknown) => void }).configureServer({ middlewares: { use: (fn: typeof handler) => (handler = fn) } });
+      const route = (url: string) => {
+        const req = { url };
+        handler!(req, {}, () => {});
+        return req.url;
+      };
+      expect(route('/hosted')).toBe('/index.html');
+      expect(route('/hosted?x=1')).toBe('/index.html?x=1');
+      expect(route('/hosted.html')).toBe('/hosted.html');
+      expect(route('/app/hosted')).toBe('/app/hosted');
+      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:hosted-offer-dev-route');
+      expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:hosted-offer-dev-route');
+    });
+
     it('keeps the twin out of the service worker precache (D2)', () => {
       expect(PWA_WORKBOX?.globIgnores).toContain(NETLIFY_FORMS_PATH.slice(1));
     });

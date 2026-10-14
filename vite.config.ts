@@ -10,6 +10,7 @@ import {
   HOSTED_REQUEST_FORM_NAME,
   NETLIFY_FORMS_PATH,
 } from "./src/pages/landing/hostedRequest";
+import { HOSTED_OFFER_URL } from "./src/content/download-config";
 
 /** Dev-only default for where `vite --mode hosted` proxies `/v1`; override with MUTABA3A_API_ORIGIN. */
 const DEFAULT_DEV_API_ORIGIN = "http://127.0.0.1:8787";
@@ -110,6 +111,25 @@ export function netlifyFormsHtml(): string {
     `<form name="${HOSTED_REQUEST_FORM_NAME}" data-netlify="true" netlify-honeypot="${HONEYPOT_FIELD}" hidden>${fields}</form>` +
     `</body></html>`
   );
+}
+
+/**
+ * Dev only: Vite's HTML fallback serves `/hosted` from the portal's entry,
+ * `hosted.html`, which sits beside `index.html`. Route the offer page to the
+ * app shell instead, as Netlify's SPA fallback does in production, where the
+ * web build has no hosted.html (MUT-186).
+ */
+function hostedOfferDevRoute(): Plugin {
+  const pattern = new RegExp(`^${HOSTED_OFFER_URL}(?=$|\\?)`);
+  return {
+    name: "mutaba3a:hosted-offer-dev-route",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.url && pattern.test(req.url)) req.url = req.url.replace(pattern, "/index.html");
+        next();
+      });
+    },
+  };
 }
 
 /** Emits the form twin at the path the page posts to. Web build only: Netlify serves only the web build. */
@@ -236,7 +256,7 @@ export default defineConfig(({ mode }) => {
     },
   plugins: [
     react(),
-    ...(buildMode === "web" ? [socialMeta(), netlifyForms()] : []),
+    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), hostedOfferDevRoute()] : []),
     VitePWA({
       disable: isTauri, // Disable PWA for desktop builds
       registerType: "autoUpdate",

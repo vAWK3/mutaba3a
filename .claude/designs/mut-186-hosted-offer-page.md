@@ -175,7 +175,7 @@ Wireframe: `.claude/designs/mut-186-hosted-offer-wireframe.html`. It is a propos
 | Idle | The form; the submit button reads "Send request"; the privacy notice sits under the button (D3) |
 | Invalid | Inline rose-ink error under each bad field, with `aria-invalid` and `aria-describedby`; focus moves to the first invalid field. Copy: "Enter your name." / "Enter an email address like name@example.com." (the example address is wrapped in an LTR isolate) |
 | Sending | The button is disabled and reads "Sending…". Fields stay editable but are not re-sent. |
-| Error | A rose alert above the form, `role="alert"`: "Couldn't send. Check your connection and try again. Your answers are still here." The button reads "Try again". |
+| Error | A rose alert directly above the submit button (moved during the build from "above the form", which sat off-screen when a visitor at the button saw it fail), `role="alert"`: "Couldn't send. Check your connection and try again. Your answers are still here." The button reads "Try again". |
 | **Success (2A)** | The form is replaced by a mint panel, `role="status"`, and focus moves to its heading. Contents: **"Request sent."** / "Thanks, {name}. We'll reply to {email} with an offer." ({email} in an LTR isolate) / a **"Wrong email? Edit and send again"** link that brings the form back with its values kept / **"Keep using the free app meanwhile"**, linking to `WEB_APP_URL`. |
 
 ### Hero copy (3A, approved)
