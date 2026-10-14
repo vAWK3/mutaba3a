@@ -33,7 +33,7 @@
 **Why:** someone who reached the portal's sign-in page without an account hit a dead end. Epic MUT-185, after MUT-186 (`/hosted`) and MUT-187 (the in-app CTA). Brief, eng review and outside voice: `.claude/designs/mut-188-portal-request-link.md`.
 
 ### Added
-- **Sign-in "No account? Request one"** (`SignInPage`): a second help line under "Can't sign in?" with one outward link to the landing's `/hosted` page, same tab. EN/AR `hosted.auth.request.{lead,link}`. The portal still has no inbound door: the bundle rules and the server's no-self-registration test are unchanged.
+- **Sign-in "No account? Request one"** (`SignInPage`): a second help line under "Can't sign in?" with one outward, underlined link to the landing's `/hosted` page, same tab (axe `link-in-text-block` flagged colour-only in the Arabic QA run). EN/AR `hosted.auth.request.{lead,link}`. The portal still has no inbound door: the bundle rules and the server's no-self-registration test are unchanged.
 - QA `@portal.signin.request-link` (EN and AR: the link is visible, its href ends in `/hosted`, it is the only link, axe still passes).
 
 ### Changed

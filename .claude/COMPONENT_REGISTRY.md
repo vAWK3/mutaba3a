@@ -1781,7 +1781,7 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 
 ### Portal sign-in request link (MUT-188)
 **Location**: `src/hosted/pages/auth/SignInPage.tsx` (no new component)
-**Purpose**: Under the "Can't sign in?" help line, a second `.hp-help` paragraph: "No account? Request one" → the landing's public `/hosted` page, same tab, the only link on the page. The address is `__HOSTED_OFFER_URL__` (hosted build only, from `MUTABA3A_PUBLIC_ORIGIN` + `HOSTED_OFFER_URL`), read at render time through a typeof guard, so nothing renders where no build set it (Vitest). `hosted.html`'s `referrer=same-origin` keeps `?next=` paths off the landing host. Strings: `hosted.auth.request.{lead,link}`.
+**Purpose**: Under the "Can't sign in?" help line, a second `.hp-help` paragraph: "No account? Request one" → the landing's public `/hosted` page, same tab, the only link on the page, underlined (axe `link-in-text-block`: colour alone doesn't distinguish a link in running text). The address is `__HOSTED_OFFER_URL__` (hosted build only, from `MUTABA3A_PUBLIC_ORIGIN` + `HOSTED_OFFER_URL`), read at render time through a typeof guard, so nothing renders where no build set it (Vitest). `hosted.html`'s `referrer=same-origin` keeps `?next=` paths off the landing host. Strings: `hosted.auth.request.{lead,link}`.
 **Tests**: `src/hosted/session/__tests__/auth-states.test.tsx` (S3 zero links without the global; S3b EN/AR with it), `scripts/__tests__/vite-config.test.ts`, `scripts/__tests__/brand-head.test.ts`; QA `@portal.signin.request-link`.
 
 ### Portal income writes (MUT-133)
