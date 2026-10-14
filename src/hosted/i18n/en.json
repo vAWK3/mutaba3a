@@ -355,7 +355,8 @@
         "notes": "Notes",
         "notesPlaceholder": "Optional notes",
         "impliedRate": "Implied rate: 1 {from} = {rate} {to}",
-        "deleteConfirm": "Delete this conversion ({from} → {to})? This can't be undone."
+        "deleteConfirm": "Delete this conversion ({from} → {to})? This can't be undone.",
+        "gone": "This conversion no longer exists"
       },
       "errors": {
         "amountInvalid": "Enter a valid amount",

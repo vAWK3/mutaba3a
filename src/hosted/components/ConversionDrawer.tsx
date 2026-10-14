@@ -8,7 +8,7 @@ import { conversionKey, useConversion, useCreateConversion, useDeleteConversion,
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useToast } from './Toast';
 import { Drawer } from './Drawer';
-import { Unreachable } from './QueryView';
+import { Empty, Unreachable } from './QueryView';
 import { applyConversionApiError } from './conversionApiErrors';
 import { conversionFormSchema, CURRENCY_OPTIONS, impliedRate, type ConversionFormValues } from './conversionFormSchema';
 import { formatDecimal } from '../format/DecimalAmount';
@@ -142,9 +142,25 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
   };
 
   if (editing && loaded.isError) {
+    // A 404 is a conversion deleted elsewhere (or a stale link): say so calmly; a retry can't bring it back.
+    // Not QueryView, which reads any 404 as a lost profile and re-asks /v1/me (TD-123).
+    const gone = loaded.error instanceof ApiError && (loaded.error.status === 404 || loaded.error.code === 'NOT_FOUND');
     return (
-      <Drawer title={t('hosted.conversions.drawer.editTitle')} onClose={onClose} closeLabel={t('common.close')}>
-        <Unreachable onRetry={() => void loaded.refetch()} />
+      <Drawer
+        title={t('hosted.conversions.drawer.editTitle')}
+        onClose={onClose}
+        closeLabel={t('common.close')}
+        footer={
+          gone ? (
+            <div className="drawer-footer-right">
+              <Button type="button" variant="secondary" onClick={onClose}>
+                {t('common.close')}
+              </Button>
+            </div>
+          ) : undefined
+        }
+      >
+        {gone ? <Empty title={t('hosted.conversions.drawer.gone')} /> : <Unreachable onRetry={() => void loaded.refetch()} />}
       </Drawer>
     );
   }

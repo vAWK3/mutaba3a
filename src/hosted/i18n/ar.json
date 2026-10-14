@@ -359,7 +359,8 @@
         "notes": "ملاحظة",
         "notesPlaceholder": "ملاحظة اختيارية",
         "impliedRate": "السعر: 1 {from} = {rate} {to}",
-        "deleteConfirm": "حذف هذا التحويل ({from} ← {to})؟ لا يمكن التراجع عن ذلك."
+        "deleteConfirm": "حذف هذا التحويل ({from} ← {to})؟ لا يمكن التراجع عن ذلك.",
+        "gone": "لم يعد هذا التحويل موجوداً"
       },
       "errors": {
         "amountInvalid": "أدخل مبلغاً صالحاً",

@@ -224,11 +224,33 @@ describe('ConversionDrawer (hosted) edit mode (MUT-194)', () => {
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
   });
 
-  it('shows an error, and no form, when the conversion cannot be loaded', async () => {
+  it('says a conversion deleted elsewhere no longer exists, with a Close that closes the drawer', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation(async () => fail(404, 'NOT_FOUND'));
+    const { onClose } = renderDrawer({ mode: 'edit', conversionId: ID });
+    expect(await screen.findByText('This conversion no longer exists')).toBeInTheDocument();
+    expect(screen.queryByText("Can't reach Mutaba3a right now")).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    const closes = screen.getAllByRole('button', { name: 'Close' });
+    await user.click(closes[closes.length - 1]!);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('says the same in Arabic', async () => {
+    localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
     fetchMock.mockImplementation(async () => fail(404, 'NOT_FOUND'));
     renderDrawer({ mode: 'edit', conversionId: ID });
-    // The portal's existing error state (QueryView's Unreachable card).
+    expect(await screen.findByText('لم يعد هذا التحويل موجوداً')).toBeInTheDocument();
+  });
+
+  it('shows an error, and no form, when the conversion cannot be loaded', async () => {
+    fetchMock.mockImplementation(async () => fail(500, 'INTERNAL'));
+    renderDrawer({ mode: 'edit', conversionId: ID });
+    // Any other load error keeps the portal's existing error state (QueryView's Unreachable card), with a retry.
     expect(await screen.findByText("Can't reach Mutaba3a right now")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
   });

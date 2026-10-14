@@ -79,7 +79,8 @@ Mirrors the Expense trio (ExpenseDrawer/ExpensesList/expenseQueries).
   existing `hosted.conversions.errors.conflict` toast shows, the drawer stays open. Delete (D7):
   `confirm(t('hosted.conversions.drawer.deleteConfirm', { from, to }))` with both legs formatted by `formatDecimal`
   (what `DecimalAmount`, which ConversionsList's rows render through, uses). Edit and Delete are hidden while
-  loading; a load error shows an error drawer body. After a successful edit `markSaved(id)`.
+  loading; a load error shows `Unreachable` with retry, except a 404 (deleted elsewhere, stale link), which shows
+  `hosted.conversions.drawer.gone` ("This conversion no longer exists") with a Close button (approved follow-up). After a successful edit `markSaved(id)`.
 - `ConversionsList`: `onRowClick` → `?conversion=<id>`; `closeDrawer` clears `newConversion` and `conversion`;
   `afterDelete` drops `anchor` when it pointed at the deleted id; renders the edit drawer for `filters.conversion`.
 - `HostedTable` (D8 / eng D11): with `onRowClick`, the first column's cell content renders inside
@@ -102,7 +103,7 @@ Mirrors the Expense trio (ExpenseDrawer/ExpensesList/expenseQueries).
 | Currency without amount | 422 `AMOUNT_REQUIRED` | n/a (both legs always sent) |
 | Same currency | 422 `SAME_CURRENCY` on `toCurrency` | client-side refine + field error |
 | Future date | 422 `DATE_INVALID` | field error |
-| Unknown / deleted id | 404 | toast (network/fallback) |
+| Unknown / deleted id | 404 | on load: "This conversion no longer exists" + Close; on save/delete: toast |
 
 ## Reuse
 `ifMatch`, `versionMismatch`, `UpdateResult`, the expense update/softDelete shape, `ledgerPageStart`,
