@@ -30,6 +30,10 @@
       "expired": "You've been signed out. Sign in again to continue.",
       "signedOut": "You've signed out.",
       "help": "Can't sign in? Ask the person who set up your account for a new password.",
+      "request": {
+        "lead": "No account?",
+        "link": "Request one"
+      },
       "checking": "Checking your session",
       "boot": {
         "title": "Can't reach Mutaba3a right now",

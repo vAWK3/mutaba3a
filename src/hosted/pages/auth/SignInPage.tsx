@@ -27,6 +27,15 @@ type FieldError = 'emailRequired' | 'emailInvalid' | 'passwordRequired';
 type Banner = { kind: 'invalid' } | { kind: 'rateLimited'; minutes: number } | { kind: 'unreachable' };
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/**
+ * The landing's public /hosted page, the one outward link on this page
+ * (MUT-188). A build-time value read at render time through a typeof guard
+ * (ADR-076): the test runner defines none, so the line renders only where a
+ * build set it, and a test can stub the global before rendering.
+ */
+function hostedOfferUrl(): string {
+  return typeof __HOSTED_OFFER_URL__ !== 'undefined' ? __HOSTED_OFFER_URL__ : '';
+}
 const SECONDS_PER_MINUTE = 60;
 
 function minutesFrom(error: ApiError): number {
@@ -99,6 +108,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
   }
 
   const pending = signIn.isPending;
+  const offerUrl = hostedOfferUrl();
   const bannerId = `${ids}-banner`;
   const describedBy = (field: string, error?: FieldError) =>
     [error ? `${ids}-${field}-error` : null, banner ? bannerId : null].filter(Boolean).join(' ') || undefined;
@@ -196,6 +206,11 @@ function SignInForm({ next, reason }: SignInPageProps) {
           </button>
         </form>
         <p className="hp-help">{t('hosted.auth.help')}</p>
+        {offerUrl && (
+          <p className="hp-help">
+            {t('hosted.auth.request.lead')} <a href={offerUrl}>{t('hosted.auth.request.link')}</a>
+          </p>
+        )}
       </main>
     </div>
   );
