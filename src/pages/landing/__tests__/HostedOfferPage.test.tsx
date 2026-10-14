@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import { LandingProviders } from '../LandingProviders';
 import { HostedOfferPage } from '../HostedOfferPage';
@@ -20,7 +21,7 @@ vi.mock('../../../content/download-config', async (importOriginal) => ({
 }));
 
 function renderPage(language: 'en' | 'ar' = 'en') {
-  localStorage.setItem('mutaba3a-language', language);
+  chooseLanguage(language);
   return render(
     <LandingProviders>
       <HostedOfferPage />

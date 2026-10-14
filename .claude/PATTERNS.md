@@ -2266,3 +2266,10 @@ Vitest defines no `__BUILD_MODE__` / `__PORTAL_URL__`; a component that reads on
 
 ### Pattern: A dismissible suggestion snoozes in localStorage and fails open
 A "hide for N days" timestamp lives in localStorage (a UI preference, never in backups). Unparseable, missing or future values count as due, so a skewed clock or a hand edit can't hide it forever; a storage that throws shows the suggestion and the dismissal holds for the tab.
+
+## Patterns added by MUT-202 (2026-10-14)
+
+### Pattern: A surface's default is not a stored preference
+When one surface needs a different default from another that shares a stored setting (the marketing site opens in Arabic; the app follows the system), pass the default into the shared provider (`LanguageProvider defaultLanguage`) and store nothing until the person chooses. Storing the default would silently change the other surface. A value a surface stored by detection is not a choice: mark real choices separately (`mutaba3a-language-chosen`) and let the default yield only to a marked value. Order: a marked choice → the surface's default → the system's. Tests seed a choice with `chooseLanguage()` (`src/test/language.ts`) and QA with `chooseLanguageScript` (`qa/support/i18n.ts`).
+**Instances**: `LandingProviders` (ADR-077). Tests: `core.test.tsx` › defaultLanguage, `LandingProviders.test.tsx`, `@web.landing.arabic-default`.
+

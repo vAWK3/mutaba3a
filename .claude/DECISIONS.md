@@ -3047,3 +3047,25 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - Dismissal in Dexie settings: rejected; it would travel in backups and needs no query.
 - Inline `__BUILD_MODE__ === 'web'` checks (foldable): rejected; vitest has no such global, so every test rendering the sidebar or Settings would throw.
 - A lavender card or an icon on the collapsed rail (design D2 C, eng D4 B): rejected; they read as an active nav item.
+
+---
+
+## ADR-077: The Marketing Site Defaults to Arabic, as a Default and Not a Stored Preference
+
+**Status**: Active
+**Date**: 2026-10-14
+**Context**: MUT-202 (epic MUT-171). Basel: "the landing page should default to arabic regardless of system language". `LanguageProvider` chose the stored language, else the system language, and wrote its pick to `mutaba3a-language` on mount. The marketing pages (`/`, `/hosted`, `/privacy`, `/download`, all through `LandingProviders`) and the web app at `/app` share that key on one origin. Brief: `.claude/designs/mut-202-landing-arabic-default.md`.
+
+**Decision**:
+1. `LanguageProvider` takes an optional `defaultLanguage`. Order: stored choice → `defaultLanguage` → system language.
+2. A `defaultLanguage` is a default, not a preference: nothing is written to storage until someone chooses (the EN/AR switch). Without the prop the provider behaves exactly as before, storing the detected language on mount (the app).
+2a. A stored language counts as a choice only alongside `mutaba3a-language-chosen`, which only `setLanguage` writes (the landing's switch, the app's Settings). Before MUT-202 the landing and the app stored whatever they detected, and the app still does, so a bare stored value is not evidence of a choice; with a `defaultLanguage`, the provider ignores it. The app reads the plain key as before.
+2b. Storage reads and writes are guarded; where storage throws, the default renders and a choice holds for the visit.
+3. `LandingProviders` passes `LANDING_DEFAULT_LANGUAGE = 'ar'`, so every marketing page opens in Arabic, right to left, for a visitor who has not chosen.
+
+**Consequences**:
+- A visitor who never chose a language sees the marketing site in Arabic, including one whose browser language was stored earlier by the app or by the old landing; a person's choice (marked) still wins on the site, and the app keeps reading the plain key. Someone who explicitly chose English before MUT-202 has no mark and sees Arabic once, until they press EN again.
+- A landing visit no longer decides the app's language; the app keeps detecting the system language until someone chooses.
+- The HTML shell still says `lang="en"` until React mounts; nothing renders before then.
+- Open: whether the web app should also default to Arabic is Basel's call (not done).
+

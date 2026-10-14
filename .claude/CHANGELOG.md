@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Landing: open in Arabic by default (MUT-202, ADR-077)
+
+**Why:** Basel asked for the landing to open in Arabic regardless of system language. Epic MUT-171. Brief: `.claude/designs/mut-202-landing-arabic-default.md`.
+
+### Changed
+- `/`, `/hosted`, `/privacy` and `/download` open in Arabic, right to left, for a visitor who hasn't chosen a language. A choice made with the EN/AR switch still wins and is remembered.
+- The Arabic default is never stored, so visiting the landing doesn't switch the web app at `/app` (same language key) to Arabic; the app keeps following the system language.
+
+### Technical
+- `LanguageProvider` gains `defaultLanguage` (a person's marked choice → default → system); with it, nothing is stored until `setLanguage`, which also writes `mutaba3a-language-chosen`; a language stored by detection (by the app, or by the landing before MUT-202) doesn't beat the default; without the prop, unchanged (the app). Storage access is guarded. `LandingProviders` passes `LANDING_DEFAULT_LANGUAGE = 'ar'`.
+- Test helpers: `chooseLanguage()` (`src/test/language.ts`) and `chooseLanguageScript` (`qa/support/i18n.ts`) seed a language as a person's choice; `DownloadPage`/`HostedOfferPage` tests and `@web.brand.type` (English) use them.
+- Tests: `core.test.tsx` › defaultLanguage, new `LandingProviders.test.tsx`; QA `@web.landing.arabic-default` (en-US browser: four pages Arabic with nothing stored, `/app` English, EN sticks after reload) and a `preferLanguage` helper for the three landing cases that assert English. PATTERNS: "a surface's default is not a stored preference".
+
+---
+
 ## [Unreleased] - 2026-10-14 — Landing: a Malafat band for law firms and accounting offices (MUT-174)
 
 **Why:** the landing never mentioned Malafat, although Malafat's Money section runs on the hosted API in production and a firm's partner can log a payment in the phone app that Malafat then allocates. Epic MUT-171 (last story). Brief, eng review and outside voice: `.claude/designs/mut-174-malafat-section.md`.

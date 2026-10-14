@@ -12,3 +12,15 @@ const translations = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 export const ar = JSON.parse(fs.readFileSync(path.join(translations, 'ar.json'), 'utf8'));
 /** The English dictionary, for specs that assert copy in both languages (MUT-172). */
 export const en = JSON.parse(fs.readFileSync(path.join(translations, 'en.json'), 'utf8'));
+
+/**
+ * A language as a person chose it, the way the EN/AR switch or Settings leaves it (MUT-202). Without the
+ * second key the marketing site ignores a stored language and opens in Arabic.
+ */
+export const LANGUAGE_KEYS = { language: 'mutaba3a-language', chosen: 'mutaba3a-language-chosen' } as const;
+
+export function chooseLanguageScript([keys, language]: [typeof LANGUAGE_KEYS, 'en' | 'ar']): void {
+  localStorage.setItem(keys.language, language);
+  localStorage.setItem(keys.chosen, '1');
+}
+
