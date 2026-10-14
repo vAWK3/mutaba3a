@@ -1,25 +1,29 @@
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n/core';
+import { useTp } from '../../lib/i18n/plural';
 import type { HostedProfile } from '../api/client';
+import { canCreateProfile, profileKindKey } from '../data/profileRules';
 import { useMe } from '../session/me';
+import { useProfileDrawers } from './ProfileDrawers';
 import { usePopover } from './usePopover';
 
 /**
  * The profile switcher (hosted-portal.md §7.2): each hosted profile with its
- * "Hosted" chip and where its figures come from, and a footer that says local
- * profiles stay on the device. Switching keeps the section, never the record:
- * a client id from one firm means nothing in another.
+ * "Hosted" chip and what kind it is, then New profile and Manage profiles
+ * (MUT-183), and a footer that says local profiles stay on the device.
+ * Switching keeps the section, never the record: a client id from one firm
+ * means nothing in another. At the cap, New profile stays focusable and says
+ * why it does nothing (`aria-disabled`, plan §2.2).
  */
 
 const SECTION_SEGMENT = 3; // '' / 'p' / ':id' / section
 
-function sourceKey(profile: HostedProfile): string {
-  return profile.writerOfRecord === 'MALAFAT' ? 'hosted.shell.switcher.sourceMalafat' : 'hosted.shell.switcher.sourceExpensesOnly';
-}
-
 export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
   const t = useT();
+  const tp = useTp();
   const me = useMe();
+  const drawers = useProfileDrawers();
+  const canCreate = canCreateProfile(me);
   const navigate = useNavigate();
   const location = useLocation();
   const { open, toggle, close, buttonRef, panelRef } = usePopover();
@@ -28,6 +32,17 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
     close();
     const section = location.pathname.split('/')[SECTION_SEGMENT];
     void navigate({ to: section ? `/p/${profile.id}/${section}` : `/p/${profile.id}` });
+  }
+
+  function openNew() {
+    if (!canCreate) return;
+    close(false);
+    drawers.openNew();
+  }
+
+  function openManage() {
+    close(false);
+    drawers.openManage();
   }
 
   return (
@@ -68,11 +83,31 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
                     <span>{profile.name}</span>
                     <span className="hp-chip">{t('hosted.shell.switcher.hosted')}</span>
                   </span>
-                  <span className="hp-option-sub">{t(sourceKey(profile))}</span>
+                  <span className="hp-option-sub">{t(profileKindKey(profile))}</span>
                 </span>
               </button>
             );
           })}
+          <div className="hp-popover-sep" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            aria-disabled={!canCreate || undefined}
+            className="hp-option hp-option-action press"
+            onClick={openNew}
+          >
+            <span className="hp-option-text">
+              <span className="hp-option-line">{t('hosted.shell.switcher.newProfile')}</span>
+              {!canCreate && (
+                <span className="hp-option-sub">{tp('hosted.profiles.used', me.limits.maxOwnedProfiles, { owned: String(me.limits.ownedProfiles) })}</span>
+              )}
+            </span>
+          </button>
+          <button type="button" role="menuitem" className="hp-option hp-option-action press" onClick={openManage}>
+            <span className="hp-option-text">
+              <span className="hp-option-line">{t('hosted.shell.switcher.manage')}</span>
+            </span>
+          </button>
           <p className="hp-popover-foot">{t('hosted.shell.switcher.localFooter')}</p>
         </div>
       )}

@@ -11,7 +11,10 @@ import { ApiError, apiErrorReason } from '../api/client';
 export interface ProfileBanner {
   tone: 'info' | 'error';
   key: string;
-  params?: Record<string, string>;
+  /** For a plural key, rendered with `tp(key, count)`. */
+  count?: number;
+  /** Other `{placeholders}` in the string. */
+  vars?: Record<string, string>;
 }
 
 export interface MappedProfileError {
@@ -40,7 +43,7 @@ function conflict(error: ApiError): MappedProfileError {
     case 'PROFILE_LIMIT': {
       const limit = (error.details as { limit?: unknown } | null)?.limit;
       return {
-        banner: { tone: 'info', key: 'hosted.profiles.errors.limit', params: { max: String(limit ?? '') } },
+        banner: { tone: 'info', key: 'hosted.profiles.errors.limit', count: typeof limit === 'number' ? limit : undefined },
         capReached: true,
         refetchMe: true,
       };

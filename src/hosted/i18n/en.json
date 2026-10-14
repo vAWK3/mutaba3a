@@ -37,8 +37,8 @@
         "retry": "Try again"
       },
       "noProfiles": {
-        "title": "Your account isn't connected to a profile yet",
-        "body": "Ask the person who set up your account to give you access."
+        "title": "You don't have a profile yet",
+        "body": "Create one to start recording income and expenses."
       },
       "unavailable": {
         "title": "This profile isn't available",
@@ -64,7 +64,9 @@
         "hosted": "Hosted",
         "sourceMalafat": "Income recorded by Malafat",
         "sourceExpensesOnly": "Expenses only",
-        "localFooter": "Your local profiles stay in the Mutaba3a app on your device. They aren't shown here and never leave it."
+        "localFooter": "Your local profiles stay in the Mutaba3a app on your device. They aren't shown here and never leave it.",
+        "newProfile": "+ New profile",
+        "manage": "Manage profiles"
       },
       "account": "Account",
       "language": "Language"
@@ -448,6 +450,82 @@
       "show": "Show",
       "anchored": "Showing from a saved entry",
       "showLatest": "Show latest"
+    },
+    "profiles": {
+      "newTitle": "New profile",
+      "manageTitle": "Profiles",
+      "used": {
+        "one": "You've used {owned} of {count} profile",
+        "other": "You've used {owned} of {count} profiles"
+      },
+      "kind": {
+        "personal": "Personal",
+        "business": "Business",
+        "builtIn": "Your built-in profile"
+      },
+      "name": "Name",
+      "type": "Type",
+      "typeHint": "Sets the starting expense categories. Changing it later replaces them.",
+      "seed": {
+        "personal": "Groceries, rent, car, health…",
+        "business": "Office rent, software, travel, taxes…"
+      },
+      "currency": "Currency",
+      "currencyHintNew": "New records start in this currency.",
+      "currencyHintEdit": "Only new records use it. Existing ones keep their currency.",
+      "timezone": "Time zone",
+      "timezoneFromBrowser": "(this browser)",
+      "timezoneChange": "Change",
+      "timezoneHint": "It can't be changed later.",
+      "create": "Create profile",
+      "creating": "Creating…",
+      "checking": "Checking…",
+      "created": "{name} is ready",
+      "saved": "Profile saved",
+      "openNow": "Open now",
+      "readOnly": {
+        "malafat": "Managed in Malafat. Change it there.",
+        "firm": "Set up for you by your account administrator."
+      },
+      "back": "All profiles",
+      "typeGroup": "Profile type",
+      "typeGroupHint": "Changing it replaces this profile's expense categories.",
+      "builtInLocked": "Your built-in Personal profile is always Personal.",
+      "confirm": {
+        "title": "Switch to {type}?",
+        "body": "This profile's expense categories will be replaced with the {type} set.",
+        "count": {
+          "one": "{count} expense will become uncategorized.",
+          "other": "{count} expenses will become uncategorized."
+        },
+        "none": "No expenses use a category yet.",
+        "action": "Switch to {type}",
+        "back": "Back"
+      },
+      "typeChanged": {
+        "one": "Now {type}. {count} expense is uncategorized.",
+        "other": "Now {type}. {count} expenses are uncategorized."
+      },
+      "openExpenses": "Open Expenses",
+      "reload": "Reload",
+      "errors": {
+        "limit": {
+          "one": "You've reached your limit of {count} profile.",
+          "other": "You've reached your limit of {count} profiles."
+        },
+        "changedElsewhere": "This profile was changed elsewhere. Reload to see the latest, then save again.",
+        "builtInType": "Your built-in Personal profile is always Personal.",
+        "notOwner": "You can't change this profile.",
+        "gone": "This profile is no longer on your account.",
+        "nameRequired": "Enter a name",
+        "nameTooLong": "Use 80 characters or fewer",
+        "nameInvalid": "Check the name",
+        "typeRequired": "Choose Personal or Business",
+        "currencyInvalid": "Choose a currency",
+        "timezoneInvalid": "Choose a valid time zone",
+        "network": "Can't reach Mutaba3a. Nothing was saved. Try again.",
+        "generic": "Something went wrong. Nothing was saved."
+      }
     }
   }
 }

@@ -7,7 +7,7 @@ const err = (status: number, code: ConstructorParameters<typeof ApiError>[1], de
 describe('mapProfileError (ER1–ER8, design review Issue 5)', () => {
   it('ER1: PROFILE_LIMIT is an info banner with the server limit, blocks Save and re-reads me', () => {
     expect(mapProfileError(err(409, 'CONFLICT', { reason: 'PROFILE_LIMIT', limit: 6 }))).toEqual({
-      banner: { tone: 'info', key: 'hosted.profiles.errors.limit', params: { max: '6' } },
+      banner: { tone: 'info', key: 'hosted.profiles.errors.limit', count: 6 },
       capReached: true,
       refetchMe: true,
     });

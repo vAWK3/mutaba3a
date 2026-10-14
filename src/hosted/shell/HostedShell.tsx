@@ -4,6 +4,7 @@ import { useT } from '../../lib/i18n/core';
 import type { HostedProfile } from '../api/client';
 import { Wordmark } from '../components/Brand';
 import { useMe } from '../session/me';
+import { ProfileDrawers } from './ProfileDrawers';
 import { ProfileSwitcher } from './ProfileSwitcher';
 import { UserMenu } from './UserMenu';
 
@@ -53,6 +54,8 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
         <UserMenu />
       </aside>
       <main className="hp-page">{children}</main>
+      {/* MUT-183: New profile / Manage profiles, opened by URL from the switcher or the empty state. */}
+      <ProfileDrawers active={profile} />
     </div>
   );
 }
