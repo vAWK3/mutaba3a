@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.20.0-mut161
+  version: 1.21.0-mut91
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -9106,6 +9106,14 @@ paths:
           in: query
         - schema:
             type: string
+            format: uuid
+            description: Start the page at this expense, inclusive (MUT-91). Filters still apply. Not with `cursor`.
+          required: false
+          description: Start the page at this expense, inclusive (MUT-91). Filters still apply. Not with `cursor`.
+          name: anchor
+          in: query
+        - schema:
+            type: string
             pattern: ^\d{4}-\d{2}-\d{2}$
             description: Inclusive
           required: false
@@ -9167,6 +9175,12 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
           content:
             application/json:
               schema:
@@ -10090,6 +10104,14 @@ paths:
           in: query
         - schema:
             type: string
+            format: uuid
+            description: Start the page at this conversion, inclusive (MUT-91). Filters still apply. Not with `cursor`.
+          required: false
+          description: Start the page at this conversion, inclusive (MUT-91). Filters still apply. Not with `cursor`.
+          name: anchor
+          in: query
+        - schema:
+            type: string
             pattern: ^\d{4}-\d{2}-\d{2}$
             description: Inclusive
           required: false
@@ -10127,6 +10149,12 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
           content:
             application/json:
               schema:

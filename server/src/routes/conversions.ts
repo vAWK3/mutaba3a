@@ -9,7 +9,7 @@ import { idempotent } from '../idempotency.js';
 import type { ConversionFilter, LedgerStore } from '../repositories/ports.js';
 import { ConversionIdParamSchema, ConversionPageSchema, ConversionSchema, CreateConversionRequestSchema, ListConversionsQuerySchema } from '../schemas.js';
 import { serializeConversion } from '../serializers.js';
-import { errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse } from './shared.js';
+import { errorResponses, IdempotencyHeaderSchema, ledgerPageStart, notFoundResponse, validationResponse } from './shared.js';
 
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
@@ -64,13 +64,14 @@ export function conversionRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       security: SESSION_ONLY,
       middleware: [requireScope('conversions:read')] as const,
       request: { query: ListConversionsQuerySchema },
-      responses: { 200: { description: 'A page', content: { 'application/json': { schema: ConversionPageSchema } } }, ...validationResponse, ...errorResponses },
+      responses: { 200: { description: 'A page', content: { 'application/json': { schema: ConversionPageSchema } } }, ...validationResponse, ...notFoundResponse, ...errorResponses },
     }),
     async (c) => {
       const { organization } = sessionAuth(c);
       const q = c.req.valid('query');
       const filter: ConversionFilter = { ...(q.from ? { from: q.from } : {}), ...(q.to ? { to: q.to } : {}), ...(q.currency ? { currency: q.currency } : {}) };
-      const page = await store.conversions.list(organization.id, filter, { limit: q.limit, cursor: q.cursor ? decodeConversionCursor(q.cursor) : null });
+      const cursor = await ledgerPageStart(q, decodeConversionCursor, (id) => store.conversions.getById(organization.id, id), 'No such conversion');
+      const page = await store.conversions.list(organization.id, filter, { limit: q.limit, cursor });
       return c.json({ items: page.items.map(serializeConversion), nextCursor: page.nextCursor ? encodeConversionCursor(page.nextCursor) : null }, 200);
     },
   );

@@ -30,9 +30,11 @@ interface HostedTableProps<Row> {
   detail?: (row: Row) => ReactNode | null;
   /** Opt-in (MUT-44): makes each row open something (the expense drawer) on click. Every other list is still read-only. */
   onRowClick?: (row: Row) => void;
+  /** Extra classes for a row, e.g. the after-save `row-flash` tint (MUT-91). */
+  rowClassName?: (row: Row) => string | undefined;
 }
 
-export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowClick }: HostedTableProps<Row>) {
+export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowClick, rowClassName }: HostedTableProps<Row>) {
   return (
     <div className="table-wrapper hp-table-wrapper">
       <table className="table" aria-label={label}>
@@ -48,9 +50,10 @@ export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowCl
         <tbody>
           {rows.map((row) => {
             const extra = detail?.(row);
+            const className = [onRowClick ? 'clickable' : undefined, rowClassName?.(row)].filter(Boolean).join(' ') || undefined;
             return (
               <Fragment key={rowKey(row)}>
-                <tr className={onRowClick ? 'clickable' : undefined} onClick={onRowClick ? () => onRowClick(row) : undefined}>
+                <tr className={className} onClick={onRowClick ? () => onRowClick(row) : undefined}>
                   {columns.map((column) => (
                     <td key={column.key} className={cellClass(column)}>
                       {column.cell(row)}

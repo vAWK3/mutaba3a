@@ -15,7 +15,7 @@ import { SearchInput, StatusSegment, DateRangeControl } from '../filters';
 import { RowActionsMenu, RowActionsHeader, PaymentStatusBadge, RecordPaymentButton, AmountWithConversion, EmptyState, type RowAction } from '../ui';
 import { CheckIcon, CopyIcon } from '../icons';
 import { useIncome, type IncomeFilters } from '../../hooks/useIncomeQueries';
-import { useSavedFlashRows } from '../../hooks/useSavedFlash';
+import { useSavedFlashRows } from '../../lib/useSavedFlash';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useDrawerStore } from '../../lib/stores';

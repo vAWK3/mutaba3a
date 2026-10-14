@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useSavedFlashRows, useSavedFlashResolution } from '../useSavedFlash';
-import { useSavedFlashStore, type SavedFlash } from '../../lib/savedFlashStore';
+import { useSavedFlashStore, type SavedFlash } from '../savedFlashStore';
 
 function income(overrides: Partial<SavedFlash> = {}): SavedFlash {
   return {

@@ -14,7 +14,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { useSavedFlashResolution } from '../../hooks/useSavedFlash';
+import { useSavedFlashResolution } from '../../lib/useSavedFlash';
 import { useSavedFlashStore, flashTarget, type SavedFlash } from '../../lib/savedFlashStore';
 import { useProfileStore } from '../../lib/profileStore';
 import { useToast } from '../../lib/toastStore';
@@ -22,14 +22,20 @@ import { useT } from '../../lib/i18n';
 import { isolate } from '../../lib/utils';
 
 function messageFor(flash: SavedFlash, t: ReturnType<typeof useT>): string {
-  if (flash.kind === 'payment') {
-    return flash.clientName
-      ? t('savedFlash.paymentSaved', { client: isolate(flash.clientName) })
-      : t('savedFlash.paymentSavedNoClient');
+  switch (flash.kind) {
+    case 'payment':
+      return flash.clientName
+        ? t('savedFlash.paymentSaved', { client: isolate(flash.clientName) })
+        : t('savedFlash.paymentSavedNoClient');
+    case 'income':
+      return flash.clientName
+        ? t('savedFlash.incomeSaved', { client: isolate(flash.clientName) })
+        : t('savedFlash.incomeSavedNoClient');
+    // Portal kinds (MUT-91): the app never marks them, so the plain word is enough.
+    case 'expense':
+    case 'conversion':
+      return t('savedFlash.saved');
   }
-  return flash.clientName
-    ? t('savedFlash.incomeSaved', { client: isolate(flash.clientName) })
-    : t('savedFlash.incomeSavedNoClient');
 }
 
 export function SavedFlashAnnouncer() {

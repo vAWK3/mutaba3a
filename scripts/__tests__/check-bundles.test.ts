@@ -18,6 +18,12 @@ describe('local bundle rules', () => {
     expect(findForbidden(`x("${marker}")`, LOCAL_RULES).map((f) => f.rule)).not.toEqual([]);
   });
 
+  it('refuses the portal stylesheet and its after-save notice (MUT-91)', () => {
+    expect(findForbidden('.hp-toast{position:fixed}', LOCAL_RULES).map((f) => f.rule)).toEqual(['portal stylesheet']);
+    expect(findForbidden('className:"hp-toast hp-toast-info"', LOCAL_RULES).map((f) => f.rule)).toEqual(['portal stylesheet']);
+    expect(findForbidden('.toast-container{} .hp-toastish{}', LOCAL_RULES)).toEqual([]);
+  });
+
   it('does not mistake ordinary sync words for the retired feature', () => {
     expect(findForbidden('async function f(){} useSyncExternalStore(); "Syncing state"; flushSync()', LOCAL_RULES)).toEqual([]);
   });
@@ -34,6 +40,12 @@ describe('hosted bundle rules', () => {
       expect(findForbidden(`label:"${copy}"`, HOSTED_RULES)).not.toEqual([]);
     },
   );
+
+  it('refuses the app\'s profile store and its after-save routes, which the shared flash store must not drag in (MUT-91)', () => {
+    expect(findForbidden('persist(s,{name:"mutaba3a-active-profile"})', HOSTED_RULES).map((f) => f.rule)).toEqual(['app profile store']);
+    expect(findForbidden('{to:"/clients/$clientId",params:p}', HOSTED_RULES).map((f) => f.rule)).toEqual(['app saved-flash route']);
+    expect(findForbidden('{path:"/clients/$customerId"}', HOSTED_RULES)).toEqual([]);
+  });
 
   it('does not mistake "sign in" for "sign up"', () => {
     expect(findForbidden('"Sign in","تسجيل الدخول","Signing in…"', HOSTED_RULES)).toEqual([]);

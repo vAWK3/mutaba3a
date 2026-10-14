@@ -12,7 +12,7 @@
  */
 
 import { usePaymentsByClient } from '../../hooks/useQueries';
-import { useSavedFlashRows } from '../../hooks/useSavedFlash';
+import { useSavedFlashRows } from '../../lib/useSavedFlash';
 import { RowActionsMenu, RowActionsHeader, AmountWithConversion, type RowAction } from '../ui';
 import { useDrawerStore } from '../../lib/stores';
 import { formatPaymentDate, cn } from '../../lib/utils';

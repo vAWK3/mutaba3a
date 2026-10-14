@@ -437,6 +437,14 @@
         "changed": "This entry changed while you were recording. Showing the latest.",
         "gone": "This entry can't take a payment anymore."
       }
+    },
+    "savedFlash": {
+      "saved": "Saved",
+      "expenseSaved": "Expense saved",
+      "conversionSaved": "Conversion saved",
+      "show": "Show",
+      "anchored": "Showing from a saved entry",
+      "showLatest": "Show latest"
     }
   }
 }

@@ -195,6 +195,39 @@ describe('GET /v1/conversions', () => {
     expect(await q('currency=EUR')).toEqual(['2026-10-06']);
     expect(await q('currency=JOD')).toEqual(['2026-10-06']);
   });
+
+  it('MUT-91: anchor starts the page at that conversion, inclusive; nextCursor continues older; filters still apply', async () => {
+    const { h, b, p, create } = await setup();
+    const made: Loose[] = [];
+    for (const d of ['2026-10-09', '2026-10-06', '2026-10-04', '2026-10-01']) made.push(await read(await create({ occurredOn: d }, b.org.id)));
+    const anchor = made[1]; // 2026-10-06
+    const page: Loose = await read(await h.app.request(`/v1/conversions?limit=2&anchor=${anchor.id}`, { headers: p.as(b.org.id) }));
+    expect(page.items.map((x: Loose) => x.occurredOn)).toEqual(['2026-10-06', '2026-10-04']);
+    expect(page.items[0].id).toBe(anchor.id);
+    const rest: Loose = await read(await h.app.request(`/v1/conversions?limit=2&cursor=${page.nextCursor}`, { headers: p.as(b.org.id) }));
+    expect(rest.items.map((x: Loose) => x.occurredOn)).toEqual(['2026-10-01']);
+    const filtered: Loose = await read(await h.app.request(`/v1/conversions?anchor=${anchor.id}&from=2026-10-05`, { headers: p.as(b.org.id) }));
+    expect(filtered.items.map((x: Loose) => x.occurredOn)).toEqual(['2026-10-06']);
+  });
+
+  it('MUT-91: anchor refuses a cursor alongside it, and 404s an unknown or other-profile conversion', async () => {
+    const { h, a, b, p, create } = await setup();
+    const mine = await read(await create({}, b.org.id));
+    const theirs = await read(await create({}, a.org.id));
+    const both = await h.app.request(`/v1/conversions?anchor=${mine.id}&cursor=abc`, { headers: p.as(b.org.id) });
+    expect(both.status).toBe(422);
+    const bothBody = await read(both);
+    expect(bothBody.error.code).toBe('VALIDATION_FAILED');
+    expect(bothBody.error.details.field).toBe('anchor');
+    const unknown = await h.app.request('/v1/conversions?anchor=00000000-0000-4000-8000-0000000000ee', { headers: p.as(b.org.id) });
+    expect(unknown.status).toBe(404);
+    const unknownBody = await read(unknown);
+    expect(unknownBody.error.code).toBe('NOT_FOUND');
+    // Not the 'profile gone' 404: a client can tell a stale anchor apart and drop it.
+    expect(unknownBody.error.details).toMatchObject({ field: 'anchor', reason: 'ANCHOR_NOT_FOUND' });
+    expect((await h.app.request(`/v1/conversions?anchor=${theirs.id}`, { headers: p.as(b.org.id) })).status).toBe(404);
+    expect((await h.app.request('/v1/conversions?anchor=not-a-uuid', { headers: p.as(b.org.id) })).status).toBe(422);
+  });
 });
 
 describe('GET /v1/conversions/{id}', () => {
