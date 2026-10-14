@@ -57,6 +57,10 @@ features:
   - id: layout
     title: At 375px and 1280px, in English and Arabic, Home, Clients, Income, a drawer and Settings fit the window
     tier: secondary
+    paths:
+      # Settings › Businesses' Hosted account row: its nowrap button once made Settings scroll sideways at 375px
+      - src/pages/settings/HostedAccountEntry.tsx
+      - src/pages/settings/HostedAccountEntry.css
     steps:
       - Set the window to 375 × 812, then 1280 × 720, in each language
       - Open each surface

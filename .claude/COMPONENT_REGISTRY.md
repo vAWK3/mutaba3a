@@ -1986,7 +1986,7 @@ await importProfileFile(file, existing ? { mode: 'merge', profileId: existing.id
 **Usage**: `{goHostedEnabled() && !collapsed && <GoHostedCard onDismissed={focusSettings} />}`
 
 ### HostedAccountEntry — `src/pages/settings/HostedAccountEntry.tsx`
-**Purpose**: Settings › Businesses' "Hosted account" row: a sentence, a link to `/hosted`, and (when the build set a portal URL) "Already have an account? Sign in". No props. SettingsPage gates it with `goHostedEnabled()`.
+**Purpose**: Settings › Businesses' "Hosted account" row: a sentence, a link to `/hosted`, and (when the build set a portal URL) "Already have an account? Sign in". No props. SettingsPage gates it with `goHostedEnabled()`. Fits any column width: `position: relative` keeps its `.sr-only` spans clipped, and its button (`.hosted-account-entry-cta`) wraps instead of widening the row (TD-141).
 
 ### MalafatSuggestionCard — `src/components/malafat/MalafatSuggestionCard.tsx`
 **Purpose**: One inline Malafat suggestion (MUT-190): `role="group"` with a label, one line, a "See Malafat" new-tab link and a 44 px "Don't show this again". Holds the one upsell slot while shown (the Go hosted card steps aside); hides itself at once on dismiss or link click, then calls `onRetire()` and `onGone()` (move focus there). Props: `label`, `text`, `href` (a `malafatUrl`), `ctaLabel`, `dismissLabel`, `onRetire`, `onGone`, `variant: 'card' | 'note'`. Reuse it for MUT-191's portal moments only through a portal copy (the portal has its own components and i18n).
