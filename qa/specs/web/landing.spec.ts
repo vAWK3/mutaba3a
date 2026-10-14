@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { attachScreenshot, expectNoHorizontalOverflow } from '../../support/brand';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
-import { ar } from '../../support/i18n';
+import { ar, en } from '../../support/i18n';
 import { contrast, parseColor } from '../../../src/test/css/brandCss';
 
 /**
@@ -399,3 +399,42 @@ test('a /hosted link that gained a trailing slash still opens the offer page', {
   await expect(page.getByRole('heading', { level: 1, name: 'Your records, on every device.' })).toBeVisible();
   await expect(page.locator('input[name="bot-field"]')).toBeHidden();
 });
+
+for (const language of ['en', 'ar'] as const) {
+  test(
+    `${language === 'en' ? 'English' : 'Arabic'}: Get it states the paid half and its button opens /hosted (MUT-172)`,
+    { tag: '@web.landing.get-it-paid' },
+    async ({ page, step }) => {
+      const copy = (language === 'ar' ? ar : en).landing.getIt.paid as { lead: string; cta: string };
+      const block = page.locator('[data-part="get-it-paid"]');
+      const cta = block.getByRole('link', { name: copy.cta });
+
+      await step('The lines under the three app cards state the split', async () => {
+        await openLanding(page, language);
+        await block.scrollIntoViewIfNeeded();
+        await expect(block.getByText(copy.lead)).toBeVisible();
+        await expect(block.getByRole('link')).toHaveCount(1);
+        await expect(cta).toHaveAttribute('href', '/hosted');
+        await expect(cta).not.toHaveAttribute('target', /./);
+        expect((await cta.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        await attachScreenshot(page, `get-it-paid-${language}`);
+      });
+
+      await step('The button presses and keeps its colour on hover, like every landing control', async () => {
+        await expectPressed(page, cta, 'scale', PRESSED, 'paid CTA');
+        const before = await readColours(cta);
+        await cta.hover();
+        await expect.poll(() => cta.evaluate((el) => el.matches(':hover'))).toBe(true);
+        const after = await readColours(cta);
+        expect(after.color).toBe(before.color);
+        expect(after.decoration).toBe('none');
+      });
+
+      await step('It opens /hosted in the same tab', async () => {
+        await cta.click();
+        await expect(page).toHaveURL(/\/hosted$/);
+        await expect(page.locator('#hosted-title')).toBeVisible();
+      });
+    },
+  );
+}

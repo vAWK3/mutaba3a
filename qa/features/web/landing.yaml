@@ -1,0 +1,113 @@
+app: web
+area: landing
+title: Landing page
+tier: secondary
+paths:
+  - src/pages/landing/**
+  - src/content/download-config.ts
+features:
+  - id: header-cta
+    title: The header button appears only once the hero button has scrolled away, and goes to the same place (MUT-77)
+    tier: secondary
+    legacy: [MUT-77]
+    steps:
+      - Open the landing page and scroll past the hero
+    expect:
+      - The sticky bar's button fades in and opens the same place as the hero's button
+  - id: transparency
+    title: The bar is frosted by default and solid when reduced transparency is asked for (MUT-77)
+    tier: secondary
+    legacy: [MUT-77]
+    steps:
+      - Open the landing page, then ask the OS for reduced transparency
+    expect:
+      - The bar is frosted, then solid
+  - id: press
+    title: Every landing button gives press feedback, and nothing scales under reduced motion (MUT-77)
+    tier: secondary
+    legacy: [MUT-77]
+    steps:
+      - Hold the hero button, the language switch, a Get it card and the bar's button; repeat under reduced motion
+    expect:
+      - Each presses to the brand scale; FAQ rows dim; nothing scales under reduced motion
+  - id: hover-light
+    title: Hovering a landing control in OS light mode keeps its label colour and readable
+    tier: secondary
+    steps:
+      - In OS light mode, hover the hero button, the wordmark, a Get it card and the bar's button
+    expect:
+      - Labels keep their colour, no underline appears, the hero button stays at least 4.5:1
+  - id: "375"
+    title: At 375 px in English and Arabic the bar fits and overlaps nothing (MUT-77)
+    tier: secondary
+    legacy: [MUT-77]
+    steps:
+      - Open the landing page at 375 px wide, in English then Arabic
+    expect:
+      - The wordmark is not clipped and does not overlap the actions; 44 px tap targets
+  - id: title
+    title: The tab title follows the language
+    tier: tertiary
+    steps:
+      - Open the landing page and switch the language
+    expect:
+      - The document title changes with the language
+  - id: reveal
+    title: Chapter visuals rise in once on scroll, and are simply there under reduced motion (MUT-77)
+    tier: secondary
+    legacy: [MUT-77]
+    steps:
+      - Scroll through the chapters; repeat under reduced motion
+    expect:
+      - Visuals rise in once; under reduced motion they are already in place
+  - id: privacy-bar
+    title: The privacy policy has the bar without the button, and its wordmark goes home
+    tier: secondary
+    paths:
+      - src/pages/landing/PrivacyPolicyPage.tsx
+    steps:
+      - Open /privacy
+    expect:
+      - The landing bar shows without the button; the wordmark links home
+  - id: download
+    title: The download page renders with the landing bar and footer, not the app's top bar
+    tier: secondary
+    paths:
+      - src/pages/download/**
+    steps:
+      - Open /download
+    expect:
+      - The landing header and footer frame the page; the app's top bar is absent
+  - id: hosted
+    title: The hosted offer page explains the trade, then takes a request through every state (MUT-186)
+    tier: secondary
+    legacy: [MUT-186]
+    steps:
+      - Open /hosted in English then Arabic, read the comparison, submit an empty, a valid and a failing request
+    expect:
+      - Validation errors, the success state and the error state with retry each show; the honeypot stays empty
+  - id: hosted-375
+    title: At 375 px in Arabic the hosted page fits, stacks the comparison and keeps 44 px device pills (MUT-186)
+    tier: secondary
+    legacy: [MUT-186]
+    steps:
+      - Open /hosted at 375 px wide in Arabic
+    expect:
+      - No horizontal overflow; the comparison stacks; device pills are at least 44 px
+  - id: hosted-slash
+    title: A /hosted link that gained a trailing slash still opens the offer page (MUT-186)
+    tier: tertiary
+    legacy: [MUT-186]
+    steps:
+      - Open /hosted/
+    expect:
+      - The offer page renders
+  - id: get-it-paid
+    title: Get it states that, unlike the free apps, a hosted account and the phone app come with a paid plan, and its button opens /hosted (MUT-172)
+    tier: secondary
+    legacy: [MUT-172]
+    steps:
+      - Open the landing page, scroll to Get Mutaba3a, read the lines under the three app cards, press "See hosted accounts"; same in Arabic
+    expect:
+      - The lead says the hosted account and the phone app come with a paid plan, with no price, no checkout and no platform name
+      - The button is the block's only link, presses like every landing control, keeps its colour on hover, and opens /hosted in the same tab
