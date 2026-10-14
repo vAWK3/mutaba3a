@@ -147,6 +147,39 @@ describe('LandingPage honesty', () => {
   });
 });
 
+describe('LandingPage Get it, free vs paid (MUT-172)', () => {
+  // No price, no checkout, no signup, no platform the phone app can't yet be installed on
+  const BANNED_EN = /\bprice\b|\/month|checkout|sign ?up|\$\d|android|\bios\b/i;
+  const BANNED_AR = /سعر|اشترك|إنشاء حساب/;
+
+  it('says the hosted account and phone app come with a paid plan, with one link to /hosted', () => {
+    renderLanding('en');
+    const paid = part('get-it-paid');
+    expect(paid).toHaveTextContent('Unlike the apps above');
+    expect(paid).toHaveTextContent('paid plan');
+    const links = within(paid).getAllByRole('link');
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAccessibleName('See hosted accounts');
+    expect(links[0]).toHaveAttribute('href', '/hosted');
+    expect(links[0]).not.toHaveAttribute('target');
+    expect(paid.textContent).not.toMatch(BANNED_EN);
+  });
+
+  it('leaves the free line in place above it (A1)', () => {
+    renderLanding('en');
+    expect(part('get-it')).toHaveTextContent('Free during early access');
+    expect(part('get-it').textContent).not.toMatch(/stay free/i);
+  });
+
+  it('reads the same in Arabic', () => {
+    renderLanding('ar');
+    const paid = part('get-it-paid');
+    expect(paid).toHaveTextContent('خطة مدفوعة');
+    expect(within(paid).getByRole('link', { name: 'اطّلع على الحسابات المستضافة' })).toHaveAttribute('href', '/hosted');
+    expect(paid.textContent).not.toMatch(BANNED_AR);
+  });
+});
+
 describe('LandingPage FAQ', () => {
   it('asks exactly six questions, each one opening its answer', () => {
     renderLanding('en');

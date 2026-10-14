@@ -1250,7 +1250,12 @@
       "webApp": "Open the web app",
       "webAppHint": "Works offline after your first visit, on any device.",
       "version": "Version {version}",
-      "releaseNotes": "Release notes"
+      "releaseNotes": "Release notes",
+      "paid": {
+        "lead": "Unlike the apps above, a hosted account and the phone app come with a paid plan.",
+        "hint": "Your records on our servers, on every device you sign in on. Tell us what you need and we'll reply with an offer.",
+        "cta": "See hosted accounts"
+      }
     },
     "faq": {
       "headline": "Questions",

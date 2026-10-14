@@ -813,6 +813,60 @@ a.landing-get-it-option:focus-visible {
   opacity: var(--landing-press-dim);
 }
 
+/* The paid half of Get it (MUT-172): two lines and one button, no box, no heading */
+.landing-get-it-paid {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+  max-width: 48ch;
+  margin: var(--space-10) auto 0;
+}
+
+.landing-get-it-paid-lead {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.landing-get-it-paid-hint {
+  margin: 0;
+  font-size: var(--text-label);
+  color: var(--muted);
+}
+
+/* The hero button's recipe (HeroSection.css): the landing loads no Button.css */
+.landing-get-it-paid-cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-card);
+  background: var(--text);
+  color: var(--bg);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+  transition:
+    scale var(--duration-press) var(--ease-spring),
+    opacity 0.15s ease;
+}
+
+/* A classed link is a control: hold its own colours over the global a:hover (MUT-77) */
+.landing-get-it-paid-cta:hover {
+  color: var(--bg);
+  text-decoration: none;
+  opacity: var(--landing-hover-dim);
+}
+
+.landing-get-it-paid-cta:active {
+  scale: var(--press-scale);
+}
+
+.landing-get-it-paid-cta:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 /* ============================================
    Footer
    ============================================ */

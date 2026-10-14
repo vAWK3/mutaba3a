@@ -52,6 +52,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Landing: the free vs. paid split, with the door to /hosted (MUT-172)
+
+**Why:** the Get it section told every visitor everything is free and never said a hosted account exists. The landing is the third door of the Go hosted funnel (epic MUT-185; parent epic MUT-171). Brief, eng review and outside voice: `.claude/designs/mut-172-landing-free-vs-paid.md`.
+
+### Added
+- **Get it, paid half** (`GetItSection`, `data-part="get-it-paid"`): under the three free app cards, "Unlike the apps above, a hosted account and the phone app come with a paid plan." + "Your records on our servers, on every device you sign in on. Tell us what you need and we'll reply with an offer." + a "See hosted accounts" button (the Settings row's words) → `/hosted`, same tab. No heading, no box: the section keeps its one idea. EN/AR `landing.getIt.paid.{lead,hint,cta}`.
+- `.landing-get-it-paid-cta`: the hero button's recipe (ink fill, `--landing-hover-dim`, `scale` press, focus ring, 44 px). The landing loads no `Button.css`, so `btn-*` classes would be unstyled on `/`.
+- **`qa/features/web/landing.yaml`** (resolves TD-130): the 12 existing `@web.landing.*` tags catalogued, plus `get-it-paid`. `release-qa lint` reports no errors. `qa/support/i18n.ts` now exports `en` beside `ar`.
+- QA `@web.landing.get-it-paid`, EN and AR: the lead is visible, the block has one link, 44 px tall, presses to the brand scale and keeps its colour on hover, and opens `/hosted`.
+
+### Changed
+- Nothing in the free copy (A1). The honesty cases gain a block-scoped ban on price, `/month`, checkout, sign up, `$`, android, ios (EN) and سعر/اشترك/إنشاء حساب (AR).
+
+### Technical
+- Tests: `LandingPage.test.tsx` (EN block + CTA + honesty, the free line intact, AR). The seven-part structure test is untouched.
+
+---
+
 ## [Unreleased] - 2026-10-14 — Portal sign-in links out to /hosted (MUT-188)
 
 **Why:** someone who reached the portal's sign-in page without an account hit a dead end. Epic MUT-185, after MUT-186 (`/hosted`) and MUT-187 (the in-app CTA). Brief, eng review and outside voice: `.claude/designs/mut-188-portal-request-link.md`.

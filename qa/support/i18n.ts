@@ -10,3 +10,5 @@ import { fileURLToPath } from 'node:url';
 const translations = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../src/lib/i18n/translations');
 
 export const ar = JSON.parse(fs.readFileSync(path.join(translations, 'ar.json'), 'utf8'));
+/** The English dictionary, for specs that assert copy in both languages (MUT-172). */
+export const en = JSON.parse(fs.readFileSync(path.join(translations, 'en.json'), 'utf8'));
