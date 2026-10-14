@@ -16,6 +16,7 @@ import { router } from "./router";
 import { initDatabase } from "./db";
 import { LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";
+import { LandingProviders } from "./pages/landing/LandingProviders";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import "./components/ui/ErrorBoundary.css";
@@ -81,37 +82,31 @@ function App() {
 
     if (path === "/" && LandingPage) {
       return (
-        <ThemeProvider>
-          <LanguageProvider>
-            <Suspense fallback={<LandingLoader />}>
-              <LandingPage />
-            </Suspense>
-          </LanguageProvider>
-        </ThemeProvider>
+        <LandingProviders>
+          <Suspense fallback={<LandingLoader />}>
+            <LandingPage />
+          </Suspense>
+        </LandingProviders>
       );
     }
 
     if (path === "/download" && DownloadPage) {
       return (
-        <ThemeProvider>
-          <LanguageProvider>
-            <Suspense fallback={<LandingLoader />}>
-              <DownloadPage />
-            </Suspense>
-          </LanguageProvider>
-        </ThemeProvider>
+        <LandingProviders>
+          <Suspense fallback={<LandingLoader />}>
+            <DownloadPage />
+          </Suspense>
+        </LandingProviders>
       );
     }
 
     if (path === "/privacy" && PrivacyPolicyPage) {
       return (
-        <ThemeProvider>
-          <LanguageProvider>
-            <Suspense fallback={<LandingLoader />}>
-              <PrivacyPolicyPage />
-            </Suspense>
-          </LanguageProvider>
-        </ThemeProvider>
+        <LandingProviders>
+          <Suspense fallback={<LandingLoader />}>
+            <PrivacyPolicyPage />
+          </Suspense>
+        </LandingProviders>
       );
     }
   }
