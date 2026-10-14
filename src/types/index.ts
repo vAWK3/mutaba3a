@@ -138,6 +138,20 @@ export interface Settings {
    * was produced, and by a restore to that backup's own timestamp.
    */
   lastBackupAt?: string;
+  /**
+   * Malafat suggestions in the web app (MUT-190, ADR-078): `off` is the Settings
+   * switch, `dismissed` the moments the person retired for good. Optional, so
+   * older rows and backups read as "on, nothing dismissed".
+   */
+  malafatSuggestions?: StoredMalafatSuggestions;
+}
+
+/** A contextual Malafat suggestion that can be retired (the Settings row itself can't). */
+export type MalafatMoment = 'business-profile' | 'client-threshold' | 'second-business';
+
+export interface StoredMalafatSuggestions {
+  off?: boolean;
+  dismissed?: MalafatMoment[];
 }
 
 /** What `settingsRepo.get()` returns: the row with `features` fully resolved. */
