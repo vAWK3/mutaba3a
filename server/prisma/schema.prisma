@@ -251,6 +251,8 @@ model User {
   lockedUntil       DateTime?
   passwordChangedAt DateTime
   lastSignInAt      DateTime?
+  /// MUT-191: `{ off, dismissed[] }` for the Malafat suggestions; NULL = on, nothing dismissed.
+  malafatSuggestions Json?
   createdAt         DateTime
   updatedAt         DateTime
 

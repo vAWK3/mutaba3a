@@ -5,7 +5,6 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { PrismaLedgerStore } from '../prisma.js';
 
 /**
  * MUT-194 (ADR-075): conversions gain `version`, `updatedAt` and `deletedAt`.
@@ -60,14 +59,16 @@ if (!url) {
       // Not one plain batch: a later migration (MUT-100) uses an enum value an earlier one added, which Postgres refuses in one transaction.
       execute(dbUrl, inTransactions(dirs.slice(0, dirs.indexOf(MUT194))));
 
-      // Tables this migration does not touch can be written by today's store; conversions take raw SQL,
-      // since today's client already knows the new columns and the pre-migration table doesn't.
-      const store = PrismaLedgerStore.connect(dbUrl);
-      const org = await store.organizations.create({ name: 'Firm', slug: `firm-${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
-      const { user } = await store.users.create({ email: `n-${randomUUID().slice(0, 8)}@firm.ps`, displayName: 'Nour', passwordHash: 'x', locale: 'en', organizationId: org.id, personal: { name: 'Personal', slug: `personal-${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: new Date('2026-10-05T08:00:00Z') });
-      await store.disconnect();
-      const orgId = org.id;
-      const userId = user.id;
+      // Raw SQL throughout: today's client knows columns that later migrations add (conversions here, and MUT-191's
+      // users.malafatSuggestions), and the pre-migration tables don't have them.
+      const orgId = randomUUID();
+      const userId = randomUUID();
+      await db.$executeRawUnsafe(
+        `INSERT INTO organizations (id, name, slug, "defaultCurrency", timezone, "updatedAt") VALUES ('${orgId}', 'Firm', 'firm-${orgId.slice(0, 8)}', 'ILS', 'Asia/Jerusalem', '2026-10-05T08:00:00Z')`,
+      );
+      await db.$executeRawUnsafe(
+        `INSERT INTO users (id, email, "displayName", "passwordHash", locale, "passwordChangedAt", "createdAt", "updatedAt") VALUES ('${userId}', 'n-${userId.slice(0, 8)}@firm.ps', 'Nour', 'x', 'en', '2026-10-05T08:00:00Z', '2026-10-05T08:00:00Z', '2026-10-05T08:00:00Z')`,
+      );
       const insert = async (createdAt: string) => {
         const id = randomUUID();
         await db.$executeRawUnsafe(

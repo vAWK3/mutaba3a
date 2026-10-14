@@ -7,7 +7,8 @@ import type { PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore, UserRecord } from '../repositories/ports.js';
-import { ErrorEnvelopeSchema, MeSchema, SignInRequestSchema } from '../schemas.js';
+import { ErrorEnvelopeSchema, MalafatSuggestionsChangeSchema, MalafatSuggestionsSchema, MeSchema, SignInRequestSchema } from '../schemas.js';
+import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { hostedProfileFor } from '../serializers.js';
 import { MAX_OWNED_PROFILES } from './profiles.js';
 
@@ -28,7 +29,7 @@ export interface SessionRouteOptions {
 }
 
 /** Session routes that act on the person rather than an organization: no X-Mutaba3a-Profile. */
-export const ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set(['GET /v1/me', 'DELETE /v1/sessions/current']);
+export const ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set(['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'DELETE /v1/sessions/current']);
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
@@ -115,6 +116,31 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
     async (c) => c.json(await buildMe(store, c.get('identity').user), 200),
   );
 
+  app.openapi(
+    createRoute({
+      method: 'patch',
+      path: '/v1/me/malafat-suggestions',
+      tags: ['Sessions'],
+      summary: "The person's Malafat suggestion preferences (MUT-191)",
+      description:
+        '`off` replaces the switch; `dismiss` adds moments to what is stored (never removes one), so two devices never undo each other. Idempotent by construction, so no Idempotency-Key. Writes no audit row: a preference is not an event a firm sees.',
+      security: [{ session: [] }, { deviceSession: [] }],
+      request: { body: { required: true, content: { 'application/json': { schema: MalafatSuggestionsChangeSchema } } } },
+      responses: {
+        200: { description: 'The preferences now stored', content: { 'application/json': { schema: MalafatSuggestionsSchema } } },
+        422: errorResponse('Invalid body'),
+        401: errorResponse('No valid session'),
+        403: errorResponse('PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST'),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid('json');
+      const change = { ...(body.off === undefined ? {} : { off: body.off }), ...(body.dismiss === undefined ? {} : { dismiss: body.dismiss }) };
+      const user = await store.users.updateMalafatSuggestions(c.get('identity').user.id, change, c.get('now')());
+      return c.json(resolveMalafatSuggestions(user?.malafatSuggestions ?? null), 200);
+    },
+  );
+
   return app;
 }
 
@@ -133,7 +159,7 @@ export async function buildMe(store: LedgerStore, user: UserRecord) {
   const rank = (p: { isPersonalDefault: boolean; owned: boolean }) => (p.isPersonalDefault ? 2 : p.owned ? 1 : 0);
   profiles.sort((a, b) => rank(a) - rank(b));
   return {
-    user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale },
+    user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale, malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions) },
     profiles,
     limits: { ownedProfiles: await store.organizations.countOwnedBy(user.id), maxOwnedProfiles: MAX_OWNED_PROFILES },
   };

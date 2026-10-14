@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { applyMalafatChange } from '../malafat-suggestions.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import type {
@@ -310,6 +311,7 @@ export class MemoryLedgerStore implements LedgerStore {
         lockedUntil: null,
         passwordChangedAt: input.at,
         lastSignInAt: null,
+        malafatSuggestions: null,
         createdAt: input.at,
         updatedAt: input.at,
       };
@@ -350,6 +352,12 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!u) return null;
       Object.assign(u, { lastSignInAt: at, failedSignIns: 0, lockedUntil: null, updatedAt: at });
       return { ...u };
+    },
+    updateMalafatSuggestions: async (id, change, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { malafatSuggestions: applyMalafatChange(u.malafatSuggestions, change), updatedAt: at });
+      return { ...u, malafatSuggestions: u.malafatSuggestions && { ...u.malafatSuggestions, dismissed: [...u.malafatSuggestions.dismissed] } };
     },
   };
 

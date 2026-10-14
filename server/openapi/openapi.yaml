@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.24.0-mut209
+  version: 1.25.0-mut191
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -154,11 +154,14 @@ components:
               type: string
             locale:
               $ref: "#/components/schemas/UserLocale"
+            malafatSuggestions:
+              $ref: "#/components/schemas/MalafatSuggestions"
           required:
             - id
             - email
             - displayName
             - locale
+            - malafatSuggestions
         profiles:
           type: array
           items:
@@ -174,6 +177,24 @@ components:
       enum:
         - en
         - ar
+    MalafatSuggestions:
+      type: object
+      properties:
+        off:
+          type: boolean
+        dismissed:
+          type: array
+          items:
+            $ref: "#/components/schemas/MalafatMoment"
+      required:
+        - off
+        - dismissed
+    MalafatMoment:
+      type: string
+      enum:
+        - business-profile
+        - client-threshold
+        - second-business
     HostedProfile:
       type: object
       properties:
@@ -325,6 +346,18 @@ components:
       required:
         - email
         - password
+    MalafatSuggestionsChange:
+      type: object
+      properties:
+        off:
+          type: boolean
+        dismiss:
+          type: array
+          items:
+            $ref: "#/components/schemas/MalafatMoment"
+          minItems: 1
+          maxItems: 3
+      additionalProperties: false
     DeviceSession:
       allOf:
         - $ref: "#/components/schemas/Me"
@@ -5214,6 +5247,46 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/me/malafat-suggestions:
+    patch:
+      tags:
+        - Sessions
+      summary: The person's Malafat suggestion preferences (MUT-191)
+      description: "`off` replaces the switch; `dismiss` adds moments to what is stored (never removes one), so two devices never undo each other. Idempotent by construction, so no Idempotency-Key. Writes no audit row: a preference is not an event a firm sees."
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MalafatSuggestionsChange"
+      responses:
+        "200":
+          description: The preferences now stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MalafatSuggestions"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Invalid body
           content:
             application/json:
               schema:

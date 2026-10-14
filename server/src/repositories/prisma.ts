@@ -4,6 +4,7 @@ import { parseScopes } from '../auth/scopes.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { ForeignKeyViolation, InsufficientCapacity, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
+import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import type {
@@ -229,6 +230,14 @@ export class PrismaLedgerStore implements LedgerStore {
       const { count } = await this.prisma.user.updateMany({ where: { id }, data: { lastSignInAt: at, failedSignIns: 0, lockedUntil: null, updatedAt: at } });
       return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
     },
+    // MUT-191: read, union and write under a row lock, so concurrent dismissals from two devices both survive
+    updateMalafatSuggestions: async (id, change, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const [locked] = await tx.$queryRaw<Array<{ malafatSuggestions: unknown }>>`SELECT "malafatSuggestions" FROM "users" WHERE "id" = ${id}::uuid FOR UPDATE`;
+        if (!locked) return null;
+        const next = applyMalafatChange(locked.malafatSuggestions, change);
+        return toUser(await tx.user.update({ where: { id }, data: { malafatSuggestions: next as unknown as Prisma.InputJsonValue, updatedAt: at } }));
+      }),
   };
 
   readonly sessions: SessionRepository = {
@@ -1633,6 +1642,7 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     lockedUntil: row.lockedUntil,
     passwordChangedAt: row.passwordChangedAt,
     lastSignInAt: row.lastSignInAt,
+    malafatSuggestions: row.malafatSuggestions === null ? null : resolveMalafatSuggestions(row.malafatSuggestions),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

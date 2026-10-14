@@ -194,7 +194,7 @@ An API key still implies its organization, and no API-key request accepts an org
 | audit | audit:read | /v1/audit | read | none | — | device |
 | expenses | expenses:read, expenses:write | /v1/expenses*, /v1/expense-categories*, /v1/summaries/expenses | none | read-write | USER | device |
 | capture | capture:write | /v1/income* | none | read-write | USER | device |
-| identity | — | /v1/me, /v1/sessions/current, /v1/profiles* | none | read-write | USER | device |
+| identity | — | /v1/me*, /v1/sessions/current, /v1/profiles* | none | read-write | USER | device |
 | conversions | conversions:read, conversions:write | /v1/conversions* | none | read-write | USER | device |
 <!-- writability-matrix:end -->
 
@@ -237,7 +237,8 @@ Tests generated from the table (MUT-39):
 |---|---|---|
 | `POST /v1/sessions` | public | `{ email, password }` → `201 Me` + cookie; `401 INVALID_CREDENTIALS`; `429 RATE_LIMITED` |
 | `DELETE /v1/sessions/current` | session | `204`; revokes server-side, clears cookie. Not organization-scoped (no profile header) |
-| `GET /v1/me` | session | `Me = { user: { id, email, displayName, locale }, profiles: HostedProfile[] }`. Not organization-scoped |
+| `GET /v1/me` | session | `Me = { user: { id, email, displayName, locale, malafatSuggestions }, profiles: HostedProfile[], limits }`. Not organization-scoped |
+| `PATCH /v1/me/malafat-suggestions` | session | MUT-191: `{ off?, dismiss? }` → `{ off, dismissed }`; dismissals are unioned server-side; no audit row |
 | the `GET` routes of every `read` row of §5 | apiKey + session | unchanged paths; sessions add `X-Mutaba3a-Profile`. POST previews (`/v1/agreements/preview`, `/v1/retainers/preview`, `/v1/retainers/{id}/changes/preview`, `/v1/retainers/{id}/cancel/preview`, `/v1/allocations/preview`, `/v1/import/preview`) and `/v1/operations/*` stay key-only; the portal needs none of them |
 
 `HostedProfile = { id, name, source: 'hosted', defaultCurrency, timezone, writerOfRecord: 'MALAFAT' | null, access: Record<Domain, 'read' | 'read-write' | 'none'> }`. `id` is the organization id. `access` is the session column of §5, resolved for this organization, so the UI never hard-codes which views are read-only. `source` has one value on the wire; it exists so the client's `ProfileSource` union is explicit, and a test pins that the server never emits `local`.

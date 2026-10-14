@@ -485,3 +485,91 @@ describe('session rate limit and log hygiene', () => {
     expect(text).not.toContain(p.password);
   });
 });
+
+describe('Malafat suggestions on the account (MUT-191)', () => {
+  const patch = (token: string, body: unknown, extra: Record<string, string> = SAME_ORIGIN) =>
+    ({ method: 'PATCH', headers: { 'content-type': 'application/json', ...withSession(token, extra) }, body: JSON.stringify(body) });
+
+  it('starts on, nothing dismissed, in /v1/me', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+    const me = await read(await h.app.request('/v1/me', { headers: withSession(token) }));
+    expect(me.user.malafatSuggestions).toEqual({ off: false, dismissed: [] });
+  });
+
+  it('adds dismissals to what is stored, so two tabs never undo each other, and switches off without losing them', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const a = await signIn(h, p.email, p.password);
+    const b = await signIn(h, p.email, p.password);
+    let res = await h.app.request('/v1/me/malafat-suggestions', patch(a.token, { dismiss: ['client-threshold'] }));
+    expect(res.status).toBe(200);
+    expect(await read(res)).toEqual({ off: false, dismissed: ['client-threshold'] });
+    res = await h.app.request('/v1/me/malafat-suggestions', patch(b.token, { off: true, dismiss: ['second-business', 'business-profile'] }));
+    expect(await read(res)).toEqual({ off: true, dismissed: ['business-profile', 'client-threshold', 'second-business'] });
+    res = await h.app.request('/v1/me/malafat-suggestions', patch(a.token, { dismiss: ['client-threshold'] }));
+    expect(await read(res)).toEqual({ off: true, dismissed: ['business-profile', 'client-threshold', 'second-business'] });
+    const me = await read(await h.app.request('/v1/me', { headers: withSession(a.token) }));
+    expect(me.user.malafatSuggestions).toEqual({ off: true, dismissed: ['business-profile', 'client-threshold', 'second-business'] });
+  });
+
+  it('works from the phone app too, and only ever for the caller', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const q = await person(h, f.org.id);
+    const { token } = await deviceSignIn(h, p.email, p.password);
+    const res = await h.app.request('/v1/me/malafat-suggestions', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', ...withDevice(token) },
+      body: JSON.stringify({ off: true }),
+    });
+    expect(res.status).toBe(200);
+    const other = await signIn(h, q.email, q.password);
+    expect((await read(await h.app.request('/v1/me', { headers: withSession(other.token) }))).user.malafatSuggestions).toEqual({ off: false, dismissed: [] });
+  });
+
+  it.each([
+    [{}],
+    [{ dismiss: ['settings'] }],
+    [{ dismiss: [] }],
+    [{ off: 'yes' }],
+    [{ off: true, extra: 1 }],
+  ])('refuses %j with 422', async (body) => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+    const res = await h.app.request('/v1/me/malafat-suggestions', patch(token, body));
+    expect(res.status).toBe(422);
+  });
+
+  it('refuses a cross-site write, an API key and no session', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+    const cross = await h.app.request('/v1/me/malafat-suggestions', patch(token, { off: true }, { origin: 'https://evil.example' }));
+    expect(cross.status).toBe(403);
+    expect((await read(cross)).error.code).toBe('CROSS_SITE_REQUEST');
+    const byKey = await h.app.request('/v1/me/malafat-suggestions', json({ off: true }, f.auth, 'PATCH'));
+    expect(byKey.status).toBe(403);
+    expect((await read(byKey)).error.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+    const none = await h.app.request('/v1/me/malafat-suggestions', json({ off: true }, SAME_ORIGIN, 'PATCH'));
+    expect(none.status).toBe(401);
+  });
+
+  it('writes no audit row: a preference is not an event a firm sees', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+    const before = (await read(await h.app.request('/v1/audit', { headers: f.auth }))).items.length;
+    await h.app.request('/v1/me/malafat-suggestions', patch(token, { dismiss: ['client-threshold'] }));
+    expect((await read(await h.app.request('/v1/audit', { headers: f.auth }))).items.length).toBe(before);
+  });
+});
+
