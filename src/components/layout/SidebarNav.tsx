@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { cn } from "../../lib/utils";
 import { useT } from "../../lib/i18n";
 import { useCheckForUpdates } from "../../hooks/useCheckForUpdates";
@@ -12,6 +12,8 @@ import type { FeatureKey } from "../../types";
 import type { AddMenuAction } from "./addMenuActions";
 import { ThemeToggle } from "./ThemeToggle";
 import { BrandMark } from "../brand/BrandMark";
+import { GoHostedCard } from "./GoHostedCard";
+import { goHostedEnabled } from "../../lib/goHosted";
 
 // Storage key for collapsed state
 const SIDEBAR_COLLAPSED_KEY = "sidebarCollapsed";
@@ -107,6 +109,12 @@ export function SidebarNav() {
   const { actions: newMenuActions, run, pickers } = useAddMenuActions();
   const [collapsed, toggleCollapsed] = useCollapsedState();
   const newMenu = useMenuButton();
+  const footerRowRef = useRef<HTMLDivElement>(null);
+
+  // The dismissed Go hosted card unmounts; Settings, just below it, takes focus (MUT-187)
+  const focusSettings = () => {
+    footerRowRef.current?.querySelector<HTMLElement>("a.nav-item")?.focus();
+  };
 
   // Check if a nav item is active
   const isItemActive = (item: NavItem): boolean => {
@@ -262,11 +270,13 @@ export function SidebarNav() {
 
       {/* Footer with system items */}
       <div className="sidebar-footer">
+        {/* Web build, expanded rail only: the core four stay first and uncrowded (MUT-187, ADR-034) */}
+        {goHostedEnabled() && !collapsed && <GoHostedCard onDismissed={focusSettings} />}
         {!collapsed && (
           <div className="nav-section-header">{t("nav.sections.system")}</div>
         )}
         {/* Appearance sits on Settings' row: nothing floats over content (MUT-79) */}
-        <div className="sidebar-footer-row">
+        <div className="sidebar-footer-row" ref={footerRowRef}>
           {systemItems.map((item) => renderNavItem(item, true))}
           <ThemeToggle />
         </div>
