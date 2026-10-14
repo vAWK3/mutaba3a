@@ -4,6 +4,7 @@ import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
 import type { ReleaseInfo } from '../../../hooks/useLatestRelease';
 import { LandingPage } from '../LandingPage';
+import { malafatUrl } from '../../../content/malafatLinks';
 import { FakeIntersectionObserver, installFakeIntersectionObserver } from '../../../test/intersectionObserver';
 
 const release = vi.hoisted(() => ({
@@ -55,6 +56,21 @@ function part(name: string): HTMLElement {
   return el;
 }
 
+/**
+ * Claims the landing's paid-tier sections must never make (MUT-173/174): reports or analytics the portal
+ * doesn't have, a price or checkout, a sync or automation the capture doesn't do, and MUT-25's spike.
+ */
+const BANNED_CLAIMS_EN =
+  /report|analytic|dashboard|statistic|chart|\bprice\b|checkout|sign ?up|\$\d|\b(sync\w*|automatic\w*|auto-\w+|seamless\w*|instant\w*|real[- ]time)\b|\b(module|core|engine)\b|inside|built into|part of malafat/i;
+const BANNED_CLAIMS_AR = /تقارير|تحليل|إحصاء|رسوم|سعر|اشترك|زامن|تلقائ|آلي|بداخل/;
+
+/** A part's own words, without any decorative mock (sample amounts are not prices). */
+function partCopy(name: string): string {
+  const section = part(name).cloneNode(true) as HTMLElement;
+  section.querySelectorAll('[data-part="devices-mock"]').forEach((el) => el.remove());
+  return section.textContent ?? '';
+}
+
 beforeEach(() => {
   localStorage.clear();
   apps.links = { ios: { available: true, url: null }, android: { available: false, url: null } };
@@ -71,7 +87,7 @@ beforeEach(() => {
 });
 
 describe('LandingPage structure', () => {
-  it('renders the eight parts in order, then the footer', () => {
+  it('renders the nine parts in order, then the footer', () => {
     renderLanding('en');
     const parts = Array.from(document.querySelectorAll('main > [data-part]')).map(
       (el) => el.getAttribute('data-part')
@@ -84,6 +100,7 @@ describe('LandingPage structure', () => {
       'privacy',
       'get-it',
       'phone',
+      'malafat',
       'faq',
     ]);
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
@@ -198,12 +215,6 @@ describe('LandingPage Get it, free vs paid (MUT-172)', () => {
 });
 
 describe('LandingPage phone and portal (MUT-173)', () => {
-  /** The section's own words, without the decorative mock (its sample amounts are not prices). */
-  function phoneCopy(): string {
-    const section = part('phone').cloneNode(true) as HTMLElement;
-    section.querySelectorAll('[data-part="devices-mock"]').forEach((el) => el.remove());
-    return section.textContent ?? '';
-  }
   const stores = () => within(part('phone')).getByRole('list', { name: 'Phone apps' });
 
   it('says the phone logs and the hosted account shows, with one link to /hosted', () => {
@@ -273,13 +284,12 @@ describe('LandingPage phone and portal (MUT-173)', () => {
     expect(within(section).getByRole('list', { name: 'تطبيقات الهاتف' })).toHaveTextContent('Android قريبًا');
   });
 
-  it('claims no reports, analytics or price, in either language', () => {
+  it('claims no reports, analytics, price or automation, in either language', () => {
     renderLanding('en');
-    expect(phoneCopy()).not.toMatch(/report|analytic|dashboard|statistic|chart/i);
-    expect(phoneCopy()).not.toMatch(/\bprice\b|\/month|checkout|sign ?up|\$\d/i);
+    expect(partCopy('phone')).not.toMatch(BANNED_CLAIMS_EN);
     cleanup();
     renderLanding('ar');
-    expect(phoneCopy()).not.toMatch(/تقارير|تحليل|إحصاء|رسوم|سعر|اشترك/);
+    expect(partCopy('phone')).not.toMatch(BANNED_CLAIMS_AR);
   });
 });
 
@@ -373,5 +383,47 @@ describe('LandingPage title (MUT-77)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Switch language/ }));
     expect(document.title).toBe('متابعة — تابع مالك، بأمان');
+  });
+});
+
+describe('LandingPage Malafat (MUT-174)', () => {
+  const link = () => within(part('malafat')).getByRole('link');
+
+  it('speaks to law firms and accounting offices on Malafat, with one link to Malafat in a new tab', () => {
+    renderLanding('en');
+    const band = part('malafat');
+    expect(within(band).getByRole('heading', { level: 2 })).toHaveTextContent(
+      'Run a law firm or accounting office on Malafat? Mutaba3a connects to it.',
+    );
+    expect(within(band).getAllByRole('link')).toHaveLength(1);
+    expect(link()).toHaveAccessibleName('See Malafat');
+    expect(link()).toHaveAttribute('href', malafatUrl({ locale: 'en', medium: 'landing', content: 'landing-section' }));
+    expect(link()).toHaveAttribute('target', '_blank');
+    expect(link().getAttribute('rel')).toContain('noopener');
+  });
+
+  it('ties the capture claim to a hosted account and the phone app, so it never contradicts the free app', () => {
+    renderLanding('en');
+    expect(part('malafat')).toHaveTextContent('With a hosted account');
+    expect(part('malafat')).toHaveTextContent('phone app');
+    expect(part('malafat')).toHaveTextContent('unallocated');
+  });
+
+  it('reads the same in Arabic, linking to Malafat in Arabic', () => {
+    renderLanding('ar');
+    const band = part('malafat');
+    expect(within(band).getByRole('heading', { level: 2 })).toHaveTextContent('متابعة متّصلة به');
+    expect(band).toHaveTextContent('حساب مستضاف');
+    expect(band).toHaveTextContent('تطبيق متابعة على الهاتف');
+    expect(link()).toHaveAccessibleName('اطّلع على Malafat');
+    expect(link()).toHaveAttribute('href', malafatUrl({ locale: 'ar', medium: 'landing', content: 'landing-section' }));
+  });
+
+  it('claims nothing automatic, no sync, no reports, no price and nothing of the money-core spike', () => {
+    renderLanding('en');
+    expect(partCopy('malafat')).not.toMatch(BANNED_CLAIMS_EN);
+    cleanup();
+    renderLanding('ar');
+    expect(partCopy('malafat')).not.toMatch(BANNED_CLAIMS_AR);
   });
 });

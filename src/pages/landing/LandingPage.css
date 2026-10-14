@@ -963,6 +963,50 @@ a.landing-get-it-option:focus-visible {
 }
 
 /* ============================================
+   Malafat (MUT-174): a band in the privacy band's look, with one link out
+   ============================================ */
+/* Its title is longer than the privacy band's four words */
+.landing-malafat .landing-privacy-title {
+  max-width: 28ch;
+}
+
+/* Its own line, never .landing-privacy-body: that dims to 0.8, which would cost the link its contrast on ink */
+.landing-malafat-link-line {
+  margin: var(--space-5) 0 0;
+  font-size: var(--text-headline);
+}
+
+/* A link on the ink band: the page colour, underlined; classed, so the global unclassed a:hover never reaches it */
+.landing-band-link {
+  color: var(--bg);
+  font-weight: var(--weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.landing-band-link:hover {
+  color: var(--bg);
+  text-decoration-thickness: 2px;
+}
+
+.landing-band-link:active {
+  opacity: var(--landing-press-dim);
+}
+
+/* The brand ring is inset and purple, near-invisible on ink: ring the link in its own colour instead */
+.landing-band-link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .landing-malafat-link-line {
+    font-size: var(--text-body);
+  }
+}
+
+/* ============================================
    The phone and the portal (MUT-173): the chapter's platform lines
    ============================================ */
 .landing-phone-hint {

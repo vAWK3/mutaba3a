@@ -4,5 +4,6 @@ export { ChapterSection } from './ChapterSection';
 export { PrivacyBand } from './PrivacyBand';
 export { GetItSection } from './GetItSection';
 export { PhoneSection } from './PhoneSection';
+export { MalafatSection } from './MalafatSection';
 export { FAQSection } from './FAQSection';
 export { LandingFooter } from './LandingFooter';
