@@ -84,3 +84,46 @@ Covers A1–A6 with two flagged readings (A2 desktop, A4 vacuous). Not in scope:
 Business / product impact
 - The free app's law and accounting users meet Malafat at the moments it helps (growing client lists, a second office), without a modal, a toast or a nag, and can turn it off; referrals are tagged for Malafat to count once MAL-1153 lands.
 - First of epic MUT-189's three stories; MUT-191 reuses the same builder, copy pattern and dismissal model.
+
+---
+
+# Eng review (/plan-eng-review, 2026-10-14, non-interactive; native + outside voice on Opus, Codex not installed)
+
+Native pass: the plan reuses `malafatUrl`, the settings-row mechanism and the Go hosted card's look; complexity 17 files (gate auto-decided: original arrangement, the moments need their own homes). The outside voice found ten issues; all accepted. Verified as already fine: restore keeps unknown settings fields (`backup.ts:59-75`, `features.ts:177-183`), `malafat.app` is allowlisted, the first business never triggers C1 (WelcomeModal), QA can add a second business through Settings.
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| O1 | High | "One at a time" ignored the Go hosted sidebar card, and Settings could show C1 + S1 + Hosted links together | **accepted (R1, D1 auto)**: a tiny `upsellSlot` store; while a Malafat suggestion (C1/C2/C3) is mounted, `GoHostedCard` renders nothing; C1 renders *inside* the S1 row (its sentence replaces S1's line), so Settings has one Malafat link |
+| O2 | High | "…connects to Mutaba3a" overclaims in the free app; "matters" is lawyer-only | **accepted (R2)**: "connects to a Mutaba3a hosted account"; "clients, documents and fee agreements" |
+| O3 | Med-High | `settingsRepo.update` replaces nested fields; dismiss vs switch would wipe each other | **accepted**: write hooks read the fresh row, merge the resolved object, dedupe; tests both directions |
+| O4 | Medium | Flash of a dismissed card while settings load; rows jump | **accepted**: render nothing until settings, businesses and clients queries succeed |
+| O5 | Medium | C1 flag outlives the sample and archived businesses | **accepted**: never marked in a sample/demo; shown only with ≥ 2 live businesses; cleared on leave-sample, dismiss and link click |
+| O6 | Medium | Adding a second business = C1 then C3, two nags for one event; link click undefined | **accepted (R3, D2 auto)**: dismissing `business-profile` also retires `second-business`; a link click counts as a dismissal of that moment (seen and acted on) |
+| O7 | Medium | Focus lost on dismiss; async write lets the card linger | **accepted**: hide immediately (local state), button disabled while writing, focus to the search box (Clients) or the S1 link (Settings); tested |
+| O8 | Low-Med | `useClients(activeProfileId)` is a new full read and `''` means every record | **accepted**: count from the cached `useClients(undefined)` filtered by a non-empty `activeProfileId`; hide while searching |
+| O9 | Low-Med | Cramped in the 22.5rem split list | **accepted**: hidden while a client is open beside the list (`openClientId`) |
+| O10 | Low | (a) namespaces, (b) S1 `contact`, (c) demo wording, (d) delete-all resets dismissals, (e) switch description not announced | **accepted**: (a) `settings.profile.malafat.*` + `clients.malafat.*`; (b) every surface `contact: true` (the epic's contract); (c) hidden in the sample *and* demo mode (the card's own choice, unlike Go hosted); (d) recorded in ADR-078 as accepted; (e) follow AdvancedFeaturesSection's label/description layout |
+
+## Amended plan (supersedes §2–§3 where they differ)
+
+- **Moments:** S1 row in Settings › Businesses (after Hosted account), `contact: true`, `content: settings`, with the switch. **C1** = the S1 row's line becomes "Is your new business a law firm or an accounting office? …" with a "Don't show this again" button and `content: business-profile`, while `businessAddedAt` is set, suggestions are on, it isn't dismissed, and ≥ 2 live businesses exist. **C2/C3** = one card on Clients (C2 beats C3), only with a non-empty list, no search, no open client, not in sample/demo, after all queries load.
+- **Copy (EN; AR mirrors, "Malafat" Latin):** S1 "For law firms and accounting offices: Malafat manages your clients, documents and fee agreements, and connects to a Mutaba3a hosted account." · C1 "Is your new business a law firm or an accounting office? Malafat manages its clients, documents and fee agreements, and connects to a Mutaba3a hosted account." · C2 "Lots of clients to keep track of? If you run a law firm or an accounting office, Malafat manages clients, documents and fee agreements, and connects to a Mutaba3a hosted account." · C3 "Running more than one office? If it's a law firm or an accounting office, Malafat …" (same tail). CTA "See Malafat"; dismiss "Don't show this again"; switch "Show Malafat suggestions" / "Occasional suggestions for law firms and accounting offices. This row stays."
+- **New modules:** `src/lib/malafatSuggestions.ts` (pure), `src/lib/useMalafatSuggestions.ts` (read/merge-write), `src/lib/malafatMomentStore.ts` (C1 flag + upsell slot count), `src/components/malafat/MalafatSuggestionCard.tsx` (+css), `src/pages/clients/MalafatClientsSuggestion.tsx`, `src/pages/settings/MalafatEntry.tsx` (+css). Touched: types, BusinessProfileDrawer (mark), useLeaveSample (clear), GoHostedCard (yield), ClientsPage, SettingsPage, dictionaries.
+- **ADR-078:** where the moments live, dismissal = permanent on the settings row (reset by delete-all/legacy import, accepted), link click = dismissal, one upsell on screen including Go hosted.
+
+Approval readiness: PASS — R1 (D1 auto: Malafat suggestion beats Go hosted card on screen), R2/O3–O5/O7–O10 factual, R3 (D2 auto: link click dismisses; C1 dismissal retires C3).
+
+**Unresolved decisions (auto-decided, for Basel):** D1 the Go hosted card yields while a Malafat suggestion is on screen; D2 a link click counts as "seen" and retires that moment; A2 desktop out (desktop retired).
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| Outside Review | native fallback (Claude Plan subagent, Opus); codex not installed | Independent 2nd opinion | 1 | unavailable (native fallback completed) | 10 findings, 10 accepted |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | ISSUES OPEN (all folded into the amended plan) | 10 issues, 0 critical gaps |
+
+- **VERDICT:** ENG REVIEWED — ready to implement with the amended plan.
+
+**UNRESOLVED DECISIONS:**
+- D1 Go hosted card yields to a Malafat suggestion (auto)
+- D2 link click retires the moment (auto)
