@@ -6,7 +6,6 @@ import ar from '../../../lib/i18n/translations/ar.json';
 import { HOSTED_OFFER_URL } from '../../../content/download-config';
 import { HostedAccountEntry } from '../HostedAccountEntry';
 
-const LANGUAGE_KEY = 'mutaba3a-language';
 const PORTAL = 'https://portal.test';
 const LOCALES = [
   ['en', en],

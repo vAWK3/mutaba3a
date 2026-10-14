@@ -17,7 +17,6 @@ vi.mock('../../../utils/backupDownload', () => ({ backUpNow }));
 // getRepositories().base.dataset.wipeCoreData delegates to this (MUT-47).
 vi.mock('../../../db/seed', () => ({ deleteAllData }));
 
-const LANGUAGE_KEY = 'mutaba3a-language';
 const copy = (locale: typeof en) => locale.settings.data.deleteModal;
 
 function renderModal() {

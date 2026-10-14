@@ -40,7 +40,6 @@ vi.mock('../../../components/modals/ExportDataModal', () => ({
 type Dict = Record<string, unknown>;
 type Copy = Record<string, string>;
 
-const LANGUAGE_KEY = 'mutaba3a-language';
 const LOCALES = [
   ['en', en as Dict],
   ['ar', ar as Dict],

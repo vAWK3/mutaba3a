@@ -12,7 +12,6 @@ import type { BusinessProfile, Client, Expense, Project, Transaction } from '../
 import { OrphanedRecordsDrawer } from '../OrphanedRecordsDrawer';
 
 const STAMP = '2026-10-01T00:00:00.000Z';
-const LANGUAGE_KEY = 'mutaba3a-language';
 
 type Dict = Record<string, unknown>;
 

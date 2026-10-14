@@ -9,7 +9,6 @@ import { useSampleSessionStore } from '../../../demo/sampleSessionStore';
 import { GoHostedCard } from '../GoHostedCard';
 import { useMalafatMomentStore } from '../../../lib/malafatMomentStore';
 
-const LANGUAGE_KEY = 'mutaba3a-language';
 const DAY = 24 * 60 * 60 * 1000;
 const LOCALES = [
   ['en', en],

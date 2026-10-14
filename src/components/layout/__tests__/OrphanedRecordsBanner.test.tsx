@@ -12,7 +12,6 @@ vi.mock('../../../db/integrityCheck', () => ({ runIntegrityCheck }));
 
 type Dict = Record<string, unknown>;
 
-const LANGUAGE_KEY = 'mutaba3a-language';
 const LOCALES = [
   ['en', en as Dict],
   ['ar', ar as Dict],
