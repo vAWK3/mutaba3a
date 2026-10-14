@@ -1,6 +1,6 @@
 # MUT-172 — Landing: state the free vs. paid split, with the CTA to `/hosted`
 
-Status: **BUILT (2026-10-14)**, branch `feature/mut-185-go-hosted` (epic worktree). Review ledger and the qa-reconcile record are at the end of this file. Branch `feature/mut-185-go-hosted` (epic worktree, after MUT-188).
+Status: **BUILT and reconciled (2026-10-14)**, branch `feature/mut-185-go-hosted` (epic worktree). Review ledger and the qa-reconcile record are at the end of this file. Branch `feature/mut-185-go-hosted` (epic worktree, after MUT-188).
 Ticket: MUT-172 (Story) · parent epic MUT-171 (landing) · the third CTA door of epic MUT-185 ("a CTA in the sidebar, in Settings › Profiles, or on the landing page"). Blocked by MUT-186 (merged to local main a7d5068, Jira In Review → gate passes). Siblings under MUT-171: MUT-173 (phone + portal section, Backlog, unplanned), MUT-174 (Malafat section, Backlog). Basel's re-cut comment (2026-10-14): the CTA links to the `/hosted` page and its request form, not `mailto:`.
 Tracker: Jira · barmajiyat.atlassian.net · MUT via atlassian-barmajiyat · Backlog = planning allowed · finished → In Review after /qa-reconcile.
 
@@ -240,6 +240,23 @@ Auto-decided in this non-interactive run; overturn before /eng-build if wrong:
 
 ## Suppressed findings (appendix)
 - (4/10) `.landing-get-it-note` has `margin-bottom: var(--space-10)` and the paid block adds `margin-top: var(--space-10)` after the meta line; the section may read long on phones. Visual check in QA at 375.
+
+## qa-reconcile (2026-10-14)
+
+Three sources: ticket MUT-172 (A1–A4 + guardrail), this plan (as amended by the eng review and the outside voice), the diff of the four MUT-172 commits (e01edd5, 343fcc7, 8d83d8e + the brief).
+
+| Criterion | In plan? | In code? | Verdict |
+|---|---|---|---|
+| A1 free-tier copy unchanged in meaning | yes (D5) | `landing.getIt.{free,freeNote,mac,windows,webApp,…}` untouched; test "leaves the free line in place" | MET |
+| A2 hosted + mobile stated as paid, CTA, no price, no checkout | yes (D1, D4, R2) | `get-it-paid` lead + hint; one link "See hosted accounts" → `/hosted`; block-scoped honesty ban | MET, with **conscious drift**: the CTA says "See hosted accounts", not "Contact us" (D1); "phone app", not "iOS/Android" (D4) |
+| A3 EN + AR, RTL-correct | yes | `landing.getIt.paid.{lead,hint,cta}`; parity test; AR unit + QA cases | MET |
+| A4 tests updated / new coverage | yes | three new Get it cases; QA `@web.landing.get-it-paid` EN/AR on a built preview (2/2) | MET |
+| Guardrail: Brand v2 tokens, one idea per section | yes (D2, R3) | tokens only (`landingCss.test` contract); nested `data-part`, seven parts unchanged | MET |
+| D6 `landing.yaml` (plan, not ticket) | yes | 13 features; `release-qa lint` 0 errors; TD-130 resolved | conscious addition |
+
+Scope creep: none beyond D6 (declared). Gaps: none. Gate (Node 22): lint 0 errors (6 pre-existing warnings), typecheck clean, 304 files / 4326 tests, build ok (one pre-existing esbuild warning about `@media` inside `:has()` in a shared stylesheet, present before this branch), `release-qa lint` 0 errors, QA 2/2. Code review (medium): 0 correctness findings, 2 low notes (shared landing button recipe rejected in the eng review; page-wide honesty regex left as a follow-up). Browser check on the worktree dev server: the block renders under the three cards with the ink button, EN.
+
+Verdict: **PASS** (D1, D4, D6, R3 auto-decided; Basel to confirm or overturn).
 
 ## Completion summary
 - Step 0: Scope Challenge — scope accepted as-is
