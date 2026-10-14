@@ -132,7 +132,7 @@ features:
       - The band speaks to law firms and accounting offices on Malafat (both named in Arabic too), ties the payment claim to a hosted account linked to the firm's Malafat and the phone app, and claims nothing automatic, no sync and no reports
       - The link reads at least 4.5:1 on the band, keeps its colour on hover, shows a ring in its own colour on keyboard focus in light and dark, and points at malafat.app in the page's language with Mutaba3a's referral tags in a new tab, which its accessible name announces
   - id: arabic-default
-    title: In an English browser with no stored choice, the marketing site opens in Arabic, the web app stays in English, and a chosen language sticks (MUT-202)
+    title: In an English browser with no stored choice, the marketing site opens in Arabic, the web app too (MUT-209), and a chosen language sticks (MUT-202)
     tier: secondary
     legacy: [MUT-202]
     paths:
@@ -141,5 +141,5 @@ features:
       - With an English browser and nothing chosen, open /, /hosted, /privacy and /download; open the web app; come back and press EN, then reload
     expect:
       - Every marketing page is in Arabic, right to left, and no language is stored
-      - The web app opens in English
+      - The web app opens in Arabic too, and nothing is stored (MUT-209)
       - Pressing EN switches to English, stores it, and it stays English after a reload

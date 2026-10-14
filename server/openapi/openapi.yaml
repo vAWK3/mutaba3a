@@ -5006,7 +5006,9 @@ components:
           minLength: 1
           maxLength: 200
         locale:
-          $ref: "#/components/schemas/UserLocale"
+          allOf:
+            - $ref: "#/components/schemas/UserLocale"
+            - description: Defaults to ar (MUT-209); the portal adopts it after sign-in.
         organizationId:
           type: string
           format: uuid

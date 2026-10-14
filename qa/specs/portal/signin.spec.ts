@@ -103,3 +103,34 @@ for (const language of ['en', 'ar'] as const) {
     },
   );
 }
+
+test.describe('in an English browser where nobody chose a language', () => {
+  test.use({ locale: 'en-US' });
+
+  test('the portal\'s sign-in opens in Arabic, and a language chosen there sticks (MUT-209)', { tag: '@portal.signin.arabic-default' }, async ({ page, step }) => {
+    // Signed out, as every portal spec stubs it: no API runs behind the preview
+    await page.route('**/v1/**', (route) =>
+      route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) }),
+    );
+    const html = page.locator('html');
+    const stored = () => page.evaluate((key) => localStorage.getItem(key), PORTAL_LANGUAGE_KEY);
+
+    await step('With nothing chosen, sign-in opens in Arabic, right to left, and stores nothing', async () => {
+      await page.goto('/sign-in');
+      await expect(page.getByRole('heading', { level: 1, name: HEADING.ar })).toBeVisible();
+      await expect(html).toHaveAttribute('lang', 'ar');
+      await expect(html).toHaveAttribute('dir', 'rtl');
+      expect(await stored()).toBeNull();
+    });
+
+    await step('Pressing EN switches to English, and it stays English after a reload', async () => {
+      await page.getByRole('button', { name: 'EN', exact: true }).click();
+      await expect(page.getByRole('heading', { level: 1, name: HEADING.en })).toBeVisible();
+      expect(await stored()).toBe('en');
+      await page.reload();
+      await expect(html).toHaveAttribute('lang', 'en');
+      await expect(page.getByRole('heading', { level: 1, name: HEADING.en })).toBeVisible();
+    });
+  });
+});
+

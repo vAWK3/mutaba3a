@@ -1,6 +1,6 @@
 # MUT-209 — Default to Arabic everywhere: the web app and the hosted portal
 
-Status: **PLANNED (2026-10-15)**, branch `feature/mut-209-arabic-default` (own worktree `.claude/worktrees/mut-209-arabic-default`; not part of an epic).
+Status: **BUILT and reconciled (2026-10-15)**; the qa-reconcile record is at the end of this file, branch `feature/mut-209-arabic-default` (own worktree `.claude/worktrees/mut-209-arabic-default`; not part of an epic).
 Ticket: MUT-209 (Story). Basel, 2026-10-15: "everything should default to arabic". Builds on MUT-202 (ADR-077: the marketing site's Arabic default; only a language a person chose beats it). No blockers.
 
 ## 1. Acceptance criteria
@@ -46,3 +46,25 @@ Gate (Node 22): lint, typecheck, `test:run`, build, `test:bundles`, `release-qa 
 
 Business / product impact
 - Every Mutaba3a surface greets a new person in Arabic, the primary market, while anyone who picks English keeps it.
+
+
+---
+
+# qa-reconcile record (2026-10-15, non-interactive)
+
+Branch `feature/mut-209-arabic-default` vs `main` (3c5282a). Reviewer: Claude + an independent in-host reviewer on the diff (Opus). The plan's own review was compact (native only); the pre-landing review stood in for the outside voice on a change this size.
+
+| Criterion | In plan? | In code? | Verdict |
+|---|---|---|---|
+| `/app` with nothing chosen opens Arabic in an English browser; a Settings choice sticks | yes | `main.tsx` `defaultLanguage={DEFAULT_LANGUAGE}` | MET (QA `@web.settings.arabic-default`; `@web.landing.arabic-default` now asserts `/app` Arabic; provider tests) |
+| The portal with nothing chosen opens Arabic; a choice sticks | yes | `HostedLanguageProvider` fallback, account-locale hint | MET (provider tests; QA `@portal.signin.arabic-default` incl. EN → reload) |
+| A detected stored language is not a choice | yes | ADR-077 mark (app); portal stores only choices | MET |
+| Tests + QA; English specs choose English | yes | `openFreshApp`, `createWrapper` on the default path, `chooseLanguage()` in 11 test files, 3 portal test files | MET |
+
+Scope creep: none. DRIFT, conscious: the server's new-account default (`ar`), so the portal stays Arabic after sign-in for new accounts.
+
+Pre-landing review, 11 findings, no P1. Fixed: (1) **an English-locale account saw the portal in Arabic and flipped to English on every load**: the adopted account locale is now remembered as a hint (`mutaba3a-portal-account-locale`, never a choice; a choice still beats it), adopted in a layout effect, and adopted at sign-in before navigating (tested); (2) the unit-test wrapper now runs the production path (`defaultLanguage`, English for tests), and 11 test files seed a language with `chooseLanguage()` instead of a bare key; (4) the portal QA case stubs `/v1`, uses steps and proves EN sticks; (5)(6) doc comments; (7) the QA helper uses `LANGUAGE_KEYS`; (9) OpenAPI publishes "Defaults to ar", the CLI example says Arabic by default; (11) duplicate imports merged. Accepted and recorded: (3) existing English users of the web app (and desktop copies) see Arabic once, including anyone who chose English before the mark existed (D2, Basel's rule); (8) the constant test is thin (the wiring is proved by QA); (9b) a new account created without a locale also gets Arabic expense categories (follows the locale, intended); (10) the HTML shells still say `lang="en"` (out of scope by the ticket), and `RecurringOccurrenceCard` formats dates without a locale (pre-existing).
+
+Gate (Node 22): lint 0 errors; typecheck; full `test:run` 314 files / 4416 tests; `test:bundles`; `release-qa lint` clean; server: typecheck, lint, `openapi:check`, `test` 1746 and `test:db` 112 files / 1913 tests; QA: the whole web + portal suites (76 passed; failures: `@web.landing.375` ×4 from main's header Sign in link, `@web.clients.owed-now-parity` MUT-178, and `@web.brand.layout` ×4 at 375 px, traced to the Settings "Hosted account" row (MUT-187) overflowing on phones, already on main and not caused here), then 18/18 affected cases after the review fixes.
+
+**Verdict: PASS.** Jira → In Review.

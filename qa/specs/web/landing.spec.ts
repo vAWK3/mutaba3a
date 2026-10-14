@@ -594,7 +594,7 @@ for (const language of ['en', 'ar'] as const) {
 test.describe('in an English browser with no stored choice', () => {
   test.use({ locale: 'en-US' });
 
-  test('the marketing site opens in Arabic, leaves the web app in English, and keeps a chosen language (MUT-202)', { tag: '@web.landing.arabic-default' }, async ({ page, step }) => {
+  test('the marketing site opens in Arabic, the web app too (MUT-209), and a chosen language sticks (MUT-202)', { tag: '@web.landing.arabic-default' }, async ({ page, step }) => {
     await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
     const stored = () => page.evaluate(() => localStorage.getItem('mutaba3a-language'));
 
@@ -609,14 +609,14 @@ test.describe('in an English browser with no stored choice', () => {
       await attachScreenshot(page, 'arabic-default-download');
     });
 
-    await step('The web app still follows the browser, opens in English and stores it as it always has', async () => {
+    await step('The web app opens in Arabic too and stores nothing, since MUT-209', async () => {
       await page.goto('/app/clients');
-      await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-      await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
-      await expect.poll(stored).toBe('en');
+      await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+      expect(await stored()).toBeNull();
     });
 
-    await step('Back on the landing, that detected English does not count as a choice: still Arabic', async () => {
+    await step('Back on the landing, still Arabic', async () => {
       await page.goto('/');
       await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
     });

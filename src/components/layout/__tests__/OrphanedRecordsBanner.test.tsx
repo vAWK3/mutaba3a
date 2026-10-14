@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import { renderWithProviders, screen, userEvent } from '../../../test/utils';
 import type { IntegrityResult } from '../../../db/integrityCheck';
 import { useDrawerStore } from '../../../lib/stores';
@@ -42,7 +43,7 @@ afterEach(() => {
 describe('OrphanedRecordsBanner', () => {
   describe.each(LOCALES)('in %s', (language, locale) => {
     it.each([1, 8])('renders translated copy, not i18n keys, for %i orphaned record(s)', async (count) => {
-      localStorage.setItem(LANGUAGE_KEY, language);
+      chooseLanguage(language);
       runIntegrityCheck.mockResolvedValue(orphans(count));
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const copy = integrityCopy(locale);
@@ -63,7 +64,7 @@ describe('OrphanedRecordsBanner', () => {
 
   it('reads naturally in English for one record and for many', async () => {
     runIntegrityCheck.mockResolvedValue(orphans(8));
-    localStorage.setItem(LANGUAGE_KEY, 'en');
+    chooseLanguage('en');
 
     const { unmount } = renderWithProviders(<OrphanedRecordsBanner />);
     expect(await screen.findByRole('alert')).toHaveTextContent("8 records aren't assigned to any profile.");
@@ -76,7 +77,7 @@ describe('OrphanedRecordsBanner', () => {
 
   describe('Review now', () => {
     beforeEach(() => {
-      localStorage.setItem(LANGUAGE_KEY, 'en');
+      chooseLanguage('en');
     });
 
     it('is a button, and the banner has no link to navigate away with', async () => {

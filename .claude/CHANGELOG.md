@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Arabic by default in the web app and the hosted portal (MUT-209, ADR-077 amended)
+
+**Why:** Basel: "everything should default to arabic". Brief: `.claude/designs/mut-209-arabic-default-everywhere.md`.
+
+### Changed
+- The web app opens in Arabic, right to left, until a person picks a language (Settings, or the landing's switch). A language the app stored by detection before today doesn't count as a choice, so most people see Arabic once and can pick English in Settings.
+- The hosted portal opens in Arabic before sign-in instead of following the browser; after sign-in it adopts the account's locale (before the first frame, and remembered as a hint so the next visit boots in it) unless this browser has a choice.
+- Server: a new account created without a locale is Arabic, and its personal profile is named شخصي. Existing accounts are unchanged. API **1.24.0-mut209**, OpenAPI regenerated.
+
+### Technical
+- One `DEFAULT_LANGUAGE` (`src/lib/i18n/core.tsx`) for landing, app and portal. QA's `openFreshApp` chooses English once, as a person would; three portal test files choose English in setup.
+- Tests: core, `HostedLanguageProvider`, server users/sessions/CLI; QA `@web.settings.arabic-default`, `@portal.signin.arabic-default`, and `@web.landing.arabic-default` updated.
+
+---
+
 ## [Unreleased] - 2026-10-14 — Malafat suggestions in the web app (MUT-190, ADR-078)
 
 **Why:** the free app's law and accounting users never heard about Malafat inside the product. Epic MUT-189. Brief, eng review and outside voice: `.claude/designs/mut-190-malafat-suggestions-local.md`. **Release only after MAL-1153** (malafat.app recognising the referral).

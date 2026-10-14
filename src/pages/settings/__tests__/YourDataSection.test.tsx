@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import { renderWithProviders, screen, fireEvent, waitFor } from '../../../test/utils';
 import type { IntegrityResult } from '../../../db/integrityCheck';
 import { db } from '../../../db/database';
@@ -144,7 +145,7 @@ describe('YourDataSection', () => {
     const yourData = sub(settings, 'yourData');
 
     beforeEach(() => {
-      localStorage.setItem(LANGUAGE_KEY, language);
+      chooseLanguage(language);
     });
 
     it('labels the section, the check and its button in this language', () => {
@@ -330,7 +331,7 @@ describe('YourDataSection', () => {
   });
 
   it('reads naturally in English for one issue, many issues and a clean run', async () => {
-    localStorage.setItem(LANGUAGE_KEY, 'en');
+    chooseLanguage('en');
     runIntegrityCheck
       .mockResolvedValueOnce(integrityResult(0, 0, 42))
       .mockResolvedValueOnce(integrityResult(1, 0, 1))

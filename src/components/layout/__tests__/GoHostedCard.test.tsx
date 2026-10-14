@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import { act, renderWithProviders, screen, userEvent, waitFor } from '../../../test/utils';
 import en from '../../../lib/i18n/translations/en.json';
 import ar from '../../../lib/i18n/translations/ar.json';
@@ -31,7 +32,7 @@ afterEach(() => {
 describe('GoHostedCard (MUT-187)', () => {
   describe.each(LOCALES)('in %s', (language, locale) => {
     it('shows one line of value, a Go hosted link to /hosted in a new tab, and a labelled dismiss', () => {
-      localStorage.setItem(LANGUAGE_KEY, language);
+      chooseLanguage(language);
       renderWithProviders(<GoHostedCard />);
 
       const group = screen.getByRole('group', { name: locale.nav.goHosted.label });
@@ -121,7 +122,7 @@ describe('GoHostedCard (MUT-187)', () => {
 
 describe('GoHostedCard and the Malafat suggestions (MUT-190)', () => {
   it('steps aside while a Malafat suggestion is on screen: one upsell at a time', () => {
-    localStorage.setItem(LANGUAGE_KEY, 'en');
+    chooseLanguage('en');
     const release = useMalafatMomentStore.getState().claimSlot();
     const { rerender } = renderWithProviders(<GoHostedCard />);
     expect(card()).toBeNull();

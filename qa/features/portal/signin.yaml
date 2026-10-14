@@ -44,3 +44,15 @@ features:
       - A link named from the portal dictionary (hosted.auth.request.link) is visible under the help line, with an https href ending in /hosted
       - It is the only link on the page, and it opens in the same tab
       - The page still passes axe
+  - id: arabic-default
+    title: In an English browser where nobody chose a language, the portal's sign-in opens in Arabic, and a language chosen there sticks (MUT-209)
+    tier: secondary
+    legacy: [MUT-209]
+    paths:
+      - src/hosted/i18n/HostedLanguageProvider.tsx
+    steps:
+      - With an English browser and nothing chosen, open the portal's sign-in, press EN, reload
+    expect:
+      - The sign-in is in Arabic, right to left, and nothing is stored
+      - EN switches to English, is stored, and stays after a reload
+

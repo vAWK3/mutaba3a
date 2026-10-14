@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Navigate, Outlet, useNavigate, useRouter } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useT } from '../../lib/i18n/core';
@@ -21,7 +21,8 @@ export function AuthGate() {
   const adoptAccountLocale = useAdoptAccountLocale();
   const locale = me.data?.user.locale;
 
-  useEffect(() => {
+  // Before paint, so the signed-in view never shows a frame in the wrong language (MUT-209)
+  useLayoutEffect(() => {
     if (locale) adoptAccountLocale(locale);
   }, [locale, adoptAccountLocale]);
 

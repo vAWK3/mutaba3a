@@ -2421,3 +2421,14 @@ Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 | `qa/specs/web/settings.spec.ts` | E2E | `@web.settings.malafat`: row link tags; second business → note (business-profile) and Go hosted card hidden; dismiss → row back, link focused, gone after reload; switch off persists, row stays |
 | `qa/specs/web/clients.spec.ts` | E2E | `@web.clients.malafat`: two businesses + a client → one card (second-business tags), hidden while searching, dismiss → search focused, gone after reload |
 
+### MUT-209 — Arabic by default in the web app and the portal (2026-10-15)
+| File | Type | Covers |
+|------|------|--------|
+| `src/lib/i18n/__tests__/core.test.tsx` | Unit | `DEFAULT_LANGUAGE` is `ar` |
+| `src/hosted/i18n/__tests__/HostedLanguageProvider.test.tsx` | Component | Arabic in an `en-US` browser with nothing stored, nothing stored; adopting the account's `en`; a stored choice beats the account; an explicit switch persists, the default never does |
+| `server/src/__tests__/routes-users.test.ts`, `routes-sessions.test.ts`, `scripts/__tests__/users-cli.test.ts` | Integration | a user created without `locale` is `ar` with a personal profile named شخصي; `--locale en` still honoured; `/v1/me` reports `ar`; API version pins 1.24.0-mut209 |
+| `qa/specs/web/settings.spec.ts` | E2E | `@web.settings.arabic-default`: `en-US` browser, nothing chosen → `/app` Arabic RTL with the Arabic welcome; English chosen in Settings sticks after reload |
+| `qa/specs/web/landing.spec.ts` | E2E | `@web.landing.arabic-default` now asserts `/app` opens in Arabic and stores nothing |
+| `qa/specs/portal/signin.spec.ts` | E2E | `@portal.signin.arabic-default`: `en-US` browser, nothing chosen → Arabic sign-in, nothing stored |
+| `qa/support/app.ts` | QA helper | `openFreshApp` chooses English once (only when no choice exists), so English specs keep their labels and `switchToArabic` still wins |
+

@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { LANGUAGE_KEYS } from './i18n';
 
 /**
  * Opens an app route on a fresh install: every test starts with an empty
@@ -11,12 +12,12 @@ import { expect, type Locator, type Page } from '@playwright/test';
 export async function openFreshApp(page: Page, path = '/'): Promise<void> {
   // The app opens in Arabic until a person chooses (MUT-209): these specs speak English, so choose it once, as a
   // person would; a later choice (switchToArabic) stands, because this only fills in a missing one
-  await page.addInitScript(() => {
-    if (localStorage.getItem('mutaba3a-language-chosen') === null) {
-      localStorage.setItem('mutaba3a-language', 'en');
-      localStorage.setItem('mutaba3a-language-chosen', '1');
+  await page.addInitScript((keys) => {
+    if (localStorage.getItem(keys.chosen) === null) {
+      localStorage.setItem(keys.language, 'en');
+      localStorage.setItem(keys.chosen, '1');
     }
-  });
+  }, LANGUAGE_KEYS);
   await page.goto(`/app${path}`);
   const welcome = page.getByRole('dialog', { name: 'Welcome to Mutaba3a' });
   await welcome.getByRole('button', { name: 'Skip for now' }).click();

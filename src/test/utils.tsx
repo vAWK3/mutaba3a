@@ -40,7 +40,9 @@ export function createWrapper() {
   return function Wrapper({ children }: WrapperProps) {
     return (
       <QueryClientProvider client={queryClient}>
-        <LanguageProvider>
+        {/* The default path production takes (MUT-209: no detection), in English for tests; seed a person's
+            choice with chooseLanguage() from src/test/language.ts */}
+        <LanguageProvider defaultLanguage="en">
           {children}
         </LanguageProvider>
       </QueryClientProvider>
