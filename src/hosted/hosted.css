@@ -356,6 +356,19 @@
 .hp-table-wrapper { overflow-x: auto; }
 .hp-table-wrapper .table th { text-align: start; }
 .hp-table-wrapper .table .hp-num, .hp-subtable .hp-num { text-align: end; }
+/* MUT-194 (D8/D11): a clickable row's first cell is a real button, so the row is reachable by keyboard. It reads as the cell's text. */
+.row-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.row-link:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-detail-row > td { background: var(--surface-2); }
 .hp-subtable { width: 100%; }
 .hp-expander { display: inline-flex; align-items: center; gap: var(--space-1-5); white-space: nowrap; }

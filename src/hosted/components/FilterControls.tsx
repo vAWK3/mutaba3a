@@ -8,7 +8,8 @@ import type { Customer, Project } from '../api/client';
  * the view folds it into its one filters object (house rule).
  */
 
-const CURRENCIES = ['ILS', 'USD', 'EUR'] as const;
+/** JOD since MUT-194 (TD-117), matching data/filters.ts. */
+const CURRENCIES = ['ILS', 'USD', 'EUR', 'JOD'] as const;
 
 function Labelled({ label, children }: { label: string; children: (id: string) => ReactNode }) {
   const id = useId();

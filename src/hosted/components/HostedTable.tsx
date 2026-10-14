@@ -28,7 +28,12 @@ interface HostedTableProps<Row> {
   rowKey: (row: Row) => string;
   label: string;
   detail?: (row: Row) => ReactNode | null;
-  /** Opt-in (MUT-44): makes each row open something (the expense drawer) on click. Every other list is still read-only. */
+  /**
+   * Opt-in (MUT-44): makes each row open something (an edit drawer) on click. MUT-194 (design D8, eng D11):
+   * the first cell's content then sits in a real `<button className="row-link press">`, so the row is reachable by
+   * Tab and opens with Enter/Space; the `<tr>` keeps its mouse click and its row semantics (no role, no tabIndex),
+   * the ClientsPage link-in-cell precedent. Every other list is still read-only.
+   */
   onRowClick?: (row: Row) => void;
   /** Extra classes for a row, e.g. the after-save `row-flash` tint (MUT-91). */
   rowClassName?: (row: Row) => string | undefined;
@@ -54,9 +59,9 @@ export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowCl
             return (
               <Fragment key={rowKey(row)}>
                 <tr className={className} onClick={onRowClick ? () => onRowClick(row) : undefined}>
-                  {columns.map((column) => (
+                  {columns.map((column, index) => (
                     <td key={column.key} className={cellClass(column)}>
-                      {column.cell(row)}
+                      {onRowClick && index === 0 ? <RowLink onActivate={() => onRowClick(row)}>{column.cell(row)}</RowLink> : column.cell(row)}
                     </td>
                   ))}
                 </tr>
@@ -71,5 +76,24 @@ export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowCl
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * The row's keyboard door (MUT-194): its own click must not bubble to the row's, or the row would open twice.
+ * `.press` keeps the portal's rule that every <button> presses (L10, ADR-074; pressFeedback.test.tsx).
+ */
+function RowLink({ onActivate, children }: { onActivate: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      className="row-link press"
+      onClick={(event) => {
+        event.stopPropagation();
+        onActivate();
+      }}
+    >
+      {children}
+    </button>
   );
 }

@@ -2165,6 +2165,14 @@ To land on a record that may sit past the first page, pass `anchor=<id>` instead
 
 When Show changes the same page's filters instead of navigating, re-arm the saved flash in an effect that sees the new filter value, not in the click handler. Otherwise the list's next render, still on its old filters, reports "settled, not here" and resolves the save as unclaimed. See `SavedNotice` (`src/hosted/components/SavedNotice.tsx`).
 
+### Pattern: A clickable table row is reachable by keyboard through a button in its first cell (MUT-194, D8/D11)
+
+When a portal list opens something on a row click, give `HostedTable` an `onRowClick`; it wraps the first column's content in a native `<button class="row-link press">` that calls the same handler with `stopPropagation`. Keep the `<tr>`'s mouse click for clicks anywhere on the row. **Never** put `role="button"`, `tabIndex` or an `aria-label` on a `<tr>`: it drops the row's cell semantics or isn't announced as actionable. Same idea as ClientsPage's `<Link>` in the name cell.
+
+### Pattern: An edit drawer refills only on a new version, and a 409 is what brings it (MUT-194, D6)
+
+`ConversionDrawer`'s edit mode resets the form in an effect keyed on `[existing.id, existing.version]`, not on the object, so a background refetch of the same version never wipes typing. On a 409 it invalidates the entity's query; the refetch brings the newer version, the effect refills the form, and the conflict toast's "showing the latest version" becomes true while the drawer stays open. This narrows MUT-133's "never key a form by an entity's version" for a drawer whose save sends the whole record: once a newer version exists, the typed values can only 409, so showing the latest is the honest state.
+
 ### Pattern: Visibility from IntersectionObserver, never from scroll listeners (MUT-77)
 
 **When**: UI reacts to whether something is on screen. Examples: a header button that appears once the hero's has scrolled away, a scroll-edge fade, a reveal on entry.

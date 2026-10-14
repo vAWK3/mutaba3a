@@ -6,6 +6,12 @@ import { AuditPageSchema, ListAuditQuerySchema } from '../schemas.js';
 import { serializeAuditEvent } from '../serializers.js';
 import { encodeNextCursor, errorResponses, toPageRequest, validationResponse } from './shared.js';
 
+/**
+ * Audit entity types of a hosted profile's own session-only activity: expenses (MUT-42) and
+ * conversions (MUT-161; closed by MUT-194 — `conversion.created` used to leak here).
+ */
+export const SESSION_ONLY_ENTITY_TYPES = [...EXPENSE_ENTITY_TYPES, 'conversion'] as const;
+
 /** /v1/audit — the organization's financial history for API keys (M6 brief §2). */
 export function auditRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
@@ -25,8 +31,9 @@ export function auditRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     async (c) => {
       const { organization } = c.get('auth');
       const q = c.req.valid('query');
-      // MUT-42: expense activity is a hosted profile's own; Malafat's key never lists it.
-      const page = await store.audit.list(organization.id, { ...(q.entityType ? { entityType: q.entityType } : {}), ...(q.entityId ? { entityId: q.entityId } : {}), ...(q.action ? { action: q.action } : {}), excludeEntityTypes: EXPENSE_ENTITY_TYPES }, toPageRequest(q));
+      // MUT-42, MUT-194: expense and conversion activity is a hosted profile's own; Malafat's key never lists it,
+      // not even when it asks for that entity type by name.
+      const page = await store.audit.list(organization.id, { ...(q.entityType ? { entityType: q.entityType } : {}), ...(q.entityId ? { entityId: q.entityId } : {}), ...(q.action ? { action: q.action } : {}), excludeEntityTypes: SESSION_ONLY_ENTITY_TYPES }, toPageRequest(q));
       return c.json({ items: page.items.map(serializeAuditEvent), nextCursor: encodeNextCursor(page.nextCursor) }, 200);
     },
   );

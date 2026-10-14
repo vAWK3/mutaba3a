@@ -62,6 +62,8 @@
 | ADR-053 | Device-to-Device Sync Is Retired; Local↔Hosted Sync Is Off the Roadmap (Supersedes ADR-011, ADR-012, ADR-013; Narrow Override of ADR-029) | Active | 2026-10 |
 | ADR-058 | Brand v2: `--m-*` Primitives From the Token JSON and One Semantic Map in theme.css; Light Text Clears 7:1; Thmanyah Is Bundled Unmodified (Amends ADR-018) | Active | 2026-10 |
 | ADR-069 | Import Writes Expenses Through expenseRepo; a Legacy kind:'expense' Transaction Gets Its Own Minimal Edit Drawer, Not IncomeDrawer | Active | 2026-10 |
+| ADR-070 | Hosted Conversions Are Their Own Prisma Model, Create + Read Only, Behind New Hosted-Only UI | Active; §2 superseded by ADR-075 (2026-10-14) | 2026-10 |
+| ADR-075 | A Conversion Is Edited With If-Match and Soft-Deleted, Like an Expense; Malafat's Audit Feed Never Lists It (Supersedes ADR-070 §2) | Active | 2026-10 |
 
 ---
 
@@ -662,6 +664,7 @@ The superseded ADRs keep their text in place, so numbers and links stay stable; 
 | ADR-011 Hybrid Logical Clock for Sync | ADR-053 | 2026-10-12 | Device sync retired (MUT-73); the clock had no other user |
 | ADR-012 Operation Log (CRDT-like) for Sync | ADR-053 | 2026-10-12 | Device sync retired; the op-log and its table were dropped (Dexie v21) |
 | ADR-013 Local-Only Sync (LAN + File Bundle) | ADR-053 | 2026-10-12 | Device sync retired product-wide; local↔hosted sync is off the roadmap |
+| ADR-070 §2 (and §5's create-only drawer, no JOD) | ADR-075 | 2026-10-14 | MUT-194: a mistaken conversion is fixed or removed, not reversed with a second entry |
 
 ---
 
@@ -2815,7 +2818,7 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 
 ## ADR-070: Hosted Conversions Are Their Own Prisma Model, Create + Read Only, Behind New Hosted-Only UI — Not a Transaction Kind, Not a Migration of the Local App's Files
 
-**Status**: Active
+**Status**: Active, except §2 ("create + read only") and §5's "create-only" drawer and no-JOD form, which ADR-075 (MUT-194, 2026-10-14) supersedes. The rest stands.
 **Date**: 2026-10-13
 **Context**: MUT-161 (server-side counterpart to MUT-141/ADR-068, unblocks MUT-159 mobile capture). The ticket's own text assumed two things that turned out false once the code was read: (1) that conversions should be "persisted as a Transaction/MoneyEvent of kind `conversion`" — the hosted server has no such generic table; every other kind (`Expense`, `Receivable`, `Payment`, `Attachment`) is its own first-class Prisma model; and (2) that "the portal's existing `useConversionQueries` / `ConversionDrawer`" should migrate off Dexie onto the new endpoint — those two files (`src/hooks/useConversionQueries.ts`, `src/components/drawers/ConversionDrawer.tsx`) are the **local/offline app's** components, not the hosted portal's; the hosted portal (`src/hosted/**`) has never reused a local hook or drawer (confirmed against the Expense precedent: `src/hosted/components/ExpenseDrawer.tsx` + `src/hosted/data/expenseQueries.ts` are hand-built siblings, not imports). Both corrections were flagged back on the ticket before planning further, the same shape as ADR-068's own corrections to MUT-141's text.
 
@@ -2963,3 +2966,40 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - Narrowing Show to the saved date with the existing `from`/`to` filters: recommended, but Basel chose the exact server lookup (D10).
 - Paging forward up to 5 pages: rejected. Up to 250 rows of reads, and it can still miss.
 
+---
+
+## ADR-075: A Conversion Is Edited With If-Match and Soft-Deleted, Like an Expense; Malafat's Audit Feed Never Lists It (Supersedes ADR-070 §2)
+
+**Status**: Active
+**Date**: 2026-10-14
+**Context**: MUT-194. ADR-070 §2 made hosted conversions create + read only ("a logging mistake is corrected with a new entry"), and MUT-159 built mobile to match. In use, a mistyped rate or the wrong currency left permanent noise: a reversing conversion plus a corrected one. Separately, `GET /v1/audit` (Malafat's API key) listed `conversion.created`, because the route excluded only `EXPENSE_ENTITY_TYPES`. Plan (eng-reviewed twice, design-reviewed): `~/.gstack/projects/vAWK3-mutaba3a-flutter/MUT-194-plan.md`; brief `.claude/designs/mut-194-conversion-edit-delete.md`.
+
+**Override log (ADR-070 §2)**:
+- *Why*: Basel's call (2026-10-14) after MUT-159 shipped; the reversing-entry workaround costs two entries and leaves both in every list.
+- *What replaces it*: §1–§3 below. ADR-070 §1, §3, §4 and §6 stand; §5's create-only drawer and USD/ILS/EUR-only form are replaced by §4–§5 below.
+- *Date*: 2026-10-14.
+
+**Decision**:
+1. **`Conversion` gains `version`, `updatedAt`, `deletedAt`**, declared like Expense's. The migration backfills existing rows to version 1 with `updatedAt = createdAt` (a temporary default, dropped after the backfill so the column matches the schema).
+2. **`PATCH /v1/conversions/{id}`** is expense PATCH's contract: `If-Match` on `version`, 409 `VERSION_MISMATCH` with `currentVersion` when stale, 200 with the body. Rules on the merged row (`conversionPatch`, `server/src/conversions/compose.ts`):
+   - a currency never travels without its amount (422 `AMOUNT_REQUIRED` on that amount field), because a leg's minor units follow its currency;
+   - each amount is parsed in the merged currency's digits;
+   - `SAME_CURRENCY` is checked on the merged pair;
+   - `occurredOn` is checked against today only when sent (stricter than expense PATCH, consistent with create; a notes-only edit of an old row is never refused).
+3. **`DELETE /v1/conversions/{id}`** soft-deletes: 204, 204 again, 404 for an unknown id. Deleted rows leave get and list, and an `anchor` on one is 404 `ANCHOR_NOT_FOUND`. Both routes stay session/device-session only; audited as `conversion.updated {fields, version}` and `conversion.deleted`.
+4. **`GET /v1/audit` excludes `SESSION_ONLY_ENTITY_TYPES = [...EXPENSE_ENTITY_TYPES, 'conversion']`**, also when the key asks for `entityType=conversion`.
+5. **The portal edits and deletes** (design D6–D8, eng D11): `?conversion=<id>` opens `ConversionDrawer` in edit mode; Save sends both legs at the loaded version; a 409 refetches the conversion and a reset effect keyed on id + version refills the form (the drawer stays open). Delete confirms naming both legs. The form takes JOD with per-leg, currency-aware decimals (closes TD-117). `HostedTable` makes clickable rows keyboard-reachable with a `row-link` button in the first cell.
+6. `API_VERSION` 1.22.0-mut182 → **1.23.0-mut194** (planned as 1.22.0; MUT-182 took that number on main first).
+
+**Consequences**:
+- The server must deploy before a mobile build that calls PATCH/DELETE (an old server answers 404).
+- Phone and portal editing the same conversion both send the version they loaded, so the second writer gets 409 instead of overwriting.
+- A queued (not yet confirmed) conversion still can't be edited on the phone; that is MUT-132's snapshot mechanism.
+- The conversion drawer deliberately refills on a new version, against the MUT-133 note "never key a form by an entity's version": here a newer version means the save would 409 anyway (see PATTERNS).
+- Widening the shared currency filter lets the receivables filter offer JOD too.
+
+**Alternatives considered**:
+- Keep create + read only: rejected by the product call above.
+- A version re-read at save time (expense edit's mobile behaviour): rejected for conversions (eng D3); If-Match would catch nothing.
+- A focusable `<tr>` for keyboard rows (design D8's first text): rejected (eng D11); it loses row semantics or isn't announced as actionable.
+- JOD conversions read-only in the portal: rejected (eng D7); web users couldn't fix them.

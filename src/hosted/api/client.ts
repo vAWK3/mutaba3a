@@ -35,6 +35,7 @@ export type CreateReceiptUploadRequest = Schemas['CreateReceiptUploadRequest'];
 export type CreateReceiptUploadResponse = Schemas['CreateReceiptUploadResponse'];
 export type Conversion = Schemas['Conversion'];
 export type CreateConversionRequest = Schemas['CreateConversionRequest'];
+export type UpdateConversionRequest = Schemas['UpdateConversionRequest'];
 export type CreateIncomeRequest = Schemas['CreateIncomeRequest'];
 export type IncomeResponse = Schemas['IncomeResponse'];
 export type PaymentMethod = Schemas['PaymentMethod'];
@@ -254,11 +255,15 @@ export const api = {
   settleReceivable: (profileId: string, receivableId: string, body: SettleReceivableRequest, idempotencyKey: string) =>
     request<SettleReceivableResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/settle`, { profileId, body, idempotencyKey }),
 
-  // Conversions (MUT-161) — create + read only, no update/delete.
+  // Conversions (MUT-161); edit and delete since MUT-194 (ADR-075), the same shape as expenses.
   conversions: (profileId: string, query: Query<'/v1/conversions'> = {}) =>
     request<Get<'/v1/conversions'>>('GET', '/v1/conversions', { profileId, query }),
   conversion: (profileId: string, conversionId: string) =>
     request<Get<'/v1/conversions/{conversionId}'>>('GET', `/v1/conversions/${encodeURIComponent(conversionId)}`, { profileId }),
   createConversion: (profileId: string, body: CreateConversionRequest, idempotencyKey: string) =>
     request<Conversion>('POST', '/v1/conversions', { profileId, body, idempotencyKey }),
+  updateConversion: (profileId: string, conversionId: string, body: UpdateConversionRequest, version: string) =>
+    request<Conversion>('PATCH', `/v1/conversions/${encodeURIComponent(conversionId)}`, { profileId, body, ifMatchVersion: version }),
+  deleteConversion: (profileId: string, conversionId: string) =>
+    request<void>('DELETE', `/v1/conversions/${encodeURIComponent(conversionId)}`, { profileId }),
 };

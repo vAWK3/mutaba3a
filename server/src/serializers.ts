@@ -478,7 +478,9 @@ export function serializeConversion(c: ConversionRecord) {
     toCurrency: c.toCurrency as Currency,
     notes: c.notes,
     createdByUserId: c.createdByUserId,
+    version: c.version,
     createdAt: c.createdAt.toISOString(),
+    updatedAt: c.updatedAt.toISOString(),
   };
 }
 

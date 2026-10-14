@@ -1251,7 +1251,7 @@ export interface LedgerStore {
   inboxEntries: InboxEntryRepository;
   /** MUT-131: idempotency for organization-independent writes (POST /v1/inbox's create). */
   userIdempotency: UserIdempotencyRepository;
-  /** MUT-161: conversions on hosted profiles; session-only, invisible to API keys (store guard `{ read: 'conversions' }`). Create + read only. */
+  /** MUT-161: conversions on hosted profiles; session-only, invisible to API keys (store guard `conversions`). MUT-194: optimistic update and soft delete, like expenses. */
   conversions: ConversionRepository;
 }
 
@@ -1420,7 +1420,7 @@ export interface ExpenseRepository {
   softDelete(organizationId: string, id: string, at: Date): Promise<{ record: ExpenseRecord; changed: boolean } | null>;
 }
 
-/** MUT-161: a logged currency conversion. Create + read only — no `version`/`deletedAt`, unlike Expense. */
+/** MUT-161: a logged currency conversion. MUT-194 (ADR-075): versioned and soft-deleted, like Expense. */
 export interface ConversionRecord {
   id: string;
   organizationId: string;
@@ -1433,7 +1433,10 @@ export interface ConversionRecord {
   toCurrency: string;
   notes: string | null;
   createdByUserId: string;
+  version: number;
   createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
 }
 
 export interface CreateConversionInput {
@@ -1446,6 +1449,12 @@ export interface CreateConversionInput {
   notes: string | null;
   createdByUserId: string;
 }
+
+/**
+ * MUT-194: absent key = unchanged; null clears `notes`. A currency never travels without its
+ * amount (the route's conversionPatch refuses that), so a leg's minor units always match its currency.
+ */
+export type UpdateConversionPatch = Partial<Pick<CreateConversionInput, 'occurredOn' | 'amountMinor' | 'currency' | 'toAmountMinor' | 'toCurrency' | 'notes'>>;
 
 export interface ConversionFilter {
   /** Inclusive. */
@@ -1471,8 +1480,12 @@ export interface ConversionPage {
 
 export interface ConversionRepository {
   create(input: CreateConversionInput, at: Date): Promise<ConversionRecord>;
+  /** Live conversions only; a deleted one reads null. */
   getById(organizationId: string, id: string): Promise<ConversionRecord | null>;
   list(organizationId: string, filter: ConversionFilter, page: { limit: number; cursor: ConversionCursor | null }): Promise<ConversionPage>;
+  update(organizationId: string, id: string, expectedVersion: number, patch: UpdateConversionPatch, at: Date): Promise<UpdateResult<ConversionRecord>>;
+  /** Null for an id the organization never had; `changed: false` when it was already deleted. */
+  softDelete(organizationId: string, id: string, at: Date): Promise<{ record: ConversionRecord; changed: boolean } | null>;
 }
 
 export interface ExpenseCategoryRecord {

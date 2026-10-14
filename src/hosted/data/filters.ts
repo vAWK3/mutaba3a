@@ -9,7 +9,8 @@ import type { Currency } from '../api/client';
 
 type Raw = Record<string, unknown>;
 
-const CURRENCIES = ['ILS', 'USD', 'EUR'] as const;
+/** The wire currencies a list can filter by. JOD since MUT-194 (TD-117): the server accepts it on every money field. */
+const CURRENCIES = ['ILS', 'USD', 'EUR', 'JOD'] as const;
 const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -132,12 +133,13 @@ export const parseConversions = (raw: Raw): ConversionFilters =>
     anchor: id(raw.anchor),
   });
 
-/** The conversions drawer's own URL state: `?newConversion=1` to create. Create-only (MUT-161) — no `?conversion=<id>` to edit. */
+/** The conversions drawer's own URL state: `?conversion=<id>` to edit (MUT-194), `?newConversion=1` to create. */
 export interface ConversionDrawerSearch {
+  conversion?: string;
   newConversion?: true;
 }
 export const parseConversionDrawer = (raw: Raw): ConversionDrawerSearch =>
-  compact({ newConversion: raw.newConversion === '1' || raw.newConversion === true ? true : undefined });
+  compact({ conversion: id(raw.conversion), newConversion: raw.newConversion === '1' || raw.newConversion === true ? true : undefined });
 
 /** The /conversions route's full search: the list's own filters plus the drawer's open state. */
 export type ConversionsPageSearch = ConversionFilters & ConversionDrawerSearch;

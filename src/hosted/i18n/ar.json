@@ -349,6 +349,7 @@
       },
       "drawer": {
         "newTitle": "تسجيل تحويل",
+        "editTitle": "تعديل التحويل",
         "fromAmount": "المبلغ المحوَّل منه",
         "fromCurrency": "العملة المحوَّلة منها",
         "toAmount": "المبلغ المحوَّل إليه",
@@ -357,7 +358,9 @@
         "date": "التاريخ",
         "notes": "ملاحظة",
         "notesPlaceholder": "ملاحظة اختيارية",
-        "impliedRate": "السعر: 1 {from} = {rate} {to}"
+        "impliedRate": "السعر: 1 {from} = {rate} {to}",
+        "deleteConfirm": "حذف هذا التحويل ({from} ← {to})؟ لا يمكن التراجع عن ذلك.",
+        "gone": "لم يعد هذا التحويل موجوداً"
       },
       "errors": {
         "amountInvalid": "أدخل مبلغاً صالحاً",

@@ -5,7 +5,7 @@ import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 
-/** MUT-161: conversions on hosted profiles — session-only routes, create + read only. */
+/** MUT-161: conversions on hosted profiles — session-only routes. MUT-194 (ADR-075): PATCH and DELETE. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 const read = (res: Response): Promise<Loose> => res.json() as Promise<Loose>;
@@ -87,7 +87,9 @@ describe('POST /v1/conversions', () => {
       toCurrency: 'ILS',
       notes: 'Transferred to ILS account',
       createdByUserId: p.userId,
+      version: 1,
       createdAt: '2026-10-20T09:00:00.000Z',
+      updatedAt: '2026-10-20T09:00:00.000Z',
     });
   });
 
@@ -163,13 +165,14 @@ describe('writability: Malafat’s key is refused on every conversion operation'
     const doc = (await read(await h.app.request('/openapi.json'))) as { paths: Record<string, Record<string, unknown>> };
     const ops = Object.entries(doc.paths)
       .filter(([path]) => /^\/v1\/conversions/.test(path))
-      .flatMap(([path, item]) => ['get', 'post'].filter((m) => item[m]).map((m) => [m.toUpperCase(), path] as const));
-    expect(ops.length).toBeGreaterThan(0);
+      .flatMap(([path, item]) => ['get', 'post', 'patch', 'delete'].filter((m) => item[m]).map((m) => [m.toUpperCase(), path] as const));
+    // MUT-194: PATCH and DELETE are swept too.
+    expect(ops.map(([m]) => m).sort()).toEqual(['DELETE', 'GET', 'GET', 'PATCH', 'POST']);
     for (const [method, path] of ops) {
       const res = await h.app.request(path.replace(/\{[^}]+\}/g, '00000000-0000-4000-8000-0000000000aa'), {
         method,
-        headers: { ...a.auth, 'content-type': 'application/json', ...idem() },
-        ...(method === 'GET' ? {} : { body: '{}' }),
+        headers: { ...a.auth, 'content-type': 'application/json', ...idem(), 'if-match': '1' },
+        ...(method === 'GET' || method === 'DELETE' ? {} : { body: '{}' }),
       });
       expect(res.status, `${method} ${path}`).toBe(403);
       expect((await read(res)).error.code, `${method} ${path}`).toBe('PRINCIPAL_NOT_ACCEPTED');
@@ -257,5 +260,134 @@ describe('regression: a conversion never appears in any /v1/summaries/* result (
     await create({});
     const after = await read(await h.app.request('/v1/summaries/expenses', { headers: p.as(a.org.id) }));
     expect(after).toEqual(before);
+  });
+
+  it('MUT-194: leaves both summaries byte-identical after editing and after deleting a conversion', async () => {
+    const { h, a, p, create } = await setup();
+    await h.app.request('/v1/income', json({ kind: 'received', amount: '250.00', currency: 'ILS', occurredOn: '2026-10-05' }, { ...p.as(a.org.id), ...idem() }));
+    await h.app.request('/v1/expenses', json({ occurredOn: '2026-10-05', amount: '40.00', currency: 'ILS' }, { ...p.as(a.org.id), ...idem() }));
+    const created = await read(await create({}));
+    const summaries = async () => ({
+      organization: await read(await h.app.request('/v1/summaries/organization', { headers: p.as(a.org.id) })),
+      expenses: await read(await h.app.request('/v1/summaries/expenses', { headers: p.as(a.org.id) })),
+    });
+    const before = await summaries();
+    const edited = await h.app.request(`/v1/conversions/${created.id}`, json({ amount: '500.00', currency: 'EUR', toAmount: '2000.00', toCurrency: 'ILS', occurredOn: '2026-10-06' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(edited.status).toBe(200);
+    expect(await summaries()).toEqual(before);
+    expect((await h.app.request(`/v1/conversions/${created.id}`, { method: 'DELETE', headers: p.as(a.org.id) })).status).toBe(204);
+    expect(await summaries()).toEqual(before);
+  });
+});
+
+describe('PATCH /v1/conversions/{id} (MUT-194)', () => {
+  const patch = (h: Harness, id: string, body: Record<string, unknown>, headers: Record<string, string>) => h.app.request(`/v1/conversions/${id}`, json(body, headers, 'PATCH'));
+
+  it('changes both legs, the date and the notes at the current version, bumps it, and audits the fields', async () => {
+    const { h, a, p, create } = await setup();
+    const created = await read(await create({ notes: 'first' }));
+    h.clock.now = new Date('2026-10-20T10:00:00Z');
+    const res = await patch(h, created.id, { amount: '70.900', currency: 'JOD', toAmount: '365.00', toCurrency: 'ILS', occurredOn: '2026-10-04', notes: null }, { ...p.as(a.org.id), 'if-match': '1' });
+    expect(res.status).toBe(200);
+    expect(await read(res)).toMatchObject({ id: created.id, amount: '70.900', currency: 'JOD', toAmount: '365.00', toCurrency: 'ILS', occurredOn: '2026-10-04', notes: null, version: 2, createdAt: '2026-10-20T09:00:00.000Z', updatedAt: '2026-10-20T10:00:00.000Z' });
+    expect(await read(await h.app.request(`/v1/conversions/${created.id}`, { headers: p.as(a.org.id) }))).toMatchObject({ version: 2, currency: 'JOD', notes: null });
+    const events = (await h.store.audit.list(a.org.id, { action: 'conversion.updated' }, { limit: 10, cursor: null })).items;
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ actorType: 'USER', actorId: p.userId, entityType: 'conversion', entityId: created.id });
+    const metadata = events[0]!.metadata as { fields: string[]; version: number };
+    expect(metadata.version).toBe(2);
+    expect([...metadata.fields].sort()).toEqual(['amount', 'currency', 'notes', 'occurredOn', 'toAmount', 'toCurrency']);
+  });
+
+  it('works with a device-session token (MUT-64)', async () => {
+    const { h, a, p, create } = await setup();
+    const created = await read(await create({}));
+    const res = await patch(h, created.id, { notes: 'from the phone' }, { ...p.asDevice(a.org.id), 'if-match': '1' });
+    expect(res.status).toBe(200);
+    expect((await read(res)).notes).toBe('from the phone');
+  });
+
+  it('refuses a stale If-Match with 409 VERSION_MISMATCH and the current version, changing nothing', async () => {
+    const { h, a, p, create } = await setup();
+    const created = await read(await create({}));
+    expect((await patch(h, created.id, { notes: 'one' }, { ...p.as(a.org.id), 'if-match': '1' })).status).toBe(200);
+    const stale = await patch(h, created.id, { notes: 'two' }, { ...p.as(a.org.id), 'if-match': '1' });
+    expect(stale.status).toBe(409);
+    expect((await read(stale)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'VERSION_MISMATCH', currentVersion: 2 } });
+    expect((await read(await h.app.request(`/v1/conversions/${created.id}`, { headers: p.as(a.org.id) }))).notes).toBe('one');
+  });
+
+  it('refuses a missing If-Match with 422', async () => {
+    const { h, a, p, create } = await setup();
+    const created = await read(await create({}));
+    const res = await patch(h, created.id, { notes: 'x' }, p.as(a.org.id));
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details.field).toBe('If-Match');
+  });
+
+  it.each([
+    ['a currency without its amount', { currency: 'EUR' }, 'AMOUNT_REQUIRED', 'amount'],
+    ['a toCurrency without its toAmount', { toCurrency: 'EUR' }, 'AMOUNT_REQUIRED', 'toAmount'],
+    ['a merged same-currency pair', { toAmount: '100.00', toCurrency: 'USD' }, 'SAME_CURRENCY', 'toCurrency'],
+    ['a wrong-precision amount for the row\'s currency', { amount: '1.234' }, 'AMOUNT_INVALID', 'amount'],
+    ['a future occurredOn', { occurredOn: '2026-10-21' }, 'DATE_INVALID', 'occurredOn'],
+  ])('refuses %s with 422 %s on field %s', async (_label, body, reason, field) => {
+    const { h, a, p, create } = await setup();
+    const created = await read(await create({}));
+    const res = await patch(h, created.id, body, { ...p.as(a.org.id), 'if-match': '1' });
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ reason, field });
+  });
+
+  it('a notes-only edit of an old conversion is fine: the date is only checked when sent', async () => {
+    const { h, a, p, create } = await setup();
+    const created = await read(await create({ occurredOn: '2020-01-01' }));
+    const res = await patch(h, created.id, { notes: 'still 2020' }, { ...p.as(a.org.id), 'if-match': '1' });
+    expect(res.status).toBe(200);
+    expect(await read(res)).toMatchObject({ occurredOn: '2020-01-01', notes: 'still 2020' });
+  });
+
+  it('404s an unknown id, another profile\'s conversion, and one deleted since', async () => {
+    const { h, a, b, p, create } = await setup();
+    const created = await read(await create({}));
+    expect((await patch(h, '00000000-0000-4000-8000-0000000000dd', { notes: 'x' }, { ...p.as(a.org.id), 'if-match': '1' })).status).toBe(404);
+    expect((await patch(h, created.id, { notes: 'x' }, { ...p.as(b.org.id), 'if-match': '1' })).status).toBe(404);
+    await h.app.request(`/v1/conversions/${created.id}`, { method: 'DELETE', headers: p.as(a.org.id) });
+    expect((await patch(h, created.id, { notes: 'x' }, { ...p.as(a.org.id), 'if-match': '1' })).status).toBe(404);
+  });
+});
+
+describe('DELETE /v1/conversions/{id} (MUT-194)', () => {
+  const del = (h: Harness, id: string, headers: Record<string, string>) => h.app.request(`/v1/conversions/${id}`, { method: 'DELETE', headers });
+
+  it('soft-deletes: 204, 204 again, audited once; gone from get, list and anchor', async () => {
+    const { h, a, p, create } = await setup();
+    const kept = await read(await create({ occurredOn: '2026-10-01' }));
+    const gone = await read(await create({ occurredOn: '2026-10-02' }));
+    expect((await del(h, gone.id, p.as(a.org.id))).status).toBe(204);
+    expect((await del(h, gone.id, p.as(a.org.id))).status).toBe(204);
+    expect((await h.app.request(`/v1/conversions/${gone.id}`, { headers: p.as(a.org.id) })).status).toBe(404);
+    const listed = await read(await h.app.request('/v1/conversions', { headers: p.as(a.org.id) }));
+    expect(listed.items.map((x: Loose) => x.id)).toEqual([kept.id]);
+    const anchored = await h.app.request(`/v1/conversions?anchor=${gone.id}`, { headers: p.as(a.org.id) });
+    expect(anchored.status).toBe(404);
+    expect((await read(anchored)).error.details).toMatchObject({ field: 'anchor', reason: 'ANCHOR_NOT_FOUND' });
+    const deletions = (await h.store.audit.list(a.org.id, { action: 'conversion.deleted' }, { limit: 10, cursor: null })).items;
+    expect(deletions).toHaveLength(1);
+    expect(deletions[0]).toMatchObject({ actorType: 'USER', actorId: p.userId, entityType: 'conversion', entityId: gone.id });
+  });
+
+  it('works with a device-session token (MUT-64)', async () => {
+    const { h, a, p, create } = await setup();
+    const created = await read(await create({}));
+    expect((await del(h, created.id, p.asDevice(a.org.id))).status).toBe(204);
+  });
+
+  it('404s an unknown id and another profile\'s conversion (G2)', async () => {
+    const { h, a, b, p, create } = await setup();
+    const created = await read(await create({}, a.org.id));
+    expect((await del(h, '00000000-0000-4000-8000-0000000000de', p.as(a.org.id))).status).toBe(404);
+    expect((await del(h, created.id, p.as(b.org.id))).status).toBe(404);
+    expect((await h.app.request(`/v1/conversions/${created.id}`, { headers: p.as(a.org.id) })).status).toBe(200);
   });
 });

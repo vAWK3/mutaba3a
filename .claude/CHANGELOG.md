@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Edit and delete a logged currency conversion (MUT-194, API 1.23.0-mut194)
+
+**Why:** ADR-070 §2 made hosted conversions create + read only, so a mistyped rate or the wrong currency could only be "fixed" with a reversing entry and a corrected one. Malafat's `GET /v1/audit` also listed `conversion.created`. ADR-075 supersedes ADR-070 §2. Brief: `.claude/designs/mut-194-conversion-edit-delete.md`; tests: `-tests.md`.
+
+### Added
+- **Server:** `PATCH /v1/conversions/{conversionId}` (If-Match on `version`; 409 `VERSION_MISMATCH` with `currentVersion`; a currency only with its amount, 422 `AMOUNT_REQUIRED`; amounts parsed in the merged currency; `SAME_CURRENCY` on the merged pair; `occurredOn` checked against today only when sent) and `DELETE /v1/conversions/{conversionId}` (soft; 204, 204 again, 404 unknown). Session and device-session only; audited `conversion.updated` / `conversion.deleted`. `Conversion` responses carry `version` and `updatedAt`.
+- **Data:** `Conversion.version`, `updatedAt`, `deletedAt`; migration `20261014180000_mut194_conversion_versions` backfills version 1 and `updatedAt = createdAt`, then drops the temporary default. `ConversionRepository.update` / `softDelete` in both stores; get, list and `anchor` hide deleted rows; the store guard classifies both as conversions writes.
+- **Portal:** a conversion row click, or Enter/Space on its row button, opens `?conversion=<id>`. `ConversionDrawer` edit mode prefills both legs, the date and the notes, PATCHes both legs at the loaded version, and on 409 refetches and refills the form while the conflict toast shows and the drawer stays open (D6). Delete confirms naming both legs (new en/ar `hosted.conversions.drawer.deleteConfirm`, D7); deleting the anchored conversion drops the anchor. New en/ar `hosted.conversions.drawer.editTitle`.
+- **Portal:** opening a conversion that was deleted elsewhere (a 404) says "This conversion no longer exists" with a Close button (new en/ar `hosted.conversions.drawer.gone`) instead of the Unreachable card; every other load error keeps Unreachable with its retry.
+- **Portal:** `HostedTable` rows with `onRowClick` get a `row-link` button in the first cell (D8, eng D11), which also makes the expense list keyboard-reachable.
+
+### Changed
+- `API_VERSION` 1.22.0-mut182 → 1.23.0-mut194 (MUT-182 took 1.22.0 on main first); `server/openapi/openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+- The hosted conversion form takes JOD with per-leg, currency-aware decimals; the portal's currency filters offer JOD (closes TD-117).
+
+### Fixed
+- `GET /v1/audit` excludes `SESSION_ONLY_ENTITY_TYPES = [...EXPENSE_ENTITY_TYPES, 'conversion']`, so Malafat's key no longer sees conversion activity, even with `?entityType=conversion`.
+
+### Technical
+- Tests: `store-contract-conversions.ts` (memory + Postgres), `migration-mut194.test.ts`, `conversions/__tests__/compose.test.ts` (`conversionPatch`), `routes-conversions.test.ts`, `route-security.test.ts`, `conversions-invisible.test.ts` (new), `HostedTable.test.tsx` (new), `ConversionDrawer.test.tsx`, `conversionFormSchema.test.ts`, `ConversionsList.test.tsx`, `filters.test.ts`. The "has no row click" list test is intentionally replaced.
+- Stale "create + read only" comments fixed in `schema.prisma`, `ports.ts`, `store-guard.ts`, `writability.ts`, `schemas.ts`, `routes/conversions.ts`, `api/client.ts`, `conversionQueries.ts`, `ConversionDrawer.tsx`, `ConversionsList.tsx`, `filters.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-14 — MUT-182: people create and manage their own hosted profiles (API 1.22.0-mut182)
 
 **Why:** a hosted user got exactly one personal profile (MUT-120); any other profile needed an operator. A freelancer with a second business had nowhere to record it. Epic MUT-181; brief and eng review `.claude/designs/mut-182-profile-management-api.md`; ADR-037 and ADR-066 amended.

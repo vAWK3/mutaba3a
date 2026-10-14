@@ -78,6 +78,7 @@ import type {
   ExpenseRecord,
   ExpenseRepository,
   UpdateExpenseCategoryPatch,
+  UpdateConversionPatch,
   UpdateExpensePatch,
   CreateInboxEntryInput,
   IncomeWriteResult,
@@ -1295,27 +1296,43 @@ export class MemoryLedgerStore implements LedgerStore {
     },
   };
 
-  // ---- MUT-161: conversions (create + read only) ----------------------------
+  // ---- MUT-161: conversions; MUT-194: versioned update and soft delete ------
 
   readonly conversions: ConversionRepository = {
     create: async (input: CreateConversionInput, at) => {
       if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('conversions.organizationId');
-      const record: ConversionRecord = { id: randomUUID(), ...input, createdAt: at };
+      const record: ConversionRecord = { id: randomUUID(), ...input, version: 1, createdAt: at, updatedAt: at, deletedAt: null };
       this.convs.set(record.id, record);
       return { ...record };
     },
     getById: async (organizationId, id) => {
       const c = this.convs.get(id);
-      return c && c.organizationId === organizationId ? { ...c } : null;
+      return c && c.organizationId === organizationId && !c.deletedAt ? { ...c } : null;
     },
     list: async (organizationId, filter: ConversionFilter, page) => {
       const rows = [...this.convs.values()]
-        .filter((c) => c.organizationId === organizationId && matchesConversion(c, filter) && (!page.cursor || isBeforeConversionCursor(c, page.cursor)))
+        .filter((c) => c.organizationId === organizationId && !c.deletedAt && matchesConversion(c, filter) && (!page.cursor || isBeforeConversionCursor(c, page.cursor)))
         .sort(newestConversionFirst)
         .slice(0, page.limit + 1);
       const items = rows.slice(0, page.limit).map((c) => ({ ...c }));
       const last = items[items.length - 1];
       return { items, nextCursor: rows.length > page.limit && last ? { occurredOn: last.occurredOn, id: last.id } : null };
+    },
+    update: async (organizationId, id, expectedVersion, patch: UpdateConversionPatch, at) => {
+      const c = this.convs.get(id);
+      if (!c || c.organizationId !== organizationId || c.deletedAt) return { kind: 'not_found' };
+      if (c.version !== expectedVersion) return { kind: 'stale', record: { ...c } };
+      Object.assign(c, definedOnly(patch));
+      c.version += 1;
+      c.updatedAt = at;
+      return { kind: 'updated', record: { ...c } };
+    },
+    softDelete: async (organizationId, id, at) => {
+      const c = this.convs.get(id);
+      if (!c || c.organizationId !== organizationId) return null;
+      const changed = !c.deletedAt;
+      if (changed) c.deletedAt = at;
+      return { record: { ...c }, changed };
     },
   };
 

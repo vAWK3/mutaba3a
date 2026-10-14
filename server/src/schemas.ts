@@ -1713,7 +1713,7 @@ export const ExpenseReceiptParamSchema = z.object({ expenseId: uuid, receiptId: 
 
 const conversionNotes = z.string().max(4000);
 
-/** MUT-161: a logged currency conversion. Create + read only — no `version`, unlike Expense. */
+/** MUT-161: a logged currency conversion. MUT-194 (ADR-075): versioned like Expense, edited with If-Match. */
 export const ConversionSchema = z
   .object({
     id: uuid,
@@ -1726,7 +1726,9 @@ export const ConversionSchema = z
     toCurrency: CurrencySchema,
     notes: z.string().nullable(),
     createdByUserId: uuid,
+    version: z.number().int(),
     createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
   })
   .openapi('Conversion');
 
@@ -1743,6 +1745,22 @@ export const CreateConversionRequestSchema = z
   })
   .strict()
   .openapi('CreateConversionRequest');
+
+/**
+ * MUT-194: every field optional; null clears the notes. A currency must come with its own amount
+ * (422 AMOUNT_REQUIRED): a leg's fractional digits follow its currency, so a currency alone would rescale it.
+ */
+export const UpdateConversionRequestSchema = z
+  .object({
+    occurredOn: IsoDateSchema.optional(),
+    amount: AmountSchema.optional().openapi({ description: 'In the merged currency\'s fractional digits (the body\'s `currency`, else the row\'s)' }),
+    currency: CurrencySchema.optional().openapi({ description: 'Only together with `amount`' }),
+    toAmount: AmountSchema.optional().openapi({ description: 'In the merged toCurrency\'s fractional digits' }),
+    toCurrency: CurrencySchema.optional().openapi({ description: 'Only together with `toAmount`; must differ from the merged `currency`' }),
+    notes: conversionNotes.nullable().optional(),
+  })
+  .strict()
+  .openapi('UpdateConversionRequest');
 
 export const ListConversionsQuerySchema = z.object({
   ...pageQuery,

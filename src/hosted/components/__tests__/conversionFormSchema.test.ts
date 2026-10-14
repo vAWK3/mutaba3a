@@ -3,9 +3,8 @@ import { conversionFormSchema, impliedRate } from '../conversionFormSchema';
 
 /**
  * Hosted conversion drawer schema (MUT-161) — mirrors the local app's own
- * conversionFormSchema.test.ts shape, scoped to the portal's current
- * currency set (USD/ILS/EUR, no JOD yet — a pre-existing hosted gap this
- * ticket doesn't extend, matching the hosted expense drawer).
+ * conversionFormSchema.test.ts shape. MUT-194 (D7, closes TD-117): JOD joins
+ * USD/ILS/EUR, and each leg's decimal places follow its own currency.
  */
 function baseFields(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -52,6 +51,40 @@ describe('hosted conversion drawer schema', () => {
 
   it('allows an optional note', () => {
     expect(conversionFormSchema.safeParse(baseFields({ notes: 'Moved savings for Q1 rent' })).success).toBe(true);
+  });
+});
+
+describe('hosted conversion drawer schema: JOD and per-leg precision (MUT-194, D7)', () => {
+  it('accepts JOD on either leg', () => {
+    expect(conversionFormSchema.safeParse(baseFields({ fromCurrency: 'JOD', fromAmount: '70.9' })).success).toBe(true);
+    expect(conversionFormSchema.safeParse(baseFields({ toCurrency: 'JOD', toAmount: '70.9' })).success).toBe(true);
+  });
+
+  it('accepts 3 decimals on a JOD leg and refuses 4', () => {
+    expect(conversionFormSchema.safeParse(baseFields({ fromCurrency: 'JOD', fromAmount: '70.925' })).success).toBe(true);
+    expect(conversionFormSchema.safeParse(baseFields({ toCurrency: 'JOD', toAmount: '70.925' })).success).toBe(true);
+    const from = conversionFormSchema.safeParse(baseFields({ fromCurrency: 'JOD', fromAmount: '70.9251' }));
+    expect(from.success).toBe(false);
+    if (!from.success) expect(from.error.issues.map((i) => i.path.join('.'))).toEqual(['fromAmount']);
+    const to = conversionFormSchema.safeParse(baseFields({ toCurrency: 'JOD', toAmount: '70.9251' }));
+    expect(to.success).toBe(false);
+    if (!to.success) expect(to.error.issues.map((i) => i.path.join('.'))).toEqual(['toAmount']);
+  });
+
+  it('precision follows each leg\'s own currency: USD with 3 decimals is refused even when the other leg is JOD', () => {
+    const result = conversionFormSchema.safeParse(baseFields({ fromCurrency: 'USD', fromAmount: '100.125', toCurrency: 'JOD', toAmount: '70.925' }));
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues.map((i) => i.path.join('.'))).toEqual(['fromAmount']);
+  });
+
+  it('still refuses JOD to JOD', () => {
+    const result = conversionFormSchema.safeParse(baseFields({ fromCurrency: 'JOD', toCurrency: 'JOD' }));
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues.some((i) => i.path.join('.') === 'toCurrency')).toBe(true);
+  });
+
+  it('computes an implied rate across a JOD leg', () => {
+    expect(impliedRate('100', 'USD', '70.900', 'JOD')).toBeCloseTo(0.709, 5);
   });
 });
 
