@@ -15,6 +15,8 @@ const P1 = PROJECTS[0].id;
 const PERSONAL = profile({
   writerOfRecord: null,
   isPersonalDefault: true,
+  owned: true,
+  type: 'PERSONAL',
   access: { payments: 'read-write', capture: 'read-write', expenses: 'read-write' },
   income: { received: true, owed: true, customer: 'optional' },
   timezone: 'Asia/Jerusalem',

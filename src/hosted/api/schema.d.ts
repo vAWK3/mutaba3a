@@ -514,7 +514,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Bound to a different tenant, the tenant is bound to another organization, or this is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE) */
+                /** @description Bound to a different tenant, the tenant is bound to another organization, or this is a profile a person owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -6807,7 +6807,7 @@ export interface paths {
         };
         /**
          * The profile’s expense categories, in creation order
-         * @description The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the personal preset on the user’s own personal profile, the general one on any other organization. Archived categories only with includeArchived=true.
+         * @description The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the personal preset on a PERSONAL profile, the general one on a BUSINESS profile or any other organization. Archived categories only with includeArchived=true.
          */
         get: {
             parameters: {
@@ -7981,6 +7981,287 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a standalone profile you own
+         * @description Hosted entirely on Mutaba3a: never a Malafat organization, never keyed or shared. Fully writable by its owner, like the personal profile. Up to 6 owned profiles per person, the personal one included (409 CONFLICT, details.reason PROFILE_LIMIT). The type picks the expense categories.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateProfileRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["HostedProfile"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/profiles/{profileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Rename a profile you own, change its default currency or its type
+         * @description One atomic write under If-Match. The default currency only seeds new records; existing ones keep theirs. A changed type replaces the profile’s expense categories with the new type’s preset, in your language, and leaves every expense that had one uncategorized — preview it with GET /v1/profiles/{profileId}/type-change. The built-in personal profile can be renamed but is always PERSONAL (409 CONFLICT, details.reason DEFAULT_PERSONAL_PROFILE).
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    profileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateProfileRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UpdateProfileResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/profiles/{profileId}/type-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview what changing a profile’s type would do
+         * @description The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type.
+         */
+        get: {
+            parameters: {
+                query: {
+                    to: components["schemas"]["ProfileType"];
+                };
+                header?: never;
+                path: {
+                    profileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileTypeChange"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/organizations": {
         parameters: {
             query?: never;
@@ -8156,7 +8437,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description A personal profile cannot hold an API key (CONFLICT, details.reason PERSONAL_PROFILE) */
+                /** @description A profile a person owns cannot hold an API key (CONFLICT, details.reason PERSONAL_PROFILE on the built-in personal profile, OWNED_PROFILE on one they created) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -8390,7 +8671,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Email already in use, or organizationId is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE) */
+                /** @description Email already in use, or organizationId is a profile a person owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -8533,7 +8814,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description The organization is another user’s personal profile (CONFLICT, details.reason PERSONAL_PROFILE) */
+                /** @description The organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -8600,7 +8881,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description The organization is this user’s own personal profile (CONFLICT, details.reason PERSONAL_PROFILE) */
+                /** @description The organization is a profile this user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -8870,6 +9151,7 @@ export interface components {
                 locale: components["schemas"]["UserLocale"];
             };
             profiles: components["schemas"]["HostedProfile"][];
+            limits: components["schemas"]["ProfileLimits"];
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
@@ -8888,6 +9170,9 @@ export interface components {
             };
             income: components["schemas"]["IncomeCaptureRules"];
             isPersonalDefault: boolean;
+            owned: boolean;
+            type: components["schemas"]["ProfileType"];
+            version: number;
         };
         /** @enum {string} */
         Currency: "ILS" | "USD" | "EUR" | "JOD";
@@ -8896,6 +9181,12 @@ export interface components {
             owed: boolean;
             /** @enum {string} */
             customer: "optional" | "linked-required";
+        };
+        /** @enum {string|null} */
+        ProfileType: "PERSONAL" | "BUSINESS" | null;
+        ProfileLimits: {
+            ownedProfiles: number;
+            maxOwnedProfiles: number;
         };
         ErrorEnvelope: {
             error: {
@@ -10557,6 +10848,27 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             dueDate?: string;
             method?: components["schemas"]["PaymentMethod"];
+        };
+        CreateProfileRequest: {
+            name: string;
+            type: components["schemas"]["ProfileType"];
+            defaultCurrency: components["schemas"]["Currency"];
+            timezone: string;
+        };
+        UpdateProfileResponse: {
+            profile: components["schemas"]["HostedProfile"];
+            typeChange: components["schemas"]["ProfileTypeChange"];
+        };
+        ProfileTypeChange: {
+            uncategorizedExpenses: number;
+            deletedCategories: number;
+            /** @enum {string} */
+            preset: "lawFirm" | "personal" | "general";
+        } | null;
+        UpdateProfileRequest: {
+            name?: string;
+            defaultCurrency?: components["schemas"]["Currency"];
+            type?: components["schemas"]["ProfileType"];
         };
         CreateOrganizationRequest: {
             name: string;

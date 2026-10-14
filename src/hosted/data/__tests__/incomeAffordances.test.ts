@@ -9,7 +9,7 @@ const MALAFAT_RULES = { received: true, owed: false, customer: 'linked-required'
 const PERSONAL_ACCESS = { payments: 'read-write', capture: 'read-write', expenses: 'read-write' } as const;
 
 function personal(overrides: Partial<HostedProfile> = {}): HostedProfile {
-  return profile({ writerOfRecord: null, isPersonalDefault: true, access: { ...PERSONAL_ACCESS }, income: { ...PERSONAL_RULES }, ...overrides });
+  return profile({ writerOfRecord: null, isPersonalDefault: true, owned: true, type: 'PERSONAL', access: { ...PERSONAL_ACCESS }, income: { ...PERSONAL_RULES }, ...overrides });
 }
 
 describe('incomeAffordancesFor (MUT-133 D-gate)', () => {
@@ -22,9 +22,15 @@ describe('incomeAffordancesFor (MUT-133 D-gate)', () => {
     expect(incomeAffordancesFor(malafat)).toEqual({ kinds: [], customer: 'linked-required', canSettle: false });
   });
 
-  it('offers nothing on a writable profile that is not the user\'s personal one (ADR-066)', () => {
-    expect(incomeAffordancesFor(personal({ isPersonalDefault: false })).kinds).toEqual([]);
-    expect(incomeAffordancesFor(personal({ isPersonalDefault: false })).canSettle).toBe(false);
+  it('offers both kinds and settling on a business profile the user created (MUT-182)', () => {
+    const business = personal({ isPersonalDefault: false, owned: true, type: 'BUSINESS' });
+    expect(incomeAffordancesFor(business)).toEqual({ kinds: ['received', 'owed'], customer: 'optional', canSettle: true });
+  });
+
+  it('offers nothing on a writable profile the user does not own, such as a writer-null firm (ADR-066)', () => {
+    const firm = personal({ isPersonalDefault: false, owned: false, type: null });
+    expect(incomeAffordancesFor(firm).kinds).toEqual([]);
+    expect(incomeAffordancesFor(firm).canSettle).toBe(false);
   });
 
   it('gates Add on capture access and settling on payments access', () => {
