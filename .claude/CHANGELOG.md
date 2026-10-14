@@ -46,6 +46,25 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — Hovered button-links keep their label colour (TD-122)
+
+**Why:** the global `a:hover` rules (`--link-hover` in `theme.css`, underline in `index.css`) are (0,1,1), so they beat any single-class link's base colour. Several button-links turned link-purple and underlined on hover, some with a purple label on a purple fill: Settings › About's `.btn` links, the landing hero button and Get it cards, /download's buttons, the sidebar mark and Home's Needs attention client link. MUT-77 fixed four landing controls one by one; this fixes the cause. Design: `.claude/designs/td-122-classed-link-hover.md`.
+
+### Fixed
+- `src/styles/theme.css`, `src/index.css`: both global hover rules are now `a:not([class]):hover`, matching `a:not([class]):visited`. A classed link owns its hover (ADR-058 amendment, PATTERNS).
+- Classed inline text links that relied on the global hover now declare it themselves (colour and underline): `.breadcrumb-link`, `.client-index-name` (placed before the settled and bucket rows' colours, which still win), `.feature-notice-banner-action`, `.hp-back` (portal), `.hero-cta-alt`, `.privacy-policy-back`, `.download-link`, `.download-alt-link`.
+
+### Changed
+- On hover, these no longer underline: `.project-tag` (it keeps its colour change), `.profile-switcher` (empty state), `.profile-switcher-action` and `.mac-download-banner-cta`. They are controls; the underline came from the global rule.
+
+### Technical
+- `src/styles/__tests__/brand.test.ts`: guards against a bare `a:hover` anywhere in `src/`, and checks the 8 text links' own `:hover`.
+- `qa/specs/web/link-hover.spec.ts` (new, `@web.brand.link-hover` in `qa/features/web/brand.yaml`): light and dark, on a vite preview build.
+- `/download` crashed on load ("No QueryClient set") when this was built, so the spec's /download test started as `fixme`. Merged onto `fix/download-page-crash`, which fixes the page; the `fixme` is dropped and the test passes in light and dark.
+- `.claude/TECH_DEBT.md`: TD-122 resolved (first filed on the MUT-77 branch).
+
+---
+
 ## [Unreleased] - 2026-10-14 — The portal presses, tints and shows where a save landed (MUT-91)
 
 **Why:** HP1 of the Apple-design brief: the hosted portal is a separate build, so without this the app and the portal feel like two products. Spring drawers (R2) were already shared by MUT-80. Press feedback (L10) existed nowhere, though its MUT-102 tokens did. After-save feedback (R1) was app-only. Plan and eng review D1–D10: `.claude/designs/mut-91-portal-shared-motion.md`.

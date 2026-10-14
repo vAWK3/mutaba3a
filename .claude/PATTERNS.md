@@ -2191,6 +2191,19 @@ When Show changes the same page's filters instead of navigating, re-arm the save
 - A classed link that looks like a control must also set its own `:hover` colour and `text-decoration`, because the global `a:hover` out-ranks one class (TD-122).
 
 **Instances**: the landing page (`HeroSection.css`, `LandingPage.css`, `FAQSection.css`), guarded by `landingCss.test.ts` and `@web.landing.press`.
+
+### Pattern: A classed link owns its hover (TD-122)
+
+**When**: you write an `<a>` or `<Link>` with a `className`.
+
+**How**: the global link hover (`--link-hover` plus an underline) applies only to `a:not([class])`, like `:visited`. A class makes the link one of two kinds:
+- **Control** (a button, card, pill, nav or menu item, or row action): set `text-decoration: none`. Its label keeps its colour on hover unless its own `:hover` sets one (`.btn-ghost` goes to `--text`).
+- **Inline text link** (a breadcrumb, a name in a table, a back link, a footer or download link): declare `color: var(--link-hover)` (or the colour it wants) and `text-decoration: underline` on its own `:hover`. Add it to `TEXT_LINKS` in `brand.test.ts`.
+
+**Never**: write a bare `a:hover` or `a:visited`. At (0,1,1) it beats every single-class colour, and `brand.test.ts` fails on it.
+
+**Instances**: `theme.css`, `index.css`. Text links: `.breadcrumb-link`, `.client-index-name`, `.feature-notice-banner-action`, `.hp-back`, `.hero-cta-alt`, `.privacy-policy-back`, `.download-link`, `.download-alt-link`.
+
 ### Pattern: Marketing pages render only landing chrome, and are tested under `LandingProviders` (2026-10-14)
 `/`, `/download` and `/privacy` mount in `src/main.tsx` outside the router and `QueryClientProvider`, and never open the database. So they use `LandingHeader`/`LandingFooter`, never app layout (`TopBar`, `SidebarNav`, anything calling `useQuery`, router hooks or `getRepositories()`). Their component tests render through `LandingProviders`, the same wrapper `main.tsx` uses, and never mock app layout away: that mock is how `/download`'s crash went unnoticed.
 **Instances**: `PrivacyPolicyPage`, `DownloadPage`; guarded by `DownloadPage.test.tsx` and `@web.landing.download`.

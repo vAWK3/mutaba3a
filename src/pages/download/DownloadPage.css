@@ -278,6 +278,7 @@
 
 .download-alt-link:hover {
   color: var(--link-hover);
+  text-decoration: underline;
 }
 
 /* Footer Links */
@@ -305,6 +306,7 @@
 
 .download-link:hover {
   color: var(--link-hover);
+  text-decoration: underline;
 }
 
 .download-link:visited {

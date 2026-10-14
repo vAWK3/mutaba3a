@@ -79,7 +79,8 @@ a {
   text-decoration: none;
 }
 
-a:hover {
+/* Unclassed links only: a classed link owns its hover (TD-122, see theme.css) */
+a:not([class]):hover {
   text-decoration: underline;
 }
 
@@ -769,6 +770,7 @@ td {
 }
 
 .feature-notice-banner-action:hover {
+  color: var(--link-hover);
   text-decoration: underline;
 }
 
@@ -986,6 +988,7 @@ td {
 
 .breadcrumb-link:hover {
   color: var(--accent-text);
+  text-decoration: underline;
 }
 
 .breadcrumb-current {
@@ -1967,6 +1970,13 @@ div.input-with-prefix {
 
 :lang(ar) .client-index-settled {
   font-family: var(--font-ar);
+}
+
+/* A client's name is a text link (TD-122). Before the settled and bucket rows' colours,
+   which share its specificity and win on a quieter row; the open row's out-ranks it. */
+.client-index-name:hover {
+  color: var(--link-hover);
+  text-decoration: underline;
 }
 
 .client-index-settled-row .client-index-name {
