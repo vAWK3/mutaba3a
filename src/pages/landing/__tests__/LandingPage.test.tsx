@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen, within, fireEvent, cleanup } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
 import type { ReleaseInfo } from '../../../hooks/useLatestRelease';
@@ -23,6 +23,21 @@ vi.mock('../../../hooks/useLatestRelease', () => ({
   useLatestRelease: () => release.current,
 }));
 
+// The store config, swapped per case through a getter so every reassignment is seen (as HostedOfferPage.test does)
+const apps = vi.hoisted(() => ({
+  links: {
+    ios: { available: true, url: null as string | null },
+    android: { available: false, url: null as string | null },
+  },
+}));
+
+vi.mock('../../../content/download-config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../content/download-config')>()),
+  get MOBILE_APP_LINKS() {
+    return apps.links;
+  },
+}));
+
 function renderLanding(language: 'en' | 'ar') {
   localStorage.setItem('mutaba3a-language', language);
   return render(
@@ -42,6 +57,7 @@ function part(name: string): HTMLElement {
 
 beforeEach(() => {
   localStorage.clear();
+  apps.links = { ios: { available: true, url: null }, android: { available: false, url: null } };
   release.current = {
     release: {
       version: '0.0.66',
@@ -55,7 +71,7 @@ beforeEach(() => {
 });
 
 describe('LandingPage structure', () => {
-  it('renders the seven parts in order, then the footer', () => {
+  it('renders the eight parts in order, then the footer', () => {
     renderLanding('en');
     const parts = Array.from(document.querySelectorAll('main > [data-part]')).map(
       (el) => el.getAttribute('data-part')
@@ -67,6 +83,7 @@ describe('LandingPage structure', () => {
       'chapter-businesses',
       'privacy',
       'get-it',
+      'phone',
       'faq',
     ]);
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
@@ -177,6 +194,83 @@ describe('LandingPage Get it, free vs paid (MUT-172)', () => {
     expect(paid).toHaveTextContent('خطة مدفوعة');
     expect(within(paid).getByRole('link', { name: 'اطّلع على الحسابات المستضافة' })).toHaveAttribute('href', '/hosted');
     expect(paid.textContent).not.toMatch(BANNED_AR);
+  });
+});
+
+describe('LandingPage phone and portal (MUT-173)', () => {
+  /** The section's own words, without the decorative mock (its sample amounts are not prices). */
+  function phoneCopy(): string {
+    const section = part('phone').cloneNode(true) as HTMLElement;
+    section.querySelectorAll('[data-part="devices-mock"]').forEach((el) => el.remove());
+    return section.textContent ?? '';
+  }
+  const stores = () => within(part('phone')).getByRole('list', { name: 'Phone apps' });
+
+  it('says the phone logs and the hosted account shows, with one link to /hosted', () => {
+    renderLanding('en');
+    const section = part('phone');
+    expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent(
+      'Log it on your phone. See it all in your hosted account.',
+    );
+    expect(section).toHaveTextContent('The phone app is for logging');
+    expect(section).toHaveTextContent('portal');
+    const link = within(section).getByRole('link', { name: 'See hosted accounts' });
+    expect(link).toHaveAttribute('href', '/hosted');
+    expect(link).not.toHaveAttribute('target');
+    expect(within(section).getAllByRole('link')).toHaveLength(1);
+  });
+
+  it('links a store once its URL is configured, in a new tab', () => {
+    apps.links = {
+      ios: { available: true, url: 'https://apps.apple.com/app/id1' },
+      android: { available: true, url: 'https://play.google.com/store/apps/details?id=com.barmajiyat.mutaba3a' },
+    };
+    renderLanding('en');
+    const ios = within(stores()).getByRole('link', { name: 'iPhone, on the App Store' });
+    expect(ios).toHaveAttribute('href', 'https://apps.apple.com/app/id1');
+    expect(ios).toHaveAttribute('target', '_blank');
+    expect(ios.getAttribute('rel')).toContain('noopener');
+    expect(within(stores()).getByRole('link', { name: 'Android, on Google Play' })).toHaveAttribute(
+      'href',
+      'https://play.google.com/store/apps/details?id=com.barmajiyat.mutaba3a',
+    );
+    expect(within(stores()).getAllByRole('link')).toHaveLength(2);
+    expect(stores().textContent).not.toMatch(/coming soon/);
+  });
+
+  it('names an available app without a link while no store URL is set, never a dead link', () => {
+    renderLanding('en');
+    const list = stores();
+    expect(list).toHaveTextContent('iPhone');
+    expect(list).toHaveTextContent('with your hosted account');
+    expect(within(list).queryAllByRole('link')).toHaveLength(0);
+  });
+
+  it('says a platform is coming soon while it is not available, and drops the note once it is', () => {
+    renderLanding('en');
+    expect(stores()).toHaveTextContent('Android coming soon');
+    cleanup();
+    apps.links = { ios: { available: true, url: null }, android: { available: true, url: 'https://play.google.com/x' } };
+    renderLanding('en');
+    expect(stores().textContent).not.toMatch(/coming soon/);
+    expect(within(stores()).getByRole('link', { name: 'Android, on Google Play' })).toBeInTheDocument();
+  });
+
+  it('reads the same in Arabic', () => {
+    renderLanding('ar');
+    const section = part('phone');
+    expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('سجّل من هاتفك');
+    expect(within(section).getByRole('link', { name: 'اطّلع على الحسابات المستضافة' })).toHaveAttribute('href', '/hosted');
+    expect(within(section).getByRole('list', { name: 'تطبيقات الهاتف' })).toHaveTextContent('Android قريبًا');
+  });
+
+  it('claims no reports, analytics or price, in either language', () => {
+    renderLanding('en');
+    expect(phoneCopy()).not.toMatch(/report|analytic|dashboard|statistic|chart/i);
+    expect(phoneCopy()).not.toMatch(/\bprice\b|\/month|checkout|sign ?up|\$\d/i);
+    cleanup();
+    renderLanding('ar');
+    expect(phoneCopy()).not.toMatch(/تقارير|تحليل|إحصاء|رسوم|سعر|اشترك/);
   });
 });
 

@@ -13,10 +13,12 @@ interface ChapterSectionProps {
   visual: ReactNode;
   /** Put the visual on the reading-start side instead of the end. */
   flip?: boolean;
+  /** Anything the chapter adds under its paragraph, in the copy column (MUT-173: the phone platforms). */
+  extra?: ReactNode;
 }
 
 /** One idea per chapter: a big line, a short paragraph, and one visual. */
-export function ChapterSection({ part, title, body, visual, flip = false }: ChapterSectionProps) {
+export function ChapterSection({ part, title, body, visual, flip = false, extra }: ChapterSectionProps) {
   const headingId = `${part}-title`;
   const figureRef = useRef<HTMLElement>(null);
   const reducedMotion = usePrefersReducedMotion();
@@ -53,6 +55,7 @@ export function ChapterSection({ part, title, body, visual, flip = false }: Chap
             {title}
           </h2>
           <p className="landing-chapter-body">{body}</p>
+          {extra}
         </div>
         <figure ref={figureRef} className="landing-chapter-visual">
           {visual}

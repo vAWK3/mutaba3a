@@ -9,6 +9,7 @@ import {
   ChapterSection,
   PrivacyBand,
   GetItSection,
+  PhoneSection,
   FAQSection,
   LandingFooter,
 } from './components';
@@ -19,7 +20,8 @@ const HERO_CTA_ROOT_MARGIN = '-72px 0px 0px 0px';
 
 /**
  * One idea per chapter (MUT-75, brief L7): the job, then the client page,
- * recording a payment, many businesses, privacy said once, how to get it, FAQ.
+ * recording a payment, many businesses, privacy said once, how to get it,
+ * the phone and the portal (MUT-173), FAQ.
  */
 export function LandingPage() {
   const t = useT();
@@ -61,6 +63,7 @@ export function LandingPage() {
         />
         <PrivacyBand />
         <GetItSection />
+        <PhoneSection />
         <FAQSection />
       </main>
       <LandingFooter />

@@ -72,6 +72,7 @@ describe('landing CSS', () => {
     ['.landing-header-cta[data-visible="true"]:active', 'LandingPage.css'],
     ['.landing-lang-toggle:active', 'LandingPage.css'],
     ['a.landing-get-it-option:active', 'LandingPage.css'],
+    ['a.landing-phone-store:active', 'LandingPage.css'],
   ])('presses %s in with the brand press tokens', (selector, fileName) => {
     const root = landingRoots.find(({ file }) => file.endsWith(`/${fileName}`))!.root;
     // The `scale` property, never transform (ADR-074, MUT-91): it composes with any transform the control has.
@@ -92,7 +93,13 @@ describe('landing CSS', () => {
     expect(offenders).toEqual([]);
   });
 
-  it.each(['.hero-cta-alt:active', '.landing-footer-links a:active', '.landing-get-it-meta a:active', '.landing-faq-question:active'])(
+  it.each([
+    '.hero-cta-alt:active',
+    '.landing-footer-links a:active',
+    '.landing-get-it-meta a:active',
+    '.landing-phone-hint a:active',
+    '.landing-faq-question:active',
+  ])(
     'dims %s on press instead of scaling it (text links, and the full-width FAQ rows)',
     (selector) => {
       const all = landingRoots.flatMap(({ root }) => rulesFor(root, selector).map((r) => declarations(r.rule)));

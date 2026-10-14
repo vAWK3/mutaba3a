@@ -961,3 +961,207 @@ a.landing-get-it-option:focus-visible {
     text-align: center;
   }
 }
+
+/* ============================================
+   The phone and the portal (MUT-173): the chapter's platform lines
+   ============================================ */
+.landing-phone-hint {
+  margin: var(--space-5) 0 0;
+  max-width: 40ch;
+  font-size: var(--text-label);
+  color: var(--muted);
+}
+
+/* A link in running text needs more than colour (axe link-in-text-block), as in .landing-get-it-meta */
+.landing-phone-hint a {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.landing-phone-hint a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.landing-phone-hint a:active {
+  opacity: var(--landing-press-dim);
+}
+
+.landing-phone-stores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* An app named without a public link, or one that is coming: plain text, nothing button-shaped (D9) */
+.landing-phone-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+
+.landing-phone-platform--soon {
+  color: var(--muted);
+  font-weight: var(--weight-normal);
+}
+
+.landing-phone-platform-note {
+  font-size: var(--text-label);
+  font-weight: var(--weight-normal);
+  color: var(--muted);
+}
+
+/* Only a real store link is a control: the device-pill recipe from /hosted, with the landing's press */
+.landing-phone-store {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    scale var(--duration-press) var(--ease-spring);
+}
+
+a.landing-phone-store:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.landing-phone-store:active {
+  scale: var(--press-scale);
+}
+
+a.landing-phone-store:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ============================================
+   The laptop-and-phone mock (HostedDevicesMock): /hosted's hero anchor, and since
+   MUT-173 the phone chapter's picture on /. It sits last in this file so it keeps
+   out-ranking .landing-mock by source order, and the two frames are written at
+   (0,2,0) so their position never matters. /hosted's phone-only rule at ≤640px
+   stays in HostedOfferPage.css; on / the chapter keeps the whole picture.
+   ============================================ */
+.hosted-devices {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  min-height: 340px;
+}
+
+.hosted-devices .landing-mock {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.hosted-devices .hosted-devices-laptop {
+  inset-inline-start: 0;
+  top: 0;
+  width: 72%;
+  padding: 0;
+  overflow: hidden;
+}
+
+.hosted-devices-chrome {
+  display: flex;
+  gap: var(--space-1-5);
+  padding: var(--space-2-5) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.hosted-devices-chrome span {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--border);
+}
+
+.hosted-devices-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-5);
+}
+
+.hosted-devices-screen .landing-mock-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.hosted-devices .hosted-devices-phone {
+  inset-inline-end: 0;
+  bottom: 0;
+  width: 160px;
+  min-height: 280px;
+  padding: var(--space-8) var(--space-4) var(--space-4);
+  border-radius: var(--radius-hero);
+}
+
+/* The phone is narrow: its figure steps down a size so a five-digit balance fits */
+.hosted-devices-phone .landing-mock-amount {
+  font-size: var(--text-headline);
+}
+
+.hosted-devices-client {
+  font-family: var(--font-heading);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-headline);
+  color: var(--text);
+  margin-block-end: var(--space-2);
+}
+
+:lang(ar) .hosted-devices-client {
+  font-family: var(--font-heading-ar);
+}
+
+.hosted-devices-caption {
+  position: absolute;
+  inset-inline-start: 0;
+  bottom: 0;
+  max-width: 50%;
+  margin: 0;
+  font-size: var(--text-label);
+  color: var(--text-secondary);
+}
+
+/* On a phone the chapter stacks laptop, phone and caption: the portal half of the picture stays */
+@media (max-width: 640px) {
+  .landing-chapter .hosted-devices {
+    position: static;
+    display: grid;
+    gap: var(--space-4);
+    justify-items: center;
+    min-height: 0;
+  }
+
+  .landing-chapter .hosted-devices .landing-mock,
+  .landing-chapter .hosted-devices .hosted-devices-caption {
+    position: static;
+  }
+
+  .landing-chapter .hosted-devices .hosted-devices-laptop {
+    width: 100%;
+  }
+
+  .landing-chapter .hosted-devices .hosted-devices-caption {
+    max-width: none;
+  }
+}

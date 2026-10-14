@@ -65,3 +65,23 @@ describe('ChapterSection reveal', () => {
     expect(renderChapter()).not.toHaveAttribute('data-reveal');
   });
 });
+
+describe('ChapterSection extra slot (MUT-173)', () => {
+  it('renders the extra inside the copy column, after the body', () => {
+    placeAt(100);
+    render(
+      <ChapterSection part="phone" title="Title" body="Body" visual={<div>visual</div>} extra={<p data-testid="extra">more</p>} />,
+    );
+    const copy = document.querySelector('.landing-chapter-copy')!;
+    const extra = copy.querySelector('[data-testid="extra"]')!;
+    expect(extra).toBeInTheDocument();
+    expect(copy.querySelector('.landing-chapter-body')!.compareDocumentPosition(extra) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector('.landing-chapter-visual')!.contains(extra)).toBe(false);
+  });
+
+  it('renders nothing extra by default', () => {
+    placeAt(100);
+    renderChapter();
+    expect(document.querySelector('.landing-chapter-copy')!.children).toHaveLength(2);
+  });
+});
