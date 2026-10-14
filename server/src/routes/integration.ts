@@ -83,7 +83,7 @@ export function integrationRoutes(store: LedgerStore, version: string): OpenAPIH
         200: { description: 'Already bound to this tenant', content: { 'application/json': { schema: BindIntegrationResponseSchema } } },
         201: { description: 'Bound', content: { 'application/json': { schema: BindIntegrationResponseSchema } } },
         409: {
-          description: 'Bound to a different tenant, the tenant is bound to another organization, or this is a personal profile (CONFLICT, details.reason PERSONAL_PROFILE)',
+          description: 'Bound to a different tenant, the tenant is bound to another organization, or this is a profile a person owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE)',
           content: { 'application/json': { schema: ErrorEnvelopeSchema } },
         },
         422: { description: 'Validation or idempotency-key failure', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },

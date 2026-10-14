@@ -15,6 +15,9 @@ import type { PricingBasis, VatTreatment } from '../vat.js';
  * one for tests — both run against the same contract test suite.
  */
 
+/** MUT-182: an owned profile's kind. It only selects the expense-category preset; BUSINESS is not a firm or a Malafat tenant. */
+export type ProfileType = 'PERSONAL' | 'BUSINESS';
+
 export interface Organization {
   id: string;
   name: string;
@@ -23,6 +26,12 @@ export interface Organization {
   timezone: string;
   /** MUT-120: the owner of a user's one personal organization; null on every firm. */
   personalOwnerUserId: string | null;
+  /** MUT-182: the user who owns and controls this profile (theirs to rename and retype); null on every operator firm. Not unique. */
+  ownerUserId: string | null;
+  /** MUT-182: set exactly when ownerUserId is; always PERSONAL on the MUT-120 profile. */
+  profileType: ProfileType | null;
+  /** MUT-182: If-Match for PATCH /v1/profiles/{id}. */
+  version: number;
   createdAt: Date;
 }
 
@@ -140,12 +149,100 @@ export type IdempotencyClaim =
   | { kind: 'in_progress' }
   | { kind: 'mismatch' };
 
+/** MUT-182: a profile a signed-in user creates for themselves (POST /v1/profiles). Standalone: never keyed, bound or shared. */
+export interface CreateOwnedOrganizationInput {
+  name: string;
+  slug: string;
+  defaultCurrency: string;
+  timezone: string;
+  profileType: ProfileType;
+  at: Date;
+}
+
+/**
+ * MUT-182 (qa-reconcile D3): who is acting, for the audit rows createOwned and
+ * updateOwned write inside their own transaction — so a profile, or a type
+ * change, never commits without its record, and a failed audit can never
+ * turn a client's retry into a second profile.
+ */
+export interface OwnedProfileAudit {
+  actorId: string;
+  requestId: string | null;
+}
+
+export interface UpdateOwnedProfileAudit extends OwnedProfileAudit {
+  /** The request body's keys, for `organization.updated`. */
+  fields: string[];
+  /** The preset a type change seeds, for `organization.type_changed` and `expense_category.seeded`; null without a type change. */
+  preset: { name: string; locale: string } | null;
+}
+
+export type CreateOwnedOrganizationResult =
+  | { kind: 'created'; organization: Organization; membership: MembershipRecord }
+  /** The user already owns `count` profiles, the cap or more; nothing was written. */
+  | { kind: 'limit'; count: number };
+
+/** Absent key = unchanged. A `profileType` equal to the current one changes nothing about the categories. */
+export interface UpdateOwnedOrganizationPatch {
+  name?: string;
+  defaultCurrency?: string;
+  profileType?: ProfileType;
+}
+
+/** What a type change does to a profile's expenses and categories (MUT-182: it replaces the categories). */
+export interface ProfileTypeChange {
+  /** Live (not deleted) expenses that had a category and are left uncategorized. */
+  uncategorizedExpenses: number;
+  /** Every category the profile had, custom and archived ones included. */
+  deletedCategories: number;
+}
+
+export type UpdateOwnedOrganizationResult =
+  | { kind: 'updated'; record: Organization; typeChange: ProfileTypeChange | null }
+  | { kind: 'stale'; record: Organization }
+  /** No such profile, or not owned by this user (an operator firm included). */
+  | { kind: 'not_found' };
+
 export interface OrganizationRepository {
   create(input: CreateOrganizationInput): Promise<Organization>;
   getById(id: string): Promise<Organization | null>;
   getBySlug(slug: string): Promise<Organization | null>;
   /** Every organization, oldest first (M5 reconcile script). */
   list(): Promise<Organization[]>;
+  /**
+   * MUT-182: the profile and its owner's membership, in one transaction that
+   * counts the user's owned profiles (MUT-120's included) under a lock on the
+   * user's row, so two concurrent creates can never both pass `cap`. The cap
+   * guards creation only: post-roll's personal-profile backfill for a legacy
+   * user with none (MUT-120) does not consult it, so such a user can end one
+   * over (accepted; the backfill is a one-time repair).
+   */
+  createOwned(ownerUserId: string, input: CreateOwnedOrganizationInput, cap: number, audit: OwnedProfileAudit): Promise<CreateOwnedOrganizationResult>;
+  /** Profiles the user owns: `ownerUserId`, or a MUT-120 profile the old revision wrote before post-roll stamped it (qa-reconcile D1). */
+  countOwnedBy(userId: string): Promise<number>;
+  /**
+   * MUT-182 (eng review D4): the one versioned write behind PATCH
+   * /v1/profiles/{id}. In one transaction, holding the organization's row
+   * (D3): the version check, the field changes, and — when `profileType`
+   * changes — every expense's category cleared, every category deleted and
+   * `preset` inserted. One version bump. Throws when asked to make the
+   * MUT-120 profile anything but PERSONAL (a CHECK constraint in Postgres).
+   * A MUT-120 profile the old revision wrote without an owner (qa-reconcile
+   * D1) is owned through `personalOwnerUserId` and gets stamped on its first
+   * update. Audit rows go in the same transaction (D3); a type change's row
+   * lists the removed categories and each expense's lost category (D4).
+   */
+  updateOwned(
+    id: string,
+    ownerUserId: string,
+    expectedVersion: number,
+    patch: UpdateOwnedOrganizationPatch,
+    preset: readonly ExpenseCategoryInput[] | null,
+    at: Date,
+    audit: UpdateOwnedProfileAudit,
+  ): Promise<UpdateOwnedOrganizationResult>;
+  /** What a type change would do right now (the preview). */
+  typeChangeImpact(id: string): Promise<ProfileTypeChange>;
 }
 
 export interface ApiKeyRepository {
@@ -1407,7 +1504,10 @@ export interface ExpenseCategoryRepository {
   getById(organizationId: string, id: string): Promise<ExpenseCategoryRecord | null>;
   /** Creation order. */
   list(organizationId: string, options: { includeArchived: boolean }): Promise<ExpenseCategoryRecord[]>;
-  /** Inserts the preset only into an organization with no categories at all; true when it did. Concurrent seeds insert it once. */
+  /**
+   * Inserts the preset only into an organization with no categories at all; true when it did. Concurrent seeds insert it once.
+   * Holds the organization's row (MUT-182 D3), so a seed and a type change (`organizations.updateOwned`) never interleave.
+   */
   seed(organizationId: string, preset: readonly ExpenseCategoryInput[], at: Date): Promise<boolean>;
   /** UniqueViolation on a rename onto a taken name. */
   update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpenseCategoryPatch, at: Date): Promise<UpdateResult<ExpenseCategoryRecord>>;

@@ -2300,3 +2300,30 @@ Run: `npx vitest run src/hosted src/components/ui/__tests__` — 55 files / 704 
 | /qa-reconcile fixes | contract: `bot-field` carries no autofill meaning; `request-id` encoded; limits 200/254/40/4000 at the boundary; error codes `required` / `invalid` / `tooLong`. Page: honeypot inside `[hidden]`; `maxLength` on every field; over-long → "Keep this under N characters."; language switched after load → sent as `ar`; a form submit while sending → one POST; retry and edit-resend reuse one `request-id`. `marketingPath.test.ts`: trailing slash dropped once, `/` kept. Privacy: Akismet, IP address, 12 months; Netlify in Sharing; the form named in Scope and Network. `vite-config.test.ts`: the `/hosted` card (og:url `/hosted`, Arabic hero), `withPageMeta` swaps the tags and title, escapes them and keeps the scripts, the plugin emits `hosted-offer.html` (web only), and `netlify.toml` serves it ahead of `/*`, outside the precache. QA `@web.landing.hosted-slash` |
 
 Run: `npx vitest run src/pages/landing scripts/__tests__/vite-config.test.ts`; QA on a dev or preview server with `QA_CONTEXT` pointing `web` at it. **Not testable locally:** Netlify registering the form and emailing it (INFRA §1, post-deploy check).
+
+## MUT-182 — profile management API (2026-10-14)
+
+| Suite | Cases |
+|---|---|
+| `server/src/repositories/__tests__/store-contract-profiles.ts` (memory + Postgres) | MUT-120 profile owned + PERSONAL at v1; firms unowned; createOwned + membership; cap counts personal, refuses past it writing nothing; granted firm not counted; **C4** two concurrent creates at cap−1 → one created (PG); **C10** type change racing the first seed → one preset (PG, D3); updateOwned versioned, stale; not_found for another owner and a firm; type change uncategorizes live + deleted expenses (version bump), deletes custom + archived categories, seeds preset; same type keeps categories; name + type one bump (D4); stale changes nothing; built-in personal can't become BUSINESS (D2); expense with missing category → FK |
+| `server/src/repositories/__tests__/migration-mut182.test.ts` (PG) | backfill: personal → owned + PERSONAL, firm untouched; both CHECKs fire; rest of history ends at the schema (`migrate diff --exit-code`) |
+| `server/src/__tests__/routes-profiles.test.ts` | R1 shape + ownership; R2 replay / key reuse / missing key; R3 seven invalid bodies; R4 audit; R5 cap 409 PROFILE_LIMIT (firm member); device session creates; R6/R7 rename + currency, project keeps its currency; R8 stale/garbage If-Match; empty body; R9 type change: preset in Arabic, expense uncategorized, audit rows; R16 name + type together; R11 404 stranger/unknown, 403 NOT_OWNER on a firm; R15 personal: 409 retype, rename OK; R10 preview == result, same type zeros, 404/422; R13 `/v1/me` owned/type/version/order/limits; R14 owned BUSINESS takes customer, project, received, owed, settle, expense |
+| `server/src/__tests__/routes-owned-profiles-standalone.test.ts` | BUSINESS and extra PERSONAL: no API key (S1), planted key refused at bind and on a ledger route (S2/S3), no grant to another user (S4), not a provisioning target (S5), owner's membership not revocable (S5); built-in profile still PERSONAL_PROFILE |
+| `server/src/__tests__/routes-expenses.test.ts` › R17 | category deleted between check and write → 422 CATEGORY_NOT_FOUND on create and PATCH |
+| `server/src/scripts/__tests__/post-roll.test.ts` (PG) | backfilled personal profile owned + PERSONAL; settings taken from an operator firm, never an owned profile |
+| `server/src/expenses/__tests__/presets.test.ts` | selector by type: PERSONAL → personal, BUSINESS / null → general, Malafat wins |
+| `src/hosted/data/__tests__/incomeAffordances.test.ts`, `src/hosted/pages/__tests__/views.test.tsx` | created BUSINESS profile → both kinds + settle, no lock notice, Add income; writer-null firm (not owned) → nothing |
+
+Run: `npm --prefix server test` (88 files / 1697 tests), `MUTABA3A_TEST_DATABASE_URL=… npx vitest run` on a fresh migrated DB for the Postgres suites, `npx vitest run src/hosted` (30 files / 286 tests). Regression contract: MUT-120's existing tests (routes-users, routes, routes-sessions, store-contract-users) pass unchanged.
+
+### MUT-182 qa-reconcile additions (2026-10-14)
+| Suite | Cases |
+|---|---|
+| `store-contract-profiles.ts` | create writes `organization.created` + `membership.granted` as the person; type change records `removedCategories` + `uncategorized` pairs, `organization.updated` fields, SYSTEM seed; stale writes no audit; D2 refusal leaves categories, expense and audit untouched; **C11** category create racing a retype (PG); **C12** expense moving between categories racing a retype (PG, 5 rounds) |
+| `routes-owned-profiles-standalone.test.ts` | an unstamped personal profile is still refused a key and a grant (PERSONAL_PROFILE) and still counts — proven red on the old single-column guard |
+| `routes-profiles.test.ts` | `/me` order = membership order; unstamped personal shows owned + PERSONAL and its rename stamps it; its first category list seeds the personal preset (proven red on the old line); preview refuses the built-in profile (409) and a firm (403 NOT_OWNER) |
+| `inbox-filing.test.ts` | filing whose category a type change deleted → 422 CATEGORY_NOT_FOUND, entry kept, no expense |
+| `post-roll.test.ts` | `repairPersonalOwnership` stamps an unstamped personal profile, idempotent; `updateOwned` stamps it too |
+| `migration-mut182.test.ts` | an old-shape personal insert after the migration is accepted and stays unstamped |
+
+Run: targeted suites only (owner's request) — 23 files / 984 tests, then 12 files / 358 tests after cycle 2, on a freshly migrated `mutaba3a_test_mut182`; portal 30 files / 286.

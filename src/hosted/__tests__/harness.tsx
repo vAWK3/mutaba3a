@@ -46,6 +46,10 @@ export function profile(overrides: Partial<HostedProfile> = {}): HostedProfile {
     // What /v1/me publishes for a Malafat-fed profile (MUT-61, MUT-120).
     income: { received: true, owed: false, customer: 'linked-required' },
     isPersonalDefault: false,
+    // MUT-182: a firm — nobody's own profile, untyped.
+    owned: false,
+    type: null,
+    version: 1,
     ...overrides,
   };
 }
@@ -54,6 +58,7 @@ export function me(profiles: HostedProfile[] = [profile()], locale: 'en' | 'ar' 
   return {
     user: { id: '99999999-9999-4999-8999-999999999999', email: 'nour@firm.ps', displayName: 'Nour Haddad', locale },
     profiles,
+    limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },
   };
 }
 

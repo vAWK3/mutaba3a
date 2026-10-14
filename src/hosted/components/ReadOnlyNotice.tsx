@@ -8,15 +8,16 @@ import { LockIcon } from './Icons';
  * IncomeDrawer locked-notice pattern: reason and next step, `role="note"`. The
  * reason comes from the profile the server described, not a hard-coded list.
  *
- * A personal profile (MUT-93) is checked before the read-write early return.
- * Since MUT-133 it can write income from the portal, so it gets no notice,
- * the rule every other writable profile already follows (design review 12A).
- * The personal copy remains only as the fallback for a personal profile whose
- * published rules ever offer no income writes.
+ * A profile the user owns (MUT-93's personal one, or one they created,
+ * MUT-182) is checked before the read-write early return. Since MUT-133 it can
+ * write income from the portal, so it gets no notice, the rule every other
+ * writable profile already follows (design review 12A). The personal copy
+ * remains only as the fallback for an owned profile whose published rules ever
+ * offer no income writes.
  */
 export function ReadOnlyNotice({ profile }: { profile: HostedProfile }) {
   const t = useT();
-  if (profile.isPersonalDefault) {
+  if (profile.owned) {
     if (incomeAffordancesFor(profile).kinds.length > 0) return null;
     return (
       <p className="hp-readonly" role="note">

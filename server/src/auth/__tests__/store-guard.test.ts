@@ -113,6 +113,20 @@ describe('storeRefusal on the three profile-dependent rows (MUT-65)', () => {
   });
 });
 
+describe('owned profiles (MUT-182)', () => {
+  it('gives a person their own standalone profiles through sessionOnly methods, and an API key none of them (G1)', () => {
+    const owned = ['createOwned', 'countOwnedBy', 'updateOwned', 'typeChangeImpact'] as const;
+    for (const method of owned) {
+      const access = STORE_ACCESS.organizations[method];
+      expect(access, method).toBe('sessionOnly');
+      expect(storeRefusal('session', null, access), method).toBeNull();
+      expect(storeRefusal('apiKey', null, access)?.code, method).toBe('PRINCIPAL_NOT_ACCEPTED');
+    }
+    // Firms and Malafat tenants still come only from the operator (ADR-037 decision 1, MUT-182 amendment).
+    expect(storeRefusal('session', null, STORE_ACCESS.organizations.create)?.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+  });
+});
+
 describe('the inbox (MUT-66)', () => {
   it('accepts a session and no other principal for the five session-only methods', () => {
     expect(storeRefusal('session', null, 'sessionOnly')).toBeNull();

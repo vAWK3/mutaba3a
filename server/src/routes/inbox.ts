@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, todayFor, validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
-import { assertCategoryChoosable, resolveLinks } from '../expenses/compose.js';
+import { assertCategoryChoosable, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
 import { identityIdempotent, idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
@@ -187,25 +187,27 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const links = await resolveLinks(store, organization.id, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
       if (body.categoryId) await assertCategoryChoosable(store, organization.id, body.categoryId);
 
-      const filed = await store.inboxEntries.fileAsExpense(
-        {
-          userId: user.id,
-          inboxEntryId: entry.id,
-          kind: 'EXPENSE',
-          expense: {
-            organizationId: organization.id,
-            occurredOn: entry.occurredOn,
-            amountMinor: entry.amountMinor,
-            currency: entry.currency,
-            title: body.title ?? null,
-            vendor: body.vendor ?? null,
-            categoryId: body.categoryId ?? null,
-            ...links,
-            notes: entry.note,
-            createdByUserId: user.id,
+      const filed = await withCategoryForeignKey(() =>
+        store.inboxEntries.fileAsExpense(
+          {
+            userId: user.id,
+            inboxEntryId: entry.id,
+            kind: 'EXPENSE',
+            expense: {
+              organizationId: organization.id,
+              occurredOn: entry.occurredOn,
+              amountMinor: entry.amountMinor,
+              currency: entry.currency,
+              title: body.title ?? null,
+              vendor: body.vendor ?? null,
+              categoryId: body.categoryId ?? null,
+              ...links,
+              notes: entry.note,
+              createdByUserId: user.id,
+            },
           },
-        },
-        now,
+          now,
+        ),
       );
       if (filed.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such inbox entry');
 

@@ -28,6 +28,38 @@
 
 ---
 
+## [Unreleased] - 2026-10-14 — MUT-182: people create and manage their own hosted profiles (API 1.22.0-mut182)
+
+**Why:** a hosted user got exactly one personal profile (MUT-120); any other profile needed an operator. A freelancer with a second business had nowhere to record it. Epic MUT-181; brief and eng review `.claude/designs/mut-182-profile-management-api.md`; ADR-037 and ADR-066 amended.
+
+### Added
+- `POST /v1/profiles` — a signed-in person (cookie or device session) creates a **standalone** profile they own: name, type (PERSONAL | BUSINESS), default currency, IANA timezone. Identity-keyed idempotency, audited as the person. Up to 6 owned profiles, the personal one counted (409 `PROFILE_LIMIT`).
+- `PATCH /v1/profiles/{profileId}` — one If-Match write for name, default currency and type. A type change replaces the profile's expense categories with the new type's preset (user's language) and leaves categorized expenses uncategorized; the response reports the counts. The built-in personal profile can be renamed but not retyped (409 `DEFAULT_PERSONAL_PROFILE`). Member-not-owner → 403 `READ_ONLY_PROFILE` / `NOT_OWNER`; non-member → 404.
+- `GET /v1/profiles/{profileId}/type-change?to=` — previews those counts.
+- `GET /v1/me`: `owned`, `type`, `version` per profile and `limits { ownedProfiles, maxOwnedProfiles }`; order firms → created → personal.
+
+### Changed
+- **Standalone guarantee:** every profile a person owns is refused an API key, refused by API-key authentication (so never bound to Malafat), never granted to or provisioned into another user and never revoked from its owner — one helper, `ownedProfileConflict` (`PERSONAL_PROFILE` on the built-in profile, `OWNED_PROFILE` on a created one).
+- The expense preset keys on the profile type (ADR-066 amendment); seeding and a type change hold the organization row, so they never mix presets.
+- Portal: `incomeAffordancesFor` and `ReadOnlyNotice` key on `owned`, so Add income and Record payment work on a created business profile exactly as on the personal one.
+- An expense create/update/filing whose category was deleted by a concurrent type change answers 422 `CATEGORY_NOT_FOUND`, not 500.
+
+### Technical
+- Migration `20261014120000_mut182_owned_profiles`: `ProfileType` enum; `organizations.ownerUserId` (indexed FK, not unique), `profileType`, `version`; backfill of every MUT-120 profile as owned + PERSONAL; two CHECKs. `post-roll` creates personal profiles owned + PERSONAL and copies settings only from operator firms.
+- Store: `organizations.createOwned` (cap counted under a user-row lock), `countOwnedBy`, `updateOwned` (single versioned transaction, D4), `typeChangeImpact`; all `sessionOnly` in the store guard. Memory store mirrors the expense-category FK; Prisma P2003 names its constraint.
+- `hostedProfileFor` (serializers.ts) is the one builder for `/v1/me`, POST and PATCH. Matrix `identity` row covers `/v1/profiles*`.
+- Older migration tests (MUT-59/61/100) write organizations/users as raw rows (`fixtures/raw-rows.ts`): today's client selects columns their schemas lack.
+- **Tests:** `store-contract-profiles.ts` (memory + Postgres incl. two races), `migration-mut182.test.ts`, `routes-profiles.test.ts`, `routes-owned-profiles-standalone.test.ts`, R17 in `routes-expenses.test.ts`, `post-roll.test.ts`, `presets.test.ts`, route-security inventory, portal `incomeAffordances`/`views`.
+
+### Fixed in qa-reconcile (2026-10-14, owner answers D1–D7)
+- **Old-revision personal profiles (D1).** The CHECKs pass an unstamped personal profile (SQL NULL), which the old revision writes during the roll window or after a rollback. One helper, `profileOwnerOf`/`profileTypeOf` (`personal-profile.ts`), now answers "whose profile, what type" everywhere (key issue, key auth, grant/revoke/provision, `/v1/me`, cap count, PATCH, first category seed); the owner's first PATCH stamps it and post-roll's new `repairPersonalOwnership` stamps the rest. The CHECK spells the tolerance out. DEPLOYMENT.md: "Roll back past MUT-182" and "Delete a user who owns profiles" rows.
+- **Locks (D2, D5).** `FOR NO KEY UPDATE` on the user and organization rows, so foreign-key inserts are never blocked. Category create/rename take the organization lock; a type change locks the categorised expense rows, then the categories (the expense writers' own order, so no deadlock), and a category update no longer crashes when a type change deleted its row.
+- **Audit in the transaction (D3, D4).** `createOwned`/`updateOwned` write their audit rows inside their transactions (a failed audit can no longer leave a profile for a retry to duplicate), in distinct milliseconds; `organization.type_changed` now lists the removed categories and each expense's lost category (TD-133: unbounded, accepted).
+- **Contract.** `ProfileType`/`ProfileTypeChange` components are non-null again; the 403 NOT_OWNER doc wins; the preview refuses what PATCH refuses; `/admin` organizations show `ownerUserId`/`profileType`; `expenses_categoryId_idx` for the delete cascade; `/v1/me` sorts on rank only (D7).
+- **Tests:** unstamped-profile guards, `/me`, seed and post-roll repair; audit rows in both stores; D2 refusal leaves categories/expenses/audit intact; inbox filing race (R17); C11 category-create race and C12 expense-move race (Postgres); `/me` order. C12 does not reproduce the old deadlock deterministically, so the lock-order fix rests on its reasoning.
+
+---
+
 ## [Unreleased] - 2026-10-14 — /hosted: the case for a hosted account, and a request form (MUT-186)
 
 **Why:** free users had no way to learn that a paid hosted tier exists or to ask for it (epic MUT-185, "one front door, not one bundle"). Brief, eng review (D1–D5), design review (1A–9A) and the approved wireframe: `.claude/designs/mut-186-hosted-offer-page.md`, `mut-186-hosted-offer-wireframe.html`.

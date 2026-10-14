@@ -1,6 +1,7 @@
 import { assertIsoDate, parseAmount, validationError } from '../agreements/compose.js';
 import type { IsoDate } from '../dates.js';
 import type { Currency } from '../money.js';
+import { ForeignKeyViolation } from '../repositories/memory.js';
 import type { ExpenseRecord, LedgerStore, UpdateExpensePatch } from '../repositories/ports.js';
 
 /**
@@ -58,6 +59,22 @@ export function requestedLinks(existing: ExpenseRecord, body: { customerId?: str
   const projectId = body.projectId !== undefined ? body.projectId : existing.projectId;
   const customerId = body.customerId !== undefined ? body.customerId : body.projectId ? null : existing.customerId;
   return { customerId, projectId };
+}
+
+/**
+ * MUT-182 R17: changing a profile's type deletes its categories, so one can
+ * vanish between `assertCategoryChoosable` and the write that names it. The
+ * foreign key catches it; answer exactly as the check would have, not 500.
+ */
+export async function withCategoryForeignKey<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (err) {
+    if (err instanceof ForeignKeyViolation && err.constraint.includes('categoryId')) {
+      throw validationError('CATEGORY_NOT_FOUND', 'No such category in this profile', { field: 'categoryId' });
+    }
+    throw err;
+  }
 }
 
 /** A category chosen for an expense must be the profile's and not archived. */

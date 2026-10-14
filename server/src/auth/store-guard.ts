@@ -15,8 +15,9 @@ import { mayRead, mayWriteFor, writeRefusal, type Domain, type Principal, type P
  *  - `control`  — bookkeeping every request needs (audit rows, idempotency
  *                 claims, last-used stamps); any principal.
  *  - `operator` — provisioning that only /admin and the operator scripts do
- *                 (organizations, keys, users, memberships); refused under
+ *                 (firm organizations, keys, users, memberships); refused under
  *                 every guard, which keeps ADR-037 decision 1 true below the routes.
+ *                 A person's own standalone profiles (MUT-182) are `sessionOnly`.
  *  - `{ write }` — a write in one matrix domain; allowed only where the
  *                 principal's column is `read-write`.
  *  - `sessionOnly` — a signed-in person's own resource, belonging to no
@@ -34,7 +35,18 @@ type Repositories = Omit<LedgerStore, 'ping'>;
 export type StoreAccess = { readonly [R in keyof Repositories]: { readonly [M in keyof Repositories[R]]-?: MethodAccess } };
 
 export const STORE_ACCESS: StoreAccess = {
-  organizations: { create: 'operator', getById: 'read', getBySlug: 'read', list: 'read' },
+  organizations: {
+    create: 'operator',
+    getById: 'read',
+    getBySlug: 'read',
+    list: 'read',
+    // MUT-182: a person's own standalone profiles. Owner checks live in the queries (`ownerUserId`); an API key has no
+    // person behind it, so it can neither create nor change one, and `create` (firms, Malafat tenants) stays operator-only.
+    createOwned: 'sessionOnly',
+    countOwnedBy: 'sessionOnly',
+    updateOwned: 'sessionOnly',
+    typeChangeImpact: 'sessionOnly',
+  },
   apiKeys: {
     create: 'operator',
     findByPrefix: 'read',

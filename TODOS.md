@@ -128,3 +128,17 @@
 
 **Depends on / blocked by:** Nothing.
 
+
+## 13. Owned hosted profiles can't be archived, so the cap of 6 can lock a user out — ticketed as MUT-193
+
+**What:** MUT-182 lets a user create up to 6 owned profiles (`MAX_OWNED_PROFILES`, `server/src/routes/profiles.ts`), and nothing can archive or delete one. MUT-181 ruled that out of scope for v1.
+
+**Why:** A user who creates a few test profiles reaches the cap for good. Only an operator editing the database can free a slot.
+
+**Pros of fixing:** Users can recover from a mistake on their own, and the cap stays a soft guardrail rather than a trap.
+
+**Cons / cost / risk:** It needs product calls on restore versus archive-only, on hard delete, and on how clients show an archived profile. Archived profiles must also drop out of `/v1/me` and the capture targets without breaking Flutter's default capture profile.
+
+**Context:** Found in MUT-182's eng review (2026-10-14, D5). Start at `organizations.createOwned` and `countOwnedBy` (the cap count would exclude archived profiles) and at `hostedProfileFor` in `server/src/serializers.ts`. The built-in Personal profile (MUT-120) must never be archivable.
+
+**Depends on / blocked by:** MUT-182.

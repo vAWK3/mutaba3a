@@ -2,7 +2,8 @@ import type { Context, MiddlewareHandler } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { matchedRoutes } from 'hono/route';
 import type { PostingActor } from '../agreements/posting.js';
-import { ApiError, personalProfileConflict } from '../errors.js';
+import { ApiError, ownedProfileConflict } from '../errors.js';
+import { profileOwnerOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { ApiKeyRecord, LedgerStore, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
@@ -228,8 +229,9 @@ async function authenticateApiKey(c: Context<AppEnv>, presented: string, options
 
   const organization = await options.store.organizations.getById(record.organizationId);
   if (!organization) throw new ApiError('INVALID_API_KEY', 'The API key is not attached to an organization');
-  // MUT-120: no key is ever issued for a personal profile (admin.ts); one that exists anyway reaches nothing.
-  if (organization.personalOwnerUserId) throw personalProfileConflict('A personal profile cannot be reached with an API key');
+  // MUT-120/182: no key is ever issued for a profile a person owns (admin.ts); one that exists anyway reaches nothing —
+  // which is also what keeps such a profile from ever being bound to Malafat (/v1/integration/bind takes a key).
+  if (profileOwnerOf(organization)) throw ownedProfileConflict(organization, 'A profile a person owns cannot be reached with an API key');
 
   await enforceRateLimit(c, options.rateLimiter, record.id, now, 'Too many requests for this API key');
   await options.store.apiKeys.touchLastUsed(record.id, now);
