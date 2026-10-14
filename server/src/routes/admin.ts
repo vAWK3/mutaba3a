@@ -3,7 +3,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { MiddlewareHandler } from 'hono';
 import { generateApiKey, type ApiKeyEnvironment } from '../auth/api-key.js';
 import type { AppEnv } from '../auth/middleware.js';
-import { ApiError, personalProfileConflict } from '../errors.js';
+import { ApiError, ownedProfileConflict } from '../errors.js';
 import { UniqueViolation } from '../repositories/memory.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import {
@@ -137,7 +137,7 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
       responses: {
         201: { description: 'Issued', content: { 'application/json': { schema: CreateApiKeyResponseSchema } } },
         404: { description: 'Unknown organization', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
-        409: { description: 'A personal profile cannot hold an API key (CONFLICT, details.reason PERSONAL_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        409: { description: 'A profile a person owns cannot hold an API key (CONFLICT, details.reason PERSONAL_PROFILE on the built-in personal profile, OWNED_PROFILE on one they created)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         422: { description: 'Validation failed', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
       },
@@ -147,7 +147,7 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
       const body = c.req.valid('json');
       const org = await store.organizations.getById(organizationId);
       if (!org) throw new ApiError('NOT_FOUND', 'Organization not found');
-      if (org.personalOwnerUserId) throw personalProfileConflict('A personal profile cannot hold an API key');
+      if (org.ownerUserId) throw ownedProfileConflict(org, 'A profile a person owns cannot hold an API key');
       const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
       if (expiresAt && expiresAt.getTime() <= c.get('now')().getTime()) {
         throw new ApiError('VALIDATION_FAILED', 'expiresAt must be in the future');
