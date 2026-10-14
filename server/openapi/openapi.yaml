@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.23.0-mut194
+  version: 1.24.0-mut209
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -5006,7 +5006,9 @@ components:
           minLength: 1
           maxLength: 200
         locale:
-          $ref: "#/components/schemas/UserLocale"
+          allOf:
+            - $ref: "#/components/schemas/UserLocale"
+            - description: Defaults to ar (MUT-209); the portal adopts it after sign-in.
         organizationId:
           type: string
           format: uuid

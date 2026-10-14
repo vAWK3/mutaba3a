@@ -8,6 +8,9 @@ import { ToastProvider } from '../Toast';
 import { ConversionDrawer } from '../ConversionDrawer';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 
+// The portal opens in Arabic until a person chooses (MUT-209); these cases speak English, so choose it as a person would
+beforeEach(() => localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en'));
+
 const fetchMock = vi.fn();
 
 function ok(body: unknown, status = 200) {

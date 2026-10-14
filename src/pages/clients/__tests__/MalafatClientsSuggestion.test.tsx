@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import { renderWithProviders, screen, userEvent, createMockBusinessProfile, createMockClient } from '../../../test/utils';
 import { useMalafatMomentStore } from '../../../lib/malafatMomentStore';
 import type { MalafatSuggestions } from '../../../lib/malafatSuggestions';
@@ -32,7 +33,7 @@ const clientsFor = (profileId: string, n: number) =>
   Array.from({ length: n }, (_, i) => createMockClient({ id: `${profileId}-c${i}`, profileId }));
 
 beforeEach(() => {
-  localStorage.setItem('mutaba3a-language', 'en');
+  chooseLanguage('en');
   state.suggestions = { on: true, dismissed: [] };
   state.profiles = [createMockBusinessProfile({ id: 'p1' })];
   state.activeProfileId = 'p1';
@@ -124,7 +125,7 @@ describe('MalafatClientsSuggestion', () => {
   });
 
   it('reads in Arabic', () => {
-    localStorage.setItem('mutaba3a-language', 'ar');
+    chooseLanguage('ar');
     state.clients = clientsFor('p1', 10);
     renderWithProviders(<MalafatClientsSuggestion onGone={vi.fn()} />);
     expect(screen.getByRole('group', { name: ar.clients.malafat.label })).toHaveTextContent(ar.clients.malafat.clientThreshold);

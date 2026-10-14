@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import { renderWithProviders, screen, waitFor } from '../../../test/utils';
 import userEvent from '@testing-library/user-event';
 import en from '../../../lib/i18n/translations/en.json';
@@ -16,7 +17,6 @@ vi.mock('../../../utils/backupDownload', () => ({ backUpNow }));
 // getRepositories().base.dataset.wipeCoreData delegates to this (MUT-47).
 vi.mock('../../../db/seed', () => ({ deleteAllData }));
 
-const LANGUAGE_KEY = 'mutaba3a-language';
 const copy = (locale: typeof en) => locale.settings.data.deleteModal;
 
 function renderModal() {
@@ -78,7 +78,7 @@ describe('DeleteAllDataModal', () => {
   });
 
   it('asks for the Arabic word in Arabic', async () => {
-    localStorage.setItem(LANGUAGE_KEY, 'ar');
+    chooseLanguage('ar');
     renderModal();
     await backUp(ar as typeof en);
 

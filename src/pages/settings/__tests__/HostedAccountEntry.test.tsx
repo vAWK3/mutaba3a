@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import { renderWithProviders, screen } from '../../../test/utils';
 import en from '../../../lib/i18n/translations/en.json';
 import ar from '../../../lib/i18n/translations/ar.json';
 import { HOSTED_OFFER_URL } from '../../../content/download-config';
 import { HostedAccountEntry } from '../HostedAccountEntry';
 
-const LANGUAGE_KEY = 'mutaba3a-language';
 const PORTAL = 'https://portal.test';
 const LOCALES = [
   ['en', en],
@@ -18,7 +18,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('HostedAccountEntry (MUT-187)', () => {
   describe.each(LOCALES)('in %s', (language, locale) => {
     it('explains hosted in one sentence and links to /hosted and the portal, each in a new tab', () => {
-      localStorage.setItem(LANGUAGE_KEY, language);
+      chooseLanguage(language);
       vi.stubGlobal('__PORTAL_URL__', PORTAL);
       renderWithProviders(<HostedAccountEntry />);
 

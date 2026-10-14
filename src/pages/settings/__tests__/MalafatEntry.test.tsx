@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import { act, renderWithProviders, screen, userEvent, createMockBusinessProfile } from '../../../test/utils';
 import type { MalafatSuggestions } from '../../../lib/malafatSuggestions';
 import { useMalafatMomentStore } from '../../../lib/malafatMomentStore';
@@ -27,7 +28,7 @@ vi.mock('../../../hooks/useQueries', () => ({
 const T = en.settings.profile.malafat;
 
 beforeEach(() => {
-  localStorage.setItem('mutaba3a-language', 'en');
+  chooseLanguage('en');
   state.suggestions = { on: true, dismissed: [] };
   state.profiles = [createMockBusinessProfile({ id: 'p1' })];
   state.retire.mockReset();
@@ -112,7 +113,7 @@ describe('MalafatEntry', () => {
   });
 
   it('reads in Arabic', () => {
-    localStorage.setItem('mutaba3a-language', 'ar');
+    chooseLanguage('ar');
     renderWithProviders(<MalafatEntry />);
     expect(screen.getByText(ar.settings.profile.malafat.text)).toBeInTheDocument();
     expect(screen.getByRole('link').getAttribute('href')).toContain('/ar/contact');

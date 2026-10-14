@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import { screen, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '../../../test/utils';
 import { db } from '../../../db/database';
@@ -6,7 +7,7 @@ import { useSampleSessionStore } from '../../../demo/sampleSessionStore';
 import { WelcomeModal } from '../WelcomeModal';
 
 beforeEach(async () => {
-  localStorage.setItem('mutaba3a-language', 'en');
+  chooseLanguage('en');
   await db.businessProfiles.clear();
 });
 

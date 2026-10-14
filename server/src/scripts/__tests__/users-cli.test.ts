@@ -58,7 +58,7 @@ describe('users CLI (npm run provision:user and friends)', () => {
     const [membership] = memberships;
     const personal = (await h.store.organizations.getById(membership!.organizationId))!;
     expect(personal).toMatchObject({ personalOwnerUserId: user.id, defaultCurrency: 'USD', timezone: 'Asia/Hebron' });
-    expect(h.out).toContain(`personal ${personal.id} Personal`);
+    expect(h.out).toContain(`personal ${personal.id} شخصي`);
   });
 
   it('grant and revoke resolve the user by email', async () => {

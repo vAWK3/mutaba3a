@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '../../../test/utils';
 import { useSampleSessionStore } from '../../../demo/sampleSessionStore';
@@ -20,7 +21,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 beforeEach(() => {
-  localStorage.setItem('mutaba3a-language', 'en');
+  chooseLanguage('en');
   sample.additions = 0;
   sample.leave.mockClear();
   navigate.mockClear();

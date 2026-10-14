@@ -70,7 +70,9 @@ describe('POST /admin/v1/users', () => {
     const text = await res.text();
     expect(text).not.toContain('$argon2id$');
     const body = JSON.parse(text);
-    expect(body.user).toMatchObject({ email: 'partner@firm.ps', displayName: 'Nour Haddad', locale: 'en', status: 'ACTIVE' });
+    // MUT-209: a new account is Arabic unless the operator asks otherwise, and so is its personal profile's name
+    expect(body.user).toMatchObject({ email: 'partner@firm.ps', displayName: 'Nour Haddad', locale: 'ar', status: 'ACTIVE' });
+    expect(body.personalProfile.name).toBe('شخصي');
     expect(body.user).not.toHaveProperty('passwordHash');
     expect(body.memberships).toEqual([
       { organizationId: body.personalProfile.id, createdAt: '2026-10-11T09:00:00.000Z' },
@@ -82,12 +84,12 @@ describe('POST /admin/v1/users', () => {
     expect(await hasher.verify(stored!.passwordHash, body.initialPassword)).toBe(true);
   });
 
-  it('accepts locale ar', async () => {
+  it('accepts locale en when the operator asks for it', async () => {
     const h = harness();
     const org = await organization(h);
-    const res = await h.app.request('/admin/v1/users', send('POST', { email: 'ar@firm.ps', displayName: 'نور', locale: 'ar', organizationId: org.id }));
+    const res = await h.app.request('/admin/v1/users', send('POST', { email: 'en@firm.ps', displayName: 'Nour', locale: 'en', organizationId: org.id }));
     expect(res.status).toBe(201);
-    expect((await read(res)).user.locale).toBe('ar');
+    expect((await read(res)).user.locale).toBe('en');
   });
 
   it('refuses a reused email in any case or spacing with 409', async () => {
@@ -132,10 +134,11 @@ describe('personal profile (MUT-120)', () => {
     const res = await h.app.request('/admin/v1/organizations', send('POST', { name: 'Haddad & Co', defaultCurrency: 'USD', timezone: 'Asia/Hebron' }));
     const firm = await read(res);
     const created = await createUser(h, firm.id);
-    expect(created.personalProfile.name).toBe('Personal');
+    // Created without a locale: Arabic by default (MUT-209), so the personal profile is شخصي
+    expect(created.personalProfile.name).toBe('شخصي');
     expect(created.memberships.map((m) => m.organizationId)).toEqual([created.personalProfile.id, firm.id]);
     expect(await h.store.organizations.getById(created.personalProfile.id)).toMatchObject({
-      name: 'Personal',
+      name: 'شخصي',
       defaultCurrency: 'USD',
       timezone: 'Asia/Hebron',
       personalOwnerUserId: created.user.id,

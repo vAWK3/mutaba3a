@@ -233,7 +233,8 @@ export const CreateUserRequestSchema = z
   .object({
     email: z.string().trim().email().max(320),
     displayName: z.string().trim().min(1).max(200),
-    locale: UserLocaleSchema.default('en'),
+    /** MUT-209: Arabic unless the operator asks otherwise; the portal adopts it after sign-in. */
+    locale: UserLocaleSchema.default('ar').openapi({ description: 'Defaults to ar (MUT-209); the portal adopts it after sign-in.' }),
     /** The firm this user belongs to, if any. More are granted with POST /admin/v1/users/{userId}/memberships. */
     organizationId: z.string().uuid().optional(),
     /** The personal profile's currency (MUT-120). Required with no organizationId; otherwise it overrides the firm's. */

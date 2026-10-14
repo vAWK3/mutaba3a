@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
-import { LanguageProvider, type Language } from '../../lib/i18n';
+import { DEFAULT_LANGUAGE, LanguageProvider, type Language } from '../../lib/i18n';
 import { ThemeProvider } from '../../lib/theme';
 
 /**
  * The marketing site opens in Arabic whatever the system language (MUT-202,
- * ADR-077). It is a default, not a stored preference: the web app shares the
+ * ADR-077), like every other surface since MUT-209. It is a default, not a stored preference: the web app shares the
  * language key, and a visit here must not switch the app's language.
  */
-export const LANDING_DEFAULT_LANGUAGE: Language = 'ar';
+export const LANDING_DEFAULT_LANGUAGE: Language = DEFAULT_LANGUAGE;
 
 /**
  * Everything the web build's marketing pages (`/`, `/download`, `/privacy`,

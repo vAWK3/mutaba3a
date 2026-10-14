@@ -6,6 +6,7 @@ import { useTp } from '../../../lib/i18n/plural';
 import { api, ApiError } from '../../api/client';
 import { LanguageSwitch, Wordmark } from '../../components/Brand';
 import { ME_KEY, meQuery } from '../../session/me';
+import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
 import { safeNext } from '../../session/safeNext';
 import { CheckingSession } from './BootScreens';
 import { AlertIcon, InfoIcon } from '../../components/Icons';
@@ -62,6 +63,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
   const tp = useTp();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const adoptAccountLocale = useAdoptAccountLocale();
   const ids = useId();
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -76,6 +78,8 @@ function SignInForm({ next, reason }: SignInPageProps) {
     mutationFn: api.signIn,
     onSuccess: (me) => {
       queryClient.setQueryData(ME_KEY, me);
+      // The account's language before the first signed-in frame (MUT-209)
+      adoptAccountLocale(me.user.locale);
       void navigate({ to: safeNext(next), replace: true });
     },
     onError: (error) => {

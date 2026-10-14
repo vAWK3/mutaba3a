@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { useLanguage, useT } from '../../../lib/i18n/core';
-import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY, useAdoptAccountLocale } from '../HostedLanguageProvider';
+import { HostedLanguageProvider, PORTAL_ACCOUNT_LOCALE_KEY, PORTAL_LANGUAGE_KEY, useAdoptAccountLocale } from '../HostedLanguageProvider';
 
 /** mut-43-auth-states.md E4: a choice made in this browser wins; otherwise the account's locale applies. */
 
@@ -33,16 +33,18 @@ describe('HostedLanguageProvider', () => {
     vi.spyOn(navigator, 'language', 'get').mockReturnValue('en-US');
   });
 
-  it('serves the portal dictionary', () => {
+  it('opens in Arabic in an English browser with nothing stored, and stores nothing (MUT-209)', () => {
     mount();
-    expect(screen.getByText('Sign in')).toBeInTheDocument();
+    expect(screen.getByTestId('lang')).toHaveTextContent('ar');
+    expect(screen.getByText('تسجيل الدخول')).toBeInTheDocument();
+    expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBeNull();
   });
 
   it('adopts the account locale when this browser has no stored choice, without persisting it', () => {
     mount();
-    act(() => screen.getByText('adopt-ar').click());
-    expect(screen.getByTestId('lang')).toHaveTextContent('ar');
-    expect(screen.getByText('تسجيل الدخول')).toBeInTheDocument();
+    act(() => screen.getByText('adopt-en').click());
+    expect(screen.getByTestId('lang')).toHaveTextContent('en');
+    expect(screen.getByText('Sign in')).toBeInTheDocument();
     expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBeNull();
   });
 
@@ -53,12 +55,35 @@ describe('HostedLanguageProvider', () => {
     expect(screen.getByTestId('lang')).toHaveTextContent('en');
   });
 
-  it('persists an explicit switch, and detection alone never persists', () => {
+  it('persists an explicit switch, and the default alone never persists', () => {
     mount();
     expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBeNull();
     act(() => screen.getByText('switch').click());
-    expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBe('ar');
+    expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBe('en');
+    act(() => screen.getByText('adopt-ar').click());
+    expect(screen.getByTestId('lang')).toHaveTextContent('en');
+  });
+
+  it('remembers the adopted account locale as a hint, not a choice, so the next visit boots in it without a flip', () => {
+    mount();
     act(() => screen.getByText('adopt-en').click());
+    expect(localStorage.getItem(PORTAL_ACCOUNT_LOCALE_KEY)).toBe('en');
+    expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBeNull();
+    cleanup();
+    mount();
+    expect(screen.getByTestId('lang')).toHaveTextContent('en');
+  });
+
+  it('lets a choice in this browser beat the remembered account locale', () => {
+    localStorage.setItem(PORTAL_ACCOUNT_LOCALE_KEY, 'en');
+    localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
+    mount();
+    expect(screen.getByTestId('lang')).toHaveTextContent('ar');
+  });
+
+  it('ignores a remembered account locale that is not a language', () => {
+    localStorage.setItem(PORTAL_ACCOUNT_LOCALE_KEY, 'fr');
+    mount();
     expect(screen.getByTestId('lang')).toHaveTextContent('ar');
   });
 });

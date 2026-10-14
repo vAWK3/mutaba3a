@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import { renderWithProviders, screen, userEvent, waitFor } from '../../../test/utils';
 import { useMalafatMomentStore } from '../../../lib/malafatMomentStore';
 import { MalafatSuggestionCard } from '../MalafatSuggestionCard';
@@ -12,7 +13,7 @@ const props = {
 };
 
 beforeEach(() => {
-  localStorage.setItem('mutaba3a-language', 'en');
+  chooseLanguage('en');
   useMalafatMomentStore.getState().reset();
 });
 

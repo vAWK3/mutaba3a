@@ -1,6 +1,7 @@
 import { test, expect } from '../../support/qa';
 import { addSecondBusiness, logIncome, openFreshApp, switchToArabic } from '../../support/app';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
+import { ar } from '../../support/i18n';
 
 test(
   'switches the language to Arabic (right-to-left) and back',
@@ -150,3 +151,31 @@ test('Settings offers Malafat, says so once after a second business, and the swi
     await expect(main.getByRole('link', { name: /اطّلع على Malafat/ })).toHaveAttribute('href', /malafat\.app\/ar\/contact/);
   });
 });
+
+test.describe('in an English browser where nobody chose a language', () => {
+  test.use({ locale: 'en-US' });
+
+  test('the web app opens in Arabic until a person chooses, and English sticks once chosen (MUT-209)', { tag: '@web.settings.arabic-default' }, async ({ page, step }) => {
+    const html = page.locator('html');
+
+    await step('A first visit opens in Arabic, right to left, welcome included', async () => {
+      await page.goto('/app/');
+      await expect(html).toHaveAttribute('lang', 'ar');
+      await expect(html).toHaveAttribute('dir', 'rtl');
+      const welcome = page.getByRole('dialog', { name: ar.welcome.title });
+      await expect(welcome).toBeVisible();
+      await welcome.getByRole('button', { name: ar.onboarding.skip }).click();
+      await expect(welcome).toBeHidden();
+    });
+
+    await step('Choosing English in Settings switches the app, and it stays English after a reload', async () => {
+      await page.goto('/app/settings');
+      await page.getByRole('main').getByRole('radio', { name: 'English' }).click();
+      await expect(html).toHaveAttribute('lang', 'en');
+      await page.reload();
+      await expect(html).toHaveAttribute('lang', 'en');
+      await expect(html).toHaveAttribute('dir', 'ltr');
+    });
+  });
+});
+

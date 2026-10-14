@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { LanguageProvider, useLanguage } from '../context';
-import { I18nProvider, createTranslator, useT } from '../core';
+import { DEFAULT_LANGUAGE, I18nProvider, createTranslator, useT } from '../core';
 
 const DICT = {
   en: { greet: { hello: 'Hello, {name}' }, plain: 'Plain' },
@@ -163,3 +163,10 @@ describe('LanguageProvider with a defaultLanguage (the marketing site, MUT-202)'
     expect(screen.getByTestId('lang')).toHaveTextContent('en');
   });
 });
+
+describe('DEFAULT_LANGUAGE (MUT-209)', () => {
+  it('is Arabic: every surface opens in Arabic until a person chooses', () => {
+    expect(DEFAULT_LANGUAGE).toBe('ar');
+  });
+});
+

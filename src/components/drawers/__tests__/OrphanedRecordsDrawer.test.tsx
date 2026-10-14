@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { chooseLanguage } from '../../../test/language';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders, screen, waitFor, within, createMockBusinessProfile } from '../../../test/utils';
 import { db } from '../../../db/database';
@@ -11,7 +12,6 @@ import type { BusinessProfile, Client, Expense, Project, Transaction } from '../
 import { OrphanedRecordsDrawer } from '../OrphanedRecordsDrawer';
 
 const STAMP = '2026-10-01T00:00:00.000Z';
-const LANGUAGE_KEY = 'mutaba3a-language';
 
 type Dict = Record<string, unknown>;
 
@@ -87,7 +87,7 @@ function isOpen() {
 
 beforeEach(async () => {
   localStorage.clear();
-  localStorage.setItem(LANGUAGE_KEY, 'en');
+  chooseLanguage('en');
   useDrawerStore.getState().closeOrphanedRecordsDrawer();
   useToastStore.setState({ toasts: [] });
   await clearTables();
@@ -256,7 +256,7 @@ describe('OrphanedRecordsDrawer', () => {
   });
 
   it('renders Arabic copy, not i18n keys', async () => {
-    localStorage.setItem(LANGUAGE_KEY, 'ar');
+    chooseLanguage('ar');
     await db.businessProfiles.add(profile('p-main', 'الرئيسي', true));
     await db.clients.add(client('c-orphan', 'عميل'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

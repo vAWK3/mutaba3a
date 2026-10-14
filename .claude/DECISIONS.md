@@ -3071,6 +3071,9 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 
 ---
 
+**Amendment (2026-10-15, MUT-209)**: Basel: "everything should default to arabic". The rule now covers every surface. One `DEFAULT_LANGUAGE = 'ar'` lives in `src/lib/i18n/core.tsx`; the landing (`LandingProviders`), the web app (`main.tsx`'s `LanguageProvider defaultLanguage`) and the hosted portal (`HostedLanguageProvider`'s fallback, instead of the browser language) use it. The app therefore stops storing a detected language, and a language it stored by detection before no longer counts as a choice (the chosen mark rule). The portal still adopts the signed-in account's locale unless this browser has a choice, and the server now creates an account without `locale` as Arabic (`CreateUserRequest.locale` default `ar`, API 1.24.0-mut209); existing accounts keep their stored locale (a production data change is Basel's call). The portal remembers the last account's locale as a hint (`mutaba3a-portal-account-locale`, never a choice) and adopts it before paint, so an English account never opens in Arabic and flips. A new account without a locale also gets Arabic expense categories (they follow the locale). The Flutter app follows separately in its own repo. Supersedes the consequence "the app keeps detecting the system language until someone chooses".
+
+
 ## ADR-078: Malafat Suggestions in the Web App — Where They Live, How They Are Retired, and One Upsell on Screen
 
 **Status**: Active

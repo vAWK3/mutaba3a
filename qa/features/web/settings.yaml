@@ -55,4 +55,17 @@ features:
       - Dismissing it brings the row's own line back with focus on its link, and the dismissal is saved (no second-business card on Clients after a reload)
       - In Arabic the row reads right to left and links to Malafat in Arabic
       - The switch turns suggestions off and stays off after a reload; the row stays
+  - id: arabic-default
+    title: In an English browser where nobody chose a language, the web app opens in Arabic; choosing English in Settings sticks (MUT-209)
+    tier: secondary
+    legacy: [MUT-209]
+    paths:
+      - src/main.tsx
+      - src/lib/i18n/context.tsx
+      - src/lib/i18n/core.tsx
+    steps:
+      - With an English browser and nothing chosen, open the web app, skip the welcome, choose English in Settings, reload
+    expect:
+      - The app and its welcome open in Arabic, right to left
+      - English applies at once and stays after a reload
 

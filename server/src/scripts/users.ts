@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
  * API of a running service, like `npm run provision`. There is no other way to
  * create a user, grant access or reset a password — by design.
  *
- *   npm run provision:user  -- --url https://api.mutaba3a.app --email nour@firm.ps --name "Nour Haddad" --organization-id <uuid> [--locale ar]
+ *   npm run provision:user  -- --url https://api.mutaba3a.app --email nour@firm.ps --name "Nour Haddad" --organization-id <uuid> [--locale en]  (Arabic by default, MUT-209)
  *   npm run provision:user  -- --email solo@me.ps --name "Solo" --currency ILS --timezone Asia/Jerusalem   (no firm; MUT-120)
  *   npm run grant:user      -- --email nour@firm.ps --organization-id <uuid>
  *   npm run revoke:user     -- --email nour@firm.ps --organization-id <uuid>

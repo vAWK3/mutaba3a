@@ -5,14 +5,14 @@ import { I18nProvider, detectSystemLanguage, type Dictionary } from './core';
 import enTranslations from './translations/en.json';
 import arTranslations from './translations/ar.json';
 
-export { useLanguage, useT, useDirection, getLocale } from './core';
+export { useLanguage, useT, useDirection, getLocale, DEFAULT_LANGUAGE } from './core';
 
 const translations: Record<Language, Dictionary> = {
   en: enTranslations,
   ar: arTranslations,
 };
 
-/** The language last used, written by every surface that shares it (the app stores even a detected one). */
+/** The language last used, shared by the landing and the app; written only when a person chooses (MUT-209). */
 export const LANGUAGE_STORAGE_KEY = 'mutaba3a-language';
 /**
  * Set only when a person picks a language (the switch, Settings), never by detection (MUT-202). A surface
@@ -70,7 +70,7 @@ interface LanguageProviderProps {
  * LanguageProvider - Provides language context to the entire app
  *
  * Features:
- * - Auto-detects system language on first visit, unless given a defaultLanguage
+ * - Opens in `defaultLanguage` (every surface passes Arabic since MUT-209); without one, the system language
  * - Persists language choice to localStorage (a defaultLanguage only once someone chooses)
  * - Updates <html> lang and dir attributes (via I18nProvider)
  * - Provides t() function for translations with interpolation
