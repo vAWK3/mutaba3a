@@ -4,6 +4,12 @@ import { VitePWA, type ManifestOptions, type VitePWAOptions } from "vite-plugin-
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json";
 import ar from "./src/lib/i18n/translations/ar.json";
+import {
+  HONEYPOT_FIELD,
+  HOSTED_REQUEST_FIELDS,
+  HOSTED_REQUEST_FORM_NAME,
+  NETLIFY_FORMS_PATH,
+} from "./src/pages/landing/hostedRequest";
 
 /** Dev-only default for where `vite --mode hosted` proxies `/v1`; override with MUTABA3A_API_ORIGIN. */
 const DEFAULT_DEV_API_ORIGIN = "http://127.0.0.1:8787";
@@ -88,6 +94,35 @@ function socialMeta(): Plugin {
 }
 
 /**
+ * The hidden static twin of /hosted's request form (MUT-186). Netlify registers
+ * forms it finds in deployed HTML, and the real form is rendered by React, so
+ * the twin names every field the page posts. Its own file, not index.html or
+ * public/, because both are shared with the desktop build; noindex because it
+ * is a bare form, not a page (D2).
+ */
+export function netlifyFormsHtml(): string {
+  const fields = HOSTED_REQUEST_FIELDS.map((name) =>
+    name === "message" ? `<textarea name="${name}"></textarea>` : `<input name="${name}">`,
+  ).join("");
+  return (
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex">` +
+    `<title>${HOSTED_REQUEST_FORM_NAME}</title></head><body>` +
+    `<form name="${HOSTED_REQUEST_FORM_NAME}" data-netlify="true" netlify-honeypot="${HONEYPOT_FIELD}" hidden>${fields}</form>` +
+    `</body></html>`
+  );
+}
+
+/** Emits the form twin at the path the page posts to. Web build only: Netlify serves only the web build. */
+function netlifyForms(): Plugin {
+  return {
+    name: "mutaba3a:netlify-forms",
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: NETLIFY_FORMS_PATH.slice(1), source: netlifyFormsHtml() });
+    },
+  };
+}
+
+/**
  * The service worker's cache rules. Thmanyah (~1.2 MB of .otf, which the
  * licence forbids converting) is cached on use instead of being precached on
  * every install (MUT-102, PD10). No font is preloaded either: a preload
@@ -104,7 +139,8 @@ export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
   // Limit what files get precached
   globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
   // Share cards are for crawlers, never shown in the app (MUT-104)
-  globIgnores: ["og-*.png"],
+  // The Netlify form twin is a bare form for the deploy bot, never opened in the app (MUT-186, D2)
+  globIgnores: ["og-*.png", NETLIFY_FORMS_PATH.slice(1)],
   runtimeCaching: [
     {
       urlPattern: ({ request }) => request.destination === "font",
@@ -200,7 +236,7 @@ export default defineConfig(({ mode }) => {
     },
   plugins: [
     react(),
-    ...(buildMode === "web" ? [socialMeta()] : []),
+    ...(buildMode === "web" ? [socialMeta(), netlifyForms()] : []),
     VitePWA({
       disable: isTauri, // Disable PWA for desktop builds
       registerType: "autoUpdate",

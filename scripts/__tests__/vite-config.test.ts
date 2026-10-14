@@ -2,7 +2,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
 import { existsSync } from 'node:fs';
-import configFn, { PWA_INCLUDE_ASSETS, PWA_MANIFEST, PWA_WORKBOX, socialMetaTags } from '../../vite.config';
+import configFn, { PWA_INCLUDE_ASSETS, PWA_MANIFEST, PWA_WORKBOX, netlifyFormsHtml, socialMetaTags } from '../../vite.config';
+import {
+  HONEYPOT_FIELD,
+  HOSTED_REQUEST_FIELDS,
+  HOSTED_REQUEST_FORM_NAME,
+  NETLIFY_FORMS_PATH,
+} from '../../src/pages/landing/hostedRequest';
 import ar from '../../src/lib/i18n/translations/ar.json';
 import tokens from '../../src/styles/brand/mutaba3a.tokens.json';
 import { repoPath } from '../../src/test/css/brandCss';
@@ -161,6 +167,48 @@ describe('vite.config', () => {
         vi.doUnmock('../../src/lib/i18n/translations/ar.json');
         vi.resetModules();
       }
+    });
+  });
+
+  describe('Netlify form twin (MUT-186)', () => {
+    const plugin = () => {
+      const found = (resolve('web').plugins ?? []).flat().find((p) => p && typeof p === 'object' && 'name' in p && p.name === 'mutaba3a:netlify-forms');
+      if (!found) throw new Error('netlify-forms plugin missing from the web build');
+      return found as { generateBundle: (this: { emitFile: (file: unknown) => void }) => void };
+    };
+    const html = () => netlifyFormsHtml();
+    const formTag = () => html().match(/<form\b[^>]*>/)?.[0] ?? '';
+    const formBody = () => html().match(/<form\b[^>]*>([\s\S]*?)<\/form>/)?.[1] ?? '';
+
+    it('declares the request form for Netlify, hidden, with its honeypot', () => {
+      expect(formTag()).toContain(`name="${HOSTED_REQUEST_FORM_NAME}"`);
+      expect(formTag()).toContain('data-netlify="true"');
+      expect(formTag()).toContain(`netlify-honeypot="${HONEYPOT_FIELD}"`);
+      expect(formTag()).toMatch(/\bhidden\b/);
+    });
+
+    it('names exactly the fields the page posts, so Netlify keeps every one', () => {
+      const names = [...formBody().matchAll(/\bname="([^"]+)"/g)].map((m) => m[1]);
+      expect(names).toEqual([...HOSTED_REQUEST_FIELDS]);
+    });
+
+    it('asks search engines not to index the bare form page (D2)', () => {
+      expect(html()).toContain('<meta name="robots" content="noindex">');
+    });
+
+    it('emits the twin as __forms.html, the path the page posts to', () => {
+      const emitFile = vi.fn();
+      plugin().generateBundle.call({ emitFile });
+      expect(emitFile).toHaveBeenCalledWith({ type: 'asset', fileName: NETLIFY_FORMS_PATH.slice(1), source: netlifyFormsHtml() });
+    });
+
+    it('runs in the web build only: desktop and the portal are not served by Netlify', () => {
+      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:netlify-forms');
+      expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:netlify-forms');
+    });
+
+    it('keeps the twin out of the service worker precache (D2)', () => {
+      expect(PWA_WORKBOX?.globIgnores).toContain(NETLIFY_FORMS_PATH.slice(1));
     });
   });
 
