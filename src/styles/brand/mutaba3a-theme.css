@@ -28,6 +28,12 @@
   --m-peach-strong: oklch(0.75 0.12 55); /* #E89960 */
   --m-butter: oklch(0.93 0.07 95); /* #F6E8B3 */
   --m-butter-ink: oklch(0.419 0.083 74.8); /* #67450A */
+  /* The mark's four fills (MUT-206): the bloom loader paints its pieces with these. The dot is primary;
+     the petals are the mark's own lavender/rose/peach, brighter than the soft grounds above. */
+  --m-mark-dot: oklch(0.55 0.14 295); /* #795DBA */
+  --m-mark-lavender: oklch(0.78 0.1 295); /* #BCABF1 */
+  --m-mark-rose: oklch(0.78 0.11 10); /* #F499A7 */
+  --m-mark-peach: oklch(0.8 0.11 55); /* #F5AB77 */
 
   --m-font-display: "Thmanyah Serif Display", serif;
   --m-font-body: "Thmanyah Sans", system-ui, sans-serif;
@@ -80,6 +86,10 @@
     --m-peach-strong: oklch(0.78 0.11 55); /* #EEA471 */
     --m-butter: oklch(0.4 0.06 85); /* #57451E */
     --m-butter-ink: oklch(0.9 0.09 95); /* #F0DE99 */
+    --m-mark-dot: oklch(0.92 0.07 95); /* #F3E5B0 */
+    --m-mark-lavender: oklch(0.78 0.1 295); /* #BCABF1 */
+    --m-mark-rose: oklch(0.78 0.11 10); /* #F499A7 */
+    --m-mark-peach: oklch(0.82 0.11 60); /* #F9B379 */
     --m-shadow-tint: oklch(0.15 0.03 300);
     --m-shadow-card: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 12px 40px color-mix(in oklch, var(--m-shadow-tint) 35%, transparent);
     --m-shadow-primary: none;
@@ -109,6 +119,10 @@
   --m-peach-strong: oklch(0.78 0.11 55); /* #EEA471 */
   --m-butter: oklch(0.4 0.06 85); /* #57451E */
   --m-butter-ink: oklch(0.9 0.09 95); /* #F0DE99 */
+  --m-mark-dot: oklch(0.92 0.07 95); /* #F3E5B0 */
+  --m-mark-lavender: oklch(0.78 0.1 295); /* #BCABF1 */
+  --m-mark-rose: oklch(0.78 0.11 10); /* #F499A7 */
+  --m-mark-peach: oklch(0.82 0.11 60); /* #F9B379 */
   --m-shadow-tint: oklch(0.15 0.03 300);
   --m-shadow-card: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 12px 40px color-mix(in oklch, var(--m-shadow-tint) 35%, transparent);
   --m-shadow-primary: none;
