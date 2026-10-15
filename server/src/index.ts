@@ -69,8 +69,8 @@ const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
   logger.info({ port: info.port, env: config.NODE_ENV, keyEnvironment: config.API_KEY_ENVIRONMENT }, 'mutaba3a-api listening');
 });
 // MUT-228: production runs one instance, so every deploy starts with an empty rate cache. Fill it now
-// rather than on the first phone's request; a failure is logged by the cache and retried on demand.
-void fxRates.get().catch(() => undefined);
+// rather than on the first phone's request; a failure is logged and the first request tries again.
+void fxRates.warm();
 
 const pruneTimer = setInterval(() => {
   const now = new Date();

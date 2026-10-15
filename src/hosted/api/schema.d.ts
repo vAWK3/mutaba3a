@@ -7866,7 +7866,7 @@ export interface paths {
         };
         /**
          * Reference exchange rates for every supported currency against a base, for display
-         * @description ECB reference rates (via Frankfurter), cached per server instance for FX_RATES_TTL_MINUTES. JOD is derived from the USD peg. When a refresh fails the last good rates come back with source=stale; with nothing cached the route answers 503 FX_RATES_UNAVAILABLE, never a zero rate. Display only: no record stores these rates.
+         * @description ECB reference rates (via Frankfurter), cached per server instance for FX_RATES_TTL_MINUTES. JOD is derived from the USD peg. Rates whose ECB rate date is more than 7 days old (or more than a day in the future) are never served. When a refresh fails the last good rates come back with source=stale while they are within that age; with nothing servable cached the route answers 503 FX_RATES_UNAVAILABLE, never a zero rate. Display only: no record stores these rates.
          */
         get: {
             parameters: {
@@ -7925,7 +7925,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description No rates to serve: the provider is down and this instance has none cached, or no rate source is configured */
+                /** @description No rates to serve: the provider is down or answered with an unusable rate date, and this instance has nothing cached within 7 days of its rate date; or no rate source is configured */
                 503: {
                     headers: {
                         [name: string]: unknown;

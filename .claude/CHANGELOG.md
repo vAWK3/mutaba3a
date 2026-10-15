@@ -39,7 +39,7 @@
 - Config: `FX_RATES_URL` (https; plain http only for a localhost stub), `FX_RATES_TTL_MINUTES` (240), `FX_RATES_TIMEOUT_MS` (3000).
 
 ### Technical
-- `server/src/fx-rates.ts` (`crossRates`, `FrankfurterSource`, `CachedFxRates`: single-flight, stale on failure, 60 s backoff, a 7-day age cap on the ECB rate date, no redirects, per instance like TD-017; filled once at startup), `server/src/routes/fx-rates.ts`, schemas, `app.ts`/`index.ts` wiring; OpenAPI and `src/hosted/api/schema.d.ts` regenerated; version pins in the route tests moved to 1.27.0-mut228.
+- `server/src/fx-rates.ts` (`crossRates`, `FrankfurterSource`, `CachedFxRates`: single-flight, stale on failure, 60 s backoff, a 7-day age cap on the ECB rate date (future or invalid dates refused too), no redirects, per instance like TD-017; filled once at startup by `warm()`, whose failure does not start the backoff), `server/src/routes/fx-rates.ts`, schemas, `app.ts`/`index.ts` wiring; OpenAPI and `src/hosted/api/schema.d.ts` regenerated; version pins in the route tests moved to 1.27.0-mut228.
 
 ## [Unreleased] - 2026-10-15 — Expenses Needs attention reaches back to the rule's start (MUT-96, TD-069)
 

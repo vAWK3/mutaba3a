@@ -83,6 +83,8 @@ describe('FrankfurterSource', () => {
     ['a negative rate', { ...OK, rates: { ILS: -3.4769, USD: 1.1208 } }],
     ['a non-numeric rate', { ...OK, rates: { ILS: 'NaN', USD: 1.1208 } }],
     ['a malformed date', { ...OK, date: '15/10/2026' }],
+    ['a date that is not on the calendar', { ...OK, date: '2026-02-30' }],
+    ['a month that does not exist', { ...OK, date: '2026-13-01' }],
     ['another base', { ...OK, base: 'USD' }],
   ])('refuses %s', async (_label, body) => {
     await expect(new FrankfurterSource({ url: URL_, timeoutMs: 1000, fetch: answering(200, body).fetch }).latest()).rejects.toThrow();
@@ -246,6 +248,60 @@ describe('CachedFxRates', () => {
     await expect(h.cache.get()).resolves.toMatchObject({ source: 'stale' });
     h.advance(24 * 60 * 60 * 1000); // 7.5 days, past the backoff too
     await expect(h.cache.get()).rejects.toMatchObject({ code: 'FX_RATES_UNAVAILABLE' });
+  });
+
+  it('stops serving a live snapshot inside its window once the rate date passes the age cap', async () => {
+    const clock = { now: new Date('2026-10-15T12:00:00Z') };
+    let calls = 0;
+    let fail = false;
+    const cache = new CachedFxRates({
+      source: {
+        async latest() {
+          calls += 1;
+          if (fail) throw new Error('provider down');
+          return { rateDate: '2026-10-09', perEur: SNAPSHOT.perEur }; // 6.5 days old
+        },
+      },
+      ttlMs: 24 * 60 * 60 * 1000,
+      now: () => clock.now,
+    });
+    await expect(cache.get()).resolves.toMatchObject({ source: 'live' });
+    clock.now = new Date(clock.now.getTime() + 12 * 60 * 60 * 1000 + 1); // 7 days and 1 ms, still inside the 24 h window
+    fail = true;
+    await expect(cache.get()).rejects.toMatchObject({ code: 'FX_RATES_UNAVAILABLE' });
+    expect(calls).toBe(2);
+  });
+
+  it.each([
+    ['in the future', '2026-10-17'],
+    ['not a calendar date', '2026-13-01'],
+  ])('treats a rate date %s as unusable', async (_label, rateDate) => {
+    const h = harness();
+    h.state.snapshot = { rateDate, perEur: SNAPSHOT.perEur };
+    await expect(h.cache.get()).rejects.toMatchObject({ code: 'FX_RATES_UNAVAILABLE' });
+  });
+
+  it('accepts a rate date up to a day ahead of the server clock (the ECB publishes in CET)', async () => {
+    const h = harness();
+    h.state.snapshot = { rateDate: '2026-10-16', perEur: SNAPSHOT.perEur }; // 12 h ahead of 2026-10-15T12:00Z
+    await expect(h.cache.get()).resolves.toMatchObject({ source: 'live' });
+  });
+
+  it('warm() fills the cache, so the first request does not call the provider', async () => {
+    const h = harness();
+    await h.cache.warm();
+    expect(h.state.calls).toBe(1);
+    await expect(h.cache.get()).resolves.toMatchObject({ source: 'live' });
+    expect(h.state.calls).toBe(1);
+  });
+
+  it('a failed warm() does not start the backoff: the first request still tries the provider', async () => {
+    const h = harness();
+    h.state.fail = true;
+    await expect(h.cache.warm()).resolves.toBeUndefined();
+    h.state.fail = false;
+    await expect(h.cache.get()).resolves.toMatchObject({ source: 'live' });
+    expect(h.state.calls).toBe(2);
   });
 
   it('keeps refusing inside the backoff when nothing was ever cached', async () => {

@@ -56,6 +56,12 @@ export function crossRates(snapshot: EcbSnapshot, base: Currency): FxRate[] {
   }));
 }
 
+/** YYYY-MM-DD that names a real day: Date.parse would roll 2026-02-30 over to March and gives NaN for month 13. */
+function isCalendarDate(value: string): boolean {
+  const t = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === value;
+}
+
 export interface FxRateSource {
   latest(): Promise<EcbSnapshot>;
 }
@@ -63,7 +69,7 @@ export interface FxRateSource {
 const positiveRate = z.number().positive();
 const FrankfurterLatestSchema = z.object({
   base: z.literal('EUR'),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isCalendarDate, 'not a calendar date'),
   rates: z.object({ USD: positiveRate, ILS: positiveRate }),
 });
 
@@ -122,23 +128,36 @@ export class CachedFxRates {
     const now = this.now().getTime();
     if (this.cached && now - this.cached.fetchedAt.getTime() < this.options.ttlMs && !this.tooOld(this.cached.snapshot)) return { ...this.cached, source: 'live' };
     if (this.lastFailureAt !== null && now - this.lastFailureAt < (this.options.failureBackoffMs ?? DEFAULT_FX_FAILURE_BACKOFF_MS)) return this.staleOrRefuse();
-    // Concurrent misses share one provider call.
-    this.inFlight ??= this.refresh().finally(() => {
+    return this.shared(true);
+  }
+
+  /**
+   * Fill the cache at startup. A failure is logged but does not start the backoff: a deploy-time
+   * blip must not refuse the first real request for a minute without trying the provider.
+   */
+  async warm(): Promise<void> {
+    await this.shared(false).catch(() => undefined);
+  }
+
+  /** Concurrent misses share one provider call. */
+  private shared(recordFailure: boolean): Promise<FxRatesReading> {
+    this.inFlight ??= this.refresh(recordFailure).finally(() => {
       this.inFlight = null;
     });
     return this.inFlight;
   }
 
-  private async refresh(): Promise<FxRatesReading> {
+  private async refresh(recordFailure: boolean): Promise<FxRatesReading> {
     try {
       const snapshot = await this.options.source.latest();
-      if (this.tooOld(snapshot)) throw new Error(`FX provider rate date ${snapshot.rateDate} is more than ${MAX_RATE_AGE_DAYS} days old`);
+      if (this.tooOld(snapshot)) throw new Error(`FX provider rate date ${snapshot.rateDate} is unusable (more than ${MAX_RATE_AGE_DAYS} days old, in the future, or not a date)`);
       this.cached = { snapshot, fetchedAt: this.now() };
       this.lastFailureAt = null;
       return { ...this.cached, source: 'live' };
     } catch (error) {
-      this.lastFailureAt = this.now().getTime();
-      this.options.logger?.warn({ err: error, hasCachedRates: this.cached !== null }, 'FX rate provider refresh failed');
+      if (recordFailure) this.lastFailureAt = this.now().getTime();
+      const hasServableRates = this.cached !== null && !this.tooOld(this.cached.snapshot);
+      this.options.logger?.warn({ err: error, hasServableRates }, 'FX rate provider refresh failed');
       return this.staleOrRefuse();
     }
   }
@@ -148,8 +167,15 @@ export class CachedFxRates {
     throw new ApiError('FX_RATES_UNAVAILABLE', 'Exchange rates are unavailable right now. Try again shortly.');
   }
 
+  /**
+   * Not servable: more than MAX_RATE_AGE_DAYS old, more than a day ahead of this clock (the ECB
+   * dates in CET, so a few hours ahead is normal), or not a date at all (NaN would compare false).
+   */
   private tooOld(snapshot: EcbSnapshot): boolean {
-    return this.now().getTime() - Date.parse(`${snapshot.rateDate}T00:00:00Z`) > MAX_RATE_AGE_DAYS * DAY_MS;
+    const rateDay = Date.parse(`${snapshot.rateDate}T00:00:00Z`);
+    if (!Number.isFinite(rateDay)) return true;
+    const age = this.now().getTime() - rateDay;
+    return age > MAX_RATE_AGE_DAYS * DAY_MS || age < -DAY_MS;
   }
 
   private now(): Date {

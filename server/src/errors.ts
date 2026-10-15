@@ -34,7 +34,7 @@ export const ERROR_CODES = {
   RATE_LIMITED: 429,
   INTERNAL: 500,
   ATTACHMENTS_NOT_CONFIGURED: 503,
-  /** MUT-228: no reference rates to serve (provider down and nothing cached on this instance, or not configured). */
+  /** MUT-228: no reference rates to serve (provider down or unusable, and nothing servable cached on this instance; or not configured). */
   FX_RATES_UNAVAILABLE: 503,
 } as const;
 
