@@ -21,6 +21,8 @@ export const KNOWN_AXE_VIOLATIONS = {
   incomeDrawer: [],
   paymentDrawer: [],
   landing: [],
+  // The bloom loader on a slow route (MUT-206)
+  loader: [],
   // The language switch sits above <main>, outside any landmark (MUT-43 layout; TD-082)
   portalSignIn: ['region'],
   // The signed-in portal (MUT-191). The account menu holds the Language row, which is no menu child (MUT-43 layout; TD-142)

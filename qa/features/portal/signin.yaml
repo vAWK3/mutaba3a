@@ -55,4 +55,18 @@ features:
     expect:
       - The sign-in is in Arabic, right to left, and nothing is stored
       - EN switches to English, is stored, and stays after a reload
-
+  - id: boot-slow-session
+    title: While /v1/me is slow the portal shows the wordmark, then after 0.4 s the bloom loader named "Checking your session", then sign-in, with no CSP violation (MUT-206)
+    tier: core
+    paths:
+      - src/components/brand/BrandLoader.tsx
+      - src/components/brand/BrandLoader.css
+      - src/components/brand/bloomLoaderData.ts
+      - src/hosted/pages/auth/BootScreens.tsx
+    steps:
+      - Hold /v1/me for 3 s, then answer 401, and open the portal in English
+    expect:
+      - The wordmark shows at once
+      - After 0.4 s a status says "Checking your session" over the bloom loader
+      - Sign-in shows once /v1/me answers
+      - The console reports no Content Security Policy violation

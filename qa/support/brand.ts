@@ -16,6 +16,9 @@ const tokens = JSON.parse(fs.readFileSync(tokensFile, 'utf8'));
 /** The canvas each scheme paints, as the brand CSS declares it. */
 export const CANVAS = { light: tokens.color.canvas.oklch as string, dark: tokens.colorDark.canvas.oklch as string };
 
+/** The bloom loader's dot, per scheme (MUT-206): purple on light, butter on dark. */
+export const MARK_DOT = { light: tokens.color.markDot.oklch as string, dark: tokens.colorDark.markDot.oklch as string };
+
 export const SCHEMES = ['light', 'dark'] as const;
 
 /** Faces the page has finished loading, as "Family weight" (e.g. "Thmanyah Sans 400"). */

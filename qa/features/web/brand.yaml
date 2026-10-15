@@ -117,3 +117,23 @@ features:
       - Text links compute text-decoration-line underline
       - The unclassed link takes --link-hover and an underline
 
+  - id: loader-slow-route
+    title: A slow route shows nothing for 0.4 s, then the bloom loader named "Loading" in the theme's colours, then the page; reduced motion holds the still mark with the word; it sits centred and unmirrored in English and Arabic (MUT-206)
+    tier: core
+    paths:
+      - src/components/brand/BrandLoader.tsx
+      - src/components/brand/BrandLoader.css
+      - src/components/brand/bloomLoaderData.ts
+      - src/router.tsx
+      - src/index.css
+    steps:
+      - Turn on Insights, then open it while its code is slow to download (held 2 s), in light and in dark
+      - Open it again with reduced motion on
+      - At 1440 × 900, open it in English, then in Arabic
+    expect:
+      - For the first 0.4 s the loader's status is empty and nothing is drawn
+      - Then the mark blooms (four path morphs and a turn), the status says "Loading", and the dot is the theme's mark colour
+      - axe finds no violation on the loader screen
+      - The page replaces the loader once its code arrives
+      - Under reduced motion the mark is still, with "Loading" written under it
+      - The mark's centre is the page column's centre (±1 px) and the mark is never mirrored
