@@ -56,17 +56,37 @@ features:
       - The sign-in is in Arabic, right to left, and nothing is stored
       - EN switches to English, is stored, and stays after a reload
   - id: boot-slow-session
-    title: While /v1/me is slow the portal shows the wordmark, then after 0.4 s the bloom loader named "Checking your session", then sign-in, with no CSP violation (MUT-206)
+    title: While /v1/me is slow the portal shows the mark, which blooms in place saying "Checking your session", then "Still connecting…" from 3 s, then sign-in; reduced motion writes the words under a still mark; no wordmark text and no CSP violation (MUT-206, MUT-207 D4)
     tier: core
     paths:
       - src/components/brand/BrandLoader.tsx
       - src/components/brand/BrandLoader.css
       - src/components/brand/bloomLoaderData.ts
+      - src/components/brand/bootDelay.ts
+      - src/hosted/pages/auth/BootScreens.tsx
+      - src/hosted/session/me.tsx
+    steps:
+      - Hold /v1/me for 4 s, then answer 401, and open the portal in English
+      - Again with reduced motion on
+    expect:
+      - The mark shows at once and no "Mutaba3a" text appears
+      - The mark blooms in place, with no fade, and a status says "Checking your session"
+      - From 3 s the status says "Still connecting…"
+      - Sign-in shows once /v1/me answers
+      - Under reduced motion no part of the mark moves, and the words are written under it
+      - The console reports no Content Security Policy violation
+  - id: boot-splash
+    title: Before any JavaScript the portal shows the 80 px mark centred on the canvas, React takes over without moving it, and the boot screen passes axe in light and dark (MUT-207)
+    tier: core
+    paths:
+      - hosted.html
+      - src/styles/brand/boot-splash.css
       - src/hosted/pages/auth/BootScreens.tsx
     steps:
-      - Hold /v1/me for 3 s, then answer 401, and open the portal in English
+      - With scripts off, under OS light then OS dark, open the portal
+      - With scripts on and /v1/me held 3 s, open the portal and wait for React's boot screen
+      - With /v1/me held, run axe on the boot screen in light and in dark
     expect:
-      - The wordmark shows at once
-      - After 0.4 s a status says "Checking your session" over the bloom loader
-      - Sign-in shows once /v1/me answers
-      - The console reports no Content Security Policy violation
+      - The splash's background is the token canvas for the scheme; the mark is loaded, 80 px and centred (±1 px)
+      - Once React mounts, the mark (or the loader in its place) has the same centre and size (±1 px), then says "Checking your session"
+      - No CSP violation, and no axe violation beyond the known landmark rule
