@@ -41,9 +41,11 @@ export function useExpenses(profileId: string, filters: ExpenseFilters) {
   );
 }
 
+export const expenseKey = (profileId: string, expenseId: string) => profileKey(profileId, 'expense', expenseId);
+
 export function useExpense(profileId: string, expenseId: string) {
   return useQuery({
-    queryKey: profileKey(profileId, 'expense', expenseId),
+    queryKey: expenseKey(profileId, expenseId),
     queryFn: () => api.expense(profileId, expenseId),
     enabled: Boolean(expenseId),
     staleTime: STALE_MS,
@@ -81,7 +83,7 @@ export function useUpdateExpense(profileId: string) {
       api.updateExpense(profileId, expenseId, body, version),
     onSuccess: (_result: Expense, { expenseId }) => {
       invalidateExpenses(queryClient, profileId);
-      queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'expense', expenseId) });
+      queryClient.invalidateQueries({ queryKey: expenseKey(profileId, expenseId) });
     },
   });
 }
@@ -125,7 +127,7 @@ export function useAddReceipt(profileId: string, expenseId: string) {
       return api.completeReceipt(profileId, expenseId, receipt.id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'expense', expenseId) });
+      queryClient.invalidateQueries({ queryKey: expenseKey(profileId, expenseId) });
     },
   });
 }
@@ -135,7 +137,7 @@ export function useDeleteReceipt(profileId: string, expenseId: string) {
   return useMutation({
     mutationFn: (receiptId: string) => api.deleteReceipt(profileId, expenseId, receiptId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'expense', expenseId) });
+      queryClient.invalidateQueries({ queryKey: expenseKey(profileId, expenseId) });
     },
   });
 }

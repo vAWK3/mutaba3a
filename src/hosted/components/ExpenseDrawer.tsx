@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -7,7 +8,7 @@ import { expenseFormFieldsSchema } from '../../components/expenses/expenseFormSc
 import { Button } from '../../components/ui/Button';
 import { useLanguage } from '../../lib/i18n/core';
 import { currencyExponent } from '../../lib/utils';
-import { useCreateExpense, useDeleteExpense, useExpense, useExpenseCategories, useUpdateExpense } from '../data/expenseQueries';
+import { expenseKey, useCreateExpense, useDeleteExpense, useExpense, useExpenseCategories, useUpdateExpense } from '../data/expenseQueries';
 import { useToast } from './Toast';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { ClientPicker } from './ClientPicker';
@@ -17,7 +18,7 @@ import { Drawer } from './Drawer';
 import { applyExpenseApiError } from './expenseApiErrors';
 import { todayInZone, todayLocalISO } from '../format/dates';
 import { useAttemptKey } from '../data/attemptKey';
-import type { CreateExpenseRequest, UpdateExpenseRequest } from '../api/client';
+import { ApiError, type CreateExpenseRequest, type Expense, type UpdateExpenseRequest } from '../api/client';
 import { HOSTED_CURRENCIES } from '../format/currencies';
 import { BrandLoader } from '../../components/brand/BrandLoader';
 
@@ -84,6 +85,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
   const markSaved = (id: string) => useSavedFlashStore.getState().markSaved({ kind: 'expense', ids: [id], profileId });
   const { t } = useLanguage();
   const showToast = useToast();
+  const queryClient = useQueryClient();
 
   const { data: categories, isLoading: categoriesLoading } = useExpenseCategories(profileId);
   const { data: existingExpense, isLoading: expenseLoading } = useExpense(profileId, expenseId ?? '');
@@ -100,21 +102,18 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
   const { control, handleSubmit, reset, setError, formState } = form;
   const selectedClientId = useWatch({ control, name: 'clientId' });
 
+  // (Re)fill the form when a genuinely new version arrives: the first load, or
+  // the refetch after a 409 (MUT-221, as ConversionDrawer's D6). Keyed on id and
+  // version, not the object, so a background refetch never wipes typing.
+  const latest = useRef(existingExpense);
   useEffect(() => {
-    if (mode === 'edit' && existingExpense) {
-      reset({
-        amount: existingExpense.amount,
-        currency: existingExpense.currency,
-        occurredAt: existingExpense.occurredOn,
-        title: existingExpense.title ?? '',
-        vendor: existingExpense.vendor ?? '',
-        clientId: existingExpense.customerId ?? '',
-        projectId: existingExpense.projectId ?? '',
-        categoryId: existingExpense.categoryId ?? '',
-        notes: existingExpense.notes ?? '',
-      });
-    }
-  }, [mode, existingExpense, reset]);
+    latest.current = existingExpense;
+  });
+  const existingId = existingExpense?.id;
+  const existingVersion = existingExpense?.version;
+  useEffect(() => {
+    if (mode === 'edit' && latest.current) reset(valuesOf(latest.current));
+  }, [mode, existingId, existingVersion, reset]);
 
   const errorLabels = {
     categoryArchived: t('hosted.expenses.errors.categoryArchived'),
@@ -180,6 +179,10 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
       }
       onClose();
     } catch (error) {
+      // A stale version: refetch, so the form refills at the new version and the next Save carries it.
+      if (existingExpense && error instanceof ApiError && error.code === 'CONFLICT') {
+        void queryClient.invalidateQueries({ queryKey: expenseKey(profileId, existingExpense.id) });
+      }
       applyExpenseApiError(error, setError, errorLabels, showToast);
     }
   };
@@ -310,4 +313,18 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
       )}
     </Drawer>
   );
+}
+
+function valuesOf(expense: Expense): HostedExpenseFormValues {
+  return {
+    amount: expense.amount,
+    currency: expense.currency,
+    occurredAt: expense.occurredOn,
+    title: expense.title ?? '',
+    vendor: expense.vendor ?? '',
+    clientId: expense.customerId ?? '',
+    projectId: expense.projectId ?? '',
+    categoryId: expense.categoryId ?? '',
+    notes: expense.notes ?? '',
+  };
 }

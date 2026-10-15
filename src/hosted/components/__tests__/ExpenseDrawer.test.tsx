@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../Toast';
 import { ExpenseDrawer } from '../ExpenseDrawer';
+import en from '../../i18n/en.json';
 
 // The portal opens in Arabic until a person chooses (MUT-209); these cases speak English, so choose it as a person would
 beforeEach(() => localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en'));
@@ -22,6 +23,7 @@ function fail(status: number, code: string, details?: unknown) {
 
 const EMPTY_CATEGORIES = { items: [{ id: 'cat-1', name: 'Software', color: null, archived: false, version: 1, createdAt: '', updatedAt: '' }] };
 const EMPTY_DIRECTORY = { items: [], nextCursor: null };
+const EN_CONFLICT = en.hosted.expenses.errors.conflict;
 
 function route(routes: Record<string, (req: { method: string; url: URL; body: unknown }) => Response>) {
   fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -46,7 +48,7 @@ function renderDrawer(props: Partial<ComponentProps<typeof ExpenseDrawer>> = {})
       </HostedLanguageProvider>
     </QueryClientProvider>,
   );
-  return { onClose };
+  return { onClose, queryClient };
 }
 
 beforeEach(() => {
@@ -303,5 +305,69 @@ describe('ExpenseDrawer (hosted)', () => {
     expect(overlay).toBeTruthy();
     (overlay as HTMLElement).click();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  describe('a stale version (MUT-221)', () => {
+    function expense(over: Record<string, unknown> = {}) {
+      return {
+        id: 'e1', occurredOn: '2026-09-01', amount: '99.99', currency: 'ILS', title: 'Hosting', vendor: 'ACME',
+        categoryId: 'cat-1', customerId: null, projectId: null, notes: null, createdByUserId: 'u', version: 3,
+        createdAt: '', updatedAt: '', receipts: [], ...over,
+      };
+    }
+
+    function server(current: () => Record<string, unknown>, onPatch: (ifMatch: string | null) => Response) {
+      const calls: { method: string; ifMatch: string | null }[] = [];
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(String(input), 'http://portal.test');
+        const method = (init.method ?? 'GET').toUpperCase();
+        const ifMatch = new Headers(init.headers).get('if-match');
+        if (method === 'GET' && url.pathname === '/v1/expense-categories') return ok(EMPTY_CATEGORIES);
+        if (method === 'GET' && (url.pathname === '/v1/customers' || url.pathname === '/v1/projects')) return ok(EMPTY_DIRECTORY);
+        if (url.pathname !== '/v1/expenses/e1') return fail(404, 'NOT_FOUND');
+        calls.push({ method, ifMatch });
+        if (method === 'GET') return ok(current());
+        if (method === 'PATCH') return onPatch(ifMatch);
+        return fail(404, 'NOT_FOUND');
+      });
+      return calls;
+    }
+
+    it('on 409 shows the conflict message, stays open, refills with the latest values, and the next Save uses the new version', async () => {
+      const user = userEvent.setup();
+      let latest = expense();
+      const calls = server(
+        () => latest,
+        (ifMatch) => (ifMatch === '3' ? fail(409, 'CONFLICT', { reason: 'VERSION_MISMATCH', currentVersion: 4 }) : ok(expense({ version: 5 }))),
+      );
+      const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1' });
+      const vendor = (await screen.findByDisplayValue('ACME')) as HTMLInputElement;
+      // Someone else changes it meanwhile.
+      latest = expense({ vendor: 'Changed elsewhere', version: 4 });
+      await user.clear(vendor);
+      await user.type(vendor, 'Mine');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(await screen.findByText(EN_CONFLICT)).toBeInTheDocument();
+      expect(await screen.findByDisplayValue('Changed elsewhere')).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(calls.filter((c) => c.method === 'PATCH').map((c) => c.ifMatch)).toEqual(['3', '4']);
+    });
+
+    it('keeps what was typed when the same version is refetched in the background', async () => {
+      const user = userEvent.setup();
+      server(() => expense(), () => ok(expense({ version: 4 })));
+      const { queryClient } = renderDrawer({ mode: 'edit', expenseId: 'e1' });
+      const vendor = (await screen.findByDisplayValue('ACME')) as HTMLInputElement;
+      await user.clear(vendor);
+      await user.type(vendor, 'Typed');
+
+      await queryClient.refetchQueries();
+
+      expect(vendor.value).toBe('Typed');
+    });
   });
 });
