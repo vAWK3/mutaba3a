@@ -10,9 +10,10 @@
  * currency, and tags each row with its business.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { OverviewPage } from '../OverviewPage';
+import { LoaderI18n } from '../../../test/loaderI18n';
 import * as useQueries from '../../../hooks/useQueries';
 import * as useIncomeQueries from '../../../hooks/useIncomeQueries';
 import { formatDate } from '../../../lib/utils';
@@ -162,7 +163,9 @@ function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <OverviewPage />
+      <LoaderI18n>
+        <OverviewPage />
+      </LoaderI18n>
     </QueryClientProvider>
   );
 }
@@ -319,18 +322,20 @@ describe('OverviewPage (Home)', () => {
       expect(mockOpenIncomeDrawer).toHaveBeenCalledWith({ mode: 'create' });
     });
 
-    it('decides nothing while the profile is still loading: no empty state, no onboarding flash', () => {
+    it('decides nothing while the profile is still loading: no empty state, no onboarding flash', async () => {
       onboarding.skipped = false;
       mockData({ clients: [], anyTransaction: false, receivables: [], recent: [] });
       vi.spyOn(useQueries, 'useClients').mockReturnValue({ data: undefined, isLoading: true, isPending: true } as unknown as ReturnType<
         typeof useQueries.useClients
       >);
-      const { container } = renderPage();
+      renderPage();
 
       expect(screen.queryByTestId('onboarding-overlay')).toBeNull();
       expect(screen.queryByText('Nothing to track yet')).toBeNull();
       expect(screen.queryByRole('region', { name: 'Owed now' })).toBeNull();
-      expect(container.querySelector('.spinner')).toBeInTheDocument();
+      // MUT-206: the bloom loader, named once its 400 ms delay passes (the clock advances with real time here)
+      const loader = await screen.findByRole('status');
+      await waitFor(() => expect(loader).toHaveTextContent(/loading/i));
     });
 
     it('still shows onboarding to a new user who has not skipped it', () => {
@@ -382,19 +387,20 @@ describe('OverviewPage (Home)', () => {
       expect(rowWith(paymentsSection(), 'Cash job')).toHaveTextContent('Studio');
     });
 
-    it('waits for the businesses before reading or deciding (D2)', () => {
+    it('waits for the businesses before reading or deciding (D2)', async () => {
       onboarding.skipped = false;
       lens.current = { scope: undefined, isAll: false, profilesById: new Map() };
       mockData({ clients: [], anyTransaction: false, receivables: [], recent: [] });
       vi.spyOn(useQueries, 'useClients').mockReturnValue({ data: undefined, isLoading: false, isPending: true } as unknown as ReturnType<
         typeof useQueries.useClients
       >);
-      const { container } = renderPage();
+      renderPage();
 
       expect(useIncomeQueries.useReceivables).toHaveBeenCalledWith({ profileId: undefined }, { enabled: false });
       expect(screen.queryByTestId('onboarding-overlay')).toBeNull();
       expect(screen.queryByText('Nothing to track yet')).toBeNull();
-      expect(container.querySelector('.spinner')).toBeInTheDocument();
+      const loader = await screen.findByRole('status');
+      await waitFor(() => expect(loader).toHaveTextContent(/loading/i));
     });
 
     it('reads All on its very first render when the lens is kept, without waiting for the route (D3)', () => {

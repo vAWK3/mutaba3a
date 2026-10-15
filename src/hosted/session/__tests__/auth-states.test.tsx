@@ -38,7 +38,8 @@ describe('S1 checking session', () => {
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.queryByLabelText('Email')).toBeNull();
     expect(screen.queryByRole('navigation')).toBeNull();
-    expect(await screen.findByRole('status', {}, { timeout: 1500 })).toHaveAccessibleName('Checking your session');
+    // The bloom loader's status carries its label as text, not as a name (MUT-206 DR14)
+    expect(await screen.findByRole('status', {}, { timeout: 1500 })).toHaveTextContent('Checking your session');
   });
 });
 
