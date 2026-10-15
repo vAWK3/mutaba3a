@@ -1,7 +1,8 @@
-import { validationError } from '../agreements/compose.js';
+import { assertIsoDate, todayFor, validationError } from '../agreements/compose.js';
 import type { ProfileWriter } from '../auth/writability.js';
 import { compareIsoDates, dueDateFor, type IsoDate } from '../dates.js';
-import type { LedgerStore } from '../repositories/ports.js';
+import { profileOwnerOf } from '../personal-profile.js';
+import type { LedgerStore, Organization, PaymentRecord } from '../repositories/ports.js';
 import type { VatTreatment } from '../vat.js';
 
 /**
@@ -117,4 +118,24 @@ export function owedVatFields(amountMinor: bigint): OwedVatFields {
  */
 export function assertNotFuture(date: IsoDate, today: IsoDate, field: string): void {
   if (compareIsoDates(date, today) > 0) throw validationError('DATE_INVALID', `${field} cannot be later than today`, { field });
+}
+
+/**
+ * MUT-223: a date may be changed only on a profile the person owns (personal or self-service, MUT-182). A
+ * Malafat-fed or firm profile is never theirs: Malafat owns allocations there, and a moved date would change its books.
+ */
+export function isOwnProfile(organization: Pick<Organization, 'ownerUserId' | 'personalOwnerUserId'>, userId: string): boolean {
+  return profileOwnerOf(organization) === userId;
+}
+
+/** MUT-223: a payment a person may re-date — their own capture (settle's included), still POSTED. */
+export function isOwnCapture(payment: Pick<PaymentRecord, 'origin' | 'createdByUserId' | 'status'>, userId: string): boolean {
+  return payment.origin === 'CAPTURE' && payment.createdByUserId === userId && payment.status === 'POSTED';
+}
+
+/** MUT-223: the new date of a re-date — the same validity and no-future rule as create, in the organization's timezone. */
+export function redateTo(raw: string, organization: Organization, now: Date, field: string): IsoDate {
+  const date = assertIsoDate(raw, field);
+  assertNotFuture(date, todayFor(organization, now), field);
+  return date;
 }

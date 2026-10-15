@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../errors.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
-import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, owedVatFields, resolveIncomeLinks } from '../compose.js';
+import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, isOwnCapture, isOwnProfile, owedVatFields, redateTo, resolveIncomeLinks } from '../compose.js';
 
 const PERSONAL = incomeCaptureRulesFor(null);
 const MALAFAT = incomeCaptureRulesFor('MALAFAT');
@@ -151,5 +151,51 @@ describe('assertNotFuture', () => {
 
   it('accepts a backdated date', () => {
     expect(() => assertNotFuture('2026-09-01', today, 'occurredOn')).not.toThrow();
+  });
+});
+
+describe('isOwnProfile (MUT-223)', () => {
+  it.each([
+    ['an owned profile', { ownerUserId: 'u1', personalOwnerUserId: null }, true],
+    ['a personal profile not yet stamped with ownerUserId (MUT-182 roll window)', { ownerUserId: null, personalOwnerUserId: 'u1' }, true],
+    ["someone else's owned profile", { ownerUserId: 'u2', personalOwnerUserId: null }, false],
+    ['a firm or Malafat-fed profile (no owner)', { ownerUserId: null, personalOwnerUserId: null }, false],
+  ])('%s → %s', (_label, organization, expected) => {
+    expect(isOwnProfile(organization, 'u1')).toBe(expected);
+  });
+});
+
+describe('isOwnCapture (MUT-223)', () => {
+  const mine = { origin: 'CAPTURE', createdByUserId: 'u1', status: 'POSTED' } as const;
+  it.each([
+    ['my posted capture', mine, true],
+    ["Malafat's payment", { ...mine, origin: 'INTEGRATION' }, false],
+    ["another person's capture", { ...mine, createdByUserId: 'u2' }, false],
+    ['a capture whose person left (createdByUserId nulled)', { ...mine, createdByUserId: null }, false],
+    ['an undone capture', { ...mine, status: 'REVERSED' }, false],
+  ] as const)('%s → %s', (_label, payment, expected) => {
+    expect(isOwnCapture(payment, 'u1')).toBe(expected);
+  });
+});
+
+describe('redateTo (MUT-223)', () => {
+  const organization = { timezone: 'Asia/Jerusalem' } as Parameters<typeof redateTo>[1];
+  const lateUtc = new Date('2026-10-12T21:30:00Z'); // already the 13th in Jerusalem
+
+  it("accepts the organization's today and any earlier date", () => {
+    expect(redateTo('2026-10-13', organization, lateUtc, 'occurredOn')).toBe('2026-10-13');
+    expect(redateTo('2025-12-31', organization, lateUtc, 'occurredOn')).toBe('2025-12-31');
+  });
+
+  it("refuses the day after the organization's today, and an impossible date, naming the field", () => {
+    for (const raw of ['2026-10-14', '2026-02-30']) {
+      try {
+        redateTo(raw, organization, lateUtc, 'receivedOn');
+        expect.unreachable();
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiError);
+        expect((err as ApiError).details).toMatchObject({ reason: 'DATE_INVALID', field: 'receivedOn' });
+      }
+    }
   });
 });

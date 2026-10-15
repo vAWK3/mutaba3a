@@ -2533,7 +2533,24 @@ Web QA on `vite preview` builds (throwaway `QA_CONTEXT`, 2 workers): 111 passed 
 | `src/utils/__tests__/csvValidation.test.ts` › `validateCSVImport (MUT-218)` | Unit | +4 | New client and project rows are New with no warning; names already in the app are still Duplicate; a name repeated in the file is Duplicate on the repeat only (trimmed); an income row referencing a client from the same file stays New. The first and third failed before the fix |
 | `qa/specs/web/data.spec.ts` › `@web.data.csv-new-client` | E2E (release-qa) | 1 | No longer manual: a new client reads New, and the summary shows New 2, Duplicates 0, with no duplicate notice. Passes on a `vite preview` build with the other 5 data specs |
 
-## MUT-164 — Delete all data (2026-10-15, ADR-083)
+## MUT-223 — hosted re-dating: change the date of a saved income entry or payment (2026-10-15, ADR-083)
+
+| Suite | Cases |
+|---|---|
+| `server/src/repositories/__tests__/store-contract-capture.ts` › re-date (memory + Postgres) | `redateAdjustment`: posting date moves, due date kept, version +1; stale → current row, nothing changed; not_found for another person, an INSTALLMENT receivable, a voided entry. `redateCapture`: receivedOn moves, version +1, updatedAt stamped, number kept; stale; not_found for INTEGRATION, an undone capture, another person; a settle payment moves with its allocations and the receivable byte-for-byte unchanged |
+| `server/src/repositories/__tests__/store-contract-m6.ts` (memory + Postgres) | `excludeActions` alone, with `excludeEntityTypes`, and with `action` (asserted sorted, never by position: TODOS #8) |
+| `server/src/income/__tests__/compose.test.ts` | `isOwnProfile` (owner, unstamped personal via `personalOwnerUserId`, someone else's, firm); `isOwnCapture` (INTEGRATION, other person, person gone, REVERSED); `redateTo` (org's today ok when UTC is a day behind; the day after and 2026-02-30 → DATE_INVALID naming the field) |
+| `server/src/__tests__/income-redate.test.ts` | AC1 Owed 200 + dueDate kept + version in the response; AC2 Received moves receivedOn; D3 settle payment via /v1/income → 409 ALREADY_ALLOCATED; AC3 settle payment via /v1/payments, allocations + receivable unchanged; AC4 stale → 409 + currentVersion, pre-settle version → 409, org-timezone future → 422, malformed / missing If-Match / extra field → 422; AC5 other person, unowned firm, Malafat-fed (404 via income, 403 READ_ONLY_PROFILE via payments, D2), INTEGRATION + INSTALLMENT, voided + undone → 404, nothing changed; AC6 device session 200, API key 403 PRINCIPAL_NOT_ACCEPTED; AC7 audit rows `{from,to,version}`, Malafat's `/v1/audit` hides both actions but lists `payment.recorded`; AC8 payment window filter follows, `lastPaymentOn` and `postingDate` follow |
+| `server/src/__tests__/route-security.test.ts` | `INCOME_OPERATIONS` lists both PATCHes (session + device session surfaces, API key refused) |
+| Regression | `income-routes`, `receivables-settle`, `routes-m6` audit tests unchanged and green; version pins in routes-m2..m8 moved to 1.26.0-mut223 |
+
+Pre-landing review additions: firm-profile capture → 404 via PATCH /v1/payments (mutation-checked: removing the owner check fails only this test); stale version on the payment branch via both routes, one audit row; PATCH /v1/payments 422s (missing If-Match, future receivedOn). Known gap, no automated guard: the Postgres write-and-re-read race the review closed by wrapping both statements in one `$transaction` (an undo between them used to give a 404 with no audit row) — proven by construction, not reproduced by a test.
+
+Release-QA: server-only; the user-visible scenarios (plan §7) are automated by MUT-224's portal spec. `release-qa lint`: no errors, portal 100% mapped.
+
+Run (Node 22, 2026-10-15): server `typecheck`, `lint`, `openapi:check` clean; `npm test` 90 files, 1806 passed, 23 skipped; `test:db` (Postgres :54329) 1982 passed, 1 failed: `routes-m6` audit listing returned two same-millisecond rows swapped (`payment.reversed` before `payment.recorded`), the known TODOS #8 ordering flake. Re-run alone 3/3 green. Root `lint`, `typecheck`, `test:run` (317 files, 4394 passed, 4 skipped) and `build` clean.
+
+## MUT-164 — Delete all data (2026-10-15, ADR-084)
 
 | File | Kind | Tests | What it proves |
 |---|---|---|---|

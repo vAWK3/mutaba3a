@@ -269,6 +269,8 @@ export interface AuditFilter {
   action?: string;
   /** Entity types left out of the listing (MUT-42: expense activity never reaches Malafat's key). */
   excludeEntityTypes?: readonly string[];
+  /** MUT-223: actions to leave out — a session's own edits on an entity type Malafat otherwise reads (receivable, payment). */
+  excludeActions?: readonly string[];
 }
 
 export interface AuditRepository {
@@ -930,6 +932,12 @@ export interface ReceivableRepository {
    * ALREADY_SETTLED.
    */
   softDeleteAdjustment(organizationId: string, id: string, at: Date): Promise<ReceivableRecord | null>;
+  /**
+   * MUT-223: moves an Owed entry's `postingDate`, keeping `dueDate`, and bumps `version`. One conditional write: only a
+   * live ADJUSTMENT row this user created, at `expectedVersion`. `not_found` covers every other row, so a stale
+   * answer never reveals a row the user may not touch.
+   */
+  redateAdjustment(organizationId: string, id: string, userId: string, expectedVersion: number, postingDate: IsoDate): Promise<UpdateResult<ReceivableRecord>>;
 }
 
 // ---- Milestone 4: payments, allocations, credits ----------------------------
@@ -1097,6 +1105,11 @@ export interface PaymentRepository {
    * unwinds an allocation, unlike `reverse`.
    */
   undoCapture(organizationId: string, paymentId: string, userId: string, at: Date): Promise<{ result: UndoCaptureResult; payment: PaymentRecord | null }>;
+  /**
+   * MUT-223: moves a POSTED CAPTURE payment's `receivedOn` (allocations untouched) and bumps `version`; same
+   * conditional-write and `not_found` rules as `receivables.redateAdjustment`. The number keeps its year.
+   */
+  redateCapture(organizationId: string, paymentId: string, userId: string, expectedVersion: number, receivedOn: IsoDate, at: Date): Promise<UpdateResult<PaymentRecord>>;
 }
 
 export interface ExternalReferenceRepository {

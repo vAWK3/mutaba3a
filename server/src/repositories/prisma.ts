@@ -363,7 +363,7 @@ export class PrismaLedgerStore implements LedgerStore {
       })),
     list: async (organizationId, filter: AuditFilter, page) => {
       const rows = await this.prisma.auditEvent.findMany({
-        where: { organizationId, ...entityTypeWhere(filter), ...(filter.entityId ? { entityId: filter.entityId } : {}), ...(filter.action ? { action: filter.action } : {}), ...cursorWhere(page) },
+        where: { organizationId, ...entityTypeWhere(filter), ...(filter.entityId ? { entityId: filter.entityId } : {}), ...actionWhere(filter), ...cursorWhere(page) },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: page.limit + 1,
       });
@@ -1007,6 +1007,16 @@ export class PrismaLedgerStore implements LedgerStore {
       await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null, paidMinor: 0n, creditedMinor: 0n }, data: { deletedAt: at } });
       return this.prisma.receivable.findFirst({ where: { id, organizationId } });
     },
+    // One transaction (MUT-223 pre-landing review, write-race fix): the updated row stays locked until commit, so the re-read is exactly this
+    // write — never an undo or a second re-date that landed between two separate statements (404 with no audit row).
+    redateAdjustment: (organizationId, id, userId, expectedVersion, postingDate) =>
+      this.prisma.$transaction(async (tx): Promise<UpdateResult<ReceivableRecord>> => {
+        const owned = { id, organizationId, origin: 'ADJUSTMENT' as const, createdByUserId: userId, deletedAt: null };
+        const { count } = await tx.receivable.updateMany({ where: { ...owned, version: expectedVersion }, data: { postingDate, version: { increment: 1 } } });
+        if (count === 1) return { kind: 'updated', record: await tx.receivable.findUniqueOrThrow({ where: { id } }) };
+        const record = await tx.receivable.findFirst({ where: owned });
+        return record ? { kind: 'stale', record } : { kind: 'not_found' };
+      }),
   };
 
   readonly payments: PaymentRepository = {
@@ -1087,6 +1097,15 @@ export class PrismaLedgerStore implements LedgerStore {
       if (payment.status !== 'REVERSED') return { result: 'allocated', payment };
       return { result: payment.reversalReason === CAPTURE_UNDO_REASON ? 'already-reversed' : 'reversed-elsewhere', payment };
     },
+    // Same single-transaction shape as receivables.redateAdjustment (MUT-223 pre-landing review).
+    redateCapture: (organizationId, paymentId, userId, expectedVersion, receivedOn, at) =>
+      this.prisma.$transaction(async (tx): Promise<UpdateResult<PaymentRecord>> => {
+        const owned = { id: paymentId, organizationId, origin: 'CAPTURE' as const, createdByUserId: userId, status: 'POSTED' as const };
+        const { count } = await tx.payment.updateMany({ where: { ...owned, version: expectedVersion }, data: { receivedOn, version: { increment: 1 }, updatedAt: at } });
+        if (count === 1) return { kind: 'updated', record: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }) };
+        const record = await tx.payment.findFirst({ where: owned });
+        return record ? { kind: 'stale', record } : { kind: 'not_found' };
+      }),
   };
 
   /** MUT-61: allocationStateOf (payments/allocation-state.ts) as a where clause, POSTED payments only. */
@@ -1429,6 +1448,13 @@ function conversionCursorWhere(cursor: ConversionCursor | null): Prisma.Conversi
 
 function toExpenseCategory(row: Prisma.ExpenseCategoryGetPayload<object>): ExpenseCategoryRecord {
   return { id: row.id, organizationId: row.organizationId, name: row.name, color: row.color, archivedAt: row.archivedAt, version: row.version, createdAt: row.createdAt, updatedAt: row.updatedAt };
+}
+
+/** `action` equals the filter's and is none of the excluded ones (MUT-223); the same shape as entityTypeWhere. */
+function actionWhere(filter: AuditFilter): { action?: Prisma.StringFilter } {
+  const excluded = filter.excludeActions ?? [];
+  if (!filter.action && excluded.length === 0) return {};
+  return { action: { ...(filter.action ? { equals: filter.action } : {}), ...(excluded.length ? { notIn: [...excluded] } : {}) } };
 }
 
 /** `entityType` equals the filter's and is none of the excluded ones (MUT-42). */

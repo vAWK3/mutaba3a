@@ -29,6 +29,22 @@ export function describeLedgerStoreM6Contract(name: string, makeStore: () => Pro
       expect((await store.audit.list(b.id, { entityType: 'payment' }, { limit: 10, cursor: null })).items).toHaveLength(1);
     });
 
+    it('excludeActions hides those actions alongside the action and excludeEntityTypes filters (MUT-223)', async () => {
+      const store = await makeStore();
+      const a = await org(store, 'A');
+      const event = (action: string, entityType: string) => store.audit.append({ organizationId: a.id, actorType: 'USER', actorId: 'u', action, entityType, entityId: 'e1', requestId: null });
+      await event('payment.recorded', 'payment');
+      await event('payment.redated', 'payment');
+      await event('income.owed.redated', 'receivable');
+      await event('expense.created', 'expense');
+      const actions = async (filter: Parameters<LedgerStore['audit']['list']>[1]) => (await store.audit.list(a.id, filter, { limit: 10, cursor: null })).items.map((e) => e.action).sort();
+
+      expect(await actions({ excludeActions: ['payment.redated', 'income.owed.redated'] })).toEqual(['expense.created', 'payment.recorded']);
+      expect(await actions({ excludeActions: ['payment.redated', 'income.owed.redated'], excludeEntityTypes: ['expense'] })).toEqual(['payment.recorded']);
+      expect(await actions({ action: 'payment.redated', excludeActions: ['payment.redated'] })).toEqual([]);
+      expect(await actions({ action: 'payment.recorded', excludeActions: ['payment.redated'] })).toEqual(['payment.recorded']);
+    });
+
     it('creates attachments pending, keys them, completes them, lists READY ones per entity, soft-deletes', async () => {
       const store = await makeStore();
       const a = await org(store, 'A');

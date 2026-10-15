@@ -127,6 +127,8 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-65: "Owed", a bare receivable written outside an Agreement.
     createAdjustment: { write: 'payments' },
     softDeleteAdjustment: { write: 'payments' },
+    // MUT-223: moving an Owed entry's date is the same row's write as creating or voiding it.
+    redateAdjustment: { write: 'payments' },
   },
   payments: {
     create: { write: 'payments' },
@@ -139,6 +141,8 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-61: the capture row's entire write surface — a person's own unallocated Received and its undo.
     capture: { write: 'capture' },
     undoCapture: { write: 'capture' },
+    // MUT-223: re-dating a person's own capture (a settle payment included: settle writes origin CAPTURE).
+    redateCapture: { write: 'capture' },
   },
   attachments: {
     create: { write: 'attachments' },
