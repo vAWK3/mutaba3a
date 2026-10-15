@@ -16,7 +16,8 @@ import type { IdempotencyClaim, LedgerStore, UserIdempotencyClaim } from './repo
  *
  * A 5xx releases the key so the client may retry; 2xx and 4xx are final.
  * The fingerprint covers method, path and body, so the same key cannot be
- * replayed against a different operation.
+ * replayed against a different operation. The body counts by meaning, not
+ * bytes (MUT-199): see `requestFingerprint`.
  */
 export const IDEMPOTENCY_HEADER = 'Idempotency-Key';
 const KEY_RE = /^[A-Za-z0-9_\-:.]{8,128}$/;
@@ -44,9 +45,15 @@ interface ClaimOps {
 async function withIdempotency(c: Context<AppEnv>, next: Next, operation: string, claimKey: string, ops: ClaimOps) {
   const now = c.get('now')();
   const body = await c.req.raw.clone().text();
-  const fingerprint = createHash('sha256').update(`${c.req.method}\n${c.req.path}\n${body}`).digest('hex');
+  const fingerprint = requestFingerprint(c.req.method, c.req.path, body);
 
-  const claim = await ops.claim({ key: claimKey, operation, fingerprint, at: now });
+  let claim = await ops.claim({ key: claimKey, operation, fingerprint, at: now });
+  if (claim.kind === 'mismatch') {
+    // A key stored before MUT-199 carries the byte fingerprint; a byte-identical replay of it must still replay.
+    // Comparing is all a claim does to an existing key, so the second call has no other effect.
+    const legacy = byteFingerprint(c.req.method, c.req.path, body);
+    if (legacy !== fingerprint) claim = await ops.claim({ key: claimKey, operation, fingerprint: legacy, at: now });
+  }
 
   switch (claim.kind) {
     case 'mismatch':
@@ -80,6 +87,42 @@ async function withIdempotency(c: Context<AppEnv>, next: Next, operation: string
     parsed = null;
   }
   await ops.complete({ key: claimKey, responseStatus: res.status, responseBody: parsed, at: c.get('now')() });
+}
+
+/**
+ * What makes two requests "the same" for a key (MUT-199): method, path and the body's meaning. A JSON body is
+ * re-serialised with sorted keys and no insignificant whitespace or escaping, so the phone widget's Swift encoding
+ * (random key order, `\/`) and the app's Dart encoding of one capture match. Array order still counts. A body that is
+ * not JSON counts byte for byte. Numbers go through a double; the API sends money as strings, so no amount is affected.
+ */
+export function requestFingerprint(method: string, path: string, body: string): string {
+  return sha256(`${method}\n${path}\n${canonicalBody(body)}`);
+}
+
+function byteFingerprint(method: string, path: string, body: string): string {
+  return sha256(`${method}\n${path}\n${body}`);
+}
+
+function sha256(text: string): string {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+function canonicalBody(body: string): string {
+  if (!body) return body;
+  try {
+    return canonicalJson(JSON.parse(body));
+  } catch {
+    return body;
+  }
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${canonicalJson((value as Record<string, unknown>)[k])}`);
+    return `{${entries.join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 export function idempotent(store: LedgerStore, operation: string): MiddlewareHandler<AppEnv> {

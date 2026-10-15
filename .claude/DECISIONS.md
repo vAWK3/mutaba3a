@@ -3260,3 +3260,15 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 **Not changed:** `clearDatabase()` still clears the six legacy tables only; it is the legacy (pre-v2) import's replace step, not a user action.
 
+## ADR-085: An Idempotency Fingerprint Compares a JSON Body by Meaning, Not Bytes
+
+**Status**: Active
+**Date**: 2026-10-15
+**Context**: MUT-199. The middleware fingerprinted `sha256(method\npath\nrawBody)`. The phone widget (Swift `JSONEncoder`: random key order, `/` escaped as `\/`) and the app's replay of the same capture (Dart `jsonEncode`: insertion order) send different bytes under the same key, so a replay after a lost response was refused as `IDEMPOTENCY_KEY_REUSED`. The ticket's alternative was byte-identical encoders on both clients. It was rejected: it fixes one pair of clients, and the next encoder would break it again.
+
+**Decision**:
+1. `requestFingerprint` (`server/src/idempotency.ts`) parses a JSON body and re-serialises it with keys sorted at every depth, with no insignificant whitespace and with `JSON.stringify` escaping. Array order and every value still count, and so do the method and the path. A body that isn't JSON counts byte for byte.
+2. Numbers pass through a double. The API sends money as decimal strings, so no amount is affected. Two integers above 2^53 that differ only beyond double precision would compare equal; no route takes such a number.
+3. **Transition:** keys stored before this change carry the byte fingerprint. On a mismatch the middleware claims again with the byte fingerprint, and a byte-identical replay of an old key still replays. A claim only compares against an existing key, so the second call has no side effect. The fallback can go once every pre-change key is past any client's retry window.
+4. API 1.26.3-mut199. The API description says how bodies compare.
+
