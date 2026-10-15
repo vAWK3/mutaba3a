@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — CSV import no longer calls new clients and projects duplicates (MUT-218)
+
+**Why:** `validateCSVImport` added the file's own client and project names to the "already exists" list before checking them, so every new client or project row matched itself and showed as Duplicate.
+
+### Fixed
+- A client or project row is a Duplicate only when its name already exists in the app, or when an earlier row in the same file has that name. A repeat in the file gets "Client/Project name appears more than once in this file". Names that already exist keep "… with this name already exists".
+
+### Technical
+- `src/utils/csvValidation.ts`: `validateCSVImport` checks each row against the app's names, then tracks the names seen in the file. The unused reference sets are gone; income rows never read them.
+- QA `web.data.csv-new-client` is no longer `manual`.
+- Files: `src/utils/csvValidation.ts`, `src/utils/__tests__/csvValidation.test.ts`, `qa/features/web/data.yaml`, `qa/specs/web/data.spec.ts`.
+
 ## [Unreleased] - 2026-10-15 — Financial Planning and local Retainers retired; Dexie v24 drops their tables (MUT-226)
 
 **Why:** both optional areas fell outside the client-accounting core. Planning read nothing and nothing read it; local retainers never fed income or owed totals. The owner chose to drop their data too (ADR-082, an explicit override of ADR-029 for five tables). Server Money v1 retainers are untouched.

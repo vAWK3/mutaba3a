@@ -33,12 +33,6 @@ features:
   - id: csv-new-client
     title: A client that is new to this device shows as New in the CSV validation preview, not Duplicate
     tier: tertiary
-    manual: true
-    # Product bug: validateCSVImport (src/utils/csvValidation.ts) adds the CSV's own client and
-    # project names to the "already exists" list before validating, so every new client or project
-    # row in a CSV is labelled Duplicate ("Client with this name already exists") and the preview
-    # says "1 duplicate detected. Existing records will be reused". The row still imports as a new
-    # client. The spec states the correct behaviour; un-manual it once fixed.
     paths:
       - src/utils/csvValidation.ts
       - src/components/csv/CSVValidationPreview.tsx
