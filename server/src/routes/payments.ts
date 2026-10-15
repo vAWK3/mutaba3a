@@ -218,7 +218,8 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         const replaced = await store.payments.getById(organization.id, body.replacesPaymentId);
         if (!replaced || replaced.status !== 'REVERSED') throw validationError('REPLACES_NOT_REVERSED', 'replacesPaymentId must name a REVERSED payment', { field: 'replacesPaymentId' });
         if (replaced.customerId !== body.customerId) throw validationError('REPLACES_CUSTOMER_MISMATCH', 'The replaced payment belongs to another customer', { field: 'replacesPaymentId' });
-        replacedOn = replaced.receivedOn;
+        // Only the first replacement keeps the exemption below: it is the one correction, not a standing licence.
+        if (!(await store.payments.findReplacedBy(organization.id, replaced.id))) replacedOn = replaced.receivedOn;
       }
       // MUT-227 floor. A correction (reverse, then record with replacesPaymentId) may keep the reversed payment's own
       // date, or move it later, even below the floor: the reversal has already committed, and refusing the second

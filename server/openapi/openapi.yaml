@@ -4205,7 +4205,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past."
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date."
         amount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -4637,7 +4637,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past."
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. Checked only when it differs from the stored date."
         amount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -4759,7 +4759,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: "Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past."
+          description: "Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date."
         note:
           type: string
           nullable: true

@@ -463,6 +463,10 @@ const PAST_MONEY_DATE = `Calendar date in the organization timezone, YYYY-MM-DD.
 const FLOORED_MONEY_DATE = `Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today: 422 DATE_INVALID with details.bound past.`;
 const PastMoneyDateSchema = IsoDateSchema.openapi({ description: PAST_MONEY_DATE });
 const FlooredMoneyDateSchema = IsoDateSchema.openapi({ description: FLOORED_MONEY_DATE });
+/** MUT-227: a PATCH re-checks the date only when it changes, so a row stored before the floor stays editable. */
+const UNCHANGED_NOT_CHECKED = ' Checked only when it differs from the stored date.';
+const FlooredMoneyDatePatchSchema = IsoDateSchema.openapi({ description: FLOORED_MONEY_DATE + UNCHANGED_NOT_CHECKED });
+const PastMoneyDatePatchSchema = IsoDateSchema.openapi({ description: PAST_MONEY_DATE + UNCHANGED_NOT_CHECKED });
 const BoundedMoneyDateSchema = IsoDateSchema.openapi({ description: `Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today nor ten years (${DAYS_IN_FUTURE_LIMIT} days) after it: 422 DATE_INVALID with details.bound past or future. A replacement (replacesPaymentId) may keep the replaced payment's receivedOn, or a later one, below the floor.` });
 export const IsoMonthSchema = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM').openapi({ description: 'Calendar month, YYYY-MM' });
 /** Canonical decimal amount in the project currency, e.g. "10000.00". Validated against the currency exponent server-side. */
@@ -1736,7 +1740,7 @@ export const CreateExpenseRequestSchema = z
 /** No `currency`: a row's currency never changes, so it is never converted. Null clears an optional field. */
 export const UpdateExpenseRequestSchema = z
   .object({
-    occurredOn: FlooredMoneyDateSchema.optional(),
+    occurredOn: FlooredMoneyDatePatchSchema.optional(),
     amount: AmountSchema.optional(),
     title: expenseText.nullable().optional(),
     vendor: expenseText.nullable().optional(),
@@ -1804,7 +1808,7 @@ export const CreateConversionRequestSchema = z
  */
 export const UpdateConversionRequestSchema = z
   .object({
-    occurredOn: PastMoneyDateSchema.optional(),
+    occurredOn: PastMoneyDatePatchSchema.optional(),
     amount: AmountSchema.optional().openapi({ description: 'In the merged currency\'s fractional digits (the body\'s `currency`, else the row\'s)' }),
     currency: CurrencySchema.optional().openapi({ description: 'Only together with `amount`' }),
     toAmount: AmountSchema.optional().openapi({ description: 'In the merged toCurrency\'s fractional digits' }),
@@ -1910,7 +1914,7 @@ export const UpdateInboxEntryRequestSchema = z
   .object({
     amount: AmountSchema.optional(),
     currency: CurrencySchema.optional(),
-    occurredOn: IsoDateSchema.optional().openapi({ description: `Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past.` }),
+    occurredOn: IsoDateSchema.optional().openapi({ description: `Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past.${UNCHANGED_NOT_CHECKED}` }),
     note: inboxNote.nullable().optional(),
     captureSource: CaptureSourceSchema.nullable().optional(),
   })

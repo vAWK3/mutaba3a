@@ -264,6 +264,9 @@ describe('recording payments', () => {
     const kept = await pay(h, f, '5.00', [], { receivedOn: '2015-12-01', replacesPaymentId: original.body.id });
     expect(kept.res.status).toBe(201);
     expect(kept.body).toMatchObject({ receivedOn: '2015-12-01', replacesPaymentId: original.body.id });
+    // The exemption is the one correction, not a standing licence: a second replacement of the same payment is floored.
+    const again = await pay(h, f, '5.00', [], { receivedOn: '2015-12-01', replacesPaymentId: original.body.id });
+    expect(again.body.error.details).toEqual({ reason: 'DATE_INVALID', field: 'receivedOn', bound: 'past' });
   });
 });
 

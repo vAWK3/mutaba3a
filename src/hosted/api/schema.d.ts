@@ -11050,7 +11050,7 @@ export interface components {
             captureSource?: components["schemas"]["CaptureSource"];
         };
         UpdateExpenseRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date. */
             occurredOn?: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
@@ -11215,7 +11215,7 @@ export interface components {
             nextCursor: string | null;
         };
         UpdateConversionRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. Checked only when it differs from the stored date. */
             occurredOn?: string;
             /** @description In the merged currency's fractional digits (the body's `currency`, else the row's) */
             amount?: string;
@@ -11262,7 +11262,7 @@ export interface components {
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
             currency?: components["schemas"]["Currency"];
-            /** @description Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past. */
+            /** @description Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date. */
             occurredOn?: string;
             note?: string | null;
             captureSource?: components["schemas"]["CaptureSource"] & unknown;
