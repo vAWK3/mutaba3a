@@ -2515,3 +2515,12 @@ Re-pointed (same assertions, a live area as the example): `featureDataProbes`, `
 Deleted with their code: `planCalculationService.test.ts`, `usePlanQueries.test.tsx`, `retainerRepo.test.ts`, `useRetainerQueries.test.tsx`, `RetainerDrawer.projectField.test.tsx`, the stores' retainer blocks, `qa/specs/web/{planning,retainers}.spec.ts`.
 
 Run (Node 22): `npm run typecheck` clean; `npm run lint` 0 errors (4 warnings, all in untouched files); `npx vitest run`: 314 files, 4,310 passed, 4 skipped; `npm run build` OK; `release-qa lint` no errors, and the same 6 unmapped web files as `main`.
+
+Web QA on `vite preview` builds (throwaway `QA_CONTEXT`, 2 workers): 111 passed and 12 failed. The same 12 also fail on a `main` (a093306) build with `--last-failed`, so none is a regression:
+- the Brand loader's three slow-route checks;
+- Brand English and Arabic at 1440px;
+- Conversions log and edit/delete (`manual: true`, known bugs);
+- `web.data.csv-new-client` (`manual: true`);
+- the landing bar at 320 and 375px in EN and AR.
+
+`web.navigation.retired-areas` and all 8 `web.brand.layout` cells pass.
