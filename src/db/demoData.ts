@@ -9,11 +9,12 @@
 // `demo_`, which is how removal and the "own data" checks tell them apart.
 
 import type { Table } from 'dexie';
-import { db } from './database';
+import { db, uncoveredPaymentAmount } from './database';
 import { enforceSingleDefaultProfile } from './profileDefault';
 import { reconcileFeaturesAfterDataLoad } from '../lib/features/features';
 import { DEMO_ID_PREFIX, DEMO_PREFIXES } from '../demo/constants';
-import type { FeatureKey, Transaction } from '../types';
+import { todayLocalISO } from '../lib/dates';
+import type { FeatureKey, PaymentRecord, Transaction } from '../types';
 import type { DemoSeedRows } from './interfaces';
 
 interface DatedRow {
@@ -74,6 +75,7 @@ export const demoDataRepo = {
         db.categories,
         db.transactions,
         db.businessProfiles,
+        db.paymentRecords,
         // Retained (MUT-145): older demo seeds wrote demo_ documents; clear them too.
         db.documents,
         db.documentSequences,
@@ -85,6 +87,8 @@ export const demoDataRepo = {
         // Delete in reverse dependency order
         await db.documents.where('id').startsWith(DEMO_ID_PREFIX).delete();
         await db.documentSequences.where('id').startsWith(DEMO_ID_PREFIX).delete();
+        // Every payment on a sample entry: the seed's own, and any the visitor recorded on one (MUT-95)
+        await db.paymentRecords.filter((r) => r.transactionId.startsWith(DEMO_ID_PREFIX)).delete();
         await db.transactions.where('id').startsWith(DEMO_ID_PREFIX).delete();
         await db.expenses.where('id').startsWith(DEMO_ID_PREFIX).delete();
         await db.recurringRules.where('id').startsWith(DEMO_ID_PREFIX).delete();
@@ -118,6 +122,7 @@ export const demoDataRepo = {
         db.projects,
         db.categories,
         db.transactions,
+        db.paymentRecords,
         db.businessProfiles,
         db.expenses,
         db.expenseCategories,
@@ -135,6 +140,7 @@ export const demoDataRepo = {
         await db.categories.bulkPut(rows.categories);
         await db.expenseCategories.bulkPut(rows.expenseCategories);
         await db.transactions.bulkPut(rows.transactions);
+        await db.paymentRecords.bulkPut(samplePaymentRecords(rows.transactions));
         await db.recurringRules.bulkPut(rows.recurringRules);
         await db.expenses.bulkPut(rows.expenses);
       }
@@ -180,3 +186,25 @@ export const demoDataRepo = {
     });
   },
 };
+
+/**
+ * The payment records behind the sample's paid and part-paid entries (MUT-95, TD-063). Payment records own payment
+ * state (ADR-039), so an entry with a received amount and no record lost it on the first real payment. Same rule as
+ * the v23 backfill (`uncoveredPaymentAmount`); dated on the entry's paid or issue date, never after today (ADR-038).
+ */
+function samplePaymentRecords(transactions: Transaction[], today: string = todayLocalISO()): PaymentRecord[] {
+  const now = new Date().toISOString();
+  return transactions.flatMap((t) => {
+    const amountMinor = uncoveredPaymentAmount(t, 0);
+    if (amountMinor <= 0) return [];
+    const paidOn = (t.paidAt ?? t.occurredAt).split('T')[0];
+    return [{
+      id: `${DEMO_PREFIXES.paymentRecord}${t.id.slice(DEMO_PREFIXES.transaction.length)}`,
+      transactionId: t.id,
+      amountMinor,
+      paidAt: paidOn > today ? today : paidOn,
+      createdAt: now,
+      updatedAt: now,
+    }];
+  });
+}

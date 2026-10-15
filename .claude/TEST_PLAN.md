@@ -2597,6 +2597,58 @@ The ticket's "drive a deadlock between an allocation and an outcome write" can n
 
 The phone-side AC ("the row shows saved") follows from the server returning the stored 2xx. It is not exercised end to end from the Flutter app here.
 
+## MUT-178 — QA specs wait for Owed now (2026-10-15)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `qa/specs/web/clients.spec.ts`, `home.spec.ts`, `brand.spec.ts` (changed) | E2E (release-qa) | 0 new | Owed now is read with waiting assertions; `@web.clients.owed-now-parity`, `@web.home` and both `@web.brand.type` pass 45/45 with `--repeat-each 5 --retries 0` |
+
+Full web suite on 2026-10-15 (after MUT-218/164/217/178): 114 passed, 9 failed, all on the main baseline (5× `loader-slow-route`, 4× `landing.375`). `csv-new-client`, `conversions.log` and `conversions.edit-delete` now pass unattended.
+
+## MUT-224 — hosted portal: change the date of a saved income entry and a recorded payment (2026-10-15, ADR-083 amendment)
+
+| Suite | Cases |
+|---|---|
+| `src/hosted/data/__tests__/incomeAffordances.test.ts` | `redateAffordancesFor` (owned + capture/payments write; Malafat-fed and unowned: neither); `canRedateOwed` (ADJUSTMENT, open or settled; not VOID, INSTALLMENT, no capture write, unowned); `canRedatePayment` (own POSTED capture incl. allocated; not REVERSED, integration, someone else's, no payments write, Malafat-fed) |
+| `src/hosted/data/__tests__/filters.test.ts` | `?income=` / `?payment=` keep a uuid, drop a malformed id, survive page parsers, and split out of list filters |
+| `src/hosted/components/__tests__/HostedTable.test.tsx` | `linkColumn` moves the row-link; `canOpen` false gives no link, no `clickable`, no handler; existing row-link tests unchanged |
+| `src/hosted/components/__tests__/RedateDrawer.test.tsx` | Owed: read-only summary, `max` = profile today, "Due … stays as it is"; save → PATCH /v1/income with If-Match 3 and `{occurredOn}`; unchanged date closes with no request; 409 → re-read, refill, conflict toast, next save If-Match 4; 422 inline; 404 gone; no payments request for an unpaid entry; settled entry lists only its payment lines (one opens `?payment=`); incomplete page → See payments. Payment: PATCH /v1/payments with `{receivedOn}` and If-Match. Arabic labels. Review fixes: a background re-read keeps a typed date and saves at the new version, refills an untouched one; a save answering after unmount doesn't close; an INSTALLMENT entry, a REVERSED payment and someone else's capture show "no longer available" with no Save; a 404 on save says so |
+| `src/hosted/components/__tests__/RecordPaymentDrawer.test.tsx` | the reworded note |
+| `src/hosted/pages/__tests__/views.test.tsx` › MUT-224 | Receivables Date column; Record payment opens only `?settle=`; Enter on the row-link opens `?income=`; Payments: own capture links from Received (3rd cell), expander doesn't open, REVERSED row inert; Malafat-fed: no row-link, deep links render nothing |
+| Release-QA (portal, preview build) | `portal.income.redate-owed`, `-received`, `-payment`, `-no-future`, `-conflict`, `-malafat-readonly`, `portal.expenses.redate-expense` |
+
+## MUT-220 — Demo mode summary and active business (2026-10-15)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/components/modals/__tests__/DemoSeedModal.test.tsx` (new) | Component + fake IndexedDB (seed stubbed) | 3 | In an AppShell-like shell, Show Demo leads to the summary with "3 Businesses" (it unmounted before the fix); the first demo business stays active through `useActiveProfile`'s repair (it switched back to the person's own before the fix); the preview names the count from the seed list, and both locales take `{count}` |
+| `qa/specs/web/onboarding.spec.ts` › `@web.onboarding.demo-summary`, `@web.onboarding.demo-mode` | E2E (release-qa) | 2 | demo-summary is automated; demo-mode follows the summary flow. All 6 onboarding specs pass 18/18 with `--repeat-each 3 --retries 0` |
+
+## MUT-95 — Sample payment records (2026-10-15, TD-063)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/demo/__tests__/seedPayments.test.ts` (new) | Integration (fake IndexedDB, real seed) | 3 | Every sample income entry's records add up to what it has received (paid: its amount; part-paid: `receivedAmountMinor`), none future-dated, all `demo_`. A 1,000 payment on a part-paid entry raises its received amount by exactly 1,000 (before the fix it reset to 1,000), and the guard refuses one minor unit over the true remainder. `removeDemoData` leaves no payment on a sample entry |
+| `qa/specs/web/record-payment.spec.ts` › `@web.record-payment.sample-part-paid` (new) | E2E (release-qa) | 1 | On `/?sample=1`, Income for All Time: paying 1,000 on the part-paid entry leaves exactly 1,000 less owed. 3/3 with `--repeat-each 3`; fails on the old seed |
+
+## MUT-96 — Recurring lookback (2026-10-15, TD-069)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/services/__tests__/recurringExpenseService.dueWindow.test.ts` (new) | Integration (fake IndexedDB, clock fixed at 15 Oct 2026) | 3 | A rule started six months ago lists all seven months, where it showed 3 before the fix. A paid June, then a skipped August, move the start to the month after. A rule started three years ago lists 37 months |
+| `src/components/expenses/__tests__/RecurringAttentionList.test.tsx` › a long-running rule | Component | +3 | 37 payments read "37 payments since Oct 2023 not marked" with a $2,960 total; three still read "Aug, Sep, Oct"; Arabic uses the many form ("37 دفعة منذ") |
+| `qa/specs/web/expenses.spec.ts` › `@web.expenses.recurring-long-missed` (new) | E2E (release-qa) | 1 | A rule from eight months ago: "9 payments since <month> not marked", $720, nine months in Mark Paid. Passes with the other recurring specs |
+
+## MUT-231 — The web QA baseline (2026-10-15)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/pages/landing/__tests__/LandingHeader.test.tsx` › one slot | Component | +1 | The sign-in link and the bar's button sit in `.landing-header-slot`, which carries `data-cta-visible` false at the top and true once the button shows. The phone CSS keys off it. Failed before the fix (no slot) |
+| `qa/specs/web/landing.spec.ts` › `@web.landing.375` | E2E (release-qa) | 4 (extended) | 320 and 375, EN and AR: the wordmark is not clipped, Sign in shows at the top and is hidden once scrolled, the button fits. Failed on main ("wordmark clipped: 110px in 47px") |
+| `qa/specs/web/brand.spec.ts` › `@web.brand.loader-slow-route` | E2E (release-qa) | 5 (fixed) | Now holds Insights in a build too, with service workers blocked, and accepts `page-has-heading-one` on the loader screen. 5/5 on a dev server; 27/27 with the landing cells, `--repeat-each 3 --retries 0`, on a preview build |
+
+This retires the nine-cell baseline from the MUT-226 and MUT-178 notes above. On preview builds `loader-slow-route` now passes as well, so it is no longer dev-server-only.
+
 ## MUT-227 — a ten-year floor on hosted money dates (2026-10-15, ADR-086)
 
 | Suite | Cases |

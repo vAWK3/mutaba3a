@@ -17,6 +17,7 @@ import type {
   Expense,
 } from '../types';
 import { getRepositories } from '../db';
+import { formatLocalDate } from '../lib/dates';
 
 // ============================================================================
 // Date Helpers
@@ -334,21 +335,36 @@ export async function getVirtualOccurrences(
 export async function getDueOccurrences(
   profileId: string
 ): Promise<VirtualOccurrenceDisplay[]> {
-  // Look back 90 days for overdue, look ahead 30 days for upcoming
-  const dateFrom = new Date(new Date().setDate(new Date().getDate() - 90))
-    .toISOString()
-    .split('T')[0];
-  const dateTo = new Date(new Date().setDate(new Date().getDate() + 30))
-    .toISOString()
-    .split('T')[0];
+  // MUT-96 (TD-069): look back to the earliest rule's start, not a fixed 90 days, so no missed payment drops out
+  // unseen; look ahead 30 days for upcoming. Local calendar dates, as the rule's own dates are.
+  const rules = await getRepositories().base.recurringRules.listActive(profileId);
+  if (rules.length === 0) return [];
+  const dateFrom = rules.reduce((earliest, rule) => (rule.startDate < earliest ? rule.startDate : earliest), rules[0].startDate);
+  const ahead = new Date();
+  ahead.setDate(ahead.getDate() + DUE_LOOKAHEAD_DAYS);
+  const dateTo = formatLocalDate(ahead);
 
-  const allOccurrences = await getVirtualOccurrences(profileId, dateFrom, dateTo);
+  const [allOccurrences, persisted] = await Promise.all([
+    getVirtualOccurrences(profileId, dateFrom, dateTo),
+    getRepositories().base.recurringOccurrences.list({ profileId, dateFrom, dateTo }),
+  ]);
 
-  // Filter to only due and overdue
+  // A rule's missed payments start the day after its last resolved one (paid or skipped): older gaps were settled
+  const lastResolved = new Map<string, string>();
+  for (const occ of persisted) {
+    if (occ.status !== 'resolved_paid' && occ.status !== 'resolved_skipped') continue;
+    if (occ.expectedDate > (lastResolved.get(occ.ruleId) ?? '')) lastResolved.set(occ.ruleId, occ.expectedDate);
+  }
+
   return allOccurrences.filter(
-    (occ) => occ.computedState === 'due' || occ.computedState === 'overdue'
+    (occ) =>
+      (occ.computedState === 'due' || occ.computedState === 'overdue') &&
+      occ.expectedDate > (lastResolved.get(occ.ruleId) ?? '')
   );
 }
+
+/** How far ahead Needs attention looks for upcoming payments. */
+const DUE_LOOKAHEAD_DAYS = 30;
 
 // ============================================================================
 // Action Functions

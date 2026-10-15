@@ -66,29 +66,23 @@ features:
       - src/db/profileDefault.ts
     steps:
       - Open /?demo=1 on a fresh install and skip the welcome
-      - Read the Activate Demo Mode dialog and click Show Demo
-      - Switch to a sample business in the sidebar and open Clients
+      - Read the Activate Demo Mode dialog, click Show Demo, then Get Started on the summary
+      - Open Clients on the sample business the app opened
       - Click Freeze Time, then Real Time
       - Click Reset and confirm
     expect:
-      - The dialog lists what the demo creates (10 clients, 60+ transactions)
-      - After Show Demo the dialog closes and a Demo Mode banner sits at the top
-      - The sample business's clients are listed
+      - The dialog lists what the demo creates (3 business profiles, 10 clients, 60+ transactions)
+      - After Show Demo and Get Started the dialog closes and a Demo Mode banner sits at the top
+      - The app is on a sample business and its clients are listed
       - Freeze Time shows "Time: Jan 15, 2025"; Real Time clears it
       - Reset removes the banner and the sample; only Default Profile is left, with no clients
   - id: demo-summary
-    title: "After Show Demo, a Demo Mode Activated summary opens the app on a sample business (bug: no summary, app stays on your own business)"
+    title: After Show Demo, a Demo Mode Activated summary opens the app on a sample business
     tier: tertiary
-    manual: true
-    # Product bug: DemoSeedModal.handleSeed calls activateDemo(), whose store update sets
-    # showConfirmModal false, so AppShell unmounts the modal before its success state renders: no
-    # "Demo Mode Activated" summary, no Get Started, no reload. Its setActiveProfile(demo id) then loses
-    # to useActiveProfile's repair (the profiles query has not refetched yet), so the app stays on the
-    # person's own default business with the sample out of sight. The spec asserts the intended
-    # behaviour under test.fail; switch this back to automated once fixed.
     paths:
       - src/components/modals/DemoSeedModal.tsx
       - src/components/modals/DemoSeedModal.css
+      - src/demo/demoStore.ts
     steps:
       - Open /?demo=1 on a fresh install, skip the welcome, click Show Demo
       - Read the summary and click Get Started

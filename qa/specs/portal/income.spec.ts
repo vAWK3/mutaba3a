@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { OFFICE_A, customer, office } from '../../support/portal';
-import { FakeApi, apiError, customerSummary, receivable, todayInJerusalem } from '../../support/portalApi';
+import { FIRM, OFFICE_A, customer, malafatFirm, office } from '../../support/portal';
+import { FakeApi, allocation, apiError, customerSummary, payment, receivable, todayInJerusalem } from '../../support/portalApi';
 
 /**
  * Income on an owned hosted profile (MUT-133): Add income (Received or Owed)
@@ -241,3 +241,178 @@ test('Add income from a client’s page starts as Owed with that client filled i
     await expect(page.getByRole('table', { name: 'Receivables' })).toContainText('300.00');
   });
 });
+
+// ---------------------------------------------------------------- MUT-224: changing a date
+
+const owedEntry = () => receivable(31, { customerId: C1, gross: '500.00', dueDate: '2026-11-15', postingDate: '2026-10-08' });
+const receivedEntry = () => payment(41, { customerId: C1, amount: '300.00', receivedOn: '2026-10-08', mine: true });
+const dayAfter = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
+
+test('An Owed entry’s date is changed from Receivables; the Date column shows it and its due date stays', { tag: '@portal.income.redate-owed' }, async ({ page, step }) => {
+  const owed = owedEntry();
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, receivables: [owed] });
+  const drawer = page.getByRole('dialog', { name: 'Change the date' });
+  const row = () => page.getByRole('table', { name: 'Receivables' }).getByRole('row', { name: /Client 1/ });
+
+  await step('Open Receivables and open the Owed entry from its row', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await expect(row()).toContainText('Oct 8, 2026');
+    await row().locator('button.row-link').click();
+    await expect(page).toHaveURL(new RegExp(`income=${owed.id}`));
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByText('Due Nov 15, 2026 — stays as it is')).toBeVisible();
+    await expect(drawer.getByLabel('Date')).toHaveValue('2026-10-08');
+    await expect(drawer.getByLabel('Amount')).toHaveCount(0);
+  });
+
+  await step('Pick a date last month and save', async () => {
+    await drawer.getByLabel('Date').fill('2026-09-20');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+    await expect(page).not.toHaveURL(/income=/);
+  });
+
+  await step('The server got the date with If-Match, and the row shows the new day with the same due date', async () => {
+    const patch = api.last('PATCH', new RegExp(`^/v1/income/${owed.id}$`));
+    expect(patch?.body).toEqual({ occurredOn: '2026-09-20' });
+    expect(patch?.headers['if-match']).toBe('1');
+    await expect(row()).toContainText('Sep 20, 2026');
+    await expect(row()).toContainText('Nov 15, 2026');
+  });
+});
+
+test('A Received payment’s date is changed from Payments by its Received cell', { tag: '@portal.income.redate-received' }, async ({ page, step }) => {
+  const received = receivedEntry();
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, payments: [received] });
+  const drawer = page.getByRole('dialog', { name: 'Change the received date' });
+  const row = () => page.getByRole('table', { name: 'Payments' }).getByRole('row', { name: /Client 1/ });
+
+  await step('Open Payments and open the payment from its Received date', async () => {
+    await api.open(page, `/p/${OFFICE_A}/payments`);
+    await row().getByRole('button', { name: 'Oct 8, 2026' }).click();
+    await expect(page).toHaveURL(new RegExp(`payment=${received.id}`));
+    await expect(drawer.getByLabel('Received on')).toHaveValue('2026-10-08');
+  });
+
+  await step('Pick an earlier day and save', async () => {
+    await drawer.getByLabel('Received on').fill('2026-10-02');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  await step('The server got receivedOn with If-Match, and the row shows the new day', async () => {
+    const patch = api.last('PATCH', new RegExp(`^/v1/payments/${received.id}$`));
+    expect(patch?.body).toEqual({ receivedOn: '2026-10-02' });
+    expect(patch?.headers['if-match']).toBe('1');
+    await expect(row()).toContainText('Oct 2, 2026');
+  });
+});
+
+test('A settled entry lists its payment; changing that payment’s date shows on the entry', { tag: '@portal.income.redate-payment' }, async ({ page, step }) => {
+  const owed = owedEntry();
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, receivables: [owed] });
+  const entry = page.getByRole('dialog', { name: 'Change the date' });
+  const paymentDrawer = page.getByRole('dialog', { name: 'Change the received date' });
+  const today = todayInJerusalem();
+
+  await step('Record payment in full on the Owed entry', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.getByRole('button', { name: /^Record payment for Client 1/ }).click();
+    const settle = page.getByRole('dialog', { name: /Record payment/ });
+    await settle.getByRole('button', { name: 'Record payment' }).click();
+    await expect(settle).toHaveCount(0);
+  });
+
+  await step('Open the settled entry: it lists its payment, received today', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables?status=SETTLED`);
+    await page.getByRole('table', { name: 'Receivables' }).getByRole('row', { name: /Client 1/ }).locator('button.row-link').click();
+    await expect(entry.getByText('Payments on this entry')).toBeVisible();
+    await expect(entry.getByRole('button', { name: /500\.00/ })).toBeVisible();
+  });
+
+  await step('Open its payment line and pick an earlier day', async () => {
+    await entry.getByRole('button', { name: /500\.00/ }).click();
+    await expect(paymentDrawer).toBeVisible();
+    await expect(paymentDrawer.getByLabel('Received on')).toHaveValue(today);
+    await paymentDrawer.getByLabel('Received on').fill('2026-10-01');
+    await paymentDrawer.getByRole('button', { name: 'Save' }).click();
+    await expect(paymentDrawer).toHaveCount(0);
+    expect(api.last('PATCH', /^\/v1\/payments\//)?.body).toEqual({ receivedOn: '2026-10-01' });
+  });
+
+  await step('Open the entry again: its payment line shows the new date', async () => {
+    await page.getByRole('table', { name: 'Receivables' }).getByRole('row', { name: /Client 1/ }).locator('button.row-link').click();
+    await expect(entry.getByRole('button', { name: /Oct 1, 2026/ })).toBeVisible();
+  });
+});
+
+test('The date stops at the profile’s today, and a later date is refused at the field without a request', { tag: '@portal.income.redate-no-future' }, async ({ page, step }) => {
+  const owed = owedEntry();
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, receivables: [owed] });
+  const drawer = page.getByRole('dialog', { name: 'Change the date' });
+
+  await step('Open the Owed entry', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables?income=${owed.id}`);
+    await expect(drawer.getByLabel('Date')).toHaveAttribute('max', todayInJerusalem());
+  });
+
+  await step('Type tomorrow and save', async () => {
+    await drawer.getByLabel('Date').fill(dayAfter(todayInJerusalem()));
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer.getByText(/The date can.t be later than today/)).toBeVisible();
+    expect(api.calls('PATCH', /^\/v1\/income\//)).toHaveLength(0);
+  });
+});
+
+test('A date changed on another device is refused on Save; the drawer refills with it and saving again works', { tag: '@portal.income.redate-conflict' }, async ({ page, step }) => {
+  const owed = owedEntry();
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, receivables: [owed] });
+  const drawer = page.getByRole('dialog', { name: 'Change the date' });
+
+  await step('Open the Owed entry; meanwhile it is re-dated elsewhere', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables?income=${owed.id}`);
+    await expect(drawer.getByLabel('Date')).toHaveValue('2026-10-08');
+    api.redatedElsewhere(owed.id, '2026-10-05');
+  });
+
+  await step('Pick a day and save: refused, and the other device’s day is shown', async () => {
+    await drawer.getByLabel('Date').fill('2026-09-30');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('alert')).toContainText('This changed elsewhere');
+    await expect(drawer.getByLabel('Date')).toHaveValue('2026-10-05');
+  });
+
+  await step('Pick the day again and save: it goes through at the new version', async () => {
+    await drawer.getByLabel('Date').fill('2026-09-30');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+    expect(api.last('PATCH', /^\/v1\/income\//)?.headers['if-match']).toBe('2');
+  });
+});
+
+test('A Malafat-fed profile offers no date change on Receivables or Payments, even from a deep link', { tag: '@portal.income.redate-malafat-readonly' }, async ({ page, step }) => {
+  const owed = receivable(51, { customerId: C1, gross: '500.00', origin: 'INSTALLMENT' });
+  const paid = payment(52, { customerId: C1, amount: '500.00', allocations: [allocation(53, { receivableId: owed.id, projectId: owed.projectId ?? C1, amount: '500.00', left: '0.00' })] });
+  const api = new FakeApi({ profiles: [malafatFirm()], clients: 1, receivables: [owed], payments: [paid] });
+
+  await step('Open the firm’s Receivables at ?income=', async () => {
+    await api.open(page, `/p/${FIRM}/receivables?income=${owed.id}`);
+    const table = page.getByRole('table', { name: 'Receivables' });
+    await expect(table).toBeVisible();
+    await expect(table.locator('button.row-link')).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  await step('Open its Payments at ?payment=', async () => {
+    await api.open(page, `/p/${FIRM}/payments?payment=${paid.id}`);
+    const table = page.getByRole('table', { name: 'Payments' });
+    await expect(table).toBeVisible();
+    await expect(table.locator('button.row-link')).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+});
+

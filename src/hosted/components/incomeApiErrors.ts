@@ -95,3 +95,18 @@ export function mapSettleError(error: unknown): MappedError {
   if (apiError.code === 'CONFLICT') return { fields: [], toast: 'hosted.settle.errors.changed', reread: true };
   return { fields: [], toast: 'hosted.income.errors.saveFailed' };
 }
+
+/**
+ * MUT-224: the re-date drawers' errors. A refused date is inline under the date; a stale version (409) or a row that
+ * went away (404) re-reads, so the drawer refills or says it's gone; anything else is a toast.
+ */
+export function mapRedateError(error: unknown): MappedError {
+  const early = nonValidation(error);
+  if (early) return early;
+  const apiError = error as ApiError;
+  if (apiError.code === 'VALIDATION_FAILED' && apiErrorReason(apiError) === 'DATE_INVALID') return { fields: [{ field: 'date', key: 'hosted.income.errors.dateFuture' }] };
+  if (apiError.code === 'CONFLICT') return { fields: [], toast: 'hosted.redate.conflict', reread: true };
+  // The re-read then shows "no longer available" (the record went, or the drawer can no longer change it).
+  if (apiError.code === 'NOT_FOUND') return { fields: [], toast: 'hosted.redate.gone', reread: true };
+  return { fields: [], toast: 'hosted.income.errors.saveFailed' };
+}

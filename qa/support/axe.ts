@@ -21,8 +21,9 @@ export const KNOWN_AXE_VIOLATIONS = {
   incomeDrawer: [],
   paymentDrawer: [],
   landing: [],
-  // The bloom loader on a slow route (MUT-206)
-  loader: [],
+  // The bloom loader on a slow route (MUT-206) stands in for the whole page, the TopBar and its
+  // h1 included, until the route's code arrives; axe's best-practice heading rule (not WCAG) fires meanwhile
+  loader: ['page-has-heading-one'],
   // The language switch sits above <main>, outside any landmark (MUT-43 layout; TD-082)
   portalSignIn: ['region'],
   // The boot screen (MUT-207) is the mark and its status alone, before any layout: nothing sits in a landmark

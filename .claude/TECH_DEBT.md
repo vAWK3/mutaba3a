@@ -29,6 +29,13 @@
 - A product question: `components/ui/MacDownloadBanner(.css)` still offers the desktop download to Mac browsers although the desktop is retired until v2.
 **Fix**: delete the first group, drop or gate `/theme-demo`, decide the Mac banner; re-run `release-qa lint`.
 
+### TD-145: A settled entry's payment lines come from the client's first 50 payments
+**Status**: Open
+**Added**: 2026-10-15 (MUT-224, eng review R4)
+**Priority**: Low — owned profiles have few payments per client
+**Impact**: The portal's `?income=` drawer finds the payments applied to an Owed entry by reading `GET /v1/payments?customerId=` (limit 50) and filtering allocations. A client with more than 50 payments may miss older lines; the drawer then shows "See this client's payments" instead.
+**Fix**: a server filter `GET /v1/payments?receivableId=` (exact, unbounded), then `usePaymentsForEntry` uses it and drops the fallback.
+
 ### TD-144: Drawer form labels are not tied to their inputs
 **Status**: Open
 **Ticket**: none (found 2026-10-15, release-QA specs)
@@ -667,7 +674,7 @@
 **Added**: 2026-10-12 (MUT-82)
 **Priority**: Low to Medium (item 1 is Medium: it is the sample path visitors take)
 **Impact**: Held back to keep MUT-82 to H1:
-1. **Undo on an entry with an uncovered received amount** (sample data, TD-063; legacy data, MUT-60) restores the record-derived state, not the seeded number. The save already drops the uncovered part, because `recalculateReceivedAmount` sums records only; deleting the record then leaves `receivedAmountMinor` at what the records cover. **Legacy-data half fixed 2026-10-13 (MUT-60):** the v23 backfill gives every uncovered real-user entry a record. The sample-data half is still open -- MUT-60's backfill runs as a Dexie version upgrade and never touches a freshly-seeded demo session (created straight at the latest schema version, nothing to upgrade from), so TD-063's own seed-side fix is still needed for the sample path.
+1. **Undo on an entry with an uncovered received amount** (sample data, TD-063; legacy data, MUT-60) restores the record-derived state, not the seeded number. The save already drops the uncovered part, because `recalculateReceivedAmount` sums records only; deleting the record then leaves `receivedAmountMinor` at what the records cover. **Legacy-data half fixed 2026-10-13 (MUT-60):** the v23 backfill gives every uncovered real-user entry a record. The sample-data half was fixed 2026-10-15 (MUT-95): the seed writes the records itself.
 2. **`useAttentionReceivables` has no app consumer.** Home selects its list from `useReceivables` (ADR-055). Both copies (`useQueries.ts`, `useIncomeQueries.ts`) and their tests remain, and so does `transactionRepo.getAttentionReceivables` in the repository interface (it now calls the shared selector). Not deleted here: `useQueries.ts` was MUT-73's area while this lane was open.
 3. **Home's Recent payments rows** still open their client by mouse only (Needs attention's rows gained a link), and at 375 px the date and amount squeeze the client column to one letter.
 4. **Toasts and assistive technology.** `ToastContainer` mounts with its first toast, so its `role="status"` region is not in the page before the message and some screen readers won't announce it. Undo has no keyboard shortcut and sits at the end of the tab order; MUT-82 only pauses the timer once focus or the pointer reaches it.
@@ -695,7 +702,7 @@
 **Effort**: Medium
 
 ### TD-069: Expenses Needs attention only looks back 90 days
-**Status**: Open
+**Status**: Resolved 2026-10-15 (MUT-96, owner chose option 1): `getDueOccurrences` looks back to the earliest active rule's start and keeps, per rule, only payments after its last resolved one (paid or skipped). A row with more than 6 missed payments reads "N payments since <Mon YYYY> not marked" instead of naming every month; the total counts them all. The 6 is our call, not the owner's yet.
 **Added**: 2026-10-12 (MUT-87)
 **Priority**: Medium
 **Impact**: `getDueOccurrences` (`src/services/recurringExpenseService.ts`) asks for occurrences from 90 days ago to 30 days ahead. A payment missed more than 90 days ago never appears, so a rule started six months ago and never marked shows "Aug, Sep, Oct not marked" and silently drops April to July. MUT-87's one-row-per-rule now names the months, which makes the gap visible but does not cause it. The window predates MUT-87; changing it is a product decision (how far back should "not marked" reach: the rule's start, the last resolved payment, a fixed year?).
@@ -727,7 +734,7 @@
 **Update 2026-10-13**: `make release full`'s `release-web` leg hit the same pattern — `ConversionDrawer.test.tsx`, `ExpenseDrawer.oneTimeFields.test.tsx`, `visitorSample.test.ts`, `ProfileSwitcher.test.tsx` and `SavedFlashAnnouncer.test.tsx` all timed out in the root `npm run test:run` (238 files on 11 cores) and passed every time alone or in a small group. Applied the same `vi.setConfig({ testTimeout: 15_000 })` per-file override already used by the `migration-mut*` suites (the DB suites' 60 s is tuned for `createdb`/`dropdb`; 15 s is proportionate for a Dexie round-trip + userEvent render). Still open: `IncomeDrawer.test.tsx` and the `routes-m6` ordering race are untouched, and more component/demo tests can hit the same ceiling as the suite grows — a vitest `projects` config with a higher default timeout for `src/**` component/demo tests would close this for good instead of patching file by file.
 **Update 2026-10-13 (MUT-47, D9 bounded investigation)**: `IncomeDrawer.test.tsx`'s MUT-89 AC4 case ("offers to create a new client only once a business is chosen") failed once in a root run on main a48f72d: `findByRole('option', { name: /Brand New Co/ })` not found, the file taking 78 s in a run that took 227 s overall. The same suite on the MUT-47 branch ran green in 49 s (246 files, 3536 tests); the file passed alone, in `src/components src/pages` runs twice, and three times under 22 busy-loop processes on 11 cores (17–23 s per file). Not a component race: `ClientTypeahead`'s "Create new" option is computed synchronously from `inputValue` and `canCreate`, with no query or timer between `selectOptions` and the click. The failing wait is `asyncUtilTimeout` (3 s, `src/test/setup.ts:10`), not the 5 s test timeout, so the per-file `testTimeout` patch does not cover it; the remediation above (a vitest `projects` config for component suites, or a higher `asyncUtilTimeout` there) is still the fix. The 227 s run coincided with other sessions' suites on the same machine.
 ### TD-063: Sample part-paid entries have a received amount but no payment record, so paying one raises Owed now
-**Status**: Open
+**Status**: Resolved 2026-10-15 (MUT-95): `demoData.seed` writes a `demo_payment_` record for every paid and part-paid sample entry, by the v23 backfill's rule (`uncoveredPaymentAmount`), dated on the entry's paid or issue date and never after today. `removeDemoData` deletes every payment on a sample entry.
 **Added**: 2026-10-12 (MUT-86, found in the browser on `/app/clients?sample=1`)
 **Priority**: Medium. This is the path the landing page's "Paid? Two taps." chapter sends visitors down.
 **Impact**: `src/demo/seedData/transactions.ts` (from line 319) seeds part-paid entries with `receivedAmountMinor` set and no `PaymentRecord`. The first payment recorded on one runs `recalculateReceivedAmount`, which sums the records alone and so drops the seeded part. For example, an entry of ₪6,300 with ₪2,298.72 received and ₪4,001.28 left took a ₪2,000 payment and showed ₪4,300 left. The client's Owed now went from ₪6,901.28 up to ₪7,200, and the entry's "Recorded on the entry" row disappeared from Payments. The repository's overpayment guard also counts records only, so it allows more than the drawer does on such an entry. This predates MUT-86; the old drawer did the same. Real data rarely reaches it, because the legacy migration wrote "Migrated from accumulated total" records. TD-029 / MUT-60 is the general case (received money with no record).

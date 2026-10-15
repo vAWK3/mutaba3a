@@ -42,6 +42,7 @@ function headerCtaLocatorFor(page: Page): Locator {
 }
 const headerCta = (page: Page) => headerCtaLocatorFor(page);
 const heroCta = (page: Page) => page.locator('.hero-cta-primary');
+const signIn = (page: Page) => header(page).locator('.landing-header-signin');
 
 /** The bar's button has finished fading in. */
 async function expectHeaderCtaShown(page: Page) {
@@ -243,6 +244,7 @@ for (const [width, language] of [[375, 'en'], [375, 'ar'], [320, 'en'], [320, 'a
       }
       expect(bar.height).toBeLessThan(80);
       expect(await barProblems(page)).toEqual([]);
+      await expect(signIn(page), 'Sign in has the slot while the hero’s button shows (MUT-231)').toBeVisible();
       await expectNoHorizontalOverflow(page, `landing ${language} ${width}`);
       await attachScreenshot(page, `bar-top-${width}-${language}`);
     });
@@ -254,6 +256,7 @@ for (const [width, language] of [[375, 'en'], [375, 'ar'], [320, 'en'], [320, 'a
       expect(cta.x).toBeGreaterThanOrEqual(0);
       expect(cta.x + cta.width).toBeLessThanOrEqual(width);
       expect(cta.height, 'a 44px tap target').toBeGreaterThanOrEqual(44);
+      await expect(signIn(page), 'the button takes Sign in’s slot (MUT-231)').toBeHidden();
       expect((await header(page).boundingBox())!.height).toBeLessThan(80);
       expect(await barProblems(page)).toEqual([]);
       await expectNoHorizontalOverflow(page, `landing ${language} ${width} scrolled`);

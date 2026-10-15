@@ -155,4 +155,33 @@ describe('RecurringAttentionList (MUT-87)', () => {
     // Three is "few" in Arabic: the few form, not the English "other"
     expect(screen.getByRole('menuitem', { name: 'تخطي 3 دفعات' })).toBeInTheDocument();
   });
+
+  describe('a long-running rule (MUT-96)', () => {
+    // Three years unmarked: 37 monthly payments, Oct 2023 to Oct 2026
+    const THREE_YEARS = Array.from({ length: 37 }, (_, i) => {
+      const date = new Date(2023, 9 + i, 5);
+      const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-05`;
+      return occurrence({ expectedDate: iso, daysUntilDue: -(36 - i) * 30 });
+    });
+
+    it('summarises the months instead of listing all of them, and the total counts every one', () => {
+      renderList(THREE_YEARS);
+      const row = rowFor('Server hosting');
+
+      expect(text(row)).toContain('37 payments since Oct 2023 not marked');
+      expect(text(row)).not.toContain('Nov 2023');
+      expect(text(within(row).getByTestId('recurring-attention-amount'))).toBe('$2,960');
+    });
+
+    it('still lists a handful of months by name', () => {
+      renderList(HOSTING);
+      expect(text(rowFor('Server hosting'))).toContain('Aug, Sep, Oct not marked');
+    });
+
+    it('summarises in Arabic with the right plural', () => {
+      renderList(THREE_YEARS, 'ar');
+      expect(text(rowFor('Server hosting'))).toContain('37 دفعة منذ');
+    });
+  });
 });
+

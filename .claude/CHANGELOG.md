@@ -49,6 +49,97 @@
 - The phone half (too-old labels for an outbox row and File from Recent) is on mutaba3a-flutter `feature/mut-227-date-floor`.
 - Files: `server/src/{agreements,income,expenses,inbox}/compose.ts`, `server/src/routes/{income,receivables,payments,expenses,conversions,inbox}.ts`, `server/src/{schemas,app}.ts`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/components/incomeApiErrors.ts`, `src/hosted/i18n/{en,ar}.json`, `qa/features/portal/income.yaml`, `qa/specs/portal/income.spec.ts`, tests below.
 
+## [Unreleased] - 2026-10-15 — The web QA baseline goes green: the phone bar fits, the slow-route loader is held in builds (MUT-231)
+
+**Why:** nine release-QA cells failed on main (the baseline MUT-226 recorded on a093306), so the web suite could never pass with no retries.
+- `@web.landing.375` (4 cells) is an app bug. `f1e8c43` put "Sign in now" in the landing bar beside the switch and the bar's button, whose slot is kept even while it is hidden. On phones that left the wordmark 47 of 110 px at 375 EN (EN at 481–487 px clipped too).
+- `@web.brand.loader-slow-route` (5 cells) was a spec problem. `holdInsightsCode` matched only dev-server module paths, and a build's service worker serves the precached chunk with no request. Once the chunk was held, light and dark hit axe's best-practice `page-has-heading-one`: the loader stands in for the whole page, TopBar h1 included. They hit it on the dev server too, so those two cells had never passed.
+
+### Fixed
+- At ≤640 px, Sign in and the bar's button share one slot. Sign in shows while the hero's button is on screen; once it has scrolled away, the bar's button fades in over it, and the hidden one leaves the tab order. Wider screens are unchanged. The wordmark fits at 320, 375, 414 and 481 in both languages.
+
+### Technical
+- `LandingHeader`: `.landing-header-slot[data-cta-visible]` wraps the sign-in link and `HeaderCta`. It is `display: contents` above 640 px and a one-cell grid below. CSS in `LandingPage.css`.
+- `brand.spec.ts`: the slow-route tests sit in a `describe` with `serviceWorkers: 'block'`. `holdInsightsCode` also holds the built chunk that exports `InsightsPage`. `KNOWN_AXE_VIOLATIONS.loader` = `page-has-heading-one`, by design, like `portalBoot`'s `region`.
+- `landing.spec.ts` `@web.landing.375` now also checks Sign in is shown at the top and hidden once scrolled.
+- Files: `src/pages/landing/components/LandingHeader.tsx`, `src/pages/landing/LandingPage.css`, `src/pages/landing/__tests__/LandingHeader.test.tsx`, `qa/specs/web/{brand,landing}.spec.ts`, `qa/support/axe.ts`, `qa/features/web/landing.yaml`.
+
+## [Unreleased] - 2026-10-15 — Hosted portal: change the date of a saved income entry and a recorded payment (MUT-224)
+
+**Why:** MUT-223 gave the server re-dating; the portal still had no way to fix a wrong day on an Owed entry or a recorded payment. Expenses could already be re-dated. ADR-083 (MUT-224 amendment).
+
+### Added
+- `RedateDrawer` (one drawer, two kinds): `?income=<receivableId>` changes an Owed entry's date (PATCH /v1/income) and `?payment=<paymentId>` a recorded payment's received date (PATCH /v1/payments). It reads the record fresh, sends If-Match at that version, refills on a 409 re-read, shows a 422 under the date and a 404 as no longer available. A settled entry lists its payment lines, found by scanning the client's first 50 payments, with a "See this client's payments" fallback (TD-145).
+- Receivables: a **Date** column (postingDate) before Due; own Owed rows open the drawer by their row-link. Payments: the user's own posted capture opens it from its Received cell.
+- `HostedTable` `linkColumn` and `canOpen`; `redateAffordancesFor`, `canRedateOwed`, `canRedatePayment`; `usePayment`, `usePaymentsForEntry`, `useRedateOwed`, `useRedatePayment`; `api.payment`, `redateIncome`, `redatePayment`.
+- Release-QA: `portal.income.redate-{owed,received,payment,no-future,conflict,malafat-readonly}` and `portal.expenses.redate-expense`; the portal stub serves the new routes.
+
+### Changed
+- The Record payment note now reads "You can fix the date later; the amount can't be changed yet." (en + ar).
+- Record payment and the Payments expander stop propagation, so they never open the re-date drawer.
+
+### Not changed
+- Malafat-fed and unowned profiles: no row-link, no clickable look, and `?income=` / `?payment=` deep links render nothing.
+
+### Fixed in review (qa-reconcile)
+- A record the server would refuse (an undone payment, someone else's capture, an entry Malafat posted) opened a working Save that did nothing: GET answers 200 there and only the PATCH says 404, which was mapped to a silent re-read. The drawer now checks `canRedateOwed` / `canRedatePayment` on the record it loaded and shows "no longer available"; a 404 on save also toasts it.
+- A save that answered after the drawer closed called the old `onClose` and closed whatever drawer was open by then (resetting its filters). It now does nothing once unmounted.
+- A background refetch with a new version replaced a typed date, and Save then closed without saving. The date now refills only after a 409's re-read or when nothing was typed.
+
+## [Unreleased] - 2026-10-15 — Expenses Needs attention reaches back to the rule's start (MUT-96, TD-069)
+
+**Why:** `getDueOccurrences` asked only for the last 90 days, so a monthly rule that started six months ago and was never marked silently lost its oldest months, from the row and from the totals.
+
+### Fixed
+- Needs attention lists every unresolved payment since the later of the rule's start date and the day after its last resolved payment (paid or skipped). This is option 1 on the ticket, chosen by the owner 2026-10-15. Row amounts and the section total include them all.
+- A rule with more than six missed payments reads "37 payments since Oct 2023 not marked" instead of naming every month. Arabic gets its own plural forms. Up to six are still named.
+- The window's dates are local calendar dates; they were UTC.
+
+### Technical
+- `formatMonthShortYear` added to `recurringAttention.ts`; `notMarkedSince` plural copy in both locales.
+- New QA feature `web.expenses.recurring-long-missed`.
+- Files: `src/services/recurringExpenseService.ts`, `src/components/expenses/{RecurringAttentionList.tsx,recurringAttention.ts}`, both translation files, tests below, `qa/specs/web/expenses.spec.ts`, `qa/features/web/expenses.yaml`.
+
+## [Unreleased] - 2026-10-15 — The sample's part-paid entries come with payment records (MUT-95, TD-063)
+
+**Why:** payment records own payment state (ADR-039). The sample seeded part-paid entries with a received amount and no record, so the first real payment summed the records alone and Owed now went up (₪4,001.28 left, pay ₪2,000, then ₪4,300 left). The overpayment guard counted records only, too.
+
+### Fixed
+- The sample writes one payment record for every paid and part-paid entry, adding up to what it has received, by the v23 backfill's rule. Each is dated on the entry's paid or issue date, never after today.
+- A payment on a part-paid sample entry now lowers what is owed by exactly that amount, and the guard uses the true remainder. Payments shows each seeded payment once, with no "Recorded on the entry" fallback row.
+- Removing the sample removes every payment on a sample entry, including ones the visitor recorded.
+
+### Technical
+- `DEMO_PREFIXES.paymentRecord` = `demo_payment_`. `samplePaymentRecords` lives in `src/db/demoData.ts`, beside the backfill rule it reuses.
+- New QA feature `web.record-payment.sample-part-paid`. It failed on the old seed (expected 3001.28, got 5300).
+- Files: `src/db/demoData.ts`, `src/demo/constants.ts`, `src/demo/__tests__/seedPayments.test.ts` (new), `qa/specs/web/record-payment.spec.ts`, `qa/features/web/record-payment.yaml`.
+
+## [Unreleased] - 2026-10-15 — Demo mode shows its summary and opens a sample business (MUT-220)
+
+**Why:** `activateDemo` set `showConfirmModal` to false, so AppShell unmounted the dialog before its summary rendered. The switch to the demo business ran before the business list refetched, so `useActiveProfile`'s repair put the person straight back on their own business. The dialog also promised "1 business profile" when it seeds 3.
+
+### Fixed
+- After Show Demo the dialog shows the Demo Mode Activated summary, now with a Businesses count. Get Started closes it and reloads.
+- The demo seed refetches every query before making the first demo business active, so the repair has nothing to fix and the app opens on the sample business.
+- The dialog says how many businesses it creates, from the seed's own list: "{count} business profiles", in English and Arabic.
+
+### Technical
+- `activateDemo` no longer closes the dialog.
+- QA `web.onboarding.demo-summary` is automated (no `test.fail`, no `manual`). `web.onboarding.demo-mode` follows the new flow: summary, Get Started, already on the sample business.
+- Files: `src/demo/demoStore.ts`, `src/components/modals/DemoSeedModal.tsx`, both translation files, the new `DemoSeedModal.test.tsx`, `qa/specs/web/onboarding.spec.ts`, `qa/features/web/onboarding.yaml`.
+
+## [Unreleased] - 2026-10-15 — QA specs wait for Owed now before reading it (MUT-178)
+
+**Why:** `@web.clients.owed-now-parity`, `@web.home` and `@web.brand.type` read Home's Owed now with `allTextContents()` (or checked the loaded font faces) straight after `goto`. That doesn't wait, so the specs raced Home's receivables query and usually failed.
+
+### Fixed
+- The Owed now reads in `clients.spec.ts` and `home.spec.ts` are web-first `toHaveText` assertions. `brand.spec.ts` step 1 waits for the amount to show, then polls the loaded faces for IBM Plex Mono.
+- No QA spec calls `allTextContents()` any more.
+
+### Technical
+- QA specs only, no app code. Run: the three specs pass 45/45 with `--repeat-each 5 --retries 0`. Full web suite (preview build, 2 workers, no retries): 114 passed. The 9 failures are the baseline that MUT-226 recorded on main a093306: five `@web.brand.loader-slow-route` cells and four `@web.landing.375` cells. `demo-summary` is the expected `test.fail` (MUT-220).
+- Files: `qa/specs/web/{clients,home,brand}.spec.ts`.
+
 ## [Unreleased] - 2026-10-15 — Idempotency compares JSON bodies by meaning (MUT-199, ADR-085, API 1.26.3-mut199)
 
 **Why:** the fingerprint hashed the raw body. The phone widget (Swift: random key order, `\/`) and the app's replay (Dart) send the same capture as different bytes, so the app's replay after a lost widget response was refused as `IDEMPOTENCY_KEY_REUSED`.

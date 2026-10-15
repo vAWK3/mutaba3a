@@ -794,6 +794,10 @@
           "yearly": "{amount} yearly"
         },
         "notMarked": "{months} not marked",
+        "notMarkedSince": {
+          "one": "{count} payment since {since} not marked",
+          "other": "{count} payments since {since} not marked"
+        },
         "total": "Total not marked",
         "actionsFor": "Actions for {title}",
         "hint": "Each payment is saved as an expense on its own date.",
@@ -1386,7 +1390,7 @@
       "infoDesc": "This will populate the app with realistic sample data for demonstration purposes. Your existing data will not be affected.",
       "willCreate": "Demo data will include:",
       "item": {
-        "profile": "1 business profile",
+        "profile": "{count} business profiles",
         "clients": "10 clients with contact info",
         "projects": "15 projects across various fields",
         "transactions": "60+ transactions (6 months history)",
@@ -1414,6 +1418,7 @@
       "resetConfirm": "Are you sure you want to reset demo mode? All demo data will be removed."
     },
     "stats": {
+      "businesses": "Businesses",
       "clients": "Clients",
       "projects": "Projects",
       "transactions": "Transactions"

@@ -528,6 +528,81 @@ describe('Income writes stay off everywhere else (MUT-133 regression contract)',
 });
 
 
+// ---------------------------------------------------------------- MUT-224
+
+const ME_ID = '99999999-9999-4999-8999-999999999999';
+const P1_ID = 'c1111111-1111-4111-8111-111111111111';
+const P2_ID = 'c2222222-2222-4222-8222-222222222222';
+const capture = (id: string, number: string, over: Record<string, unknown> = {}) => ({
+  ...payment(id, number),
+  origin: 'capture' as const,
+  capturedBy: { userId: ME_ID, displayName: 'Nour Haddad' },
+  ...over,
+});
+
+describe('Changing a date (MUT-224)', () => {
+  it('shows each Owed entry’s own date, and a row opens ?income= while Record payment still opens only its drawer', async () => {
+    const { user, router } = portal(`/p/${ORG_A}/receivables`, {
+      'GET /v1/receivables': () => ok(page(OPEN_OWED)),
+      [`GET /v1/receivables/${R1}`]: () => ok(OPEN_OWED[0]),
+    }, [PERSONAL]);
+    const table = await screen.findByRole('table', { name: 'Receivables' });
+    expect(within(table).getByRole('columnheader', { name: 'Date' })).toBeInTheDocument();
+    expect(rowsOf(table)[0]).toHaveTextContent('Sep 1, 2026');
+
+    await user.click(within(table).getAllByRole('button', { name: /Record payment/ })[0]!);
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}/receivables?settle=${R1}`));
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    const link = rowsOf(table)[0]!.querySelector<HTMLButtonElement>('button.row-link')!;
+    link.focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}/receivables?income=${R1}`));
+    expect(await screen.findByRole('heading', { name: 'Change the date' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}/receivables`));
+  });
+
+  it('opens ?payment= from the Received date of the user’s own posted capture; the expander and other rows stay put', async () => {
+    const mine = capture(P1_ID, 'PAY-2026-0007');
+    const undone = capture(P2_ID, 'PAY-2026-0008', { status: 'REVERSED' });
+    const { user, router } = portal(`/p/${ORG_A}/payments`, {
+      'GET /v1/payments': () => ok(page([mine, undone])),
+      [`GET /v1/payments/${P1_ID}`]: () => ok(mine),
+    }, [PERSONAL]);
+    const table = await screen.findByRole('table', { name: 'Payments' });
+    const [first, second] = rowsOf(table);
+    expect(second!.querySelector('button.row-link')).toBeNull();
+    expect(second).not.toHaveClass('clickable');
+
+    await user.click(within(first!).getByRole('button', { name: 'Show where this payment went' }));
+    expect(locationOf(router)).toBe(`/p/${ORG_A}/payments`);
+
+    const link = first!.querySelector<HTMLButtonElement>('button.row-link')!;
+    expect(link.closest('td')).toBe(first!.querySelectorAll('td')[2]);
+    await user.click(link);
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}/payments?payment=${P1_ID}`));
+    expect(await screen.findByRole('heading', { name: 'Change the received date' })).toBeInTheDocument();
+  });
+
+  it('a Malafat-fed profile shows no row-link on either list and ignores ?income= and ?payment= deep links', async () => {
+    const malafat = profile();
+    portal(`/p/${ORG_A}/receivables?income=${R1}`, { 'GET /v1/receivables': () => ok(page(OPEN_OWED)) }, [malafat]);
+    const receivables = await screen.findByRole('table', { name: 'Receivables' });
+    expect(receivables.querySelector('button.row-link')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('a Malafat-fed profile’s Payments are unchanged too', async () => {
+    portal(`/p/${ORG_A}/payments?payment=${P1_ID}`, { 'GET /v1/payments': () => ok(page([capture(P1_ID, 'PAY-2026-0007')])) }, [profile()]);
+    const payments = await screen.findByRole('table', { name: 'Payments' });
+    expect(payments.querySelector('button.row-link')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+
 // ---------------------------------------------------------------- MUT-183
 
 describe('Shell overlay keys never reach a list (MUT-183 R1)', () => {

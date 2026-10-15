@@ -31,6 +31,7 @@ export const DEMO_PREFIXES = {
   recurringRule: 'demo_recurring_',
   businessProfile: 'demo_profile_',
   category: 'demo_category_',
+  paymentRecord: 'demo_payment_',
 } as const;
 
 // Default frozen time for screenshots (mid-month for good demo data visibility)

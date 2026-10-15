@@ -78,13 +78,16 @@ export function LandingHeader({ showCta, homeHref = '#top' }: LandingHeaderProps
             />
           </a>
           <div className="landing-header-actions">
-            {portalUrl && (
-              <a href={portalUrl} target="_blank" rel="noopener noreferrer" className="landing-header-signin">
-                {t('landing.header.signIn')} <span className="sr-only">{t('common.opensInNewTab')}</span>
-              </a>
-            )}
-            {/* Before the switch, so while it is hidden its reserved slot reads as gap and the switch keeps the end edge */}
-            {showCta !== undefined && <HeaderCta visible={showCta} />}
+            {/* Before the switch, so while the button is hidden its reserved slot reads as gap and the switch keeps the end edge.
+                A phone has room for one of the two: Sign in until the button shows, then the button (MUT-231, CSS) */}
+            <span className="landing-header-slot" data-cta-visible={showCta === true}>
+              {portalUrl && (
+                <a href={portalUrl} target="_blank" rel="noopener noreferrer" className="landing-header-signin">
+                  {t('landing.header.signIn')} <span className="sr-only">{t('common.opensInNewTab')}</span>
+                </a>
+              )}
+              {showCta !== undefined && <HeaderCta visible={showCta} />}
+            </span>
             <button type="button" className="landing-lang-toggle" onClick={toggleLanguage}>
               <span className={language === 'en' ? 'active' : ''}>{t('landing.langToggle.en')}</span>
               <span className="landing-lang-divider" aria-hidden="true">
