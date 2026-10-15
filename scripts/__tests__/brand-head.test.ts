@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { existsSync, readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-import { describe, expect, it } from 'vitest';
+import postcss from 'postcss';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+import { BootSplash } from '../../src/components/brand/BootSplash';
 import tokens from '../../src/styles/brand/mutaba3a.tokens.json';
 import { repoPath } from '../../src/test/css/brandCss';
 import { pngSize } from '../../src/test/pngSize';
@@ -127,5 +131,135 @@ describe('desktop icons (MUT-104, D2)', () => {
     for (const leftover of ['android', 'ios', 'icon-1024.png']) {
       expect(existsSync(repoPath(`src-tauri/icons/${leftover}`)), leftover).toBe(false);
     }
+  });
+});
+
+/**
+ * The boot splash (MUT-207, ADR-080): the mark on the canvas before any
+ * JavaScript, in both entry HTML files, styled by a linked stylesheet only
+ * (the portal CSP blocks inline style and script), identical to the React
+ * fallback's first render, and coloured from the token file.
+ */
+const BOOT_CSS = './src/styles/brand/boot-splash.css';
+const MARK = './src/assets/brand/mark.svg';
+const MARK_DARK = './src/assets/brand/mark-dark.svg';
+
+describe.each(['index.html', 'hosted.html'])('%s boot splash (MUT-207)', (file) => {
+  const doc = head(file);
+
+  it('links the boot-splash stylesheet, and the file exists', () => {
+    const links = [...doc.querySelectorAll('link[rel="stylesheet"]')].map((link) => link.getAttribute('href'));
+    expect(links).toContain(BOOT_CSS);
+    expect(existsSync(repoPath(BOOT_CSS))).toBe(true);
+  });
+
+  it('puts exactly one hidden .boot-splash in #root: the dark mark for a dark OS, else the 80 px mark', () => {
+    const root = doc.getElementById('root')!;
+    const splashes = root.querySelectorAll('.boot-splash');
+    expect(splashes).toHaveLength(1);
+    const splash = splashes[0];
+    expect(splash.parentElement).toBe(root);
+    expect(root.children).toHaveLength(1);
+    expect(splash.getAttribute('aria-hidden')).toBe('true');
+
+    const source = splash.querySelector('picture > source')!;
+    expect(source.getAttribute('media')).toBe('(prefers-color-scheme: dark)');
+    expect(source.getAttribute('srcset')).toBe(MARK_DARK);
+    const img = splash.querySelector('picture > img')!;
+    expect(img.getAttribute('src')).toBe(MARK);
+    expect([img.getAttribute('width'), img.getAttribute('height'), img.getAttribute('alt')]).toEqual(['80', '80', '']);
+    expect(img.classList.contains('boot-splash-mark')).toBe(true);
+    for (const asset of [MARK, MARK_DARK]) expect(existsSync(repoPath(asset)), asset).toBe(true);
+  });
+
+  it('has no style attribute and no inline <style> or <script> in the body (portal CSP)', () => {
+    expect(doc.body.querySelectorAll('[style], style')).toHaveLength(0);
+    expect([...doc.body.querySelectorAll('script')].filter((script) => !script.hasAttribute('src'))).toHaveLength(0);
+  });
+});
+
+/** Tag, attributes (asset URLs reduced to their file name) and children, for comparing markup. */
+function shape(element: Element): unknown {
+  const attrs = Object.fromEntries(
+    [...element.attributes]
+      .map((attr) => [attr.name, /^(src|srcset)$/.test(attr.name) ? attr.value.split('/').pop()! : attr.value])
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+  return { tag: element.tagName.toLowerCase(), attrs, children: [...element.children].map(shape) };
+}
+
+describe('BootSplash ≡ the HTML splash (MUT-207 D3)', () => {
+  // Its first render only: after bootDelayMs() it becomes the loader (DR10), which no HTML can match.
+  it.each(['index.html', 'hosted.html'])('renders, on its first render, the element tree %s paints before JS', (file) => {
+    // Page start: the still mark, as on a fast load
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+    try {
+      const react = new JSDOM(renderToStaticMarkup(createElement(BootSplash))).window.document.body.firstElementChild!;
+      const html = head(file).querySelector('#root > .boot-splash')!;
+      expect(shape(react)).toEqual(shape(html));
+    } finally {
+      now.mockRestore();
+    }
+  });
+});
+
+describe('boot-splash.css (MUT-207 D2, DR12)', () => {
+  const css = readFileSync(repoPath('src/styles/brand/boot-splash.css'), 'utf8');
+
+  interface Rule {
+    selector: string;
+    media: string | null;
+    background: string;
+    order: number;
+  }
+
+  /** Every background rule, with the media query it sits in. */
+  function rules(): Rule[] {
+    const found: Rule[] = [];
+    const root = postcss.parse(css);
+    root.walkDecls('background', (decl) => {
+      const rule = decl.parent as import('postcss').Rule;
+      const media = rule.parent?.type === 'atrule' ? (rule.parent as import('postcss').AtRule).params.replace(/\s+/g, ' ').trim() : null;
+      for (const selector of rule.selectors) found.push({ selector: selector.trim().replace(/'/g, '"'), media, background: decl.value.toUpperCase(), order: found.length });
+    });
+    return found;
+  }
+
+  type State = { os: 'light' | 'dark'; dataTheme: 'none' | 'light' | 'dark' };
+  const forced = (selector: string) => /^:root\[data-theme="(light|dark)"\]/.exec(selector)?.[1] ?? null;
+  const specificity = (selector: string) => (forced(selector) ? 20 : 0) + (selector.endsWith('.boot-splash') ? 10 : 0) + (/^html\b/.test(selector) ? 1 : 0);
+  const subject = (selector: string) => (selector.endsWith('.boot-splash') ? 'splash' : 'page');
+
+  /** The background a browser gives the splash or the page in one theme state. */
+  function background(target: 'splash' | 'page', state: State): string {
+    const matching = rules().filter((rule) => {
+      if (subject(rule.selector) !== target) return false;
+      if (rule.media === '(prefers-color-scheme: dark)' && state.os !== 'dark') return false;
+      const theme = forced(rule.selector);
+      return theme === null || theme === state.dataTheme;
+    });
+    matching.sort((a, b) => specificity(a.selector) - specificity(b.selector) || a.order - b.order);
+    return matching[matching.length - 1].background;
+  }
+
+  const STATES: [string, State, string][] = [
+    ['OS light', { os: 'light', dataTheme: 'none' }, LIGHT_CANVAS],
+    ['OS dark', { os: 'dark', dataTheme: 'none' }, DARK_CANVAS],
+    ['forced dark under OS light', { os: 'light', dataTheme: 'dark' }, DARK_CANVAS],
+    ['forced light under OS dark', { os: 'dark', dataTheme: 'light' }, LIGHT_CANVAS],
+  ];
+
+  it.each(STATES)('%s: the splash and the page behind it are the canvas the token file names', (_name, state, canvas) => {
+    expect(background('splash', state)).toBe(canvas.toUpperCase());
+    expect(background('page', state)).toBe(canvas.toUpperCase());
+  });
+
+  it('writes no colour but the two canvases', () => {
+    const hexes = new Set([...css.matchAll(/#[0-9a-f]{3,8}\b/gi)].map((m) => m[0].toUpperCase()));
+    expect([...hexes].sort()).toEqual([DARK_CANVAS.toUpperCase(), LIGHT_CANVAS.toUpperCase()].sort());
+  });
+
+  it('centres a fixed, full-window splash', () => {
+    expect(css).toMatch(/\.boot-splash\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*display:\s*grid;[^}]*place-items:\s*center;/);
   });
 });

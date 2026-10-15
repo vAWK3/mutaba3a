@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { HOSTED_RULES, LOCAL_RULES, cssUrls, extractOrigins, findForbidden, fontProblems, newOrigins, unresolvedUrls } from '../bundle-rules';
+import { HOSTED_RULES, LOCAL_RULES, bootSplashProblems, cssUrls, extractOrigins, findForbidden, fontProblems, newOrigins, unresolvedUrls } from '../bundle-rules';
 
 /** hosted-portal.md §8: the checks that keep the local builds and the portal apart. */
 
@@ -128,5 +128,62 @@ describe('brand fonts', () => {
       const preload = '<head><link rel="preload" as="font" type="font/otf" href="/assets/thmanyahsans-Regular-Xy12.otf" crossorigin></head>';
       expect(check({ html: preload })).toEqual(['the entry HTML preloads a font (/assets/thmanyahsans-Regular-Xy12.otf); swap loads it without delaying first paint']);
     });
+  });
+});
+
+/** MUT-207: every built entry opens on the boot splash, and what it needs ships (eng review A2: or is inlined). */
+describe('boot splash', () => {
+  const dist = '/d';
+  const files: Record<string, string> = {
+    '/d/assets/index-Ab12.css': '.boot-splash{position:fixed}body{margin:0}',
+    '/d/assets/mark-Cd34.svg': '<svg/>',
+    '/d/assets/mark-dark-Ef56.svg': '<svg/>',
+  };
+  const exists = (path: string) => path in files;
+  const read = (path: string) => files[path] ?? '';
+  const page = ({
+    css = '<link rel="stylesheet" crossorigin href="/assets/index-Ab12.css">',
+    srcset = '/assets/mark-dark-Ef56.svg',
+    src = '/assets/mark-Cd34.svg',
+    root = true,
+  } = {}) =>
+    `<html><head>${css}</head><body>${
+      root
+        ? `<div id="root"><div class="boot-splash" aria-hidden="true"><picture><source srcset="${srcset}" media="(prefers-color-scheme: dark)"><img class="boot-splash-mark" src="${src}" width="80" height="80" alt=""></picture></div></div>`
+        : '<div id="root"></div>'
+    }</body></html>`;
+  const check = (html: string, htmlPath = '/d/index.html') => bootSplashProblems({ htmlPath, html, dist, exists, read });
+
+  it('passes a built entry whose splash, marks and stylesheet are all in the dist', () => {
+    expect(check(page())).toEqual([]);
+  });
+
+  it('resolves the desktop build\'s relative URLs from the HTML file', () => {
+    expect(check(page({ css: '<link rel="stylesheet" href="./assets/index-Ab12.css">', src: './assets/mark-Cd34.svg', srcset: './assets/mark-dark-Ef56.svg' }))).toEqual([]);
+  });
+
+  it('accepts marks Vite inlined as data: URIs', () => {
+    expect(check(page({ src: 'data:image/svg+xml,%3Csvg/%3E', srcset: 'data:image/svg+xml,%3Csvg/%3E' }))).toEqual([]);
+  });
+
+  it('flags an entry with an empty #root', () => {
+    expect(check(page({ root: false }))).toEqual(['#root does not open with the .boot-splash markup']);
+  });
+
+  it('flags a mark or stylesheet with no file in the dist', () => {
+    expect(check(page({ src: '/assets/mark-gone.svg', css: '<link rel="stylesheet" href="/assets/gone.css"><link rel="stylesheet" href="/assets/index-Ab12.css">' }))).toEqual([
+      'the mark <img src> "/assets/mark-gone.svg" has no file in /d',
+      'a stylesheet <link href> "/assets/gone.css" has no file in /d',
+    ]);
+  });
+
+  it('flags a URL that escapes the dist', () => {
+    expect(check(page({ srcset: '../../outside.svg' }))).toEqual(['the dark mark <source srcset> "../../outside.svg" has no file in /d']);
+  });
+
+  it('flags an entry whose stylesheets carry no .boot-splash rule, or that links none', () => {
+    files['/d/assets/other.css'] = 'body{margin:0}';
+    expect(check(page({ css: '<link rel="stylesheet" href="/assets/other.css">' }))).toEqual(['no linked stylesheet carries the .boot-splash rules']);
+    expect(check(page({ css: '' }))).toEqual(['the entry links no stylesheet, so the splash paints unstyled']);
   });
 });

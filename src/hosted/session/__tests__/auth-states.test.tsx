@@ -15,6 +15,7 @@ import {
 } from '../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import { SESSION_CHANNEL } from '../channel';
+import { pageStartsNow } from '../../../test/pageStart';
 
 /** mut-43-auth-states.md §2–§3, one block per state. */
 
@@ -24,22 +25,29 @@ beforeEach(() => {
   localStorage.clear();
   localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 function signedIn(extra = {}) {
   return stubApi({ 'GET /v1/me': () => ok(me()), ...emptyProfileRoutes(), ...extra });
 }
 
 describe('S1 checking session', () => {
-  it('shows neither the form nor the shell while /v1/me is pending, and the spinner only after 400 ms', async () => {
+  // MUT-207 D4: the boot splash's mark, then the bloom loader in its place; no wordmark text.
+  it('shows neither the form nor the shell while /v1/me is pending: the mark first, the loader only after 400 ms', async () => {
+    pageStartsNow();
     stubApi({ 'GET /v1/me': never });
     renderPortal('/');
-    expect(await screen.findByText('Mutaba3a')).toBeInTheDocument();
+    expect(await screen.findByRole('presentation')).toHaveClass('boot-splash-mark');
+    expect(screen.queryByText('Mutaba3a')).toBeNull();
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.queryByLabelText('Email')).toBeNull();
     expect(screen.queryByRole('navigation')).toBeNull();
     // The bloom loader's status carries its label as text, not as a name (MUT-206 DR14)
     expect(await screen.findByRole('status', {}, { timeout: 1500 })).toHaveTextContent('Checking your session');
+    expect(screen.queryByRole('presentation')).toBeNull();
   });
 });
 

@@ -32,6 +32,11 @@ describe('loader i18n keys (MUT-206)', () => {
     expect(lookup(dict, 'common.loadingSlow')).toBe(slow);
   });
 
+  it('the portal boot screen says it is still connecting (MUT-207 DR5)', () => {
+    expect(lookup(portalEn, 'hosted.auth.connectingSlow')).toBe('Still connecting…');
+    expect(lookup(portalAr, 'hosted.auth.connectingSlow')).toBe('ما زلنا نتصل…');
+  });
+
   it('keeps the "Loading..." drawer title as it was', () => {
     expect(lookup(en, 'common.loading')).toBe('Loading...');
   });
