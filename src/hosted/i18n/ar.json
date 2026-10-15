@@ -423,6 +423,7 @@
         "currencyMismatch": "هذا المبلغ بعملة {typed}، وهذا القيد بعملة {currency}",
         "dateRequired": "اختر تاريخاً",
         "dateFuture": "لا يمكن أن يكون التاريخ بعد اليوم",
+        "dateTooOld": "لا يمكن أن يكون التاريخ قبل أكثر من عشر سنوات",
         "clientRequiredOwed": "المستحق يحتاج إلى عميل",
         "clientRequired": "اختر عميلاً",
         "clientNotFound": "هذا العميل غير موجود في هذا الملف",

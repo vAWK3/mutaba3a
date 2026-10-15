@@ -419,6 +419,7 @@
         "currencyMismatch": "That amount is in {typed}; this entry is in {currency}",
         "dateRequired": "Choose a date",
         "dateFuture": "The date can't be later than today",
+        "dateTooOld": "The date can't be more than ten years ago",
         "clientRequiredOwed": "Owed needs a client",
         "clientRequired": "Choose a client",
         "clientNotFound": "This client isn't on this profile",

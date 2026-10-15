@@ -31,6 +31,15 @@ function fieldOf(error: ApiError): string | undefined {
   return typeof details?.field === 'string' ? details.field : undefined;
 }
 
+/**
+ * MUT-227: a DATE_INVALID from a range check says which end it crossed. Past is the ten-year floor; anything else
+ * (future, or an older server with no bound) keeps the "later than today" sentence.
+ */
+function dateKey(error: ApiError): string {
+  const bound = (error.details as { bound?: unknown } | null)?.bound;
+  return bound === 'past' ? 'hosted.income.errors.dateTooOld' : 'hosted.income.errors.dateFuture';
+}
+
 function readOnlyToast(error: ApiError): string {
   const writer = (error.details as { writerOfRecord?: unknown } | null)?.writerOfRecord;
   return writer === 'MALAFAT' ? 'hosted.readOnly.malafat' : 'hosted.readOnly.none';
@@ -58,7 +67,7 @@ export function mapIncomeError(error: unknown): MappedError {
   if (apiError.code === 'VALIDATION_FAILED') {
     if (reason === 'AMOUNT_INVALID') return { fields: [{ field: 'amount', key: 'hosted.income.errors.amountInvalid' }] };
     if (reason === 'DATE_INVALID') {
-      return { fields: [{ field: fieldOf(apiError) === 'dueDate' ? 'dueDate' : 'occurredOn', key: 'hosted.income.errors.dateFuture' }] };
+      return { fields: [{ field: fieldOf(apiError) === 'dueDate' ? 'dueDate' : 'occurredOn', key: dateKey(apiError) }] };
     }
     if (reason && CUSTOMER_REASONS[reason]) return { fields: [{ field: 'customerId', key: CUSTOMER_REASONS[reason] }] };
     if (reason === 'PROJECT_NOT_FOUND') return { fields: [{ field: 'projectId', key: 'hosted.income.errors.matterNotFound' }] };
@@ -80,7 +89,7 @@ export function mapSettleError(error: unknown): MappedError {
         reread: true,
       };
     }
-    if (reason === 'DATE_INVALID') return { fields: [{ field: 'paidAt', key: 'hosted.income.errors.dateFuture' }] };
+    if (reason === 'DATE_INVALID') return { fields: [{ field: 'paidAt', key: dateKey(apiError) }] };
     if (reason === 'RECEIVABLE_NOT_OPEN') return { fields: [], toast: 'hosted.settle.errors.gone', reread: true };
   }
   if (apiError.code === 'NOT_FOUND') return { fields: [], toast: 'hosted.settle.errors.gone', reread: true };

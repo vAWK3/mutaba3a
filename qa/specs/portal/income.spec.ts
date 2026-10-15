@@ -63,6 +63,38 @@ test('Add income, Received: amount, client and method go to the server, and the 
   });
 });
 
+test('Add income dated more than ten years back is refused at the date field, not as a future date (MUT-227)', { tag: '@portal.income.date-too-old' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 2 });
+  const drawer = page.getByRole('dialog', { name: 'New income' });
+
+  await step('Open Payments and choose + Add income', async () => {
+    await api.open(page, `/p/${OFFICE_A}/payments`);
+    await page.locator('[data-income-add]').click();
+    await expect(drawer).toBeVisible();
+  });
+
+  await step('Type 1,200, pick Client 1, and set the date to 2001-03-04 under More details', async () => {
+    await drawer.getByLabel('Amount').fill('1,200');
+    await pickClient(page, 'Client (optional)', 'Client 1');
+    await drawer.getByRole('button', { name: /More details/ }).click();
+    await drawer.getByLabel('Date').fill('2001-03-04');
+  });
+
+  await step('Save income; the server refuses the date as more than ten years ago', async () => {
+    api.once('POST', /^\/v1\/income$/, apiError(422, 'VALIDATION_FAILED', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' }));
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer.getByText("The date can't be more than ten years ago")).toBeVisible();
+    await expect(drawer.getByText("The date can't be later than today")).toHaveCount(0);
+    expect(api.last('POST', /^\/v1\/income$/)?.body).toMatchObject({ occurredOn: '2001-03-04' });
+  });
+
+  await step('The drawer stays open with the entry as typed', async () => {
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByLabel('Amount')).toHaveValue('1,200');
+    await expect(drawer.getByLabel('Date')).toHaveValue('2001-03-04');
+  });
+});
+
 test('Add income, Owed: what is missing is said at the field, a refusal or a dropped connection keeps the entry, and a retry never writes twice', { tag: '@portal.income.owed-errors' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 2 });
   const drawer = page.getByRole('dialog', { name: 'New income' });

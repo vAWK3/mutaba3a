@@ -15,6 +15,13 @@ describe('mapIncomeError (MUT-133)', () => {
     expect(mapIncomeError(v('PROJECT_CUSTOMER_MISMATCH')).fields[0]).toEqual({ field: 'customerId', key: 'hosted.income.errors.matterMismatch' });
   });
 
+  it('says "more than ten years ago" when the server reports the past bound, and "later than today" otherwise (MUT-227)', () => {
+    expect(mapIncomeError(v('DATE_INVALID', { field: 'occurredOn', bound: 'past' })).fields).toEqual([{ field: 'occurredOn', key: 'hosted.income.errors.dateTooOld' }]);
+    expect(mapIncomeError(v('DATE_INVALID', { field: 'occurredOn', bound: 'future' })).fields).toEqual([{ field: 'occurredOn', key: 'hosted.income.errors.dateFuture' }]);
+    // An older server sends no bound: keep today's message.
+    expect(mapIncomeError(v('DATE_INVALID', { field: 'occurredOn' })).fields).toEqual([{ field: 'occurredOn', key: 'hosted.income.errors.dateFuture' }]);
+  });
+
   it('uses the §7.4 sentence for a stale read-only profile', () => {
     expect(mapIncomeError(new ApiError(403, 'READ_ONLY_PROFILE', 'x', { writerOfRecord: 'MALAFAT' })).toast).toBe('hosted.readOnly.malafat');
     expect(mapIncomeError(new ApiError(403, 'READ_ONLY_PROFILE', 'x', { writerOfRecord: null })).toast).toBe('hosted.readOnly.none');
@@ -37,6 +44,11 @@ describe('mapSettleError (MUT-133)', () => {
 
   it('puts a future paidAt on the date field', () => {
     expect(mapSettleError(v('DATE_INVALID', { field: 'paidAt' })).fields[0].field).toBe('paidAt');
+  });
+
+  it('says which end of the range a paidAt crossed (MUT-227)', () => {
+    expect(mapSettleError(v('DATE_INVALID', { field: 'paidAt', bound: 'past' })).fields).toEqual([{ field: 'paidAt', key: 'hosted.income.errors.dateTooOld' }]);
+    expect(mapSettleError(v('DATE_INVALID', { field: 'paidAt', bound: 'future' })).fields).toEqual([{ field: 'paidAt', key: 'hosted.income.errors.dateFuture' }]);
   });
 
   it('toasts and re-reads when the entry is gone, closed or changed', () => {
