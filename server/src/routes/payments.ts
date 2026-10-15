@@ -1,10 +1,13 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { keyAuth, postingActorOf, requireScope, type AppEnv } from '../auth/middleware.js';
+import type { Context } from 'hono';
+import { keyAuth, postingActorOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, assertNotAbsurdDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import type { IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
+import { ifMatch } from '../if-match.js';
+import { isOwnCapture, isOwnProfile, redateTo } from '../income/compose.js';
 import { formatMoney, type Currency } from '../money.js';
 import { eligibleFor, resultingBalances, suggestAllocations, validateAllocations, type AllocationRequest, type AllocationStrategy } from '../payments/allocate.js';
 import { allocationSnapshot, paymentPreviewToken } from '../payments/preview-token.js';
@@ -19,11 +22,13 @@ import {
   ListPaymentsQuerySchema,
   PaymentIdParamSchema,
   PaymentPageSchema,
+  IfMatchHeaderSchema,
   PaymentSchema,
   ReversePaymentRequestSchema,
+  UpdatePaymentRequestSchema,
 } from '../schemas.js';
 import { outstandingMinor, receivableStatus, serializeAllocation, serializePayment, type CapturedBy } from '../serializers.js';
-import { conflictResponse, encodeNextCursor, errorResponses, IdempotencyHeaderSchema, notFoundResponse, toPageRequest, validationResponse } from './shared.js';
+import { conflictResponse, encodeNextCursor, errorResponses, IdempotencyHeaderSchema, notFoundResponse, toPageRequest, validationResponse, versionMismatch } from './shared.js';
 
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 
@@ -297,6 +302,31 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     },
   );
 
+  // ---- re-date (MUT-223): a person's own captured payment, on a profile they own ----
+  app.openapi(
+    createRoute({
+      method: 'patch',
+      path: '/v1/payments/{paymentId}',
+      tags: ['Payments'],
+      summary: 'Change the date of a payment you recorded (optimistic, If-Match)',
+      description:
+        'Date only: amount, client and allocations are never touched, and a settled entry\'s paid date follows (ADR-038). Only a POSTED payment this person captured (POST /v1/income Received, or a settle) on a profile they own; any other id answers 404. On a Malafat-fed profile the session holds no payments:write, so this answers 403 READ_ONLY_PROFILE before any lookup, as settle does. receivedOn may not be later than the organization\'s today. The payment number keeps its year.',
+      security: [{ session: [] }, { deviceSession: [] }],
+      middleware: [requireScope('payments:write'), ifMatch()] as const,
+      request: { params: PaymentIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdatePaymentRequestSchema) },
+      responses: { 200: { description: 'Changed', content: { 'application/json': { schema: PaymentSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization, user } = sessionAuth(c);
+      const now = c.get('now')();
+      const receivedOn = redateTo(c.req.valid('json').receivedOn, organization, now, 'receivedOn');
+      const payment = await store.payments.getById(organization.id, c.req.valid('param').paymentId);
+      if (!payment || !isOwnProfile(organization, user.id) || !isOwnCapture(payment, user.id)) throw new ApiError('NOT_FOUND', 'No such payment');
+      const updated = await redateOwnCapture(store, c, payment, receivedOn);
+      return c.json(await viewOf(organization.id, updated, todayFor(organization, now)), 200);
+    },
+  );
+
   // ---- allocate later ----
   app.openapi(
     createRoute({
@@ -388,4 +418,29 @@ function allocationMessage(reason: string): string {
     default:
       return 'Allocations are invalid';
   }
+}
+
+/**
+ * MUT-223: the payment half of both re-date routes — PATCH /v1/payments/{id}, and PATCH /v1/income/{id} on a Received
+ * entry. The caller has already checked the profile (`isOwnProfile`) and the payment (`isOwnCapture`); the version is
+ * checked against that read, so its `receivedOn` is exactly the date the audit row says was replaced.
+ */
+export async function redateOwnCapture(store: LedgerStore, c: Context<AppEnv>, payment: PaymentRecord, receivedOn: IsoDate): Promise<PaymentRecord> {
+  const { organization, user } = sessionAuth(c);
+  const expected = c.get('expectedVersion');
+  if (payment.version !== expected) throw versionMismatch(payment.version);
+  const result = await store.payments.redateCapture(organization.id, payment.id, user.id, expected, receivedOn, c.get('now')());
+  if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such payment');
+  if (result.kind === 'stale') throw versionMismatch(result.record.version);
+  await store.audit.append({
+    organizationId: organization.id,
+    actorType: 'USER',
+    actorId: user.id,
+    action: 'payment.redated',
+    entityType: 'payment',
+    entityId: payment.id,
+    metadata: { from: payment.receivedOn, to: receivedOn, version: result.record.version },
+    requestId: c.get('requestId'),
+  });
+  return result.record;
 }

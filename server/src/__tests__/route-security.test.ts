@@ -37,7 +37,8 @@ const EXPENSE_OPERATIONS = [
 ];
 
 /** MUT-65: personal-profile income capture — session-only (Malafat has its own richer payment/allocation routes). */
-const INCOME_OPERATIONS = ['POST /v1/income', 'DELETE /v1/income/{incomeId}', 'POST /v1/receivables/{receivableId}/settle'];
+// MUT-223 adds the two re-date PATCHes: a person's own entries and captured payments, never a key's.
+const INCOME_OPERATIONS = ['POST /v1/income', 'DELETE /v1/income/{incomeId}', 'PATCH /v1/income/{incomeId}', 'POST /v1/receivables/{receivableId}/settle', 'PATCH /v1/payments/{paymentId}'];
 
 /** MUT-161: logged currency conversions — session-only. MUT-194 (ADR-075) adds PATCH and DELETE. */
 const CONVERSION_OPERATIONS = ['POST /v1/conversions', 'GET /v1/conversions', 'GET /v1/conversions/{conversionId}', 'PATCH /v1/conversions/{conversionId}', 'DELETE /v1/conversions/{conversionId}'];

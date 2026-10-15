@@ -2,14 +2,16 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { writeRefusal } from '../auth/writability.js';
 import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
-import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
+import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, isOwnCapture, isOwnProfile, owedVatFields, redateTo, resolveIncomeLinks } from '../income/compose.js';
+import { ifMatch } from '../if-match.js';
+import { redateOwnCapture } from './payments.js';
 import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
 import { idempotent } from '../idempotency.js';
 import { CAPTURE_UNDO_REASON, type LedgerStore } from '../repositories/ports.js';
-import { CreateIncomeRequestSchema, IncomeIdParamSchema, IncomeResponseSchema } from '../schemas.js';
+import { CreateIncomeRequestSchema, IfMatchHeaderSchema, IncomeIdParamSchema, IncomeResponseSchema, UpdateIncomeRequestSchema } from '../schemas.js';
 import { serializeIncomeEntry } from '../serializers.js';
-import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse } from './shared.js';
+import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 
 // MUT-64: a device session is the same 'session' principal, so it reaches every route a cookie session does.
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
@@ -146,6 +148,48 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'payment.reversed', entityType: 'payment', entityId: undone.payment.id, metadata: { number: undone.payment.number, reason: CAPTURE_UNDO_REASON, allocationsUndone: 0, amount: formatMoney({ minor: undone.payment.amountMinor, currency: undone.payment.currency as Currency }) }, requestId: c.get('requestId') });
       }
       return c.body(null, 204);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'patch',
+      path: '/v1/income/{incomeId}',
+      tags: ['Income'],
+      summary: 'Change the date of an income entry you captured (optimistic, If-Match)',
+      description:
+        'Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate; a Received entry moves its payment\'s receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. occurredOn may not be later than the organization\'s today.',
+      security: SESSION_ONLY,
+      middleware: [requireScope('capture:write'), ifMatch()] as const,
+      request: { params: IncomeIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateIncomeRequestSchema) },
+      responses: { 200: { description: 'Changed', content: { 'application/json': { schema: IncomeResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization, user } = sessionAuth(c);
+      const occurredOn = redateTo(c.req.valid('json').occurredOn, organization, c.get('now')(), 'occurredOn');
+      const { incomeId } = c.req.valid('param');
+      const notFound = () => new ApiError('NOT_FOUND', 'No such income entry');
+      if (!isOwnProfile(organization, user.id)) throw notFound();
+
+      const receivable = await store.receivables.getById(organization.id, incomeId);
+      if (receivable) {
+        if (receivable.origin !== 'ADJUSTMENT' || receivable.createdByUserId !== user.id) throw notFound();
+        const expected = c.get('expectedVersion');
+        if (receivable.version !== expected) throw versionMismatch(receivable.version);
+        const result = await store.receivables.redateAdjustment(organization.id, receivable.id, user.id, expected, occurredOn);
+        if (result.kind === 'not_found') throw notFound();
+        if (result.kind === 'stale') throw versionMismatch(result.record.version);
+        await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'income.owed.redated', entityType: 'receivable', entityId: receivable.id, metadata: { from: receivable.postingDate, to: occurredOn, version: result.record.version }, requestId: c.get('requestId') });
+        return c.json(serializeIncomeEntry({ kind: 'owed', receivable: result.record }), 200);
+      }
+
+      const payment = await store.payments.getById(organization.id, incomeId);
+      if (!payment || !isOwnCapture(payment, user.id)) throw notFound();
+      // Checked on this read, not in the write (eng review D3): on an owned profile only settle allocates, and only to the
+      // payment it creates, because POST /v1/payments/{id}/allocations is API-key only (routes/payments.ts) and API keys
+      // are refused on owned profiles (auth/middleware.ts ownedProfileConflict). So allocatedMinor cannot change under us.
+      if (payment.allocatedMinor > 0n) throw new ApiError('CONFLICT', 'This payment is applied to an entry; change its date through PATCH /v1/payments/{id}', { reason: 'ALREADY_ALLOCATED' });
+      return c.json(serializeIncomeEntry({ kind: 'received', payment: await redateOwnCapture(store, c, payment, occurredOn) }), 200);
     },
   );
 
