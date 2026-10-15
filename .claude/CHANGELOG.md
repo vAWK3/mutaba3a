@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Hosted portal: change the date of a saved income entry and a recorded payment (MUT-224)
+
+**Why:** MUT-223 gave the server re-dating; the portal still had no way to fix a wrong day on an Owed entry or a recorded payment. Expenses could already be re-dated. ADR-083 (MUT-224 amendment).
+
+### Added
+- `RedateDrawer` (one drawer, two kinds): `?income=<receivableId>` changes an Owed entry's date (PATCH /v1/income) and `?payment=<paymentId>` a recorded payment's received date (PATCH /v1/payments). It reads the record fresh, sends If-Match at that version, refills on a 409 re-read, shows a 422 under the date and a 404 as no longer available. A settled entry lists its payment lines, found by scanning the client's first 50 payments, with a "See this client's payments" fallback (TD-145).
+- Receivables: a **Date** column (postingDate) before Due; own Owed rows open the drawer by their row-link. Payments: the user's own posted capture opens it from its Received cell.
+- `HostedTable` `linkColumn` and `canOpen`; `redateAffordancesFor`, `canRedateOwed`, `canRedatePayment`; `usePayment`, `usePaymentsForEntry`, `useRedateOwed`, `useRedatePayment`; `api.payment`, `redateIncome`, `redatePayment`.
+- Release-QA: `portal.income.redate-{owed,received,payment,no-future,conflict,malafat-readonly}` and `portal.expenses.redate-expense`; the portal stub serves the new routes.
+
+### Changed
+- The Record payment note now reads "You can fix the date later; the amount can't be changed yet." (en + ar).
+- Record payment and the Payments expander stop propagation, so they never open the re-date drawer.
+
+### Not changed
+- Malafat-fed and unowned profiles: no row-link, no clickable look, and `?income=` / `?payment=` deep links render nothing.
+
 ## [Unreleased] - 2026-10-15 — QA specs wait for Owed now before reading it (MUT-178)
 
 **Why:** `@web.clients.owed-now-parity`, `@web.home` and `@web.brand.type` read Home's Owed now with `allTextContents()` (or checked the loaded font faces) straight after `goto`. That doesn't wait, so the specs raced Home's receivables query and usually failed.
