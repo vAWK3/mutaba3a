@@ -456,6 +456,12 @@ export const VatTreatmentSchema = z.enum(VAT_TREATMENTS).openapi('VatTreatment')
 export const PricingBasisSchema = z.enum(PRICING_BASES).openapi('PricingBasis');
 export const PaymentTermsSchema = z.enum(PAYMENT_TERMS).openapi('PaymentTerms');
 export const IsoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD').openapi({ description: 'Calendar date in the organization timezone, YYYY-MM-DD' });
+
+/** MUT-227: the money-date rules, said once for every request field that carries them. */
+const PAST_MONEY_DATE = "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past.";
+const FLOORED_MONEY_DATE = "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past.";
+const PastMoneyDateSchema = IsoDateSchema.openapi({ description: PAST_MONEY_DATE });
+const FlooredMoneyDateSchema = IsoDateSchema.openapi({ description: FLOORED_MONEY_DATE });
 export const IsoMonthSchema = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM').openapi({ description: 'Calendar month, YYYY-MM' });
 /** Canonical decimal amount in the project currency, e.g. "10000.00". Validated against the currency exponent server-side. */
 export const AmountSchema = z.string().regex(/^-?\d+(\.\d+)?$/, 'canonical decimal').openapi({ description: 'Canonical decimal string; exactly the currency\'s fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID' });
@@ -1262,7 +1268,7 @@ export const CreatePaymentRequestSchema = z
     customerId: uuid,
     currency: CurrencySchema,
     amount: AmountSchema,
-    receivedOn: IsoDateSchema,
+    receivedOn: FlooredMoneyDateSchema,
     method: PaymentMethodSchema,
     reference: z.string().max(120).optional(),
     notes: z.string().max(2000).optional(),
@@ -1369,7 +1375,7 @@ export const CreateIncomeRequestSchema = z
     kind: IncomeKindSchema,
     amount: AmountSchema,
     currency: CurrencySchema,
-    occurredOn: IsoDateSchema,
+    occurredOn: PastMoneyDateSchema,
     /** Required for `owed`; optional for `received` ("money can stand alone"). */
     customerId: uuid.optional(),
     /** With no customerId, it is taken from the project. */
@@ -1409,17 +1415,17 @@ export const IncomeResponseSchema = z
 export const IncomeIdParamSchema = z.object({ incomeId: uuid });
 
 /** MUT-223: date only (amount, client, matter and note edits are out of scope). */
-export const UpdateIncomeRequestSchema = z.object({ occurredOn: IsoDateSchema }).strict().openapi('UpdateIncomeRequest');
+export const UpdateIncomeRequestSchema = z.object({ occurredOn: PastMoneyDateSchema }).strict().openapi('UpdateIncomeRequest');
 
 /** MUT-223: date only; allocations are never touched. */
-export const UpdatePaymentRequestSchema = z.object({ receivedOn: IsoDateSchema }).strict().openapi('UpdatePaymentRequest');
+export const UpdatePaymentRequestSchema = z.object({ receivedOn: PastMoneyDateSchema }).strict().openapi('UpdatePaymentRequest');
 
 export const SettleReceivableRequestSchema = z
   .object({
     /** Defaults to the full outstanding amount. */
     amount: AmountSchema.optional(),
     /** Defaults to today; rejected if later than today. */
-    paidAt: IsoDateSchema.optional(),
+    paidAt: PastMoneyDateSchema.optional(),
     method: PaymentMethodSchema.optional(),
     captureSource: CaptureSourceSchema.optional(),
   })
@@ -1710,7 +1716,7 @@ export const ExpensePageSchema = z.object({ items: z.array(ExpenseSchema), nextC
 
 export const CreateExpenseRequestSchema = z
   .object({
-    occurredOn: IsoDateSchema,
+    occurredOn: FlooredMoneyDateSchema,
     amount: AmountSchema.openapi({ description: 'Greater than zero, in the currency\'s fractional digits' }),
     currency: CurrencySchema,
     title: expenseText.optional(),
@@ -1728,7 +1734,7 @@ export const CreateExpenseRequestSchema = z
 /** No `currency`: a row's currency never changes, so it is never converted. Null clears an optional field. */
 export const UpdateExpenseRequestSchema = z
   .object({
-    occurredOn: IsoDateSchema.optional(),
+    occurredOn: FlooredMoneyDateSchema.optional(),
     amount: AmountSchema.optional(),
     title: expenseText.nullable().optional(),
     vendor: expenseText.nullable().optional(),
@@ -1780,7 +1786,7 @@ export const ConversionPageSchema = z.object({ items: z.array(ConversionSchema),
 
 export const CreateConversionRequestSchema = z
   .object({
-    occurredOn: IsoDateSchema,
+    occurredOn: PastMoneyDateSchema,
     amount: AmountSchema.openapi({ description: 'Greater than zero, in the currency\'s fractional digits' }),
     currency: CurrencySchema,
     toAmount: AmountSchema.openapi({ description: 'Greater than zero, in toCurrency\'s fractional digits' }),
@@ -1796,7 +1802,7 @@ export const CreateConversionRequestSchema = z
  */
 export const UpdateConversionRequestSchema = z
   .object({
-    occurredOn: IsoDateSchema.optional(),
+    occurredOn: PastMoneyDateSchema.optional(),
     amount: AmountSchema.optional().openapi({ description: 'In the merged currency\'s fractional digits (the body\'s `currency`, else the row\'s)' }),
     currency: CurrencySchema.optional().openapi({ description: 'Only together with `amount`' }),
     toAmount: AmountSchema.optional().openapi({ description: 'In the merged toCurrency\'s fractional digits' }),
@@ -1890,7 +1896,7 @@ export const CreateInboxEntryRequestSchema = z
     kind: InboxEntryKindSchema,
     amount: AmountSchema.openapi({ description: 'Greater than zero, in the currency\'s fractional digits' }),
     currency: CurrencySchema,
-    occurredOn: IsoDateSchema.openapi({ description: 'May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check.' }),
+    occurredOn: IsoDateSchema.openapi({ description: 'May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check. Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past; filing applies the exact floor in the profile\'s timezone.' }),
     note: inboxNote.optional(),
     captureSource: CaptureSourceSchema.optional(),
   })
@@ -1902,7 +1908,7 @@ export const UpdateInboxEntryRequestSchema = z
   .object({
     amount: AmountSchema.optional(),
     currency: CurrencySchema.optional(),
-    occurredOn: IsoDateSchema.optional(),
+    occurredOn: IsoDateSchema.optional().openapi({ description: 'Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past.' }),
     note: inboxNote.nullable().optional(),
     captureSource: CaptureSourceSchema.nullable().optional(),
   })

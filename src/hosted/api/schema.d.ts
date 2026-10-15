@@ -10616,7 +10616,7 @@ export interface components {
         SettleReceivableRequest: {
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             paidAt?: string;
             method?: components["schemas"]["PaymentMethod"];
             captureSource?: components["schemas"]["CaptureSource"];
@@ -10708,7 +10708,7 @@ export interface components {
             currency: components["schemas"]["Currency"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. */
             receivedOn: string;
             method: components["schemas"]["PaymentMethod"];
             reference?: string;
@@ -10723,7 +10723,7 @@ export interface components {
             nextCursor: string | null;
         };
         UpdatePaymentRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             receivedOn: string;
         };
         AllocatePaymentRequest: {
@@ -11030,7 +11030,7 @@ export interface components {
             completedAt: string | null;
         };
         CreateExpenseRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. */
             occurredOn: string;
             /** @description Greater than zero, in the currency's fractional digits */
             amount: string;
@@ -11050,7 +11050,7 @@ export interface components {
             captureSource?: components["schemas"]["CaptureSource"];
         };
         UpdateExpenseRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. */
             occurredOn?: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
@@ -11162,7 +11162,7 @@ export interface components {
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             currency: components["schemas"]["Currency"];
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             occurredOn: string;
             /** Format: uuid */
             customerId?: string;
@@ -11176,7 +11176,7 @@ export interface components {
             captureSource?: components["schemas"]["CaptureSource"];
         };
         UpdateIncomeRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             occurredOn: string;
         };
         Conversion: {
@@ -11200,7 +11200,7 @@ export interface components {
             updatedAt: string;
         };
         CreateConversionRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             occurredOn: string;
             /** @description Greater than zero, in the currency's fractional digits */
             amount: string;
@@ -11215,7 +11215,7 @@ export interface components {
             nextCursor: string | null;
         };
         UpdateConversionRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             occurredOn?: string;
             /** @description In the merged currency's fractional digits (the body's `currency`, else the row's) */
             amount?: string;
@@ -11253,7 +11253,7 @@ export interface components {
             /** @description Greater than zero, in the currency's fractional digits */
             amount: string;
             currency: components["schemas"]["Currency"];
-            /** @description May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check. */
+            /** @description May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check. Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past; filing applies the exact floor in the profile's timezone. */
             occurredOn: string;
             note?: string;
             captureSource?: components["schemas"]["CaptureSource"];
@@ -11262,7 +11262,7 @@ export interface components {
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
             currency?: components["schemas"]["Currency"];
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past. */
             occurredOn?: string;
             note?: string | null;
             captureSource?: components["schemas"]["CaptureSource"] & unknown;
