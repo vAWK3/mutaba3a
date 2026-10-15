@@ -1,0 +1,22 @@
+# Native splash for Mutaba3a — iOS, Android (incl. 12+), web.
+# 1. Copy splash/*.png → assets/splash/
+# 2. flutter pub add dev:flutter_native_splash
+# 3. dart run flutter_native_splash:create
+# Generates LaunchScreen.storyboard + LaunchImage, launch_background.xml, values-v31 styles, web/index.html splash.
+flutter_native_splash:
+  color: "#FCF6ED"
+  image: assets/splash/splash.png
+  color_dark: "#221B2D"
+  image_dark: assets/splash/splash-dark.png
+
+  android_12:
+    color: "#FCF6ED"
+    image: assets/splash/android12.png
+    icon_background_color: "#FCF6ED"
+    color_dark: "#221B2D"
+    image_dark: assets/splash/android12-dark.png
+    icon_background_color_dark: "#221B2D"
+
+  ios_content_mode: center
+  web_image_mode: center
+  fullscreen: false
