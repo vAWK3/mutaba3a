@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Dead web code deleted (TD-143)
+
+**Why:** the release-QA coverage pass left 31 web files no feature claims. Most are imported by nothing; they cost review and type-check time and kept `release-qa lint` noisy.
+
+### Removed
+- Imported by nothing: `src/assets/react.svg`; `components/filters/{CurrencyTabs,TypeSegment}`; `components/transactions/**`; `components/ui/{InlineStats,StepperInput(.css),UnifiedAmount,ProfileContextChip(.css),VendorTypeahead.css}`; `components/modals/ProfilePickerModal(.css)`; `hooks/{useTransactionActions,useTransactionFilters}`; `lib/aggregations.ts` (the app uses `db/aggregations.ts`); `pages/reports/**` (`/reports` redirects to `/insights`); `pages/retainers/index.ts`. Each was checked with `rg` first: nothing outside its own tests and barrel imported it.
+- Their tests (`CurrencyTabs`, `TypeSegment`, `StepperInput`, `InlineStats`, `useTransactionFilters`, `useTransactionActions`, `lib/aggregations`), their exports from the `ui`, `modals` and `filters` barrels, and the `UnifiedAmount` styles in `index.css` (no other user of those classes).
+- The `/theme-demo` route and `components/examples/ThemeDemo(.css)`: a dev page that shipped to production, documented nowhere.
+- `MacDownloadBanner(.css)`, its test, its `AppShell` slot (and the gate test's mock) and the `downloadBanner.*` strings in `en.json`/`ar.json`: it offered the desktop app to Mac browsers, and the desktop is retired until v2 (Basel's call).
+
+### Changed
+- Comments that pointed at `src/lib/aggregations.ts` (`useConversionQueries`, `ConversionsPage`, `InsightsPage.test`), the `reports` QA feature's header, COMPONENT_REGISTRY (StepperInput, TypeSegment, CurrencyTabs, UnifiedAmount entries) and PATTERNS' URL-state example.
+
+### Not changed
+- `services/oauth/**` and `services/tokenStore.ts`: ADR-053 keeps the Malafat OAuth client; TD-075 decides its fate with the Rust half. `db/migration-safety.ts`, `db/retained/monthCloseSchema.ts`: intentional.
+
 ## [Unreleased] - 2026-10-15 — Release QA: a true baseline, and the catalog covers the whole app
 
 **Why:** `release-qa plan` compared every release against `v0.0.67`, the last desktop tag, because `make release web|server` committed `release: web|api v<x>` but never tagged it, so all 287 commits since were "in scope" and every feature was touched. And 36% of web files / 30% of portal files were claimed by a QA feature, so most changes reached no QA check at all. ADR-081.

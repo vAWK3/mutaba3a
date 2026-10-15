@@ -277,8 +277,8 @@ describe('InsightsPage', () => {
     });
 
     // MUT-141: this page computes its own summary totals independently of
-    // src/lib/aggregations.ts (the module whose kind==='income'-else pattern
-    // was fixed for conversions) -- it has the identical bug, just duplicated
+    // the aggregations module (the since-deleted src/lib/aggregations.ts, whose
+    // kind==='income'-else pattern was fixed for conversions) -- it had the identical bug, just duplicated
     // inline, and was missed until qa-reconcile re-swept every kind==='income'
     // call site in the repo.
     it('excludes a conversion transaction from the expenses total', () => {

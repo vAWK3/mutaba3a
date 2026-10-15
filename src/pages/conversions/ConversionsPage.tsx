@@ -3,7 +3,7 @@
  *
  * Logged currency-conversion events: date, from-amount/currency,
  * to-amount/currency, implied rate, optional note. Excluded from P&L by
- * construction (src/db/aggregations.ts, src/lib/aggregations.ts) -- this
+ * construction (src/db/aggregations.ts) -- this
  * page only lists/edits them, same single-list shape as ExpensesLedgerPage's
  * "list" view, without its category grouping (conversions have no category).
  */

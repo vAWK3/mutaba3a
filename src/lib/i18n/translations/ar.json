@@ -771,11 +771,6 @@
       "replacing": "جارٍ الاستعادة…"
     }
   },
-  "downloadBanner": {
-    "message": "احصل على تطبيق Mac الأصلي لتجربة أفضل",
-    "cta": "تحميل",
-    "dismiss": "إغلاق"
-  },
   "updateBanner": {
     "available": "الإصدار {version} متاح",
     "downloading": "جاري التحميل... {progress}%",

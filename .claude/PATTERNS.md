@@ -218,7 +218,8 @@ Use URL search params for filter state and drawer state. Enables deep linking an
 
 **Filter State**:
 ```typescript
-// src/hooks/useTransactionFilters.ts
+// Illustrative. The living example is useIncomeFilters (/income); the old
+// src/hooks/useTransactionFilters.ts and CurrencyTabs were deleted (TD-143).
 
 export function useTransactionFilters() {
   const navigate = useNavigate();
@@ -1282,7 +1283,7 @@ that isn't a list of actions.
 The app frame is in flow. Bars that belong to the whole app go inside `<main>`
 in `AppShell`. Notices go at the top, before the page (`SampleDataBar`,
 `FeatureNoticeBanner`). Offers and updates go at the bottom, after the page,
-with `margin-top: auto` (`MacDownloadBanner`, `UpdateBanner`). None of them is
+with `margin-top: auto` (`UpdateBanner`). None of them is
 `position: fixed`. Settings-like controls go into the frame itself: the FX
 rate in `TopBar`, the theme toggle in the sidebar footer. Only transient
 overlays may cover the page: drawers, modals, menus, popovers and toasts. A

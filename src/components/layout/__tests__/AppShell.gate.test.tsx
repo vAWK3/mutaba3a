@@ -30,7 +30,6 @@ vi.mock('../SidebarNav', () => ({ SidebarNav: () => null }));
 vi.mock('../OrphanedRecordsBanner', () => ({ OrphanedRecordsBanner: () => null }));
 vi.mock('../FeatureNoticeBanner', () => ({ FeatureNoticeBanner: () => null }));
 vi.mock('../SavedFlashAnnouncer', () => ({ SavedFlashAnnouncer: () => null }));
-vi.mock('../../ui/MacDownloadBanner', () => ({ MacDownloadBanner: () => null }));
 vi.mock('../../ui/DemoBanner', () => ({ DemoBanner: () => null }));
 vi.mock('../../ui/SampleDataBar', () => ({ SampleDataBar: () => null }));
 vi.mock('../../ui/UpdateBanner', () => ({ UpdateBanner: () => null }));

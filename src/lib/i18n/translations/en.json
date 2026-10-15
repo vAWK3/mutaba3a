@@ -755,11 +755,6 @@
       "replacing": "Restoring…"
     }
   },
-  "downloadBanner": {
-    "message": "Get the native Mac app for a better experience",
-    "cta": "Download",
-    "dismiss": "Dismiss"
-  },
   "updateBanner": {
     "available": "Version {version} is available",
     "downloading": "Downloading update... {progress}%",

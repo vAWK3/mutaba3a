@@ -14,7 +14,6 @@ import { PlanAssumptionDrawer } from "../drawers/PlanAssumptionDrawer";
 import { OrphanedRecordsDrawer } from "../drawers/OrphanedRecordsDrawer";
 import { WelcomeModal, DemoSeedModal, MigrationWizard } from "../modals";
 import { OrphanedRecordsBanner } from "./OrphanedRecordsBanner";
-import { MacDownloadBanner } from "../ui/MacDownloadBanner";
 import { DemoBanner } from "../ui/DemoBanner";
 import { SampleDataBar } from "../ui/SampleDataBar";
 import { useT } from "../../lib/i18n";
@@ -116,8 +115,7 @@ export function AppShell({ children }: AppShellProps) {
         ) : (
           <BusinessesGate>{children}</BusinessesGate>
         )}
-        {/* Bottom bars sit in flow below the page: nothing floats over content (MUT-79) */}
-        <MacDownloadBanner />
+        {/* The bottom bar sits in flow below the page: nothing floats over content (MUT-79) */}
         <UpdateBanner />
       </main>
 
