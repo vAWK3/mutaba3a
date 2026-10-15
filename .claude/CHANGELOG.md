@@ -42,6 +42,7 @@
 - Not changed: expense list and summary `from`/`to` filters still take any date, and rows already older than the floor stay readable and editable. Expense, conversion and inbox PATCH skip a resent, unchanged date, because the portal sends it on every save (pre-landing review D1).
 - A Malafat correction (`replacesPaymentId`) may keep the reversed payment's date, or a later one, below the floor, so the second step of reverse-and-replace can't strand the money (review D4).
 - Expense and conversion forms also say "The date can't be more than ten years ago" (`apiErrorBound` in `src/hosted/api/client.ts`, review D2).
+- MUT-224's re-date drawer (landed first) now refuses a date before the floor itself, with `min` on the date input (`moneyDateFloor` in `src/hosted/format/dates.ts`), routes a server refusal by `bound` (`mapRedateError`), and still closes untouched for an entry already older than the floor.
 - Still unbounded (follow-up, review D3): an Owed entry's `dueDate`, a credit's `effectiveDate`, an installment trigger date.
 
 ### Technical

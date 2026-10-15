@@ -104,7 +104,7 @@ export function mapRedateError(error: unknown): MappedError {
   const early = nonValidation(error);
   if (early) return early;
   const apiError = error as ApiError;
-  if (apiError.code === 'VALIDATION_FAILED' && apiErrorReason(apiError) === 'DATE_INVALID') return { fields: [{ field: 'date', key: 'hosted.income.errors.dateFuture' }] };
+  if (apiError.code === 'VALIDATION_FAILED' && apiErrorReason(apiError) === 'DATE_INVALID') return { fields: [{ field: 'date', key: dateKey(apiError) }] };
   if (apiError.code === 'CONFLICT') return { fields: [], toast: 'hosted.redate.conflict', reread: true };
   // The re-read then shows "no longer available" (the record went, or the drawer can no longer change it).
   if (apiError.code === 'NOT_FOUND') return { fields: [], toast: 'hosted.redate.gone', reread: true };

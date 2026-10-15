@@ -107,6 +107,7 @@ describe('RedateDrawer — an Owed entry (?income=)', () => {
     const input = await dateInput();
     expect(input.value).toBe('2026-10-08');
     expect(input.max).toBe('2026-10-14');
+    expect(input.min).toBe('2016-10-06'); // MUT-227: the server's ten-year floor, today − 3660 days
     expect(screen.getByText(/Due Nov 15, 2026 — stays as it is/)).toBeInTheDocument();
     await waitFor(() => expect(document.querySelector('.hp-settle-context')?.textContent).toContain(CUSTOMERS[0].name));
     expect(screen.queryByRole('textbox', { name: /amount/i })).toBeNull();
@@ -165,6 +166,34 @@ describe('RedateDrawer — an Owed entry (?income=)', () => {
     await setDate(user, '2026-10-13');
     await user.click(save());
     expect(await screen.findByText(/The date can.t be later than today/)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('refuses a date more than ten years back before asking the server, as the server would (MUT-227)', async () => {
+    const api = stub();
+    const { user, onClose } = renderDrawer('owed');
+    await setDate(user, '2016-10-05');
+    await user.click(save());
+    expect(await screen.findByText(/The date can.t be more than ten years ago/)).toBeInTheDocument();
+    expect(api.patches()).toHaveLength(0);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes without a request for an entry already older than the floor whose date did not change (MUT-227)', async () => {
+    const api = stub({ getOwed: () => json(owed({ postingDate: '2010-03-01' })) });
+    const { user, onClose } = renderDrawer('owed');
+    await waitFor(async () => expect((await dateInput()).value).toBe('2010-03-01'));
+    await user.click(save());
+    expect(onClose).toHaveBeenCalled();
+    expect(api.patches()).toHaveLength(0);
+  });
+
+  it('says "more than ten years ago" when the server refuses the date with the past bound (MUT-227)', async () => {
+    stub({ patch: () => fail(422, 'VALIDATION_FAILED', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' }) });
+    const { user, onClose } = renderDrawer('owed');
+    await setDate(user, '2016-10-07');
+    await user.click(save());
+    expect(await screen.findByText(/The date can.t be more than ten years ago/)).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
 

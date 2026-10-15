@@ -2661,5 +2661,6 @@ This retires the nine-cell baseline from the MUT-226 and MUT-178 notes above. On
 | Release-QA | `portal.income.date-too-old` (`qa/specs/portal/income.spec.ts`): passing, recorded |
 | Regression | version pins in routes-m2..m8 moved to 1.27.0-mut227; every other date test unchanged and green |
 | qa-reconcile additions | per endpoint group: `0001-01-01` on settle and both re-dates, the floor day accepted on expense, conversion and inbox PATCH, and on both filings |
+| MUT-224 integration (merged second) | `RedateDrawer.test.tsx`: `min` is today − 3660; a date before it is refused with no request; a server `bound: past` reads "more than ten years ago"; an unchanged pre-floor entry closes with no request. `incomeApiErrors.test.ts`: `mapRedateError` past / future / no bound |
 | pre-landing review fixes | an unchanged pre-floor date resent with another edit → 200 on expense, conversion and inbox PATCH (written failing first); `routes-m4` replacement keeps the reversed payment's 2015 date (201), an earlier date or a fresh payment there → 422 bound past; `expenseApiErrors` + new `conversionApiErrors.test.ts` map bound past to `dateTooOld`; the floor message test asserts with `toThrow` |
 
