@@ -282,14 +282,13 @@ for (const scheme of SCHEMES) {
   for (const viewport of VIEWPORTS) {
     for (const language of ['en', 'ar'] as const) {
       test(
-        `${scheme} mode at ${viewport.width}px in ${language === 'en' ? 'English' : 'Arabic'}: Home, Clients, Income, both drawers, Settings, Import, Expenses and Planning fit the window`,
+        `${scheme} mode at ${viewport.width}px in ${language === 'en' ? 'English' : 'Arabic'}: Home, Clients, Income, both drawers, Settings, Import and Expenses fit the window`,
         { tag: '@web.brand.layout' },
         async ({ page, step }) => {
           // Drawers settle at once, so their box is measured where it rests
           await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
           await logTwoClients(page);
           await enableOptionalArea(page, 'Expenses');
-          await enableOptionalArea(page, 'Planning');
           if (language === 'ar') await switchToArabic(page);
           await page.setViewportSize(viewport);
           const shot = (name: string) => attachScreenshot(page, `${scheme}-${viewport.width}-${language}-${name}`);
@@ -348,15 +347,11 @@ for (const scheme of SCHEMES) {
             await shot('import');
           });
 
-          await step('Expenses and Planning', async () => {
+          await step('Expenses', async () => {
             await page.goto('/app/expenses');
             await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
             await expectFits(page, 'Expenses', viewport.width);
             await shot('expenses');
-            await page.goto('/app/planning');
-            await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
-            await expectFits(page, 'Planning', viewport.width);
-            await shot('planning');
           });
         },
       );

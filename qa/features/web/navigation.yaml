@@ -20,3 +20,14 @@ features:
     expect:
       - The sidebar shows exactly Home, Clients, Income, Settings — no Projects, Transactions, Reports or Expenses
       - Each click lands on the matching route and marks that link aria-current="page"
+  - id: retired-areas
+    title: Old Planning and Retainers links land on Home, and no switch brings either area back (MUT-226)
+    tier: secondary
+    legacy: [MUT-226]
+    steps:
+      - Open a fresh install, then a bookmarked /app/planning?plan=p1
+      - Open a bookmarked /app/retainers?status=active
+      - Open Settings and read the Features switches
+    expect:
+      - Each old link lands on Home, and the sidebar has no Planning or Retainers entry
+      - Settings › Features lists exactly Expenses, Insights, Projects and Currency conversions
