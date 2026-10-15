@@ -18,7 +18,7 @@ import { CurrencyAmounts } from '../ui/CurrencyAmounts';
 import { formatAmount, isolateAmount } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useTp } from '../../lib/i18n/plural';
-import { currencyTotals, formatMonthList, type RecurringAttentionGroup } from './recurringAttention';
+import { currencyTotals, formatMonthList, formatMonthShortYear, type RecurringAttentionGroup } from './recurringAttention';
 import './RecurringAttentionList.css';
 
 type GroupAction = (group: RecurringAttentionGroup) => void;
@@ -58,6 +58,9 @@ export function RecurringAttentionList({ groups, ...actions }: RecurringAttentio
   );
 }
 
+/** More missed payments than this are summarised as "N payments since <month>" rather than listed. */
+const MAX_NAMED_MONTHS = 6;
+
 interface RowProps extends Omit<RecurringAttentionListProps, 'groups'> {
   group: RecurringAttentionGroup;
 }
@@ -72,10 +75,13 @@ function RecurringAttentionRow({ group, onMarkPaid, onSkipAll, onSnoozeAll, onEd
 
   const count = group.occurrences.length;
   const oldest = group.occurrences[0];
-  const months = formatMonthList(
-    group.occurrences.map((occurrence) => occurrence.expectedDate),
-    locale
-  );
+  // A few months are named; a long run (a rule unmarked for years, MUT-96) is counted from where it started
+  const notMarked =
+    count > MAX_NAMED_MONTHS
+      ? tp('expenses.recurring.attention.notMarkedSince', count, { since: formatMonthShortYear(oldest.expectedDate, locale) })
+      : t('expenses.recurring.attention.notMarked', {
+          months: formatMonthList(group.occurrences.map((occurrence) => occurrence.expectedDate), locale),
+        });
   const period = t(`expenses.recurring.attention.perPeriod.${group.frequency}`, {
     amount: isolateAmount(formatAmount(group.periodAmountMinor, group.currency, locale)),
   });
@@ -94,7 +100,7 @@ function RecurringAttentionRow({ group, onMarkPaid, onSkipAll, onSnoozeAll, onEd
         <span className="recurring-attention-detail">
           {period}
           <span aria-hidden="true"> · </span>
-          {t('expenses.recurring.attention.notMarked', { months })}
+          {notMarked}
         </span>
       </div>
 

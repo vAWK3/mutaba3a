@@ -695,7 +695,7 @@
 **Effort**: Medium
 
 ### TD-069: Expenses Needs attention only looks back 90 days
-**Status**: Open
+**Status**: Resolved 2026-10-15 (MUT-96, owner chose option 1): `getDueOccurrences` looks back to the earliest active rule's start and keeps, per rule, only payments after its last resolved one (paid or skipped). A row with more than 6 missed payments reads "N payments since <Mon YYYY> not marked" instead of naming every month; the total counts them all. The 6 is our call, not the owner's yet.
 **Added**: 2026-10-12 (MUT-87)
 **Priority**: Medium
 **Impact**: `getDueOccurrences` (`src/services/recurringExpenseService.ts`) asks for occurrences from 90 days ago to 30 days ahead. A payment missed more than 90 days ago never appears, so a rule started six months ago and never marked shows "Aug, Sep, Oct not marked" and silently drops April to July. MUT-87's one-row-per-rule now names the months, which makes the gap visible but does not cause it. The window predates MUT-87; changing it is a product decision (how far back should "not marked" reach: the rule's start, the last resolved payment, a fixed year?).

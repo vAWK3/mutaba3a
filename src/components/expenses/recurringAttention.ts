@@ -91,6 +91,11 @@ export function formatMonthList(expectedDates: readonly string[], locale: string
   return list.format(expectedDates.map((date) => month.format(localDate(date))));
 }
 
+/** "Oct 2023": where a long run of missed payments started (MUT-96). */
+export function formatMonthShortYear(expectedDate: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { month: 'short', year: 'numeric' }).format(localDate(expectedDate));
+}
+
 /** "August 2026": the drawer's name for one payment. */
 export function formatMonthYear(expectedDate: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(localDate(expectedDate));

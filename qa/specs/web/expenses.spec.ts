@@ -231,6 +231,34 @@ test(
   },
 );
 
+// MUT-96: Needs attention used to look back only 90 days, so the oldest missed months dropped out unseen.
+test(
+  'a recurring expense missed for eight months shows every month, counted from where it started',
+  { tag: '@web.expenses.recurring-long-missed' },
+  async ({ page, step }) => {
+    const start = firstOfMonthAgo(8);
+    const since = new Date(`${start}T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+    await step('Turn on Expenses and add a monthly recurring expense from the 1st eight months ago', async () => {
+      await turnOnExpenses(page);
+      await addRecurringExpense(page, { title: 'Server hosting', amount: '80', startDate: start });
+    });
+
+    const row = needsAttention(page).getByRole('listitem').filter({ hasText: 'Server hosting' });
+    await step('Needs Attention counts all nine months since the start, $720', async () => {
+      await expect(row).toContainText(`9 payments since ${since} not marked`);
+      await expect(row.getByTestId('recurring-attention-amount')).toHaveText('$720');
+    });
+
+    await step('Mark Paid lists all nine months', async () => {
+      await row.getByRole('button', { name: 'Mark Paid' }).click();
+      const drawer = page.getByRole('dialog').filter({ hasText: 'Server hosting' });
+      await expect(drawer.getByRole('checkbox')).toHaveCount(9);
+      await expect(drawer.getByRole('checkbox', { name: new RegExp(monthName(start)) })).toBeChecked();
+    });
+  },
+);
+
 test(
   'skip one missed month and snooze the other; the snoozed one moves to Upcoming Expenses',
   { tag: '@web.expenses.recurring-skip-snooze' },

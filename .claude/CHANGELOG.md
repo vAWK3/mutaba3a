@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Expenses Needs attention reaches back to the rule's start (MUT-96, TD-069)
+
+**Why:** `getDueOccurrences` asked only for the last 90 days, so a monthly rule that started six months ago and was never marked silently lost its oldest months, from the row and from the totals.
+
+### Fixed
+- Needs attention lists every unresolved payment since the later of the rule's start date and the day after its last resolved payment (paid or skipped). This is option 1 on the ticket, chosen by the owner 2026-10-15. Row amounts and the section total include them all.
+- A rule with more than six missed payments reads "37 payments since Oct 2023 not marked" instead of naming every month. Arabic gets its own plural forms. Up to six are still named.
+- The window's dates are local calendar dates; they were UTC.
+
+### Technical
+- `formatMonthShortYear` added to `recurringAttention.ts`; `notMarkedSince` plural copy in both locales.
+- New QA feature `web.expenses.recurring-long-missed`.
+- Files: `src/services/recurringExpenseService.ts`, `src/components/expenses/{RecurringAttentionList.tsx,recurringAttention.ts}`, both translation files, tests below, `qa/specs/web/expenses.spec.ts`, `qa/features/web/expenses.yaml`.
+
 ## [Unreleased] - 2026-10-15 — The sample's part-paid entries come with payment records (MUT-95, TD-063)
 
 **Why:** payment records own payment state (ADR-039). The sample seeded part-paid entries with a received amount and no record, so the first real payment summed the records alone and Owed now went up (₪4,001.28 left, pay ₪2,000, then ₪4,300 left). The overpayment guard counted records only, too.

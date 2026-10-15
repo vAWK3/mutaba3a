@@ -794,6 +794,10 @@
           "yearly": "{amount} yearly"
         },
         "notMarked": "{months} not marked",
+        "notMarkedSince": {
+          "one": "{count} payment since {since} not marked",
+          "other": "{count} payments since {since} not marked"
+        },
         "total": "Total not marked",
         "actionsFor": "Actions for {title}",
         "hint": "Each payment is saved as an expense on its own date.",

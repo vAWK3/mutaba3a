@@ -2618,3 +2618,11 @@ Full web suite on 2026-10-15 (after MUT-218/164/217/178): 114 passed, 9 failed, 
 |---|---|---|---|
 | `src/demo/__tests__/seedPayments.test.ts` (new) | Integration (fake IndexedDB, real seed) | 3 | Every sample income entry's records add up to what it has received (paid: its amount; part-paid: `receivedAmountMinor`), none future-dated, all `demo_`. A 1,000 payment on a part-paid entry raises its received amount by exactly 1,000 (before the fix it reset to 1,000), and the guard refuses one minor unit over the true remainder. `removeDemoData` leaves no payment on a sample entry |
 | `qa/specs/web/record-payment.spec.ts` › `@web.record-payment.sample-part-paid` (new) | E2E (release-qa) | 1 | On `/?sample=1`, Income for All Time: paying 1,000 on the part-paid entry leaves exactly 1,000 less owed. 3/3 with `--repeat-each 3`; fails on the old seed |
+
+## MUT-96 — Recurring lookback (2026-10-15, TD-069)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/services/__tests__/recurringExpenseService.dueWindow.test.ts` (new) | Integration (fake IndexedDB, clock fixed at 15 Oct 2026) | 3 | A rule started six months ago lists all seven months, where it showed 3 before the fix. A paid June, then a skipped August, move the start to the month after. A rule started three years ago lists 37 months |
+| `src/components/expenses/__tests__/RecurringAttentionList.test.tsx` › a long-running rule | Component | +3 | 37 payments read "37 payments since Oct 2023 not marked" with a $2,960 total; three still read "Aug, Sep, Oct"; Arabic uses the many form ("37 دفعة منذ") |
+| `qa/specs/web/expenses.spec.ts` › `@web.expenses.recurring-long-missed` (new) | E2E (release-qa) | 1 | A rule from eight months ago: "9 payments since <month> not marked", $720, nine months in Mark Paid. Passes with the other recurring specs |
