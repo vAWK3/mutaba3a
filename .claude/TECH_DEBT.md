@@ -29,6 +29,13 @@
 - A product question: `components/ui/MacDownloadBanner(.css)` still offers the desktop download to Mac browsers although the desktop is retired until v2.
 **Fix**: delete the first group, drop or gate `/theme-demo`, decide the Mac banner; re-run `release-qa lint`.
 
+### TD-145: A settled entry's payment lines come from the client's first 50 payments
+**Status**: Open
+**Added**: 2026-10-15 (MUT-224, eng review R4)
+**Priority**: Low — owned profiles have few payments per client
+**Impact**: The portal's `?income=` drawer finds the payments applied to an Owed entry by reading `GET /v1/payments?customerId=` (limit 50) and filtering allocations. A client with more than 50 payments may miss older lines; the drawer then shows "See this client's payments" instead.
+**Fix**: a server filter `GET /v1/payments?receivableId=` (exact, unbounded), then `usePaymentsForEntry` uses it and drops the fallback.
+
 ### TD-144: Drawer form labels are not tied to their inputs
 **Status**: Open
 **Ticket**: none (found 2026-10-15, release-QA specs)

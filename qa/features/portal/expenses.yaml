@@ -77,3 +77,12 @@ features:
     expect:
       - The first save is refused and the drawer shows the latest amount
       - The second save goes through with If-Match of the latest version
+  - id: redate-expense
+    title: An expense's date is changed in the edit drawer, sent with If-Match, and the list shows the new day (MUT-224 regression)
+    tier: secondary
+    steps:
+      - Open Expenses and choose the expense
+      - Change only its date and save
+    expect:
+      - PATCH /v1/expenses/<id> carries the new occurredOn with If-Match 1
+      - The row shows the new day
