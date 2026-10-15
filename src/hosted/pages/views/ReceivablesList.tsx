@@ -2,13 +2,13 @@ import { useMemo, type ReactNode } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { useLanguage } from '../../../lib/i18n/core';
-import type { Currency, Customer, Project, Receivable } from '../../api/client';
+import type { Currency, Customer, HostedProfile, Project, Receivable } from '../../api/client';
 import { ClientFilter, CurrencyFilter, DateFilter, FilterBar, MatterFilter } from '../../components/FilterControls';
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { DEFAULT_RECEIVABLE_STATUS, isNarrowed, splitIncomeDrawer, type ReceivableFilters, type ReceivablesPageSearch, type ReceivableStatusFilter } from '../../data/filters';
-import { incomeAffordancesFor, isSettleable } from '../../data/incomeAffordances';
+import { canRedateOwed, incomeAffordancesFor, isSettleable, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost, SETTLE_BUTTON_ATTR } from '../../components/IncomeDrawerHost';
 import { useCustomerDirectory, useProjectDirectory, useReceivables } from '../../data/queries';
 import { DecimalAmount, formatDecimal } from '../../format/DecimalAmount';
@@ -28,6 +28,8 @@ interface ReceivableRow {
   id: string;
   client: string;
   matter: string;
+  /** MUT-224: the entry's own date (postingDate), so a re-dated entry visibly moves. */
+  date: string;
   due: string;
   currency: Currency;
   gross: string;
@@ -35,13 +37,15 @@ interface ReceivableRow {
   outstanding: string;
   status: string;
   settleable: boolean;
+  redatable: boolean;
 }
 
-function shape(items: Receivable[], customers: Map<string, Customer>, projects: Map<string, Project>, language: 'en' | 'ar'): ReceivableRow[] {
+function shape(items: Receivable[], customers: Map<string, Customer>, projects: Map<string, Project>, language: 'en' | 'ar', profile: HostedProfile): ReceivableRow[] {
   return items.map((r) => ({
     id: r.id,
     client: customers.get(r.customerId)?.name ?? '—',
     matter: (r.projectId ? projects.get(r.projectId)?.name : undefined) ?? '—',
+    date: formatDay(r.postingDate, language),
     due: formatDay(r.dueDate, language),
     currency: r.currency,
     gross: r.gross,
@@ -49,6 +53,7 @@ function shape(items: Receivable[], customers: Map<string, Customer>, projects: 
     outstanding: r.outstanding,
     status: r.status,
     settleable: isSettleable(r),
+    redatable: canRedateOwed(profile, r),
   }));
 }
 
@@ -60,9 +65,11 @@ interface ReceivablesListProps {
   onRecordPayment?: (receivableId: string) => void;
   /** The page's Add income button, repeated as the empty state's action. */
   addAction?: ReactNode;
+  /** MUT-224: present where the gate offers re-dating; an Owed row then opens `?income=` (row-link, MUT-194). */
+  onRedate?: (receivableId: string) => void;
 }
 
-export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecordPayment, addAction }: ReceivablesListProps) {
+export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecordPayment, addAction, onRedate }: ReceivablesListProps) {
   const profile = useProfile();
   const { t, language } = useLanguage();
   const effective = fixedCustomerId ? { ...filters, customerId: fixedCustomerId } : filters;
@@ -71,14 +78,15 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
   const projects = useProjectDirectory(profile.id);
 
   const rows = useMemo(
-    () => (list.data && customers.data && projects.data ? shape(list.data, customers.data, projects.data, language) : undefined),
-    [list.data, customers.data, projects.data, language],
+    () => (list.data && customers.data && projects.data ? shape(list.data, customers.data, projects.data, language, profile) : undefined),
+    [list.data, customers.data, projects.data, language, profile],
   );
 
   const columns = useMemo<Column<ReceivableRow>[]>(
     () => [
       ...(fixedCustomerId ? [] : [{ key: 'client', header: t('hosted.receivables.columns.client'), cell: (r: ReceivableRow) => r.client }]),
       { key: 'matter', header: t('hosted.receivables.columns.matter'), cell: (r) => r.matter },
+      { key: 'date', header: t('hosted.receivables.columns.date'), cell: (r) => r.date },
       { key: 'due', header: t('hosted.receivables.columns.due'), cell: (r) => r.due },
       { key: 'gross', header: t('hosted.receivables.columns.gross'), numeric: true, cell: (r) => <DecimalAmount value={r.gross} currency={r.currency} /> },
       { key: 'paid', header: t('hosted.receivables.columns.paid'), numeric: true, cell: (r) => <DecimalAmount value={r.paid} currency={r.currency} /> },
@@ -98,7 +106,11 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
                     className="hp-row-action"
                     {...{ [SETTLE_BUTTON_ATTR]: r.id }}
                     aria-label={t('hosted.settle.rowLabel', { client: r.client, amount: formatDecimal(r.outstanding, r.currency, language) })}
-                    onClick={() => onRecordPayment(r.id)}
+                    onClick={(event) => {
+                      // MUT-224: the row itself opens the re-date drawer; this button opens only Record payment.
+                      event.stopPropagation();
+                      onRecordPayment(r.id);
+                    }}
                   >
                     {t('hosted.settle.record')}
                   </Button>
@@ -151,7 +163,14 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
       >
         {(r) => (
           <>
-            <HostedTable label={t('hosted.receivables.title')} columns={columns} rows={r} rowKey={(row) => row.id} />
+            <HostedTable
+              label={t('hosted.receivables.title')}
+              columns={columns}
+              rows={r}
+              rowKey={(row) => row.id}
+              onRowClick={onRedate ? (row) => onRedate(row.id) : undefined}
+              canOpen={(row) => row.redatable}
+            />
             <ShowMore hasMore={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
           </>
         )}
@@ -165,6 +184,7 @@ export function ReceivablesPage({ search, setSearch }: { search: ReceivablesPage
   const { t } = useLanguage();
   const { filters, drawer } = splitIncomeDrawer(search);
   const { kinds, canSettle } = incomeAffordancesFor(profile);
+  const redate = redateAffordancesFor(profile);
   // The header copy carries ADD_BUTTON_ATTR (focus returns there after a save); the empty state reuses it without.
   const openAdd = () => setSearch({ ...filters, newIncome: kinds.includes('owed') ? 'owed' : kinds[0] });
   const addButton = (header: boolean) =>
@@ -181,8 +201,9 @@ export function ReceivablesPage({ search, setSearch }: { search: ReceivablesPage
         setFilters={setSearch}
         addAction={addButton(false)}
         onRecordPayment={canSettle ? (receivableId) => setSearch({ ...filters, settle: receivableId }) : undefined}
+        onRedate={redate.owed ? (receivableId) => setSearch({ ...filters, income: receivableId }) : undefined}
       />
-      <IncomeDrawerHost profile={profile} drawer={drawer} onClose={() => setSearch(filters)} />
+      <IncomeDrawerHost profile={profile} drawer={drawer} onClose={() => setSearch(filters)} onOpen={(next) => setSearch({ ...filters, ...next })} />
     </>
   );
 }

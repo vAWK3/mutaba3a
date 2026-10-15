@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { HostedProfile, Payment, Receivable } from '../../api/client';
 import { profile } from '../../__tests__/harness';
 import { payment, receivable } from '../../pages/__tests__/fixtures';
-import { canRedateOwed, canRedatePayment, incomeAffordancesFor, isSettleable } from '../incomeAffordances';
+import { canRedateOwed, canRedatePayment, incomeAffordancesFor, isSettleable, redateAffordancesFor } from '../incomeAffordances';
 
 const PERSONAL_RULES = { received: true, owed: true, customer: 'optional' } as const;
 const MALAFAT_RULES = { received: true, owed: false, customer: 'linked-required' } as const;
@@ -93,5 +93,18 @@ describe('canRedatePayment (MUT-224)', () => {
     expect(canRedatePayment(personal(), mine({ capturedBy: { userId: 'u-other', displayName: 'Rami' } }), ME)).toBe(false);
     expect(canRedatePayment(personal({ access: { ...PERSONAL_ACCESS, payments: 'read' } }), mine(), ME)).toBe(false);
     expect(canRedatePayment(personal({ owned: false, writerOfRecord: 'MALAFAT', income: { ...MALAFAT_RULES } }), mine(), ME)).toBe(false);
+  });
+});
+
+describe('redateAffordancesFor (MUT-224)', () => {
+  it('offers both drawers on a profile the user owns, each on its own access row', () => {
+    expect(redateAffordancesFor(personal())).toEqual({ owed: true, payments: true });
+    expect(redateAffordancesFor(personal({ access: { ...PERSONAL_ACCESS, capture: 'read' } }))).toEqual({ owed: false, payments: true });
+    expect(redateAffordancesFor(personal({ access: { ...PERSONAL_ACCESS, payments: 'read' } }))).toEqual({ owed: true, payments: false });
+  });
+
+  it('offers neither on a Malafat-fed profile or a firm the user does not own', () => {
+    expect(redateAffordancesFor(profile())).toEqual({ owed: false, payments: false });
+    expect(redateAffordancesFor(personal({ owned: false }))).toEqual({ owed: false, payments: false });
   });
 });

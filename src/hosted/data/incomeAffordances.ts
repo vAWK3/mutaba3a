@@ -52,7 +52,18 @@ export function isSettleable(receivable: Receivable): boolean {
  * A settled entry can still be re-dated: the server keeps its due date and its payments.
  */
 export function canRedateOwed(profile: HostedProfile, receivable: Receivable): boolean {
-  return profile.owned && profile.access.capture === 'read-write' && receivable.origin === 'ADJUSTMENT' && receivable.status !== 'VOID';
+  return redateAffordancesFor(profile).owed && receivable.origin === 'ADJUSTMENT' && receivable.status !== 'VOID';
+}
+
+/**
+ * MUT-224: which re-date drawers a profile offers at all: what pages wire a row click to, and what a deep link may
+ * open. Owned profiles only; PATCH /v1/income stands on `capture`, PATCH /v1/payments on `payments`.
+ */
+export function redateAffordancesFor(profile: HostedProfile): { owed: boolean; payments: boolean } {
+  return {
+    owed: profile.owned && profile.access.capture === 'read-write',
+    payments: profile.owned && profile.access.payments === 'read-write',
+  };
 }
 
 /**
@@ -61,5 +72,5 @@ export function canRedateOwed(profile: HostedProfile, receivable: Receivable): b
  * looks exactly as before; the server would answer 403 there anyway.
  */
 export function canRedatePayment(profile: HostedProfile, payment: Payment, userId: string): boolean {
-  return profile.owned && profile.access.payments === 'read-write' && payment.origin === 'capture' && payment.status === 'POSTED' && payment.capturedBy?.userId === userId;
+  return redateAffordancesFor(profile).payments && payment.origin === 'capture' && payment.status === 'POSTED' && payment.capturedBy?.userId === userId;
 }
