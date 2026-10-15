@@ -2604,3 +2604,10 @@ The phone-side AC ("the row shows saved") follows from the server returning the 
 | `qa/specs/web/clients.spec.ts`, `home.spec.ts`, `brand.spec.ts` (changed) | E2E (release-qa) | 0 new | Owed now is read with waiting assertions; `@web.clients.owed-now-parity`, `@web.home` and both `@web.brand.type` pass 45/45 with `--repeat-each 5 --retries 0` |
 
 Full web suite on 2026-10-15 (after MUT-218/164/217/178): 114 passed, 9 failed, all on the main baseline (5× `loader-slow-route`, 4× `landing.375`). `csv-new-client`, `conversions.log` and `conversions.edit-delete` now pass unattended.
+
+## MUT-220 — Demo mode summary and active business (2026-10-15)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/components/modals/__tests__/DemoSeedModal.test.tsx` (new) | Component + fake IndexedDB (seed stubbed) | 3 | In an AppShell-like shell, Show Demo leads to the summary with "3 Businesses" (it unmounted before the fix); the first demo business stays active through `useActiveProfile`'s repair (it switched back to the person's own before the fix); the preview names the count from the seed list, and both locales take `{count}` |
+| `qa/specs/web/onboarding.spec.ts` › `@web.onboarding.demo-summary`, `@web.onboarding.demo-mode` | E2E (release-qa) | 2 | demo-summary is automated; demo-mode follows the summary flow. All 6 onboarding specs pass 18/18 with `--repeat-each 3 --retries 0` |

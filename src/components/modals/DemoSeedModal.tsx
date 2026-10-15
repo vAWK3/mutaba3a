@@ -57,20 +57,16 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
 
     try {
       const result = await seedDemoData();
+
+      // Refetch first, so the business list already holds the demo businesses when one becomes active;
+      // otherwise useActiveProfile's repair switches straight back to the person's own (MUT-220)
+      await queryClient.invalidateQueries();
+      const [firstDemoProfile] = getDemoProfileIds();
+      if (firstDemoProfile) setActiveProfile(firstDemoProfile);
+
+      activateDemo();
       setStats(result);
       setSeedStatus('success');
-
-      // Activate demo mode in store
-      activateDemo();
-
-      // Switch to the first demo profile so seeded data is visible
-      const demoProfileIds = getDemoProfileIds();
-      if (demoProfileIds.length > 0) {
-        setActiveProfile(demoProfileIds[0]);
-      }
-
-      // Invalidate all queries to refresh UI
-      queryClient.invalidateQueries();
     } catch (error) {
       setSeedStatus('error');
       setSeedError(error instanceof Error ? error.message : 'Unknown error');
@@ -127,7 +123,7 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
               <div className="demo-preview">
                 <h3>{t('demo.modal.willCreate')}</h3>
                 <ul>
-                  <li>{t('demo.modal.item.profile')}</li>
+                  <li>{t('demo.modal.item.profile', { count: getDemoProfileIds().length })}</li>
                   <li>{t('demo.modal.item.clients')}</li>
                   <li>{t('demo.modal.item.projects')}</li>
                   <li>{t('demo.modal.item.transactions')}</li>
@@ -151,6 +147,10 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
               <h3>{t('demo.modal.successTitle')}</h3>
               <p>{t('demo.modal.successDesc')}</p>
               <div className="demo-stats">
+                <div className="demo-stat">
+                  <span className="demo-stat-value">{stats.businessProfiles}</span>
+                  <span className="demo-stat-label">{t('demo.stats.businesses')}</span>
+                </div>
                 <div className="demo-stat">
                   <span className="demo-stat-value">{stats.clients}</span>
                   <span className="demo-stat-label">{t('demo.stats.clients')}</span>

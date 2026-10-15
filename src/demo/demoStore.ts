@@ -49,10 +49,10 @@ export const useDemoStore = create<DemoStore>((set, get) => ({
 
   activateDemo: (seededAt) => {
     const timestamp = seededAt || new Date().toISOString();
+    // The dialog stays open: its summary is the next thing the person sees, and Get Started closes it (MUT-220)
     set({
       isActive: true,
       seededAt: timestamp,
-      showConfirmModal: false,
       seedingStatus: 'success',
     });
     get().saveToStorage();
