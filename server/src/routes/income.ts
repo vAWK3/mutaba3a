@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { writeRefusal } from '../auth/writability.js';
 import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
-import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, isOwnCapture, isOwnProfile, owedVatFields, redateTo, resolveIncomeLinks } from '../income/compose.js';
+import { dueDateForOwed, incomeCaptureRulesFor, isOwnCapture, isOwnProfile, owedVatFields, pastMoneyDate, redateTo, resolveIncomeLinks } from '../income/compose.js';
 import { ifMatch } from '../if-match.js';
 import { OWED_REDATED } from './audit.js';
 import { redateOwnCapture } from './payments.js';
@@ -51,8 +51,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (body.kind === 'owed' && !rules.owed) throw writeRefusal('payments', writerOfRecord);
       const now = c.get('now')();
       const today = todayFor(organization, now);
-      const occurredOn = assertIsoDate(body.occurredOn, 'occurredOn');
-      assertNotFuture(occurredOn, today, 'occurredOn');
+      const occurredOn = pastMoneyDate(body.occurredOn, today, 'occurredOn');
       const amountMinor = parseAmount(body.amount, body.currency);
       if (amountMinor <= 0n) throw validationError('AMOUNT_INVALID', 'amount must be positive', { field: 'amount' });
       const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null }, body.currency, rules);

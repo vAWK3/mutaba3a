@@ -226,6 +226,10 @@ describe('recording payments', () => {
     };
     expect(await bad({ receivedOn: '2026-02-30' })).toBe('DATE_INVALID');
     expect(await bad({ receivedOn: '2099-01-01' })).toBe('DATE_INVALID');
+    // MUT-227: the floor applies to Malafat's API-key payments too; today is 2026-10-08, so the floor is 2016-09-30.
+    expect(await bad({ receivedOn: '2016-09-29' })).toBe('DATE_INVALID');
+    expect((await pay(h, f, '10.00', [], { receivedOn: '0001-01-01' })).body.error.details).toEqual({ reason: 'DATE_INVALID', field: 'receivedOn', bound: 'past' });
+    expect((await pay(h, f, '10.00', [], { receivedOn: '2016-09-30' })).res.status).toBe(201);
     expect(await bad({ method: 'CARD' })).toBeUndefined(); // schema
     expect(await bad({ replacesPaymentId: '00000000-0000-4000-8000-000000000000' })).toBe('REPLACES_NOT_REVERSED');
     const posted = await pay(h, f, '5.00', []);

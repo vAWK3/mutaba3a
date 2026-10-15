@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { keyAuth, postingActorOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
-import { assertIsoDate, assertNotAbsurdDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
+import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import type { IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
@@ -213,6 +213,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const today = todayFor(organization, now);
       assertIsoDate(body.receivedOn, 'receivedOn');
       assertNotAbsurdDate(body.receivedOn, today, 'receivedOn');
+      assertNotTooOld(body.receivedOn, today, 'receivedOn');
       if (body.replacesPaymentId) {
         const replaced = await store.payments.getById(organization.id, body.replacesPaymentId);
         if (!replaced || replaced.status !== 'REVERSED') throw validationError('REPLACES_NOT_REVERSED', 'replacesPaymentId must name a REVERSED payment', { field: 'replacesPaymentId' });

@@ -2,8 +2,8 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { todayFor } from '../agreements/compose.js';
 import type { Context } from 'hono';
-import { assertDifferentCurrencies, conversionDate, conversionPatch, parseConversionAmount } from '../conversions/compose.js';
-import { assertNotFuture } from '../income/compose.js';
+import { assertDifferentCurrencies, conversionPatch, parseConversionAmount } from '../conversions/compose.js';
+import { pastMoneyDate } from '../income/compose.js';
 import { decodeConversionCursor, encodeConversionCursor } from '../conversions/cursor.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
@@ -64,8 +64,7 @@ export function conversionRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
-      const occurredOn = conversionDate(body.occurredOn);
-      assertNotFuture(occurredOn, today, 'occurredOn');
+      const occurredOn = pastMoneyDate(body.occurredOn, today, 'occurredOn');
       assertDifferentCurrencies(body.currency, body.toCurrency);
       const amountMinor = parseConversionAmount(body.amount, body.currency, 'amount');
       const toAmountMinor = parseConversionAmount(body.toAmount, body.toCurrency, 'toAmount');
@@ -136,7 +135,7 @@ export function conversionRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const existing = await mustGet(organization.id, c.req.valid('param').conversionId);
       const patch = conversionPatch(existing, body);
       // Stricter than expense PATCH, consistent with create; a notes-only edit of an old row is never refused.
-      if (patch.occurredOn !== undefined) assertNotFuture(patch.occurredOn, todayFor(organization, now), 'occurredOn');
+      if (patch.occurredOn !== undefined) pastMoneyDate(patch.occurredOn, todayFor(organization, now), 'occurredOn');
       const result = await store.conversions.update(organization.id, existing.id, c.get('expectedVersion'), patch, now);
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such conversion');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);

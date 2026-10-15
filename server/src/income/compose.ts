@@ -1,4 +1,4 @@
-import { assertIsoDate, todayFor, validationError } from '../agreements/compose.js';
+import { assertIsoDate, assertNotTooOld, todayFor, validationError, type DateBound } from '../agreements/compose.js';
 import type { ProfileWriter } from '../auth/writability.js';
 import { compareIsoDates, dueDateFor, type IsoDate } from '../dates.js';
 import { profileOwnerOf } from '../personal-profile.js';
@@ -117,7 +117,19 @@ export function owedVatFields(amountMinor: bigint): OwedVatFields {
  * (`occurredOn`, settle's `paidAt`), not a verbatim reuse of an existing one.
  */
 export function assertNotFuture(date: IsoDate, today: IsoDate, field: string): void {
-  if (compareIsoDates(date, today) > 0) throw validationError('DATE_INVALID', `${field} cannot be later than today`, { field });
+  if (compareIsoDates(date, today) > 0) throw validationError('DATE_INVALID', `${field} cannot be later than today`, { field, bound: 'future' satisfies DateBound });
+}
+
+/**
+ * MUT-227: a money date that has already happened — a valid date, not later than today, not more than ten years
+ * back. One call for every income-like date (create, settle, re-date, conversions, filing) so the three checks
+ * cannot drift apart again.
+ */
+export function pastMoneyDate(raw: string, today: IsoDate, field: string): IsoDate {
+  const date = assertIsoDate(raw, field);
+  assertNotFuture(date, today, field);
+  assertNotTooOld(date, today, field);
+  return date;
 }
 
 /**
@@ -133,9 +145,7 @@ export function isOwnCapture(payment: Pick<PaymentRecord, 'origin' | 'createdByU
   return payment.origin === 'CAPTURE' && payment.createdByUserId === userId && payment.status === 'POSTED';
 }
 
-/** MUT-223: the new date of a re-date — the same validity and no-future rule as create, in the organization's timezone. */
+/** MUT-223: the new date of a re-date — the same rules as create (MUT-227's floor included), in the organization's timezone. */
 export function redateTo(raw: string, organization: Organization, now: Date, field: string): IsoDate {
-  const date = assertIsoDate(raw, field);
-  assertNotFuture(date, todayFor(organization, now), field);
-  return date;
+  return pastMoneyDate(raw, todayFor(organization, now), field);
 }

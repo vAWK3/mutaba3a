@@ -1,5 +1,5 @@
-import { assertIsoDate, parseAmount, validationError } from '../agreements/compose.js';
-import type { IsoDate } from '../dates.js';
+import { assertIsoDate, assertNotTooOld, parseAmount, validationError } from '../agreements/compose.js';
+import { addDays, todayIn, type IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
 import type { Currency } from '../money.js';
 import type { InboxEntryKind } from '../repositories/ports.js';
@@ -27,9 +27,16 @@ export function parseInboxAmount(text: string, currency: Currency): bigint {
  * an unsorted entry has no organization yet. The check happens at filing time,
  * against the chosen profile's own timezone (ADR-022's whole history is a
  * record of what guessing a timezone costs). A regression test pins this.
+ *
+ * MUT-227: the ten-year floor is checked here too, but leniently, so a typo
+ * year is refused while the person is still looking at it. Measured from UTC's
+ * yesterday, which is at or before every timezone's today: capture can never
+ * refuse a date that filing (exact, in the profile's timezone) would accept.
  */
-export function inboxDate(value: string): IsoDate {
-  return assertIsoDate(value, 'occurredOn');
+export function inboxDate(value: string, now: Date): IsoDate {
+  const date = assertIsoDate(value, 'occurredOn');
+  assertNotTooOld(date, addDays(todayIn('UTC', now), -1), 'occurredOn');
+  return date;
 }
 
 /**

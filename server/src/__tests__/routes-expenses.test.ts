@@ -229,6 +229,39 @@ describe('POST /v1/expenses', () => {
 });
 
 describe('PATCH /v1/expenses/{id}', () => {
+  it('MUT-227: create and edit refuse a date more than ten years back (bound past); the floor day is accepted', async () => {
+    // Today is 2026-10-20 in Jerusalem, so the floor is 2016-10-12.
+    const { h, a, p, create } = await setup();
+    for (const occurredOn of ['2016-10-11', '0001-01-01']) {
+      const old = await create({ occurredOn });
+      expect(old.status).toBe(422);
+      expect((await read(old)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    }
+    const e = await read(await create({ occurredOn: '2016-10-12' }));
+    expect(e.occurredOn).toBe('2016-10-12');
+    const url = `/v1/expenses/${e.id}`;
+    const moved = await h.app.request(url, json({ occurredOn: '2006-10-12' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(moved.status).toBe(422);
+    expect((await read(moved)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    expect((await read(await h.app.request(url, { headers: p.as(a.org.id) }))).occurredOn).toBe('2016-10-12');
+  });
+
+  it('MUT-227: a row already older than the floor stays readable, editable without its date, and inside old-date filters', async () => {
+    const { h, a, p } = await setup();
+    const old = await h.store.expenses.create(
+      { organizationId: a.org.id, occurredOn: '2001-03-04', amountMinor: 5000n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId },
+      h.clock.now,
+    );
+    const edited = await h.app.request(`/v1/expenses/${old.id}`, json({ notes: 'from the old ledger' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(edited.status).toBe(200);
+    expect(await read(edited)).toMatchObject({ occurredOn: '2001-03-04', notes: 'from the old ledger' });
+    const listed = await read(await h.app.request('/v1/expenses?from=2001-01-01&to=2001-12-31', { headers: p.as(a.org.id) }));
+    expect(listed.items.map((x: Loose) => x.id)).toEqual([old.id]);
+    const summary = await h.app.request('/v1/summaries/expenses?from=2001-01-01&to=2001-12-31', { headers: p.as(a.org.id) });
+    expect(summary.status).toBe(200);
+    expect((await read(summary)).currencies.map((c: Loose) => c.total)).toEqual(['50.00']);
+  });
+
   it('needs If-Match, refuses a stale version, clears with null, re-parses the amount in the row’s currency', async () => {
     const { h, a, p, create } = await setup();
     const e = await read(await create({ currency: 'USD', vendor: 'Courier', notes: 'keep' }));

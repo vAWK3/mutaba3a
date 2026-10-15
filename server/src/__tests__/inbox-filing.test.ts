@@ -253,6 +253,23 @@ describe('POST /v1/inbox/{id}/file-as-expense', () => {
     expect((await read(filed)).occurredOn).toBe('2027-06-01');
     expect(await s.listInbox()).toEqual([]);
   });
+
+  /**
+   * MUT-227: POST /v1/expenses refuses a date more than ten years back, so filing does too. 2016-10-03 passes
+   * capture's lenient floor (UTC yesterday − 3660) but sits one day under this profile's exact floor (2016-10-04).
+   */
+  it('refuses an entry dated more than ten years back, because POST /v1/expenses does, and leaves it in the inbox', async () => {
+    const s = await setup();
+    const entry = await s.capture({ ...EXPENSE_ENTRY, occurredOn: '2016-10-03' });
+    const filed = await s.fileExpense(entry.id);
+    const direct = await s.h.app.request('/v1/expenses', json({ occurredOn: '2016-10-03', amount: '120.50', currency: 'ILS' }, s.as(s.p.id, idem())));
+    const [filedBody, directBody] = [await read(filed), await read(direct)];
+
+    expect(filed.status).toBe(422);
+    expect(filedBody.error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    expect(filedBody.error.details).toEqual(directBody.error.details);
+    expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
+  });
 });
 
 describe('POST /v1/inbox/{id}/file-as-income on a personal profile', () => {
@@ -350,6 +367,19 @@ describe('POST /v1/inbox/{id}/file-as-income on a personal profile', () => {
 
     expect(filed.status).toBe(direct.status);
     expect(filed.status).toBe(422);
+    expect(filedBody.error.details).toEqual(directBody.error.details);
+    expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
+  });
+
+  it('refuses an entry dated more than ten years back, because POST /v1/income does, and leaves it in the inbox (MUT-227)', async () => {
+    const s = await setup();
+    const entry = await s.capture({ ...INCOME_ENTRY, occurredOn: '2016-10-03' });
+    const filed = await s.fileIncome(entry.id, { kind: 'received' });
+    const direct = await s.h.app.request('/v1/income', json({ kind: 'received', amount: '250.00', currency: 'ILS', occurredOn: '2016-10-03' }, s.as(s.p.id, idem())));
+    const [filedBody, directBody] = [await read(filed), await read(direct)];
+
+    expect(filed.status).toBe(422);
+    expect(filedBody.error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
     expect(filedBody.error.details).toEqual(directBody.error.details);
     expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
   });

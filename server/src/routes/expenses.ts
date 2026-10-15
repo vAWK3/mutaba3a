@@ -6,7 +6,7 @@ import { checkFile, receiptStorageKey } from '../attachments/rules.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import { endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
-import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, parseExpenseAmount, requestedLinks, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
+import { assertCategoryChoosable, expenseDate, expenseOccurredOn, expensePatch, MAX_RECEIPTS_PER_EXPENSE, parseExpenseAmount, requestedLinks, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
 import { summarizeExpenses } from '../expenses/summary.js';
 import { idempotent } from '../idempotency.js';
@@ -138,7 +138,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
     async (c) => {
       const { organization, user } = sessionAuth(c);
       const body = c.req.valid('json');
-      const occurredOn = expenseDate(body.occurredOn);
+      const occurredOn = expenseOccurredOn(body.occurredOn, todayFor(organization, c.get('now')()));
       const amountMinor = parseExpenseAmount(body.amount, body.currency);
       const links = await resolveLinks(store, organization.id, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
       if (body.categoryId) await assertCategoryChoosable(store, organization.id, body.categoryId);
@@ -169,7 +169,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const { organization } = sessionAuth(c);
       const body = c.req.valid('json');
       const existing = await mustGet(organization.id, c.req.valid('param').expenseId);
-      const patch = expensePatch(existing, body);
+      const patch = expensePatch(existing, todayFor(organization, c.get('now')()), body);
       const links = requestedLinks(existing, body);
       if (links) Object.assign(patch, await resolveLinks(store, organization.id, links));
       if (patch.categoryId && patch.categoryId !== existing.categoryId) await assertCategoryChoosable(store, organization.id, patch.categoryId);

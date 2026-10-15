@@ -113,6 +113,21 @@ describe('POST /v1/inbox', () => {
     expect((await read(res)).occurredOn).toBe('2027-06-01');
   });
 
+  /**
+   * MUT-227: a typo year is refused at capture, but leniently. With no profile there is no timezone, so the floor
+   * is measured from UTC's yesterday (2026-10-11 here), which is at or before every timezone's today. Capture can
+   * never refuse a date that filing would accept; filing applies the exact floor.
+   */
+  it('refuses a date more than ten years before UTC yesterday (bound past); accepts that floor day', async () => {
+    const { capture } = await setup();
+    for (const occurredOn of ['2016-10-02', '0001-01-01']) {
+      const old = await capture({ ...BASE, occurredOn });
+      expect(old.status).toBe(422);
+      expect((await read(old)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    }
+    expect((await capture({ ...BASE, occurredOn: '2016-10-03' })).status).toBe(201);
+  });
+
   it('rejects an unknown field, as every other create route does', async () => {
     const { capture } = await setup();
     expect((await capture({ ...BASE, organizationId: '00000000-0000-4000-8000-000000000000' })).status).toBe(422);
@@ -258,6 +273,15 @@ describe('PATCH /v1/inbox/{entryId}', () => {
     const res = await h.app.request(`/v1/inbox/${created.id}`, json({ amount: '99.00', note: null }, { ...u.me(), 'if-match': '1' }, 'PATCH'));
     expect(res.status).toBe(200);
     expect(await read(res)).toMatchObject({ amount: '99.00', note: null, version: 2 });
+  });
+
+  it('refuses moving the date more than ten years back (MUT-227), and leaves the entry as it was', async () => {
+    const { h, u, capture, list } = await setup();
+    const created = (await read(await capture())) as { id: string };
+    const res = await h.app.request(`/v1/inbox/${created.id}`, json({ occurredOn: '2006-10-08' }, { ...u.me(), 'if-match': '1' }, 'PATCH'));
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    expect((await read(await list())).items).toMatchObject([{ id: created.id, occurredOn: '2026-10-08', version: 1 }]);
   });
 
   it('refuses a stale If-Match with 409 VERSION_MISMATCH, and a missing one with 422', async () => {

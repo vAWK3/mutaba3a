@@ -1,13 +1,13 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
-import { assertIsoDate, todayFor, validationError } from '../agreements/compose.js';
+import { assertIsoDate, assertNotTooOld, todayFor, validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
 import { assertCategoryChoosable, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
 import { identityIdempotent, idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
-import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
+import { dueDateForOwed, incomeCaptureRulesFor, owedVatFields, pastMoneyDate, resolveIncomeLinks } from '../income/compose.js';
 import { formatMoney, type Currency } from '../money.js';
 import type { InboxEntryRecord, LedgerStore, UpdateInboxEntryPatch } from '../repositories/ports.js';
 import {
@@ -96,7 +96,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           kind: body.kind === 'income' ? 'INCOME' : 'EXPENSE',
           amountMinor: parseInboxAmount(body.amount, body.currency),
           currency: body.currency,
-          occurredOn: inboxDate(body.occurredOn),
+          occurredOn: inboxDate(body.occurredOn, c.get('now')()),
           note: body.note ?? null,
           captureSource: body.captureSource ?? null,
         },
@@ -127,7 +127,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const patch: UpdateInboxEntryPatch = {
         ...(body.amount !== undefined ? { amountMinor: parseInboxAmount(body.amount, currency) } : {}),
         ...(body.currency !== undefined ? { currency: body.currency } : {}),
-        ...(body.occurredOn !== undefined ? { occurredOn: inboxDate(body.occurredOn) } : {}),
+        ...(body.occurredOn !== undefined ? { occurredOn: inboxDate(body.occurredOn, c.get('now')()) } : {}),
         ...(body.note !== undefined ? { note: body.note } : {}),
         ...(body.captureSource !== undefined ? { captureSource: body.captureSource } : {}),
       };
@@ -184,6 +184,8 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       // Every destination-side rule is checked before the transaction opens, so a refusal can never consume the entry.
       // No future-date check: POST /v1/expenses has none, and filing must be refused in exactly the places a
       // direct create is — not more. The income route below does check, because POST /v1/income does.
+      // The ten-year floor (MUT-227) applies, because POST /v1/expenses applies it.
+      assertNotTooOld(entry.occurredOn, todayFor(organization, now), 'occurredOn');
       const links = await resolveLinks(store, organization.id, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
       if (body.categoryId) await assertCategoryChoosable(store, organization.id, body.categoryId);
 
@@ -244,7 +246,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const now = c.get('now')();
       const entry = await mustGet(user.id, c.req.valid('param').entryId);
       assertKind(entry, 'INCOME');
-      assertNotFuture(entry.occurredOn, todayFor(organization, now), 'occurredOn');
+      pastMoneyDate(entry.occurredOn, todayFor(organization, now), 'occurredOn');
       // MUT-65's own validators, reused rather than reimplemented. This route stays on payments:write, so a Malafat-fed
       // profile is refused before this line and only personal-profile rules ever apply here (TD-094).
       const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null }, entry.currency, incomeCaptureRulesFor(writerOfRecord));

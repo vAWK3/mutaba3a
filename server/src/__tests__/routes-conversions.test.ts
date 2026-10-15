@@ -145,6 +145,17 @@ describe('POST /v1/conversions', () => {
     expect(today.status).toBe(201);
   });
 
+  it('MUT-227: refuses an occurredOn more than ten years back (bound past); accepts the floor day', async () => {
+    // Today is 2026-10-20 in Jerusalem, so the floor is 2016-10-12.
+    const { create } = await setup();
+    for (const occurredOn of ['2016-10-11', '0001-01-01']) {
+      const old = await create({ occurredOn });
+      expect(old.status).toBe(422);
+      expect((await read(old)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    }
+    expect((await create({ occurredOn: '2016-10-12' })).status).toBe(201);
+  });
+
   it('replays an Idempotency-Key and refuses it for a different body', async () => {
     const { h, a, p } = await setup();
     const key = { ...p.as(a.org.id), 'idempotency-key': 'conversion-key-0001' };
@@ -331,6 +342,7 @@ describe('PATCH /v1/conversions/{id} (MUT-194)', () => {
     ['a merged same-currency pair', { toAmount: '100.00', toCurrency: 'USD' }, 'SAME_CURRENCY', 'toCurrency'],
     ['a wrong-precision amount for the row\'s currency', { amount: '1.234' }, 'AMOUNT_INVALID', 'amount'],
     ['a future occurredOn', { occurredOn: '2026-10-21' }, 'DATE_INVALID', 'occurredOn'],
+    ['an occurredOn more than ten years back (MUT-227)', { occurredOn: '2016-10-11' }, 'DATE_INVALID', 'occurredOn'],
   ])('refuses %s with 422 %s on field %s', async (_label, body, reason, field) => {
     const { h, a, p, create } = await setup();
     const created = await read(await create({}));

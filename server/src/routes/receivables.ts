@@ -4,7 +4,7 @@ import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreem
 import { postDueItems } from '../agreements/posting.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
-import { assertNotFuture } from '../income/compose.js';
+import { pastMoneyDate } from '../income/compose.js';
 import { formatMoney, type Currency } from '../money.js';
 import { checkCredit, splitCredit } from '../payments/credit.js';
 import { InsufficientCapacity, LockConflict } from '../repositories/memory.js';
@@ -181,8 +181,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (amountMinor > outstanding) {
         throw validationError('ALLOCATION_EXCEEDS_OUTSTANDING', 'The amount exceeds what is outstanding on this receivable', { outstanding: formatMoney({ minor: outstanding, currency }) });
       }
-      const paidAt = body.paidAt ? assertIsoDate(body.paidAt, 'paidAt') : today;
-      assertNotFuture(paidAt, today, 'paidAt');
+      const paidAt = body.paidAt ? pastMoneyDate(body.paidAt, today, 'paidAt') : today;
       const requestId = c.get('requestId');
 
       let created;
