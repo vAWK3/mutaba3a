@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { ARGON2_MINIMUMS } from './auth/users.js';
 
+/** Rates must not travel in cleartext; a local stub (tests, QA against a local server) may use plain http. */
+function isHttpsOrLocalHttp(value: string): boolean {
+  // zod runs a refine even after .url() has failed; a value URL can't parse is reported by .url().
+  if (!URL.canParse(value)) return true;
+  const url = new URL(value);
+  return url.protocol === 'https:' || (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1'));
+}
+
 /**
  * Validated process configuration. Fails fast at boot with a readable list of
  * what is missing — a half-configured ledger service must not start.
@@ -19,11 +27,15 @@ const envSchema = z.object({
   SERVICE_VERSION: z.string().min(1).default('0.0.0-dev'),
   /** Private GCS bucket for attachments (M6). Absent = attachments routes answer 503 ATTACHMENTS_NOT_CONFIGURED. */
   ATTACHMENTS_BUCKET: z.string().min(3).optional(),
+  ATTACHMENTS_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
   /** MUT-228: the ECB reference-rate provider's `latest` endpoint, how long a snapshot is fresh, and how long to wait for it. */
-  FX_RATES_URL: z.string().url().default('https://api.frankfurter.dev/v1/latest'),
+  FX_RATES_URL: z
+    .string()
+    .url()
+    .refine(isHttpsOrLocalHttp, 'must be https (plain http only for localhost or 127.0.0.1)')
+    .default('https://api.frankfurter.dev/v1/latest'),
   FX_RATES_TTL_MINUTES: z.coerce.number().int().min(15).max(1440).default(240),
   FX_RATES_TIMEOUT_MS: z.coerce.number().int().min(500).max(10_000).default(3000),
-  ATTACHMENTS_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
   /** argon2id cost for user passwords (MUT-37). Never below OWASP profile 1. */
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(ARGON2_MINIMUMS.memoryKiB).default(ARGON2_MINIMUMS.memoryKiB),
   ARGON2_TIME_COST: z.coerce.number().int().min(ARGON2_MINIMUMS.timeCost).default(ARGON2_MINIMUMS.timeCost),

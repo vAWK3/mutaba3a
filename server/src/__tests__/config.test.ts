@@ -158,8 +158,15 @@ describe('loadConfig — reference exchange rates (MUT-228)', () => {
     expect(loadConfig({ ...base, FX_RATES_TTL_MINUTES: '1440', FX_RATES_TIMEOUT_MS: '500' })).toMatchObject({ FX_RATES_TTL_MINUTES: 1440, FX_RATES_TIMEOUT_MS: 500 });
   });
 
+  it('accepts plain http only for a local stub', () => {
+    expect(loadConfig({ ...base, FX_RATES_URL: 'http://127.0.0.1:9999/latest' }).FX_RATES_URL).toBe('http://127.0.0.1:9999/latest');
+    expect(loadConfig({ ...base, FX_RATES_URL: 'http://localhost/latest' }).FX_RATES_URL).toBe('http://localhost/latest');
+  });
+
   it.each([
     ['FX_RATES_URL', 'not a url'],
+    ['FX_RATES_URL', 'http://api.frankfurter.dev/v1/latest'],
+    ['FX_RATES_URL', 'ftp://localhost/latest'],
     ['FX_RATES_TTL_MINUTES', '14'],
     ['FX_RATES_TTL_MINUTES', '1441'],
     ['FX_RATES_TIMEOUT_MS', '499'],

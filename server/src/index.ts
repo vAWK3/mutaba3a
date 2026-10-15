@@ -16,6 +16,12 @@ const rateLimiter = new SlidingWindowRateLimiter(config.RATE_LIMIT_PER_MINUTE);
 const signInThrottle = new SignInThrottle();
 const signInIpLimiter = new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute);
 
+const fxRates = new CachedFxRates({
+  source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
+  ttlMs: config.FX_RATES_TTL_MINUTES * 60_000,
+  logger,
+});
+
 const app = createApp({
   store,
   logger,
@@ -53,11 +59,7 @@ const app = createApp({
           androidSha256Fingerprints: config.ANDROID_SHA256_FINGERPRINTS.split(','),
         }
       : null,
-  fxRates: new CachedFxRates({
-    source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
-    ttlMs: config.FX_RATES_TTL_MINUTES * 60_000,
-    logger,
-  }),
+  fxRates,
 });
 if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; attachments routes answer 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
@@ -66,6 +68,9 @@ if (!config.APPLE_TEAM_ID) logger.warn('APPLE_TEAM_ID/APPLE_BUNDLE_ID/ANDROID_PA
 const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
   logger.info({ port: info.port, env: config.NODE_ENV, keyEnvironment: config.API_KEY_ENVIRONMENT }, 'mutaba3a-api listening');
 });
+// MUT-228: production runs one instance, so every deploy starts with an empty rate cache. Fill it now
+// rather than on the first phone's request; a failure is logged by the cache and retried on demand.
+void fxRates.get().catch(() => undefined);
 
 const pruneTimer = setInterval(() => {
   const now = new Date();

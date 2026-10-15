@@ -19,6 +19,15 @@ import { SUPPORTED_CURRENCIES, type Currency } from './money.js';
 /** 1 USD = 0.709 JOD, the Central Bank of Jordan's peg since 1995. A change is a deploy, not an env flip. */
 export const JOD_PER_USD = 0.709;
 const RATE_DECIMALS = 6;
+/** After a failed refresh, how long to answer from what we have before asking the provider again. */
+export const DEFAULT_FX_FAILURE_BACKOFF_MS = 60_000;
+/**
+ * A snapshot whose ECB rate date is older than this is not served, live or stale. The ECB skips
+ * weekends and TARGET holidays (Easter is the longest gap, under 6 days); anything older means the
+ * provider is stuck or the outage is long, and an old rate beside a typed amount misleads.
+ */
+export const MAX_RATE_AGE_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** One ECB reference day: units of each currency per 1 EUR. */
 export interface EcbSnapshot {
@@ -74,8 +83,13 @@ export class FrankfurterSource implements FxRateSource {
     url.searchParams.set('base', 'EUR');
     url.searchParams.set('symbols', 'USD,ILS');
     const doFetch = this.options.fetch ?? fetch;
-    const res = await doFetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(this.options.timeoutMs) });
-    if (!res.ok) throw new Error(`FX provider answered ${res.status}`);
+    // A redirect is a failure, not rates to accept: the provider moved or its domain changed hands.
+    const res = await doFetch(url, { headers: { accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(this.options.timeoutMs) });
+    if (!res.ok) {
+      // Release the connection now rather than at garbage collection.
+      await res.body?.cancel();
+      throw new Error(`FX provider answered ${res.status}`);
+    }
     const body = FrankfurterLatestSchema.parse(await res.json());
     return { rateDate: body.date, perEur: { USD: body.rates.USD, ILS: body.rates.ILS } };
   }
@@ -91,7 +105,7 @@ export interface FxRatesReading {
 export interface CachedFxRatesOptions {
   source: FxRateSource;
   ttlMs: number;
-  /** After a failed refresh, how long to answer from what we have before asking the provider again. */
+  /** After a failed refresh, how long to answer from what we have before asking the provider again. Default DEFAULT_FX_FAILURE_BACKOFF_MS. */
   failureBackoffMs?: number;
   now?: () => Date;
   logger?: Logger;
@@ -106,8 +120,8 @@ export class CachedFxRates {
 
   async get(): Promise<FxRatesReading> {
     const now = this.now().getTime();
-    if (this.cached && now - this.cached.fetchedAt.getTime() < this.options.ttlMs) return { ...this.cached, source: 'live' };
-    if (this.lastFailureAt !== null && now - this.lastFailureAt < (this.options.failureBackoffMs ?? 60_000)) return this.staleOrRefuse();
+    if (this.cached && now - this.cached.fetchedAt.getTime() < this.options.ttlMs && !this.tooOld(this.cached.snapshot)) return { ...this.cached, source: 'live' };
+    if (this.lastFailureAt !== null && now - this.lastFailureAt < (this.options.failureBackoffMs ?? DEFAULT_FX_FAILURE_BACKOFF_MS)) return this.staleOrRefuse();
     // Concurrent misses share one provider call.
     this.inFlight ??= this.refresh().finally(() => {
       this.inFlight = null;
@@ -118,6 +132,7 @@ export class CachedFxRates {
   private async refresh(): Promise<FxRatesReading> {
     try {
       const snapshot = await this.options.source.latest();
+      if (this.tooOld(snapshot)) throw new Error(`FX provider rate date ${snapshot.rateDate} is more than ${MAX_RATE_AGE_DAYS} days old`);
       this.cached = { snapshot, fetchedAt: this.now() };
       this.lastFailureAt = null;
       return { ...this.cached, source: 'live' };
@@ -129,8 +144,12 @@ export class CachedFxRates {
   }
 
   private staleOrRefuse(): FxRatesReading {
-    if (this.cached) return { ...this.cached, source: 'stale' };
+    if (this.cached && !this.tooOld(this.cached.snapshot)) return { ...this.cached, source: 'stale' };
     throw new ApiError('FX_RATES_UNAVAILABLE', 'Exchange rates are unavailable right now. Try again shortly.');
+  }
+
+  private tooOld(snapshot: EcbSnapshot): boolean {
+    return this.now().getTime() - Date.parse(`${snapshot.rateDate}T00:00:00Z`) > MAX_RATE_AGE_DAYS * DAY_MS;
   }
 
   private now(): Date {

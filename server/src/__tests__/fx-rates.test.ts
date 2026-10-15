@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../errors.js';
-import { CachedFxRates, crossRates, FrankfurterSource, JOD_PER_USD, type EcbSnapshot, type FxRateSource } from '../fx-rates.js';
+import {
+  CachedFxRates,
+  crossRates,
+  DEFAULT_FX_FAILURE_BACKOFF_MS,
+  FrankfurterSource,
+  JOD_PER_USD,
+  MAX_RATE_AGE_DAYS,
+  type EcbSnapshot,
+  type FxRateSource,
+} from '../fx-rates.js';
 import { SUPPORTED_CURRENCIES } from '../money.js';
 
 /** MUT-228 (ADR-086): reference rates for display, proxied from the ECB via Frankfurter. */
@@ -77,6 +86,16 @@ describe('FrankfurterSource', () => {
     ['another base', { ...OK, base: 'USD' }],
   ])('refuses %s', async (_label, body) => {
     await expect(new FrankfurterSource({ url: URL_, timeoutMs: 1000, fetch: answering(200, body).fetch }).latest()).rejects.toThrow();
+  });
+
+  it('refuses to follow a redirect, so a moved or re-pointed provider counts as a failure', async () => {
+    let init: RequestInit | undefined;
+    const fake = (async (_input: string | URL | Request, given?: RequestInit) => {
+      init = given;
+      return new Response(JSON.stringify(OK), { status: 200 });
+    }) as typeof fetch;
+    await new FrankfurterSource({ url: URL_, timeoutMs: 1000, fetch: fake }).latest();
+    expect(init?.redirect).toBe('error');
   });
 
   it('gives up on a provider that hangs past the timeout', async () => {
@@ -167,6 +186,66 @@ describe('CachedFxRates', () => {
     h.state.fail = false;
     await expect(h.cache.get()).resolves.toMatchObject({ source: 'live' });
     expect(h.state.calls).toBe(3);
+  });
+
+  it('defaults the failure backoff to one minute', async () => {
+    expect(DEFAULT_FX_FAILURE_BACKOFF_MS).toBe(60_000);
+    const clock = { now: new Date('2026-10-15T12:00:00Z') };
+    let calls = 0;
+    const cache = new CachedFxRates({
+      source: {
+        async latest() {
+          calls += 1;
+          throw new Error('provider down');
+        },
+      },
+      ttlMs: TTL,
+      now: () => clock.now,
+    });
+    await cache.get().catch(() => undefined);
+    clock.now = new Date(clock.now.getTime() + DEFAULT_FX_FAILURE_BACKOFF_MS - 1);
+    await cache.get().catch(() => undefined);
+    expect(calls).toBe(1);
+    clock.now = new Date(clock.now.getTime() + 1);
+    await cache.get().catch(() => undefined);
+    expect(calls).toBe(2);
+  });
+
+  it('a failing cold burst shares one call, every request is refused, and the first miss after the backoff retries', async () => {
+    const h = harness();
+    h.gate.hold = true;
+    h.state.fail = true;
+    const pending = Array.from({ length: 10 }, () => h.cache.get().catch((e: unknown) => e));
+    await Promise.resolve();
+    h.release();
+    const results = await Promise.all(pending);
+    expect(h.state.calls).toBe(1);
+    expect(results.every((e) => e instanceof ApiError && e.code === 'FX_RATES_UNAVAILABLE')).toBe(true);
+    h.gate.hold = false;
+    h.state.fail = false;
+    h.advance(BACKOFF);
+    await expect(h.cache.get()).resolves.toMatchObject({ source: 'live' });
+    expect(h.state.calls).toBe(2);
+  });
+
+  it(`refuses a provider snapshot whose rate date is more than ${MAX_RATE_AGE_DAYS} days old, and accepts one inside`, async () => {
+    expect(MAX_RATE_AGE_DAYS).toBe(7);
+    const old = harness();
+    old.state.snapshot = { rateDate: '2026-10-08', perEur: SNAPSHOT.perEur }; // 7.5 days before 2026-10-15T12:00Z
+    await expect(old.cache.get()).rejects.toMatchObject({ code: 'FX_RATES_UNAVAILABLE' });
+    const recent = harness();
+    recent.state.snapshot = { rateDate: '2026-10-09', perEur: SNAPSHOT.perEur }; // 6.5 days
+    await expect(recent.cache.get()).resolves.toMatchObject({ source: 'live', snapshot: { rateDate: '2026-10-09' } });
+  });
+
+  it(`stops serving the last snapshot as stale once its rate date is more than ${MAX_RATE_AGE_DAYS} days old`, async () => {
+    const h = harness();
+    await h.cache.get(); // rateDate 2026-10-15, fetched 2026-10-15T12:00Z
+    h.state.fail = true;
+    h.advance(6 * 24 * 60 * 60 * 1000); // 6.5 days after the rate date
+    await expect(h.cache.get()).resolves.toMatchObject({ source: 'stale' });
+    h.advance(24 * 60 * 60 * 1000); // 7.5 days, past the backoff too
+    await expect(h.cache.get()).rejects.toMatchObject({ code: 'FX_RATES_UNAVAILABLE' });
   });
 
   it('keeps refusing inside the backoff when nothing was ever cached', async () => {
