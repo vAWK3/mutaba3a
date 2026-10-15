@@ -147,7 +147,9 @@ for (const language of ['en', 'ar'] as const) {
         expect(body).toMatchObject({ family: 'Thmanyah Sans', size: '16px' });
         await expectHeadingFace(page, page.getByRole('heading', { level: 1 }).first());
         await expectHeadingFace(page, page.getByRole('main').getByRole('heading', { level: 2 }).first());
-        expect(await loadedFaces(page)).toEqual(
+        // Home's only Plex Mono text is the Owed now amount: the face loads once it renders (MUT-178)
+        await expect(page.getByTestId('owed-now-amount').first()).toBeVisible();
+        await expect.poll(() => loadedFaces(page)).toEqual(
           expect.arrayContaining(['Thmanyah Sans 400', 'Thmanyah Serif Display 700', 'IBM Plex Mono 400']),
         );
       });

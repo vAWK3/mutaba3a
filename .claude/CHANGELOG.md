@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — QA specs wait for Owed now before reading it (MUT-178)
+
+**Why:** `@web.clients.owed-now-parity`, `@web.home` and `@web.brand.type` read Home's Owed now with `allTextContents()` (or checked the loaded font faces) straight after `goto`. That doesn't wait, so the specs raced Home's receivables query and usually failed.
+
+### Fixed
+- The Owed now reads in `clients.spec.ts` and `home.spec.ts` are web-first `toHaveText` assertions. `brand.spec.ts` step 1 waits for the amount to show, then polls the loaded faces for IBM Plex Mono.
+- No QA spec calls `allTextContents()` any more.
+
+### Technical
+- QA specs only, no app code. Run: the three specs pass 45/45 with `--repeat-each 5 --retries 0`. Full web suite (preview build, 2 workers, no retries): 114 passed. The 9 failures are the baseline that MUT-226 recorded on main a093306: five `@web.brand.loader-slow-route` cells and four `@web.landing.375` cells. `demo-summary` is the expected `test.fail` (MUT-220).
+- Files: `qa/specs/web/{clients,home,brand}.spec.ts`.
+
 ## [Unreleased] - 2026-10-15 — Idempotency compares JSON bodies by meaning (MUT-199, ADR-085, API 1.26.3-mut199)
 
 **Why:** the fingerprint hashed the raw body. The phone widget (Swift: random key order, `\/`) and the app's replay (Dart) send the same capture as different bytes, so the app's replay after a lost widget response was refused as `IDEMPOTENCY_KEY_REUSED`.

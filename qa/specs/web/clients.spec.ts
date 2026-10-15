@@ -22,22 +22,18 @@ test(
       await expect(drawer).toBeHidden();
     });
 
-    let home: string[] = [];
+    // Web-first assertions: they wait for Home's receivables query, where allTextContents() read [] (MUT-178)
+    const home = ['$1,500'];
     await step('Open Home and read Owed Now', async () => {
       await page.goto('/app/');
-      home = await page.getByRole('region', { name: 'Owed now' }).getByTestId('owed-now-amount').allTextContents();
-      expect(home).toEqual(['$1,500']);
+      await expect(page.getByRole('region', { name: 'Owed now' }).getByTestId('owed-now-amount')).toHaveText(home);
     });
 
     await step('Open Clients and find the "No client" row', async () => {
       await page.goto('/app/clients');
       const noClient = page.getByRole('link', { name: 'No client · 1 entry' });
       await expect(noClient).toBeVisible();
-      const clientsOwedNow = await page
-        .getByRole('region', { name: 'Owed now' })
-        .getByTestId('owed-now-amount')
-        .allTextContents();
-      expect(clientsOwedNow).toEqual(home);
+      await expect(page.getByRole('region', { name: 'Owed now' }).getByTestId('owed-now-amount')).toHaveText(home);
     });
 
     await step('Check accessibility', async () => {
