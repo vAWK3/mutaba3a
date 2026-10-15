@@ -3165,3 +3165,25 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 **Consequences**: `release-qa plan` scopes to real changes again. The backfilled tags exist only in this checkout until pushed (`git push origin --tags`). A release that keeps its version reuses the old tag.
 
 **Alternatives Considered**: release-qa's `commit-grep` strategy on `^release: web v` (Malafat's approach; rejected: tags are also what people and `git describe` read, and a tag survives a reworded commit); one shared tag for web + portal (rejected: they deploy separately, so their baselines differ).
+
+---
+
+## ADR-082: Hosted Re-dating — Date-Only PATCH on Income Entries and Captured Payments, Owner-Only, If-Match
+
+**Status**: Active
+**Date**: 2026-10-15
+**Context**: MUT-223. A hosted Owed entry (`ADJUSTMENT` receivable) or captured payment kept its date forever; DELETE /v1/income refuses a settled entry, so a payment logged on the wrong day was permanent (TD-126). Expenses and conversions already re-date with If-Match (ADR-075). Basel (2026-10-15): date only; owned profiles only; an Owed entry keeps its stored due date.
+
+**Decision**:
+1. `PATCH /v1/income/{id}` `{ occurredOn }` and `PATCH /v1/payments/{id}` `{ receivedOn }`, session or device session, If-Match on the row's existing `version` (no migration). Same contract as ADR-075: stale → 409 `VERSION_MISMATCH` + `currentVersion`; success bumps `version`.
+2. Only a profile the person owns (`profileOwnerOf`, ADR-037 MUT-182 amendment) and only a row they captured: an `ADJUSTMENT` receivable they created, or a POSTED `CAPTURE` payment they created (settle writes `CAPTURE`). Everything else is 404. Exception (eng review D2): on a Malafat-fed profile PATCH /v1/payments keeps `payments:write`, which a session there lacks, so it answers 403 `READ_ONLY_PROFILE` before any lookup — the same answer settle gives.
+3. The new date passes create's rules: a valid date, not later than the organization's today (ADR-038 server addendum).
+4. An Owed entry's `dueDate` never moves with its date; moving past it can make an unpaid entry overdue.
+5. PATCH /v1/income refuses a payment with allocations (409 `ALREADY_ALLOCATED`, use PATCH /v1/payments): `IncomeStatus` cannot describe it. The check is on the route's read, not in the write (eng review D3): on an owned profile only settle allocates, and only to the payment it creates, since `/v1/payments/{id}/allocations` is API-key only and keys are refused on owned profiles. If owned profiles ever accept keys, move the check into the WHERE.
+6. A payment keeps its `PAY-YYYY-NNNN` number when `receivedOn` moves into another year (gap-free numbering beats a matching year). A payment dated before its receivable's posting date is allowed, as settle already allows.
+7. Audit `income.owed.redated` / `payment.redated` with `{ from, to, version }`; `GET /v1/audit` excludes them by action (`excludeActions`), because those entity types are Malafat's to read.
+
+**Consequences**: a wrong date is fixable on hosted; a wrong amount still is not (TD-126 remains for that half). `IncomeResponse` gains `version`. Clients must send the version of the row they showed (MUT-196's trap) and refetch on 409 (MUT-221's).
+
+**Alternatives Considered**: `capture:write` on PATCH /v1/payments so every refusal is 404 (rejected D2: puts a /v1/payments route under the capture row MUT-61 kept separate, and edits the matrix + brief the drift test pins); a `requireUnallocated` store option (rejected D3: guards a race that cannot occur on owned profiles); re-deriving `dueDate` from the new date (rejected: the server cannot tell a defaulted EOM_15 due date from a chosen one)
+

@@ -2318,3 +2318,13 @@ A suggestion the person retires for good (Malafat suggestions) is a product pref
 Every in-product suggestion claims a slot while mounted (`useMalafatMomentStore.claimSlot()` in an effect); other upsells read `suggestionsShown > 0` and render nothing. A suggestion hides itself at once on dismiss or click (local state) and hands focus to a named target before it goes.
 **Instances**: `MalafatSuggestionCard` → `GoHostedCard`.
 
+## Patterns added by MUT-223 (2026-10-15)
+
+### Pattern: Hide a session's own edits from Malafat's audit feed by action when the entity type is shared
+Expenses and conversions are hidden by entity type (`SESSION_ONLY_ENTITY_TYPES`) because Malafat reads none of them. Receivables and payments are Malafat's to read, so a person's own edits on them are hidden by action instead: list the action in `SESSION_ONLY_ACTIONS` (routes/audit.ts), which `GET /v1/audit` passes as `excludeActions`.
+**Instances**: `income.owed.redated`, `payment.redated`.
+
+### Pattern: An owner-scoped If-Match write checks the version on its read, then re-asserts everything in one conditional WHERE
+Read the row, refuse 404 unless it is the person's own, compare its `version` with If-Match (409 with `currentVersion`), then write with the ownership predicate and `version` in the WHERE and re-read under the same predicate (`not_found` vs `stale`). The read gives the exact old value for the audit row; the predicate in the re-read means a stale answer never reveals a row the person may not touch.
+**Instances**: `receivables.redateAdjustment`, `payments.redateCapture`, `routes/income.ts` PATCH, `redateOwnCapture` in `routes/payments.ts`.
+

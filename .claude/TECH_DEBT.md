@@ -171,7 +171,7 @@
 - Render the hidden status only in the render where a re-armed save resolves.
 
 ### TD-126: A recorded payment can't be corrected or reversed from any session
-**Status**: Open — follow-up ticket to be filed (MUT-133 design 6A)
+**Status**: Open, partly addressed — MUT-223 (2026-10-15, ADR-082) makes a wrong **date** fixable (`PATCH /v1/payments/{id}`, `PATCH /v1/income/{id}`); a wrong **amount** still can't be corrected or reversed. Follow-up ticket for that half still to be filed (MUT-133 design 6A)
 **Added**: 2026-10-14 (MUT-133)
 **Priority**: Medium — a typo on the most frequent money action is permanent
 **Impact**: A payment created by `POST /v1/receivables/{id}/settle` carries an allocation, so `DELETE /v1/income/{id}` refuses it (409), and personal profiles refuse API keys (409 `PERSONAL_PROFILE`), so the Malafat reverse route can't reach it either. The portal's Record payment drawer says "Check the amount: a recorded payment can't be changed yet." and the live line blocks amounts over what's left; smaller mistakes still stick.
