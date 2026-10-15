@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Portal expense drawer recovers from a 409 (MUT-221)
+
+**Why:** on `CONFLICT` the portal's ExpenseDrawer only showed a toast. Nothing re-read the expense, so the form kept the stale version, and every later Save sent the same `If-Match` and was refused again.
+
+### Fixed
+- On `409 CONFLICT` the drawer refetches the expense, refills at the new version and stays open with the conflict toast. The next Save carries the new `If-Match`. This is the same handling as ConversionDrawer (MUT-194 D6).
+- The form refills only when the expense id or version changes, not on every refetch, so a background refetch never wipes what was typed.
+
+### Technical
+- `expenseKey(profileId, expenseId)` exported from `src/hosted/data/expenseQueries.ts` and reused by its three invalidations.
+- QA `portal.expenses.edit-conflict` is no longer `manual`.
+- Files: `src/hosted/components/ExpenseDrawer.tsx`, `src/hosted/data/expenseQueries.ts`, `src/hosted/components/__tests__/ExpenseDrawer.test.tsx`, `qa/features/portal/expenses.yaml`, `qa/specs/portal/expenses.spec.ts`.
+
 ## [Unreleased] - 2026-10-15 — "Delete all data" deletes all data (MUT-164, ADR-084)
 
 **Why:** it cleared five of the 19 tables. Businesses, expenses, receipt files and payment records all survived a confirmation that promised "all data".

@@ -2557,3 +2557,10 @@ Run (Node 22, 2026-10-15): server `typecheck`, `lint`, `openapi:check` clean; `n
 | `src/db/__tests__/dataset.test.ts` | Integration (fake IndexedDB) | 2 (replaces the five-table test) | With a row in every table of `db.tables`, `wipeAllData` leaves only settings, so a new table can't be missed silently; settings keep currencies, `lastBackupAt` and `malafatSuggestions` while `features` and `featureNotice` are emptied |
 | `src/components/modals/__tests__/DeleteAllDataModal.test.tsx` | Component | +2 | After the delete, `invalidateQueries()` is called with no key, the active business is cleared, demo mode is off and the walkthrough is reset; the "kept" line exists in both locales and is shown |
 | `qa/specs/web/data.spec.ts` › `@web.data.delete-and-restore` (extended) | E2E (release-qa) | 1 | The dialog says what is kept; after deleting, the welcome comes back (no business left), Income is empty, and the backup restores the entry |
+
+## MUT-221 — Portal expense drawer after a 409 (2026-10-15)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` › `a stale version (MUT-221)` | Component | +2 | On 409 the drawer shows the conflict toast, stays open, refills with the other device's values, and the next Save sends `If-Match: 4` after `3` (it failed before the fix); a background refetch of the same version keeps what was typed |
+| `qa/specs/portal/expenses.spec.ts` › `@portal.expenses.edit-conflict` | E2E (release-qa) | 1 | No longer manual; passes on a `vite preview --mode hosted` build with the other 4 portal expense specs |

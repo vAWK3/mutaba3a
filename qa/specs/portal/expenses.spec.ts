@@ -209,7 +209,6 @@ test('An expense saved outside the current filter says so, and Show starts the l
   });
 });
 
-// manual: true in qa/features/portal/expenses.yaml — the drawer does not re-read after a 409 yet (product bug).
 test('An expense changed on another device: Save is refused, the drawer shows the latest version, and saving again works', { tag: '@portal.expenses.edit-conflict' }, async ({ page, step }) => {
   const lunch = expense(1, { amount: '80.00', title: 'Client lunch', categoryId: travel.id });
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], categories: [travel], expenses: [lunch] });
