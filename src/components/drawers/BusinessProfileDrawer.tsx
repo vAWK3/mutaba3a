@@ -16,6 +16,7 @@ import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 import type { Currency } from '../../types';
 import { noteBusinessCreated } from '../../lib/malafatBusinessAdded';
+import { BrandLoader } from '../brand/BrandLoader';
 
 const schema = z.object({
   name: z.string().min(1, 'Business name is required'),
@@ -132,8 +133,8 @@ export function BusinessProfileDrawer() {
   if (mode === 'edit' && profileLoading) {
     return (
       <Drawer title={t('common.loading')} onClose={closeBusinessProfileDrawer}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

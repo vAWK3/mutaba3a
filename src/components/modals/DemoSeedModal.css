@@ -111,19 +111,13 @@
   color: var(--muted);
 }
 
-.demo-spinner {
-  width: 48px;
-  height: 48px;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+/* The line under the loader already says what is happening: under reduced motion the loader's
+   visible label (MUT-206 DR7) would sit on top of it, so it stays for screen readers only. */
+.demo-seeding .brand-loader__caption {
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 
 /* Success state */

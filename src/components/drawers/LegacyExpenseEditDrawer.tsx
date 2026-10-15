@@ -17,6 +17,7 @@ import { ExpenseFormFields, type ExpenseFormFieldsLabels } from '../expenses/Exp
 import { expenseFormFieldsSchema } from '../expenses/expenseFormSchema';
 import { currencyExponent, parseAmountInput, parseAmountToMinor } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
+import { BrandLoader } from '../brand/BrandLoader';
 
 const CURRENCY_OPTIONS = ['USD', 'ILS', 'EUR', 'JOD'] as const;
 
@@ -153,8 +154,8 @@ export function LegacyExpenseEditDrawer() {
   if (isLoading) {
     return (
       <Drawer title={t('common.loading')} onClose={closeLegacyExpenseDrawer}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

@@ -16,6 +16,7 @@ import { formatDecimal } from '../format/DecimalAmount';
 import { todayInZone, todayLocalISO } from '../format/dates';
 import { useAttemptKey } from '../data/attemptKey';
 import { ApiError, type Conversion, type CreateConversionRequest, type UpdateConversionRequest } from '../api/client';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 /**
  * The hosted portal's conversion drawer (MUT-161): log a conversion, and since
@@ -169,8 +170,8 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
   if (editing && !existing) {
     return (
       <Drawer title={t('common.loading')} onClose={onClose} closeLabel={t('common.close')}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

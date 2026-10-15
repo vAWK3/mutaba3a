@@ -12,6 +12,7 @@ import { formatDate, formatAmount, getDaysUntil, getDateRangePreset, cn, EMPTY_C
 import { AmountWithConversion } from '../../components/ui';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import type { TxKind, TxStatus, QueryFilters } from '../../types';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 export function ProjectDetailPage() {
   const { projectId } = useParams({ from: '/projects/$projectId' });
@@ -73,7 +74,7 @@ export function ProjectDetailPage() {
         <TopBar title={t('common.loading')} breadcrumbs={[{ label: t('nav.projects'), href: '/projects' }]} />
         <div className="page-content">
           <div className="loading">
-            <div className="spinner" />
+            <BrandLoader size={64} slowCaption={t('common.loadingSlow')} />
           </div>
         </div>
       </>
@@ -108,7 +109,7 @@ export function ProjectDetailPage() {
           </button>
         }
       />
-      <div className="page-content">
+      <div className="page-content content-enter">
         {/* Inline Stats - Unified with EUR support */}
         {summary && (
           <div className="inline-stats" style={{ marginBottom: 24 }}>

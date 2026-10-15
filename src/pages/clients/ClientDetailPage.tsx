@@ -10,6 +10,7 @@ import { useReceivables } from '../../hooks/useIncomeQueries';
 import { summarizeOwedByCurrency } from '../../db/aggregations';
 import { todayLocalISO } from '../../lib/dates';
 import { useT } from '../../lib/i18n';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 /**
  * The client profile (MUT-3): one page answering the product's three
@@ -37,7 +38,7 @@ export function ClientDetailPage() {
     return (
       <div className="page-content">
         <div className="loading">
-          <div className="spinner" />
+          <BrandLoader size={64} slowCaption={t('common.loadingSlow')} />
         </div>
       </div>
     );
@@ -57,7 +58,7 @@ export function ClientDetailPage() {
   const contact = [client.email, client.phone].filter(Boolean);
 
   return (
-    <div className="page-content client-profile">
+    <div className="page-content client-profile content-enter">
       <header className="card client-profile-header">
         {(contact.length > 0 || client.notes) && (
           <div className="client-profile-contact">

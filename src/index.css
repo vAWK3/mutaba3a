@@ -3267,28 +3267,31 @@ a.project-tag:hover {
   gap: var(--space-1);
 }
 
-/* Loading */
+/* Loading (MUT-206): the box a BrandLoader waits in. Full-page waits sit centred in the
+   upper half of the page; a section or drawer body waits at its top (DR1). */
 .loading {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 50vh;
   padding: var(--space-8);
   color: var(--muted);
 }
 
-.spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.loading--section {
+  align-items: flex-start;
+  min-height: 120px;
+  padding-block: var(--space-8);
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+/* What replaces a .loading box fades in (DR3). Loaded by the app and the portal (hosted/main.tsx). */
+.content-enter {
+  animation: content-enter var(--duration-fade) var(--ease-spring) backwards; /* backwards: nothing lingers once it ends */
+}
+
+@keyframes content-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ============================================

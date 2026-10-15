@@ -2,6 +2,8 @@
 import React, { Suspense } from 'react';
 import { createRouter, createRootRoute, createRoute, Outlet, redirect } from '@tanstack/react-router';
 import { AppShell } from './components/layout';
+import { BrandLoader } from './components/brand/BrandLoader';
+import { useT } from './lib/i18n';
 import { requireFeature } from './lib/features/routeGuard';
 import { parseIncomeSearch } from './lib/incomeSearch';
 import { parseClientsSearch } from './components/clients/clientsSearch';
@@ -10,10 +12,22 @@ import { clientProfileRemountDeps } from './components/clients/clientsSplitView'
 // Keep OverviewPage eager (it's the landing page)
 import { OverviewPage } from './pages/overview/OverviewPage';
 
-// Simple loading fallback
-const PageLoader = () => (
-  <div style={{ padding: '2rem', opacity: 0.5 }}>Loading...</div>
-);
+/**
+ * A route still downloading its code (or waiting on a feature gate): the bloom
+ * loader at 64 in the same page box and spot the page's own data loader uses,
+ * so code download plus data load read as one wait (MUT-206 DR2; DR11 skips
+ * the second loader's delay).
+ */
+const PageLoader = () => {
+  const t = useT();
+  return (
+    <div className="page-content">
+      <div className="loading">
+        <BrandLoader size={64} slowCaption={t('common.loadingSlow')} />
+      </div>
+    </div>
+  );
+};
 
 // Helper for lazy routes with named exports
 function lazyPage(

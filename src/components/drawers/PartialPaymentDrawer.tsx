@@ -15,6 +15,7 @@ import type { Currency, PaymentRecord } from '../../types';
 import { useDrawerStore } from '../../lib/stores';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import './PartialPaymentDrawer.css';
+import { BrandLoader } from '../brand/BrandLoader';
 
 /**
  * PartialPaymentDrawer -- "Record payment"
@@ -92,8 +93,8 @@ export function PartialPaymentDrawer({ transactionId, onClose, onRecorded }: Par
   if (txLoading || !transaction || waitingForRecord) {
     return (
       <Drawer title={t('transactions.partialPayment.title')} onClose={onClose}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

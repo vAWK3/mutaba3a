@@ -29,6 +29,7 @@ import { ALL_CATEGORIES } from '../../db/defaultExpenseCategories';
 import { ExpenseFormFields, type ExpenseFormFieldsLabels } from '../expenses/ExpenseFormFields';
 import type { Currency, ExpenseFrequency, RecurringEndMode } from '../../types';
 import { schema, type FormData } from './expenseDrawerFormSchema';
+import { BrandLoader } from '../brand/BrandLoader';
 
 export function ExpenseDrawer() {
   const { expenseDrawer, closeExpenseDrawer } = useDrawerStore();
@@ -256,8 +257,8 @@ export function ExpenseDrawer() {
   if (isLoading) {
     return (
       <Drawer title={t('common.loading')} onClose={closeExpenseDrawer}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

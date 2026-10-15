@@ -22,6 +22,7 @@ import type {
   AssumptionConfidence,
 } from '../../types';
 import './PlanAssumptionDrawer.css';
+import { BrandLoader } from '../brand/BrandLoader';
 
 const schema = z.object({
   planId: z.string().min(1, 'Plan is required'),
@@ -182,8 +183,8 @@ export function PlanAssumptionDrawer() {
   if (isLoading) {
     return (
       <Drawer title={t('common.loading')} onClose={closePlanAssumptionDrawer}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

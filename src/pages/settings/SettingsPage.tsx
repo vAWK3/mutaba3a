@@ -24,6 +24,7 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { ProfileBadge } from '../../components/ui/ProfileBadge';
 import type { Currency, BusinessProfile } from '../../types';
 import type { Language } from '../../lib/i18n/types';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 const LANGUAGE_OPTIONS: { value: Language; label: string }[] = [
   { value: 'en', label: 'English' },
@@ -200,7 +201,7 @@ export function SettingsPage() {
         <TopBar title={t('settings.title')} hideAddMenu />
         <div className="page-content">
           <div className="loading">
-            <div className="spinner" />
+            <BrandLoader size={64} slowCaption={t('common.loadingSlow')} />
           </div>
         </div>
       </>
@@ -213,7 +214,7 @@ export function SettingsPage() {
       {/* One scroll area (MUT-88): .page-content scrolls at full width and
           .settings-column only caps the reading width, so the scrollbar sits
           at the window edge and nothing renders outside the column. */}
-      <div className="page-content">
+      <div className="page-content content-enter">
         <div className="settings-column">
           {/* Businesses */}
           <div className="settings-section">

@@ -10,6 +10,7 @@ import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import type { RetainerStatus, RetainerFilters } from '../../types';
 import './RetainersPage.css';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 type ViewFilter = 'all' | 'due' | 'active' | 'ending';
 
@@ -221,8 +222,8 @@ export function RetainersPage() {
         {/* Main Table */}
         <main className="retainers-main">
           {isLoading ? (
-            <div className="loading">
-              <div className="spinner" />
+            <div className="loading loading--section">
+              <BrandLoader size={40} />
             </div>
           ) : retainers.length === 0 ? (
             <EmptyState
@@ -234,7 +235,7 @@ export function RetainersPage() {
               } : undefined}
             />
           ) : (
-            <div className="table-container">
+            <div className="table-container content-enter">
               <table className="data-table">
                 <thead>
                   <tr>

@@ -17,6 +17,7 @@ import { useT } from '../../lib/i18n';
 import { useToast } from '../../lib/toastStore';
 import type { Currency } from '../../types';
 import { schema, type FormData } from './conversionFormSchema';
+import { BrandLoader } from '../brand/BrandLoader';
 
 const CURRENCY_OPTIONS: readonly Currency[] = ['USD', 'ILS', 'EUR', 'JOD'];
 
@@ -132,8 +133,8 @@ export function ConversionDrawer() {
   if (isLoading) {
     return (
       <Drawer title={t('common.loading')} onClose={closeConversionDrawer}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );
