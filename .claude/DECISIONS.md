@@ -3168,7 +3168,7 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 
 ---
 
-## ADR-082: Hosted Re-dating — Date-Only PATCH on Income Entries and Captured Payments, Owner-Only, If-Match
+## ADR-083: Hosted Re-dating — Date-Only PATCH on Income Entries and Captured Payments, Owner-Only, If-Match
 
 **Status**: Active
 **Date**: 2026-10-15

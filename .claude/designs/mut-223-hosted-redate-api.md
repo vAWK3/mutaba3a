@@ -87,7 +87,7 @@ AC1–AC9 are the ticket's, unchanged. §6 maps each one to a test.
 | Schemas | `server/src/schemas.ts` | `UpdateIncomeRequestSchema`, `UpdatePaymentRequestSchema`; `version` on `IncomeResponseSchema`. |
 | Serializer | `server/src/serializers.ts` | `serializeIncomeEntry` emits `version`. |
 | Contract | `server/openapi/openapi.yaml` (`npm --prefix server run openapi:generate`), `src/hosted/api/schema.d.ts` (`npm run hosted:types`), `API_VERSION` in `server/src/app.ts` → `1.26.0-mut223` |
-| Knowledge | `.claude/DECISIONS.md` ADR-082 (hosted re-dating: date-only, owner-only, If-Match, the four edge cases above; it extends ADR-075's contract and ADR-038's server addendum); `TECH_DEBT.md` TD-126 note (a wrong date can now be fixed, a wrong amount still can't); `CHANGELOG`, `SYSTEM_OVERVIEW`, `PATTERNS` (owner gate + action-level audit exclusion), `TEST_PLAN` |
+| Knowledge | `.claude/DECISIONS.md` ADR-083 (hosted re-dating: date-only, owner-only, If-Match, the four edge cases above; it extends ADR-075's contract and ADR-038's server addendum); `TECH_DEBT.md` TD-126 note (a wrong date can now be fixed, a wrong amount still can't); `CHANGELOG`, `SYSTEM_OVERVIEW`, `PATTERNS` (owner gate + action-level audit exclusion), `TEST_PLAN` |
 
 No migration: `receivables.version` and `payments.version` already exist. No new index: both writes hit the
 primary key.

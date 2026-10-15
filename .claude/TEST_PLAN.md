@@ -2497,7 +2497,7 @@ Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 - Node 22: lint (0 errors, 6 old warnings), typecheck, `test:run` (317 files, 4,394 passed, 4 skipped) and build all pass.
 - `release-qa lint`: the 6 web files left are the two intentional `db/` files and the OAuth client + `tokenStore` (ADR-053 / TD-075).
 
-## MUT-223 — hosted re-dating: change the date of a saved income entry or payment (2026-10-15, ADR-082)
+## MUT-223 — hosted re-dating: change the date of a saved income entry or payment (2026-10-15, ADR-083)
 
 | Suite | Cases |
 |---|---|

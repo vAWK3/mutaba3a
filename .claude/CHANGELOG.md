@@ -30,7 +30,7 @@
 
 ## [Unreleased] - 2026-10-15 — Hosted API: change the date of a saved income entry or payment (MUT-223)
 
-**Why:** on a hosted profile a saved Owed entry or a recorded payment kept its date forever; a payment logged on the wrong day could not be fixed at all, since a settled entry cannot be undone (TD-126). Expenses and conversions could already be re-dated. Server half only; the portal (MUT-224) and phone (MUT-225) build on it. ADR-082.
+**Why:** on a hosted profile a saved Owed entry or a recorded payment kept its date forever; a payment logged on the wrong day could not be fixed at all, since a settled entry cannot be undone (TD-126). Expenses and conversions could already be re-dated. Server half only; the portal (MUT-224) and phone (MUT-225) build on it. ADR-083.
 
 ### Added
 - `PATCH /v1/income/{incomeId}` `{ occurredOn }` (session/device session, `capture:write`, If-Match): an Owed entry moves `postingDate` and keeps `dueDate`; a Received entry moves its payment's `receivedOn`. A payment already applied to an entry (a settle) is 409 `ALREADY_ALLOCATED`.
