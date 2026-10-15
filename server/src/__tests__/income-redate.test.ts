@@ -4,6 +4,7 @@ import { createApp } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { OWED_REDATED, PAYMENT_REDATED } from '../routes/audit.js';
 
 /**
  * MUT-223: PATCH /v1/income/{id} and PATCH /v1/payments/{id} change the date of a person's own Owed entry or
@@ -158,6 +159,21 @@ describe('versions and dates (AC4)', () => {
     expect(await s.h.store.receivables.getById(s.u.personal, owed.id)).toMatchObject({ postingDate: '2026-10-01' });
   });
 
+  it('a stale version on a payment → 409 on both routes, nothing changes and only one audit row exists', async () => {
+    const s = await setup();
+    const received = await receivedEntry(s);
+    const headers = s.u.as(s.u.personal);
+    expect((await s.h.app.request(`/v1/payments/${received.id}`, patch({ receivedOn: '2026-10-03' }, headers, 1))).status).toBe(200);
+
+    for (const [path, body] of [[`/v1/payments/${received.id}`, { receivedOn: '2026-10-01' }], [`/v1/income/${received.id}`, { occurredOn: '2026-10-01' }]] as const) {
+      const res = await s.h.app.request(path, patch(body, headers, 1));
+      expect(res.status).toBe(409);
+      expect(await errorOf(res)).toMatchObject({ code: 'CONFLICT', details: { reason: 'VERSION_MISMATCH', currentVersion: 2 } });
+    }
+    expect(await s.h.store.payments.getById(s.u.personal, received.id)).toMatchObject({ receivedOn: '2026-10-03', version: 2 });
+    expect((await s.h.store.audit.list(s.u.personal, { action: PAYMENT_REDATED }, { limit: 10, cursor: null })).items).toHaveLength(1);
+  });
+
   it('an Owed entry edited with the version it had before a settle → 409 (settle bumps the version)', async () => {
     const s = await setup();
     const owed = await owedEntry(s);
@@ -181,7 +197,7 @@ describe('versions and dates (AC4)', () => {
     expect(today.status).toBe(200);
   });
 
-  it('a malformed date, a missing If-Match or an extra field → 422', async () => {
+  it('a malformed or future date, a missing If-Match or an extra field → 422', async () => {
     const s = await setup();
     const owed = await owedEntry(s);
     const headers = s.u.as(s.u.personal);
@@ -189,6 +205,13 @@ describe('versions and dates (AC4)', () => {
     expect((await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-10-01' }, headers, null))).status).toBe(422);
     expect((await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-10-01', amount: '1.00' }, headers, 1))).status).toBe(422);
     expect((await s.h.app.request(`/v1/payments/${owed.id}`, patch({ receivedOn: 'yesterday' }, headers, 1))).status).toBe(422);
+
+    const received = await receivedEntry(s);
+    expect((await s.h.app.request(`/v1/payments/${received.id}`, patch({ receivedOn: '2026-10-01' }, headers, null))).status).toBe(422);
+    const future = await s.h.app.request(`/v1/payments/${received.id}`, patch({ receivedOn: '2026-10-13' }, headers, 1));
+    expect(future.status).toBe(422);
+    expect(await errorOf(future)).toMatchObject({ details: { reason: 'DATE_INVALID', field: 'receivedOn' } });
+    expect(await s.h.store.payments.getById(s.u.personal, received.id)).toMatchObject({ receivedOn: '2026-10-08', version: 1 });
     expect(await s.h.store.receivables.getById(s.u.personal, owed.id)).toMatchObject({ postingDate: '2026-10-08', version: 1 });
   });
 });
@@ -213,6 +236,16 @@ describe('what may not be touched (AC5)', () => {
     const res = await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-10-01' }, s.u.as(s.plain.id), 1));
     expect(res.status).toBe(404);
     expect(await s.h.store.receivables.getById(s.plain.id, owed.id)).toMatchObject({ postingDate: '2026-10-08' });
+  });
+
+  it('a capture on a firm profile the person does not own → 404 via /v1/payments too (the session holds payments:write there)', async () => {
+    const s = await setup();
+    const c = (await read(await s.h.app.request('/v1/customers', json({ name: 'Firm client' }, { ...s.u.as(s.plain.id), ...idem() })))) as { id: string };
+    const received = await income(s, { kind: 'received', customerId: c.id }, s.plain.id);
+
+    const res = await s.h.app.request(`/v1/payments/${received.id}`, patch({ receivedOn: '2026-10-01' }, s.u.as(s.plain.id), received.version));
+    expect(res.status).toBe(404);
+    expect(await s.h.store.payments.getById(s.plain.id, received.id)).toMatchObject({ receivedOn: '2026-10-08', version: received.version });
   });
 
   it("a Malafat-fed profile's capture → 404 via /v1/income, 403 READ_ONLY_PROFILE via /v1/payments (D2)", async () => {
@@ -293,25 +326,25 @@ describe('the audit trail (AC7)', () => {
     await s.h.app.request(`/v1/payments/${received.id}`, patch({ receivedOn: '2026-10-03' }, headers, 1));
 
     // Looked up by action, never by position: same-millisecond audit rows can tie (TODOS #8).
-    const owedRows = (await s.h.store.audit.list(s.u.personal, { action: 'income.owed.redated' }, { limit: 10, cursor: null })).items;
+    const owedRows = (await s.h.store.audit.list(s.u.personal, { action: OWED_REDATED }, { limit: 10, cursor: null })).items;
     expect(owedRows).toHaveLength(1);
     expect(owedRows[0]).toMatchObject({ actorType: 'USER', actorId: s.u.id, entityType: 'receivable', entityId: owed.id, metadata: { from: '2026-10-08', to: '2026-10-01', version: 2 } });
-    const paymentRows = (await s.h.store.audit.list(s.u.personal, { action: 'payment.redated' }, { limit: 10, cursor: null })).items;
+    const paymentRows = (await s.h.store.audit.list(s.u.personal, { action: PAYMENT_REDATED }, { limit: 10, cursor: null })).items;
     expect(paymentRows).toHaveLength(1);
     expect(paymentRows[0]).toMatchObject({ entityType: 'payment', entityId: received.id, metadata: { from: '2026-10-08', to: '2026-10-03', version: 2 } });
   });
 
   it("Malafat's GET /v1/audit never lists re-date events, but still lists other payment events", async () => {
     const s = await setup();
-    for (const action of ['payment.redated', 'income.owed.redated', 'payment.recorded']) {
+    for (const action of [PAYMENT_REDATED, OWED_REDATED, 'payment.recorded']) {
       await s.h.store.audit.append({ organizationId: s.m.id, actorType: 'USER', actorId: s.u.id, action, entityType: action.startsWith('income') ? 'receivable' : 'payment', entityId: 'e1', requestId: null });
     }
     const res = await s.h.app.request('/v1/audit', { headers: s.mAuth });
     expect(res.status).toBe(200);
     const actions = ((await read(res)).items as Array<{ action: string }>).map((e) => e.action);
     expect(actions).toContain('payment.recorded');
-    expect(actions).not.toContain('payment.redated');
-    expect(actions).not.toContain('income.owed.redated');
+    expect(actions).not.toContain(PAYMENT_REDATED);
+    expect(actions).not.toContain(OWED_REDATED);
   });
 });
 

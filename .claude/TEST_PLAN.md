@@ -2508,6 +2508,8 @@ Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 | `server/src/__tests__/route-security.test.ts` | `INCOME_OPERATIONS` lists both PATCHes (session + device session surfaces, API key refused) |
 | Regression | `income-routes`, `receivables-settle`, `routes-m6` audit tests unchanged and green; version pins in routes-m2..m8 moved to 1.26.0-mut223 |
 
+Pre-landing review additions: firm-profile capture → 404 via PATCH /v1/payments (mutation-checked: removing the owner check fails only this test); stale version on the payment branch via both routes, one audit row; PATCH /v1/payments 422s (missing If-Match, future receivedOn). Known gap, no automated guard: the Postgres write-and-re-read race the review closed by wrapping both statements in one `$transaction` (an undo between them used to give a 404 with no audit row) — proven by construction, not reproduced by a test.
+
 Release-QA: server-only; the user-visible scenarios (plan §7) are automated by MUT-224's portal spec. `release-qa lint`: no errors, portal 100% mapped.
 
 Run (Node 22, 2026-10-15): server `typecheck`, `lint`, `openapi:check` clean; `npm test` 90 files, 1806 passed, 23 skipped; `test:db` (Postgres :54329) 1982 passed, 1 failed: `routes-m6` audit listing returned two same-millisecond rows swapped (`payment.reversed` before `payment.recorded`), the known TODOS #8 ordering flake. Re-run alone 3/3 green. Root `lint`, `typecheck`, `test:run` (317 files, 4394 passed, 4 skipped) and `build` clean.

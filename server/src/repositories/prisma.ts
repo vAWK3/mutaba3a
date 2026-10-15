@@ -1007,13 +1007,16 @@ export class PrismaLedgerStore implements LedgerStore {
       await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null, paidMinor: 0n, creditedMinor: 0n }, data: { deletedAt: at } });
       return this.prisma.receivable.findFirst({ where: { id, organizationId } });
     },
-    redateAdjustment: async (organizationId, id, userId, expectedVersion, postingDate) => {
-      const owned = { id, organizationId, origin: 'ADJUSTMENT' as const, createdByUserId: userId, deletedAt: null };
-      const { count } = await this.prisma.receivable.updateMany({ where: { ...owned, version: expectedVersion }, data: { postingDate, version: { increment: 1 } } });
-      const record = await this.prisma.receivable.findFirst({ where: owned });
-      if (!record) return { kind: 'not_found' };
-      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
-    },
+    // One transaction (MUT-223 pre-landing review, write-race fix): the updated row stays locked until commit, so the re-read is exactly this
+    // write — never an undo or a second re-date that landed between two separate statements (404 with no audit row).
+    redateAdjustment: (organizationId, id, userId, expectedVersion, postingDate) =>
+      this.prisma.$transaction(async (tx): Promise<UpdateResult<ReceivableRecord>> => {
+        const owned = { id, organizationId, origin: 'ADJUSTMENT' as const, createdByUserId: userId, deletedAt: null };
+        const { count } = await tx.receivable.updateMany({ where: { ...owned, version: expectedVersion }, data: { postingDate, version: { increment: 1 } } });
+        if (count === 1) return { kind: 'updated', record: await tx.receivable.findUniqueOrThrow({ where: { id } }) };
+        const record = await tx.receivable.findFirst({ where: owned });
+        return record ? { kind: 'stale', record } : { kind: 'not_found' };
+      }),
   };
 
   readonly payments: PaymentRepository = {
@@ -1094,13 +1097,15 @@ export class PrismaLedgerStore implements LedgerStore {
       if (payment.status !== 'REVERSED') return { result: 'allocated', payment };
       return { result: payment.reversalReason === CAPTURE_UNDO_REASON ? 'already-reversed' : 'reversed-elsewhere', payment };
     },
-    redateCapture: async (organizationId, paymentId, userId, expectedVersion, receivedOn, at) => {
-      const owned = { id: paymentId, organizationId, origin: 'CAPTURE' as const, createdByUserId: userId, status: 'POSTED' as const };
-      const { count } = await this.prisma.payment.updateMany({ where: { ...owned, version: expectedVersion }, data: { receivedOn, version: { increment: 1 }, updatedAt: at } });
-      const record = await this.prisma.payment.findFirst({ where: owned });
-      if (!record) return { kind: 'not_found' };
-      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
-    },
+    // Same single-transaction shape as receivables.redateAdjustment (MUT-223 pre-landing review).
+    redateCapture: (organizationId, paymentId, userId, expectedVersion, receivedOn, at) =>
+      this.prisma.$transaction(async (tx): Promise<UpdateResult<PaymentRecord>> => {
+        const owned = { id: paymentId, organizationId, origin: 'CAPTURE' as const, createdByUserId: userId, status: 'POSTED' as const };
+        const { count } = await tx.payment.updateMany({ where: { ...owned, version: expectedVersion }, data: { receivedOn, version: { increment: 1 }, updatedAt: at } });
+        if (count === 1) return { kind: 'updated', record: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }) };
+        const record = await tx.payment.findFirst({ where: owned });
+        return record ? { kind: 'stale', record } : { kind: 'not_found' };
+      }),
   };
 
   /** MUT-61: allocationStateOf (payments/allocation-state.ts) as a where clause, POSTED payments only. */

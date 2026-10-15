@@ -28,6 +28,7 @@ import {
   UpdatePaymentRequestSchema,
 } from '../schemas.js';
 import { outstandingMinor, receivableStatus, serializeAllocation, serializePayment, type CapturedBy } from '../serializers.js';
+import { PAYMENT_REDATED } from './audit.js';
 import { conflictResponse, encodeNextCursor, errorResponses, IdempotencyHeaderSchema, notFoundResponse, toPageRequest, validationResponse, versionMismatch } from './shared.js';
 
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
@@ -320,9 +321,10 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization, user } = sessionAuth(c);
       const now = c.get('now')();
       const receivedOn = redateTo(c.req.valid('json').receivedOn, organization, now, 'receivedOn');
+      const notFound = () => new ApiError('NOT_FOUND', 'No such payment');
       const payment = await store.payments.getById(organization.id, c.req.valid('param').paymentId);
-      if (!payment || !isOwnProfile(organization, user.id) || !isOwnCapture(payment, user.id)) throw new ApiError('NOT_FOUND', 'No such payment');
-      const updated = await redateOwnCapture(store, c, payment, receivedOn);
+      if (!payment || !isOwnProfile(organization, user.id) || !isOwnCapture(payment, user.id)) throw notFound();
+      const updated = await redateOwnCapture(store, c, payment, receivedOn, notFound);
       return c.json(await viewOf(organization.id, updated, todayFor(organization, now)), 200);
     },
   );
@@ -423,20 +425,21 @@ function allocationMessage(reason: string): string {
 /**
  * MUT-223: the payment half of both re-date routes — PATCH /v1/payments/{id}, and PATCH /v1/income/{id} on a Received
  * entry. The caller has already checked the profile (`isOwnProfile`) and the payment (`isOwnCapture`); the version is
- * checked against that read, so its `receivedOn` is exactly the date the audit row says was replaced.
+ * checked against that read, so its `receivedOn` is exactly the date the audit row says was replaced. `notFound` is the
+ * caller's own 404, so a row undone mid-request answers in that route's words.
  */
-export async function redateOwnCapture(store: LedgerStore, c: Context<AppEnv>, payment: PaymentRecord, receivedOn: IsoDate): Promise<PaymentRecord> {
+export async function redateOwnCapture(store: LedgerStore, c: Context<AppEnv>, payment: PaymentRecord, receivedOn: IsoDate, notFound: () => ApiError): Promise<PaymentRecord> {
   const { organization, user } = sessionAuth(c);
   const expected = c.get('expectedVersion');
   if (payment.version !== expected) throw versionMismatch(payment.version);
   const result = await store.payments.redateCapture(organization.id, payment.id, user.id, expected, receivedOn, c.get('now')());
-  if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such payment');
+  if (result.kind === 'not_found') throw notFound();
   if (result.kind === 'stale') throw versionMismatch(result.record.version);
   await store.audit.append({
     organizationId: organization.id,
     actorType: 'USER',
     actorId: user.id,
-    action: 'payment.redated',
+    action: PAYMENT_REDATED,
     entityType: 'payment',
     entityId: payment.id,
     metadata: { from: payment.receivedOn, to: receivedOn, version: result.record.version },

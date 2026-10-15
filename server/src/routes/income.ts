@@ -4,6 +4,7 @@ import { writeRefusal } from '../auth/writability.js';
 import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, isOwnCapture, isOwnProfile, owedVatFields, redateTo, resolveIncomeLinks } from '../income/compose.js';
 import { ifMatch } from '../if-match.js';
+import { OWED_REDATED } from './audit.js';
 import { redateOwnCapture } from './payments.js';
 import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
@@ -179,7 +180,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         const result = await store.receivables.redateAdjustment(organization.id, receivable.id, user.id, expected, occurredOn);
         if (result.kind === 'not_found') throw notFound();
         if (result.kind === 'stale') throw versionMismatch(result.record.version);
-        await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'income.owed.redated', entityType: 'receivable', entityId: receivable.id, metadata: { from: receivable.postingDate, to: occurredOn, version: result.record.version }, requestId: c.get('requestId') });
+        await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: OWED_REDATED, entityType: 'receivable', entityId: receivable.id, metadata: { from: receivable.postingDate, to: occurredOn, version: result.record.version }, requestId: c.get('requestId') });
         return c.json(serializeIncomeEntry({ kind: 'owed', receivable: result.record }), 200);
       }
 
@@ -189,7 +190,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       // payment it creates, because POST /v1/payments/{id}/allocations is API-key only (routes/payments.ts) and API keys
       // are refused on owned profiles (auth/middleware.ts ownedProfileConflict). So allocatedMinor cannot change under us.
       if (payment.allocatedMinor > 0n) throw new ApiError('CONFLICT', 'This payment is applied to an entry; change its date through PATCH /v1/payments/{id}', { reason: 'ALREADY_ALLOCATED' });
-      return c.json(serializeIncomeEntry({ kind: 'received', payment: await redateOwnCapture(store, c, payment, occurredOn) }), 200);
+      return c.json(serializeIncomeEntry({ kind: 'received', payment: await redateOwnCapture(store, c, payment, occurredOn, notFound) }), 200);
     },
   );
 

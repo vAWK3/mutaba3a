@@ -79,9 +79,9 @@ AC1–AC9 are the ticket's, unchanged. §6 maps each one to a test.
 | Layer | File | Change |
 |---|---|---|
 | Rules | `server/src/income/compose.ts` (extended, eng review D1) | `assertOwnedProfile(organization, userId)` (404), `redateDate(raw, organization, now, field)` (assertIsoDate + assertNotFuture), `assertExpectedVersion(row, expected)`. They go next to `assertNotFuture`. Pure, so they are unit-tested without HTTP. |
-| Ports | `server/src/repositories/ports.ts` | `ReceivableRepository.redateAdjustment(orgId, id, userId, expectedVersion, postingDate, at): Promise<UpdateResult<ReceivableRecord>>`; `PaymentRepository.redateCapture(orgId, id, userId, expectedVersion, receivedOn, at): Promise<UpdateResult<PaymentRecord>>` (no option, D3); `AuditFilter.excludeActions?: readonly string[]` |
+| Ports | `server/src/repositories/ports.ts` | `ReceivableRepository.redateAdjustment(orgId, id, userId, expectedVersion, postingDate): Promise<UpdateResult<ReceivableRecord>>` (no `at`: receivables carry no updatedAt); `PaymentRepository.redateCapture(orgId, id, userId, expectedVersion, receivedOn, at): Promise<UpdateResult<PaymentRecord>>` (no option, D3); `AuditFilter.excludeActions?: readonly string[]` |
 | Memory store | `server/src/repositories/memory.ts` | Mirrors both write methods and `excludeActions`. |
-| Prisma store | `server/src/repositories/prisma.ts` | `updateMany` with the predicates in §2 plus `version: expected`, then a re-read under the same ownership predicate → `stale`/`not_found` (the conversions.update shape, lines ~1153–1157). Audit where: `action: { equals?, notIn? }`, next to `entityTypeWhere`. |
+| Prisma store | `server/src/repositories/prisma.ts` | `updateMany` with the predicates in §2 plus `version: expected`, inside one `prisma.$transaction` (pre-landing review, write-race fix): `count === 1` → re-read the locked row by id → `updated`; otherwise re-read under the ownership predicate → `stale` / `not_found`. Audit where: `action: { equals?, notIn? }`, next to `entityTypeWhere`. |
 | Routes | `server/src/routes/income.ts`, `server/src/routes/payments.ts` | The two PATCH routes above. |
 | Audit feed | `server/src/routes/audit.ts` | `SESSION_ONLY_ACTIONS = ['income.owed.redated', 'payment.redated']`, passed as `excludeActions`. An entity-type exclusion would hide every receivable and payment event from Malafat, so it can't be used. |
 | Schemas | `server/src/schemas.ts` | `UpdateIncomeRequestSchema`, `UpdatePaymentRequestSchema`; `version` on `IncomeResponseSchema`. |
@@ -156,6 +156,7 @@ This ticket's own definition of done is the server suite above. No portal path c
   overwrote changes. That is a client-side trap. MUT-224/225 must send the version from the row they showed,
   never a fresh re-read.
 - **MUT-221 (Backlog):** the portal expense drawer never refetches after a 409. MUT-224 must not copy it.
+- **Idempotent replays (pre-landing review, replay decision):** a replayed POST /v1/income returns the body stored at the time. One stored before 1.26.0-mut223 has no `version`; one replayed after a re-date shows the old date. MUT-224/225 take If-Match from GET /v1/receivables/{id} or GET /v1/payments/{id}, and treat a missing `version` (or a 409) as "refetch".
 - **Malafat-fed profiles stay closed:** this is enforced by the owner gate, and a test proves it.
 - **i18n:** no user-facing strings on the server. Error codes only.
 

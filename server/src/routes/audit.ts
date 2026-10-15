@@ -16,7 +16,9 @@ export const SESSION_ONLY_ENTITY_TYPES = [...EXPENSE_ENTITY_TYPES, 'conversion']
  * MUT-223: a person's own edits on rows whose entity types Malafat does read (receivable, payment). Excluded by action,
  * since excluding the entity type would hide every receivable and payment event from Malafat.
  */
-export const SESSION_ONLY_ACTIONS = ['income.owed.redated', 'payment.redated'] as const;
+export const OWED_REDATED = 'income.owed.redated';
+export const PAYMENT_REDATED = 'payment.redated';
+export const SESSION_ONLY_ACTIONS = [OWED_REDATED, PAYMENT_REDATED] as const;
 
 /** /v1/audit — the organization's financial history for API keys (M6 brief §2). */
 export function auditRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
@@ -38,7 +40,7 @@ export function auditRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization } = c.get('auth');
       const q = c.req.valid('query');
       // MUT-42, MUT-194: expense and conversion activity is a hosted profile's own; Malafat's key never lists it,
-      // not even when it asks for that entity type by name.
+      // not even when it asks for that entity type by name. MUT-223: nor a person's own re-dates, excluded by action.
       const page = await store.audit.list(organization.id, { ...(q.entityType ? { entityType: q.entityType } : {}), ...(q.entityId ? { entityId: q.entityId } : {}), ...(q.action ? { action: q.action } : {}), excludeEntityTypes: SESSION_ONLY_ENTITY_TYPES, excludeActions: SESSION_ONLY_ACTIONS }, toPageRequest(q));
       return c.json({ items: page.items.map(serializeAuditEvent), nextCursor: encodeNextCursor(page.nextCursor) }, 200);
     },
