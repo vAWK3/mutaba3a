@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateCSVRow, ValidationStatus } from '../csvValidation';
+import { validateCSVImport, validateCSVRow, ValidationStatus } from '../csvValidation';
 
 describe('CSV Validation', () => {
   describe('validateCSVRow', () => {
@@ -372,6 +372,63 @@ describe('CSV Validation', () => {
         expect(result.status).toBe(ValidationStatus.ERROR);
         expect(result.errors).toContain('Type is required');
       });
+    });
+  });
+  describe('validateCSVImport (MUT-218)', () => {
+    it('treats a client and a project that are new to the app as new, not duplicates', () => {
+      const results = validateCSVImport(
+        [
+          { type: 'client', name: 'Hala Cafe' },
+          { type: 'project', name: 'Menu refresh' },
+        ],
+        ['Existing Client'],
+        ['Existing Project']
+      );
+
+      expect(results.map((r) => r.status)).toEqual([ValidationStatus.NEW, ValidationStatus.NEW]);
+      expect(results.every((r) => r.warnings.length === 0)).toBe(true);
+    });
+
+    it('still flags a client or project whose name already exists in the app', () => {
+      const results = validateCSVImport(
+        [
+          { type: 'client', name: 'Existing Client' },
+          { type: 'project', name: 'Existing Project' },
+        ],
+        ['Existing Client'],
+        ['Existing Project']
+      );
+
+      expect(results.map((r) => r.status)).toEqual([ValidationStatus.DUPLICATE, ValidationStatus.DUPLICATE]);
+      expect(results[0].warnings).toContain('Client with this name already exists');
+      expect(results[1].warnings).toContain('Project with this name already exists');
+    });
+
+    it('flags a name repeated within the CSV on the repeat only', () => {
+      const results = validateCSVImport([
+        { type: 'client', name: 'Hala Cafe' },
+        { type: 'client', name: ' Hala Cafe ' },
+        { type: 'project', name: 'Menu refresh' },
+        { type: 'project', name: 'Menu refresh' },
+      ]);
+
+      expect(results.map((r) => r.status)).toEqual([
+        ValidationStatus.NEW,
+        ValidationStatus.DUPLICATE,
+        ValidationStatus.NEW,
+        ValidationStatus.DUPLICATE,
+      ]);
+      expect(results[1].warnings).toContain('Client name appears more than once in this file');
+      expect(results[3].warnings).toContain('Project name appears more than once in this file');
+    });
+
+    it('keeps rows that reference a client defined in the same CSV valid', () => {
+      const results = validateCSVImport([
+        { type: 'client', name: 'Hala Cafe' },
+        { type: 'income', client: 'Hala Cafe', amount: '400', currency: 'USD', status: 'unpaid', date: '2026-10-01' },
+      ]);
+
+      expect(results.map((r) => r.status)).toEqual([ValidationStatus.NEW, ValidationStatus.NEW]);
     });
   });
 });

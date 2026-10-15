@@ -2525,3 +2525,10 @@ Web QA on `vite preview` builds (throwaway `QA_CONTEXT`, 2 workers): 111 passed 
 - the landing bar at 320 and 375px in EN and AR.
 
 `web.navigation.retired-areas` and all 8 `web.brand.layout` cells pass.
+
+## MUT-218 — CSV import duplicates (2026-10-15)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/utils/__tests__/csvValidation.test.ts` › `validateCSVImport (MUT-218)` | Unit | +4 | New client and project rows are New with no warning; names already in the app are still Duplicate; a name repeated in the file is Duplicate on the repeat only (trimmed); an income row referencing a client from the same file stays New. The first and third failed before the fix |
+| `qa/specs/web/data.spec.ts` › `@web.data.csv-new-client` | E2E (release-qa) | 1 | No longer manual: a new client reads New, and the summary shows New 2, Duplicates 0, with no duplicate notice. Passes on a `vite preview` build with the other 5 data specs |

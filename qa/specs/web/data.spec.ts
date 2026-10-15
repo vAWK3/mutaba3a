@@ -134,9 +134,6 @@ test(
   },
 );
 
-// Product bug (manual in data.yaml): validateCSVImport adds the CSV's own client and project
-// names to the "already exists" list before checking them, so every new client in a CSV is
-// shown as a Duplicate of itself. This spec states the correct behaviour.
 test(
   'a client that is new to this device shows as New in the CSV validation preview, not Duplicate',
   { tag: '@web.data.csv-new-client' },

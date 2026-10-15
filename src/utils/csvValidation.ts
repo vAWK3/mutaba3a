@@ -208,35 +208,37 @@ function validateConversion(
   }
 }
 
+const REPEATED_NAME_WARNING: Record<'client' | 'project', string> = {
+  client: 'Client name appears more than once in this file',
+  project: 'Project name appears more than once in this file',
+};
+
 /**
- * Validate all CSV rows
+ * Validate all CSV rows.
+ *
+ * Duplicates are checked against the names that already exist in the app, plus the
+ * names of earlier rows in the same file, so a new client or project is New on its
+ * first row and Duplicate only on a repeat (MUT-218).
  */
 export function validateCSVImport(
   rows: Record<string, string>[],
   existingClients: string[] = [],
   existingProjects: string[] = []
 ): CSVValidationResult[] {
-  // Track clients and projects from CSV for reference resolution
-  const csvClients = new Set<string>(existingClients);
-  const csvProjects = new Set<string>(existingProjects);
+  const seenInFile = { client: new Set<string>(), project: new Set<string>() };
 
-  // First pass: collect client and project names from CSV
-  rows.forEach((row) => {
-    if (row.type === 'client' && row.name) {
-      csvClients.add(row.name.trim());
-    }
-    if (row.type === 'project' && row.name) {
-      csvProjects.add(row.name.trim());
-    }
-  });
-
-  // Second pass: validate all rows
   return rows.map((row, index) => {
-    return validateCSVRow(
-      row,
-      index,
-      Array.from(csvClients),
-      Array.from(csvProjects)
-    );
+    const result = validateCSVRow(row, index, existingClients, existingProjects);
+    const type = row.type?.trim();
+    const name = row.name?.trim();
+    if ((type !== 'client' && type !== 'project') || !name) return result;
+
+    const seen = seenInFile[type];
+    if (seen.has(name) && result.warnings.length === 0) {
+      result.warnings.push(REPEATED_NAME_WARNING[type]);
+      if (result.status === ValidationStatus.NEW) result.status = ValidationStatus.DUPLICATE;
+    }
+    seen.add(name);
+    return result;
   });
 }
