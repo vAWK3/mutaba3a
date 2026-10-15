@@ -195,7 +195,7 @@ type Get<P extends keyof paths> = OkJson<P, 'get'>;
 
 /** One function per operation the portal uses (hosted-portal.md §6, §7.3). */
 export const api = {
-  me: () => request<Get<'/v1/me'>>('GET', '/v1/me'),
+  me: (options: { signal?: AbortSignal } = {}) => request<Get<'/v1/me'>>('GET', '/v1/me', { signal: options.signal }),
   signIn: (body: Schemas['SignInRequest']) => request<OkJson<'/v1/sessions', 'post'>>('POST', SIGN_IN_PATH, { body }),
   signOut: () => request<void>('DELETE', '/v1/sessions/current'),
   /** MUT-191: off replaces; dismissals are added to what the account holds. */

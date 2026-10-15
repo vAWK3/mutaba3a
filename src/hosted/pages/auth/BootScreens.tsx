@@ -1,27 +1,38 @@
 import { useEffect, useState } from 'react';
 import { useT } from '../../../lib/i18n/core';
 import { Button } from '../../../components/ui/Button';
+import { BrandMark } from '../../../components/brand/BrandMark';
+import { BrandLoader } from '../../../components/brand/BrandLoader';
+import { bootDelayMs } from '../../../components/brand/bootDelay';
 import { Wordmark } from '../../components/Brand';
-import { BrandLoader, LOADER_DELAY_MS } from '../../../components/brand/BrandLoader';
 
 /**
- * S1: the wordmark, and the bloom loader only once the check has taken a
- * noticeable time (the app-wide `LOADER_DELAY_MS`, MUT-206). The loader mounts
- * then, with no delay of its own, so nothing is announced before it shows.
+ * S1, "the mark becomes the loader" (MUT-207 D4, eng review R1): the boot
+ * splash's 80 px mark, in the same spot, until the check has taken
+ * `LOADER_DELAY_MS` from page start (DR9); then the bloom loader (96, whose
+ * frame 0 is that mark) blooms in place, with no fade, and says what it is
+ * doing (DR14: no aria-hidden here, unlike the static splash). No wordmark
+ * text: before JS neither the font nor the language is known, so the splash
+ * can't draw it, and the lockup would jump. "Still connecting…" from 3 s
+ * (DR5); `meQuery` gives up at 15 s and BootUnreachable takes over (DR6).
  */
 export function CheckingSession() {
   const t = useT();
-  const [slow, setSlow] = useState(false);
+  const [blooming, setBlooming] = useState(() => bootDelayMs() === 0);
 
   useEffect(() => {
-    const timer = setTimeout(() => setSlow(true), LOADER_DELAY_MS);
+    if (blooming) return;
+    const timer = setTimeout(() => setBlooming(true), bootDelayMs());
     return () => clearTimeout(timer);
-  }, []);
+  }, [blooming]);
 
   return (
-    <div className="hp-center">
-      <Wordmark />
-      {slow && <BrandLoader size={40} delay={0} label={t('hosted.auth.checking')} />}
+    <div className="boot-splash">
+      {blooming ? (
+        <BrandLoader size={96} delay={0} label={t('hosted.auth.checking')} slowCaption={t('hosted.auth.connectingSlow')} />
+      ) : (
+        <BrandMark size={80} className="boot-splash-mark" />
+      )}
     </div>
   );
 }

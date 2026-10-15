@@ -11,10 +11,17 @@ import { api, type HostedProfile, type Me } from '../api/client';
 
 export const ME_KEY = ['me'] as const;
 const ME_STALE_MS = 60_000;
+/**
+ * The session check gives up after this long (MUT-207 DR6; the iPhone's
+ * `Env.requestTimeout`). The timeout is a network error (`ApiError` status 0),
+ * not a 401, so AuthGate shows BootUnreachable with Retry instead of a loader
+ * that never ends.
+ */
+export const ME_TIMEOUT_MS = 15_000;
 
 export const meQuery = queryOptions({
   queryKey: ME_KEY,
-  queryFn: () => api.me(),
+  queryFn: ({ signal }) => api.me({ signal: AbortSignal.any([signal, AbortSignal.timeout(ME_TIMEOUT_MS)]) }),
   staleTime: ME_STALE_MS,
   retry: false,
 });
