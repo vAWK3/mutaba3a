@@ -130,51 +130,6 @@ interface DrawerState {
   openLegacyExpenseDrawer: (options: { transactionId: string }) => void;
   closeLegacyExpenseDrawer: () => void;
 
-  // Retainer drawer
-  retainerDrawer: {
-    isOpen: boolean;
-    mode: 'create' | 'edit';
-    retainerId?: string;
-    defaultProfileId?: string;
-    defaultClientId?: string;
-    defaultProjectId?: string;
-  };
-  openRetainerDrawer: (options?: {
-    mode?: 'create' | 'edit';
-    retainerId?: string;
-    defaultProfileId?: string;
-    defaultClientId?: string;
-    defaultProjectId?: string;
-  }) => void;
-  closeRetainerDrawer: () => void;
-
-  // Retainer matching drawer
-  retainerMatchingDrawer: {
-    isOpen: boolean;
-    step: 'select-transaction' | 'select-projected';
-    transactionId?: string;
-    projectedIncomeId?: string;
-    // Confirmation flow state
-    pendingProjectedId?: string; // Selected but not yet confirmed
-    matchSuccess?: boolean; // Show success state
-    lastMatchedIds?: { transactionId: string; projectedId: string }; // For undo
-  };
-  openRetainerMatchingDrawer: (options?: {
-    step?: 'select-transaction' | 'select-projected';
-    transactionId?: string;
-    projectedIncomeId?: string;
-  }) => void;
-  closeRetainerMatchingDrawer: () => void;
-  setRetainerMatchingStep: (step: 'select-transaction' | 'select-projected') => void;
-  setRetainerMatchingTransaction: (transactionId: string) => void;
-  setRetainerMatchingProjectedIncome: (projectedIncomeId: string) => void;
-  setRetainerMatchingPendingProjected: (projectedId: string | undefined) => void;
-  setRetainerMatchingSuccess: (success: boolean, ids?: { transactionId: string; projectedId: string }) => void;
-
-  // Selected retainer for inspector panel
-  selectedRetainerId?: string;
-  selectRetainer: (id?: string) => void;
-
   // Partial payment drawer
   partialPaymentDrawer: {
     isOpen: boolean;
@@ -199,24 +154,6 @@ interface DrawerState {
   }) => void;
   editPaymentRecord: (options: { transactionId: string; paymentRecordId: string }) => void;
   closePartialPaymentDrawer: () => void;
-
-  // Plan assumption drawer (Financial Planning)
-  planAssumptionDrawer: {
-    isOpen: boolean;
-    mode: 'create' | 'edit';
-    planId?: string;
-    assumptionId?: string;
-    defaultCategory?: 'revenue' | 'expense' | 'funding' | 'hiring' | 'other';
-    defaultProfileId?: string;
-  };
-  openPlanAssumptionDrawer: (options?: {
-    mode?: 'create' | 'edit';
-    planId?: string;
-    assumptionId?: string;
-    defaultCategory?: 'revenue' | 'expense' | 'funding' | 'hiring' | 'other';
-    defaultProfileId?: string;
-  }) => void;
-  closePlanAssumptionDrawer: () => void;
 
   // Unassigned-records drawer (opened from the orphaned-records banner)
   orphanedRecordsDrawer: {
@@ -409,104 +346,6 @@ export const useDrawerStore = create<DrawerState>((set) => ({
       },
     }),
 
-  // Retainer drawer
-  retainerDrawer: {
-    isOpen: false,
-    mode: 'create',
-  },
-  openRetainerDrawer: (options) =>
-    set({
-      retainerDrawer: {
-        isOpen: true,
-        mode: options?.mode || 'create',
-        retainerId: options?.retainerId,
-        defaultProfileId: options?.defaultProfileId,
-        defaultClientId: options?.defaultClientId,
-        defaultProjectId: options?.defaultProjectId,
-      },
-    }),
-  closeRetainerDrawer: () =>
-    set({
-      retainerDrawer: {
-        isOpen: false,
-        mode: 'create',
-      },
-    }),
-
-  // Retainer matching drawer
-  retainerMatchingDrawer: {
-    isOpen: false,
-    step: 'select-transaction',
-  },
-  openRetainerMatchingDrawer: (options) =>
-    set({
-      retainerMatchingDrawer: {
-        isOpen: true,
-        step: options?.step || 'select-transaction',
-        transactionId: options?.transactionId,
-        projectedIncomeId: options?.projectedIncomeId,
-        pendingProjectedId: undefined,
-        matchSuccess: false,
-        lastMatchedIds: undefined,
-      },
-    }),
-  closeRetainerMatchingDrawer: () =>
-    set({
-      retainerMatchingDrawer: {
-        isOpen: false,
-        step: 'select-transaction',
-        transactionId: undefined,
-        projectedIncomeId: undefined,
-        pendingProjectedId: undefined,
-        matchSuccess: false,
-        lastMatchedIds: undefined,
-      },
-    }),
-  setRetainerMatchingStep: (step) =>
-    set((state) => ({
-      retainerMatchingDrawer: {
-        ...state.retainerMatchingDrawer,
-        step,
-        pendingProjectedId: undefined, // Clear pending when going back
-      },
-    })),
-  setRetainerMatchingTransaction: (transactionId) =>
-    set((state) => ({
-      retainerMatchingDrawer: {
-        ...state.retainerMatchingDrawer,
-        transactionId,
-        step: 'select-projected',
-        pendingProjectedId: undefined,
-      },
-    })),
-  setRetainerMatchingProjectedIncome: (projectedIncomeId) =>
-    set((state) => ({
-      retainerMatchingDrawer: {
-        ...state.retainerMatchingDrawer,
-        projectedIncomeId,
-      },
-    })),
-  setRetainerMatchingPendingProjected: (projectedId) =>
-    set((state) => ({
-      retainerMatchingDrawer: {
-        ...state.retainerMatchingDrawer,
-        pendingProjectedId: projectedId,
-      },
-    })),
-  setRetainerMatchingSuccess: (success, ids) =>
-    set((state) => ({
-      retainerMatchingDrawer: {
-        ...state.retainerMatchingDrawer,
-        matchSuccess: success,
-        lastMatchedIds: ids,
-        pendingProjectedId: undefined,
-      },
-    })),
-
-  // Selected retainer for inspector panel
-  selectedRetainerId: undefined,
-  selectRetainer: (id) => set({ selectedRetainerId: id }),
-
   // Partial payment drawer
   partialPaymentDrawer: {
     isOpen: false,
@@ -540,30 +379,6 @@ export const useDrawerStore = create<DrawerState>((set) => ({
         isOpen: false,
         transactionId: undefined,
         editingPaymentRecordId: undefined,
-      },
-    }),
-
-  // Plan assumption drawer (Financial Planning)
-  planAssumptionDrawer: {
-    isOpen: false,
-    mode: 'create',
-  },
-  openPlanAssumptionDrawer: (options) =>
-    set({
-      planAssumptionDrawer: {
-        isOpen: true,
-        mode: options?.mode || 'create',
-        planId: options?.planId,
-        assumptionId: options?.assumptionId,
-        defaultCategory: options?.defaultCategory,
-        defaultProfileId: options?.defaultProfileId,
-      },
-    }),
-  closePlanAssumptionDrawer: () =>
-    set({
-      planAssumptionDrawer: {
-        isOpen: false,
-        mode: 'create',
       },
     }),
 

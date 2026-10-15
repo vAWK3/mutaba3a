@@ -47,7 +47,7 @@ export default defineConfig([
         {
           patterns: [
             {
-              regex: '(^|/)db/(repository|expenseRepository|retainerRepository|planRepository|dataset|demoData|seed|backup|profileImport|csvImport|integrityCheck|crossProfileStats|migration-safety)$',
+              regex: '(^|/)db/(repository|expenseRepository|dataset|demoData|seed|backup|profileImport|csvImport|integrityCheck|crossProfileStats|migration-safety)$',
               allowTypeImports: true,
               message: 'Storage modules are reached through getRepositories() (MUT-47).',
             },

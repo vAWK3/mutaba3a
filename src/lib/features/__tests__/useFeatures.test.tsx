@@ -135,8 +135,8 @@ describe('useFeatureNotice', () => {
 
 describe('readFeatureFlags', () => {
   it('resolves from the repository without React', async () => {
-    installFakeSettings({ features: { retainers: true } });
-    expect(await readFeatureFlags()).toEqual({ ...DEFAULT_FEATURES, retainers: true });
+    installFakeSettings({ features: { projects: true } });
+    expect(await readFeatureFlags()).toEqual({ ...DEFAULT_FEATURES, projects: true });
   });
 
   it('resolves defaults for a row without features', async () => {

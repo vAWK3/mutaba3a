@@ -61,11 +61,9 @@
     "overview": "نظرة عامة",
     "income": "الإيرادات",
     "insights": "التحليلات",
-    "planning": "التخطيط",
     "projects": "المشاريع",
     "clients": "العملاء",
     "transactions": "المعاملات",
-    "retainers": "العقود المتكررة",
     "expenses": "المصروفات",
     "conversions": "تحويلات العملات",
     "reports": "التقارير",
@@ -302,15 +300,7 @@
     },
     "detail": {
       "noReceivables": "لا توجد مستحقات",
-      "noReceivablesHint": "تم تحصيل جميع المستحقات.",
-      "retainers": {
-        "title": "العقود الشهرية",
-        "empty": "لا توجد عقود شهرية لهذا العميل بعد.",
-        "new": "عقد جديد",
-        "viewAll": "عرض الكل",
-        "nextExpected": "الاستحقاق القادم",
-        "dueNow": "مستحق الآن"
-      }
+      "noReceivablesHint": "تم تحصيل جميع المستحقات."
     },
     "profile": {
       "owedNow": "المستحق الآن",
@@ -387,8 +377,7 @@
       "year": "سنة"
     },
     "toggles": {
-      "includeUnpaid": "تضمين الدخل غير المحصّل",
-      "includeProjected": "تضمين العقود المتوقعة"
+      "includeUnpaid": "تضمين الدخل غير المحصّل"
     },
     "yearInsights": {
       "title": "تحليلات السنة"
@@ -545,10 +534,6 @@
       "openSettings": "فتح الإعدادات",
       "dismiss": "إغلاق",
       "items": {
-        "retainers": {
-          "label": "العقود الشهرية",
-          "description": "اتفاقيات متكررة مع دخل متوقع"
-        },
         "expenses": {
           "label": "المصروفات",
           "description": "تتبّع المصروفات في سجل واحد، مع المورّدين الذين تدفع لهم"
@@ -556,10 +541,6 @@
         "insights": {
           "label": "التحليلات",
           "description": "تقارير واتجاهات عبر العملاء والأشهر"
-        },
-        "planning": {
-          "label": "التخطيط",
-          "description": "سيناريوهات وافتراضات للأشهر القادمة"
         },
         "projects": {
           "label": "المشاريع",
@@ -877,167 +858,6 @@
     },
     "receiptsAttached": "{count} إيصال مرفق"
   },
-  "retainers": {
-    "title": "العقود المتكررة",
-    "new": "عقد متكرر جديد",
-    "addRetainer": "إضافة عقد",
-    "matchPayment": "مطابقة الدفعات",
-    "empty": "لا توجد عقود متكررة",
-    "emptySearch": "حاول تعديل البحث أو الفلاتر",
-    "emptyHint": "أنشئ أول عقد لتتبع الإيرادات المتوقعة",
-    "searchPlaceholder": "بحث في العقود...",
-    "selectToInspect": "اختر عقداً لعرض التفاصيل",
-    "confirmArchive": "هل أنت متأكد من أرشفة هذا العقد؟",
-    "confirmPause": "هل أنت متأكد من إيقاف هذا العقد؟ سيتم إلغاء الدفعات المستقبلية.",
-    "confirmEnd": "هل أنت متأكد من إنهاء هذا العقد؟ لا يمكن التراجع عن هذا الإجراء.",
-    "activate": "تفعيل",
-    "pause": "إيقاف",
-    "resume": "استئناف",
-    "end": "إنهاء",
-    "activeCount": "العقود النشطة",
-    "monthlyExpected": "المتوقع شهرياً",
-    "totalDue": "إجمالي المستحق",
-    "totalOverdue": "إجمالي المتأخر",
-    "view": {
-      "all": "الكل",
-      "dueNow": "مستحق الآن",
-      "active": "نشط",
-      "endingSoon": "ينتهي قريباً"
-    },
-    "status": {
-      "title": "الحالة",
-      "draft": "مسودة",
-      "active": "نشط",
-      "paused": "متوقف",
-      "ended": "منتهٍ"
-    },
-    "cadence": {
-      "monthly": "شهرياً",
-      "quarterly": "ربع سنوي"
-    },
-    "columns": {
-      "status": "الحالة",
-      "title": "العنوان",
-      "client": "العميل",
-      "amount": "المبلغ",
-      "cadence": "التكرار",
-      "nextDue": "الاستحقاق التالي",
-      "dueNow": "المستحق"
-    },
-    "inspector": {
-      "placeholder": "اختر عقداً للاطلاع على التفاصيل",
-      "overview": "نظرة عامة",
-      "schedule": "الجدول الزمني",
-      "transactions": "المعاملات",
-      "linkedTransactions": "المعاملات المرتبطة",
-      "noLinkedTransactions": "لا توجد معاملات مرتبطة بعد",
-      "client": "العميل",
-      "project": "المشروع",
-      "amount": "المبلغ",
-      "cadence": "التكرار",
-      "paymentDay": "يوم الدفع",
-      "startDate": "تاريخ البدء",
-      "endDate": "تاريخ الانتهاء",
-      "noEndDate": "مفتوح",
-      "notes": "ملاحظات",
-      "status": "الحالة",
-      "dueAmount": "المبلغ المستحق",
-      "actions": "الإجراءات",
-      "edit": "تعديل",
-      "pause": "إيقاف",
-      "resume": "استئناف",
-      "end": "إنهاء",
-      "match": "مطابقة دفعة",
-      "confirmPause": "هل أنت متأكد من إيقاف هذا العقد؟",
-      "confirmEnd": "هل أنت متأكد من إنهاء هذا العقد؟"
-    },
-    "summary": {
-      "active": "نشط",
-      "dueNow": "مستحق الآن",
-      "mtd": "حتى تاريخه (الشهري)"
-    },
-    "scheduleState": {
-      "upcoming": "قادم",
-      "due": "مستحق",
-      "received": "مستلم",
-      "partial": "جزئي",
-      "missed": "فائت",
-      "canceled": "ملغى"
-    },
-    "state": {
-      "upcoming": "قادم",
-      "due": "مستحق",
-      "received": "مستلم",
-      "partial": "جزئي",
-      "missed": "فائت",
-      "canceled": "ملغى"
-    },
-    "filters": {
-      "view": "عرض",
-      "all": "الكل",
-      "due": "مستحق الآن",
-      "active": "نشط",
-      "ending": "ينتهي قريباً",
-      "status": "الحالة",
-      "currency": "العملة",
-      "client": "العميل",
-      "allStatuses": "جميع الحالات",
-      "allCurrencies": "جميع العملات",
-      "allClients": "جميع العملاء"
-    }
-  },
-  "retainerMatching": {
-    "selectTransaction": "اختر معاملة",
-    "selectProjectedIncome": "اختر الإيراد المتوقع",
-    "selectTransactionDesc": "اختر معاملة إيراد لمطابقتها مع دفعة عقد متوقعة.",
-    "selectProjectedDesc": "اختر دفعة عقد متوقعة لمطابقتها مع هذه المعاملة.",
-    "searchTransactions": "بحث في المعاملات...",
-    "searchProjected": "بحث في الدفعات المتوقعة...",
-    "createNewTransaction": "إنشاء معاملة جديدة",
-    "noMatchingTransactions": "لا توجد معاملات مطابقة",
-    "noUnlinkedTransactions": "جميع معاملات الإيراد مرتبطة",
-    "noMatchingProjected": "لا توجد دفعات متوقعة مطابقة",
-    "noDueItems": "لا توجد دفعات مستحقة",
-    "untitled": "بدون عنوان",
-    "untitledRetainer": "عقد بدون عنوان",
-    "suggestions": "مقترحات",
-    "otherDueItems": "دفعات مستحقة أخرى",
-    "confidence": {
-      "high": "تطابق عالي",
-      "medium": "تطابق متوسط",
-      "low": "تطابق منخفض"
-    },
-    "steps": {
-      "transaction": "المعاملة",
-      "period": "الفترة"
-    },
-    "selectedTransaction": "المعاملة المختارة",
-    "change": "تغيير",
-    "scoreBreakdown": {
-      "title": "درجة التطابق",
-      "currency": "العملة",
-      "client": "العميل",
-      "amount": "المبلغ",
-      "date": "التاريخ",
-      "total": "الإجمالي"
-    },
-    "confirmation": {
-      "title": "تأكيد المطابقة",
-      "transaction": "المعاملة",
-      "period": "الفترة",
-      "confirm": "تأكيد المطابقة",
-      "cancel": "إلغاء"
-    },
-    "success": {
-      "title": "تمت المطابقة!",
-      "message": "تم ربط المعاملة بفترة العقد بنجاح"
-    },
-    "toast": {
-      "matched": "تمت مطابقة الدفعة بنجاح",
-      "undo": "تراجع",
-      "undone": "تم التراجع عن المطابقة"
-    }
-  },
   "conversions": {
     "title": "تحويلات العملات",
     "description": "الأموال المحوّلة بين العملات، بعيدًا عن إجماليات دخلك ومصروفاتك",
@@ -1178,29 +998,6 @@
       "receipts": "الإيصالات",
       "addReceipt": "إضافة إيصال",
       "linkReceipt": "ربط من الوارد"
-    },
-    "retainer": {
-      "new": "عقد متكرر جديد",
-      "edit": "تعديل العقد المتكرر",
-      "client": "العميل",
-      "clientPlaceholder": "اختر عميل...",
-      "title": "العنوان",
-      "titlePlaceholder": "مثال: عقد صيانة شهري...",
-      "amount": "المبلغ",
-      "amountPlaceholder": "0.00",
-      "currency": "العملة",
-      "cadence": "التكرار",
-      "paymentDay": "يوم الدفع",
-      "startDate": "تاريخ البدء",
-      "endDate": "تاريخ الانتهاء (اختياري)",
-      "project": "المشروع (اختياري)",
-      "projectPlaceholder": "اختر مشروع...",
-      "status": "الحالة",
-      "notes": "ملاحظات",
-      "notesPlaceholder": "ملاحظات إضافية عن هذا العقد...",
-      "schedulePreview": "معاينة الجدول",
-      "enterDetailsForPreview": "أدخل التفاصيل لعرض معاينة الجدول",
-      "andMore": "والمزيد..."
     },
     "businessProfile": {
       "sectionIdentity": "الهوية",
@@ -1624,7 +1421,6 @@
         "clients": "10 عملاء مع معلومات الاتصال",
         "projects": "15 مشروع في مجالات مختلفة",
         "transactions": "60+ معاملة (6 أشهر من السجل)",
-        "retainers": "3 اتفاقيات عقود فعّالة",
         "expenses": "25+ مصروف مع تصنيفات"
       },
       "seeding": "جاري إنشاء البيانات التوضيحية...",
@@ -1652,119 +1448,6 @@
       "clients": "عملاء",
       "projects": "مشاريع",
       "transactions": "معاملات"
-    }
-  },
-  "planning": {
-    "title": "التخطيط المالي",
-    "subtitle": "نمذجة الإيرادات والمصروفات واحتياجات التمويل المتوقعة",
-    "confirmDeleteAssumption": "هل أنت متأكد من حذف هذا الافتراض؟",
-    "plan": {
-      "new": "خطة جديدة",
-      "defaultName": "خطتي",
-      "name": "اسم الخطة",
-      "description": "الوصف",
-      "startMonth": "شهر البداية",
-      "horizon": "أفق التخطيط",
-      "horizonMonths": "{months} شهر",
-      "status": "الحالة",
-      "currency": "العملة",
-      "rename": "إعادة تسمية",
-      "confirmDelete": "هل أنت متأكد من حذف هذه الخطة؟ لا يمكن التراجع عن هذا الإجراء."
-    },
-    "summary": {
-      "ask": "طلب التمويل",
-      "monthlyBurn": "الحرق الشهري",
-      "monthlyRevenue": "متوسط الإيرادات الشهرية",
-      "runway": "المدرج",
-      "months": "شهر",
-      "breakEven": "نقطة التعادل",
-      "notReached": "لم تتحقق",
-      "worstDip": "أسوأ انخفاض نقدي",
-      "bufferNeeded": "الاحتياطي المطلوب"
-    },
-    "assumptions": {
-      "title": "الافتراضات",
-      "new": "افتراض جديد",
-      "edit": "تعديل الافتراض",
-      "label": "التسمية",
-      "labelPlaceholder": "مثال: دخل العقد الشهري",
-      "category": "الفئة",
-      "type": "النوع",
-      "amount": "المبلغ",
-      "currency": "العملة",
-      "startMonth": "شهر البداية",
-      "endMonth": "شهر النهاية",
-      "notes": "ملاحظات",
-      "notesPlaceholder": "أضف أي ملاحظات حول هذا الافتراض...",
-      "addFirst": "إضافة {category}",
-      "categories": {
-        "revenue": "الإيرادات",
-        "expense": "المصروفات",
-        "funding": "التمويل",
-        "hiring": "التوظيف",
-        "other": "أخرى"
-      },
-      "types": {
-        "oneTime": "مرة واحدة",
-        "recurring": "متكرر",
-        "milestone": "إنجاز",
-        "percentage": "نسبة مئوية"
-      },
-      "frequency": {
-        "label": "التكرار",
-        "monthly": "شهري",
-        "quarterly": "ربع سنوي",
-        "yearly": "سنوي"
-      },
-      "confidence": {
-        "label": "الثقة",
-        "confirmed": "مؤكد",
-        "likely": "محتمل",
-        "roughGuess": "تخمين تقريبي"
-      }
-    },
-    "scenarios": {
-      "base": "الأساسي",
-      "conservative": "المتحفظ",
-      "optimistic": "المتفائل"
-    },
-    "timeline": {
-      "title": "التدفق النقدي الشهري",
-      "cashIn": "الوارد",
-      "cashOut": "الصادر",
-      "netFlow": "صافي التدفق",
-      "startingCash": "البداية",
-      "endingCash": "النهاية"
-    },
-    "insights": {
-      "title": "الرؤى",
-      "negativeCash": "يصبح النقد سالباً في {month}. ستحتاج {amount} لتغطية العجز.",
-      "lowRunway": "متبقي {months} شهر فقط من المدرج. فكر في تمديد جدول التمويل.",
-      "lowConfidenceAssumptions": "{count} افتراضات ذات ثقة منخفضة. راجع هذه التقديرات وتحقق منها.",
-      "breakEvenReached": "نقطة التعادل متوقعة في {month}. استمر في مراقبة معدل الحرق.",
-      "selfSustaining": "خطتك مستدامة ذاتياً! لا حاجة لتمويل خارجي.",
-      "highBurnRate": "معدل الحرق ({burn}) يتجاوز الإيرادات المتوقعة ({revenue})."
-    },
-    "ask": {
-      "title": "حاسبة التمويل",
-      "mode": "وضع الطلب",
-      "manual": "يدوي",
-      "calculated": "محسوب",
-      "minimum": "الحد الأدنى للبقاء",
-      "comfortable": "مريح",
-      "growth": "للنمو"
-    },
-    "emptyState": {
-      "title": "ابدأ تخطيط ماليتك",
-      "description": "أنشئ خطة مالية لنمذجة إيراداتك ومصروفاتك واحتياجات التمويل خلال 12-24 شهراً القادمة.",
-      "cta": "أنشئ خطتك الأولى",
-      "noProfile": "يرجى إنشاء ملف تجاري أولاً لبدء التخطيط.",
-      "noProjections": "أضف افتراضات لمشاهدة توقعاتك المالية"
-    },
-    "export": {
-      "button": "تصدير",
-      "projections": "التوقعات (CSV)",
-      "assumptions": "الافتراضات (CSV)"
     }
   },
   "orphanedRecords": {

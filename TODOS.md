@@ -86,9 +86,9 @@
 
 **Depends on / blocked by:** MUT-145 merged (it deletes `pdfArchival.ts`).
 
-## 10. "Delete all data" keeps businesses, expenses, payment records, retainers and plans
+## 10. "Delete all data" keeps businesses, expenses and payment records
 
-**What:** `dataset.wipeCoreData()` (`src/db/seed.ts` `deleteAllData`) clears transactions, projects, clients, categories and FX rates only. Business profiles, expenses, expense categories, payment records, receipts, vendors, recurring rules and occurrences, retainers, projected income and plans all survive.
+**What:** `dataset.wipeCoreData()` (`src/db/seed.ts` `deleteAllData`) clears transactions, projects, clients, categories and FX rates only. Business profiles, expenses, expense categories, payment records, receipts, vendors, recurring rules and occurrences all survive. (Retainers, projected income and plans no longer exist: Dexie v24 dropped them, MUT-226.)
 
 **Why:** The Settings button and its modal promise to delete all data.
 

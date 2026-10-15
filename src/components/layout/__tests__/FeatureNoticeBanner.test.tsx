@@ -98,6 +98,19 @@ describe('FeatureNoticeBanner', () => {
     expect(banner).not.toHaveTextContent(/invoice/i);
   });
 
+  // v24 cleans the stored notice, but restoring a pre-v24 backup brings the
+  // retired keys back (MUT-226); the read side must still drop them.
+  it('drops planning and retainers from a notice restored from an older backup (MUT-226)', async () => {
+    installFakeSettings({ featureNotice: ['retainers', 'expenses', 'planning'] as never });
+
+    render(<FeatureNoticeBanner />, { wrapper: Wrapper });
+
+    const banner = await screen.findByTestId('feature-notice-banner');
+    expect(banner).toHaveTextContent('Expenses');
+    expect(banner).not.toHaveTextContent('settings.features.items');
+    expect(banner).not.toHaveTextContent(/planning|retainer/i);
+  });
+
   it('renders nothing when every area in the stored notice is retired', async () => {
     const fake = installFakeSettings({ featureNotice: ['invoices'] as never });
 

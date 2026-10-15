@@ -2496,3 +2496,32 @@ Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 - Removed `MacDownloadBanner.test.tsx` with the banner (product decision: desktop retired until v2), and its mock in `AppShell.gate.test.tsx`.
 - Node 22: lint (0 errors, 6 old warnings), typecheck, `test:run` (317 files, 4,394 passed, 4 skipped) and build all pass.
 - `release-qa lint`: the 6 web files left are the two intentional `db/` files and the OAuth client + `tokenStore` (ADR-053 / TD-075).
+
+## MUT-226 — Planning and local Retainers retired; Dexie v24 drops their tables (2026-10-15, ADR-082)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/db/__tests__/migration-v24.test.ts` | Integration (fake IndexedDB) | 8 | A seeded v23 database (plans, assumptions, scenarios, a retainer, projected income, a matched transaction, both switches on) opens at v24 without an error; the five stores are gone on disk and in the schema; `linkedProjectedIncomeId` is stripped and its index dropped; `planning`/`retainers` leave `features` and `featureNotice` while the rest of settings stays; every other row is unchanged; a fresh install has none of the five; a pre-v24 backup restores its other tables and skips the five; the migration-safety snapshot omits them |
+| `src/__tests__/noDeadPlanningRetainerModules.test.ts` | Structural | 18 | 14 deleted paths stay gone; no app source names a deleted module (outside `db/database.ts`'s historical versions and `src/hosted`); `FEATURE_KEYS` is exactly expenses, insights, projects, conversions; neither locale carries a retired key |
+| `src/__tests__/router.gateKeys.test.ts` (extended) | Structural | +4 | `/planning` and `/retainers` redirect home with every switch on; they render no component and drop a bookmarked search |
+| `src/lib/features/__tests__/features.test.ts` (extended) | Unit | +1 | Stored `planning`/`retainers` switches resolve to nothing |
+| `src/components/layout/__tests__/SidebarNav.features.test.tsx` (rewritten examples) | Component | +1 | No Planning or Retainers entry even with their stored switches; "More" order is Expenses, Conversions, Insights, Projects |
+| `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | Page | 1 (was 2) | No retainers card, even with a stored retainers switch |
+| `src/db/__tests__/provider.test.ts` | Unit | 1 (rewritten) | The registry has no plan or retainer slots |
+| `src/components/layout/__tests__/FeatureNoticeBanner.test.tsx` (extended, qa-reconcile) | Component | +1 | A notice restored from a pre-v24 backup (`retainers`, `expenses`, `planning`) names only Expenses and never a raw key. It fails when `useFeatureNotice` stops filtering through `FEATURE_KEYS` (mutation-checked) |
+| `qa/specs/web/navigation.spec.ts` › `@web.navigation.retired-areas` | E2E (release-qa) | 1 | Bookmarked `/app/planning?plan=p1` and `/app/retainers?status=active` land on Home; the sidebar has no entry; Settings › Features shows exactly four switches |
+
+Re-pointed (same assertions, a live area as the example): `featureDataProbes`, `reconcile`, `routeGuard`, `useFeatures`, `leaveDisabledArea`, `gatingDataSafety`, `settingsRepo`, `migration-safety`, `migration-v20` (the no-settings-row case now seeds a project), `migration-v21` (its kept-table list excludes the five v24 drops), and every `verno` 23 → 24.
+
+Deleted with their code: `planCalculationService.test.ts`, `usePlanQueries.test.tsx`, `retainerRepo.test.ts`, `useRetainerQueries.test.tsx`, `RetainerDrawer.projectField.test.tsx`, the stores' retainer blocks, `qa/specs/web/{planning,retainers}.spec.ts`.
+
+Run (Node 22): `npm run typecheck` clean; `npm run lint` 0 errors (4 warnings, all in untouched files); `npx vitest run`: 314 files, 4,310 passed, 4 skipped; `npm run build` OK; `release-qa lint` no errors, and the same 6 unmapped web files as `main`.
+
+Web QA on `vite preview` builds (throwaway `QA_CONTEXT`, 2 workers): 111 passed and 12 failed. The same 12 also fail on a `main` (a093306) build with `--last-failed`, so none is a regression:
+- the Brand loader's three slow-route checks;
+- Brand English and Arabic at 1440px;
+- Conversions log and edit/delete (`manual: true`, known bugs);
+- `web.data.csv-new-client` (`manual: true`);
+- the landing bar at 320 and 375px in EN and AR.
+
+`web.navigation.retired-areas` and all 8 `web.brand.layout` cells pass.

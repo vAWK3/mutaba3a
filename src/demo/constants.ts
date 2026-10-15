@@ -26,8 +26,6 @@ export const DEMO_PREFIXES = {
   transaction: 'demo_tx_',
   document: 'demo_doc_',
   documentSequence: 'demo_doc_seq_',
-  retainer: 'demo_retainer_',
-  projectedIncome: 'demo_proj_income_',
   expense: 'demo_expense_',
   expenseCategory: 'demo_exp_cat_',
   recurringRule: 'demo_recurring_',
@@ -46,7 +44,6 @@ export const DEMO_CONFIG = {
   projectCount: 15,
   transactionCount: 60, // ~10 per month for 6 months
   documentCount: 12,
-  retainerCount: 3,
   expenseCount: 25,
   recurringRuleCount: 4,
 

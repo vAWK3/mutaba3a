@@ -8,7 +8,7 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
  * core routes do not (MUT-13; MUT-16 extends the list). The guard's behaviour
  * is proven in `src/lib/features/__tests__/routeGuard.test.ts`.
  */
-const GATED = ['/retainers', '/expenses', '/insights', '/planning', '/projects', '/projects/$projectId'];
+const GATED = ['/expenses', '/insights', '/projects', '/projects/$projectId', '/conversions'];
 const UNGATED = ['/', '/income', '/clients', '/clients/$clientId', '/settings'];
 // '/reports' and '/transactions' carry an unconditional redirect, not a gate: see legacyRedirectsCore.test.ts
 

@@ -84,7 +84,7 @@ export async function switchToArabic(page: Page): Promise<void> {
  * Turns on an optional area (ADR-032: all off on a fresh install) from Settings,
  * by its English switch label. Call it before switching to Arabic.
  */
-export async function enableOptionalArea(page: Page, label: 'Expenses' | 'Planning' | 'Retainers' | 'Insights' | 'Projects'): Promise<void> {
+export async function enableOptionalArea(page: Page, label: 'Expenses' | 'Insights' | 'Projects' | 'Currency conversions'): Promise<void> {
   await page.goto('/app/settings');
   const toggle = page.getByRole('switch', { name: label, exact: true });
   if ((await toggle.getAttribute('aria-checked')) !== 'true') await toggle.click();

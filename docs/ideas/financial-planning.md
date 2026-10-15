@@ -1,3 +1,5 @@
+> **Retired 2026-10-15** (MUT-226, ADR-082): Financial Planning was built (`a7151d3`) and then removed with its data. Kept as a record of the idea.
+
 Yes. This deserves a dedicated page, and it should not be treated like a boring spreadsheet with lipstick.
 
 What entrepreneurs actually need is not “accounting.” They need a planning cockpit that answers:

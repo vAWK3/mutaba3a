@@ -61,11 +61,9 @@
     "overview": "Overview",
     "income": "Income",
     "insights": "Insights",
-    "planning": "Planning",
     "projects": "Projects",
     "clients": "Clients",
     "transactions": "Transactions",
-    "retainers": "Retainers",
     "expenses": "Expenses",
     "conversions": "Conversions",
     "reports": "Reports",
@@ -302,15 +300,7 @@
     },
     "detail": {
       "noReceivables": "No receivables",
-      "noReceivablesHint": "All payments have been received.",
-      "retainers": {
-        "title": "Retainers",
-        "empty": "No retainers for this client yet.",
-        "new": "New retainer",
-        "viewAll": "View all",
-        "nextExpected": "Next expected",
-        "dueNow": "Due now"
-      }
+      "noReceivablesHint": "All payments have been received."
     },
     "profile": {
       "owedNow": "Owed now",
@@ -379,8 +369,7 @@
       "year": "Year"
     },
     "toggles": {
-      "includeUnpaid": "Include unpaid income",
-      "includeProjected": "Include projected retainers"
+      "includeUnpaid": "Include unpaid income"
     },
     "yearInsights": {
       "title": "Year Insights"
@@ -537,10 +526,6 @@
       "openSettings": "Open settings",
       "dismiss": "Dismiss",
       "items": {
-        "retainers": {
-          "label": "Retainers",
-          "description": "Recurring agreements with projected income"
-        },
         "expenses": {
           "label": "Expenses",
           "description": "Track money out in a single ledger, with the vendors you pay"
@@ -548,10 +533,6 @@
         "insights": {
           "label": "Insights",
           "description": "Reports and trends across clients and months"
-        },
-        "planning": {
-          "label": "Planning",
-          "description": "Scenarios and assumptions for the months ahead"
         },
         "projects": {
           "label": "Projects",
@@ -986,29 +967,6 @@
       "addReceipt": "Add Receipt",
       "linkReceipt": "Link from Inbox"
     },
-    "retainer": {
-      "new": "New Retainer",
-      "edit": "Edit Retainer",
-      "client": "Client",
-      "clientPlaceholder": "Select client...",
-      "title": "Title",
-      "titlePlaceholder": "e.g. Monthly retainer",
-      "amount": "Amount",
-      "amountPlaceholder": "0.00",
-      "currency": "Currency",
-      "cadence": "Cadence",
-      "paymentDay": "Payment Day",
-      "startDate": "Start Date",
-      "endDate": "End Date (optional)",
-      "project": "Project (optional)",
-      "projectPlaceholder": "Select project...",
-      "status": "Status",
-      "notes": "Notes",
-      "notesPlaceholder": "Additional notes...",
-      "schedulePreview": "Schedule Preview",
-      "enterDetailsForPreview": "Enter amount and start date to see schedule",
-      "andMore": "and more..."
-    },
     "businessProfile": {
       "sectionIdentity": "Identity",
       "sectionMoney": "Money",
@@ -1124,132 +1082,6 @@
     "retryFailed": "Retry failed",
     "statusPending": "Pending",
     "duplicate": "Duplicate file"
-  },
-  "retainers": {
-    "title": "Retainers",
-    "new": "New Retainer",
-    "addRetainer": "Add Retainer",
-    "matchPayment": "Match Payment",
-    "empty": "No retainers found",
-    "emptySearch": "Try adjusting your search or filters",
-    "emptyHint": "Create your first retainer to track recurring income",
-    "searchPlaceholder": "Search retainers...",
-    "selectToInspect": "Select a retainer to view details",
-    "confirmArchive": "Are you sure you want to archive this retainer?",
-    "confirmPause": "Are you sure you want to pause this retainer? Future payments will be canceled.",
-    "confirmEnd": "Are you sure you want to end this retainer? This cannot be undone.",
-    "activate": "Activate",
-    "pause": "Pause",
-    "resume": "Resume",
-    "end": "End",
-    "summary": "Summary",
-    "activeCount": "Active Retainers",
-    "monthlyExpected": "Monthly Expected",
-    "totalDue": "Total Due",
-    "totalOverdue": "Total Overdue",
-    "filters": {
-      "view": "View",
-      "all": "All",
-      "due": "Due Now",
-      "active": "Active",
-      "ending": "Ending Soon",
-      "status": "Status",
-      "currency": "Currency",
-      "client": "Client"
-    },
-    "status": {
-      "draft": "Draft",
-      "active": "Active",
-      "paused": "Paused",
-      "ended": "Ended"
-    },
-    "cadence": {
-      "monthly": "Monthly",
-      "quarterly": "Quarterly"
-    },
-    "state": {
-      "upcoming": "Upcoming",
-      "due": "Due",
-      "received": "Received",
-      "partial": "Partial",
-      "missed": "Missed",
-      "canceled": "Canceled"
-    },
-    "columns": {
-      "status": "Status",
-      "title": "Title",
-      "client": "Client",
-      "amount": "Amount",
-      "cadence": "Cadence",
-      "nextDue": "Next Due",
-      "dueNow": "Due Now"
-    },
-    "inspector": {
-      "overview": "Overview",
-      "schedule": "Schedule",
-      "transactions": "Transactions",
-      "notes": "Notes",
-      "client": "Client",
-      "project": "Project",
-      "amount": "Amount",
-      "cadence": "Cadence",
-      "paymentDay": "Payment Day",
-      "startDate": "Start Date",
-      "endDate": "End Date",
-      "status": "Status"
-    }
-  },
-  "retainerMatching": {
-    "selectTransaction": "Select Transaction",
-    "selectProjectedIncome": "Select Payment Period",
-    "selectTransactionDesc": "Choose an income transaction to match with a retainer payment",
-    "selectProjectedDesc": "Choose the payment period to link this transaction to",
-    "searchTransactions": "Search transactions...",
-    "searchProjected": "Search periods...",
-    "createNewTransaction": "Create New Transaction",
-    "noMatchingTransactions": "No matching transactions found",
-    "noUnlinkedTransactions": "No unlinked income transactions",
-    "noMatchingProjected": "No matching periods found",
-    "noDueItems": "No due payment periods",
-    "untitled": "Untitled transaction",
-    "untitledRetainer": "Untitled retainer",
-    "suggestions": "Suggestions",
-    "otherDueItems": "Other Due Periods",
-    "confidence": {
-      "high": "High",
-      "medium": "Medium",
-      "low": "Low"
-    },
-    "steps": {
-      "transaction": "Transaction",
-      "period": "Period"
-    },
-    "selectedTransaction": "Selected Transaction",
-    "change": "Change",
-    "scoreBreakdown": {
-      "title": "Match Score",
-      "currency": "Currency",
-      "client": "Client",
-      "amount": "Amount",
-      "date": "Date",
-      "total": "Total"
-    },
-    "confirmation": {
-      "title": "Confirm Match",
-      "transaction": "Transaction",
-      "period": "Period",
-      "confirm": "Confirm Match",
-      "cancel": "Cancel"
-    },
-    "success": {
-      "title": "Payment Matched!",
-      "message": "Transaction linked to retainer period successfully"
-    },
-    "toast": {
-      "matched": "Payment matched successfully",
-      "undo": "Undo",
-      "undone": "Match undone"
-    }
   },
   "landing": {
     "skipToContent": "Skip to main content",
@@ -1557,7 +1389,6 @@
         "clients": "10 clients with contact info",
         "projects": "15 projects across various fields",
         "transactions": "60+ transactions (6 months history)",
-        "retainers": "3 active retainer agreements",
         "expenses": "25+ expenses with categories"
       },
       "seeding": "Creating demo data...",
@@ -1585,119 +1416,6 @@
       "clients": "Clients",
       "projects": "Projects",
       "transactions": "Transactions"
-    }
-  },
-  "planning": {
-    "title": "Financial Planning",
-    "subtitle": "Model your expected revenue, expenses, and funding needs",
-    "confirmDeleteAssumption": "Are you sure you want to delete this assumption?",
-    "plan": {
-      "new": "New Plan",
-      "defaultName": "My Plan",
-      "name": "Plan Name",
-      "description": "Description",
-      "startMonth": "Start Month",
-      "horizon": "Planning Horizon",
-      "horizonMonths": "{months} months",
-      "status": "Status",
-      "currency": "Currency",
-      "rename": "Rename",
-      "confirmDelete": "Are you sure you want to delete this plan? This action cannot be undone."
-    },
-    "summary": {
-      "ask": "Funding Ask",
-      "monthlyBurn": "Monthly Burn",
-      "monthlyRevenue": "Avg Monthly Revenue",
-      "runway": "Runway",
-      "months": "months",
-      "breakEven": "Break-Even",
-      "notReached": "Not reached",
-      "worstDip": "Worst Cash Dip",
-      "bufferNeeded": "Buffer Needed"
-    },
-    "assumptions": {
-      "title": "Assumptions",
-      "new": "New Assumption",
-      "edit": "Edit Assumption",
-      "label": "Label",
-      "labelPlaceholder": "e.g., Monthly retainer income",
-      "category": "Category",
-      "type": "Type",
-      "amount": "Amount",
-      "currency": "Currency",
-      "startMonth": "Start Month",
-      "endMonth": "End Month",
-      "notes": "Notes",
-      "notesPlaceholder": "Add any notes about this assumption...",
-      "addFirst": "Add {category}",
-      "categories": {
-        "revenue": "Revenue",
-        "expense": "Expenses",
-        "funding": "Funding",
-        "hiring": "Hiring",
-        "other": "Other"
-      },
-      "types": {
-        "oneTime": "One-time",
-        "recurring": "Recurring",
-        "milestone": "Milestone",
-        "percentage": "Percentage"
-      },
-      "frequency": {
-        "label": "Frequency",
-        "monthly": "Monthly",
-        "quarterly": "Quarterly",
-        "yearly": "Yearly"
-      },
-      "confidence": {
-        "label": "Confidence",
-        "confirmed": "Confirmed",
-        "likely": "Likely",
-        "roughGuess": "Rough Guess"
-      }
-    },
-    "scenarios": {
-      "base": "Base",
-      "conservative": "Conservative",
-      "optimistic": "Optimistic"
-    },
-    "timeline": {
-      "title": "Monthly Cash Flow",
-      "cashIn": "Cash In",
-      "cashOut": "Cash Out",
-      "netFlow": "Net Flow",
-      "startingCash": "Starting",
-      "endingCash": "Ending"
-    },
-    "insights": {
-      "title": "Insights",
-      "negativeCash": "Cash goes negative in {month}. You'll need {amount} to cover the shortfall.",
-      "lowRunway": "Only {months} months of runway remaining. Consider extending your funding timeline.",
-      "lowConfidenceAssumptions": "{count} assumptions have low confidence. Review and validate these estimates.",
-      "breakEvenReached": "Break-even projected for {month}. Keep monitoring your burn rate.",
-      "selfSustaining": "Your plan is self-sustaining! No external funding needed.",
-      "highBurnRate": "Your burn rate ({burn}) exceeds expected revenue ({revenue})."
-    },
-    "ask": {
-      "title": "Funding Calculator",
-      "mode": "Ask Mode",
-      "manual": "Manual",
-      "calculated": "Calculated",
-      "minimum": "Minimum Survivable",
-      "comfortable": "Comfortable",
-      "growth": "Growth"
-    },
-    "emptyState": {
-      "title": "Start Planning Your Finances",
-      "description": "Create a financial plan to model your revenue, expenses, and funding needs over the next 12-24 months.",
-      "cta": "Create Your First Plan",
-      "noProfile": "Please create a business profile first to start planning.",
-      "noProjections": "Add assumptions to see your financial projections"
-    },
-    "export": {
-      "button": "Export",
-      "projections": "Projections (CSV)",
-      "assumptions": "Assumptions (CSV)"
     }
   },
   "orphanedRecords": {

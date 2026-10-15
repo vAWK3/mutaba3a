@@ -20,10 +20,8 @@ export type { FeatureKey } from '../../types';
 
 /** Display order in Settings; also the order of auto-enable notices. */
 export const FEATURE_KEYS = [
-  'retainers',
   'expenses',
   'insights',
-  'planning',
   'projects',
   'conversions',
 ] as const satisfies readonly FeatureKey[];
@@ -105,13 +103,11 @@ interface Probe {
  * on.
  */
 export const FEATURE_DATA_PROBES: Readonly<Record<FeatureKey, readonly Probe[]>> = Object.freeze({
-  retainers: [{ table: 'retainerAgreements', softDelete: false }],
   expenses: [
     { table: 'expenses', softDelete: true },
     { table: 'vendors', softDelete: false },
   ],
   insights: [],
-  planning: [{ table: 'plans', softDelete: false }],
   projects: [{ table: 'projects', softDelete: false }],
   conversions: [],
 });

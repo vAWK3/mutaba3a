@@ -29,20 +29,20 @@ afterEach(() => {
 describe('requireFeature', () => {
   it('redirects to home while the area is off', async () => {
     installFakeSettings();
-    const error = await thrownBy(requireFeature('retainers'));
+    const error = await thrownBy(requireFeature('projects'));
     expect(error).toBeDefined();
     expect(isRedirect(error)).toBe(true);
     expect((error as { options: { to: string } }).options.to).toBe('/');
   });
 
   it('lets the navigation through when the area is on', async () => {
-    installFakeSettings({ features: { retainers: true } });
-    await expect(requireFeature('retainers')()).resolves.toBeUndefined();
+    installFakeSettings({ features: { projects: true } });
+    await expect(requireFeature('projects')()).resolves.toBeUndefined();
   });
 
   it('honours a custom redirect target', async () => {
     installFakeSettings();
-    const error = await thrownBy(requireFeature('retainers', '/clients'));
+    const error = await thrownBy(requireFeature('projects', '/clients'));
     expect(isRedirect(error)).toBe(true);
     expect((error as { options: { to: string } }).options.to).toBe('/clients');
   });
@@ -50,15 +50,15 @@ describe('requireFeature', () => {
   it('treats a pre-v20 settings row (no features) as off', async () => {
     const settings = installFakeSettings();
     settings.get.mockResolvedValueOnce({ ...DEFAULT_SETTINGS });
-    const error = await thrownBy(requireFeature('retainers'));
+    const error = await thrownBy(requireFeature('projects'));
     expect(isRedirect(error)).toBe(true);
   });
 
   it('reads the flag on every call, so a toggle is honoured by the next navigation', async () => {
     const settings = installFakeSettings();
-    const guard = requireFeature('retainers');
+    const guard = requireFeature('projects');
     expect(isRedirect(await thrownBy(guard))).toBe(true);
-    settings.get.mockResolvedValueOnce({ ...DEFAULT_SETTINGS, features: { retainers: true } });
+    settings.get.mockResolvedValueOnce({ ...DEFAULT_SETTINGS, features: { projects: true } });
     await expect(guard()).resolves.toBeUndefined();
     expect(settings.get).toHaveBeenCalledTimes(2);
   });

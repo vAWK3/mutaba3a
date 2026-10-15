@@ -32,3 +32,37 @@ test(
     }
   },
 );
+
+// MUT-226: Planning and the local Retainers area are retired and their data
+// dropped. Bookmarks land on Home, and Settings offers no switch for either.
+test(
+  'old Planning and Retainers links land on Home, and no switch brings either area back',
+  { tag: '@web.navigation.retired-areas' },
+  async ({ page, step }) => {
+    const sidebar = page.locator('aside.sidebar');
+
+    await step('Open a fresh install, then a bookmarked /app/planning?plan=p1', async () => {
+      await openFreshApp(page, '/');
+      await page.goto('/app/planning?plan=p1');
+      await expect(page).toHaveURL(/\/app\/$/);
+      await expect(sidebar.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page');
+    });
+
+    await step('Open a bookmarked /app/retainers?status=active', async () => {
+      await page.goto('/app/retainers?status=active');
+      await expect(page).toHaveURL(/\/app\/$/);
+      await expect(sidebar.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(sidebar.getByRole('link', { name: /planning|retainers/i })).toHaveCount(0);
+    });
+
+    await step('Open Settings and read the Features switches', async () => {
+      await page.goto('/app/settings');
+      const features = page.getByTestId('settings-features');
+      await expect(features.getByRole('switch')).toHaveCount(4);
+      for (const label of ['Expenses', 'Insights', 'Projects', 'Currency conversions']) {
+        await expect(features.getByRole('switch', { name: label, exact: true })).toBeVisible();
+      }
+      await expect(features.getByText(/planning|retainers/i)).toHaveCount(0);
+    });
+  },
+);

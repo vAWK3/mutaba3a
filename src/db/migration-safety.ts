@@ -75,8 +75,6 @@ const ALL_TABLES = [
   'expenseCategories',
   'vendors',
   'monthCloseStatuses',
-  'retainerAgreements',
-  'projectedIncome',
   'engagements',
   'engagementVersions',
   // The device-sync tables were dropped in v21 (MUT-73). This list is kept by

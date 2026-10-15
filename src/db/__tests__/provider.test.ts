@@ -7,8 +7,6 @@ import {
 } from '../provider';
 import { transactionRepo, clientRepo, settingsRepo, paymentRecordRepo, businessProfileRepo } from '../repository';
 import { expenseRepo } from '../expenseRepository';
-import { retainerRepo, projectedIncomeRepo } from '../retainerRepository';
-import { planRepo, planAssumptionRepo, planScenarioRepo } from '../planRepository';
 import { datasetRepo } from '../dataset';
 import { demoDataRepo } from '../demoData';
 
@@ -26,8 +24,6 @@ describe('repository provider', () => {
       expect(repos.base.clients).toBe(clientRepo);
       expect(repos.base.settings).toBe(settingsRepo);
       expect(repos.base.expenses).toBe(expenseRepo);
-      expect(repos.base.retainerAgreements).toBe(retainerRepo);
-      expect(repos.base.projectedIncome).toBe(projectedIncomeRepo);
     });
 
     it('exposes only the base repositories, now that device sync is retired (MUT-73)', () => {
@@ -41,12 +37,12 @@ describe('repository provider', () => {
       expect(repos.base.businessProfiles).toBe(businessProfileRepo);
     });
 
-    it('resolves the plan repositories through the seam (MUT-47)', () => {
-      const repos = getRepositories();
+    it('has no planning or local retainer slots (MUT-226)', () => {
+      const slots = Object.keys(getRepositories().base);
 
-      expect(repos.base.plans).toBe(planRepo);
-      expect(repos.base.planAssumptions).toBe(planAssumptionRepo);
-      expect(repos.base.planScenarios).toBe(planScenarioRepo);
+      for (const retired of ['plans', 'planAssumptions', 'planScenarios', 'retainerAgreements', 'projectedIncome']) {
+        expect(slots).not.toContain(retired);
+      }
     });
 
     it('resolves whole-database operations through the dataset slot (MUT-47)', () => {

@@ -9,15 +9,8 @@ import {
 } from '../features';
 
 describe('feature vocabulary', () => {
-  it('lists the six optional areas in display order (invoices retired, MUT-145; conversions added, MUT-141)', () => {
-    expect([...FEATURE_KEYS]).toEqual([
-      'retainers',
-      'expenses',
-      'insights',
-      'planning',
-      'projects',
-      'conversions',
-    ]);
+  it('lists the four optional areas in display order (invoices retired, MUT-145; conversions added, MUT-141; planning and retainers retired, MUT-226)', () => {
+    expect([...FEATURE_KEYS]).toEqual(['expenses', 'insights', 'projects', 'conversions']);
   });
 
   it('defaults every area to off and nothing else', () => {
@@ -60,15 +53,22 @@ describe('resolveFeatures', () => {
   });
 
   it('coerces non-boolean values to off, never on by accident', () => {
-    const flags = resolveFeatures({ expenses: 'yes', retainers: 1 } as unknown as Record<string, boolean>);
+    const flags = resolveFeatures({ expenses: 'yes', projects: 1 } as unknown as Record<string, boolean>);
     expect(flags.expenses).toBe(false);
-    expect(flags.retainers).toBe(false);
+    expect(flags.projects).toBe(false);
   });
 
   it('drops a stored invoices switch, retired with document generation (MUT-145)', () => {
     const flags = resolveFeatures({ invoices: true, expenses: true });
     expect(flags.expenses).toBe(true);
     expect(flags).not.toHaveProperty('invoices');
+  });
+
+  it('drops stored planning and retainers switches, retired with their areas (MUT-226)', () => {
+    const flags = resolveFeatures({ planning: true, retainers: true, projects: true });
+    expect(flags.projects).toBe(true);
+    expect(flags).not.toHaveProperty('planning');
+    expect(flags).not.toHaveProperty('retainers');
   });
 });
 
@@ -84,8 +84,8 @@ describe('withFeature', () => {
   });
 
   it('can switch a key off again', () => {
-    const on = withFeature(DEFAULT_FEATURES, 'retainers', true);
-    expect(withFeature(on, 'retainers', false)).toEqual(DEFAULT_FEATURES);
+    const on = withFeature(DEFAULT_FEATURES, 'conversions', true);
+    expect(withFeature(on, 'conversions', false)).toEqual(DEFAULT_FEATURES);
   });
 });
 
@@ -104,13 +104,13 @@ describe('featuresTurnedOff (MUT-15)', () => {
   });
 
   it('lists several keys in FEATURE_KEYS order', () => {
-    const before = resolveFeatures({ projects: true, retainers: true, planning: true });
-    expect(featuresTurnedOff(before, DEFAULT_FEATURES)).toEqual(['retainers', 'planning', 'projects']);
+    const before = resolveFeatures({ conversions: true, expenses: true, projects: true });
+    expect(featuresTurnedOff(before, DEFAULT_FEATURES)).toEqual(['expenses', 'projects', 'conversions']);
   });
 
   it('reports only the key that went off when another went on', () => {
-    const before = resolveFeatures({ retainers: true });
+    const before = resolveFeatures({ projects: true });
     const after = resolveFeatures({ expenses: true });
-    expect(featuresTurnedOff(before, after)).toEqual(['retainers']);
+    expect(featuresTurnedOff(before, after)).toEqual(['projects']);
   });
 });

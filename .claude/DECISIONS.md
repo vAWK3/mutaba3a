@@ -3165,3 +3165,63 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 **Consequences**: `release-qa plan` scopes to real changes again. The backfilled tags exist only in this checkout until pushed (`git push origin --tags`). A release that keeps its version reuses the old tag.
 
 **Alternatives Considered**: release-qa's `commit-grep` strategy on `^release: web v` (Malafat's approach; rejected: tags are also what people and `git describe` read, and a tag survives a reworded commit); one shared tag for web + portal (rejected: they deploy separately, so their baselines differ).
+
+---
+
+## ADR-082: Financial Planning and the Local Retainers Area Are Retired, and Dexie v24 Drops Their Tables (Narrow Override of ADR-029 and ADR-032; Server Retainers Unaffected)
+
+**Status**: Active
+**Date**: 2026-10-15
+**Context**: MUT-226 (epic MUT-2). Brief: `.claude/designs/mut-226-remove-planning-retainers.md`. Two of the six optional areas (ADR-032) fell outside the client-accounting core:
+- **Planning** was a cash projection built from hand-typed assumptions. It read nothing else and nothing read it.
+- **Local Retainers** kept a schedule of *expected* payments (`projectedIncome`) and a drawer that matched a received entry to one period. It never created income and no owed, Home, Insights or lens figure counted it.
+
+The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remove planning table and local retainers tables and clean up db and table and everything, but don't touch server".
+
+**Decision**:
+1. **All code goes.** That covers:
+   - the pages, `PlanAssumptionDrawer`, `RetainerDrawer`, `RetainerMatchingDrawer` and `ClientRetainersCard`;
+   - `planCalculationService`, `planRepository`, `retainerRepository` (schedule generator and matching) and their hooks;
+   - the store slices, the five repository slots and interfaces, the types, the demo seed rows, about 210 i18n keys per locale, and the matching-drawer CSS;
+   - the `planning` and `retainers` keys in `FEATURE_KEYS`, the `FeatureKey` union and their probes. Four optional areas remain: expenses, insights, projects, conversions.
+2. **Dexie v24 drops the five tables**: `plans`, `planAssumptions`, `planScenarios`, `retainerAgreements`, `projectedIncome`. The same version also:
+   - re-declares `transactions` without the `linkedProjectedIncomeId` index;
+   - has its upgrade delete that field from every transaction row and remove `features.planning` / `features.retainers` and both keys from `featureNotice` on the settings row.
+
+   An upgrade failure is logged, never thrown, as in v20/v22/v23; the stores drop regardless. Versions 1–23 stay as written. A backup saved before v24 still carries the rows, and restore skips them. A stale `linkedProjectedIncomeId` on a restored old transaction is inert, because nothing reads it.
+3. **Old URLs land on Home.** `/planning` and `/retainers` are unconditional `beforeLoad` redirects to `/`, dropping any bookmarked search (ADR-067 §4: the router has no not-found component).
+4. **The server's Money v1 retainers are a different feature and are untouched.** That includes:
+   - `/v1/retainers*` and lazy posting (`postDueItems` → `RETAINER_CHARGE` receivables);
+   - `RetainerCharge`/`RetainerVersion` and the summaries `RETAINER` kind;
+   - the hosted portal's generated `schema.d.ts` and `incomeAffordances` non-settleable rule.
+
+   The two systems never exchanged data, since sync was retired by ADR-053.
+
+**Override log — ADR-029 (these five tables only).**
+- *What:* "removing a feature's UI never drops a Dexie table".
+- *Why:* the owner chose it explicitly, knowing it deletes user records. The rows were plans, assumptions and scenarios typed by hand, and retainer agreements with their generated expectations. No core record (income, payments, clients, projects, expenses, documents) lives in them, and a matched income entry keeps its amount, status and payments.
+- *What replaces it, for these tables:* `src/db/__tests__/migration-v24.test.ts`. It upgrades a seeded v23 database and asserts:
+  - the upgrade opens without error;
+  - the five stores are gone;
+  - the link field and its index are gone;
+  - the settings keys are cleaned;
+  - every other row is unchanged;
+  - a pre-v24 backup restores its other tables;
+  - the migration-safety snapshot omits the dropped tables.
+- ADR-029 stands for every other table. ADR-053 and this ADR are its only two exceptions.
+
+**Override — ADR-032.** The optional-area list shrinks from six to four. The mechanism (switches, probes, the v20 auto-enable, banner, guards) is unchanged.
+
+**Consequences**:
+- About 11.8k lines leave (74 files).
+- Guards:
+  - `src/__tests__/noDeadPlanningRetainerModules.test.ts` covers paths, names, the four-key list and the retired i18n keys in both locales.
+  - `migration-v24.test.ts`.
+  - `router.gateKeys.test.ts` covers the redirects.
+- MUT-219 (Planning CSV) and MUT-222 (retainer schedule panel) are obsolete, and MUT-180's fix went with the code.
+- The pattern for retiring an area is now in PATTERNS.md.
+
+**Alternatives Considered**:
+- *Keeping the tables as retained types (the ADR-067 default).* Recommended, but the owner declined.
+- *A v24 that only drops the stores.* Rejected: it would leave the dead index and flags behind, against the "clean up everything" instruction.
+- *Also retiring the server retainers.* Out of scope by instruction; that would be a contract change with Malafat, the writer of record.

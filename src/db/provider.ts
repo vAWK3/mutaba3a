@@ -7,7 +7,7 @@
  * source under Tauri) can be swapped in without touching call sites.
  *
  * One family, `base`: the Dexie repositories (repository.ts,
- * expenseRepository.ts, retainerRepository.ts, planRepository.ts, dataset.ts, demoData.ts). Until MUT-73 a second family,
+ * expenseRepository.ts, dataset.ts, demoData.ts). Until MUT-73 a second family,
  * `synced`, wrapped some of them to capture device-sync operations; device sync
  * is retired (ADR-053), so every call site uses `base`. The `{ base }` wrapper
  * is kept so the 160-odd existing call sites and test overrides stay as they are.
@@ -37,8 +37,6 @@ import {
   recurringRuleRepo,
   recurringOccurrenceRepo,
 } from './expenseRepository';
-import { retainerRepo, projectedIncomeRepo } from './retainerRepository';
-import { planRepo, planAssumptionRepo, planScenarioRepo } from './planRepository';
 import { datasetRepo } from './dataset';
 import { demoDataRepo } from './demoData';
 
@@ -67,11 +65,6 @@ const dexieBase = {
   vendors: vendorRepo,
   recurringRules: recurringRuleRepo,
   recurringOccurrences: recurringOccurrenceRepo,
-  retainerAgreements: retainerRepo,
-  projectedIncome: projectedIncomeRepo,
-  plans: planRepo,
-  planAssumptions: planAssumptionRepo,
-  planScenarios: planScenarioRepo,
   dataset: datasetRepo,
   demoData: demoDataRepo,
 } satisfies IRepositoryProvider;

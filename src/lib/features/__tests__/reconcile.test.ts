@@ -25,7 +25,7 @@ describe('reconcileFeaturesWithData', () => {
     expect(result).toEqual(['projects']);
     const row = await readRow();
     expect(row?.features?.projects).toBe(true);
-    expect(row?.features?.retainers).toBe(false);
+    expect(row?.features?.expenses).toBe(false);
     expect(row?.featureNotice).toEqual(['projects']);
     expect(row?.enabledCurrencies).toEqual(DEFAULT_SETTINGS.enabledCurrencies);
   });
@@ -41,7 +41,7 @@ describe('reconcileFeaturesWithData', () => {
   it('never turns a flag off and writes nothing when nothing is new', async () => {
     const stored: Settings = {
       ...DEFAULT_SETTINGS,
-      features: { projects: true, planning: true },
+      features: { projects: true, insights: true },
     };
     await db.settings.put(stored);
     await db.projects.add({ id: 'p1', name: 'P', createdAt: now, updatedAt: now } as never);
@@ -51,12 +51,12 @@ describe('reconcileFeaturesWithData', () => {
   });
 
   it('merges a newly enabled key into a pending notice, ordered and without duplicates', async () => {
-    await db.settings.put({ ...DEFAULT_SETTINGS, features: { retainers: true }, featureNotice: ['retainers'] });
-    await db.retainerAgreements.add({ id: 'r1', createdAt: now } as never);
+    await db.settings.put({ ...DEFAULT_SETTINGS, features: { expenses: true }, featureNotice: ['expenses'] });
+    await db.expenses.add({ id: 'e1', createdAt: now, updatedAt: now } as never);
     await db.projects.add({ id: 'p1', name: 'P', createdAt: now, updatedAt: now } as never);
 
     expect(await reconcileFeaturesWithData(db)).toEqual(['projects']);
-    expect((await readRow())?.featureNotice).toEqual(['retainers', 'projects']);
+    expect((await readRow())?.featureNotice).toEqual(['expenses', 'projects']);
   });
 
   it('creates the settings row from the defaults when none exists', async () => {
@@ -96,11 +96,11 @@ describe('reconcileFeaturesWithData', () => {
   });
 
   it('works inside a Dexie transaction', async () => {
-    await db.retainerAgreements.add({ id: 'r1', createdAt: now } as never);
+    await db.projects.add({ id: 'p1', name: 'P', createdAt: now, updatedAt: now } as never);
     const result = await db.transaction('rw', [...PROBED_TABLES, 'settings'], (tx) =>
       reconcileFeaturesWithData(tx),
     );
-    expect(result).toEqual(['retainers']);
-    expect((await readRow())?.features?.retainers).toBe(true);
+    expect(result).toEqual(['projects']);
+    expect((await readRow())?.features?.projects).toBe(true);
   });
 });

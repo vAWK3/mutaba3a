@@ -11,7 +11,7 @@ vi.mock('../useActiveProfile', () => ({
 }));
 
 vi.mock('../../lib/features/useFeatures', () => ({
-  useFeatureFlags: () => ({ expenses: true, projects: true, invoices: false, retainers: false, insights: false, planning: false }),
+  useFeatureFlags: () => ({ expenses: true, projects: true, insights: false, conversions: false }),
 }));
 
 const mockProfile1: BusinessProfile = {

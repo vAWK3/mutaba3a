@@ -78,7 +78,6 @@ export interface Transaction {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
-  linkedProjectedIncomeId?: string; // Optional link to projected income (from retainer)
   archivedAt?: string;         // ISO timestamp when archived
   needsReview?: boolean;       // Set during migration v17 for records needing user confirmation
 }
@@ -110,10 +109,8 @@ export interface FxRate {
 // The list of keys lives in src/lib/features/features.ts (FEATURE_KEYS);
 // this union is the type-level mirror so the types module stays import-free.
 export type FeatureKey =
-  | 'retainers'
   | 'expenses'
   | 'insights'
-  | 'planning'
   | 'projects'
   | 'conversions';
 
@@ -685,133 +682,6 @@ export interface BulkUploadFile {
 // ============================================================================
 
 // ============================================================================
-// Retainer Types (for recurring income agreements)
-// ============================================================================
-
-// Retainer cadence
-export type RetainerCadence = 'monthly' | 'quarterly';
-
-// Retainer status
-export type RetainerStatus = 'draft' | 'active' | 'paused' | 'ended';
-
-// Projected income state
-export type ProjectedIncomeState = 'upcoming' | 'due' | 'received' | 'partial' | 'missed' | 'canceled';
-
-// Retainer Agreement entity
-export interface RetainerAgreement {
-  id: string;
-  profileId: string; // FK to BusinessProfile
-  clientId: string;
-  projectId?: string;
-  title: string;
-  currency: Currency;
-  amountMinor: number;
-  cadence: RetainerCadence;
-  paymentDay: number; // 1-28
-  startDate: string; // ISO date
-  endDate?: string; // ISO date (optional)
-  status: RetainerStatus;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-  archivedAt?: string;
-}
-
-// Projected Income entity (generated from retainers)
-export interface ProjectedIncome {
-  id: string;
-  profileId: string; // FK to BusinessProfile
-  sourceType: 'retainer';
-  sourceId: string; // Reference to RetainerAgreement.id
-  clientId: string;
-  projectId?: string;
-  currency: Currency;
-  expectedAmountMinor: number;
-  expectedDate: string; // ISO date
-  periodStart: string; // ISO date
-  periodEnd: string; // ISO date
-  state: ProjectedIncomeState;
-  receivedAmountMinor: number;
-  receivedAt?: string; // ISO timestamp
-  matchedTransactionIds: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Retainer with resolved names for display
-export interface RetainerAgreementDisplay extends RetainerAgreement {
-  profileName?: string;
-  clientName?: string;
-  projectName?: string;
-  nextExpectedDate?: string;
-  dueNowAmountMinor: number;
-  lastReceivedDate?: string;
-  lastReceivedAmountMinor?: number;
-}
-
-// Projected income with resolved names for display
-export interface ProjectedIncomeDisplay extends ProjectedIncome {
-  clientName?: string;
-  projectName?: string;
-  retainerTitle?: string;
-  daysOverdue?: number;
-}
-
-// Query filters for retainers
-export interface RetainerFilters {
-  profileId?: string;
-  status?: RetainerStatus;
-  currency?: Currency;
-  clientId?: string;
-  projectId?: string;
-  dueOnly?: boolean;
-  search?: string;
-}
-
-// Query filters for projected income
-export interface ProjectedIncomeFilters {
-  profileId?: string;
-  sourceId?: string;
-  clientId?: string;
-  state?: ProjectedIncomeState | ProjectedIncomeState[];
-  dateFrom?: string;
-  dateTo?: string;
-  currency?: Currency;
-}
-
-// Match score breakdown (for transparent scoring)
-export interface MatchScoreBreakdown {
-  total: number;
-  currency: number; // 0 or 30
-  client: number;   // 0 or 30
-  amount: number;   // 0-25
-  date: number;     // 0-15
-}
-
-// Retainer match suggestion (for matching transactions to projected income)
-/** Retainer totals with amounts broken down by currency (Retainers page). */
-export interface RetainerSummary {
-  activeCount: number;
-  // Monthly expected by currency
-  totalExpectedMonthlyUsdMinor: number;
-  totalExpectedMonthlyIlsMinor: number;
-  // Due by currency
-  totalDueUsdMinor: number;
-  totalDueIlsMinor: number;
-  // Overdue by currency
-  totalOverdueUsdMinor: number;
-  totalOverdueIlsMinor: number;
-}
-
-export interface RetainerMatchSuggestion {
-  projectedIncomeId: string;
-  score: number; // 0-100
-  confidence: 'high' | 'medium' | 'low';
-  projectedIncome: ProjectedIncomeDisplay;
-  scoreBreakdown?: MatchScoreBreakdown; // Detailed breakdown for transparency
-}
-
-// ============================================================================
 // Forecast KPI Types (Financial Intelligence)
 // ============================================================================
 
@@ -823,47 +693,6 @@ export interface AmountByCurrency {
   ILS: number;
   EUR: number;
   JOD: number;
-}
-
-/**
- * Options for forecast calculations.
- * Explicit about what data sources are included.
- */
-export interface ForecastOptions {
-  /** Include unpaid income (transactions with kind='income' and status='unpaid') due this month */
-  includeUnpaidIncome: boolean;
-  /** Include projected retainer income (from ProjectedIncome table) expected this month */
-  includeProjectedRetainer: boolean;
-  /** Opening balance to start calculations from (default: 0 per currency) */
-  openingBalance?: AmountByCurrency;
-}
-
-/**
- * Forecast KPIs for the Home page predictive snapshot.
- * All amounts in minor units (cents/agorot).
- *
- * Methodology:
- * - willMakeIt = cashOnHand + coming - leaving (end-of-month forecast)
- * - cashOnHand = openingBalance + paid inflows - paid outflows (actuals to date)
- * - coming = unpaid income due this month + projected retainer income
- * - leaving = known upcoming expenses this month
- */
-export interface ForecastKPIs {
-  /** End-of-month projected position (cashOnHand + coming - leaving) */
-  willMakeIt: AmountByCurrency;
-  /** Current balance based on actuals only (no unpaid, no projections) */
-  cashOnHand: AmountByCurrency;
-  /** Expected inflows: unpaid income due this month + projected retainer */
-  coming: AmountByCurrency;
-  /** Expected outflows: known expenses for rest of month */
-  leaving: AmountByCurrency;
-  /** Net forecast (coming - leaving) */
-  netForecast: AmountByCurrency;
-  /** What data sources were included in this calculation */
-  includedSources: {
-    unpaidIncome: boolean;
-    projectedRetainer: boolean;
-  };
 }
 
 /**
@@ -910,120 +739,3 @@ export interface AttentionItem {
   };
 }
 
-// ============================================================================
-// Financial Planning Types
-// ============================================================================
-
-export type PlanStatus = 'draft' | 'active' | 'archived';
-export type AssumptionCategory = 'revenue' | 'expense' | 'funding' | 'hiring' | 'other';
-export type AssumptionType = 'one_time' | 'recurring' | 'milestone' | 'percentage';
-export type AssumptionFrequency = 'monthly' | 'quarterly' | 'yearly';
-export type AssumptionConfidence = 'confirmed' | 'likely' | 'rough_guess';
-
-export interface Plan {
-  id: string;
-  profileId: string;
-  name: string;
-  description?: string;
-  currency: Currency;
-  startMonth: string;           // YYYY-MM
-  horizonMonths: 12 | 18 | 24;
-  status: PlanStatus;
-  askMode: 'manual' | 'calculated';
-  manualAskMinor?: number;
-  createdAt: string;
-  updatedAt: string;
-  archivedAt?: string;
-}
-
-export interface PlanAssumption {
-  id: string;
-  planId: string;
-  profileId: string;
-  category: AssumptionCategory;
-  type: AssumptionType;
-  label: string;
-  amountMinor: number;
-  currency: Currency;
-  startMonth: string;
-  endMonth?: string;
-  frequency?: AssumptionFrequency;
-  dayOfMonth?: number;
-  confidence: AssumptionConfidence;
-  scenarioId?: string;          // null = applies to all scenarios
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PlanScenario {
-  id: string;
-  planId: string;
-  profileId: string;
-  name: string;
-  description?: string;
-  isDefault: boolean;
-  revenueMultiplier?: number;
-  expenseMultiplier?: number;
-  revenueDelayMonths?: number;
-  fundingDelayMonths?: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Computed types (not persisted)
-export interface MonthProjection {
-  month: string;
-  openingCashMinor: number;
-  cashInMinor: number;
-  cashOutMinor: number;
-  netFlowMinor: number;
-  closingCashMinor: number;
-  confidenceScore: number;
-  events: ProjectionEvent[];
-}
-
-export interface ProjectionEvent {
-  type: 'funding' | 'hire' | 'big_cost' | 'milestone' | 'break_even' | 'negative_cash';
-  label: string;
-  amountMinor?: number;
-}
-
-export interface CurrencyBreakdown {
-  usdMinor: number;
-  ilsMinor: number;
-  eurMinor: number;
-}
-
-export interface PlanSummary {
-  askMinor: number;
-  askRange: {
-    minimumSurvivableMinor: number;
-    comfortableMinor: number;
-    growthMinor: number;
-  };
-  monthlyBurnMinor: number;
-  expectedMonthlyRevenueMinor: number;
-  runwayMonths: number;
-  breakEvenMonth?: string;
-  worstCashDipMinor: number;
-  bufferNeededMinor: number;
-  // Currency breakdowns for multi-currency display
-  askByCurrency: CurrencyBreakdown;
-  burnByCurrency: CurrencyBreakdown;
-  revenueByCurrency: CurrencyBreakdown;
-  worstDipByCurrency: CurrencyBreakdown;
-  bufferByCurrency: CurrencyBreakdown;
-}
-
-export interface PlanInsight {
-  id: string;
-  severity: 'critical' | 'warning' | 'info';
-  messageKey: string;
-  variables?: Record<string, string | number>;
-}
-
-export interface PlanFilters {
-  profileId?: string;
-  status?: PlanStatus;
-}

@@ -595,7 +595,7 @@ UTC date. Pin an instant where the two differ instead: `atInstantIn(timeZone,
 instant, fn)` (`src/test/atInstantIn.ts`, data-layer tests without `waitFor`)
 sets `TZ` and fakes only `Date`, e.g. `atInstantIn('Asia/Jerusalem',
 '2026-10-13T22:30:00.000Z', …)` is 01:30 on the 14th locally and the 13th in
-UTC. `retainerRepo.test.ts` and `paymentRecords.test.ts` use it.
+UTC. `paymentRecords.test.ts` uses it.
 
 ---
 
@@ -864,7 +864,7 @@ The `--color-*`, `--font-size-*` and `--font-weight-*` names are defined nowhere
 Every colour, px radius and px/rem font size outside `src/styles/` comes from a token — never a hex, `rgb()`/`hsl()`/`oklch()` function call, `white`/`black`, or a literal px/rem. `brand.test.ts` › `literals` (`cssLiterals`/`scriptLiterals` in `src/test/css/brandCss.ts`) enforces this on every `.css`/`.ts`/`.tsx` file; `KNOWN_LITERALS` is the shrink-only escape hatch while a surface is mid-sweep (empty since MUT-103 finished).
 
 - **The only allowed literals are user data**: a business's or expense category's own colour (`ALLOWED_LITERAL_FILES`, each with a reason — e.g. `src/components/ui/profileAvatarStyle.ts`'s `DEFAULT_BUSINESS_COLOR`). Nothing else is exempt.
-- **No `<style>` element in TSX.** An inline stylesheet is invisible to the CSS guard; move it to a co-located `.css` file (`PlanAssumptionDrawer.css`, `MonthlyTimeline.css`).
+- **No `<style>` element in TSX.** An inline stylesheet is invisible to the CSS guard; move it to a co-located `.css` file (e.g. `RecurringMarkPaidDrawer.css`).
 - **A fluid `clamp()` still takes tokens for its floor and ceiling** — `font-size: clamp(var(--text-title), 4vw, var(--text-figure))`, never a raw rem on either end; only the `vw` middle term is a literal.
 - **A one-off formula with a dynamic input** (e.g. a per-item hue) is a primitive in `mutaba3a-theme.css` (`--m-*`, with a `var(--x, fallback)` for the part a component sets inline), mapped once onto a `theme.css` role — not a literal colour function in a component stylesheet. See `--m-avatar-mock-fill` / `--landing-mock-avatar-fill` (the landing business-switcher mock).
 - **A mono amount never carries `--weight-semibold`/`--weight-bold`.** Plex Mono ships only 400/500; `font-weight: var(--weight-medium)` is the heaviest a `--font-mono` rule may ask for in the same rule, or the browser synthesizes a fake bold. `brand.test.ts` checks this per-rule (same declaration block only — a child selector that bumps weight without redeclaring `font-family` isn't caught, so check by eye too).
@@ -1188,7 +1188,7 @@ repository module directly. Share one set of fakes across mocks with
 nothing imports `db`, a repository object or a storage helper module;
 `eslint.config.js` rejects it, and `initDatabase()` in `main.tsx` is the one
 commented exception. When a feature needs a new kind of read or write:
-- one entity → a method on that entity's slot (`projectedIncome.match`,
+- one entity → a method on that entity's slot (`paymentRecords.listByClient`,
   `transactions.listNeedsReview`), declared in `interfaces.ts`;
 - the whole database → a method on `dataset`; sample data → `demoData`;
 - a new storage module in `src/db` → add it to the lint pattern list in
@@ -1197,7 +1197,7 @@ Browser-only halves stay outside (`utils/backupDownload.ts` downloads what
 `dataset.serializeBackup()` returns).
 
 **Inside `src/db`, never call back out.** Dexie implementation code calls other
-Dexie code directly (`retainerRepo` → `scheduleGenerator`). Resolving storage
+Dexie code directly (`expenseRepo` → the recurring-rule repos). Resolving storage
 through `getRepositories()` from inside an implementation would send a Dexie
 write to whatever source is injected. Write such duties on the interface
 instead ("`create` also maintains the projected schedule").
@@ -1229,7 +1229,7 @@ Three places, always together: the **route** gets `beforeLoad: requireFeature('<
 the **sidebar entry** goes into `optionalItems` in `SidebarNav.tsx` with its
 `feature` key (the "More" section renders only enabled items); **entry points**
 on other pages read `useFeatureEnabled('<key>')` and render nothing while off.
-Data and repository guards never read a flag: a retainer or a vendor behaves
+Data and repository guards never read a flag: a project or a vendor behaves
 identically whether its area is on or off; the UI only changes what it shows.
 (A retired area, like invoices since MUT-145, loses its key entirely: a stored
 flag or notice entry for it is filtered out on read, ADR-067.) Deep links
@@ -2318,3 +2318,14 @@ A suggestion the person retires for good (Malafat suggestions) is a product pref
 Every in-product suggestion claims a slot while mounted (`useMalafatMomentStore.claimSlot()` in an effect); other upsells read `suggestionsShown > 0` and render nothing. A suggestion hides itself at once on dismiss or click (local state) and hands focus to a named target before it goes.
 **Instances**: `MalafatSuggestionCard` → `GoHostedCard`.
 
+## Retiring an optional area (MUT-145, MUT-226)
+
+When an optional area leaves the product:
+- **Code**: delete the pages, drawers, hooks, repositories, store slices, types, i18n keys (both locales) and CSS. Drop the key from `FEATURE_KEYS` and the `FeatureKey` union, and drop its probe. A stored switch is then inert, because `resolveFeatures` drops unknown keys and `useFeatureNotice` filters through `FEATURE_KEYS`.
+- **CSS**: before deleting a stylesheet, check how it's loaded. One imported by an eagerly loaded module (a drawer mounted in AppShell) is global, and its unscoped rules may be styling live screens (MUT-226: `.segment-control`). Move any rule a live component depends on into its base stylesheet.
+- **URLs**: replace the route with an unconditional `beforeLoad` redirect home. The router has no not-found component, and a bookmark must land somewhere real.
+- **Guards**: add a `src/__tests__/noDead<Area>Modules.test.ts` covering deleted paths, deleted names and retired i18n keys.
+- **Data**: the default is ADR-029, so the tables stay. Their row types go in `src/db/retained/`, with a retention test (MUT-145).
+  - Only an explicit owner decision drops them. It needs a new Dexie version with `null` stores, an override log in the ADR (ADR-053, ADR-082), and a `migration-vN.test.ts` that upgrades a seeded previous-version database.
+  - That test proves the stores are gone, every other row is unchanged, and a pre-upgrade backup still restores.
+  - Strip any link field the area wrote onto core rows in that version's upgrade, and log a failure rather than throwing it.
