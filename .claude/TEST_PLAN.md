@@ -2571,3 +2571,11 @@ Run (Node 22, 2026-10-15): server `typecheck`, `lint`, `openapi:check` clean; `n
 |---|---|---|---|
 | `src/hooks/__tests__/useConversionQueries.test.tsx` (new) | Integration (hooks + fake IndexedDB) | 1 | With the list mounted, a created conversion appears, an update shows its new `toAmountMinor`, and a delete empties the list, all without a remount. It failed before the fix |
 | `qa/specs/web/conversions.spec.ts` › `@web.conversions.log`, `@web.conversions.edit-delete` | E2E (release-qa) | 2 | No longer manual; pass with no reload on a `vite preview` build, with the other 2 conversion specs |
+
+## MUT-126 — Amount upper bound (2026-10-15, TD-100)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `server/src/__tests__/money.test.ts` | Unit | +2 (1 rewritten) | The bound parses, either sign, in USD/ILS and JOD; one minor unit above it, and a 20-digit amount, throw `MoneyParseError` |
+| `server/src/__tests__/routes-m3.test.ts` › validates … amounts | Route (memory store) | +1 assertion | An agreement preview with a 20-digit amount is 422 `AMOUNT_INVALID`, `field: 'amount'` |
+| `server/src/__tests__/routes-mut100.test.ts` › outcome validation | Route (memory store) | +1 assertion | A 20-digit `awardedAmount` is 422 `AMOUNT_INVALID`, `field: 'awardedAmount'` |

@@ -38,6 +38,15 @@ export class MoneyParseError extends Error {
 const DECIMAL_RE = /^(-)?(\d+)(?:\.(\d+))?$/;
 
 /**
+ * The largest amount the API accepts, in minor units, either sign (MUT-126):
+ * 9,999,999,999,999.99 in a 2-decimal currency. Amounts are stored in Postgres
+ * BIGINT columns (max ~9.2e18); without a bound an oversized amount passed
+ * validation and failed inside the write as a 500. The headroom below BIGINT
+ * also keeps sums of many amounts in range.
+ */
+export const MAX_AMOUNT_MINOR = 10n ** 15n - 1n;
+
+/**
  * Parse a canonical decimal string. Accepts "10000", "10000.5", "10000.50",
  * "-3000.00". Rejects locale separators, exponents, whitespace and more
  * fractional digits than the currency carries — the client must not have
@@ -53,8 +62,11 @@ export function parseMoney(text: string, currency: Currency): Money {
   if (frac.length > exponent) {
     throw new MoneyParseError(`"${text}" has more than ${exponent} fractional digits for ${currency}`);
   }
-  const scaled = whole + frac.padEnd(exponent, '0');
-  return { minor: sign * BigInt(scaled), currency };
+  const scaled = BigInt(whole + frac.padEnd(exponent, '0'));
+  if (scaled > MAX_AMOUNT_MINOR) {
+    throw new MoneyParseError(`"${text}" is above the largest amount accepted (${formatMoney({ minor: MAX_AMOUNT_MINOR, currency })})`);
+  }
+  return { minor: sign * scaled, currency };
 }
 
 export function formatMoney(money: Money): string {

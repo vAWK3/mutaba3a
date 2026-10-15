@@ -5,6 +5,7 @@ import {
   currencyExponent,
   formatMoney,
   isSupportedCurrency,
+  MAX_AMOUNT_MINOR,
   MoneyParseError,
   parseMoney,
   subtractMoney,
@@ -42,8 +43,21 @@ describe('parseMoney', () => {
   });
 
   it('never loses precision on large values', () => {
-    const big = '123456789012345678.99';
-    expect(formatMoney(parseMoney(big, 'USD'))).toBe(big);
+    expect(formatMoney({ minor: 12345678901234567899n, currency: 'USD' })).toBe('123456789012345678.99');
+    expect(formatMoney(parseMoney('9999999999999.99', 'USD'))).toBe('9999999999999.99');
+  });
+
+  it('accepts the largest amount, 999,999,999,999,999 minor units, either sign (MUT-126)', () => {
+    expect(parseMoney('9999999999999.99', 'USD').minor).toBe(MAX_AMOUNT_MINOR);
+    expect(parseMoney('-9999999999999.99', 'ILS').minor).toBe(-MAX_AMOUNT_MINOR);
+    expect(parseMoney('999999999999.999', 'JOD').minor).toBe(MAX_AMOUNT_MINOR);
+  });
+
+  it('refuses an amount above the bound, so it never reaches a BIGINT column (MUT-126)', () => {
+    expect(() => parseMoney('10000000000000.00', 'USD')).toThrow(MoneyParseError);
+    expect(() => parseMoney('-10000000000000.00', 'USD')).toThrow(MoneyParseError);
+    expect(() => parseMoney('1000000000000.000', 'JOD')).toThrow(MoneyParseError);
+    expect(() => parseMoney('99999999999999999999.00', 'ILS')).toThrow(/largest amount/);
   });
 });
 

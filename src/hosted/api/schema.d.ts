@@ -9877,7 +9877,7 @@ export interface components {
             currency: components["schemas"]["Currency"];
             status: components["schemas"]["FeeProposalStatus"];
             pricingBasis: components["schemas"]["PricingBasis"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             proposedAmount: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             proposedOn: string;
@@ -9885,7 +9885,7 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             clientApprovedOn: string | null;
             clientApprovalNote: string | null;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             agreedAmount: string | null;
             /** Format: date-time */
             withdrawnAt: string | null;
@@ -9913,7 +9913,7 @@ export interface components {
         CreateFeeProposalRequest: {
             /** Format: uuid */
             projectId: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             pricingBasis: components["schemas"]["PricingBasis"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -9948,13 +9948,13 @@ export interface components {
             pricingBasis: components["schemas"]["PricingBasis"];
             vatTreatment: components["schemas"]["VatTreatment"];
             vatRateBasisPoints: number;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             net: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             vat: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             gross: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             agreementDate: string;
@@ -9993,7 +9993,7 @@ export interface components {
             outcome: "AWAITING" | "AWARDED" | "NO_RECOVERY";
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             outcomeDate: string | null;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             awarded: string | null;
             note: string | null;
             /** Format: date-time */
@@ -10004,13 +10004,13 @@ export interface components {
             id: string;
             position: number;
             label: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             net: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             vat: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             gross: string;
             vatTreatment: components["schemas"]["VatTreatment"];
             rateBasisPoints: number;
@@ -10038,20 +10038,20 @@ export interface components {
         Supplement: {
             /** Format: uuid */
             id: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             description: string | null;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             effectiveDate: string;
             /** @enum {string} */
             distribution: "LAST_UNPOSTED" | "PRORATE_UNPOSTED" | "NEW_INSTALLMENT";
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             resultingAmount: string;
             /** Format: date-time */
             createdAt: string;
         };
         ApproveFeeProposalRequest: {
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             approvedOn?: string;
@@ -10079,13 +10079,13 @@ export interface components {
             type: "FIXED" | "CONTINGENCY";
             contingency: components["schemas"]["ContingencyTerms"];
             totals: {
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 amount: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 net: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 vat: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 gross: string;
             };
             vatRateBasisPoints: number;
@@ -10094,13 +10094,13 @@ export interface components {
             installments: {
                 position: number;
                 label: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 amount: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 net: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 vat: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 gross: string;
                 vatTreatment: components["schemas"]["VatTreatment"];
                 rateBasisPoints: number;
@@ -10116,7 +10116,7 @@ export interface components {
         AgreementPreviewRequest: {
             /** Format: uuid */
             projectId: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             currency?: components["schemas"]["Currency"];
             pricingBasis: components["schemas"]["PricingBasis"];
@@ -10130,7 +10130,7 @@ export interface components {
         };
         InstallmentSpec: {
             label: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
             percentBasisPoints?: number;
             vatTreatment?: components["schemas"]["VatTreatment"];
@@ -10151,14 +10151,14 @@ export interface components {
             supplement: components["schemas"]["Supplement"];
             installments: components["schemas"]["Installment"][];
             effect: {
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 contractualDelta: string;
                 installmentsChanged: string[];
                 installmentsCreated: string[];
             };
         };
         SupplementRequest: {
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             description?: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -10183,26 +10183,26 @@ export interface components {
             /** @enum {string} */
             mode: "RECORD" | "CORRECT";
             outcome: components["schemas"]["ContingencyOutcome"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             awarded: string | null;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             outcomeDate: string;
             commissionRateBasisPoints: number;
             upfrontTreatment: components["schemas"]["UpfrontTreatment"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             commission: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             upfrontCounted: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             appliedUpfront: string;
             billable: {
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 amount: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 net: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 vat: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 gross: string;
             };
             vatRateBasisPoints: number;
@@ -10215,7 +10215,7 @@ export interface components {
                 installmentId: string;
                 /** Format: uuid */
                 receivableId: string | null;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 gross: string;
             } | null;
             previewToken: string;
@@ -10224,7 +10224,7 @@ export interface components {
         ContingencyOutcome: "AWARDED" | "NO_RECOVERY";
         ContingencyOutcomePreviewRequest: {
             outcome: components["schemas"]["ContingencyOutcome"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             awardedAmount?: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             outcomeDate: string;
@@ -10238,7 +10238,7 @@ export interface components {
         };
         ContingencyOutcomeRequest: {
             outcome: components["schemas"]["ContingencyOutcome"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             awardedAmount?: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             outcomeDate: string;
@@ -10250,7 +10250,7 @@ export interface components {
         };
         ContingencyOutcomeCorrectRequest: {
             outcome: components["schemas"]["ContingencyOutcome"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             awardedAmount?: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             outcomeDate: string;
@@ -10282,17 +10282,17 @@ export interface components {
             /** Format: uuid */
             originId: string | null;
             currency: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             net: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             vat: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             gross: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             paid: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             credited: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             outstanding: string;
             vatTreatment: components["schemas"]["VatTreatment"];
             vatRateBasisPoints: number;
@@ -10312,13 +10312,13 @@ export interface components {
         };
         RetainerPreviewResponse: {
             monthly: {
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 amount: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 net: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 vat: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 gross: string;
             };
             vatRateBasisPoints: number;
@@ -10339,7 +10339,7 @@ export interface components {
         RetainerPreviewRequest: {
             /** Format: uuid */
             projectId: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             monthlyAmount: string;
             currency?: components["schemas"]["Currency"];
             pricingBasis: components["schemas"]["PricingBasis"];
@@ -10364,13 +10364,13 @@ export interface components {
             version: number;
             /** @description Calendar month, YYYY-MM */
             effectiveMonth: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             monthlyAmount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             net: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             vat: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             gross: string;
             pricingBasis: components["schemas"]["PricingBasis"];
             vatTreatment: components["schemas"]["VatTreatment"];
@@ -10389,13 +10389,13 @@ export interface components {
             serviceMonth: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             chargeDate: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             net: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             vat: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             gross: string;
             vatTreatment: components["schemas"]["VatTreatment"];
             rateBasisPoints: number;
@@ -10424,7 +10424,7 @@ export interface components {
         RetainerChangeRequest: {
             /** @description Calendar month, YYYY-MM */
             effectiveMonth: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             monthlyAmount?: string;
             pricingBasis?: components["schemas"]["PricingBasis"];
             vatTreatment?: components["schemas"]["VatTreatment"];
@@ -10446,13 +10446,13 @@ export interface components {
                 serviceMonth: string;
                 days: number;
                 daysInMonth: number;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 amount: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 net: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 vat: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 gross: string;
                 posted: boolean;
             } | null;
@@ -10461,27 +10461,27 @@ export interface components {
                 chargeId: string;
                 /** Format: uuid */
                 receivableId: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 gross: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 paid: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 credited: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 outstanding: string;
             } | null;
             adjustment: {
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 amount: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 net: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 vat: string;
                 limitedByPayments: boolean;
             } | null;
             /** @description Calendar month, YYYY-MM */
             stoppedFrom: string | null;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             outstandingAfter: string;
             previewToken: string;
         };
@@ -10514,11 +10514,11 @@ export interface components {
             id: string;
             /** Format: uuid */
             receivableId: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             net: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             vat: string;
             reason: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -10527,7 +10527,7 @@ export interface components {
             createdAt: string;
         };
         CreditRequest: {
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             reason: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -10561,11 +10561,11 @@ export interface components {
                 displayName: string;
             } | null;
             currency: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             allocated: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             unallocated: string;
             allocationState: components["schemas"]["AllocationState"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -10605,16 +10605,16 @@ export interface components {
             projectId: string;
             /** @enum {string} */
             origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             receivableOutstanding: string;
             receivableStatus: components["schemas"]["ItemStatus"];
             /** Format: date-time */
             createdAt: string;
         };
         SettleReceivableRequest: {
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             paidAt?: string;
@@ -10625,12 +10625,12 @@ export interface components {
             /** Format: uuid */
             customerId: string;
             currency: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             allocations: components["schemas"]["AllocationRequest"][];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             allocated: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             unallocated: string;
             eligible: components["schemas"]["EligibleReceivable"][];
             balances: {
@@ -10639,9 +10639,9 @@ export interface components {
                     receivableId: string;
                     /** Format: uuid */
                     projectId: string;
-                    /** @description Canonical decimal string; exactly the currency's fractional digits */
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                     outstandingBefore: string;
-                    /** @description Canonical decimal string; exactly the currency's fractional digits */
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                     outstandingAfter: string;
                     statusBefore: components["schemas"]["ItemStatus"];
                     statusAfter: components["schemas"]["ItemStatus"];
@@ -10663,7 +10663,7 @@ export interface components {
         AllocationRequest: {
             /** Format: uuid */
             receivableId: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
         };
         EligibleReceivable: {
@@ -10677,23 +10677,23 @@ export interface components {
             origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             dueDate: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             gross: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             outstanding: string;
             status: components["schemas"]["ItemStatus"];
         };
         Balance: {
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             outstanding: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             overdue: string;
         };
         AllocationPreviewRequest: {
             /** Format: uuid */
             customerId?: string;
             currency?: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
             /** Format: uuid */
             paymentId?: string;
@@ -10706,7 +10706,7 @@ export interface components {
             /** Format: uuid */
             customerId: string;
             currency: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             receivedOn: string;
@@ -10752,17 +10752,17 @@ export interface components {
         };
         CurrencySummary: {
             currency: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             outstanding: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             overdue: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             dueToday: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             notYetDue: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             unallocated: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             proposed: string;
             counts: {
                 customers: number;
@@ -10775,15 +10775,15 @@ export interface components {
         CustomerSummaryRow: {
             /** Format: uuid */
             customerId: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             outstanding: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             overdue: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             dueToday: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             notYetDue: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             unallocated: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             lastPaymentOn: string | null;
@@ -10797,7 +10797,7 @@ export interface components {
             proposalId: string;
             /** Format: uuid */
             projectId: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             proposedOn: string;
@@ -10814,15 +10814,15 @@ export interface components {
         };
         CustomerCurrencySummary: {
             currency: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             outstanding: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             overdue: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             dueToday: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             notYetDue: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             unallocated: string;
             status: components["schemas"]["CustomerSummaryStatus"];
             projects: components["schemas"]["ProjectSummary"][];
@@ -10833,27 +10833,27 @@ export interface components {
             currency: components["schemas"]["Currency"];
             /** @enum {string} */
             kind: "FIXED" | "RETAINER" | "NONE";
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             agreed: string | null;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             monthly: string | null;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             posted: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             paid: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             credited: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             outstanding: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             overdue: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             dueToday: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             notYetDue: string;
             pending: {
                 count: number;
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 amount: string;
             };
             status: components["schemas"]["ProjectSummaryStatus"];
@@ -10867,9 +10867,9 @@ export interface components {
             id: string;
             status: components["schemas"]["FeeProposalStatus"];
             pricingBasis: components["schemas"]["PricingBasis"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             proposedAmount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             agreedAmount: string | null;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             proposedOn: string;
@@ -10884,7 +10884,7 @@ export interface components {
             upfrontTreatment: components["schemas"]["UpfrontTreatment"];
             /** @enum {string} */
             outcome: "AWAITING" | "AWARDED" | "NO_RECOVERY";
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             awarded: string | null;
         } | null;
         ProjectSummaryResponse: components["schemas"]["ProjectSummary"] & {
@@ -10990,7 +10990,7 @@ export interface components {
             id: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             occurredOn: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             currency: components["schemas"]["Currency"];
             title: string | null;
@@ -11052,7 +11052,7 @@ export interface components {
         UpdateExpenseRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             occurredOn?: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
             title?: string | null;
             vendor?: string | null;
@@ -11090,20 +11090,20 @@ export interface components {
             to: string;
             currencies: {
                 currency: components["schemas"]["Currency"];
-                /** @description Canonical decimal string; exactly the currency's fractional digits */
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 total: string;
                 count: number;
                 byCategory: {
                     /** Format: uuid */
                     categoryId: string | null;
-                    /** @description Canonical decimal string; exactly the currency's fractional digits */
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                     total: string;
                     count: number;
                 }[];
                 byCustomer: {
                     /** Format: uuid */
                     customerId: string | null;
-                    /** @description Canonical decimal string; exactly the currency's fractional digits */
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                     total: string;
                     count: number;
                 }[];
@@ -11137,7 +11137,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["IncomeKind"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             currency: components["schemas"]["Currency"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -11159,7 +11159,7 @@ export interface components {
         IncomeStatus: "unallocated" | "open" | "settled";
         CreateIncomeRequest: {
             kind: components["schemas"]["IncomeKind"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             currency: components["schemas"]["Currency"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -11184,10 +11184,10 @@ export interface components {
             id: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             occurredOn: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             currency: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             toAmount: string;
             toCurrency: components["schemas"]["Currency"];
             notes: string | null;
@@ -11233,7 +11233,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["InboxEntryKind"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             currency: components["schemas"]["Currency"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -11259,7 +11259,7 @@ export interface components {
             captureSource?: components["schemas"]["CaptureSource"];
         };
         UpdateInboxEntryRequest: {
-            /** @description Canonical decimal string; exactly the currency's fractional digits */
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
             currency?: components["schemas"]["Currency"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */

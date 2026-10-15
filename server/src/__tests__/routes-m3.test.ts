@@ -157,6 +157,10 @@ describe('agreement preview + create', () => {
     expect(await bad({ currency: 'USD' })).toBe('CURRENCY_MISMATCH');
     expect(await bad({ amount: '1000.005' })).toBe('AMOUNT_INVALID');
     expect(await bad({ amount: '-5.00' })).toBe('AMOUNT_INVALID');
+    // Above the bound (MUT-126): a 422 naming the field, not a 500 from the BIGINT column.
+    const huge = await h.app.request('/v1/agreements/preview', json(fixed(project.id, { amount: '99999999999999999999.00' }), auth));
+    expect(huge.status).toBe(422);
+    expect((await read(huge)).error.details).toMatchObject({ reason: 'AMOUNT_INVALID', field: 'amount' });
     expect(await bad({ installments: [{ label: 'A', amount: '999.99', trigger: { type: 'MANUAL' } }] })).toBe('INSTALLMENTS_DO_NOT_SUM');
     expect(await bad({ installments: [{ label: 'A', percentBasisPoints: 9000, trigger: { type: 'MANUAL' } }] })).toBe('PERCENTS_DO_NOT_SUM');
     expect(await bad({ installments: [{ label: 'A', amount: '1000.00', trigger: { type: 'DATE' } }] })).toBe('TRIGGER_DATE_REQUIRED');
@@ -465,8 +469,8 @@ describe('contract', () => {
   it('publishes every M3 path, the reason vocabularies and the version', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.26.0-mut223');
-    expect(API_VERSION).toBe('1.26.0-mut223');
+    expect(doc.info.version).toBe('1.26.1-mut126');
+    expect(API_VERSION).toBe('1.26.1-mut126');
     for (const path of ['/v1/vat-rates', '/v1/settings/vat', '/v1/agreements/preview', '/v1/agreements', '/v1/agreements/{agreementId}', '/v1/agreements/{agreementId}/supplements', '/v1/agreements/{agreementId}/cancel', '/v1/installments/{installmentId}/trigger', '/v1/retainers/preview', '/v1/retainers', '/v1/retainers/{agreementId}/charges', '/v1/retainers/{agreementId}/cancel', '/v1/retainers/reconcile', '/v1/receivables', '/v1/receivables/{receivableId}']) {
       expect(doc.paths[path], path).toBeDefined();
     }

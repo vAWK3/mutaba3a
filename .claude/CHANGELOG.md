@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Oversized amounts are a 422, not a 500 (MUT-126, TD-100, API 1.26.1-mut126)
+
+**Why:** `parseMoney` accepted any number of digits. An amount whose minor units overflow Postgres `BIGINT` passed validation, then failed inside the write with a Prisma error, and the caller got a 500.
+
+### Fixed
+- Every amount the hosted API parses is refused above 999,999,999,999,999 minor units, either sign (9,999,999,999,999.99 in a 2-decimal currency, 999,999,999,999.999 in JOD), with 422 `AMOUNT_INVALID` naming the field. The headroom below `BIGINT` also keeps sums of many amounts in range.
+
+### Changed
+- API 1.26.1-mut126. `AmountSchema`'s OpenAPI description states the bound. OpenAPI and `src/hosted/api/schema.d.ts` are regenerated (descriptions only).
+
+### Technical
+- `MAX_AMOUNT_MINOR` is exported from `server/src/money.ts`. The precision test now formats a large value directly rather than parsing one above the bound.
+- Files: `server/src/{money,schemas,app}.ts`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `server/src/__tests__/{money,routes-m2,routes-m3,routes-m4,routes-m5,routes-m6,routes-m8,routes-mut100}.test.ts`.
+
 ## [Unreleased] - 2026-10-15 — Conversions list refreshes after a write (MUT-217)
 
 **Why:** `invalidateConversionQueries` refreshed only the transaction queries. The Conversions list is keyed `['conversions', filters]`, so a logged, edited or deleted conversion only showed after a reload.

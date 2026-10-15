@@ -429,6 +429,7 @@ describe('outcome validation', () => {
     await expect422(award({ awardedAmount: '0.00' }), 'AMOUNT_INVALID', 'awardedAmount');
     await expect422(award({ awardedAmount: '-5.00' }), 'AMOUNT_INVALID', 'awardedAmount');
     await expect422(award({ awardedAmount: '100.005' }), 'AMOUNT_INVALID', 'awardedAmount');
+    await expect422(award({ awardedAmount: '99999999999999999999.00' }), 'AMOUNT_INVALID', 'awardedAmount'); // MUT-126
     await expect422(award({ awardedAmount: undefined }), 'AMOUNT_INVALID', 'awardedAmount');
     await expect422(noRecovery({ awardedAmount: '100.00' }), 'AMOUNT_INVALID', 'awardedAmount');
     await expect422(award({ commissionLabel: undefined }), 'COMMISSION_LABEL_REQUIRED', 'commissionLabel');
