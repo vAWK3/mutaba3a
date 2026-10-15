@@ -206,4 +206,103 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       expect(ids(second)).toEqual(onX.slice(2));
     });
   });
+
+  describe(`${name} LedgerStore re-date contract (MUT-223)`, () => {
+    const owed = (organizationId: string, customerId: string, userId: string) =>
+      ({ organizationId, customerId, projectId: null, currency: 'ILS', netMinor: 3000n, vatMinor: 0n, grossMinor: 3000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: 'Consult', dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(20), createdByUserId: userId, requestId: null }) as const;
+
+    it('redateAdjustment moves the posting date, keeps the due date and bumps the version', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      const { c } = await seed(store, a.id);
+      const r = await store.receivables.createAdjustment(owed(a.id, c.id, u.id), at(20));
+
+      const result = await store.receivables.redateAdjustment(a.id, r.id, u.id, r.version, '2026-09-28');
+      expect(result).toMatchObject({ kind: 'updated', record: { postingDate: '2026-09-28', dueDate: '2026-11-15', version: r.version + 1 } });
+      expect(await store.receivables.getById(a.id, r.id)).toMatchObject({ postingDate: '2026-09-28', version: r.version + 1 });
+    });
+
+    it('redateAdjustment with a stale version returns the current row and changes nothing', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      const { c } = await seed(store, a.id);
+      const r = await store.receivables.createAdjustment(owed(a.id, c.id, u.id), at(20));
+      await store.receivables.redateAdjustment(a.id, r.id, u.id, r.version, '2026-10-01');
+
+      const result = await store.receivables.redateAdjustment(a.id, r.id, u.id, r.version, '2026-09-01');
+      expect(result).toMatchObject({ kind: 'stale', record: { postingDate: '2026-10-01', version: r.version + 1 } });
+    });
+
+    it('redateAdjustment answers not_found for another person, a Malafat receivable or a voided entry', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      const other = await person(store, a.id, 'Rami');
+      const { c, receivable: installment } = await seed(store, a.id);
+      const mine = await store.receivables.createAdjustment(owed(a.id, c.id, u.id), at(20));
+      const voided = await store.receivables.createAdjustment(owed(a.id, c.id, u.id), at(21));
+      await store.receivables.softDeleteAdjustment(a.id, voided.id, at(22));
+
+      expect(await store.receivables.redateAdjustment(a.id, mine.id, other.id, mine.version, '2026-10-01')).toEqual({ kind: 'not_found' });
+      expect(await store.receivables.redateAdjustment(a.id, installment.id, u.id, installment.version, '2026-10-01')).toEqual({ kind: 'not_found' });
+      expect(await store.receivables.redateAdjustment(a.id, voided.id, u.id, voided.version, '2026-10-01')).toEqual({ kind: 'not_found' });
+      expect(await store.receivables.getById(a.id, mine.id)).toMatchObject({ postingDate: '2026-10-08', version: mine.version });
+    });
+
+    it('redateCapture moves receivedOn, bumps the version and stamps updatedAt', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      const p = await store.payments.capture(capture(a.id, u.id, 500n), at(10));
+
+      const result = await store.payments.redateCapture(a.id, p.id, u.id, p.version, '2026-10-02', at(40));
+      expect(result).toMatchObject({ kind: 'updated', record: { receivedOn: '2026-10-02', version: p.version + 1, number: p.number, amountMinor: 500n } });
+      if (result.kind !== 'updated') throw new Error('expected updated');
+      expect(result.record.updatedAt.getTime()).toBe(at(40).getTime());
+    });
+
+    it('redateCapture with a stale version returns the current row and changes nothing', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      const p = await store.payments.capture(capture(a.id, u.id, 500n), at(10));
+      await store.payments.redateCapture(a.id, p.id, u.id, p.version, '2026-10-02', at(40));
+
+      expect(await store.payments.redateCapture(a.id, p.id, u.id, p.version, '2026-10-01', at(41))).toMatchObject({ kind: 'stale', record: { receivedOn: '2026-10-02' } });
+    });
+
+    it('redateCapture answers not_found for a Malafat payment, an undone capture or another person', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      const other = await person(store, a.id, 'Rami');
+      const { c, receivable } = await seed(store, a.id);
+      const { payment: integration } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 1000n }] }, at(10));
+      const undone = await store.payments.capture(capture(a.id, u.id, 500n), at(11));
+      await store.payments.undoCapture(a.id, undone.id, u.id, at(12));
+      const mine = await store.payments.capture(capture(a.id, u.id, 500n), at(13));
+
+      expect(await store.payments.redateCapture(a.id, integration.id, u.id, integration.version, '2026-10-01', at(40))).toEqual({ kind: 'not_found' });
+      expect(await store.payments.redateCapture(a.id, undone.id, u.id, undone.version + 1, '2026-10-01', at(40))).toEqual({ kind: 'not_found' });
+      expect(await store.payments.redateCapture(a.id, mine.id, other.id, mine.version, '2026-10-01', at(40))).toEqual({ kind: 'not_found' });
+      expect(await store.payments.getById(a.id, mine.id)).toMatchObject({ receivedOn: '2026-10-08', version: mine.version });
+    });
+
+    it('redateCapture moves a settle payment and leaves its allocations and the receivable untouched', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      const { c } = await seed(store, a.id);
+      const r = await store.receivables.createAdjustment(owed(a.id, c.id, u.id), at(20));
+      const { payment, allocations } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 3000n, receivedOn: '2026-10-10', method: 'CASH', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: u.id, origin: 'CAPTURE', captureSource: null, allocations: [{ receivableId: r.id, amountMinor: 3000n }] }, at(21));
+      const settled = await store.receivables.getById(a.id, r.id);
+
+      const result = await store.payments.redateCapture(a.id, payment.id, u.id, payment.version, '2026-10-09', at(40));
+      expect(result).toMatchObject({ kind: 'updated', record: { receivedOn: '2026-10-09', allocatedMinor: 3000n } });
+      expect(await store.payments.listAllocations(a.id, payment.id)).toEqual(allocations);
+      expect(await store.receivables.getById(a.id, r.id)).toEqual(settled);
+    });
+  });
 }

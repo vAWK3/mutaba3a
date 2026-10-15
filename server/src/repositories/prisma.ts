@@ -1007,6 +1007,13 @@ export class PrismaLedgerStore implements LedgerStore {
       await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null, paidMinor: 0n, creditedMinor: 0n }, data: { deletedAt: at } });
       return this.prisma.receivable.findFirst({ where: { id, organizationId } });
     },
+    redateAdjustment: async (organizationId, id, userId, expectedVersion, postingDate) => {
+      const owned = { id, organizationId, origin: 'ADJUSTMENT' as const, createdByUserId: userId, deletedAt: null };
+      const { count } = await this.prisma.receivable.updateMany({ where: { ...owned, version: expectedVersion }, data: { postingDate, version: { increment: 1 } } });
+      const record = await this.prisma.receivable.findFirst({ where: owned });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
   };
 
   readonly payments: PaymentRepository = {
@@ -1086,6 +1093,13 @@ export class PrismaLedgerStore implements LedgerStore {
       if (!payment || payment.origin !== 'CAPTURE' || payment.createdByUserId !== userId) return { result: 'not-found', payment: null };
       if (payment.status !== 'REVERSED') return { result: 'allocated', payment };
       return { result: payment.reversalReason === CAPTURE_UNDO_REASON ? 'already-reversed' : 'reversed-elsewhere', payment };
+    },
+    redateCapture: async (organizationId, paymentId, userId, expectedVersion, receivedOn, at) => {
+      const owned = { id: paymentId, organizationId, origin: 'CAPTURE' as const, createdByUserId: userId, status: 'POSTED' as const };
+      const { count } = await this.prisma.payment.updateMany({ where: { ...owned, version: expectedVersion }, data: { receivedOn, version: { increment: 1 }, updatedAt: at } });
+      const record = await this.prisma.payment.findFirst({ where: owned });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
     },
   };
 

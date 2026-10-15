@@ -1116,6 +1116,13 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!r.deletedAt && r.paidMinor === 0n && r.creditedMinor === 0n) r.deletedAt = at;
       return { ...r };
     },
+    redateAdjustment: async (organizationId, id, userId, expectedVersion, postingDate) => {
+      const r = this.recs.get(id);
+      if (!r || r.organizationId !== organizationId || r.origin !== 'ADJUSTMENT' || r.createdByUserId !== userId || r.deletedAt) return { kind: 'not_found' };
+      if (r.version !== expectedVersion) return { kind: 'stale', record: { ...r } };
+      Object.assign(r, { postingDate, version: r.version + 1 });
+      return { kind: 'updated', record: { ...r } };
+    },
   };
 
   readonly payments: PaymentRepository = {
@@ -1198,6 +1205,13 @@ export class MemoryLedgerStore implements LedgerStore {
       if (p.allocatedMinor > 0n) return { result: 'allocated', payment: { ...p } };
       Object.assign(p, { status: 'REVERSED', reversedAt: at, reversalReason: CAPTURE_UNDO_REASON, version: p.version + 1, updatedAt: at });
       return { result: 'reversed', payment: { ...p } };
+    },
+    redateCapture: async (organizationId, paymentId, userId, expectedVersion, receivedOn, at) => {
+      const p = this.pays.get(paymentId);
+      if (!p || p.organizationId !== organizationId || p.origin !== 'CAPTURE' || p.createdByUserId !== userId || p.status !== 'POSTED') return { kind: 'not_found' };
+      if (p.version !== expectedVersion) return { kind: 'stale', record: { ...p } };
+      Object.assign(p, { receivedOn, version: p.version + 1, updatedAt: at });
+      return { kind: 'updated', record: { ...p } };
     },
   };
 
