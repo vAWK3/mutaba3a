@@ -2346,3 +2346,13 @@ Every write that locks more than one receivable takes the row locks in ascending
 
 A lock conflict that still happens (40P01 / 40001) is turned into `LockConflict` (`repositories/memory.ts`) by `asLockConflict`, and the route answers 409, never 500. Postgres rolled the transaction back, so nothing was written. A new multi-receivable write uses the same helper and the same mapping.
 
+## Patterns added by MUT-227 (2026-10-15)
+
+### Pattern: A money date goes through one composite check, never hand-paired checks
+An income-like date (income, settle, re-date, conversion, income filing) is parsed with `pastMoneyDate(raw, today, field)` from `server/src/income/compose.ts`: valid, not later than `today`, not more than `DAYS_IN_PAST_LIMIT` days back. An expense date uses `expenseOccurredOn` (floor, no future check). `today` is always `todayFor(organization, now)`. A query filter (`from`/`to`) uses the plain iso parser instead, so it can still reach old rows.
+**Instances**: `routes/{income,receivables,conversions,inbox}.ts`, `redateTo`, `expensePatch`.
+
+### Pattern: A range refusal names its bound
+A `DATE_INVALID` raised by a range check carries `details.bound: 'past' | 'future'` (`DateBound`). A client branches on `bound` for its message and never redoes the date arithmetic; with no `bound` (an older server) it keeps its old message.
+**Instances**: `assertNotTooOld`, `assertNotFuture`, `assertNotAbsurdDate`; portal `incomeApiErrors.ts` `dateKey`.
+

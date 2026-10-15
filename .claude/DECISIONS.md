@@ -3272,3 +3272,21 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 3. **Transition:** keys stored before this change carry the byte fingerprint. On a mismatch the middleware claims again with the byte fingerprint, and a byte-identical replay of an old key still replays. A claim only compares against an existing key, so the second call has no side effect. The fallback can go once every pre-change key is past any client's retry window.
 4. API 1.26.3-mut199. The API description says how bodies compare.
 
+## ADR-086: Every Hosted Money Date Has a Ten-Year Floor; DATE_INVALID Says Which Bound It Crossed
+
+**Status**: Active
+**Date**: 2026-10-15
+**Context**: MUT-227, found in MUT-223's pre-landing review. The hosted API checked money dates for validity and, for income, "not later than today" (ADR-038 server addendum), but had no lower bound. A typo year saved silently, and MUT-223's re-dating (ADR-083) could now move a settled entry decades back. Basel decided the rule on the ticket (2026-10-15); the eng review settled D1 to D4.
+
+**Decision**:
+1. **Floor:** a money date earlier than the organization's today − 3660 days (`DAYS_IN_PAST_LIMIT`, `assertNotTooOld`, beside `assertNotAbsurdDate`'s ceiling) is 422 `VALIDATION_FAILED` / `DATE_INVALID`. The floor day itself is accepted. It is a separate constant from the ceiling: the two are equal by decision, not by definition.
+2. **Everywhere, create and edit alike:** `POST /v1/income`, settle's `paidAt`, both MUT-223 PATCH routes, `POST /v1/payments` (Malafat's key too: its wizard defaults to today), expense create and patch, conversion create and patch, and both inbox filings. Income-like dates make one call, `pastMoneyDate` (valid, not future, not too old). Expenses keep no future check (filing must refuse exactly where a direct create does, ADR-048).
+3. **Not on queries or existing rows:** expense list and summary `from`/`to` stay iso-only (`expenseDate`); a stored date is only checked when a request sends it, so old rows stay readable and editable; no migration.
+4. **Inbox capture is lenient:** an unsorted entry has no profile and so no timezone. Capture and edit check the floor from UTC's yesterday, which is at or before every timezone's today, so capture can never refuse a date filing would accept; filing applies the exact floor.
+5. **`details.bound`:** the floor, `assertNotFuture` and `assertNotAbsurdDate` add `bound: 'past' | 'future'`. Additive: the reason enum is unchanged, and a client that ignores it keeps working. The portal (income, settle) and the phone (outbox row, File from Recent) show a "more than ten years ago" message on `past`.
+6. API 1.27.0-mut227.
+
+**Consequences**: a typo year is caught at the API on every surface. Agreement, fee-proposal and due dates keep the ceiling only. Date pickers still allow any past date; the server is the guard.
+
+**Alternatives Considered**: a fixed year or the profile's creation date as the floor (rejected by Basel: a fixed year misses 2006-for-2026, and creation date blocks backfilling older work); a new `DATE_TOO_OLD` reason (rejected: an enum change for every client, where an additive detail does); a filing-only inbox floor (rejected D3: the typo would wait in Unsorted until filing failed).
+

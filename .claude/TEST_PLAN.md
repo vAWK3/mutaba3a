@@ -2596,3 +2596,16 @@ The ticket's "drive a deadlock between an allocation and an outcome write" can n
 | `server/src/__tests__/idempotency-fingerprint.test.ts` (new) | Unit + route (memory store) | 6 | The widget's body and the app's body for one capture fingerprint identically. Nested keys, whitespace and `\u` escapes don't count; a value, array order, method and path do; a non-JSON body counts byte for byte. A replay with reordered keys and `\/` gets the stored 201 with `Idempotent-Replayed` and the same id, while a changed value is 422 `IDEMPOTENCY_KEY_REUSED`. A key stored under the old byte fingerprint still replays |
 
 The phone-side AC ("the row shows saved") follows from the server returning the stored 2xx. It is not exercised end to end from the Flutter app here.
+
+## MUT-227 — a ten-year floor on hosted money dates (2026-10-15, ADR-086)
+
+| Suite | Cases |
+|---|---|
+| `server/src/agreements/__tests__/date-bounds.test.ts` (new) | `DAYS_IN_PAST_LIMIT` is 3660 and equals the ceiling; the floor day and today pass; floor − 1 → `{ reason: DATE_INVALID, field, bound: past }`; `0001-01-01`; the message; the ceiling now says `bound: future` |
+| `server/src/income/__tests__/compose.test.ts` | `assertNotFuture` carries `bound: future`; `pastMoneyDate` (today and the floor day pass; impossible date, tomorrow, floor − 1, `0001-01-01`); `redateTo` refuses below the org-timezone floor |
+| `server/src/inbox/__tests__/compose.test.ts` | lenient capture floor from UTC yesterday; at four instants, capture accepts every timezone's exact floor (Etc/GMT+12, Kiritimati, UTC, Jerusalem) |
+| Route suites | `income-routes` (received + owed), `receivables-settle` (nothing recorded), `income-redate` (both PATCHes, nothing moved), `routes-m4` (API-key `POST /v1/payments`), `routes-expenses` (create + patch; a seeded 2001 row is editable without its date and listed by `from=2001-01-01`, and its summary range works), `routes-conversions` (create + patch), `inbox-routes` (capture + patch), `inbox-filing` (both filings refuse below the profile's floor and keep the entry, matching the direct create's details) |
+| `src/hosted/components/__tests__/incomeApiErrors.test.ts` | `bound: past` → `dateTooOld`; `future` or no bound → `dateFuture`, for income and settle |
+| Release-QA | `portal.income.date-too-old` (`qa/specs/portal/income.spec.ts`): passing, recorded |
+| Regression | version pins in routes-m2..m8 moved to 1.27.0-mut227; every other date test unchanged and green |
+
