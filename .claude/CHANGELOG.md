@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Hosted API: change the date of a saved income entry or payment (MUT-223)
+
+**Why:** on a hosted profile a saved Owed entry or a recorded payment kept its date forever; a payment logged on the wrong day could not be fixed at all, since a settled entry cannot be undone (TD-126). Expenses and conversions could already be re-dated. Server half only; the portal (MUT-224) and phone (MUT-225) build on it. ADR-083.
+
+### Added
+- `PATCH /v1/income/{incomeId}` `{ occurredOn }` (session/device session, `capture:write`, If-Match): an Owed entry moves `postingDate` and keeps `dueDate`; a Received entry moves its payment's `receivedOn`. A payment already applied to an entry (a settle) is 409 `ALREADY_ALLOCATED`.
+- `PATCH /v1/payments/{paymentId}` `{ receivedOn }` (session/device session, `payments:write`, If-Match): a person's own `CAPTURE` payment, settle payments included; allocations untouched, the settled entry's paid date follows.
+- Store: `receivables.redateAdjustment`, `payments.redateCapture` — one conditional write each, the owner/origin/liveness predicate and the version in the WHERE (memory + Postgres, store-guard classified).
+- `AuditFilter.excludeActions`; `GET /v1/audit` passes `SESSION_ONLY_ACTIONS` (`income.owed.redated`, `payment.redated`).
+- `income/compose.ts`: `isOwnProfile`, `isOwnCapture`, `redateTo`. `routes/payments.ts`: `redateOwnCapture` (shared by both routes).
+
+### Changed
+- `IncomeResponse` carries `version` (additive), so a client can send If-Match straight from a create.
+- API `1.26.0-mut223`; OpenAPI and `src/hosted/api/schema.d.ts` regenerated; `route-security.test.ts`'s income inventory lists the two PATCHes.
+
+### Not changed
+- Amount, client, matter and note stay uneditable; Malafat-fed and firm profiles stay closed (404, or 403 `READ_ONLY_PROFILE` on `/v1/payments`); no migration (`version` already existed on both tables).
+
 ## [Unreleased] - 2026-10-15 — CSV import no longer calls new clients and projects duplicates (MUT-218)
 
 **Why:** `validateCSVImport` added the file's own client and project names to the "already exists" list before checking them, so every new client or project row matched itself and showed as Duplicate.

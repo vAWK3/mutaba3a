@@ -539,8 +539,10 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
       title: null,
       notes: p.notes,
       dueDate: null,
-      // Always true at creation: a fresh Received payment carries no allocations yet.
+      // Always true at creation: a fresh Received payment carries no allocations yet. MUT-223's PATCH keeps it true:
+      // it refuses an allocated payment before serializing one here.
       status: 'unallocated' as const,
+      version: p.version,
     };
   }
   const r = entry.receivable;
@@ -556,6 +558,7 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
     notes: null,
     dueDate: r.dueDate,
     status: r.status === 'SETTLED' ? ('settled' as const) : ('open' as const),
+    version: r.version,
   };
 }
 

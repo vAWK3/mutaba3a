@@ -1401,10 +1401,18 @@ export const IncomeResponseSchema = z
     /** `owed` only; null for `received`. */
     dueDate: IsoDateSchema.nullable(),
     status: IncomeStatusSchema,
+    /** MUT-223: send it back in If-Match to PATCH /v1/income/{id}. */
+    version: z.number().int().positive(),
   })
   .openapi('IncomeResponse');
 
 export const IncomeIdParamSchema = z.object({ incomeId: uuid });
+
+/** MUT-223: date only (amount, client, matter and note edits are out of scope). */
+export const UpdateIncomeRequestSchema = z.object({ occurredOn: IsoDateSchema }).strict().openapi('UpdateIncomeRequest');
+
+/** MUT-223: date only; allocations are never touched. */
+export const UpdatePaymentRequestSchema = z.object({ receivedOn: IsoDateSchema }).strict().openapi('UpdatePaymentRequest');
 
 export const SettleReceivableRequestSchema = z
   .object({
