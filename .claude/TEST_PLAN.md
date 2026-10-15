@@ -2626,3 +2626,14 @@ Full web suite on 2026-10-15 (after MUT-218/164/217/178): 114 passed, 9 failed, 
 | `src/services/__tests__/recurringExpenseService.dueWindow.test.ts` (new) | Integration (fake IndexedDB, clock fixed at 15 Oct 2026) | 3 | A rule started six months ago lists all seven months, where it showed 3 before the fix. A paid June, then a skipped August, move the start to the month after. A rule started three years ago lists 37 months |
 | `src/components/expenses/__tests__/RecurringAttentionList.test.tsx` › a long-running rule | Component | +3 | 37 payments read "37 payments since Oct 2023 not marked" with a $2,960 total; three still read "Aug, Sep, Oct"; Arabic uses the many form ("37 دفعة منذ") |
 | `qa/specs/web/expenses.spec.ts` › `@web.expenses.recurring-long-missed` (new) | E2E (release-qa) | 1 | A rule from eight months ago: "9 payments since <month> not marked", $720, nine months in Mark Paid. Passes with the other recurring specs |
+
+## MUT-228 — GET /v1/fx-rates (2026-10-15, ADR-086)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `server/src/__tests__/fx-rates.test.ts` (new) | Unit | 24 | `crossRates`: every base lists the four currencies in order with itself at 1; EUR reads the snapshot; crosses round to 6 dp; USD→JOD is 0.709 and JOD→USD 1.410437; `derived` exactly when one side is JOD. `FrankfurterSource`: asks base=EUR&symbols=USD,ILS; refuses a non-2xx, a missing/zero/negative/non-numeric rate, a bad date, another base, and a hang past the timeout. `CachedFxRates`: 100 concurrent cold calls make 1 provider call; no refetch inside the window, one after; a failed refresh serves the old snapshot as stale; nothing cached + failure is 503 `FX_RATES_UNAVAILABLE`; no provider call inside the 60 s backoff; recovery is live again |
+| `server/src/__tests__/routes-fx-rates.test.ts` (new) | Route (memory store, fake provider) | 9 | A device session gets the full ILS-base shape with no profile header; a cookie session gets USD-base rates with or without one; five requests make one provider call; `GBP`, `ils` and no base are 422 `VALIDATION_FAILED` without touching the provider; no auth 401, an API key 403 `PRINCIPAL_NOT_ACCEPTED`; provider down with nothing cached, or no rate source configured, is 503 `FX_RATES_UNAVAILABLE` |
+| `server/src/__tests__/config.test.ts` › reference exchange rates | Unit | +3 (7 cases) | Defaults (Frankfurter URL, 240 min, 3000 ms); values at the bounds are accepted; a bad URL, TTL 14/1441 and timeout 499/10001 refuse boot naming the variable |
+| `server/src/__tests__/route-security.test.ts` (changed) | Contract | 0 new | `GET /v1/fx-rates` is in the session and device-session surfaces and in both session-only lists (`FX_OPERATIONS`), so an API key is refused |
+
+The phone flows that use it (MUT-229) and a live call to Frankfurter are not exercised here; the provider is faked.

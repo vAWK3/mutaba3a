@@ -3272,3 +3272,23 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 3. **Transition:** keys stored before this change carry the byte fingerprint. On a mismatch the middleware claims again with the byte fingerprint, and a byte-identical replay of an old key still replays. A claim only compares against an existing key, so the second call has no side effect. The fallback can go once every pre-change key is past any client's retry window.
 4. API 1.26.3-mut199. The API description says how bodies compare.
 
+
+## ADR-086: The Hosted API Proxies ECB Reference Rates for Display, Derives JOD From the USD Peg, and Caches Per Instance
+
+**Status**: Active
+**Date**: 2026-10-15
+**Context**: MUT-228, for MUT-229. The phone shows what a USD, EUR or JOD amount is in the target profile's default currency, and the Convert sheet shows the market rate next to the user's own. The server had no rates. The web top bar (MUT-79) calls Frankfurter from the browser, and a second client copying that logic would drift. The ECB reference set has USD and ILS but no JOD; a probe (2026-10-15) showed Frankfurter drops JOD from `symbols=` with a 200 and no error.
+
+**Decision**:
+1. `GET /v1/fx-rates?base=` (sessions and device sessions, no API keys, no `X-Mutaba3a-Profile`) answers every supported currency against `base`: units of that currency per 1 `base`, rounded to 6 decimal places, with the ECB `rateDate`, the instance's `fetchedAt` and `source` `live` | `stale`. `base` is required; a missing or unknown one is 422 `VALIDATION_FAILED` like every other validation failure (the ticket's "400" was amended).
+2. The server reads Frankfurter (`FX_RATES_URL`, base EUR, symbols USD and ILS) with a timeout (`FX_RATES_TIMEOUT_MS`, 3 s) and a strict body check, and crosses the euro rates for any base (`server/src/fx-rates.ts`).
+3. **JOD** comes from the Central Bank of Jordan's peg, 1 USD = 0.709 JOD, as a constant in code. Every pair with exactly one JOD side is marked `derived`. A re-peg is a deploy.
+4. **Display only.** No record stores a rate, and no amount is converted on the server.
+5. **Cache in process, per instance**, like the rate limiter (TD-017). A snapshot is fresh for `FX_RATES_TTL_MINUTES` (240). Concurrent misses share one provider call. A failed refresh serves the last snapshot as `stale` and does not call the provider again for 60 s. With nothing cached, the route answers 503 `FX_RATES_UNAVAILABLE`, never a zero rate. So a new instance that starts while the provider is down answers 503 until it is back; the phone keeps its own last copy and shows "as of" (MUT-229).
+6. The refresh runs inline on the request that finds the snapshot expired (at most 3 s, once per window per instance): a background refresh is unreliable if Cloud Run throttles CPU between requests.
+7. API 1.27.0-mut228; new error code `FX_RATES_UNAVAILABLE` (503).
+
+**Alternatives rejected**:
+- The phone calls Frankfurter itself, like the web: two copies of the provider logic and the JOD derivation.
+- Persisting the last snapshot in the database so a cold start can serve stale: a table, a migration and two store implementations for a display-only hint the phone already caches (eng review D3).
+- A route-specific 400 for a bad `base`: the only 400 in the API (eng review D2).
