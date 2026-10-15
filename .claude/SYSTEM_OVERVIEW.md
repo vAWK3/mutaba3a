@@ -19,7 +19,7 @@
 
 ### Target Users
 - Freelancers managing multiple clients and projects
-- Consultants tracking retainers and billable work
+- Consultants tracking billable work
 - Small businesses that bill outside the app and track who owes what here (document generation retired, MUT-145)
 - Users in regions with privacy concerns or unreliable internet
 
@@ -99,14 +99,14 @@ ESLint enforces it (MUT-47, ADR-071).
                                                      │
                               ┌─────────────────────┬┴─────────────────────┐
                               │                     │                       │
-                       ┌──────▼──────┐       ┌──────▼──────┐       ┌───────▼──────┐
-                       │  Document   │       │  Retainer   │       │   Expense    │
-                       │             │       │  Agreement  │       │              │
-                       │ - type      │       │             │       │ - vendor     │
-                       │ - number    │       │ - cadence   │       │ - category   │
-                       │ - items[]   │       │ - amount    │       │ - receipt    │
-                       │ - status    │       │ - status    │       │              │
-                       └─────────────┘       └─────────────┘       └──────────────┘
+                       ┌──────▼──────┐                             ┌───────▼──────┐
+                       │  Document   │                             │   Expense    │
+                       │ (retained)  │                             │              │
+                       │ - type      │                             │ - vendor     │
+                       │ - number    │                             │ - category   │
+                       │ - items[]   │                             │ - receipt    │
+                       │ - status    │                             │              │
+                       └─────────────┘                             └──────────────┘
 ```
 
 ### Key Relationships
@@ -117,8 +117,7 @@ ESLint enforces it (MUT-47, ADR-071).
 | **Project** | Belongs to Client, has many Transactions | Scopes work |
 | **Transaction** | Belongs to Client, Project; links to Document | kind: income/expense, status: paid/unpaid |
 | **Document** (retained) | Rows from before MUT-145; nothing renders them | Retained table only (ADR-029/066): backup + profile export/import |
-| **BusinessProfile** | Has many Documents, Expenses, Retainers | Multi-identity support |
-| **RetainerAgreement** | Belongs to Client, Project | Generates ProjectedIncome |
+| **BusinessProfile** | Has many Documents, Expenses | Multi-identity support |
 | **Expense** | Belongs to BusinessProfile, has Receipts | Profile-scoped costs |
 
 ### Currency Model (Non-negotiable)
@@ -200,10 +199,10 @@ ESLint enforces it (MUT-47, ADR-071).
   - **Typeahead keyboard contract:** one contract serves every picker.
   - **Offline (ADR-040):** local reads and saves run whether or not the device is online; only the live FX rate waits for the network.
   - **App frame (MUT-79):** nothing floats over content. The live FX rate is a top-bar readout (`$1 = ₪3.06 ▾`) with a popover showing the rates, their source, date and Refresh. The Light/Dark/System toggle sits beside Settings in the sidebar footer. The Mac-app offer (Mac browsers only, until dismissed) and the desktop update bar sit in flow at the bottom of the main area.
-- **Client profile (MUT-3 / ADR-033)** — `/clients/:id` (beside the list on a wide window, full page otherwise, MUT-84) is one page with no tabs answering the three questions: the header's **Owed now** (largest figure, per currency, overdue part called out), **Work and billing** (the client's income entries — the entry is the work record — with project as a tag, its own date/status/search filters and the row actions: Record payment, Mark paid, duplicate), and **Payments** (full history, newest first, each labelled with what it paid for; a recorded payment opens the payment drawer, money saved on the entry opens the entry). The retainers card follows while Retainers is on.
+- **Client profile (MUT-3 / ADR-033)** — `/clients/:id` (beside the list on a wide window, full page otherwise, MUT-84) is one page with no tabs answering the three questions: the header's **Owed now** (largest figure, per currency, overdue part called out), **Work and billing** (the client's income entries — the entry is the work record — with project as a tag, its own date/status/search filters and the row actions: Record payment, Mark paid, duplicate), and **Payments** (full history, newest first, each labelled with what it paid for; a recorded payment opens the payment drawer, money saved on the entry opens the entry). (The retainers card below Payments left with the local Retainers area, MUT-226.)
 - **Drawer motion (MUT-80 / ADR-044)**: every drawer (local and portal) renders the shared `DrawerFrame`. It springs in from its edge, follows a horizontal drag with a rubber band, and dismisses on a release past half (projected momentum); a press catches it mid-motion. Closing is immediate: the exit is an inert snapshot sliding out along the same edge (mirrored in RTL; cross-fades under reduced motion). Focus is trapped while open and returns to the trigger. `motion@13.4.4` is a dependency.
 - **Unassigned records (2026-10-11)**: records saved without a `profileId` show in no profile's lists. `OrphanedRecordsBanner` (AppShell) counts them with `runIntegrityCheck`; its **Review now** opens `OrphanedRecordsDrawer` in place, which lists the clients, projects, income and expenses involved and assigns them all to the default profile or one by one, each starting on its linked client's profile. "Unassigned" is defined once (`isOrphaned`, `src/db/orphanedRecords.ts`). Clients and Projects no longer open a modal by themselves. Locked income entries can't be assigned yet (TD-035).
-- **Optional areas (Advanced features, MUT-12 / ADR-032)** — retainers, expenses, insights, planning, projects and conversions are switches in Settings (invoices retired by MUT-145, ADR-067), off by default; `Settings.features` on the settings row; the Dexie v20 upgrade and every bulk data load (restore, import, demo) switch on areas that have data and show a one-time banner. Read through `useFeatureEnabled` / `readFeatureFlags`. **Gated so far (MUT-13):** `/retainers` redirects home while off (`/documents*` always redirects home since MUT-145); the sidebar "More" section, client-profile invoice actions and retainers card, and the income drawer's lock notice follow the switches. **MUT-14:** expenses are one gated ledger (`/expenses`); the seven other expense pages, `/suppliers`, forecasting, receipt matching and month close are gone (tables retained; receipts exportable from Settings › Your data). **MUT-16:** `/insights`, `/planning` and `/projects*` are gated; the three join "More"; `+ Add → Project`, the client profile's Projects tab, the drawers' project field and the onboarding project step follow the projects switch (hidden fields keep their data). **MUT-15 (ADR-034):** the sidebar is a fixed, header-less core of Home, Clients, Income, then "More" (optional areas, only while on), with Settings pinned in the footer; a fresh install shows exactly those four. Both `+ Add` menus offer Income, Client, then Expense/Project while on (`visibleAddMenuActions`), with menu-button keyboard support (`useMenuButton`). Switching an area off while its page is open re-runs the route guards (`useLeaveDisabledArea` → `router.invalidate()`), which send the user home. **MUT-141 (ADR-068):** a 7th area, `conversions` (`/conversions`), logs money moved between currencies as a new Transaction `kind:'conversion'` (two amount/currency legs, read-only implied rate), excluded from every P&L total by construction; its data probe is empty (never auto-enabled) since the kind is new and has nothing pre-existing to detect.
+- **Optional areas (Advanced features, MUT-12 / ADR-032)** — expenses, insights, projects and conversions are switches in Settings (invoices retired by MUT-145, ADR-067; planning and the local retainers area retired by MUT-226, ADR-082, whose Dexie v24 drops their tables and `/planning`, `/retainers` redirect home), off by default; `Settings.features` on the settings row; the Dexie v20 upgrade and every bulk data load (restore, import, demo) switch on areas that have data and show a one-time banner. Read through `useFeatureEnabled` / `readFeatureFlags`. **Gated so far (MUT-13):** `/retainers` redirected home while off (since MUT-226 it always does, like `/documents*` since MUT-145); the sidebar "More" section, client-profile invoice actions and retainers card (both gone since), and the income drawer's lock notice follow the switches. **MUT-14:** expenses are one gated ledger (`/expenses`); the seven other expense pages, `/suppliers`, forecasting, receipt matching and month close are gone (tables retained; receipts exportable from Settings › Your data). **MUT-16:** `/insights`, `/planning` (retired by MUT-226) and `/projects*` are gated; they join "More"; `+ Add → Project`, the client profile's Projects tab, the drawers' project field and the onboarding project step follow the projects switch (hidden fields keep their data). **MUT-15 (ADR-034):** the sidebar is a fixed, header-less core of Home, Clients, Income, then "More" (optional areas, only while on), with Settings pinned in the footer; a fresh install shows exactly those four. Both `+ Add` menus offer Income, Client, then Expense/Project while on (`visibleAddMenuActions`), with menu-button keyboard support (`useMenuButton`). Switching an area off while its page is open re-runs the route guards (`useLeaveDisabledArea` → `router.invalidate()`), which send the user home. **MUT-141 (ADR-068):** a 7th area, `conversions` (`/conversions`), logs money moved between currencies as a new Transaction `kind:'conversion'` (two amount/currency legs, read-only implied rate), excluded from every P&L total by construction; its data probe is empty (never auto-enabled) since the kind is new and has nothing pre-existing to detect.
 - **Expenses Needs attention (MUT-87, ADR-052)** — one row per recurring rule, not one card per missed month: "Server hosting · $80 monthly · Aug, Sep, Oct not marked · $240", grouped by the pure `groupOccurrencesByRule`; the header totals each currency side by side (`CurrencyAmounts`). **Mark Paid** opens `RecurringMarkPaidDrawer`: the payments, all checked, each with its date and an editable amount; saving writes one expense per checked payment, **dated on its own expected date**, in one all-or-nothing write (`confirmPayments` inside `recurringOccurrences.runAtomically`). Skip and Snooze apply per payment in the drawer, or to all from the row's ⋯ menu (`useMenuButton`); snoozing is a view of the same drawer. The per-month confirm and snooze modals are gone; the forecast keeps a read-only card. Editing a rule now refreshes the rows (`invalidateRecurringRuleQueries`). Still looks back only 90 days (TD-069).
 - **Settings in five groups (MUT-88, ADR-072)**: Businesses, General, Features, About, Your data, then Delete all data alone below every card. `.page-content` is the one scroll area.
   - **Your data** offers each action once: Back up (shows `settings.lastBackupAt`), Restore (one picker: a full backup is confirmed then replaces everything; a business export or CSV opens `/settings/import` preloaded), Export a business, Export receipts, Check data.
@@ -219,7 +218,8 @@ ESLint enforces it (MUT-47, ADR-071).
 | Document Generation | 🗑️ Retired (MUT-145) | The app records what happened and issues no documents; tables retained (ADR-067) |
 | Multi-Currency | ✅ Complete | USD, ILS, EUR, JOD (income/expense entry); per-currency reports |
 | Expense Tracking | ✅ Complete | Profile-scoped, receipts, categories |
-| Retainer Agreements | ✅ Complete | Monthly/quarterly, matching workflow |
+| Retainer Agreements (local) | 🗑️ Retired (MUT-226) | Page, drawers and matching deleted; Dexie v24 dropped `retainerAgreements`/`projectedIncome` (ADR-082). Server Money v1 retainers (`/v1/retainers*`) are a separate feature and stay |
+| Financial Planning | 🗑️ Retired (MUT-226) | Page and projections deleted; Dexie v24 dropped `plans`/`planAssumptions`/`planScenarios` (ADR-082) |
 | Business Profiles | ✅ Complete | Multi-identity, branding |
 | Data Export/Import | ✅ Complete | ZIP backup/restore |
 | Demo Mode | ✅ Complete | Sample data, time-frozen |
@@ -463,7 +463,6 @@ mini-crm/
 │   │   ├── projects/         # Project CRUD
 │   │   ├── clients/          # Client CRUD
 │   │   ├── expenses/         # Expense tracking
-│   │   ├── retainers/        # Retainer agreements
 │   │   └── settings/         # App configuration
 │   │
 │   ├── db/                    # Data layer

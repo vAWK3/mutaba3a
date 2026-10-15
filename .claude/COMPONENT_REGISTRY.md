@@ -9,8 +9,8 @@
 
 | Category | Components |
 |----------|------------|
-| **Layout** | AppShell, SidebarNav, BrandMark, BrandLoader (page/section waits), BootSplash (landing Suspense fallback), TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
-| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, LegacyExpenseEditDrawer, ConversionDrawer (currency conversion logging), RecurringMarkPaidDrawer, RetainerDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
+| **Layout** | AppShell, SidebarNav, BrandMark, BrandLoader (page/section waits), BootSplash (landing Suspense fallback), TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
+| **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, LegacyExpenseEditDrawer, ConversionDrawer (currency conversion logging), RecurringMarkPaidDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
@@ -68,7 +68,7 @@
 - Keyboard navigation (links in DOM order; the New menu via `useMenuButton`)
 - RTL support (logical rail and menu offsets; the collapse chevron points toward the collapsing edge)
 - Collapsible to a 64px rail (choice kept in `localStorage.sidebarCollapsed`); toggles in normal flow; a hairline separates core from "More"
-- **Shape (MUT-15, ADR-034):** `coreItems` (Home, Clients, Income) render first with no header and never depend on a flag; `optionalItems` render the "More" section with only the enabled areas, in the order Expenses, Documents, Retainers, Insights, Planning, Projects; `systemItems` (Settings) sit in the footer, never gated.
+- **Shape (MUT-15, ADR-034):** `coreItems` (Home, Clients, Income) render first with no header and never depend on a flag; `optionalItems` render the "More" section with only the enabled areas, in the order Expenses, Conversions, Insights, Projects (Documents retired by MUT-145; Retainers and Planning by MUT-226); `systemItems` (Settings) sit in the footer, never gated.
 - New menu: actions and order from `visibleAddMenuActions(flags)`; `newMenuEntries` maps each to its label and icon.
 - **Footer (MUT-79):** Settings and `ThemeToggle` share `.sidebar-footer-row` (stacked on the 64px rail).
 
@@ -348,18 +348,6 @@ Tests: `src/lib/__tests__/dataFiles.test.ts`.
 **Purpose**: `pickDefaultProfileId(profiles, preferId?)` and `enforceSingleDefaultProfile(table, preferId?)` (MUT-88, ADR-072). Every profile writer calls `enforce` inside its own transaction. Use it in any new path that writes `businessProfiles`.
 
 Tests: `src/db/__tests__/profileDefault.test.ts`, `migration-v22.test.ts`, `src/demo/__tests__/seedDefault.test.ts`.
-
----
-
-### ClientRetainersCard
-**Location**: `src/components/clients/ClientRetainersCard.tsx`
-**Purpose**: Retainer status for one client, below Payments on the client profile (MUT-13; the Summary tab it first lived in is gone with MUT-3): list of the client's retainers (status badge, next expected date, due now) with **New retainer** (`openRetainerDrawer({ mode: 'create', defaultClientId })`) and **View all** (`/retainers?clientId=`). The page renders it only while `useFeatureEnabled('retainers')` is true.
-
-```tsx
-{retainersEnabled && <ClientRetainersCard clientId={client.id} />}
-```
-
-Tests: `src/pages/clients/__tests__/ClientDetailPage.test.tsx` ("Advanced-feature entry points").
 
 ---
 
@@ -758,29 +746,6 @@ Tests: `src/components/drawers/__tests__/LegacyExpenseEditDrawer.test.tsx`.
 
 Calls the batch hooks itself (`useConfirmRecurringPayments`, `useSkipRecurringOccurrences`, `useSnoozeRecurringOccurrences`). Closes itself when nothing would be left (all marked, the last skipped, all snoozed).
 Tests: `src/components/drawers/__tests__/RecurringMarkPaidDrawer.test.tsx`.
-
----
-
-### RetainerDrawer
-**Location**: `src/components/drawers/RetainerDrawer.tsx`
-**Purpose**: Create/edit retainer agreements.
-
-**Features**:
-- Monthly/quarterly cadence
-- Payment day selection
-- Start/end date
-- Client/project linking
-
----
-
-### RetainerMatchingDrawer
-**Location**: `src/components/drawers/RetainerMatchingDrawer.tsx`
-**Purpose**: Match transactions to projected income from retainers.
-
-**Features**:
-- Smart matching suggestions
-- Score breakdown display
-- Partial match support
 
 ---
 
@@ -1701,7 +1666,7 @@ import {
 | All filters | Core | 2024-05 |
 | Document components | Documents | 2024-08 |
 | Expense components | Expenses | 2024-09 |
-| Retainer components | Retainers | 2024-10 |
+| Retainer components | Retainers (retired MUT-226) | 2024-10 |
 | Home components | Home | 2026-03 |
 | PredictiveKpiStrip | Home | 2026-03 |
 | AttentionFeed | Home | 2026-03 |
@@ -1855,8 +1820,8 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 ### getRepositories() — `src/db/provider.ts`
 
 **What**: The single entry point to the data layer. Returns a frozen
-`{ base }` registry of 23 slots (MUT-47 added `plans`, `planAssumptions`,
-`planScenarios`, `dataset` and `demoData`). Re-exported from the `src/db`
+`{ base }` registry of 18 slots (MUT-47 added `dataset` and `demoData`, and
+the plan slots MUT-226 removed with the retainer ones). Re-exported from the `src/db`
 barrel. (Until MUT-73 it also had a `synced` family of 8 op-capturing
 decorators; they were deleted with device sync, ADR-053.)
 
@@ -1894,8 +1859,7 @@ has only `base`.
 `restoreBackup`, `exportProfile`, `importProfile`, `importLegacyV1`,
 `csvValidationContext`, `importCsvRows`, `exportCoreTables`, `wipeCoreData`,
 `integrityCheck`, `findOrphanedRecords`, `reconcileFeaturesAfterLoad`); sample
-data on `demoData`. Retainer matching, due states, mark missed and the summary
-are `projectedIncome.*` / `retainerAgreements.getSummary`.
+data on `demoData`.
 
 ### Malafat OAuth client — `src/services/oauth/` and `src-tauri/src/oauth/`
 

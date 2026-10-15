@@ -34,7 +34,7 @@
 **Ticket**: none (found 2026-10-15, release-QA specs)
 **Added**: 2026-10-15
 **Priority**: Medium
-**Impact**: In the Expense, Retainer, Project, Client and Plan Assumption drawers (web) and the hosted expense drawer's Client/Matter pickers, `<label>`s have no `htmlFor`/`id` pairing, so screen readers announce unnamed fields and specs must find them by placeholder. The web Insights currency filter has no accessible name.
+**Impact**: In the Expense, Project and Client drawers (web; the Retainer and Plan Assumption drawers left with MUT-226) and the hosted expense drawer's Client/Matter pickers, `<label>`s have no `htmlFor`/`id` pairing, so screen readers announce unnamed fields and specs must find them by placeholder. The web Insights currency filter has no accessible name.
 **Fix**: pair each label with its control (the Income drawer already does), then switch the specs to `getByLabel`.
 
 ### TD-142: The portal's account menu holds a Language row that is no menu child
@@ -279,17 +279,17 @@
 
 *(TD-111/TD-110/TD-109 below were already claimed by MUT-145, merged to main first — this branch's equivalents were renumbered to TD-113/TD-112 above; see CHANGELOG/ADR-068.)*
 
-### TD-111: The per-profile export leaves out payment records, expenses, receipts and retainers
+### TD-111: The per-profile export leaves out payment records, expenses and receipts
 **Status**: Open
 **Ticket**: MUT-145 / MUT-158 (found while fixing import)
 **Added**: 2026-10-13
 **Priority**: Medium
-**Impact**: Settings → Export (`ExportDataModal`, v2 JSON) writes the profile, clients, projects, transactions, fx rates and retained documents only. Payment records own an entry's paid state (ADR-038/039), so after an export → import round trip a paid entry keeps `status`/`receivedAmountMinor` but has no payment history. `db.expenses`, receipts, recurring rules, retainers and categories are not exported at all. The full backup in Data tools (`backup.ts`) is unaffected and covers every table.
+**Impact**: Settings → Export (`ExportDataModal`, v2 JSON) writes the profile, clients, projects, transactions, fx rates and retained documents only. Payment records own an entry's paid state (ADR-038/039), so after an export → import round trip a paid entry keeps `status`/`receivedAmountMinor` but has no payment history. `db.expenses`, receipts, recurring rules and categories are not exported at all (retainers no longer exist locally, MUT-226). The full backup in Data tools (`backup.ts`) is unaffected and covers every table.
 **Fix**: Extend the v2 export and `importProfileFile` together (remap `paymentRecords.transactionId`, `expenses.profileId/clientId/projectId`, receipts' expense links), with a round-trip test per table. CSV import's expense rows landing in `transactions` is MUT-138.
 **Also deferred here (MUT-145 qa-reconcile review, 2026-10-13):**
 - **F2, re-import duplicates.** Importing the same file twice (merge, or create for an email-less profile, which `findMatchingProfile` can't match) adds every entry again and doubles owed totals. Merge "adds" by definition, and the old modal did the same. Fix: tag imported rows with their source ID and skip ones already imported into that profile.
 - **F4, archived match.** `ImportDataPage` matches against `useBusinessProfiles()`, which excludes archived profiles. A file whose profile is archived therefore defaults to create, and merge can't target it. Fix: match against `list(true)` and say the match is archived (or offer to unarchive).
-- `categoryId`/`linkedProjectedIncomeId` on imported transactions point at rows the v2 export doesn't carry.
+- `categoryId` on imported transactions points at rows the v2 export doesn't carry. (`linkedProjectedIncomeId` left the type with MUT-226; on an imported old row it is inert.)
 
 ### TD-110: BusinessProfileDrawer and ImportDataPage still hard-code English labels
 **Status**: Open
@@ -590,7 +590,7 @@
 **Status**: Open
 **Added**: 2026-10-12 (MUT-73, found in the audit; brief decision D10)
 **Priority**: Low
-**Impact**: `ALL_TABLES` in `src/db/migration-safety.ts` decides what the post-migration snapshot in the `mutaba3a_backup` IndexedDB contains. It has never listed `paymentRecords`, `plans`, `planAssumptions`, `planScenarios` or `recurringOccurrences`, so those snapshots, including the one the Dexie v21 upgrade writes, hold no payment records. The user-facing JSON backup (`src/db/backup.ts`) is not affected: it reads `db.tables` and is complete. `importBackupFromFile`, the only restore path for these snapshots, has no UI caller. MUT-73 removed the eight sync names from the list and changed nothing else, to keep a deletion ticket from changing a non-sync path.
+**Impact**: `ALL_TABLES` in `src/db/migration-safety.ts` decides what the post-migration snapshot in the `mutaba3a_backup` IndexedDB contains. It has never listed `paymentRecords` or `recurringOccurrences` (nor the plan tables, which Dexie v24 dropped in MUT-226), so those snapshots, including the one the Dexie v21 upgrade writes, hold no payment records. The user-facing JSON backup (`src/db/backup.ts`) is not affected: it reads `db.tables` and is complete. `importBackupFromFile`, the only restore path for these snapshots, has no UI caller. MUT-73 removed the eight sync names from the list and changed nothing else, to keep a deletion ticket from changing a non-sync path.
 **Remediation**: Derive the list from `db.tables` (one line), or delete the snapshot machinery if the JSON backup is the only one anyone restores. Either way, add a test that the snapshot covers every table in the schema.
 **Effort**: Small
 
@@ -865,11 +865,11 @@ addition to this one. Explicitly not folded in here (scope guard).
 **Update (2026-10-12, MUT-102): font half resolved.** `theme.css` now sets the face on `<html>` only (`html:lang(..)`), so inline elements inherit; `brand.test.ts` › `tokens` forbids a `:lang()` font-family rule whose subject is not `html`, and `brand.spec.ts` checks the landing headline's inner lines compute Serif Display in EN and AR. The `.hero-headline-line { font-family: inherit }` workaround is removed. **The direction half below is open and is MUT-109** (20 `dir="ltr"` sites, five of them inputs).
 **Also (MUT-79):** the `:lang(ar)` rule's `direction: rtl` beats the `dir` attribute, so every `<bdi dir="ltr">` renders right to left in Arabic. Three amount spans depend on that today: `OwedNowSummary`, `ClientWorkSection` and `HomeNeedsAttention`. Their Arabic-locale strings (`‏2,400 US$`) only look right, in CLDR's order, *because* the attribute loses. Scoping `direction` to the root therefore has to drop their `dir="ltr"` in the same change, leaving plain `<bdi>` (auto). The top bar's FX formula is the one span that must stay LTR; it states `.fx-formula[dir='ltr'] { direction: ltr }`. Tried and reverted in MUT-79.
 
-### TD-047: The expense, retainer and plan drawers read amounts with the lenient parsers
+### TD-047: The expense drawer reads amounts with the lenient parsers
 **Status**: Open
 **Added**: 2026-10-11 (MUT-5 re-review)
 **Priority**: Low
-**Impact**: `ExpenseDrawer`, `RetainerDrawer` and `PlanAssumptionDrawer` save `parseAmountToMinor(data.amount)`, which returns 0 for text it can't read and ignores a typed currency token. The income drawer refuses both: an ambiguous amount is a field error, and "€100" in a USD entry is refused (`amountInputCurrency`). In the other drawers "€100" is saved as 100 in the drawer's currency, and an unreadable amount relies on each schema's own checks.
+**Impact**: `ExpenseDrawer` saves `parseAmountToMinor(data.amount)` (`RetainerDrawer` and `PlanAssumptionDrawer` did too, until MUT-226 deleted them), which returns 0 for text it can't read and ignores a typed currency token. The income drawer refuses both: an ambiguous amount is a field error, and "€100" in a USD entry is refused (`amountInputCurrency`). In the other drawers "€100" is saved as 100 in the drawer's currency, and an unreadable amount relies on each schema's own checks.
 **Remediation**: Validate with `parseAmountInput` (null → field error) and compare `amountInputCurrency` with the selected currency, as `IncomeDrawer` does; keep the lenient wrappers for display-only paths.
 **Effort**: Small per drawer
 **Update (2026-10-12, MUT-86):** the payment drawer, which was not listed but used the same lenient path (`formatCurrencyInput` filtering keystrokes, then `parseCurrencyInput`), now validates strictly. `describePaymentAmount` reads the text with `parseAmountInput`, and an unreadable amount or another currency's symbol is a field error. The three drawers above remain. `parseCurrencyInput` and `formatCurrencyInput` (`src/lib/utils.ts`) no longer have any production caller; delete them, and their `utils.test.ts` cases, when this entry closes.
@@ -1010,14 +1010,11 @@ protocol change requiring its own ADR (with MUT-27, TD-015).
 **Status**: Open
 **Added**: 2026-10-11 (found during MUT-36)
 **Priority**: Medium
-**Impact**: English users can see raw keys on the retainers views; new drift
-goes unnoticed
+**Impact**: New drift goes unnoticed. (The retainers views where English users
+saw raw keys were deleted with MUT-226, and their keys with them.)
 
-`en.json` has 1,131 leaf keys and `ar.json` 1,160. `en` is missing about 30
-keys that `ar` has (`retainers.view.*`, `retainers.inspector.*`,
-`retainers.scheduleState.*`, `retainers.filters.*`, `retainers.status.*`), and
-`retainers.summary`
-is a string in `en` but an object in `ar`. The only parity test
+`en.json` has 1,131 leaf keys and `ar.json` 1,160. Those counts predate MUT-226, which removed the `retainers.*` subtree where most of the
+gap was; recount before fixing. The only parity test
 (`src/lib/features/__tests__/i18nParity.test.ts`) covers `settings.features`.
 `t()` takes a plain string, so keys are not type-checked either.
 
@@ -1136,11 +1133,11 @@ Per CLAUDE.md project spec, the app should use SQLite in Tauri desktop builds fo
 - ✅ **The seam is complete and lint-enforced (MUT-47, ADR-071).** Outside `src/db`, nothing imports `db`, a repository object or a storage helper module; `eslint.config.js` rejects it. The single exception is `initDatabase()` in `src/main.tsx` (Dexie opens before React mounts).
 - ✅ Migration Safety Layer (`src/db/migration-safety.ts`).
 
-**Slots** (`getRepositories().base.*`): `clients`, `projects`, `categories`, `transactions`, `projectSummaries`, `clientSummaries`, `fxRates`, `settings`, `businessProfiles`, `paymentRecords`, `expenses`, `expenseCategories`, `receipts`, `vendors`, `recurringRules`, `recurringOccurrences`, `retainerAgreements`, `projectedIncome`, `plans`, `planAssumptions`, `planScenarios`, `dataset` (backup/restore, export/import, wipe, integrity and orphan checks), `demoData` (`?demo=1` and the visitor sample).
+**Slots** (`getRepositories().base.*`): `clients`, `projects`, `categories`, `transactions`, `projectSummaries`, `clientSummaries`, `fxRates`, `settings`, `businessProfiles`, `paymentRecords`, `expenses`, `expenseCategories`, `receipts`, `vendors`, `recurringRules`, `recurringOccurrences`, `dataset` (backup/restore, export/import, wipe, integrity and orphan checks), `demoData` (`?demo=1` and the visitor sample).
 
-**Repository interfaces** (generated from `interfaces.ts`, 2026-10-13): `IClientRepository`, `IProjectRepository`, `ICategoryRepository`, `ITransactionRepository`, `IProjectSummaryRepository`, `IClientSummaryRepository`, `IFxRateRepository`, `ISettingsRepository`, `IBusinessProfileRepository`, `IExpenseRepository`, `IExpenseCategoryRepository`, `IReceiptRepository`, `IVendorRepository`, `IRecurringRuleRepository`, `IRecurringOccurrenceRepository`, `IRetainerAgreementRepository`, `IProjectedIncomeRepository`, `IPaymentRecordRepository`, `IPlanRepository`, `IPlanAssumptionRepository`, `IPlanScenarioRepository`, `IDatasetRepository`, `IDemoDataRepository`, and `IRepositoryProvider`. (The previous list named `IDocumentRepository`, `IDocumentSequenceRepository` and `IMonthCloseStatusRepository`, deleted by MUT-145/MUT-14: another drifted claim, corrected here.)
+**Repository interfaces** (generated from `interfaces.ts`, 2026-10-13; the five plan/retainer interfaces removed by MUT-226, 2026-10-15): `IClientRepository`, `IProjectRepository`, `ICategoryRepository`, `ITransactionRepository`, `IProjectSummaryRepository`, `IClientSummaryRepository`, `IFxRateRepository`, `ISettingsRepository`, `IBusinessProfileRepository`, `IExpenseRepository`, `IExpenseCategoryRepository`, `IReceiptRepository`, `IVendorRepository`, `IRecurringRuleRepository`, `IRecurringOccurrenceRepository`, `IPaymentRecordRepository`, `IDatasetRepository`, `IDemoDataRepository`, and `IRepositoryProvider`. (The previous list named `IDocumentRepository`, `IDocumentSequenceRepository` and `IMonthCloseStatusRepository`, deleted by MUT-145/MUT-14: another drifted claim, corrected here.)
 
-**What a second implementation must also do** (documented on the interfaces): retainer `create`/`update`/`activate`/`resume` maintain the projected schedule (Dexie: `scheduleGenerator`, internal); `dataset.importLegacyV1` is all or nothing; `recurringOccurrences.runAtomically` is one unit of work (ADR-052).
+**What a second implementation must also do** (documented on the interfaces): `dataset.importLegacyV1` is all or nothing; `recurringOccurrences.runAtomically` is one unit of work (ADR-052).
 
 **Every declared slot has a real caller.** Verified by grepping `base.<slot>.<method>` across `src/` (2026-10-13). A slot nothing reads would make a future swap silently leave that domain on Dexie.
 
@@ -1406,8 +1403,8 @@ Found while fixing these, not caught by axe (the names exist, in English):
 - `CurrencySummaryPopup`'s button is "Show currency breakdown", hard-coded
   English, on Income's summary strip.
 
-Optional areas (Projects, Insights, Expenses, Retainers, Planning, Documents)
-have no axe coverage; they are off on a fresh install.
+Optional areas (Projects, Insights, Expenses, Conversions) have no axe
+coverage; they are off on a fresh install.
 
 **Remaining**:
 1. ~~Run axe-core or similar accessibility checker~~ ✅ Done

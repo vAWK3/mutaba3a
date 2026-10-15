@@ -107,10 +107,11 @@ Basel's decision (2026-10-15): remove Planning entirely, remove Retainers from t
 
 | id | Steps | Expect |
 |---|---|---|
-| `web.settings.removed-areas-redirect` | Open `/planning`, then `/retainers` | Each lands on Home; the sidebar has no Planning or Retainers |
-| `web.settings.advanced-areas-list` | Open Settings › Advanced features | The toggles are exactly Expenses, Insights, Projects, Conversions |
+| `web.navigation.retired-areas` | Open a fresh install, then a bookmarked `/app/planning?plan=p1`, then `/app/retainers?status=active`, then Settings | Each lands on Home, and the sidebar has no Planning or Retainers entry. Settings › Features shows exactly Expenses, Insights, Projects and Currency conversions |
 
-The `planning.yaml` and `retainers.yaml` features are deleted. Their `paths` go with them, so no file is left unmapped. `release-qa lint` must report no errors.
+Both scenarios are one spec. `planning.yaml`, `retainers.yaml` and their specs are deleted, and every path they mapped was deleted with them. `release-qa lint` reports no errors and the same 6 unmapped web files as `main`.
+
+**Build note:** the redirect checks went into the existing `router.gateKeys.test.ts` (its `LEGACY_REDIRECTS` table plus a no-component/no-search case) instead of a new file, so the MUT-145 pattern has one home.
 
 ## Impact
 

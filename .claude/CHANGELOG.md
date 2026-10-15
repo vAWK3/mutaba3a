@@ -28,6 +28,32 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Financial Planning and local Retainers retired; Dexie v24 drops their tables (MUT-226)
+
+**Why:** both optional areas fell outside the client-accounting core. Planning read nothing and nothing read it; local retainers never fed income or owed totals. The owner chose to drop their data too (ADR-082, an explicit override of ADR-029 for five tables). Server Money v1 retainers are untouched.
+
+### Removed
+- Planning: `pages/planning/**`, `PlanAssumptionDrawer`, `planCalculationService`, `planRepository`, `usePlanQueries`, the plan types and the `planning` switch.
+- Local Retainers: `pages/retainers/**`, `RetainerDrawer`, `RetainerMatchingDrawer`, `ClientRetainersCard`, `retainerRepository` (schedule generator, matching), `useRetainerQueries`, the store slices, the retainer and projected-income types, the demo seed rows, the matching-drawer CSS in `index.css` and the `retainers` switch.
+- Both areas: the sidebar entries, about 210 i18n keys per locale (parity kept), five repository slots and interfaces, the `eslint.config.js` allowlist entries, and the QA areas `planning` and `retainers` (yaml and specs). The brand layout matrix no longer opens Planning.
+
+### Changed
+- Dexie **v24**:
+  - drops `plans`, `planAssumptions`, `planScenarios`, `retainerAgreements` and `projectedIncome`;
+  - removes the `transactions.linkedProjectedIncomeId` index and strips the field from rows;
+  - removes the `planning`/`retainers` switches and notices from settings.
+- `/planning` and `/retainers` redirect to Home.
+- Four optional areas remain: Expenses, Insights, Projects, Currency conversions.
+
+### Technical
+- New tests:
+  - `migration-v24.test.ts` (upgrade, cleanup, restore, migration-safety snapshot);
+  - `noDeadPlanningRetainerModules.test.ts`;
+  - the redirect rows in `router.gateKeys.test.ts`;
+  - QA `web.navigation.retired-areas`.
+- Tests that used retainers or planning as the example area now use projects, insights or conversions.
+- Files: `src/db/database.ts`, `src/router.tsx`, `src/lib/features/features.ts`, `src/types/index.ts`, `src/db/{interfaces,provider,demoData,migration-safety}.ts`, `src/lib/stores.ts`, `src/components/layout/{AppShell,SidebarNav}.tsx`, `src/pages/clients/ClientDetailPage.tsx`, `src/demo/**`, the i18n JSON and `qa/**`.
+
 ## [Unreleased] - 2026-10-15 — Dead web code deleted (TD-143)
 
 **Why:** the release-QA coverage pass left 31 web files no feature claims. Most are imported by nothing; they cost review and type-check time and kept `release-qa lint` noisy.
