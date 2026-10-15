@@ -340,7 +340,7 @@
 **Fix**: lock receivables in sorted id order in `applyAllocations` / `payments.reverse`, and map `isLockConflict` to a retryable 409 in the payments store methods.
 
 ### TD-100: No upper bound on money amounts — an oversized award is a 500, not a 422
-**Status**: Open
+**Status**: Resolved 2026-10-15 (MUT-126): `parseMoney` refuses more than `MAX_AMOUNT_MINOR` (999,999,999,999,999 minor units, either sign) with a `MoneyParseError`, which `parseAmount` turns into 422 `AMOUNT_INVALID` with the field. The bound sits in `parseMoney` rather than `parseAmount` because `parseAmount` is its only caller, so every amount is covered either way. API 1.26.1-mut126.
 **Ticket**: MUT-126
 **Added**: 2026-10-13 (MUT-100 review; pre-existing for every amount)
 **Priority**: Low
