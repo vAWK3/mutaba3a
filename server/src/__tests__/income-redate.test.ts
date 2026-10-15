@@ -221,12 +221,14 @@ describe('versions and dates (AC4)', () => {
     const received = await receivedEntry(s);
     const headers = s.u.as(s.u.personal);
 
-    const oldOwed = await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '0001-01-01' }, headers, 1));
-    expect(oldOwed.status).toBe(422);
-    expect(await errorOf(oldOwed)).toMatchObject({ details: { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' } });
-    const oldPayment = await s.h.app.request(`/v1/payments/${received.id}`, patch({ receivedOn: '2016-10-03' }, headers, 1));
-    expect(oldPayment.status).toBe(422);
-    expect(await errorOf(oldPayment)).toMatchObject({ details: { reason: 'DATE_INVALID', field: 'receivedOn', bound: 'past' } });
+    for (const date of ['2016-10-03', '0001-01-01']) {
+      const oldOwed = await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: date }, headers, 1));
+      expect(oldOwed.status).toBe(422);
+      expect(await errorOf(oldOwed)).toMatchObject({ details: { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' } });
+      const oldPayment = await s.h.app.request(`/v1/payments/${received.id}`, patch({ receivedOn: date }, headers, 1));
+      expect(oldPayment.status).toBe(422);
+      expect(await errorOf(oldPayment)).toMatchObject({ details: { reason: 'DATE_INVALID', field: 'receivedOn', bound: 'past' } });
+    }
     expect(await s.h.store.receivables.getById(s.u.personal, owed.id)).toMatchObject({ postingDate: '2026-10-08', version: 1 });
     expect(await s.h.store.payments.getById(s.u.personal, received.id)).toMatchObject({ receivedOn: '2026-10-08', version: 1 });
 

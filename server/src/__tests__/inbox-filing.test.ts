@@ -270,6 +270,14 @@ describe('POST /v1/inbox/{id}/file-as-expense', () => {
     expect(filedBody.error.details).toEqual(directBody.error.details);
     expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
   });
+
+  it('files an entry dated on the floor day itself (MUT-227: 2016-10-04 when today is 2026-10-12)', async () => {
+    const s = await setup();
+    const entry = await s.capture({ ...EXPENSE_ENTRY, occurredOn: '2016-10-04' });
+    const filed = await s.fileExpense(entry.id);
+    expect(filed.status).toBe(201);
+    expect((await read(filed)).occurredOn).toBe('2016-10-04');
+  });
 });
 
 describe('POST /v1/inbox/{id}/file-as-income on a personal profile', () => {
@@ -382,6 +390,14 @@ describe('POST /v1/inbox/{id}/file-as-income on a personal profile', () => {
     expect(filedBody.error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
     expect(filedBody.error.details).toEqual(directBody.error.details);
     expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
+  });
+
+  it('files an entry dated on the floor day itself (MUT-227: 2016-10-04 when today is 2026-10-12)', async () => {
+    const s = await setup();
+    const entry = await s.capture({ ...INCOME_ENTRY, occurredOn: '2016-10-04' });
+    const filed = await s.fileIncome(entry.id, { kind: 'received' });
+    expect(filed.status).toBe(201);
+    expect((await read(filed)).occurredOn).toBe('2016-10-04');
   });
 
   it('records how the entry was captured on the income audit row', async () => {

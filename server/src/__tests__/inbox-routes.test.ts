@@ -278,10 +278,14 @@ describe('PATCH /v1/inbox/{entryId}', () => {
   it('refuses moving the date more than ten years back (MUT-227), and leaves the entry as it was', async () => {
     const { h, u, capture, list } = await setup();
     const created = (await read(await capture())) as { id: string };
-    const res = await h.app.request(`/v1/inbox/${created.id}`, json({ occurredOn: '2006-10-08' }, { ...u.me(), 'if-match': '1' }, 'PATCH'));
-    expect(res.status).toBe(422);
-    expect((await read(res)).error.details).toMatchObject({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    for (const occurredOn of ['2016-10-02', '0001-01-01']) {
+      const res = await h.app.request(`/v1/inbox/${created.id}`, json({ occurredOn }, { ...u.me(), 'if-match': '1' }, 'PATCH'));
+      expect(res.status).toBe(422);
+      expect((await read(res)).error.details).toMatchObject({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    }
     expect((await read(await list())).items).toMatchObject([{ id: created.id, occurredOn: '2026-10-08', version: 1 }]);
+    const atFloor = await h.app.request(`/v1/inbox/${created.id}`, json({ occurredOn: '2016-10-03' }, { ...u.me(), 'if-match': '1' }, 'PATCH'));
+    expect(atFloor.status).toBe(200);
   });
 
   it('refuses a stale If-Match with 409 VERSION_MISMATCH, and a missing one with 422', async () => {

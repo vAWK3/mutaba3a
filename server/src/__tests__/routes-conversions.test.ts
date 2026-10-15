@@ -343,12 +343,21 @@ describe('PATCH /v1/conversions/{id} (MUT-194)', () => {
     ['a wrong-precision amount for the row\'s currency', { amount: '1.234' }, 'AMOUNT_INVALID', 'amount'],
     ['a future occurredOn', { occurredOn: '2026-10-21' }, 'DATE_INVALID', 'occurredOn'],
     ['an occurredOn more than ten years back (MUT-227)', { occurredOn: '2016-10-11' }, 'DATE_INVALID', 'occurredOn'],
+    ['a typo year (MUT-227)', { occurredOn: '0001-01-01' }, 'DATE_INVALID', 'occurredOn'],
   ])('refuses %s with 422 %s on field %s', async (_label, body, reason, field) => {
     const { h, a, p, create } = await setup();
     const created = await read(await create({}));
     const res = await patch(h, created.id, body, { ...p.as(a.org.id), 'if-match': '1' });
     expect(res.status).toBe(422);
     expect((await read(res)).error.details).toMatchObject({ reason, field });
+  });
+
+  it('moves the date to the floor day itself (MUT-227: 2016-10-12 when today is 2026-10-20)', async () => {
+    const { h, a, p, create } = await setup();
+    const created = await read(await create({}));
+    const res = await patch(h, created.id, { occurredOn: '2016-10-12' }, { ...p.as(a.org.id), 'if-match': '1' });
+    expect(res.status).toBe(200);
+    expect((await read(res)).occurredOn).toBe('2016-10-12');
   });
 
   it('a notes-only edit of an old conversion is fine: the date is only checked when sent', async () => {

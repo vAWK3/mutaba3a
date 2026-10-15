@@ -240,10 +240,14 @@ describe('PATCH /v1/expenses/{id}', () => {
     const e = await read(await create({ occurredOn: '2016-10-12' }));
     expect(e.occurredOn).toBe('2016-10-12');
     const url = `/v1/expenses/${e.id}`;
-    const moved = await h.app.request(url, json({ occurredOn: '2006-10-12' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
-    expect(moved.status).toBe(422);
-    expect((await read(moved)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    for (const occurredOn of ['2016-10-11', '0001-01-01']) {
+      const moved = await h.app.request(url, json({ occurredOn }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+      expect(moved.status).toBe(422);
+      expect((await read(moved)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    }
     expect((await read(await h.app.request(url, { headers: p.as(a.org.id) }))).occurredOn).toBe('2016-10-12');
+    const atFloor = await h.app.request(url, json({ occurredOn: '2016-10-12', notes: 'moved to the floor' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(atFloor.status).toBe(200);
   });
 
   it('MUT-227: a row already older than the floor stays readable, editable without its date, and inside old-date filters', async () => {

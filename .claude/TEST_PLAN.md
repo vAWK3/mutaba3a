@@ -2608,4 +2608,5 @@ The phone-side AC ("the row shows saved") follows from the server returning the 
 | `src/hosted/components/__tests__/incomeApiErrors.test.ts` | `bound: past` → `dateTooOld`; `future` or no bound → `dateFuture`, for income and settle |
 | Release-QA | `portal.income.date-too-old` (`qa/specs/portal/income.spec.ts`): passing, recorded |
 | Regression | version pins in routes-m2..m8 moved to 1.27.0-mut227; every other date test unchanged and green |
+| qa-reconcile additions | per endpoint group: `0001-01-01` on settle and both re-dates, the floor day accepted on expense, conversion and inbox PATCH, and on both filings |
 
