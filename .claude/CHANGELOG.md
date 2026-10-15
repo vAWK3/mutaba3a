@@ -45,6 +45,11 @@
 ### Not changed
 - Malafat-fed and unowned profiles: no row-link, no clickable look, and `?income=` / `?payment=` deep links render nothing.
 
+### Fixed in review (qa-reconcile)
+- A record the server would refuse (an undone payment, someone else's capture, an entry Malafat posted) opened a working Save that did nothing: GET answers 200 there and only the PATCH says 404, which was mapped to a silent re-read. The drawer now checks `canRedateOwed` / `canRedatePayment` on the record it loaded and shows "no longer available"; a 404 on save also toasts it.
+- A save that answered after the drawer closed called the old `onClose` and closed whatever drawer was open by then (resetting its filters). It now does nothing once unmounted.
+- A background refetch with a new version replaced a typed date, and Save then closed without saving. The date now refills only after a 409's re-read or when nothing was typed.
+
 ## [Unreleased] - 2026-10-15 — QA specs wait for Owed now before reading it (MUT-178)
 
 **Why:** `@web.clients.owed-now-parity`, `@web.home` and `@web.brand.type` read Home's Owed now with `allTextContents()` (or checked the loaded font faces) straight after `goto`. That doesn't wait, so the specs raced Home's receivables query and usually failed.

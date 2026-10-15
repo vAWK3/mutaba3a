@@ -15,6 +15,7 @@ const R = 'b1111111-1111-4111-8111-111111111111';
 const P = 'c1111111-1111-4111-8111-111111111111';
 const P2 = 'c2222222-2222-4222-8222-222222222222';
 const C1 = CUSTOMERS[0].id;
+const ME = 'd1111111-1111-4111-8111-111111111111';
 const PJ = PROJECTS[0].id;
 const PERSONAL = profile({
   writerOfRecord: null,
@@ -27,7 +28,7 @@ const PERSONAL = profile({
 });
 
 const owed = (o: Partial<Receivable> = {}): Receivable => ({ ...receivable(R, C1, PJ, '500.00', 'DUE', '2026-11-15'), origin: 'ADJUSTMENT', gross: '500.00', postingDate: '2026-10-08', version: 3, ...o });
-const mine = (o: Partial<Payment> = {}): Payment => ({ ...payment(P, 'PAY-2026-0007'), id: P, origin: 'capture', receivedOn: '2026-10-08', version: 2, allocations: [], allocated: '0.00', unallocated: '585.00', ...o });
+const mine = (o: Partial<Payment> = {}): Payment => ({ ...payment(P, 'PAY-2026-0007'), id: P, origin: 'capture', status: 'POSTED', capturedBy: { userId: ME, displayName: 'Me' }, receivedOn: '2026-10-08', version: 2, allocations: [], allocated: '0.00', unallocated: '585.00', ...o });
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -40,7 +41,7 @@ interface Routes {
   getOwed?: () => Response;
   getPayment?: () => Response;
   listPayments?: () => Response;
-  patch?: (request: StubRequest) => Response;
+  patch?: (request: StubRequest) => Response | Promise<Response>;
 }
 
 function stub(routes: Routes = {}) {
@@ -67,16 +68,16 @@ function stub(routes: Routes = {}) {
 function renderDrawer(kind: 'owed' | 'payment', id = kind === 'owed' ? R : P) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const props = { onClose: vi.fn(), onOpenPayment: vi.fn(), onSeePayments: vi.fn() };
-  render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <HostedLanguageProvider>
         <ToastProvider>
-          <RedateDrawer kind={kind} profile={PERSONAL} id={id} {...props} />
+          <RedateDrawer kind={kind} profile={PERSONAL} id={id} userId={ME} {...props} />
         </ToastProvider>
       </HostedLanguageProvider>
     </QueryClientProvider>,
   );
-  return { ...props, user: userEvent.setup() };
+  return { ...props, user: userEvent.setup(), queryClient, unmount: view.unmount };
 }
 
 const dateInput = () => screen.findByLabelText<HTMLInputElement>(/^(Date|Received on)$/);
@@ -167,6 +168,47 @@ describe('RedateDrawer — an Owed entry (?income=)', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('keeps a typed date when a background re-read brings a new version, and saves at that version', async () => {
+    let reads = 0;
+    const api = stub({ getOwed: () => json(reads++ === 0 ? owed() : owed({ version: 4 })), patch: () => json({ id: R, version: 5 }) });
+    const { user, onClose, queryClient } = renderDrawer('owed');
+    await setDate(user, '2026-09-30');
+    await queryClient.invalidateQueries();
+    await waitFor(() => expect(reads).toBe(2));
+    expect((await dateInput()).value).toBe('2026-09-30');
+    await user.click(save());
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(api.patches()[0]!.headers.get('If-Match')).toBe('4');
+  });
+
+  it('refills an untouched date when a background re-read brings a new one', async () => {
+    let reads = 0;
+    stub({ getOwed: () => json(reads++ === 0 ? owed() : owed({ postingDate: '2026-10-01', version: 4 })) });
+    const { queryClient } = renderDrawer('owed');
+    await dateInput();
+    await queryClient.invalidateQueries();
+    await waitFor(async () => expect((await dateInput()).value).toBe('2026-10-01'));
+  });
+
+  it('does not close or toast for a save that answers after the drawer was closed', async () => {
+    let answer: (response: Response) => void = () => {};
+    stub({ patch: () => new Promise<Response>((resolve) => (answer = resolve)) });
+    const { user, onClose, unmount } = renderDrawer('owed');
+    await setDate(user, '2026-09-30');
+    await user.click(save());
+    unmount();
+    answer(json({ id: R, version: 4 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shows "no longer available" for an entry Malafat posted (the server would refuse it)', async () => {
+    stub({ getOwed: () => json(owed({ origin: 'INSTALLMENT' })) });
+    renderDrawer('owed');
+    expect(await screen.findByText('This entry is no longer available.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+  });
+
   it('says calmly when the entry no longer exists', async () => {
     stub({ getOwed: () => fail(404, 'NOT_FOUND') });
     renderDrawer('owed');
@@ -215,6 +257,30 @@ describe('RedateDrawer — a payment (?payment=)', () => {
     expect(sent!.url.pathname).toBe(`/v1/payments/${P}`);
     expect(sent!.headers.get('If-Match')).toBe('2');
     expect(sent!.body).toEqual({ receivedOn: '2026-10-02' });
+  });
+});
+
+describe('RedateDrawer — a payment it can no longer change', () => {
+  it('shows "no longer available" for an undone payment or someone else’s, with no Save', async () => {
+    for (const refused of [mine({ status: 'REVERSED' }), mine({ capturedBy: { userId: 'u-other', displayName: 'Rami' } })]) {
+      stub({ getPayment: () => json(refused) });
+      const { unmount } = renderDrawer('payment');
+      expect(await screen.findByText('This entry is no longer available.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+      unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('when the server answers 404 on save, says so instead of doing nothing', async () => {
+    let reads = 0;
+    stub({ getPayment: () => json(reads++ === 0 ? mine() : mine({ status: 'REVERSED', version: 3 })), patch: () => fail(404, 'NOT_FOUND') });
+    const { user, onClose } = renderDrawer('payment');
+    await setDate(user, '2026-10-02');
+    await user.click(save());
+    expect(await screen.findAllByText('This entry is no longer available.')).not.toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
 

@@ -2353,6 +2353,6 @@ When a clickable `HostedTable` row already has a button in its first cell (the P
 **Instances**: `PaymentsList` (`linkColumn="received"`), `ReceivablesList` (Record payment stops propagation).
 
 ### Pattern: One drawer for two record kinds calls both reads unconditionally
-`RedateDrawer` calls `useReceivable(…, kind === 'owed')` and `usePayment(…, kind === 'payment')` every render and picks one, so hooks never run conditionally. A new version (the re-read after a 409) refills the form through a render-time adjustment, not an effect.
+`RedateDrawer` calls `useReceivable(…, kind === 'owed')` and `usePayment(…, kind === 'payment')` every render and picks one, so hooks never run conditionally. A new version refills the form through a render-time adjustment, not an effect, and only after a 409's re-read or when the field is untouched: a background refetch never replaces typed input. The drawer also re-checks the gate (`canRedate…`) on the record it loaded, since a GET can succeed where the PATCH would 404, and a save that answers after unmount neither closes nor toasts.
 **Instances**: `RedateDrawer`.
 

@@ -5,6 +5,7 @@ import { incomeAffordancesFor, redateAffordancesFor } from '../data/incomeAfford
 import type { IncomeDrawerSearch } from '../data/filters';
 import { IncomeCaptureDrawer } from './IncomeCaptureDrawer';
 import { RecordPaymentDrawer } from './RecordPaymentDrawer';
+import { useMe } from '../session/me';
 import { RedateDrawer } from './RedateDrawer';
 
 /**
@@ -73,6 +74,7 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, 
   const { kinds, canSettle } = incomeAffordancesFor(profile);
   const redate = redateAffordancesFor(profile);
   const navigate = useNavigate();
+  const userId = useMe().user.id;
   const seePayments = onSeePayments ?? ((customerId: string) => void navigate({ to: `/p/${profile.id}/clients/${customerId}`, search: { tab: 'payments' } } as never));
   if (drawer.settle && canSettle) {
     const receivableId = drawer.settle;
@@ -104,6 +106,7 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, 
         kind={redateTarget.kind}
         profile={profile}
         id={redateTarget.id}
+        userId={userId}
         onClose={onClose}
         onOpenPayment={(paymentId) => onOpen({ payment: paymentId })}
         onSeePayments={seePayments}

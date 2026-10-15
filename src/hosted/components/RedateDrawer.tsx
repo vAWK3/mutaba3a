@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/ui/Button';
 import { BrandLoader } from '../../components/brand/BrandLoader';
 import { useLanguage } from '../../lib/i18n/core';
 import { isolate, isolateAmount } from '../../lib/utils';
 import { ApiError, type HostedProfile, type Payment, type Receivable } from '../api/client';
+import { canRedateOwed, canRedatePayment } from '../data/incomeAffordances';
 import { usePayment, usePaymentsForEntry, useReceivable, useRedateOwed, useRedatePayment } from '../data/incomeQueries';
 import { useCustomerDirectory, useProjectDirectory } from '../data/queries';
 import { formatDecimal } from '../format/DecimalAmount';
@@ -25,6 +26,9 @@ import { useToast } from './Toast';
  *     ├─ 409 ─▶ re-read ─▶ the form refills on the new version ─▶ "changed elsewhere", stays open (MUT-221's lesson)
  *     ├─ 422 ─▶ inline under the date
  *     └─ 404 ─▶ re-read ─▶ "no longer available"
+ *
+ * A record the server would refuse (undone, someone else's, Malafat's) shows "no longer available" instead of a form,
+ * whether a stale link opened it or it changed while open: GET still answers 200 there, only the PATCH says 404.
  */
 
 export type RedateKind = 'owed' | 'payment';
@@ -33,6 +37,8 @@ export interface RedateDrawerProps {
   kind: RedateKind;
   profile: HostedProfile;
   id: string;
+  /** The signed-in user: only their own captures can be re-dated (the server's isOwnCapture). */
+  userId: string;
   onClose: () => void;
   /** A settled entry's payment line opens that payment's drawer (eng review R4). */
   onOpenPayment: (paymentId: string) => void;
@@ -44,7 +50,7 @@ const FORM_ID = 'hosted-redate-form';
 /** Statuses with money applied: only then does the drawer look up the entry's payment lines (R4). */
 const PAID_STATUSES: ReadonlySet<string> = new Set(['PAID', 'PARTIALLY_PAID']);
 
-export function RedateDrawer({ kind, profile, id, onClose, onOpenPayment, onSeePayments }: RedateDrawerProps) {
+export function RedateDrawer({ kind, profile, id, userId, onClose, onOpenPayment, onSeePayments }: RedateDrawerProps) {
   const { t } = useLanguage();
   // Both are called every render (rules of hooks); `enabled` runs only the one this kind needs.
   const owed = useReceivable(profile.id, id, kind === 'owed');
@@ -52,12 +58,18 @@ export function RedateDrawer({ kind, profile, id, onClose, onOpenPayment, onSeeP
   const loaded = kind === 'owed' ? owed : paid;
   const title = t(kind === 'owed' ? 'hosted.redate.owedTitle' : 'hosted.redate.paymentTitle');
 
+  const goneDrawer = (
+    <Drawer title={title} onClose={onClose} closeLabel={t('common.close')}>
+      <Empty title={t('hosted.redate.gone')} />
+    </Drawer>
+  );
   if (loaded.isError) {
     // Not QueryView, which reads any 404 as a lost profile (TD-123): a deleted or undone row says so calmly.
     const gone = loaded.error instanceof ApiError && (loaded.error.status === 404 || loaded.error.code === 'NOT_FOUND');
+    if (gone) return goneDrawer;
     return (
       <Drawer title={title} onClose={onClose} closeLabel={t('common.close')}>
-        {gone ? <Empty title={t('hosted.redate.gone')} /> : <Unreachable onRetry={() => void loaded.refetch()} />}
+        <Unreachable onRetry={() => void loaded.refetch()} />
       </Drawer>
     );
   }
@@ -70,6 +82,8 @@ export function RedateDrawer({ kind, profile, id, onClose, onOpenPayment, onSeeP
       </Drawer>
     );
   }
+  const editable = kind === 'owed' ? canRedateOwed(profile, loaded.data as Receivable) : canRedatePayment(profile, loaded.data as Payment, userId);
+  if (!editable) return goneDrawer;
   return (
     <RedateForm
       kind={kind}
@@ -83,7 +97,7 @@ export function RedateDrawer({ kind, profile, id, onClose, onOpenPayment, onSeeP
   );
 }
 
-interface RedateFormProps extends Omit<RedateDrawerProps, 'id'> {
+interface RedateFormProps extends Omit<RedateDrawerProps, 'id' | 'userId'> {
   record: Receivable | Payment;
   title: string;
 }
@@ -104,15 +118,28 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
   const loadedDate = dateOf(kind, record);
 
   const [date, setDate] = useState(loadedDate);
-  const [seenVersion, setSeenVersion] = useState(record.version);
+  const [seen, setSeen] = useState({ version: record.version, date: loadedDate });
+  const [refillOnReread, setRefillOnReread] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
-  // A genuinely new version (the re-read after a 409) refills the date. Adjusted during render, not in an effect,
-  // so a background refetch of the same version never wipes what was typed.
-  if (record.version !== seenVersion) {
-    setSeenVersion(record.version);
-    setDate(loadedDate);
-    setDateError(null);
+  // A new version refills the date after a 409's re-read, or when nothing was typed; a background refetch never
+  // replaces what the person typed (it then saves at the new version). Adjusted during render, not in an effect.
+  if (record.version !== seen.version) {
+    const untouched = date === seen.date;
+    setSeen({ version: record.version, date: loadedDate });
+    if (refillOnReread || untouched) {
+      setDate(loadedDate);
+      setDateError(null);
+      setRefillOnReread(false);
+    }
   }
+  // A save that answers after the drawer closed must not close (or toast over) whatever is open by then.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const receivable = kind === 'owed' ? (record as Receivable) : null;
   const pay = kind === 'payment' ? (record as Payment) : null;
@@ -134,11 +161,13 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
     try {
       if (kind === 'owed') await redateOwed.mutateAsync({ receivableId: record.id, occurredOn: date, version: record.version });
       else await redatePayment.mutateAsync({ paymentId: record.id, receivedOn: date, version: record.version });
-      onClose();
+      if (mounted.current) onClose();
     } catch (error) {
+      if (!mounted.current) return;
       const mapped = mapRedateError(error);
       if (mapped.fields[0]) setDateError(t(mapped.fields[0].key));
       if (mapped.toast) showToast(t(mapped.toast));
+      if (mapped.reread) setRefillOnReread(true);
       if (mapped.reread) void queryClient.invalidateQueries({ queryKey: profileKey(profile.id, kind === 'owed' ? 'receivable' : 'payment', record.id) });
     }
   };
