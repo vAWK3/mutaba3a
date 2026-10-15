@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Conversions list refreshes after a write (MUT-217)
+
+**Why:** `invalidateConversionQueries` refreshed only the transaction queries. The Conversions list is keyed `['conversions', filters]`, so a logged, edited or deleted conversion only showed after a reload.
+
+### Fixed
+- Logging, editing and deleting a conversion also invalidates the `['conversions']` prefix, so the list and a reopened drawer show the change straight away.
+
+### Technical
+- New `src/hooks/__tests__/useConversionQueries.test.tsx` (real Dexie on fake IndexedDB).
+- QA `web.conversions.log` and `web.conversions.edit-delete` are no longer `manual`.
+- Files: `src/hooks/useConversionQueries.ts`, the new test, `qa/features/web/conversions.yaml`, `qa/specs/web/conversions.spec.ts`.
+
 ## [Unreleased] - 2026-10-15 — Portal expense drawer recovers from a 409 (MUT-221)
 
 **Why:** on `CONFLICT` the portal's ExpenseDrawer only showed a toast. Nothing re-read the expense, so the form kept the stale version, and every later Save sent the same `If-Match` and was refused again.
