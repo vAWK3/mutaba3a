@@ -3128,3 +3128,23 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - Three duplicate `@keyframes spin` and five spinner blocks are gone; a test keeps them gone.
 - The loader's default label lives in both the app and portal dictionaries (`common.loaderLabel`), kept equal by the portal parity test.
 
+---
+
+## ADR-080: The Web and Portal Boot Splash Is Static HTML Plus a Linked Stylesheet; the Portal's Session Check Is "the Mark Becomes the Loader"; Before JS the Theme Is the OS's
+
+**Status**: Active
+**Date**: 2026-10-15
+**Context**: MUT-207 (epic MUT-101). Until the bundle mounted, `index.html` and `hosted.html` painted the browser default (white, even in dark mode) for seconds on a cold or slow load, then a second screen: the portal's wordmark lockup (which moved 18 px when its spinner came) or the landing's unlocalised "Loading...". The portal CSP is `default-src 'self'` (no inline style or script). QA runs the Vite dev servers, where CSS imported from `main.tsx` arrives through JS. Before JS neither the stored theme nor the language is known. Brief and reviews: `.claude/designs/mut-207-boot-splash.md`, eng review R1 in `mut-206-brand-loader.md`.
+
+**Decision**:
+1. **Static splash in both heads** (D1): `#root` holds a hidden `.boot-splash` with a `<picture>` (the dark mark under `prefers-color-scheme: dark`) around an 80 px `<img>` of the bundled `mark.svg`. Pure HTML and attributes; Vite rewrites the asset URLs to the same hashed files `BrandMark` uses. React's first render replaces it; no code removes it.
+2. **Its own linked stylesheet** (D2): `src/styles/brand/boot-splash.css`, about 300 B, linked from both heads, so it styles the first paint in dev, QA and production. It writes the two canvas hexes (it loads before the tokens), and a test pins them to `mutaba3a.tokens.json`. Once ThemeProvider sets `data-theme`, forced-theme rules win in the brand CSS's selector order (DR12).
+3. **The portal's session check is "the mark becomes the loader"** (D4, R1): inside `.boot-splash`, `BrandMark` 80 until `bootDelayMs()` (400 ms from page start, DR9), then `BrandLoader` 96 with `delay={0}`, whose frame 0 is the identical mark: no jump, no fade. The wordmark text leaves the boot screen (it can't be drawn before JS); BootUnreachable keeps it. The landing's fallback (`BootSplash`) does the same (DR10).
+4. **Before JS the theme is the OS's** (D6). A person who chose the opposite in-app theme sees the OS-coloured splash for the pre-JS moment. Rejected: an external `boot-theme.js` reading `localStorage` before paint (a render-blocking request on every load for a sub-second, one-colour mismatch; the portal, a different origin, rarely has a stored theme). Matches ADR-073's no-JS theme-color default.
+
+**Consequences**:
+- One extra render-blocking request of about 300 B (cached immutable on the portal); no JS before first paint; no new asset.
+- `BootSplash.tsx` and the two heads must change together (`brand-head.test.ts` compares them); `check-bundles` proves each built entry's splash files ship (or are inlined `data:` URIs, eng review A2).
+- The portal's boot screen no longer spells the product name; sign-in and the error screen still do.
+- The session check now has a 15 s deadline (DR6): a hung `/v1/me` ends in BootUnreachable with Retry.
+

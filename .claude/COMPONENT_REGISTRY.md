@@ -9,7 +9,7 @@
 
 | Category | Components |
 |----------|------------|
-| **Layout** | AppShell, SidebarNav, BrandMark, BrandLoader (page/section waits), TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
+| **Layout** | AppShell, SidebarNav, BrandMark, BrandLoader (page/section waits), BootSplash (landing Suspense fallback), TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, LegacyExpenseEditDrawer, ConversionDrawer (currency conversion logging), RecurringMarkPaidDrawer, RetainerDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
@@ -106,6 +106,16 @@ Tests: `src/components/brand/__tests__/Wordmark.test.tsx`, `src/hosted/component
 Props: `size` (24 | 40 | 64 | 96), `label` (default `common.loaderLabel`), `delay` (default `LOADER_DELAY_MS` = 400; `0` shows at once, no fade), `slowCaption` (shown and announced from `LOADER_SLOW_MS` = 3000, full-page waits only), `className`. Behaviour: a `role="status"` span from mount, empty during the delay around a same-size blank SVG; then a fresh SVG (keyed) and the label as `.sr-only` text, or as a visible caption under reduced motion (no `<animate>` children, the still mark). A loader mounting within `LOADER_CHAIN_MS` (100) of a shown one unmounting shows at once. Exports `LOADER_DELAY_MS`, `LOADER_SLOW_MS`, `LOADER_CHAIN_MS`, `__resetLoaderChainForTests()` (tests only). Import by direct path in the portal (no barrel).
 
 Tests: `src/components/brand/__tests__/BrandLoader.test.tsx`, `bloomLoaderData.test.ts` (parity with `docs/brand/loader/*.json`), `src/styles/__tests__/brand.test.ts` (fills, fade token, `.loading` boxes).
+
+### BootSplash
+**Location**: `src/components/brand/BootSplash.tsx` (+ `bootDelay.ts`; styles in `src/styles/brand/boot-splash.css`, linked from the heads)
+**Purpose**: The boot splash in React (MUT-207, ADR-080), the Suspense fallback for the landing, download, privacy and /hosted pages. Its first render is the static splash in `index.html`/`hosted.html` element for element (a hidden `.boot-splash` > `<picture>` with the dark mark for a dark OS > 80 px `img.boot-splash-mark`), so the HTML → React hand-off changes nothing; after `bootDelayMs()` it becomes `BrandLoader size={96} delay={0}` in place (frame 0 is the same mark), with no fade or slow caption. No props. Renders inside `LandingProviders` (the loader's label needs a language).
+
+`bootDelayMs(now = performance.now())`: `max(0, LOADER_DELAY_MS - now)`, the still-mark time counted from page start; the portal's `CheckingSession` uses it too.
+
+**Keep in step**: change `BootSplash`, and the two heads' splash markup, together; `brand-head.test.ts` compares them.
+
+Tests: `scripts/__tests__/brand-head.test.ts` (markup, CSP, BootSplash ≡ HTML, canvas hexes), `src/components/brand/__tests__/BootSplash.test.tsx`, `src/hosted/pages/auth/__tests__/BootScreens.test.tsx`.
 
 ### ThemeToggle
 **Location**: `src/components/layout/ThemeToggle.tsx`

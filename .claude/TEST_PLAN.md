@@ -2463,3 +2463,16 @@ Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 | `qa/specs/web/brand.spec.ts` | E2E | `@web.brand.loader-slow-route`: Insights' code held 2 s, light and dark (empty status, then the bloom named Loading in the theme's dot colour, axe, then the page); reduced motion (still mark + word); 1440×900 English and Arabic (centred in the page column ±1 px, not mirrored) |
 | `qa/specs/portal/signin.spec.ts` | E2E | `@portal.signin.boot-slow-session`: `/v1/me` held 3 s → wordmark, then the loader's status "Checking your session", then sign-in, no CSP console error |
 
+### MUT-207 — the boot splash (2026-10-15, ADR-080)
+| File | Type | Covers |
+|------|------|--------|
+| `scripts/__tests__/brand-head.test.ts` | Unit (HTML, node) | both heads link `boot-splash.css`; `#root` holds exactly one hidden `.boot-splash` with the dark `<source>` and the 80 px `<img>`, files present; no `style` attribute or inline `<style>`/`<script>` in the body; `BootSplash`'s first render ≡ the HTML splash; the splash and page backgrounds equal the token canvas in four theme states (OS × `data-theme`), and no other colour is written |
+| `scripts/__tests__/check-bundles.test.ts` | Unit | the boot-splash rule: passes absolute and relative (desktop) URLs and `data:` marks; flags an empty `#root`, a missing mark or stylesheet, a URL outside the dist, no `.boot-splash` rule in any linked sheet, no stylesheet |
+| `scripts/__tests__/vite-config.test.ts` | Unit | the /hosted copy of index.html keeps the splash and its stylesheet |
+| `src/components/brand/__tests__/BootSplash.test.tsx` | Component | `bootDelayMs` (0→400, 100→300, 400→0, 2500→0, default reads the clock); the hidden still mark, then the loader in place with no fade and no aria-hidden; blooms on first render on a slow load; no slow caption; Arabic |
+| `src/hosted/pages/auth/__tests__/BootScreens.test.tsx` | Component + integration | the mark (decorative, 80, `.boot-splash`, not under aria-hidden), no status, no wordmark; at 400 ms the status "Checking your session" (Arabic too), no fade, same container; slow page load blooms at once; reduced motion: no animation, the words visible; "Still connecting…" at 3 s with the mark in place; DR6 through the real portal: still checking at 14.9 s, BootUnreachable at 15 s, Retry calls `/v1/me` again, no unhandled rejection |
+| `src/hosted/session/__tests__/auth-states.test.tsx` | Integration | S1 updated to D4: the mark first, no wordmark text, the status only after 400 ms |
+| `src/lib/i18n/__tests__/loaderKeys.test.ts` | Unit | `hosted.auth.connectingSlow` in both languages |
+| `qa/specs/web/brand.spec.ts` | E2E | `@web.brand.boot-splash`: scripts off, OS light/dark, `/app/` and `/`: canvas background, the right mark loaded, 80 px, centred ±1 px |
+| `qa/specs/portal/signin.spec.ts` | E2E | `@portal.signin.boot-splash`: scripts off light/dark; the hand-off (React's mark or loader keeps the static centre and size ±1 px, then the status); axe on the boot screen light/dark. `@portal.signin.boot-slow-session` (updated): mark first, no wordmark, the bloom in place without a fade, "Still connecting…" at 3 s, sign-in, no CSP error; reduced motion writes the words under a still mark |
+
