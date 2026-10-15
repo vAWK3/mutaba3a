@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../errors.js';
+import { addDays, todayIn } from '../../dates.js';
 import { assertKind, inboxDate, parseInboxAmount } from '../compose.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../cursor.js';
 
@@ -26,13 +27,15 @@ describe('inbox capture amounts (MUT-66)', () => {
 });
 
 describe('inbox capture dates (MUT-66)', () => {
+  const now = new Date('2026-10-12T09:00:00Z');
+
   it('takes a well-formed date', () => {
-    expect(inboxDate('2026-10-05')).toBe('2026-10-05');
+    expect(inboxDate('2026-10-05', now)).toBe('2026-10-05');
   });
 
   it('refuses a malformed one, with the existing reason', () => {
-    expect(reasonOf(() => inboxDate('05/10/2026'))).toBe('VALIDATION_FAILED:DATE_INVALID');
-    expect(reasonOf(() => inboxDate('2026-13-01'))).toBe('VALIDATION_FAILED:DATE_INVALID');
+    expect(reasonOf(() => inboxDate('05/10/2026', now))).toBe('VALIDATION_FAILED:DATE_INVALID');
+    expect(reasonOf(() => inboxDate('2026-13-01', now))).toBe('VALIDATION_FAILED:DATE_INVALID');
   });
 
   /**
@@ -41,7 +44,22 @@ describe('inbox capture dates (MUT-66)', () => {
    * check. If someone "fixes" this by reflex, this test says why not.
    */
   it('accepts a future date at capture — the profile’s timezone decides that, at filing time', () => {
-    expect(inboxDate('2099-01-01')).toBe('2099-01-01');
+    expect(inboxDate('2099-01-01', now)).toBe('2099-01-01');
+  });
+
+  it('MUT-227: refuses a date more than ten years before UTC yesterday, naming the past bound', () => {
+    expect(inboxDate('2016-10-03', now)).toBe('2016-10-03');
+    expect(reasonOf(() => inboxDate('2016-10-02', now))).toBe('VALIDATION_FAILED:DATE_INVALID');
+    expect(reasonOf(() => inboxDate('0001-01-01', now))).toBe('VALIDATION_FAILED:DATE_INVALID');
+  });
+
+  /** The lenient floor is never stricter than filing's exact one, in the earliest and the latest timezone on Earth. */
+  it.each(['2026-10-12T00:30:00Z', '2026-10-12T11:59:00Z', '2026-10-12T12:30:00Z', '2026-10-12T23:30:00Z'])('MUT-227: at %s capture accepts every date any profile would file', (instant) => {
+    const at = new Date(instant);
+    for (const timezone of ['Etc/GMT+12', 'Pacific/Kiritimati', 'UTC', 'Asia/Jerusalem']) {
+      const exactFloor = addDays(todayIn(timezone, at), -3660);
+      expect(inboxDate(exactFloor, at)).toBe(exactFloor);
+    }
   });
 });
 

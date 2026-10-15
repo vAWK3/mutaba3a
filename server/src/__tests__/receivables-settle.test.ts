@@ -184,6 +184,19 @@ describe('POST /v1/receivables/{id}/settle', () => {
     expect((await read(res)).error.details).toMatchObject({ reason: 'DATE_INVALID', field: 'paidAt' });
   });
 
+  it('paidAt more than ten years back → 422 bound past, nothing recorded; the floor day settles (MUT-227)', async () => {
+    const { h, p, as } = await setup();
+    const { receivableId } = await owed(h, as, p.id);
+    for (const paidAt of ['2016-10-03', '0001-01-01']) {
+      const res = await settle(h, as, p.id, receivableId, { paidAt });
+      expect(res.status).toBe(422);
+      expect((await read(res)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'paidAt', bound: 'past' });
+    }
+    expect((await read(await h.app.request('/v1/payments', { headers: as(p.id) }))).items).toEqual([]);
+    const floor = await read(await settle(h, as, p.id, receivableId, { paidAt: '2016-10-04' }));
+    expect(floor.payment.receivedOn).toBe('2016-10-04');
+  });
+
   it('paidAt omitted defaults to today; a backdated paidAt lands on the payment’s receivedOn', async () => {
     const { h, p, as } = await setup();
     const today = await owed(h, as, p.id);

@@ -145,6 +145,17 @@ describe('POST /v1/conversions', () => {
     expect(today.status).toBe(201);
   });
 
+  it('MUT-227: refuses an occurredOn more than ten years back (bound past); accepts the floor day', async () => {
+    // Today is 2026-10-20 in Jerusalem, so the floor is 2016-10-12.
+    const { create } = await setup();
+    for (const occurredOn of ['2016-10-11', '0001-01-01']) {
+      const old = await create({ occurredOn });
+      expect(old.status).toBe(422);
+      expect((await read(old)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    }
+    expect((await create({ occurredOn: '2016-10-12' })).status).toBe(201);
+  });
+
   it('replays an Idempotency-Key and refuses it for a different body', async () => {
     const { h, a, p } = await setup();
     const key = { ...p.as(a.org.id), 'idempotency-key': 'conversion-key-0001' };
@@ -331,12 +342,33 @@ describe('PATCH /v1/conversions/{id} (MUT-194)', () => {
     ['a merged same-currency pair', { toAmount: '100.00', toCurrency: 'USD' }, 'SAME_CURRENCY', 'toCurrency'],
     ['a wrong-precision amount for the row\'s currency', { amount: '1.234' }, 'AMOUNT_INVALID', 'amount'],
     ['a future occurredOn', { occurredOn: '2026-10-21' }, 'DATE_INVALID', 'occurredOn'],
+    ['an occurredOn more than ten years back (MUT-227)', { occurredOn: '2016-10-11' }, 'DATE_INVALID', 'occurredOn'],
+    ['a typo year (MUT-227)', { occurredOn: '0001-01-01' }, 'DATE_INVALID', 'occurredOn'],
   ])('refuses %s with 422 %s on field %s', async (_label, body, reason, field) => {
     const { h, a, p, create } = await setup();
     const created = await read(await create({}));
     const res = await patch(h, created.id, body, { ...p.as(a.org.id), 'if-match': '1' });
     expect(res.status).toBe(422);
     expect((await read(res)).error.details).toMatchObject({ reason, field });
+  });
+
+  it('moves the date to the floor day itself (MUT-227: 2016-10-12 when today is 2026-10-20)', async () => {
+    const { h, a, p, create } = await setup();
+    const created = await read(await create({}));
+    const res = await patch(h, created.id, { occurredOn: '2016-10-12' }, { ...p.as(a.org.id), 'if-match': '1' });
+    expect(res.status).toBe(200);
+    expect((await read(res)).occurredOn).toBe('2016-10-12');
+  });
+
+  it('MUT-227: a row already older than the floor accepts an edit that resends its unchanged date (the portal always sends it)', async () => {
+    const { h, a, p } = await setup();
+    const old = await h.store.conversions.create({ organizationId: a.org.id, occurredOn: '2009-05-01', amountMinor: 10000n, currency: 'USD', toAmountMinor: 36000n, toCurrency: 'ILS', notes: null, createdByUserId: p.userId }, h.clock.now);
+    const res = await patch(h, old.id, { occurredOn: '2009-05-01', notes: 'from the old ledger' }, { ...p.as(a.org.id), 'if-match': '1' });
+    expect(res.status).toBe(200);
+    expect(await read(res)).toMatchObject({ occurredOn: '2009-05-01', notes: 'from the old ledger' });
+    const moved = await patch(h, old.id, { occurredOn: '2009-05-02' }, { ...p.as(a.org.id), 'if-match': '2' });
+    expect(moved.status).toBe(422);
+    expect((await read(moved)).error.details).toMatchObject({ reason: 'DATE_INVALID', bound: 'past' });
   });
 
   it('a notes-only edit of an old conversion is fine: the date is only checked when sent', async () => {

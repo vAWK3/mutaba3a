@@ -43,6 +43,7 @@ import { integrationRoutes } from './routes/integration.js';
 import { projectRoutes } from './routes/projects.js';
 import { wellKnownRoutes, type AppAssociationConfig } from './routes/well-known.js';
 import { CaptureSourceSchema, CONFLICT_REASONS, VALIDATION_REASONS } from './schemas.js';
+import { DAYS_IN_PAST_LIMIT } from './agreements/compose.js';
 
 export interface AppDependencies {
   store: LedgerStore;
@@ -112,7 +113,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.26.3-mut199';
+export const API_VERSION = '1.27.0-mut227';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -283,6 +284,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         `409 CONFLICT responses carry details.reason, one of: ${CONFLICT_REASONS.join(', ')}.`,
         '',
         `422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: ${VALIDATION_REASONS.join(', ')} (schema failures carry the zod issues in details instead).`,
+        `A DATE_INVALID on a range check also carries details.bound: past when the date is more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today (the floor on every money date, MUT-227), future when it is later than allowed.`,
         '',
         'Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).',
         '',

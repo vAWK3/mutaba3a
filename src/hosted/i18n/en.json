@@ -337,6 +337,7 @@
         "projectCustomerMismatch": "This matter belongs to a different client",
         "amountInvalid": "Enter a valid amount",
         "dateInvalid": "Enter a valid date",
+        "dateTooOld": "The date can't be more than ten years ago",
         "conflict": "This expense changed elsewhere — showing the latest version",
         "network": "Couldn't reach the server. Try again."
       }
@@ -373,6 +374,7 @@
         "amountInvalid": "Enter a valid amount",
         "toAmountInvalid": "Enter a valid amount",
         "dateInvalid": "Enter a valid date",
+        "dateTooOld": "The date can't be more than ten years ago",
         "sameCurrency": "Choose a different currency to convert to",
         "conflict": "This conversion changed elsewhere — showing the latest version",
         "network": "Couldn't reach the server. Try again."
@@ -420,6 +422,7 @@
         "currencyMismatch": "That amount is in {typed}; this entry is in {currency}",
         "dateRequired": "Choose a date",
         "dateFuture": "The date can't be later than today",
+        "dateTooOld": "The date can't be more than ten years ago",
         "clientRequiredOwed": "Owed needs a client",
         "clientRequired": "Choose a client",
         "clientNotFound": "This client isn't on this profile",

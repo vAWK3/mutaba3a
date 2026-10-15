@@ -151,8 +151,22 @@ export function installmentView(installment: InstallmentRecord, agreement: Agree
 
 export const DAYS_IN_FUTURE_LIMIT = 3660;
 
+/**
+ * MUT-227: the floor twin of the ceiling below. Equal to it by decision, not by definition, so a separate
+ * constant. A money date more than ten years back is a typo (2006 for 2026), not history.
+ */
+export const DAYS_IN_PAST_LIMIT = 3660;
+
+/** Which end of a date range a DATE_INVALID crossed (MUT-227), so a client can say "too old" vs "too late". */
+export type DateBound = 'past' | 'future';
+
 export function assertNotAbsurdDate(date: IsoDate, today: IsoDate, field: string): void {
-  if (compareIsoDates(date, addDays(today, DAYS_IN_FUTURE_LIMIT)) > 0) throw validationError('DATE_INVALID', `${field} is more than ten years ahead`, { field });
+  if (compareIsoDates(date, addDays(today, DAYS_IN_FUTURE_LIMIT)) > 0) throw validationError('DATE_INVALID', `${field} is more than ten years ahead`, { field, bound: 'future' satisfies DateBound });
+}
+
+/** MUT-227: a money date earlier than `today` − DAYS_IN_PAST_LIMIT is refused; the floor day itself is accepted. */
+export function assertNotTooOld(date: IsoDate, today: IsoDate, field: string): void {
+  if (compareIsoDates(date, addDays(today, -DAYS_IN_PAST_LIMIT)) < 0) throw validationError('DATE_INVALID', `${field} is more than ten years ago`, { field, bound: 'past' satisfies DateBound });
 }
 
 export type { PricingBasis };

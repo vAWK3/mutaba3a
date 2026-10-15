@@ -2648,3 +2648,19 @@ Full web suite on 2026-10-15 (after MUT-218/164/217/178): 114 passed, 9 failed, 
 | `qa/specs/web/brand.spec.ts` › `@web.brand.loader-slow-route` | E2E (release-qa) | 5 (fixed) | Now holds Insights in a build too, with service workers blocked, and accepts `page-has-heading-one` on the loader screen. 5/5 on a dev server; 27/27 with the landing cells, `--repeat-each 3 --retries 0`, on a preview build |
 
 This retires the nine-cell baseline from the MUT-226 and MUT-178 notes above. On preview builds `loader-slow-route` now passes as well, so it is no longer dev-server-only.
+
+## MUT-227 — a ten-year floor on hosted money dates (2026-10-15, ADR-086)
+
+| Suite | Cases |
+|---|---|
+| `server/src/agreements/__tests__/date-bounds.test.ts` (new) | `DAYS_IN_PAST_LIMIT` is 3660 and equals the ceiling; the floor day and today pass; floor − 1 → `{ reason: DATE_INVALID, field, bound: past }`; `0001-01-01`; the message; the ceiling now says `bound: future` |
+| `server/src/income/__tests__/compose.test.ts` | `assertNotFuture` carries `bound: future`; `pastMoneyDate` (today and the floor day pass; impossible date, tomorrow, floor − 1, `0001-01-01`); `redateTo` refuses below the org-timezone floor |
+| `server/src/inbox/__tests__/compose.test.ts` | lenient capture floor from UTC yesterday; at four instants, capture accepts every timezone's exact floor (Etc/GMT+12, Kiritimati, UTC, Jerusalem) |
+| Route suites | `income-routes` (received + owed), `receivables-settle` (nothing recorded), `income-redate` (both PATCHes, nothing moved), `routes-m4` (API-key `POST /v1/payments`), `routes-expenses` (create + patch; a seeded 2001 row is editable without its date and listed by `from=2001-01-01`, and its summary range works), `routes-conversions` (create + patch), `inbox-routes` (capture + patch), `inbox-filing` (both filings refuse below the profile's floor and keep the entry, matching the direct create's details) |
+| `src/hosted/components/__tests__/incomeApiErrors.test.ts` | `bound: past` → `dateTooOld`; `future` or no bound → `dateFuture`, for income and settle |
+| Release-QA | `portal.income.date-too-old` (`qa/specs/portal/income.spec.ts`): passing, recorded |
+| Regression | version pins in routes-m2..m8 moved to 1.27.0-mut227; every other date test unchanged and green |
+| qa-reconcile additions | per endpoint group: `0001-01-01` on settle and both re-dates, the floor day accepted on expense, conversion and inbox PATCH, and on both filings |
+| MUT-224 integration (merged second) | `RedateDrawer.test.tsx`: `min` is today − 3660; a date before it is refused with no request; a server `bound: past` reads "more than ten years ago"; an unchanged pre-floor entry closes with no request. `incomeApiErrors.test.ts`: `mapRedateError` past / future / no bound |
+| pre-landing review fixes | an unchanged pre-floor date resent with another edit → 200 on expense, conversion and inbox PATCH (written failing first); `routes-m4` replacement keeps the reversed payment's 2015 date (201), an earlier date or a fresh payment there → 422 bound past; `expenseApiErrors` + new `conversionApiErrors.test.ts` map bound past to `dateTooOld`; the floor message test asserts with `toThrow` |
+

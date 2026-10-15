@@ -1,4 +1,4 @@
-import { assertIsoDate, parseAmount, validationError } from '../agreements/compose.js';
+import { assertIsoDate, assertNotTooOld, parseAmount, validationError } from '../agreements/compose.js';
 import type { IsoDate } from '../dates.js';
 import type { Currency } from '../money.js';
 import { ForeignKeyViolation } from '../repositories/memory.js';
@@ -21,8 +21,19 @@ export function parseExpenseAmount(text: string, currency: Currency): bigint {
   return minor;
 }
 
+/** A valid date, nothing more: also parses the list and summary `from`/`to` filters, which must reach old rows (MUT-227). */
 export function expenseDate(value: string): IsoDate {
   return assertIsoDate(value, 'occurredOn');
+}
+
+/**
+ * MUT-227: the date an expense is recorded or moved to — valid, and not more than ten years back. No future check:
+ * POST /v1/expenses has never had one, and filing must refuse exactly where a direct create does.
+ */
+export function expenseOccurredOn(value: string, today: IsoDate): IsoDate {
+  const date = expenseDate(value);
+  assertNotTooOld(date, today, 'occurredOn');
+  return date;
 }
 
 export interface Links {
@@ -84,10 +95,14 @@ export async function assertCategoryChoosable(store: LedgerStore, organizationId
   if (category.archivedAt) throw validationError('CATEGORY_ARCHIVED', 'This category is archived; choose another or restore it', { field: 'categoryId' });
 }
 
-/** The patch fields a PATCH body sets, amount parsed in the row's own currency. */
-export function expensePatch(existing: ExpenseRecord, body: { occurredOn?: string | undefined; amount?: string | undefined; title?: string | null | undefined; vendor?: string | null | undefined; categoryId?: string | null | undefined; notes?: string | null | undefined }): UpdateExpensePatch {
+/**
+ * The patch fields a PATCH body sets, amount parsed in the row's own currency. A resent, unchanged `occurredOn` is
+ * left out rather than re-checked: the portal sends the date on every save, and a row already older than MUT-227's
+ * floor must stay editable.
+ */
+export function expensePatch(existing: ExpenseRecord, today: IsoDate, body: { occurredOn?: string | undefined; amount?: string | undefined; title?: string | null | undefined; vendor?: string | null | undefined; categoryId?: string | null | undefined; notes?: string | null | undefined }): UpdateExpensePatch {
   const patch: UpdateExpensePatch = {};
-  if (body.occurredOn !== undefined) patch.occurredOn = expenseDate(body.occurredOn);
+  if (body.occurredOn !== undefined && body.occurredOn !== existing.occurredOn) patch.occurredOn = expenseOccurredOn(body.occurredOn, today);
   if (body.amount !== undefined) patch.amountMinor = parseExpenseAmount(body.amount, existing.currency as Currency);
   if (body.title !== undefined) patch.title = body.title;
   if (body.vendor !== undefined) patch.vendor = body.vendor;

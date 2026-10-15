@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Money dates have a ten-year floor (MUT-227, ADR-086, API 1.27.0-mut227)
+
+**Why:** the hosted API accepted any valid past date, so a typo like `0001-01-01` or 2006 for 2026 saved silently. Since MUT-223 a settled entry or payment can also be re-dated, so one typo could move it decades back and skew aging, `lastPaymentOn` and month views.
+
+### Fixed
+- Every hosted money date is refused more than ten years (3660 days) before the organization's today, on create and on edit: income, settle, both re-dates, `POST /v1/payments` (Malafat's key included), expenses, conversions and inbox filing. The floor day itself is accepted. 422 `DATE_INVALID` with `details.bound: 'past'`.
+- Inbox capture and edit refuse a typo year straight away, measured leniently from UTC's yesterday, so capture never refuses a date filing would accept.
+- The portal's Add income and Record payment say "The date can't be more than ten years ago" instead of "later than today" for such a date (`hosted.income.errors.dateTooOld`, en + ar).
+
+### Changed
+- `DATE_INVALID` from a range check carries `details.bound` (`past` | `future`); the reason enum is unchanged. API 1.27.0-mut227; every floored request field says so in OpenAPI. OpenAPI and hosted types are regenerated.
+- Not changed: expense list and summary `from`/`to` filters still take any date, and rows already older than the floor stay readable and editable. Expense, conversion and inbox PATCH skip a resent, unchanged date, because the portal sends it on every save (pre-landing review D1).
+- A Malafat correction (`replacesPaymentId`) may keep the reversed payment's date, or a later one, below the floor, so the second step of reverse-and-replace can't strand the money (review D4).
+- Expense and conversion forms also say "The date can't be more than ten years ago" (`apiErrorBound` in `src/hosted/api/client.ts`, review D2).
+- MUT-224's re-date drawer (landed first) now refuses a date before the floor itself, with `min` on the date input (`moneyDateFloor` in `src/hosted/format/dates.ts`), routes a server refusal by `bound` (`mapRedateError`), and still closes untouched for an entry already older than the floor.
+- Still unbounded (follow-up, review D3): an Owed entry's `dueDate`, a credit's `effectiveDate`, an installment trigger date.
+
+### Technical
+- `assertNotTooOld` and `DAYS_IN_PAST_LIMIT` beside the ceiling (`server/src/agreements/compose.ts`); `pastMoneyDate` (`server/src/income/compose.ts`) is the one call for income-like dates; `expenseOccurredOn` (`server/src/expenses/compose.ts`); `inboxDate(value, now)`.
+- The phone half (too-old labels for an outbox row and File from Recent) is on mutaba3a-flutter `feature/mut-227-date-floor`.
+- Files: `server/src/{agreements,income,expenses,inbox}/compose.ts`, `server/src/routes/{income,receivables,payments,expenses,conversions,inbox}.ts`, `server/src/{schemas,app}.ts`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/components/incomeApiErrors.ts`, `src/hosted/i18n/{en,ar}.json`, `qa/features/portal/income.yaml`, `qa/specs/portal/income.spec.ts`, tests below.
+
 ## [Unreleased] - 2026-10-15 — The web QA baseline goes green: the phone bar fits, the slow-route loader is held in builds (MUT-231)
 
 **Why:** nine release-QA cells failed on main (the baseline MUT-226 recorded on a093306), so the web suite could never pass with no retries.

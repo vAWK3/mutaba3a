@@ -181,6 +181,17 @@ describe('POST /v1/income on a personal profile', () => {
     expect((await create({ ...(base as Loose), customerId: c.id, occurredOn: '2026-09-01' })).status).toBe(201);
   });
 
+  it.each([['received', BASE_RECEIVED], ['owed', BASE_OWED]])('%s: occurredOn more than ten years back → 422 DATE_INVALID bound past; the floor day is accepted (MUT-227)', async (_label, base) => {
+    const { h, p, u, create } = await setup();
+    const c = await customer(h, u, p.id);
+    for (const occurredOn of ['2016-10-03', '0001-01-01']) {
+      const old = await create({ ...(base as Loose), customerId: c.id, occurredOn });
+      expect(old.status).toBe(422);
+      expect((await read(old)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    }
+    expect((await create({ ...(base as Loose), customerId: c.id, occurredOn: '2016-10-04' })).status).toBe(201);
+  });
+
   it('Owed: dueDate defaults to EOM_15 of occurredOn, not occurredOn itself', async () => {
     const { h, p, u, create } = await setup();
     const c = await customer(h, u, p.id);

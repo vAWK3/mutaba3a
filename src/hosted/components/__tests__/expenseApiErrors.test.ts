@@ -9,6 +9,7 @@ const labels: ExpenseErrorLabels = {
   projectCustomerMismatch: 'project-customer-mismatch',
   amountInvalid: 'amount-invalid',
   dateInvalid: 'date-invalid',
+  dateTooOld: 'date-too-old',
   conflict: 'conflict',
   network: 'network',
 };
@@ -32,6 +33,12 @@ describe('applyExpenseApiError', () => {
     applyExpenseApiError(validation(reason), setError, labels, showToast);
     expect(setError).toHaveBeenCalledWith(field, { type: 'manual', message });
     expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it('says the date is too old when the server reports the past bound (MUT-227)', () => {
+    const setError = vi.fn();
+    applyExpenseApiError(new ApiError(422, 'VALIDATION_FAILED', 'm', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' }), setError, labels, vi.fn());
+    expect(setError).toHaveBeenCalledWith('occurredAt', { type: 'manual', message: 'date-too-old' });
   });
 
   it('toasts an unrecognised validation reason rather than silently dropping it', () => {

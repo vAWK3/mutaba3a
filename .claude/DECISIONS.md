@@ -3235,7 +3235,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 **Decision**:
 1. `PATCH /v1/income/{id}` `{ occurredOn }` and `PATCH /v1/payments/{id}` `{ receivedOn }`, session or device session, If-Match on the row's existing `version` (no migration). Same contract as ADR-075: stale → 409 `VERSION_MISMATCH` + `currentVersion`; success bumps `version`.
 2. Only a profile the person owns (`profileOwnerOf`, ADR-037 MUT-182 amendment) and only a row they captured: an `ADJUSTMENT` receivable they created, or a POSTED `CAPTURE` payment they created (settle writes `CAPTURE`). Everything else is 404. Exception (eng review D2): on a Malafat-fed profile PATCH /v1/payments keeps `payments:write`, which a session there lacks, so it answers 403 `READ_ONLY_PROFILE` before any lookup — the same answer settle gives.
-3. The new date passes create's rules: a valid date, not later than the organization's today (ADR-038 server addendum).
+3. The new date passes create's rules: a valid date, not later than the organization's today (ADR-038 server addendum). ADR-086 adds the ten-year floor to those rules (`redateTo` → `pastMoneyDate`).
 4. An Owed entry's `dueDate` never moves with its date; moving past it can make an unpaid entry overdue.
 5. PATCH /v1/income refuses a payment with allocations (409 `ALREADY_ALLOCATED`, use PATCH /v1/payments): `IncomeStatus` cannot describe it. The check is on the route's read, not in the write (eng review D3): on an owned profile only settle allocates, and only to the payment it creates, since `/v1/payments/{id}/allocations` is API-key only and keys are refused on owned profiles. If owned profiles ever accept keys, move the check into the WHERE.
 6. A payment keeps its `PAY-YYYY-NNNN` number when `receivedOn` moves into another year (gap-free numbering beats a matching year). A payment dated before its receivable's posting date is allowed, as settle already allows.
@@ -3274,4 +3274,23 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 2. Numbers pass through a double. The API sends money as decimal strings, so no amount is affected. Two integers above 2^53 that differ only beyond double precision would compare equal; no route takes such a number.
 3. **Transition:** keys stored before this change carry the byte fingerprint. On a mismatch the middleware claims again with the byte fingerprint, and a byte-identical replay of an old key still replays. A claim only compares against an existing key, so the second call has no side effect. The fallback can go once every pre-change key is past any client's retry window.
 4. API 1.26.3-mut199. The API description says how bodies compare.
+
+## ADR-086: Every Hosted Money Date Has a Ten-Year Floor; DATE_INVALID Says Which Bound It Crossed
+
+**Status**: Active
+**Date**: 2026-10-15
+**Context**: MUT-227, found in MUT-223's pre-landing review. The hosted API checked money dates for validity and, for income, "not later than today" (ADR-038 server addendum), but had no lower bound. A typo year saved silently, and MUT-223's re-dating (ADR-083) could now move a settled entry decades back. Basel decided the rule on the ticket (2026-10-15); the eng review settled D1 to D4.
+
+**Decision**:
+1. **Floor:** a money date earlier than the organization's today − 3660 days (`DAYS_IN_PAST_LIMIT`, `assertNotTooOld`, beside `assertNotAbsurdDate`'s ceiling) is 422 `VALIDATION_FAILED` / `DATE_INVALID`. The floor day itself is accepted. It is a separate constant from the ceiling: the two are equal by decision, not by definition.
+2. **Everywhere, create and edit alike:** `POST /v1/income`, settle's `paidAt`, both MUT-223 PATCH routes, `POST /v1/payments` (Malafat's key too: its wizard defaults to today), expense create and patch, conversion create and patch, and both inbox filings. Income-like dates make one call, `pastMoneyDate` (valid, not future, not too old). Expenses keep no future check (filing must refuse exactly where a direct create does, ADR-048).
+3. **Not on queries or existing rows:** expense list and summary `from`/`to` stay iso-only (`expenseDate`); a stored date is only checked when a request changes it (expense, conversion and inbox PATCH skip a resent, unchanged date, since the portal sends it on every save), so old rows stay readable and editable; no migration.
+4. **Inbox capture is lenient:** an unsorted entry has no profile and so no timezone. Capture and edit check the floor from UTC's yesterday, which is at or before every timezone's today, so capture can never refuse a date filing would accept; filing applies the exact floor.
+5. **`details.bound`:** the floor, `assertNotFuture` and `assertNotAbsurdDate` add `bound: 'past' | 'future'`. Additive: the reason enum is unchanged, and a client that ignores it keeps working. The portal (income, settle, expenses, conversions, and MUT-224's re-date drawer; `apiErrorBound`) shows a "more than ten years ago" message on `past`. The phone's matching message (outbox row, File from Recent) is on mutaba3a-flutter `feature/mut-227-date-floor`; until that ships, the phone says "date ahead" for a too-old date, so release the two together.
+6. API 1.27.0-mut227.
+7. **Corrections keep their date (review D4):** the first `POST /v1/payments` replacing a reversed payment (`replacesPaymentId`, none recorded yet) may keep that payment's `receivedOn`, or a later one, below the floor; a second replacement is floored. The reversal has already committed, so refusing the replacement would leave the money with no payment.
+
+**Consequences**: a typo year in a money date (when it happened or was paid) is caught at the API. Not covered: agreement and fee-proposal dates keep the ceiling only, and an Owed entry's `dueDate` (POST /v1/income, file-as-income), a receivable credit's `effectiveDate` and an installment trigger date have no bound at all, so a `dueDate` of `0001-01-01` still makes an entry overdue since year 1 (follow-up ticket, review D3). Date pickers still allow any past date; the server is the guard.
+
+**Alternatives Considered**: a fixed year or the profile's creation date as the floor (rejected by Basel: a fixed year misses 2006-for-2026, and creation date blocks backfilling older work); a new `DATE_TOO_OLD` reason (rejected: an enum change for every client, where an additive detail does); a filing-only inbox floor (rejected D3: the typo would wait in Unsorted until filing failed).
 

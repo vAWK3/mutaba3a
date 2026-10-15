@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ApiError } from '../../api/client';
-import { mapIncomeError, mapSettleError } from '../incomeApiErrors';
+import { mapIncomeError, mapRedateError, mapSettleError } from '../incomeApiErrors';
 
 const v = (reason: string, extra: Record<string, unknown> = {}) => new ApiError(422, 'VALIDATION_FAILED', reason, { reason, ...extra });
 
@@ -13,6 +13,13 @@ describe('mapIncomeError (MUT-133)', () => {
     expect(mapIncomeError(v('CUSTOMER_NOT_FOUND')).fields[0]).toEqual({ field: 'customerId', key: 'hosted.income.errors.clientNotFound' });
     expect(mapIncomeError(v('PROJECT_NOT_FOUND')).fields[0]).toEqual({ field: 'projectId', key: 'hosted.income.errors.matterNotFound' });
     expect(mapIncomeError(v('PROJECT_CUSTOMER_MISMATCH')).fields[0]).toEqual({ field: 'customerId', key: 'hosted.income.errors.matterMismatch' });
+  });
+
+  it('says "more than ten years ago" when the server reports the past bound, and "later than today" otherwise (MUT-227)', () => {
+    expect(mapIncomeError(v('DATE_INVALID', { field: 'occurredOn', bound: 'past' })).fields).toEqual([{ field: 'occurredOn', key: 'hosted.income.errors.dateTooOld' }]);
+    expect(mapIncomeError(v('DATE_INVALID', { field: 'occurredOn', bound: 'future' })).fields).toEqual([{ field: 'occurredOn', key: 'hosted.income.errors.dateFuture' }]);
+    // An older server sends no bound: keep today's message.
+    expect(mapIncomeError(v('DATE_INVALID', { field: 'occurredOn' })).fields).toEqual([{ field: 'occurredOn', key: 'hosted.income.errors.dateFuture' }]);
   });
 
   it('uses the §7.4 sentence for a stale read-only profile', () => {
@@ -39,9 +46,22 @@ describe('mapSettleError (MUT-133)', () => {
     expect(mapSettleError(v('DATE_INVALID', { field: 'paidAt' })).fields[0].field).toBe('paidAt');
   });
 
+  it('says which end of the range a paidAt crossed (MUT-227)', () => {
+    expect(mapSettleError(v('DATE_INVALID', { field: 'paidAt', bound: 'past' })).fields).toEqual([{ field: 'paidAt', key: 'hosted.income.errors.dateTooOld' }]);
+    expect(mapSettleError(v('DATE_INVALID', { field: 'paidAt', bound: 'future' })).fields).toEqual([{ field: 'paidAt', key: 'hosted.income.errors.dateFuture' }]);
+  });
+
   it('toasts and re-reads when the entry is gone, closed or changed', () => {
     expect(mapSettleError(v('RECEIVABLE_NOT_OPEN'))).toEqual({ fields: [], toast: 'hosted.settle.errors.gone', reread: true });
     expect(mapSettleError(new ApiError(404, 'NOT_FOUND', 'x'))).toEqual({ fields: [], toast: 'hosted.settle.errors.gone', reread: true });
     expect(mapSettleError(new ApiError(409, 'CONFLICT', 'x', { reason: 'VERSION_MISMATCH' }))).toEqual({ fields: [], toast: 'hosted.settle.errors.changed', reread: true });
+  });
+});
+
+describe('mapRedateError dates (MUT-227)', () => {
+  it('says which end of the range a re-date crossed', () => {
+    expect(mapRedateError(v('DATE_INVALID', { field: 'occurredOn', bound: 'past' })).fields).toEqual([{ field: 'date', key: 'hosted.income.errors.dateTooOld' }]);
+    expect(mapRedateError(v('DATE_INVALID', { field: 'receivedOn', bound: 'future' })).fields).toEqual([{ field: 'date', key: 'hosted.income.errors.dateFuture' }]);
+    expect(mapRedateError(v('DATE_INVALID', { field: 'occurredOn' })).fields).toEqual([{ field: 'date', key: 'hosted.income.errors.dateFuture' }]);
   });
 });

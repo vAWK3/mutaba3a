@@ -9,7 +9,7 @@ import { canRedateOwed, canRedatePayment } from '../data/incomeAffordances';
 import { usePayment, usePaymentsForEntry, useReceivable, useRedateOwed, useRedatePayment } from '../data/incomeQueries';
 import { useCustomerDirectory, useProjectDirectory } from '../data/queries';
 import { formatDecimal } from '../format/DecimalAmount';
-import { formatDay, todayInZone } from '../format/dates';
+import { formatDay, moneyDateFloor, todayInZone } from '../format/dates';
 import { profileKey } from '../session/me';
 import { Drawer } from './Drawer';
 import { mapRedateError } from './incomeApiErrors';
@@ -115,6 +115,7 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
   const customers = useCustomerDirectory(profile.id);
   const projects = useProjectDirectory(profile.id);
   const today = todayInZone(profile.timezone);
+  const floor = moneyDateFloor(today);
   const loadedDate = dateOf(kind, record);
 
   const [date, setDate] = useState(loadedDate);
@@ -156,7 +157,9 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
     if (saving) return;
     if (!date) return setDateError(t('hosted.redate.dateRequired'));
     if (date > today) return setDateError(t('hosted.income.errors.dateFuture'));
+    // An entry already older than the floor may be opened and closed again; only a new date must clear it.
     if (date === loadedDate) return onClose();
+    if (date < floor) return setDateError(t('hosted.income.errors.dateTooOld'));
     setDateError(null);
     try {
       if (kind === 'owed') await redateOwed.mutateAsync({ receivableId: record.id, occurredOn: date, version: record.version });
@@ -202,6 +205,7 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
             id="hosted-redate-date"
             type="date"
             className="input"
+            min={floor}
             max={today}
             value={date}
             aria-invalid={Boolean(dateError)}

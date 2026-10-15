@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.26.3-mut199
+  version: 1.27.0-mut227
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -16,6 +16,7 @@ info:
     409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS.
 
     422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED (schema failures carry the zod issues in details instead).
+    A DATE_INVALID on a range check also carries details.bound: past when the date is more than ten years (3660 days) before the organization's today (the floor on every money date, MUT-227), future when it is later than allowed.
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
 
@@ -3073,7 +3074,7 @@ components:
         paidAt:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past."
         method:
           $ref: "#/components/schemas/PaymentMethod"
         captureSource:
@@ -3302,7 +3303,7 @@ components:
         receivedOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. The first replacement of a reversed payment (replacesPaymentId, none posted yet) may keep that payment's receivedOn, or a later one, below the floor."
         method:
           $ref: "#/components/schemas/PaymentMethod"
         reference:
@@ -3350,7 +3351,7 @@ components:
         receivedOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past."
       required:
         - receivedOn
       additionalProperties: false
@@ -4163,7 +4164,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past."
         amount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -4204,7 +4205,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date."
         amount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -4502,7 +4503,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past."
         customerId:
           type: string
           format: uuid
@@ -4536,7 +4537,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past."
       required:
         - occurredOn
       additionalProperties: false
@@ -4594,7 +4595,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past."
         amount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -4636,7 +4637,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. Checked only when it differs from the stored date."
         amount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -4734,7 +4735,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: 'May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check.'
+          description: "May be in the future: an unsorted entry has no profile, so no timezone to judge \"today\" in. Filing applies that check. Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past; filing applies the exact floor in the profile's timezone."
         note:
           type: string
           maxLength: 2000
@@ -4758,7 +4759,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
+          description: "Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date."
         note:
           type: string
           nullable: true
@@ -8266,7 +8267,7 @@ paths:
       tags:
         - Receivables
       summary: Settle a receivable directly, with one payment and one allocation
-      description: "For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today, matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404."
+      description: "For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404."
       security:
         - session: []
         - deviceSession: []
@@ -8613,7 +8614,7 @@ paths:
       tags:
         - Payments
       summary: Change the date of a payment you recorded (optimistic, If-Match)
-      description: "Date only: amount, client and allocations are never touched, and a settled entry's paid date follows (ADR-038). Only a POSTED payment this person captured (POST /v1/income Received, or a settle) on a profile they own; any other id answers 404. On a Malafat-fed profile the session holds no payments:write, so this answers 403 READ_ONLY_PROFILE before any lookup, as settle does. receivedOn may not be later than the organization's today. The payment number keeps its year."
+      description: "Date only: amount, client and allocations are never touched, and a settled entry's paid date follows (ADR-038). Only a POSTED payment this person captured (POST /v1/income Received, or a settle) on a profile they own; any other id answers 404. On a Malafat-fed profile the session holds no payments:write, so this answers 403 READ_ONLY_PROFILE before any lookup, as settle does. receivedOn may not be later than the organization's today, nor more than ten years before it (MUT-227). The payment number keeps its year."
       security:
         - session: []
         - deviceSession: []
@@ -10260,7 +10261,7 @@ paths:
       tags:
         - Income
       summary: Capture money received or owed, directly — no agreement, no allocation dance
-      description: What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today.
+      description: What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today and not more than ten years before it (MUT-227).
       security:
         - session: []
         - deviceSession: []
@@ -10364,7 +10365,7 @@ paths:
       tags:
         - Income
       summary: Change the date of an income entry you captured (optimistic, If-Match)
-      description: "Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate; a Received entry moves its payment's receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. occurredOn may not be later than the organization's today."
+      description: "Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate; a Received entry moves its payment's receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. occurredOn may not be later than the organization's today, nor more than ten years before it (MUT-227)."
       security:
         - session: []
         - deviceSession: []
@@ -10436,7 +10437,7 @@ paths:
       tags:
         - Conversions
       summary: Log a currency conversion
-      description: Two legs, each in its own currency and fractional digits. toCurrency must differ from currency. occurredOn may not be later than today (ADR-038); backdated is accepted.
+      description: Two legs, each in its own currency and fractional digits. toCurrency must differ from currency. occurredOn may not be later than today (ADR-038) and not more than ten years before it (MUT-227); backdated is accepted.
       security:
         - session: []
         - deviceSession: []
@@ -10637,7 +10638,7 @@ paths:
       tags:
         - Conversions
       summary: Change a conversion (optimistic, If-Match)
-      description: Any field. A currency comes with its own amount (422 AMOUNT_REQUIRED), each amount is read in the merged currency's digits, and the merged legs must differ (422 SAME_CURRENCY). occurredOn, when sent, may not be later than today. null clears the notes.
+      description: Any field. A currency comes with its own amount (422 AMOUNT_REQUIRED), each amount is read in the merged currency's digits, and the merged legs must differ (422 SAME_CURRENCY). occurredOn, when changed, may not be later than today and not more than ten years before it (MUT-227). null clears the notes.
       security:
         - session: []
         - deviceSession: []
@@ -10814,7 +10815,7 @@ paths:
       tags:
         - Inbox
       summary: Capture an amount now, decide where it belongs later
-      description: 'occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. kind is fixed at capture.'
+      description: 'occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. A typo year is refused at once: not more than ten years before UTC yesterday (MUT-227); filing applies the exact floor. kind is fixed at capture.'
       security:
         - session: []
         - deviceSession: []
