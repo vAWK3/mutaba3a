@@ -2596,3 +2596,11 @@ The ticket's "drive a deadlock between an allocation and an outcome write" can n
 | `server/src/__tests__/idempotency-fingerprint.test.ts` (new) | Unit + route (memory store) | 6 | The widget's body and the app's body for one capture fingerprint identically. Nested keys, whitespace and `\u` escapes don't count; a value, array order, method and path do; a non-JSON body counts byte for byte. A replay with reordered keys and `\/` gets the stored 201 with `Idempotent-Replayed` and the same id, while a changed value is 422 `IDEMPOTENCY_KEY_REUSED`. A key stored under the old byte fingerprint still replays |
 
 The phone-side AC ("the row shows saved") follows from the server returning the stored 2xx. It is not exercised end to end from the Flutter app here.
+
+## MUT-178 — QA specs wait for Owed now (2026-10-15)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `qa/specs/web/clients.spec.ts`, `home.spec.ts`, `brand.spec.ts` (changed) | E2E (release-qa) | 0 new | Owed now is read with waiting assertions; `@web.clients.owed-now-parity`, `@web.home` and both `@web.brand.type` pass 45/45 with `--repeat-each 5 --retries 0` |
+
+Full web suite on 2026-10-15 (after MUT-218/164/217/178): 114 passed, 9 failed, all on the main baseline (5× `loader-slow-route`, 4× `landing.375`). `csv-new-client`, `conversions.log` and `conversions.edit-delete` now pass unattended.

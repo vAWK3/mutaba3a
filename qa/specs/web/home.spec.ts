@@ -36,11 +36,7 @@ test(
     await step('Open Home and read Owed Now', async () => {
       await page.goto('/app/');
       await expect(page.getByRole('heading', { name: 'Needs Attention' })).toBeVisible();
-      const owedNow = await page
-        .getByRole('region', { name: 'Owed now' })
-        .getByTestId('owed-now-amount')
-        .allTextContents();
-      expect(owedNow).toEqual(['$1,500']);
+      await expect(page.getByRole('region', { name: 'Owed now' }).getByTestId('owed-now-amount')).toHaveText(['$1,500']);
     });
 
     await step('Check accessibility', async () => {
