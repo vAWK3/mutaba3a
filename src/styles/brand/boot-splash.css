@@ -1,0 +1,40 @@
+/* The boot splash (MUT-207, ADR-080): the mark on the brand canvas, painted before any JavaScript runs.
+ * Linked from index.html and hosted.html, so it styles the first paint in dev, QA and production alike
+ * (CSS imported from main.tsx arrives through JS in dev). Standalone: theme.css has not loaded yet, so the
+ * canvas hexes are written out; brand-head.test.ts pins them to mutaba3a.tokens.json (color.canvas,
+ * colorDark.canvas). Before JS the theme is the OS's; once ThemeProvider sets data-theme, a forced theme
+ * wins, in the selector order of mutaba3a-theme.css (DR12). */
+
+html,
+.boot-splash {
+  background: #FCF6ED;
+}
+
+.boot-splash {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* A block, so its box is exactly 80 × 80: the mark the loader's frame 0 draws in place */
+.boot-splash-mark {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  html,
+  .boot-splash {
+    background: #221B2D;
+  }
+}
+
+:root[data-theme="dark"],
+:root[data-theme="dark"] .boot-splash {
+  background: #221B2D;
+}
+
+:root[data-theme="light"],
+:root[data-theme="light"] .boot-splash {
+  background: #FCF6ED;
+}
