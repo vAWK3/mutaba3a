@@ -19,6 +19,10 @@ const envSchema = z.object({
   SERVICE_VERSION: z.string().min(1).default('0.0.0-dev'),
   /** Private GCS bucket for attachments (M6). Absent = attachments routes answer 503 ATTACHMENTS_NOT_CONFIGURED. */
   ATTACHMENTS_BUCKET: z.string().min(3).optional(),
+  /** MUT-228: the ECB reference-rate provider's `latest` endpoint, how long a snapshot is fresh, and how long to wait for it. */
+  FX_RATES_URL: z.string().url().default('https://api.frankfurter.dev/v1/latest'),
+  FX_RATES_TTL_MINUTES: z.coerce.number().int().min(15).max(1440).default(240),
+  FX_RATES_TIMEOUT_MS: z.coerce.number().int().min(500).max(10_000).default(3000),
   ATTACHMENTS_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
   /** argon2id cost for user passwords (MUT-37). Never below OWASP profile 1. */
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(ARGON2_MINIMUMS.memoryKiB).default(ARGON2_MINIMUMS.memoryKiB),
