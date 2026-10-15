@@ -42,7 +42,9 @@
       "netLow": "Net (Low to High)"
     },
     "pageTitle": "Mutaba3a — {page}",
-    "opensInNewTab": "(opens in a new tab)"
+    "opensInNewTab": "(opens in a new tab)",
+    "loaderLabel": "Loading",
+    "loadingSlow": "Still loading…"
   },
   "currency": {
     "USD": "USD",

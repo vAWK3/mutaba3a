@@ -7,7 +7,9 @@
     "close": "إغلاق",
     "loading": "جارٍ التحميل...",
     "saving": "جارٍ الحفظ...",
-    "opensInNewTab": "(يُفتح في علامة تبويب جديدة)"
+    "opensInNewTab": "(يُفتح في علامة تبويب جديدة)",
+    "loaderLabel": "جارٍ التحميل",
+    "loadingSlow": "ما زلنا نحمّل…"
   },
   "hosted": {
     "brand": "متابعة",

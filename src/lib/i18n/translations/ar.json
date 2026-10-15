@@ -42,7 +42,9 @@
       "netLow": "الصافي (الأقل أولاً)"
     },
     "pageTitle": "متابعة — {page}",
-    "opensInNewTab": "(يُفتح في علامة تبويب جديدة)"
+    "opensInNewTab": "(يُفتح في علامة تبويب جديدة)",
+    "loaderLabel": "جارٍ التحميل",
+    "loadingSlow": "ما زلنا نحمّل…"
   },
   "currency": {
     "USD": "دولار",
