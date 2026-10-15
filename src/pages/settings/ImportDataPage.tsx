@@ -3,11 +3,13 @@ import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { getRepositories, findMatchingProfile, type ProfileExportFile } from '../../db';
 import { useT, useLanguage } from '../../lib/i18n';
+import { useTp } from '../../lib/i18n/plural';
 import { useBusinessProfiles } from '../../hooks/useQueries';
 import { parseCSV, generateImportTemplate, downloadTextFile } from '../../utils/csv';
 import { validateCSVImport, type CSVValidationResult } from '../../utils/csvValidation';
 import { CSVValidationPreview } from '../../components/csv/CSVValidationPreview';
 import { Select } from '../../components/ui';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 import { isFullBackup, hasLegacyRows, takePendingImport } from '../../lib/dataFiles';
 import type { BusinessProfile } from '../../types';
 import './ImportDataPage.css';
@@ -40,6 +42,7 @@ interface CSVPreviewData {
 
 export function ImportDataPage() {
   const t = useT();
+  const tp = useTp();
   const { language } = useLanguage();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -72,7 +75,7 @@ export function ImportDataPage() {
         const rows = parseCSV(text);
 
         if (rows.length === 0) {
-          setError('CSV file is empty');
+          setError(t('settings.import.errors.emptyCsv'));
           return;
         }
 
@@ -122,7 +125,7 @@ export function ImportDataPage() {
         setError('');
       }
     } catch (err) {
-      setError(`Failed to read file. Please select a valid ${file.name.endsWith('.csv') ? 'CSV' : 'JSON'} file.`);
+      setError(t('settings.import.errors.readFailed', { format: file.name.endsWith('.csv') ? 'CSV' : 'JSON' }));
       console.error('File read error:', err);
     }
   }, [existingProfiles, t]);
@@ -143,9 +146,9 @@ export function ImportDataPage() {
     if (file && (file.name.endsWith('.json') || file.name.endsWith('.csv'))) {
       handleFileSelect(file);
     } else {
-      setError('Please drop a .json or .csv file');
+      setError(t('settings.import.errors.wrongType'));
     }
-  }, [handleFileSelect]);
+  }, [handleFileSelect, t]);
 
   const handleDownloadTemplate = useCallback(() => {
     const template = generateImportTemplate();
@@ -189,7 +192,7 @@ export function ImportDataPage() {
             : selectedProfileId
               ? { mode: 'merge' as const, profileId: selectedProfileId }
               : null;
-        if (!target) throw new Error('Choose a profile to merge into');
+        if (!target) throw new Error(t('settings.import.errors.chooseProfile'));
         const imported = await dataset.importProfile(fileData as ProfileExportFile, target);
         stats.profiles = imported.profiles;
         stats.transactions = imported.transactions;
@@ -208,21 +211,29 @@ export function ImportDataPage() {
       setStep('done');
     } catch (err) {
       console.error('Import error:', err);
-      setError(err instanceof Error ? err.message : 'Import failed');
+      setError(err instanceof Error ? err.message : t('settings.import.errors.failed'));
       setStep('error');
     }
   };
 
   const isV2Format = fileData?.version === 2;
-  const profileName = fileData?.profile?.name || fileData?.profile?.nameEn || 'Unknown';
+  const profileName = fileData?.profile?.name || fileData?.profile?.nameEn || t('settings.import.preview.unknownProfile');
+  const importedItems = importStats
+    ? [
+        importStats.profiles > 0 && t('settings.import.done.profiles', { count: importStats.profiles }),
+        importStats.transactions > 0 && t('settings.import.done.transactions', { count: importStats.transactions }),
+      ]
+        .filter(Boolean)
+        .join(t('settings.import.done.separator'))
+    : '';
 
   return (
     <div className="import-data-page">
       <div className="page-header">
         <button className="btn btn-text" onClick={() => navigate({ to: '/settings' })}>
-          ← Back to Settings
+          {t('settings.import.backToSettings')}
         </button>
-        <h1>Import Data</h1>
+        <h1>{t('settings.import.title')}</h1>
       </div>
 
       <div className="import-content">
@@ -239,8 +250,8 @@ export function ImportDataPage() {
                 <polyline points="17 8 12 3 7 8" />
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
-              <h3>Drop a .json or .csv file here</h3>
-              <p>or click to select a file</p>
+              <h3>{t('settings.import.select.drop')}</h3>
+              <p>{t('settings.import.select.orClick')}</p>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -261,15 +272,15 @@ export function ImportDataPage() {
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                {t('settings.data.downloadTemplate') || 'Download CSV Template'}
+                {t('settings.data.downloadTemplate')}
               </button>
             </div>
 
             <div className="import-help">
-              <h4>Need help?</h4>
+              <h4>{t('settings.import.help.title')}</h4>
               <ul>
-                <li><strong>CSV Import:</strong> Download the template, fill it with your data, and upload it back.</li>
-                <li><strong>JSON Import:</strong> Use exported backup files from this app.</li>
+                <li><strong>{t('settings.import.help.csvLabel')}</strong> {t('settings.import.help.csv')}</li>
+                <li><strong>{t('settings.import.help.jsonLabel')}</strong> {t('settings.import.help.json')}</li>
               </ul>
             </div>
           </div>
@@ -286,17 +297,19 @@ export function ImportDataPage() {
                 <div className="file-name">{fileName}</div>
                 <div className="file-meta">
                   {fileType === 'csv' && csvPreview ? (
-                    <>
-                      CSV Import: {csvPreview.clients} clients, {csvPreview.projects} projects,{' '}
-                      {csvPreview.income} income, {csvPreview.expenses} expenses
-                    </>
+                    t('settings.import.preview.csvSummary', {
+                      clients: csvPreview.clients,
+                      projects: csvPreview.projects,
+                      income: csvPreview.income,
+                      expenses: csvPreview.expenses,
+                    })
                   ) : isV2Format ? (
-                    <>Profile: {profileName}</>
+                    t('settings.import.preview.profile', { name: profileName })
                   ) : (
-                    <>Legacy format (all data)</>
+                    t('settings.import.preview.legacy')
                   )}
                   {fileData?.exportedAt && (
-                    <> · Exported: {new Date(fileData.exportedAt).toLocaleDateString()}</>
+                    <> · {t('settings.import.preview.exported', { date: new Date(fileData.exportedAt).toLocaleDateString() })}</>
                   )}
                 </div>
               </div>
@@ -352,21 +365,19 @@ export function ImportDataPage() {
 
             {fileType === 'csv' && existingProfiles.length > 0 && (
               <div className="profile-select-section">
-                <h4>Select Business Profile</h4>
+                <h4>{t('settings.import.preview.csvProfileTitle')}</h4>
                 <Select
                   value={selectedProfileId || ''}
                   onChange={(e) => setSelectedProfileId(e.target.value)}
                 >
-                  <option value="">Select a profile...</option>
+                  <option value="">{t('settings.import.preview.csvProfilePlaceholder')}</option>
                   {existingProfiles.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} {p.nameEn && `(${p.nameEn})`}
                     </option>
                   ))}
                 </Select>
-                <p className="help-text">
-                  Choose which business profile to associate imported data with
-                </p>
+                <p className="help-text">{t('settings.import.preview.csvProfileHelp')}</p>
               </div>
             )}
 
@@ -377,7 +388,7 @@ export function ImportDataPage() {
                   <line x1="12" y1="9" x2="12" y2="13" />
                   <line x1="12" y1="17" x2="12.01" y2="17" />
                 </svg>
-                <p>This is a legacy backup file. Importing will replace all existing data.</p>
+                <p>{t('settings.import.preview.legacyWarning')}</p>
               </div>
             )}
 
@@ -389,8 +400,7 @@ export function ImportDataPage() {
                   <line x1="12" y1="8" x2="12.01" y2="8" />
                 </svg>
                 <p>
-                  <strong>CSV Import:</strong> New data will be added without replacing existing records.
-                  Clients and projects are matched by name.
+                  <strong>{t('settings.import.help.csvLabel')}</strong> {t('settings.import.preview.csvInfo')}
                 </p>
               </div>
             )}
@@ -399,7 +409,7 @@ export function ImportDataPage() {
 
             <div className="import-actions">
               <button className="btn btn-secondary" onClick={() => setStep('select')}>
-                Choose Different File
+                {t('settings.import.actions.chooseDifferent')}
               </button>
               {fileType === 'json' && (
                 <button
@@ -407,7 +417,7 @@ export function ImportDataPage() {
                   onClick={handleImport}
                   disabled={importMode === 'merge' && !selectedProfileId}
                 >
-                  Import JSON
+                  {t('settings.import.actions.importJson')}
                 </button>
               )}
               {fileType === 'csv' && (
@@ -416,7 +426,7 @@ export function ImportDataPage() {
                   onClick={handleValidateCSV}
                   disabled={existingProfiles.length > 0 && !selectedProfileId}
                 >
-                  Next: Validate Data
+                  {t('settings.import.actions.validate')}
                 </button>
               )}
             </div>
@@ -425,21 +435,21 @@ export function ImportDataPage() {
 
         {step === 'validate' && (
           <div className="import-step-validate">
-            <h2>Validate CSV Data</h2>
+            <h2>{t('settings.import.validate.title')}</h2>
             <CSVValidationPreview
               results={csvValidationResults}
               onSelectionChange={setSelectedRowIndices}
             />
             <div className="import-actions">
               <button className="btn btn-secondary" onClick={() => setStep('preview')}>
-                ← Back
+                {t('settings.import.actions.back')}
               </button>
               <button
                 className="btn btn-primary"
                 onClick={handleImport}
                 disabled={selectedRowIndices.length === 0}
               >
-                Import {selectedRowIndices.length} Row{selectedRowIndices.length !== 1 ? 's' : ''}
+                {tp('settings.import.actions.importRows', selectedRowIndices.length)}
               </button>
             </div>
           </div>
@@ -447,9 +457,9 @@ export function ImportDataPage() {
 
         {step === 'importing' && (
           <div className="import-step-importing">
-            <div className="spinner" />
-            <h3>Importing data...</h3>
-            <p>Please wait while we process your data.</p>
+            <BrandLoader size={64} />
+            <h3>{t('settings.import.importing.title')}</h3>
+            <p>{t('settings.import.importing.body')}</p>
           </div>
         )}
 
@@ -459,21 +469,14 @@ export function ImportDataPage() {
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
-            <h2>Import Complete!</h2>
-            <p>
-              {importStats && (
-                <>
-                  Imported {importStats.profiles > 0 && `${importStats.profiles} profile, `}
-                  {importStats.transactions > 0 && `${importStats.transactions} transactions`}
-                </>
-              )}
-            </p>
+            <h2>{t('settings.import.done.title')}</h2>
+            <p>{importedItems && t('settings.import.done.imported', { items: importedItems })}</p>
             <div className="import-actions">
               <button className="btn btn-secondary" onClick={() => setStep('select')}>
-                Import More Data
+                {t('settings.import.actions.importMore')}
               </button>
               <button className="btn btn-primary" onClick={() => navigate({ to: '/settings' })}>
-                Back to Settings
+                {t('settings.import.actions.backToSettings')}
               </button>
             </div>
           </div>
@@ -486,11 +489,11 @@ export function ImportDataPage() {
               <line x1="15" y1="9" x2="9" y2="15" />
               <line x1="9" y1="9" x2="15" y2="15" />
             </svg>
-            <h2>Import Failed</h2>
+            <h2>{t('settings.import.failed.title')}</h2>
             <p className="text-danger">{error}</p>
             <div className="import-actions">
               <button className="btn btn-secondary" onClick={() => setStep('select')}>
-                Try Again
+                {t('settings.import.actions.tryAgain')}
               </button>
             </div>
           </div>
