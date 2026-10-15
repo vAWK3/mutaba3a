@@ -1,4 +1,4 @@
-import type { HostedProfile, Receivable, Schemas } from '../api/client';
+import type { HostedProfile, Payment, Receivable, Schemas } from '../api/client';
 
 /**
  * What income writes the portal offers on a profile (MUT-133, D-gate). One
@@ -44,4 +44,22 @@ export function incomeAffordancesFor(profile: HostedProfile): IncomeAffordances 
  */
 export function isSettleable(receivable: Receivable): boolean {
   return receivable.origin === 'ADJUSTMENT' && !CLOSED_STATUSES.has(receivable.status);
+}
+
+/**
+ * MUT-224: whether an Owed entry's date can be changed (PATCH /v1/income/{id}). Only on a profile the user owns
+ * (the server answers 404 anywhere else), only an entry captured through POST /v1/income, and not a voided one.
+ * A settled entry can still be re-dated: the server keeps its due date and its payments.
+ */
+export function canRedateOwed(profile: HostedProfile, receivable: Receivable): boolean {
+  return profile.owned && profile.access.capture === 'read-write' && receivable.origin === 'ADJUSTMENT' && receivable.status !== 'VOID';
+}
+
+/**
+ * MUT-224: whether a payment's date can be changed (PATCH /v1/payments/{id}): the user's own capture (a Received
+ * entry or a settle payment), still posted, on a profile they own. A Malafat-fed profile never passes `owned`, so it
+ * looks exactly as before; the server would answer 403 there anyway.
+ */
+export function canRedatePayment(profile: HostedProfile, payment: Payment, userId: string): boolean {
+  return profile.owned && profile.access.payments === 'read-write' && payment.origin === 'capture' && payment.status === 'POSTED' && payment.capturedBy?.userId === userId;
 }

@@ -149,15 +149,20 @@ export const INCOME_KINDS = ['received', 'owed'] as const;
 
 /**
  * The income drawers' own URL state (MUT-133): `?newIncome=received|owed` opens
- * Add income, `?settle=<receivableId>` opens Record payment. Pages own it,
+ * Add income, `?settle=<receivableId>` opens Record payment. MUT-224 adds the
+ * re-date drawers: `?income=<receivableId>` (an Owed entry) and
+ * `?payment=<paymentId>` (a payment the person recorded). Pages own it,
  * beside (never inside) a list's filters, so it can never enter a list's query
  * key (eng review R1). Ignored where the gate offers no income writes.
  */
 export interface IncomeDrawerSearch {
   newIncome?: (typeof INCOME_KINDS)[number];
   settle?: string;
+  income?: string;
+  payment?: string;
 }
-export const parseIncomeDrawer = (raw: Raw): IncomeDrawerSearch => compact({ newIncome: oneOf(raw.newIncome, INCOME_KINDS), settle: id(raw.settle) });
+export const parseIncomeDrawer = (raw: Raw): IncomeDrawerSearch =>
+  compact({ newIncome: oneOf(raw.newIncome, INCOME_KINDS), settle: id(raw.settle), income: id(raw.income), payment: id(raw.payment) });
 
 export type ReceivablesPageSearch = ReceivableFilters & IncomeDrawerSearch;
 export const parseReceivablesPage = (raw: Raw): ReceivablesPageSearch => ({ ...parseReceivables(raw), ...parseIncomeDrawer(raw) });
@@ -167,8 +172,8 @@ export const parsePaymentsPage = (raw: Raw): PaymentsPageSearch => ({ ...parsePa
 
 /** Splits a page's search into the list's filters and the drawer state, so the list never sees the latter. */
 export function splitIncomeDrawer<T extends IncomeDrawerSearch>(search: T): { filters: Omit<T, keyof IncomeDrawerSearch>; drawer: IncomeDrawerSearch } {
-  const { newIncome, settle, ...filters } = search;
-  return { filters, drawer: compact({ newIncome, settle }) };
+  const { newIncome, settle, income, payment, ...filters } = search;
+  return { filters, drawer: compact({ newIncome, settle, income, payment }) };
 }
 
 export const DOCUMENT_KINDS = ['INVOICE', 'RECEIPT', 'OTHER'] as const;

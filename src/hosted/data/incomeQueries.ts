@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type CreateIncomeRequest, type SettleReceivableRequest } from '../api/client';
+import { api, type CreateIncomeRequest, type Payment, type SettleReceivableRequest } from '../api/client';
 import { profileKey } from '../session/me';
 
 /**
@@ -11,17 +11,72 @@ import { profileKey } from '../session/me';
  */
 
 function invalidateIncome(queryClient: ReturnType<typeof useQueryClient>, profileId: string) {
-  for (const key of ['receivables', 'payments', 'receivable', 'summary'] as const) {
+  for (const key of ['receivables', 'payments', 'receivable', 'payment', 'paymentsForEntry', 'summary'] as const) {
     void queryClient.invalidateQueries({ queryKey: profileKey(profileId, key) });
   }
 }
 
-/** One receivable, read fresh each time the Record payment drawer opens (its outstanding must be current). */
-export function useReceivable(profileId: string, receivableId: string) {
+/**
+ * One receivable, read fresh each time a drawer opens: Record payment needs its current outstanding, and the
+ * re-date drawer (MUT-224) the version it will send in If-Match. `enabled` lets one drawer call both this and
+ * usePayment unconditionally and run only the one its kind needs.
+ */
+export function useReceivable(profileId: string, receivableId: string, enabled = true) {
   return useQuery({
     queryKey: profileKey(profileId, 'receivable', receivableId),
     queryFn: () => api.receivable(profileId, receivableId),
     staleTime: 0,
+    enabled,
+  });
+}
+
+/** MUT-224: one payment, read fresh when the re-date drawer opens (its version goes in If-Match). */
+export function usePayment(profileId: string, paymentId: string, enabled = true) {
+  return useQuery({
+    queryKey: profileKey(profileId, 'payment', paymentId),
+    queryFn: () => api.payment(profileId, paymentId),
+    staleTime: 0,
+    enabled,
+  });
+}
+
+/** How many of a client's payments the Owed drawer scans for this entry's payment lines (eng review R4). */
+export const ENTRY_PAYMENTS_SCAN_LIMIT = 50;
+
+/**
+ * MUT-224 (eng review R4): the payments applied to one Owed entry. The API can't list payments by receivable, so this
+ * reads the client's first page and keeps those whose allocations name the entry. `complete` is false when that page
+ * was full, so the drawer can offer "See payments" instead of claiming there are no others.
+ */
+export function usePaymentsForEntry(profileId: string, customerId: string, receivableId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: profileKey(profileId, 'paymentsForEntry', receivableId),
+    queryFn: async (): Promise<{ payments: Payment[]; complete: boolean }> => {
+      const page = await api.payments(profileId, { customerId, limit: ENTRY_PAYMENTS_SCAN_LIMIT });
+      const payments = page.items.filter((p) => p.status === 'POSTED' && p.allocations.some((a) => a.receivableId === receivableId));
+      return { payments, complete: page.nextCursor === null };
+    },
+    enabled,
+  });
+}
+
+/** MUT-224: change an Owed entry's date at the version the drawer loaded. */
+export function useRedateOwed(profileId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ receivableId, occurredOn, version }: { receivableId: string; occurredOn: string; version: number }) =>
+      api.redateIncome(profileId, receivableId, { occurredOn }, String(version)),
+    onSuccess: () => invalidateIncome(queryClient, profileId),
+  });
+}
+
+/** MUT-224: change a payment's received date at the version the drawer loaded. */
+export function useRedatePayment(profileId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ paymentId, receivedOn, version }: { paymentId: string; receivedOn: string; version: number }) =>
+      api.redatePayment(profileId, paymentId, { receivedOn }, String(version)),
+    onSuccess: () => invalidateIncome(queryClient, profileId),
   });
 }
 

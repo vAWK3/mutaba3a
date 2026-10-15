@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { HostedProfile, Receivable } from '../../api/client';
+import type { HostedProfile, Payment, Receivable } from '../../api/client';
 import { profile } from '../../__tests__/harness';
-import { receivable } from '../../pages/__tests__/fixtures';
-import { incomeAffordancesFor, isSettleable } from '../incomeAffordances';
+import { payment, receivable } from '../../pages/__tests__/fixtures';
+import { canRedateOwed, canRedatePayment, incomeAffordancesFor, isSettleable } from '../incomeAffordances';
 
 const PERSONAL_RULES = { received: true, owed: true, customer: 'optional' } as const;
 const MALAFAT_RULES = { received: true, owed: false, customer: 'linked-required' } as const;
@@ -58,5 +58,40 @@ describe('isSettleable', () => {
     expect(isSettleable(adjustment('VOID'))).toBe(false);
     expect(isSettleable({ ...adjustment('DUE'), origin: 'INSTALLMENT' })).toBe(false);
     expect(isSettleable({ ...adjustment('DUE'), origin: 'RETAINER_CHARGE' })).toBe(false);
+  });
+});
+
+describe('canRedateOwed (MUT-224)', () => {
+  const owed = (status = 'DUE'): Receivable => ({ ...receivable('r1', 'c1', 'p1', '100.00', status), origin: 'ADJUSTMENT' });
+
+  it('offers it for an Owed entry on a profile the user owns, open or settled', () => {
+    expect(canRedateOwed(personal(), owed())).toBe(true);
+    expect(canRedateOwed(personal(), owed('PAID'))).toBe(true);
+  });
+
+  it('refuses a void entry, anything Malafat posted, a profile without capture write, and any profile the user does not own', () => {
+    expect(canRedateOwed(personal(), owed('VOID'))).toBe(false);
+    expect(canRedateOwed(personal(), { ...owed(), origin: 'INSTALLMENT' })).toBe(false);
+    expect(canRedateOwed(personal({ access: { ...PERSONAL_ACCESS, capture: 'read' } }), owed())).toBe(false);
+    expect(canRedateOwed(personal({ owned: false }), owed())).toBe(false);
+    expect(canRedateOwed(personal({ owned: false, writerOfRecord: 'MALAFAT', income: { ...MALAFAT_RULES } }), owed())).toBe(false);
+  });
+});
+
+describe('canRedatePayment (MUT-224)', () => {
+  const ME = 'u-me';
+  const mine = (over: Partial<Payment> = {}): Payment => ({ ...payment('p1', 'PAY-2026-0001'), origin: 'capture', status: 'POSTED', capturedBy: { userId: ME, displayName: 'Me' }, ...over });
+
+  it("offers it for the user's own posted capture on a profile they own, settle payments included", () => {
+    expect(canRedatePayment(personal(), mine(), ME)).toBe(true);
+    expect(canRedatePayment(personal(), mine({ allocated: '585.00', unallocated: '0.00' }), ME)).toBe(true);
+  });
+
+  it("refuses an undone payment, Malafat's payment, someone else's capture, no payments write, and a profile the user does not own", () => {
+    expect(canRedatePayment(personal(), mine({ status: 'REVERSED' }), ME)).toBe(false);
+    expect(canRedatePayment(personal(), mine({ origin: 'integration', capturedBy: null }), ME)).toBe(false);
+    expect(canRedatePayment(personal(), mine({ capturedBy: { userId: 'u-other', displayName: 'Rami' } }), ME)).toBe(false);
+    expect(canRedatePayment(personal({ access: { ...PERSONAL_ACCESS, payments: 'read' } }), mine(), ME)).toBe(false);
+    expect(canRedatePayment(personal({ owned: false, writerOfRecord: 'MALAFAT', income: { ...MALAFAT_RULES } }), mine(), ME)).toBe(false);
   });
 });
