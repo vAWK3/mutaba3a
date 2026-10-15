@@ -79,7 +79,7 @@ afterEach(() => {
 const optionalHeader = () => screen.queryByText('nav.sections.optional');
 
 describe('SidebarNav optional areas (MUT-13)', () => {
-  it('shows no optional section and no Documents/Retainers links while both areas are off', async () => {
+  it('shows no optional section and no Documents, Retainers or Planning links while every area is off', async () => {
     const fake = installFakeSettings();
     renderNav();
     await waitFor(() => expect(fake.settings.get).toHaveBeenCalled());
@@ -90,6 +90,7 @@ describe('SidebarNav optional areas (MUT-13)', () => {
     expect(optionalHeader()).toBeNull();
     expect(screen.queryByText('nav.documents')).toBeNull();
     expect(screen.queryByText('nav.retainers')).toBeNull();
+    expect(screen.queryByText('nav.planning')).toBeNull();
     // MUT-14: Expenses left the main section and Suppliers left workspace
     expect(screen.queryByText('nav.expenses')).toBeNull();
     expect(screen.queryByText('nav.suppliers')).toBeNull();
@@ -99,32 +100,42 @@ describe('SidebarNav optional areas (MUT-13)', () => {
     expect(screen.getByText('nav.settings')).toBeInTheDocument();
   });
 
-  it('shows only Retainers when retainers is on', async () => {
-    installFakeSettings({ features: { retainers: true } });
+  it('shows only Insights when insights is on', async () => {
+    installFakeSettings({ features: { insights: true } });
     renderNav();
 
-    expect(await screen.findByText('nav.retainers')).toBeInTheDocument();
+    expect(await screen.findByText('nav.insights')).toBeInTheDocument();
     expect(optionalHeader()).toBeInTheDocument();
-    expect(screen.getByText('nav.retainers').closest('a')).toHaveAttribute('href', '/retainers');
+    expect(screen.getByText('nav.insights').closest('a')).toHaveAttribute('href', '/insights');
   });
 
   it('never shows Documents, even with a stored invoices switch (MUT-145)', async () => {
-    installFakeSettings({ features: { invoices: true, retainers: true } as never });
+    installFakeSettings({ features: { invoices: true, insights: true } as never });
     renderNav();
 
-    expect(await screen.findByText('nav.retainers')).toBeInTheDocument();
+    expect(await screen.findByText('nav.insights')).toBeInTheDocument();
     expect(screen.queryByText('nav.documents')).toBeNull();
     expect(document.querySelector('a[href="/documents"]')).toBeNull();
   });
 
-  it('shows Expenses in the optional section, before Retainers, and offers it in + Add only while on (MUT-14)', async () => {
-    installFakeSettings({ features: { expenses: true, retainers: true } });
+  it('never shows Planning or Retainers, even with their stored switches (MUT-226)', async () => {
+    installFakeSettings({ features: { planning: true, retainers: true, insights: true } as never });
+    renderNav();
+
+    expect(await screen.findByText('nav.insights')).toBeInTheDocument();
+    expect(screen.queryByText('nav.planning')).toBeNull();
+    expect(screen.queryByText('nav.retainers')).toBeNull();
+    expect(document.querySelector('a[href="/planning"], a[href="/retainers"]')).toBeNull();
+  });
+
+  it('shows Expenses in the optional section, before Insights, and offers it in + Add only while on (MUT-14)', async () => {
+    installFakeSettings({ features: { expenses: true, insights: true } });
     renderNav();
 
     const expenses = await screen.findByText('nav.expenses');
-    const ret = await screen.findByText('nav.retainers');
+    const insights = await screen.findByText('nav.insights');
     expect(expenses.closest('a')).toHaveAttribute('href', '/expenses');
-    expect(expenses.compareDocumentPosition(ret) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(expenses.compareDocumentPosition(insights) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     fireEvent.click(screen.getByText('nav.new'));
     expect(await screen.findByText('nav.newMenu.expense')).toBeInTheDocument();
@@ -144,20 +155,20 @@ describe('SidebarNav optional areas (MUT-13)', () => {
     const fake = installFakeSettings();
     const { queryClient } = renderNav();
     await waitFor(() => expect(fake.settings.get).toHaveBeenCalled());
-    expect(screen.queryByText('nav.retainers')).toBeNull();
+    expect(screen.queryByText('nav.insights')).toBeNull();
 
-    fake.set({ features: { retainers: true } });
+    fake.set({ features: { insights: true } });
     await act(async () => {
       await queryClient.invalidateQueries({ queryKey: ['settings'] });
     });
 
-    expect(await screen.findByText('nav.retainers')).toBeInTheDocument();
+    expect(await screen.findByText('nav.insights')).toBeInTheDocument();
     expect(screen.queryByText('nav.documents')).toBeNull();
   });
 });
 
-describe('SidebarNav insights, planning and projects (MUT-16)', () => {
-  it('shows none of the three while all areas are off, and + Add has no Project', async () => {
+describe('SidebarNav insights and projects (MUT-16)', () => {
+  it('shows neither while all areas are off, and + Add has no Project', async () => {
     const fake = installFakeSettings();
     renderNav();
     await waitFor(() => expect(fake.settings.get).toHaveBeenCalled());
@@ -167,7 +178,6 @@ describe('SidebarNav insights, planning and projects (MUT-16)', () => {
 
     expect(optionalHeader()).toBeNull();
     expect(screen.queryByText('nav.insights')).toBeNull();
-    expect(screen.queryByText('nav.planning')).toBeNull();
     expect(screen.queryByText('nav.projects')).toBeNull();
     // the core sections are Home + Income and Clients
     expect(screen.getByText('nav.home')).toBeInTheDocument();
@@ -187,28 +197,24 @@ describe('SidebarNav insights, planning and projects (MUT-16)', () => {
     expect(optionalHeader()).toBeInTheDocument();
     expect(projects.closest('a')).toHaveAttribute('href', '/projects');
     expect(screen.queryByText('nav.insights')).toBeNull();
-    expect(screen.queryByText('nav.planning')).toBeNull();
 
     fireEvent.click(screen.getByText('nav.new'));
     expect(await screen.findByText('nav.newMenu.project')).toBeInTheDocument();
   });
 
-  it('lists Insights then Planning after any earlier optional entry', async () => {
-    installFakeSettings({ features: { retainers: true, insights: true, planning: true } });
+  it('lists Insights after any earlier optional entry', async () => {
+    installFakeSettings({ features: { conversions: true, insights: true } });
     renderNav();
 
-    const retainers = await screen.findByText('nav.retainers');
+    const conversions = await screen.findByText('nav.conversions');
     const insights = await screen.findByText('nav.insights');
-    const planning = await screen.findByText('nav.planning');
     expect(insights.closest('a')).toHaveAttribute('href', '/insights');
-    expect(planning.closest('a')).toHaveAttribute('href', '/planning');
-    expect(retainers.compareDocumentPosition(insights) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(insights.compareDocumentPosition(planning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(conversions.compareDocumentPosition(insights) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText('nav.projects')).toBeNull();
   });
 });
 
-const ALL_ON = { retainers: true, expenses: true, insights: true, planning: true, projects: true };
+const ALL_ON = { expenses: true, conversions: true, insights: true, projects: true };
 
 /** The sidebar's destinations in DOM (and so Tab) order; label key, or `title` when collapsed. */
 function navLinks(container: HTMLElement): string[] {
@@ -246,14 +252,13 @@ describe('SidebarNav core shape (MUT-15)', () => {
       'nav.clients',
       'nav.income',
       'nav.expenses',
-      'nav.retainers',
+      'nav.conversions',
       'nav.insights',
-      'nav.planning',
       'nav.projects',
       'nav.settings',
     ]);
     const more = optionalHeader()!.closest('.nav-section')!;
-    expect(more.querySelectorAll('a.nav-item')).toHaveLength(5);
+    expect(more.querySelectorAll('a.nav-item')).toHaveLength(4);
   });
 
   it('adds and removes an area below the core without re-creating the core entries', async () => {
@@ -317,9 +322,8 @@ describe('SidebarNav active state (MUT-15)', () => {
     ['/clients/c1', 'nav.clients'],
     ['/income', 'nav.income'],
     ['/expenses', 'nav.expenses'],
-    ['/retainers', 'nav.retainers'],
     ['/insights', 'nav.insights'],
-    ['/planning', 'nav.planning'],
+    ['/conversions', 'nav.conversions'],
     ['/projects/p1', 'nav.projects'],
     ['/settings/import', 'nav.settings'],
   ])('on %s only %s is active', async (pathname, expected) => {

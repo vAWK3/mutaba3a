@@ -39,11 +39,11 @@ describe('retained document schema', () => {
     await Promise.all([db.documents.clear(), db.documentSequences.clear()]);
   });
 
-  it('keeps both tables in the Dexie schema at v23', () => {
+  it('keeps both tables in the Dexie schema at the current version (v24)', () => {
     const names = db.tables.map((t) => t.name);
     expect(names).toContain('documents');
     expect(names).toContain('documentSequences');
-    expect(db.verno).toBe(23);
+    expect(db.verno).toBe(24);
   });
 
   it('stores and reads back pre-existing rows unchanged', async () => {

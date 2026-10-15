@@ -17,11 +17,6 @@ import type {
   Receipt,
   ExpenseCategory,
   Vendor,
-  RetainerAgreement,
-  ProjectedIncome,
-  Plan,
-  PlanAssumption,
-  PlanScenario,
   PaymentRecord,
 } from '../types';
 import type {
@@ -59,23 +54,15 @@ export class MiniCrmDatabase extends Dexie {
   vendors!: Table<Vendor, string>;
   monthCloseStatuses!: Table<MonthCloseStatus, string>;
 
-  // Retainer tables
-  retainerAgreements!: Table<RetainerAgreement, string>;
-  projectedIncome!: Table<ProjectedIncome, string>;
-
   // Engagement tables
   engagements!: Table<Engagement, string>;
   engagementVersions!: Table<EngagementVersion, string>;
 
-  // Financial planning tables
-  plans!: Table<Plan, string>;
-  planAssumptions!: Table<PlanAssumption, string>;
-  planScenarios!: Table<PlanScenario, string>;
-
   // Payment records table
   paymentRecords!: Table<PaymentRecord, string>;
 
-  // The device-sync tables (versions 2–20) were dropped in v21 (MUT-73).
+  // The device-sync tables (versions 2–20) were dropped in v21 (MUT-73);
+  // the retainer (v6) and planning (v16) tables in v24 (MUT-226).
 
   constructor(name = 'mutaba3a') {
     super(name);
@@ -992,6 +979,46 @@ export class MiniCrmDatabase extends Dexie {
         console.error('[db] v23: could not backfill payment records:', error);
       }
     });
+
+    // V24 (MUT-226, ADR-082): Financial Planning and the local Retainers area
+    // are retired, and the owner chose to drop their data with them -- an
+    // explicit override of ADR-029 for these five tables only. The upgrade
+    // strips the projected-income link from transactions and removes the two
+    // areas' switches and notices from settings; Dexie then drops the stores
+    // and the transactions index. Like v20/v22/v23, an upgrade failure is
+    // logged, never thrown: the stores drop regardless. A backup saved before
+    // this version still carries the rows; restore skips them.
+    this.version(24).stores({
+      transactions: 'id, kind, status, profileId, clientId, projectId, categoryId, currency, occurredAt, dueDate, paidAt, createdAt, updatedAt, deletedAt, linkedDocumentId, lockedAt, archivedAt, needsReview',
+      retainerAgreements: null,
+      projectedIncome: null,
+      plans: null,
+      planAssumptions: null,
+      planScenarios: null,
+    }).upgrade(async (tx) => {
+      try {
+        await tx.table('transactions')
+          .filter((t: { linkedProjectedIncomeId?: string }) => 'linkedProjectedIncomeId' in t)
+          .modify((t: { linkedProjectedIncomeId?: string }) => {
+            delete t.linkedProjectedIncomeId;
+          });
+        await tx.table('settings').toCollection().modify(dropRetiredFeatureKeys);
+      } catch (error) {
+        console.error('[db] v24: could not clean up planning and retainer references:', error);
+      }
+    });
+  }
+}
+
+/** The optional areas MUT-226 retired; their stored switches and notices go in v24. */
+const RETIRED_FEATURE_KEYS = ['planning', 'retainers'];
+
+function dropRetiredFeatureKeys(settings: { features?: Record<string, unknown>; featureNotice?: string[] }): void {
+  if (settings.features) {
+    for (const key of RETIRED_FEATURE_KEYS) delete settings.features[key];
+  }
+  if (settings.featureNotice) {
+    settings.featureNotice = settings.featureNotice.filter((key) => !RETIRED_FEATURE_KEYS.includes(key));
   }
 }
 

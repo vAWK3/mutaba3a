@@ -3,8 +3,9 @@
  *
  * MUT-3: the client profile is one page with three sections -- Owed Now,
  * Work and billing, Payments -- answering the product's three questions with
- * no tab clicks. The MUT-6 (Record payment), MUT-13 (retainers) and
- * MUT-16 (projects switch) behaviours are re-asserted on the new sections.
+ * no tab clicks. The MUT-6 (Record payment) and MUT-16 (projects switch)
+ * behaviours are re-asserted on the new sections; the MUT-13 retainers card
+ * left with the local Retainers area (MUT-226).
  * Since MUT-84 the page is the Clients layout's profile pane: the layout's
  * top bar names the client, so the page renders the profile body only.
  */
@@ -29,7 +30,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 // Advanced-feature switches: off unless a test turns one on; projects starts on
-const featureFlags: Record<string, boolean> = { retainers: false, projects: true };
+const featureFlags: Record<string, boolean> = { projects: true };
 vi.mock('../../../lib/features/useFeatures', () => ({
   useFeatureEnabled: (key: string) => featureFlags[key] ?? false,
   // the top bar's Add menu reads the whole map (MUT-15)
@@ -97,7 +98,6 @@ vi.mock('../../../lib/i18n', () => {
 const mockOpenClientDrawer = vi.fn();
 const mockOpenProjectDrawer = vi.fn();
 const mockOpenIncomeDrawer = vi.fn();
-const mockOpenRetainerDrawer = vi.fn();
 const mockOpenPartialPaymentDrawer = vi.fn();
 const mockEditPaymentRecord = vi.fn();
 vi.mock('../../../lib/stores', () => ({
@@ -105,15 +105,9 @@ vi.mock('../../../lib/stores', () => ({
     openClientDrawer: mockOpenClientDrawer,
     openProjectDrawer: mockOpenProjectDrawer,
     openIncomeDrawer: mockOpenIncomeDrawer,
-    openRetainerDrawer: mockOpenRetainerDrawer,
     openPartialPaymentDrawer: mockOpenPartialPaymentDrawer,
     editPaymentRecord: mockEditPaymentRecord,
   }),
-}));
-
-// Retainers card data (MUT-13): the card itself renders for real
-vi.mock('../../../hooks/useRetainerQueries', () => ({
-  useRetainers: () => ({ data: [], isLoading: false }),
 }));
 
 const mockClient = {
@@ -256,7 +250,6 @@ describe('ClientDetailPage', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date('2026-10-11T12:00:00'));
     useSavedFlashStore.getState().clear();
-    featureFlags.retainers = false;
     featureFlags.projects = true;
 
     vi.spyOn(useQueries, 'useClient').mockReturnValue({
@@ -622,19 +615,10 @@ describe('ClientDetailPage', () => {
       expect(screen.queryByText(/invoice/i)).toBeNull();
     });
 
-    it('shows no retainers card while retainers is off', () => {
-      renderPage();
-      expect(screen.queryByTestId('client-retainers-card')).toBeNull();
-    });
-
-    it('shows the retainers card with its entry points when retainers is on', () => {
+    it('shows no retainers card, even with a stored retainers switch (MUT-226)', () => {
       featureFlags.retainers = true;
       renderPage();
-
-      const card = screen.getByTestId('client-retainers-card');
-      expect(card).toHaveTextContent('clients.detail.retainers.empty');
-      fireEvent.click(within(card).getByText('clients.detail.retainers.new'));
-      expect(mockOpenRetainerDrawer).toHaveBeenCalledWith({ mode: 'create', defaultClientId: 'client-1' });
+      expect(screen.queryByTestId('client-retainers-card')).toBeNull();
     });
 
     it('offers + Project for this client while projects is on', () => {

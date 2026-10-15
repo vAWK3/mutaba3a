@@ -14,8 +14,8 @@
  * no storage helper module. ESLint enforces it (eslint.config.js). The single
  * exception is `initDatabase()` in src/main.tsx, which opens Dexie and runs
  * its migrations before React mounts. Inside src/db, Dexie implementation
- * code may call other Dexie code directly (e.g. retainerRepo →
- * scheduleGenerator) and must never call back out through the provider.
+ * code may call other Dexie code directly (e.g. expenseRepo → the
+ * recurring-rule repos) and must never call back out through the provider.
  *
  * @see CLAUDE.md for architecture decisions
  * @see .claude/TECH_DEBT.md TD-013 for migration tracking
@@ -46,24 +46,12 @@ import type {
   RecurringRule,
   RecurringOccurrence,
   RecurringOccurrenceStatus,
-  RetainerAgreement,
-  RetainerAgreementDisplay,
-  ProjectedIncome,
-  ProjectedIncomeDisplay,
-  ProjectedIncomeFilters,
-  RetainerSummary,
-  RetainerMatchSuggestion,
   PaymentRecord,
   PaymentByClientFilters,
   PaymentByClientRow,
   RecentPaymentRow,
   ProfileScope,
   FeatureKey,
-  Plan,
-  PlanAssumption,
-  PlanScenario,
-  PlanFilters,
-  AssumptionCategory,
 } from '../types';
 import type { TransactionTotalsByCurrency } from './aggregations';
 import type { BackupData } from './backup';
@@ -282,59 +270,6 @@ export interface IRecurringOccurrenceRepository extends BaseRepository<Recurring
 }
 
 // ============================================================================
-// Retainer Agreement Repository Interface
-// ============================================================================
-
-/**
- * Retainers are archived or ended, never hard-deleted, so `delete` is omitted.
- *
- * `create`, `update`, `activate` and `resume` also maintain the retainer's
- * projected income schedule (generate, or regenerate keeping received and
- * partial rows); `end` cancels upcoming rows. Any implementation must do the
- * same in the same call.
- */
-export interface IRetainerAgreementRepository
-  extends Omit<BaseRepository<RetainerAgreement, Omit<RetainerAgreement, 'id' | 'createdAt' | 'updatedAt'>>, 'delete'> {
-  list(filters?: { profileId?: string; clientId?: string; projectId?: string; status?: string }): Promise<RetainerAgreementDisplay[]>;
-  getDisplay(id: string): Promise<RetainerAgreementDisplay | undefined>;
-  archive(id: string): Promise<void>;
-  activate(id: string): Promise<void>;
-  pause(id: string): Promise<void>;
-  resume(id: string): Promise<void>;
-  end(id: string): Promise<void>;
-  /** Totals for the Retainers page; `currency` narrows both counts and amounts. */
-  getSummary(profileId?: string, currency?: Currency): Promise<RetainerSummary>;
-}
-
-// ============================================================================
-// Projected Income Repository Interface
-// ============================================================================
-
-/**
- * Projected income rows are generated from a retainer's schedule, so this
- * repository has no `create` and no `delete` — it extends nothing. Matching
- * writes both the item and the transaction's `linkedProjectedIncomeId`.
- */
-export interface IProjectedIncomeRepository {
-  get(id: string): Promise<ProjectedIncome | undefined>;
-  update(id: string, data: Partial<ProjectedIncome>): Promise<void>;
-  list(filters?: ProjectedIncomeFilters): Promise<ProjectedIncomeDisplay[]>;
-  getByRetainer(retainerId: string): Promise<ProjectedIncome[]>;
-  getDueItems(currency?: Currency): Promise<ProjectedIncomeDisplay[]>;
-  getForForecast(dateFrom: string, dateTo: string, currency?: Currency): Promise<ProjectedIncome[]>;
-  /** Upcoming items whose expected date has arrived become due (run on app load). */
-  refreshDueStates(): Promise<void>;
-  markMissed(id: string): Promise<void>;
-  /** Up to ten scored suggestions for a paid income transaction, best first. */
-  getMatchSuggestions(transactionId: string): Promise<RetainerMatchSuggestion[]>;
-  /** Suggestions for every paid, unlinked, live income transaction that has any. */
-  getAllMatchSuggestions(): Promise<Array<{ transaction: TransactionDisplay; suggestions: RetainerMatchSuggestion[] }>>;
-  /** Links the transaction to the item and recomputes the item's received amount and state. */
-  match(projectedIncomeId: string, transactionId: string): Promise<void>;
-  unmatch(projectedIncomeId: string, transactionId: string): Promise<void>;
-}
-
-// ============================================================================
 // Payment Record Repository Interface
 // ============================================================================
 
@@ -346,50 +281,6 @@ export interface IPaymentRecordRepository {
   create(data: { transactionId: string; amountMinor: number; paidAt: string; notes?: string }): Promise<PaymentRecord>;
   update(id: string, data: { amountMinor?: number; paidAt?: string; notes?: string }): Promise<void>;
   delete(id: string): Promise<void>;
-}
-
-// ============================================================================
-// Plan Repository Interfaces (Financial Planning, an optional area)
-// ============================================================================
-
-/** Plans are archived, never deleted, so `delete` is omitted. */
-export interface IPlanRepository {
-  list(filters?: PlanFilters): Promise<Plan[]>;
-  get(id: string): Promise<Plan | undefined>;
-  create(data: Omit<Plan, 'id' | 'createdAt' | 'updatedAt'>): Promise<Plan>;
-  update(id: string, data: Partial<Plan>): Promise<void>;
-  archive(id: string): Promise<void>;
-  /** Copies the plan with its assumptions and scenarios; `undefined` when the source is missing. */
-  duplicate(id: string, newName?: string): Promise<Plan | undefined>;
-  activate(id: string): Promise<void>;
-}
-
-export interface IPlanAssumptionRepository {
-  getByPlan(planId: string): Promise<PlanAssumption[]>;
-  getByPlanAndCategory(planId: string, category: AssumptionCategory): Promise<PlanAssumption[]>;
-  getForScenario(planId: string, scenarioId?: string): Promise<PlanAssumption[]>;
-  get(id: string): Promise<PlanAssumption | undefined>;
-  create(data: Omit<PlanAssumption, 'id' | 'createdAt' | 'updatedAt'>): Promise<PlanAssumption>;
-  update(id: string, data: Partial<PlanAssumption>): Promise<void>;
-  delete(id: string): Promise<void>;
-  deleteByPlan(planId: string): Promise<void>;
-  /** Count and total per category, counting only assumptions in `currency`. */
-  getCategorySummary(
-    planId: string,
-    currency: Currency
-  ): Promise<Record<AssumptionCategory, { count: number; totalMinor: number }>>;
-}
-
-export interface IPlanScenarioRepository {
-  getByPlan(planId: string): Promise<PlanScenario[]>;
-  getDefault(planId: string): Promise<PlanScenario | undefined>;
-  get(id: string): Promise<PlanScenario | undefined>;
-  create(data: Omit<PlanScenario, 'id' | 'createdAt' | 'updatedAt'>): Promise<PlanScenario>;
-  update(id: string, data: Partial<PlanScenario>): Promise<void>;
-  /** `false` when the scenario is missing or is the plan's default, which cannot be deleted. */
-  delete(id: string): Promise<boolean>;
-  setDefault(id: string): Promise<void>;
-  createDefaultScenarios(planId: string, profileId: string): Promise<void>;
 }
 
 // ============================================================================
@@ -453,8 +344,6 @@ export interface DemoSeedRows {
   projects: Project[];
   categories: Category[];
   expenseCategories: ExpenseCategory[];
-  retainers: RetainerAgreement[];
-  projectedIncome: ProjectedIncome[];
   transactions: Transaction[];
   recurringRules: RecurringRule[];
   expenses: Expense[];
@@ -502,11 +391,6 @@ export interface IRepositoryProvider {
   vendors: IVendorRepository;
   recurringRules: IRecurringRuleRepository;
   recurringOccurrences: IRecurringOccurrenceRepository;
-  retainerAgreements: IRetainerAgreementRepository;
-  projectedIncome: IProjectedIncomeRepository;
-  plans: IPlanRepository;
-  planAssumptions: IPlanAssumptionRepository;
-  planScenarios: IPlanScenarioRepository;
   dataset: IDatasetRepository;
   demoData: IDemoDataRepository;
 }

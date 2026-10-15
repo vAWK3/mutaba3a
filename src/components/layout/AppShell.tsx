@@ -7,10 +7,7 @@ import { BusinessProfileDrawer } from "../drawers/BusinessProfileDrawer";
 import { ExpenseDrawer } from "../drawers/ExpenseDrawer";
 import { ConversionDrawer } from "../drawers/ConversionDrawer";
 import { LegacyExpenseEditDrawer } from "../drawers/LegacyExpenseEditDrawer";
-import { RetainerDrawer } from "../drawers/RetainerDrawer";
-import { RetainerMatchingDrawer } from "../drawers/RetainerMatchingDrawer";
 import { PartialPaymentDrawer } from "../drawers/PartialPaymentDrawer";
-import { PlanAssumptionDrawer } from "../drawers/PlanAssumptionDrawer";
 import { OrphanedRecordsDrawer } from "../drawers/OrphanedRecordsDrawer";
 import { WelcomeModal, DemoSeedModal, MigrationWizard } from "../modals";
 import { OrphanedRecordsBanner } from "./OrphanedRecordsBanner";
@@ -52,11 +49,8 @@ export function AppShell({ children }: AppShellProps) {
     expenseDrawer,
     conversionDrawer,
     legacyExpenseDrawer,
-    retainerDrawer,
-    retainerMatchingDrawer,
     partialPaymentDrawer,
     closePartialPaymentDrawer,
-    planAssumptionDrawer,
     orphanedRecordsDrawer,
   } = useDrawerStore();
 
@@ -154,16 +148,6 @@ export function AppShell({ children }: AppShellProps) {
           <LegacyExpenseEditDrawer />
         </InlineErrorBoundary>
       )}
-      {retainerDrawer.isOpen && (
-        <InlineErrorBoundary>
-          <RetainerDrawer />
-        </InlineErrorBoundary>
-      )}
-      {retainerMatchingDrawer.isOpen && (
-        <InlineErrorBoundary>
-          <RetainerMatchingDrawer />
-        </InlineErrorBoundary>
-      )}
       {partialPaymentDrawer.isOpen && partialPaymentDrawer.transactionId && (
         <InlineErrorBoundary>
           <PartialPaymentDrawer
@@ -171,11 +155,6 @@ export function AppShell({ children }: AppShellProps) {
             onClose={closePartialPaymentDrawer}
             onRecorded={partialPaymentDrawer.onRecorded}
           />
-        </InlineErrorBoundary>
-      )}
-      {planAssumptionDrawer.isOpen && (
-        <InlineErrorBoundary>
-          <PlanAssumptionDrawer />
         </InlineErrorBoundary>
       )}
       {orphanedRecordsDrawer.isOpen && (

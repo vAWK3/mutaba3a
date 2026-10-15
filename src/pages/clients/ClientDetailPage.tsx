@@ -3,8 +3,6 @@ import { useParams } from '@tanstack/react-router';
 import { OwedNowSummary } from '../../components/clients/OwedNowSummary';
 import { ClientWorkSection } from '../../components/clients/ClientWorkSection';
 import { ClientPaymentsSection } from '../../components/clients/ClientPaymentsSection';
-import { ClientRetainersCard } from '../../components/clients/ClientRetainersCard';
-import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { useClient } from '../../hooks/useQueries';
 import { useReceivables } from '../../hooks/useIncomeQueries';
 import { summarizeOwedByCurrency } from '../../db/aggregations';
@@ -25,7 +23,6 @@ import { BrandLoader } from '../../components/brand/BrandLoader';
  */
 export function ClientDetailPage() {
   const { clientId } = useParams({ from: '/clients/$clientId' });
-  const retainersEnabled = useFeatureEnabled('retainers');
   const t = useT();
 
   const { data: client, isLoading: clientLoading } = useClient(clientId);
@@ -75,8 +72,6 @@ export function ClientDetailPage() {
 
       <ClientWorkSection clientId={clientId} />
       <ClientPaymentsSection clientId={clientId} />
-
-      {retainersEnabled && <ClientRetainersCard clientId={client.id} />}
     </div>
   );
 }

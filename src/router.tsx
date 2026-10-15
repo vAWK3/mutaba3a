@@ -276,52 +276,21 @@ const expensesVendorsRoute = createRoute({
   },
 });
 
-// ============================================================================
-// Retainer Routes
-// ============================================================================
-
-// Retainers search params
-interface RetainersSearch {
-  status?: 'draft' | 'active' | 'paused' | 'ended';
-  currency?: 'USD' | 'ILS';
-  clientId?: string;
-}
-
-const retainersRoute = createRoute({
+// Retired areas (MUT-226, ADR-082): Planning and the local Retainers area are
+// gone and their tables dropped; old links, whatever their search, land on Home.
+const legacyRetainersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/retainers',
-  beforeLoad: requireFeature('retainers'),
-  component: lazyPage(() => import('./pages/retainers/RetainersPage'), 'RetainersPage'),
-  validateSearch: (search: Record<string, unknown>): RetainersSearch => {
-    return {
-      status: search.status === 'draft' || search.status === 'active' || search.status === 'paused' || search.status === 'ended'
-        ? search.status
-        : undefined,
-      currency: search.currency === 'USD' || search.currency === 'ILS' ? search.currency : undefined,
-      clientId: typeof search.clientId === 'string' ? search.clientId : undefined,
-    };
+  beforeLoad: () => {
+    throw redirect({ to: '/' });
   },
 });
 
-// ============================================================================
-// Financial Planning Routes
-// ============================================================================
-
-interface PlanningSearch {
-  plan?: string;
-  scenario?: string;
-}
-
-const planningRoute = createRoute({
+const legacyPlanningRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/planning',
-  beforeLoad: requireFeature('planning'),
-  component: lazyPage(() => import('./pages/planning'), 'PlanningPage'),
-  validateSearch: (search: Record<string, unknown>): PlanningSearch => {
-    return {
-      plan: typeof search.plan === 'string' ? search.plan : undefined,
-      scenario: typeof search.scenario === 'string' ? search.scenario : undefined,
-    };
+  beforeLoad: () => {
+    throw redirect({ to: '/' });
   },
 });
 
@@ -360,10 +329,9 @@ const routeTree = rootRoute.addChildren([
   expensesVendorsRoute,
   suppliersRoute,
   monthCloseRoute,
-  // Retainer routes
-  retainersRoute,
-  // Financial Planning route
-  planningRoute,
+  // Retired areas (MUT-226)
+  legacyRetainersRoute,
+  legacyPlanningRoute,
   // Reports route
   reportsRoute,
   settingsRoute,

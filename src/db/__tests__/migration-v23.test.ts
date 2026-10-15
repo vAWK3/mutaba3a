@@ -66,7 +66,7 @@ describe('Migration v23: backfill payment records for uncovered paid income (MUT
 
     const upgraded = await openCurrent(name);
 
-    expect(upgraded.verno).toBe(23);
+    expect(upgraded.verno).toBe(24);
     const records = await upgraded.paymentRecords.where('transactionId').equals('t1').toArray();
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ amountMinor: 50000, paidAt: '2026-09-05', notes: MIGRATED_PAYMENT_NOTE });
@@ -222,14 +222,14 @@ describe('Migration v23: backfill payment records for uncovered paid income (MUT
 
     const upgraded = await openCurrent(name);
 
-    expect(upgraded.verno).toBe(23);
+    expect(upgraded.verno).toBe(24);
     expect(errors).not.toHaveBeenCalled();
   });
 
-  it('a fresh install is created at v23 and has no stray migrated records', async () => {
+  it('a fresh install is created at the current version and has no stray migrated records', async () => {
     const fresh = await openCurrent(uniqueName());
 
-    expect(fresh.verno).toBe(23);
+    expect(fresh.verno).toBe(24);
     expect(await fresh.paymentRecords.count()).toBe(0);
   });
 });
@@ -240,13 +240,13 @@ describe('Migration safety after v22 → v23 (MUT-60)', () => {
     await Dexie.delete('mutaba3a_backup');
   });
 
-  it('validates the upgrade and writes a post-migration backup at v23', async () => {
+  it('validates the upgrade and writes a post-migration backup at the current version', async () => {
     localStorage.setItem('mutaba3a_last_known_version', '22');
 
     const result = await completeMigrationSafety();
 
     expect(result?.success).toBe(true);
     const backup = await getLatestBackup();
-    expect(backup?.version).toBe(23);
+    expect(backup?.version).toBe(24);
   });
 });

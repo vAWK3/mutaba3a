@@ -49,8 +49,8 @@ afterEach(async () => {
 
 describe('Migration v20 — auto-enable optional areas that have data', () => {
   it('bumps the singleton past v20 without changing the settings index', () => {
-    // v21 (MUT-73) only drops the sync tables, so the settings index is v20's.
-    expect(db.verno).toBe(23);
+    // v21 (MUT-73) and v24 (MUT-226) only drop tables, so the settings index is v20's.
+    expect(db.verno).toBe(24);
     expect(db.settings.schema.primKey.name).toBe('id');
     expect(db.settings.schema.indexes).toHaveLength(0);
   });
@@ -73,7 +73,7 @@ describe('Migration v20 — auto-enable optional areas that have data', () => {
     });
 
     const upgraded = await openAtV20(name);
-    expect(upgraded.verno).toBe(23); // the v20 upgrade runs on the way to the current version
+    expect(upgraded.verno).toBe(24); // the v20 upgrade runs on the way to the current version
 
     const row = (await upgraded.settings.get('default')) as Settings;
     // MUT-145: the document row no longer switches anything on (invoices is
@@ -88,15 +88,15 @@ describe('Migration v20 — auto-enable optional areas that have data', () => {
   it('creates the settings row from the defaults when a v19 database had data but no row', async () => {
     const name = uniqueName();
     await createV19Database(name, async (v19) => {
-      await v19.table('retainerAgreements').add({ id: 'r1', createdAt: now });
+      await v19.table('projects').add({ id: 'p1', name: 'A', createdAt: now, updatedAt: now });
     });
 
     const upgraded = await openAtV20(name);
     const row = (await upgraded.settings.get('default')) as Settings;
     expect(row.defaultCurrency).toBe(DEFAULT_SETTINGS.defaultCurrency);
     expect(row.enabledCurrencies).toEqual(DEFAULT_SETTINGS.enabledCurrencies);
-    expect(row.features).toEqual({ ...DEFAULT_FEATURES, retainers: true });
-    expect(row.featureNotice).toEqual(['retainers']);
+    expect(row.features).toEqual({ ...DEFAULT_FEATURES, projects: true });
+    expect(row.featureNotice).toEqual(['projects']);
   });
 
   it('leaves the settings row untouched when no optional area has data', async () => {
@@ -117,7 +117,7 @@ describe('Migration v20 — auto-enable optional areas that have data', () => {
 
   it('starts a fresh database at v20 with everything off and no notice', async () => {
     const fresh = await openAtV20(uniqueName());
-    expect(fresh.verno).toBe(23);
+    expect(fresh.verno).toBe(24);
     expect(await fresh.settings.get('default')).toBeUndefined();
     expect(await fresh.settings.count()).toBe(0);
   });

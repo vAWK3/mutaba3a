@@ -21,8 +21,6 @@ export interface DemoDataStats {
   clients: number;
   projects: number;
   transactions: number;
-  retainers: number;
-  projectedIncome: number;
   expenses: number;
   expenseCategories: number;
   recurringRules: number;
@@ -37,8 +35,6 @@ export type DemoEntityPrefix =
   | 'demo_project'
   | 'demo_tx'
   | 'demo_doc'
-  | 'demo_retainer'
-  | 'demo_proj_income'
   | 'demo_expense'
   | 'demo_exp_cat'
   | 'demo_recurring'

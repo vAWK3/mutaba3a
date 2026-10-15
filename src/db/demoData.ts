@@ -30,7 +30,6 @@ function sessionTables(): Table<DatedRow, string>[] {
     db.transactions,
     db.paymentRecords,
     db.expenses,
-    db.retainerAgreements,
   ] as unknown as Table<DatedRow, string>[];
 }
 
@@ -78,16 +77,12 @@ export const demoDataRepo = {
         // Retained (MUT-145): older demo seeds wrote demo_ documents; clear them too.
         db.documents,
         db.documentSequences,
-        db.retainerAgreements,
-        db.projectedIncome,
         db.expenses,
         db.expenseCategories,
         db.recurringRules,
       ],
       async () => {
         // Delete in reverse dependency order
-        await db.projectedIncome.where('id').startsWith(DEMO_ID_PREFIX).delete();
-        await db.retainerAgreements.where('id').startsWith(DEMO_ID_PREFIX).delete();
         await db.documents.where('id').startsWith(DEMO_ID_PREFIX).delete();
         await db.documentSequences.where('id').startsWith(DEMO_ID_PREFIX).delete();
         await db.transactions.where('id').startsWith(DEMO_ID_PREFIX).delete();
@@ -124,8 +119,6 @@ export const demoDataRepo = {
         db.categories,
         db.transactions,
         db.businessProfiles,
-        db.retainerAgreements,
-        db.projectedIncome,
         db.expenses,
         db.expenseCategories,
         db.recurringRules,
@@ -141,8 +134,6 @@ export const demoDataRepo = {
         await db.projects.bulkPut(rows.projects);
         await db.categories.bulkPut(rows.categories);
         await db.expenseCategories.bulkPut(rows.expenseCategories);
-        await db.retainerAgreements.bulkPut(rows.retainers);
-        await db.projectedIncome.bulkPut(rows.projectedIncome);
         await db.transactions.bulkPut(rows.transactions);
         await db.recurringRules.bulkPut(rows.recurringRules);
         await db.expenses.bulkPut(rows.expenses);

@@ -14,8 +14,6 @@ import { createDemoProfiles, getDemoProfileIds } from './profile';
 import { createDemoClients } from './clients';
 import { createDemoProjects } from './projects';
 import { createDemoCategories, createDemoExpenseCategories } from './categories';
-import { createDemoRetainers } from './retainers';
-import { createDemoProjectedIncome } from './projectedIncome';
 import { createDemoTransactions } from './transactions';
 import { createDemoExpenses, createDemoRecurringRules } from './expenses';
 
@@ -68,14 +66,12 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
   const projects = createDemoProjects();
   const categories = createDemoCategories();
   const expenseCategories = createDemoExpenseCategories();
-  const retainers = createDemoRetainers();
-  const projectedIncome = createDemoProjectedIncome();
   const transactions = createDemoTransactions();
   const recurringRules = createDemoRecurringRules();
   const expenses = createDemoExpenses();
 
   // Insert all data in a transaction, then switch on the areas the demo
-  // exercises (retainers, expenses, projects) so a fresh install does not show
+  // exercises (expenses, projects) so a fresh install does not show
   // a mostly empty app (MUT-12). The existingDefault read above ran outside
   // this transaction; demoData.seed settles the default inside it, so a
   // profile created meanwhile keeps it (MUT-88, ADR-072).
@@ -85,8 +81,6 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
     projects,
     categories,
     expenseCategories,
-    retainers,
-    projectedIncome,
     transactions,
     recurringRules,
     expenses,
@@ -102,8 +96,6 @@ export async function seedDemoData({ announceFeatures = true }: SeedDemoOptions 
     clients: clients.length,
     projects: projects.length,
     transactions: transactions.length,
-    retainers: retainers.length,
-    projectedIncome: projectedIncome.length,
     expenses: expenses.length,
     expenseCategories: expenseCategories.length,
     recurringRules: recurringRules.length,

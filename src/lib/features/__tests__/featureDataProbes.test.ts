@@ -29,9 +29,9 @@ describe('detectFeaturesWithData', () => {
   });
 
   it('reports tables without soft delete when any row exists, in FEATURE_KEYS order', async () => {
-    await db.plans.add({ id: 'pl1', createdAt: now } as never);
-    await db.retainerAgreements.add({ id: 'r1', createdAt: now } as never);
-    expect(await detectFeaturesWithData(db)).toEqual(['retainers', 'planning']);
+    await db.projects.add({ id: 'p1', name: 'P', createdAt: now, updatedAt: now } as never);
+    await db.vendors.add({ id: 'v1', createdAt: now } as never);
+    expect(await detectFeaturesWithData(db)).toEqual(['expenses', 'projects']);
   });
 
   it('counts a vendor as expenses data (vendors belong to the expenses module)', async () => {
@@ -48,11 +48,9 @@ describe('detectFeaturesWithData', () => {
     await db.projects.add({ id: 'p1', name: 'P', createdAt: now, updatedAt: now } as never);
     await db.expenses.add({ id: 'e1', createdAt: now, updatedAt: now } as never);
     await db.vendors.add({ id: 'v1', createdAt: now } as never);
-    await db.plans.add({ id: 'pl1', createdAt: now } as never);
-    await db.retainerAgreements.add({ id: 'r1', createdAt: now } as never);
     const found = await detectFeaturesWithData(db);
     expect(found).not.toContain('insights');
-    expect(found).toHaveLength(4);
+    expect(found).toEqual(['expenses', 'projects']);
   });
 
   it('gives the same answer through a Dexie transaction as through db', async () => {

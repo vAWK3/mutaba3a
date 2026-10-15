@@ -56,7 +56,7 @@ export function useMutationWithFeedback<TData = unknown, TError = Error, TVariab
 
 /**
  * Wraps raw useMutation options with automatic error toast.
- * Used by expense/retainer/recurring hooks that need the full useMutation API.
+ * Used by expense/recurring hooks that need the full useMutation API.
  * Preserves all original options and types, only adds onError handling.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
