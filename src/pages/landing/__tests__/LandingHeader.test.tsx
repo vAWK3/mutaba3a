@@ -176,6 +176,22 @@ describe('LandingHeader', () => {
     expect(signIn).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
+  it('puts the sign-in link and the button in one slot that says whether the button shows, so a phone can show one at a time (MUT-231)', () => {
+    vi.stubGlobal('__PORTAL_URL__', 'https://portal.test');
+    const { rerender } = renderHeader({ showCta: false });
+    const slot = document.querySelector('.landing-header-slot')!;
+    expect([...slot.children].map((el) => el.className)).toEqual(['landing-header-signin', 'landing-header-cta']);
+    expect(slot).toHaveAttribute('data-cta-visible', 'false');
+    rerender(
+      <ThemeProvider>
+        <LanguageProvider>
+          <LandingHeader showCta />
+        </LanguageProvider>
+      </ThemeProvider>,
+    );
+    expect(document.querySelector('.landing-header-slot')).toHaveAttribute('data-cta-visible', 'true');
+  });
+
   it('leaves out the sign-in link when the build set no portal URL', () => {
     renderHeader();
     expect(screen.queryByRole('link', { name: /Sign in now/ })).not.toBeInTheDocument();

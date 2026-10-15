@@ -2626,3 +2626,13 @@ Full web suite on 2026-10-15 (after MUT-218/164/217/178): 114 passed, 9 failed, 
 | `src/services/__tests__/recurringExpenseService.dueWindow.test.ts` (new) | Integration (fake IndexedDB, clock fixed at 15 Oct 2026) | 3 | A rule started six months ago lists all seven months, where it showed 3 before the fix. A paid June, then a skipped August, move the start to the month after. A rule started three years ago lists 37 months |
 | `src/components/expenses/__tests__/RecurringAttentionList.test.tsx` › a long-running rule | Component | +3 | 37 payments read "37 payments since Oct 2023 not marked" with a $2,960 total; three still read "Aug, Sep, Oct"; Arabic uses the many form ("37 دفعة منذ") |
 | `qa/specs/web/expenses.spec.ts` › `@web.expenses.recurring-long-missed` (new) | E2E (release-qa) | 1 | A rule from eight months ago: "9 payments since <month> not marked", $720, nine months in Mark Paid. Passes with the other recurring specs |
+
+## MUT-231 — The web QA baseline (2026-10-15)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/pages/landing/__tests__/LandingHeader.test.tsx` › one slot | Component | +1 | The sign-in link and the bar's button sit in `.landing-header-slot`, which carries `data-cta-visible` false at the top and true once the button shows. The phone CSS keys off it. Failed before the fix (no slot) |
+| `qa/specs/web/landing.spec.ts` › `@web.landing.375` | E2E (release-qa) | 4 (extended) | 320 and 375, EN and AR: the wordmark is not clipped, Sign in shows at the top and is hidden once scrolled, the button fits. Failed on main ("wordmark clipped: 110px in 47px") |
+| `qa/specs/web/brand.spec.ts` › `@web.brand.loader-slow-route` | E2E (release-qa) | 5 (fixed) | Now holds Insights in a build too, with service workers blocked, and accepts `page-has-heading-one` on the loader screen. 5/5 on a dev server; 27/27 with the landing cells, `--repeat-each 3 --retries 0`, on a preview build |
+
+This retires the nine-cell baseline from the MUT-226 and MUT-178 notes above. On preview builds `loader-slow-route` now passes as well, so it is no longer dev-server-only.

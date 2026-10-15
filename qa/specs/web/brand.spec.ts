@@ -367,21 +367,85 @@ for (const scheme of SCHEMES) {
  * redirects to Insights). The dev server serves the page from /src; a build
  * would serve a hashed chunk.
  */
+const INSIGHTS_DEV_MODULE = /\/src\/pages\/insights\//;
+/** A built chunk that exports the page (`export{Ue as InsightsPage}`); the entry chunk only names it in a string. */
+const INSIGHTS_BUILT_CHUNK = /export\s*\{[^}]*\bas InsightsPage\b/;
+
+/**
+ * Delays the Insights page's code by `ms`. A dev server serves it as its own
+ * modules under /src/pages/insights/; a build ships it as a hashed
+ * assets/*.js chunk, recognised by the page it exports.
+ */
 async function holdInsightsCode(page: Page, ms: number) {
-  await page.route(/\/src\/pages\/insights\//, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, ms));
+  const hold = () => new Promise((resolve) => setTimeout(resolve, ms));
+  await page.route(INSIGHTS_DEV_MODULE, async (route) => {
+    await hold();
     await route.continue();
+  });
+  await page.route(/\/assets\/[^/?]+\.js(\?|$)/, async (route) => {
+    const response = await route.fetch();
+    if (INSIGHTS_BUILT_CHUNK.test(await response.text())) await hold();
+    await route.fulfill({ response });
   });
 }
 
 const loaderOf = (page: Page) => page.locator('.brand-loader').first();
 
-for (const scheme of SCHEMES) {
+/**
+ * The slow route: a build's service worker precaches every chunk and serves it
+ * without a network request, so these block it, as on a first visit.
+ */
+test.describe('a slow route', () => {
+  test.use({ serviceWorkers: 'block' });
+
+
+  for (const scheme of SCHEMES) {
+    test(
+      `${scheme} mode: a slow route shows nothing for 0.4 s, then the bloom loader named Loading, then the page`,
+      { tag: '@web.brand.loader-slow-route' },
+      async ({ page, step }) => {
+        await page.emulateMedia({ colorScheme: scheme });
+        await openFreshApp(page, '/');
+        await enableOptionalArea(page, 'Insights');
+        await holdInsightsCode(page, 2_000);
+        const loader = loaderOf(page);
+
+        await step('Open Insights while its code is slow to download', async () => {
+          await page.goto('/app/insights');
+          await loader.waitFor({ state: 'attached' });
+        });
+
+        await step('For the first 0.4 s the status is empty and nothing is drawn', async () => {
+          expect(await loader.evaluate((el) => ({ text: el.textContent, paths: el.querySelectorAll('path').length }))).toEqual({ text: '', paths: 0 });
+        });
+
+        await step('Then the mark blooms, named Loading, in the theme’s colours', async () => {
+          await expect(loader).toHaveText('Loading');
+          await expect(loader).toHaveAttribute('role', 'status');
+          expect(await loader.locator('animate').count()).toBe(4);
+          expect(await loader.locator('animateTransform').count()).toBe(1);
+          const fill = await loader.locator('.brand-loader-dot').evaluate((el) => getComputedStyle(el).fill);
+          expect(numbersIn(fill)).toEqual(numbersIn(MARK_DOT[scheme]));
+          await attachScreenshot(page, `loader-${scheme}`);
+        });
+
+        await step('Check accessibility on the loader screen', async () => {
+          await expectOnlyKnownAxeViolations(page, 'loader');
+        });
+
+        await step('Then the page', async () => {
+          await expect(page.getByRole('main').getByRole('heading', { name: 'Insights' }).first()).toBeVisible({ timeout: 10_000 });
+          await expect(page.locator('.brand-loader')).toHaveCount(0);
+        });
+      },
+    );
+  }
+
   test(
-    `${scheme} mode: a slow route shows nothing for 0.4 s, then the bloom loader named Loading, then the page`,
+    'reduced motion: the slow route’s loader holds the still mark and shows the word Loading',
     { tag: '@web.brand.loader-slow-route' },
     async ({ page, step }) => {
-      await page.emulateMedia({ colorScheme: scheme });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
       await openFreshApp(page, '/');
       await enableOptionalArea(page, 'Insights');
       await holdInsightsCode(page, 2_000);
@@ -389,85 +453,45 @@ for (const scheme of SCHEMES) {
 
       await step('Open Insights while its code is slow to download', async () => {
         await page.goto('/app/insights');
-        await loader.waitFor({ state: 'attached' });
       });
 
-      await step('For the first 0.4 s the status is empty and nothing is drawn', async () => {
-        expect(await loader.evaluate((el) => ({ text: el.textContent, paths: el.querySelectorAll('path').length }))).toEqual({ text: '', paths: 0 });
-      });
-
-      await step('Then the mark blooms, named Loading, in the theme’s colours', async () => {
-        await expect(loader).toHaveText('Loading');
-        await expect(loader).toHaveAttribute('role', 'status');
-        expect(await loader.locator('animate').count()).toBe(4);
-        expect(await loader.locator('animateTransform').count()).toBe(1);
-        const fill = await loader.locator('.brand-loader-dot').evaluate((el) => getComputedStyle(el).fill);
-        expect(numbersIn(fill)).toEqual(numbersIn(MARK_DOT[scheme]));
-        await attachScreenshot(page, `loader-${scheme}`);
-      });
-
-      await step('Check accessibility on the loader screen', async () => {
-        await expectOnlyKnownAxeViolations(page, 'loader');
-      });
-
-      await step('Then the page', async () => {
-        await expect(page.getByRole('main').getByRole('heading', { name: 'Insights' }).first()).toBeVisible({ timeout: 10_000 });
-        await expect(page.locator('.brand-loader')).toHaveCount(0);
+      await step('The mark stays still, with Loading written under it', async () => {
+        await expect(loader.locator('.brand-loader__caption')).toHaveText('Loading');
+        expect(await loader.locator('path').count()).toBe(4);
+        expect(await loader.locator('animate, animateTransform').count()).toBe(0);
       });
     },
   );
-}
 
-test(
-  'reduced motion: the slow route’s loader holds the still mark and shows the word Loading',
-  { tag: '@web.brand.loader-slow-route' },
-  async ({ page, step }) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await openFreshApp(page, '/');
-    await enableOptionalArea(page, 'Insights');
-    await holdInsightsCode(page, 2_000);
-    const loader = loaderOf(page);
+  for (const language of ['en', 'ar'] as const) {
+    test(
+      `${language === 'en' ? 'English' : 'Arabic'} at 1440×900: the route loader sits in the middle of the page and is never mirrored`,
+      { tag: '@web.brand.loader-slow-route' },
+      async ({ page, step }) => {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await openFreshApp(page, '/');
+        await enableOptionalArea(page, 'Insights');
+        if (language === 'ar') await switchToArabic(page);
+        await holdInsightsCode(page, 2_000);
+        const loader = loaderOf(page);
 
-    await step('Open Insights while its code is slow to download', async () => {
-      await page.goto('/app/insights');
-    });
+        await step('Open Insights while its code is slow to download', async () => {
+          await page.goto('/app/insights');
+          await expect(loader).toHaveText(language === 'en' ? 'Loading' : ar.common.loaderLabel);
+        });
 
-    await step('The mark stays still, with Loading written under it', async () => {
-      await expect(loader.locator('.brand-loader__caption')).toHaveText('Loading');
-      expect(await loader.locator('path').count()).toBe(4);
-      expect(await loader.locator('animate, animateTransform').count()).toBe(0);
-    });
-  },
-);
-
-for (const language of ['en', 'ar'] as const) {
-  test(
-    `${language === 'en' ? 'English' : 'Arabic'} at 1440×900: the route loader sits in the middle of the page and is never mirrored`,
-    { tag: '@web.brand.loader-slow-route' },
-    async ({ page, step }) => {
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await openFreshApp(page, '/');
-      await enableOptionalArea(page, 'Insights');
-      if (language === 'ar') await switchToArabic(page);
-      await holdInsightsCode(page, 2_000);
-      const loader = loaderOf(page);
-
-      await step('Open Insights while its code is slow to download', async () => {
-        await page.goto('/app/insights');
-        await expect(loader).toHaveText(language === 'en' ? 'Loading' : ar.common.loaderLabel);
-      });
-
-      await step('The mark’s centre is the page column’s centre, and it is not flipped', async () => {
-        const svg = loader.locator('svg');
-        const [mark, column] = await Promise.all([svg.boundingBox(), page.locator('.page-content').first().boundingBox()]);
-        const centre = (box: { x: number; width: number }) => box.x + box.width / 2;
-        expect(Math.abs(centre(mark!) - centre(column!))).toBeLessThanOrEqual(1);
-        expect(await svg.evaluate((el) => getComputedStyle(el).transform)).toBe('none');
-        await attachScreenshot(page, `loader-1440-${language}`);
-      });
-    },
-  );
-}
+        await step('The mark’s centre is the page column’s centre, and it is not flipped', async () => {
+          const svg = loader.locator('svg');
+          const [mark, column] = await Promise.all([svg.boundingBox(), page.locator('.page-content').first().boundingBox()]);
+          const centre = (box: { x: number; width: number }) => box.x + box.width / 2;
+          expect(Math.abs(centre(mark!) - centre(column!))).toBeLessThanOrEqual(1);
+          expect(await svg.evaluate((el) => getComputedStyle(el).transform)).toBe('none');
+          await attachScreenshot(page, `loader-1440-${language}`);
+        });
+      },
+    );
+  }
+});
 
 /**
  * MUT-207: the boot splash before any JavaScript. With scripts off, every

@@ -212,6 +212,42 @@ html:has(.landing-header) {
   border-radius: var(--radius-md);
 }
 
+/* Sign in and the bar's button: side by side on wide screens */
+.landing-header-slot {
+  display: contents;
+}
+
+/* A phone has room for one of them (MUT-231): stacked in one cell, Sign in
+   while the hero's button is on screen, then the bar's button in its place.
+   Hidden with visibility after the fade, so it also leaves the tab order. */
+@media (max-width: 640px) {
+  .landing-header-slot {
+    display: grid;
+    align-items: center;
+    justify-items: end;
+  }
+
+  .landing-header-slot > * {
+    grid-area: 1 / 1;
+  }
+
+  .landing-header-signin {
+    transition:
+      color 0.15s ease,
+      opacity var(--duration-toggle) ease,
+      visibility 0s linear 0s;
+  }
+
+  .landing-header-slot[data-cta-visible="true"] .landing-header-signin {
+    visibility: hidden;
+    opacity: 0;
+    transition:
+      color 0.15s ease,
+      opacity var(--duration-toggle) ease,
+      visibility 0s linear var(--duration-toggle);
+  }
+}
+
 .landing-lang-toggle {
   display: flex;
   align-items: center;
