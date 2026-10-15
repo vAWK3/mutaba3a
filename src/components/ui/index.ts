@@ -4,12 +4,10 @@ export { Input, Textarea, Select, type InputProps, type TextareaProps, type Sele
 export { Badge, PaidBadge, UnpaidBadge, OverdueBadge, TypeBadge, type BadgeProps, type BadgeVariant, type TypeBadgeVariant, type TypeBadgeProps } from './Badge';
 export { Numeric, Amount, type NumericProps, type AmountProps } from './Numeric';
 export { EmptyState } from './EmptyState';
-export { InlineStats } from './InlineStats';
 export { RowActionsMenu, type RowAction } from './RowActionsMenu';
 export { RowActionsHeader } from './RowActionsHeader';
 export { Pagination } from './Pagination';
 export { ProfileQuickPicker } from './ProfileQuickPicker';
-export { ProfileContextChip } from './ProfileContextChip';
 export { AmountWithConversion, type AmountWithConversionProps } from './AmountWithConversion';
 export { RecurringOccurrenceCard, RecurringOccurrenceList } from './RecurringOccurrenceCard';
 export { PaymentStatusBadge } from './PaymentStatusBadge';

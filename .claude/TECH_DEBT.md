@@ -19,7 +19,7 @@
 ## Open Debt
 
 ### TD-143: Dead and unreachable web code found while mapping the release-QA catalog
-**Status**: Open
+**Status**: Resolved 2026-10-15 (`chore/td-143-dead-code`): the 21 imported-by-nothing files, their 7 test files and their barrel exports are deleted, with the dead `UnifiedAmount` block in `index.css`. `/theme-demo` and `ThemeDemo(.css)` are deleted rather than gated: no doc, spec or link uses them. `MacDownloadBanner(.css)`, its test, its `AppShell` slot and its `downloadBanner.*` strings are deleted too (Basel, 2026-10-15: the desktop is retired until v2). One item left this ticket: `services/oauth/**` + `services/tokenStore.ts` are kept, since ADR-053 (5) keeps the Malafat OAuth client and TD-075 owns whether to delete it with its Rust half. `release-qa lint` now lists only those, plus the two intentional `db/` files.
 **Ticket**: none (found 2026-10-15, release-QA coverage pass)
 **Added**: 2026-10-15
 **Priority**: Low

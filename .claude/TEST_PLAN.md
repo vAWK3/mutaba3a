@@ -2489,3 +2489,10 @@ Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 - Catalog: 146 features in 29 areas (25 core). Mapped: web 92% (31 left, all TD-143), portal 100%.
 - `manual: true` until their bugs are fixed (specs already assert the right behaviour): `web.conversions.log`, `.edit-delete`, `web.data.csv-new-client`, `web.planning.export-confidence`, `web.onboarding.demo-summary`, `portal.expenses.edit-conflict`. Unmark each when its fix lands.
 - On `vite preview` builds, `web.brand.loader-slow-route` (delays `/src/...`, dev-server only by design), `web.landing.375` (the known 375 px header regression) and `portal.signin.boot-slow-session` fail; `release-qa release` uses dev servers. The other 165 pass with 4 workers.
+
+## Dead web code deleted (2026-10-15, TD-143)
+
+- Removed 7 test files with the code they covered: `CurrencyTabs`, `TypeSegment`, `StepperInput`, `InlineStats`, `useTransactionFilters`, `useTransactionActions`, `lib/aggregations` (`db/aggregations` keeps its own tests). No live behaviour lost coverage.
+- Removed `MacDownloadBanner.test.tsx` with the banner (product decision: desktop retired until v2), and its mock in `AppShell.gate.test.tsx`.
+- Node 22: lint (0 errors, 6 old warnings), typecheck, `test:run` (317 files, 4,394 passed, 4 skipped) and build all pass.
+- `release-qa lint`: the 6 web files left are the two intentional `db/` files and the OAuth client + `tokenStore` (ADR-053 / TD-075).

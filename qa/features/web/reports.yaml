@@ -1,5 +1,5 @@
 # Reports became the Insights page's presets: /reports redirects to /insights (router.tsx),
-# which the optional Insights area gates. src/pages/reports/** is no longer routed (dead code).
+# which the optional Insights area gates. The old src/pages/reports/** was deleted (TD-143).
 app: web
 area: reports
 title: Reports (Insights presets and CSV export)

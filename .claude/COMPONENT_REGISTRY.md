@@ -11,7 +11,7 @@
 |----------|------------|
 | **Layout** | AppShell, SidebarNav, BrandMark, BrandLoader (page/section waits), BootSplash (landing Suspense fallback), TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, LegacyExpenseEditDrawer, ConversionDrawer (currency conversion logging), RecurringMarkPaidDrawer, RetainerDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
-| **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
+| **Forms** | Input, Select, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
 | **Table cells** | TruncatedTitle (a row's title: one line, opens the record, full text on hover and focus), `EMPTY_CELL` (the dash), `toIncomeRow` / `incomeColumns` (`/income`'s rows and columns) |
@@ -19,9 +19,9 @@
 | **Home** | HomeNeedsAttention (rows: HomeAttentionRow), HomeRecentPayments (with OwedNowSummary), usePaymentUndo |
 | **Expenses** | RecurringAttentionList (+ `recurringAttention` helpers), RecurringOccurrenceCard (read-only, forecast) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
-| **Filters** | DateRangeControl, SearchInput, StatusSegment, TypeSegment, CurrencyTabs, useIncomeFilters (URL model for /income), useClientsSearch (URL model for the Clients list) |
+| **Filters** | DateRangeControl, SearchInput, StatusSegment, useIncomeFilters (URL model for /income), useClientsSearch (URL model for the Clients list) |
 | **Feedback** | Toast, Modal, RestoreBackupModal, DeleteAllDataModal |
-| **Money** | OwedNowSummary, partitionOwedNow (helper), clients index muted rows, CurrencyAmounts, UnifiedAmount, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
+| **Money** | OwedNowSummary, partitionOwedNow (helper), clients index muted rows, CurrencyAmounts, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
 | **Icons** | Custom SVG icons (see Icons section) |
 
 ---
@@ -218,13 +218,13 @@ Tests: `LandingHeader.test.tsx`, `HeroSection.test.tsx`.
 
 ### detectDevice / currentDevice
 **Location**: `src/lib/platform.ts`
-**Purpose**: Pure `detectDevice({ userAgent, platform, maxTouchPoints })` → `'mac' | 'windows' | 'ios' | 'android' | 'linux' | 'unknown'`, telling an iPad from a Mac and Android from Linux; `currentDevice()` reads `navigator`. Used by the landing hero, `DownloadPage` and `MacDownloadBanner` (MUT-79, which removed the substring checks `isMacOS`/`isWindows`/`isLinux`, TD-049). Cannot tell Intel from Apple Silicon.
+**Purpose**: Pure `detectDevice({ userAgent, platform, maxTouchPoints })` → `'mac' | 'windows' | 'ios' | 'android' | 'linux' | 'unknown'`, telling an iPad from a Mac and Android from Linux; `currentDevice()` reads `navigator`. Used by the landing hero and `DownloadPage` (`MacDownloadBanner` used it until TD-143 deleted it; MUT-79 which removed the substring checks `isMacOS`/`isWindows`/`isLinux`, TD-049). Cannot tell Intel from Apple Silicon.
 
-### MacDownloadBanner / UpdateBanner (frame bars)
-**Location**: `src/components/ui/MacDownloadBanner.tsx`, `UpdateBanner.tsx`
-**Purpose**: The app's bottom bars, rendered after the page inside `<main>`. They are in flow (`margin-top: auto`), not fixed, so they never cover content (MUT-79). The Mac bar shows when `currentDevice() === 'mac'`, the app is not in Tauri, and `localStorage.hideDownloadBanner` isn't set; storage errors are ignored. The update bar is desktop only (`role="status"`). Settings' own update card is `.settings-update-card`, not `.update-banner`.
+### UpdateBanner (frame bar)
+**Location**: `src/components/ui/UpdateBanner.tsx`
+**Purpose**: The app's bottom bar, rendered after the page inside `<main>`. It is in flow (`margin-top: auto`), not fixed, so it never covers content (MUT-79). Desktop only (`role="status"`). Settings' own update card is `.settings-update-card`, not `.update-banner`. The Mac download bar that sat beside it was deleted with the retired desktop (TD-143, 2026-10-15); a stale `localStorage.hideDownloadBanner` is harmless.
 
-Tests: `src/components/ui/__tests__/MacDownloadBanner.test.tsx`, `src/components/__tests__/UpdateBanner.test.tsx`.
+Tests: `src/components/__tests__/UpdateBanner.test.tsx`.
 
 ### THEME_MODES / nextThemeMode
 **Location**: `src/lib/theme/modes.ts` (exported from `lib/theme`)
@@ -866,23 +866,6 @@ Takes `<option>` children (same as a native select), not an `options` array. Use
 
 ---
 
-### StepperInput
-**Location**: `src/components/ui/StepperInput.tsx`
-**Purpose**: Numeric input with increment/decrement buttons.
-
-```tsx
-<StepperInput
-  label="Quantity"
-  min={1}
-  max={100}
-  step={1}
-  value={quantity}
-  onChange={setQuantity}
-/>
-```
-
----
-
 ### DatePicker
 **Location**: `src/components/ui/DatePicker.tsx`
 **Purpose**: Date input with native picker.
@@ -1384,7 +1367,7 @@ const filters = useMemo(() => resolveIncomeFilters(search), [search]);
 <Link to="/income" search={owedEntriesSearch('none')}>…</Link>
 ```
 
-**Extend, don't copy**: a new `/income` filter is one more field in `IncomeSearch`, `parseIncomeSearch` and `resolveIncomeFilters`. `useTransactionFilters` is a `useState` model with no URL and no current consumer; it is not this.
+**Extend, don't copy**: a new `/income` filter is one more field in `IncomeSearch`, `parseIncomeSearch` and `resolveIncomeFilters`.
 **Tests**: `src/lib/__tests__/incomeSearch.test.ts`, `src/hooks/__tests__/useIncomeFilters.test.tsx` (real memory router), `src/pages/income/__tests__/IncomePage.test.tsx`.
 
 ---
@@ -1433,35 +1416,6 @@ const { q, sort, dir } = useMemo(() => resolveClientsSearch(search), [search]);
   value={status}
   onChange={setStatus}
   options={['all', 'paid', 'unpaid', 'overdue']}
-/>
-```
-
----
-
-### TypeSegment
-**Location**: `src/components/filters/TypeSegment.tsx`
-**Purpose**: Transaction type filter.
-
-```tsx
-<TypeSegment
-  value={kind}
-  onChange={setKind}
-  options={['all', 'income', 'expense']}
-/>
-```
-
----
-
-### CurrencyTabs
-**Location**: `src/components/filters/CurrencyTabs.tsx`
-**Purpose**: Currency selection tabs.
-
-```tsx
-<CurrencyTabs
-  value={currency}
-  onChange={setCurrency}
-  currencies={['USD', 'ILS', 'EUR']}
-  showAll={true}
 />
 ```
 
@@ -1571,7 +1525,7 @@ const owed = useMemo(() => summarizeOwedByCurrency(receivables, today), [receiva
 - The clients index strip uses it over `useClientOwedIndex(...).total`. That is the same figure as Home's (MUT-83, ADR-049), or `combineOwed` of the matching rows while a search is active.
 
 Not for period totals (paid income, expenses): those are not "now" figures.
-**Not**: `CurrencySummaryPopup`, `UnifiedAmount` or `KpiCard`, which all convert to ILS.
+**Not**: `CurrencySummaryPopup` or `KpiCard`, which both convert to ILS.
 Tests: `src/components/clients/__tests__/OwedNowSummary.test.tsx`; the helper in `src/db/__tests__/aggregations.test.ts`.
 
 ---
@@ -1644,28 +1598,8 @@ The parts always add up to `total`. It takes entries and clients rather than a b
 // $240  ₪3,500
 ```
 
-**Use when**: a total or a header figure covers several currencies (the Expenses Needs attention total). **Not**: `OwedNowSummary` for Owed now itself; `UnifiedAmount` / `CurrencySummaryPopup`, which convert. The Expenses page's "Total expenses" strip still uses `CurrencySummaryPopup`, and sums the wrong table (reported with MUT-87, not changed).
+**Use when**: a total or a header figure covers several currencies (the Expenses Needs attention total). **Not**: `OwedNowSummary` for Owed now itself; `CurrencySummaryPopup`, which converts. The Expenses page's "Total expenses" strip still uses `CurrencySummaryPopup`, and sums the wrong table (reported with MUT-87, not changed).
 Tests: through `RecurringAttentionList.test.tsx`; the helper in `src/lib/__tests__/currencyAmounts.test.ts`.
-
----
-
-### UnifiedAmount
-**Location**: `src/components/ui/UnifiedAmount.tsx`
-**Purpose**: Display multi-currency totals (USD + ILS + EUR) as unified ILS amount with breakdown.
-
-```tsx
-<UnifiedAmount
-  usdAmountMinor={1999}
-  ilsAmountMinor={5000}
-  eurAmountMinor={1500}
-  variant="kpi"  // 'default' | 'compact' | 'kpi' | 'table'
-  type="income"  // 'income' | 'expense' | 'net' | 'neutral'
-/>
-// KPI variant: ₪95.50 with breakdown "USD: $19.99 + ILS: ₪50.00 + EUR: €15.00"
-// Table variant: ₪95.50 with hover tooltip showing breakdown
-```
-
-**Use when**: Displaying aggregated totals from multiple currencies (summaries, KPIs).
 
 ---
 

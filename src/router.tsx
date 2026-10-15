@@ -183,13 +183,6 @@ const importDataRoute = createRoute({
   component: lazyPage(() => import('./pages/settings/ImportDataPage'), 'ImportDataPage'),
 });
 
-// Theme demo route (for visual testing)
-const themeDemoRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/theme-demo',
-  component: lazyPage(() => import('./components/examples/ThemeDemo'), 'ThemeDemo'),
-});
-
 // ============================================================================
 // Expense Routes
 // ============================================================================
@@ -376,7 +369,6 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
   legacyProfileDetailRoute,
   importDataRoute,
-  themeDemoRoute,
 ]);
 
 // Create router with conditional basepath for web build

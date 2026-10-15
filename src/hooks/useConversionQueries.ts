@@ -4,7 +4,7 @@
  * Mirrors useIncomeQueries.ts: a semantic API over the generic transaction
  * repository, pre-filtered to kind='conversion'. Conversions are logged
  * money movements between currencies, excluded from P&L by construction
- * (src/db/aggregations.ts, src/lib/aggregations.ts) -- this file only
+ * (src/db/aggregations.ts) -- this file only
  * reads/writes them, it never aggregates them into totals.
  */
 
