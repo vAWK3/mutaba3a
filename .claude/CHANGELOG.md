@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — The bloom loader replaces the page and section spinners (MUT-206)
+
+**Why:** the app and the portal showed five unrelated rings and an unlocalised "Loading..." on lazy routes. Brand v2 has a designed loader: the mark folds into drops and blooms back over a 4.5 s loop. Brief: `.claude/designs/mut-206-brand-loader.md` (eng review R1–R5, design review DR1–DR16). ADR-079.
+
+### Added
+- `BrandLoader` (`src/components/brand/BrandLoader.tsx` + `.css`): a React port of the delivered SMIL SVG, path data in `bloomLoaderData.ts`. Sizes 24/40/64/96. A `role="status"` region from mount, empty for `LOADER_DELAY_MS` (400 ms), then a fresh SVG (its SMIL clock starts at frame 0) and the label as text; `slowCaption` replaces it at `LOADER_SLOW_MS` (3 s); reduced motion holds the still mark and shows the word; a loader mounting within `LOADER_CHAIN_MS` (100 ms) of a shown one skips its delay and fade. No `style` attribute, no runtime: it runs under the portal CSP.
+- Tokens: `markDot`/`markLavender`/`markRose`/`markPeach` in `mutaba3a.tokens.json` (light and dark), `--m-mark-*` in the brand CSS's three blocks, `--mark-*` in `theme.css`; `--duration-fade: 150ms` (zeroed under reduced motion).
+- `.loading` is a 50vh centred box; `.loading--section` waits at the top of a section or drawer (120 px, `--space-8`); `.content-enter` fades in what replaces a loader (ClientDetail, ProjectDetail, Settings, the Retainers table, a client's work table, the retainer matching list).
+- i18n: `common.loaderLabel` ("Loading" / "جارٍ التحميل") and `common.loadingSlow` ("Still loading…" / "ما زلنا نحمّل…") in the app and portal dictionaries; `useOptionalT()` in `lib/i18n/core` (the loader never throws outside a provider).
+- Settings › Import is fully localised: every string moved to `settings.import.*` with Arabic copy, the row count pluralised (eng review R4).
+- QA: `@web.brand.loader-slow-route`, `@portal.signin.boot-slow-session`.
+
+### Changed
+- Every page, section and drawer wait (11 pages and sections, 13 app drawers, 2 portal drawers, the demo seed modal, the import step) shows `BrandLoader` (64 full-page with the slow caption, 40 in sections and drawers). The router's `PageLoader` is the 64 loader in the page box. The portal's S1 boot screen shows `BrandLoader` 40 after `LOADER_DELAY_MS` (its own `SPINNER_DELAY_MS` is gone). Planning's `.loading-state` is now `.loading`.
+- Audit (DR8): every site decides on TanStack `isLoading`/`isPending` (no data yet), so a background refetch keeps the content.
+
+### Removed
+- `.spinner` and `@keyframes spin` (index.css), `.hp-spinner`/`hp-spin` (hosted.css), `.demo-spinner` and its `spin`, `.import-step-importing .spinner` and its `spin`, the dead `.table-spinner`/`table-spin`, `.planning-page .loading-state`.
+
 ## [Unreleased] - 2026-10-15 — Brand kit: the Loader & Splash delivery (MUT-203)
 
 **Why:** MUT-204/205 (iPhone) and MUT-206/207 (web and portal) build the bloom loader and the splash screens from one committed, as-delivered copy. Docs only; nothing ships.

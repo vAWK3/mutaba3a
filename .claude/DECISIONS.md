@@ -3108,3 +3108,23 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - **Who sees it.** A profile is eligible when it is owned, `type === 'BUSINESS'`, not the personal default, and not Malafat-fed (`writerOfRecord === null`). Firms never (they are Malafat tenants). Anyone who belongs to a Malafat-fed firm gets no suggestion anywhere (auto decision D7, flagged to Basel).
 - **Where.** S1 is two items at the end of the account menu (after Sign out, which keeps first focus). C1 shows on the new business profile's Overview right after the create drawer lands there, read once on arrival and consumed. C2/C3 sit in Clients' loaded view above the table, hidden while searching; C2 counts `ACTIVE` customers; C3 stays quiet for the rest of a visit in which a business profile was created (C1 spoke for that event).
 
+---
+
+## ADR-079: The Bloom Loader Is a React Port of the Delivered SVG — Token Fills, a JS-Chosen Still Frame, No Lottie Runtime
+
+**Status**: Active
+**Date**: 2026-10-15
+**Context**: MUT-206 (epic MUT-101). The app and the portal showed five unrelated ring spinners. Brand v2 delivered the bloom loader (MUT-203, `docs/brand/loader/`) as a Lottie JSON (the motion source of truth), a `<mutaba3a-loader>` custom element with inline SMIL, and a Flutter painter. The element reads the OS theme (not ThemeToggle), writes a `<style>` into a shadow root, hard-codes its colours and an English label. The portal CSP is `default-src 'self'` (no inline `<style>`, no `style=""`), the literal guard forbids colour literals and `<style>` in TSX, and SMIL ignores the CSS reduced-motion rule. Brief and reviews: `.claude/designs/mut-206-brand-loader.md`.
+
+**Decision**:
+1. **Port, don't ship.** `BrandLoader` renders the delivered SVG in React: `viewBox="-10 -10 120 120"`, four `<path>`s each with an `<animate attributeName="d">`, one group `<animateTransform type="rotate">`, `dur="4.5s"`, the delivered `keyTimes`/`keySplines`/`values` strings (in `bloomLoaderData.ts`). No `lottie-web` (≈250 KB), no custom element. A parity test proves every string against the Lottie JSON.
+2. **Fills from tokens.** Four new tokens, `markDot`/`markLavender`/`markRose`/`markPeach` (light dot `#795DBA`, dark dot `#F3E5B0`; peach `#F5AB77`/`#F9B379`), as `--m-mark-*` in the brand CSS's three selector blocks and `--mark-*` in `theme.css`. `BrandLoader.css` paints each piece's class. Light, Dark, System and live OS changes follow `data-theme` through the existing cascade; no `useTheme` call. Recorded under the kit README's Deviations.
+3. **The still frame is chosen in JS.** Under `prefers-reduced-motion` (via `usePrefersReducedMotion`) the loader renders no `<animate>` children: the paths hold frame 0, which is the mark, and the label is shown as text. Deterministic and testable, unlike `pauseAnimations()`.
+4. **Behaviour.** 400 ms of empty `role="status"` (same footprint) before anything shows; the shown SVG is a fresh element so its SMIL clock starts at frame 0; a 3 s slow caption on full-page waits; a loader chained within 100 ms of a shown one shows at once; sizes are a union (24/40/64/96).
+
+**Consequences**:
+- About 6.5 KB of path strings (≈1.5 KB gzipped) in the shared chunk; no dependency.
+- A kit change must update `bloomLoaderData.ts` (the parity test fails otherwise) and, for a colour change, the four tokens.
+- Three duplicate `@keyframes spin` and five spinner blocks are gone; a test keeps them gone.
+- The loader's default label lives in both the app and portal dictionaries (`common.loaderLabel`), kept equal by the portal parity test.
+
