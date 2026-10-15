@@ -2508,6 +2508,7 @@ Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 | `src/components/layout/__tests__/SidebarNav.features.test.tsx` (rewritten examples) | Component | +1 | No Planning or Retainers entry even with their stored switches; "More" order is Expenses, Conversions, Insights, Projects |
 | `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | Page | 1 (was 2) | No retainers card, even with a stored retainers switch |
 | `src/db/__tests__/provider.test.ts` | Unit | 1 (rewritten) | The registry has no plan or retainer slots |
+| `src/components/layout/__tests__/FeatureNoticeBanner.test.tsx` (extended, qa-reconcile) | Component | +1 | A notice restored from a pre-v24 backup (`retainers`, `expenses`, `planning`) names only Expenses and never a raw key. It fails when `useFeatureNotice` stops filtering through `FEATURE_KEYS` (mutation-checked) |
 | `qa/specs/web/navigation.spec.ts` › `@web.navigation.retired-areas` | E2E (release-qa) | 1 | Bookmarked `/app/planning?plan=p1` and `/app/retainers?status=active` land on Home; the sidebar has no entry; Settings › Features shows exactly four switches |
 
 Re-pointed (same assertions, a live area as the example): `featureDataProbes`, `reconcile`, `routeGuard`, `useFeatures`, `leaveDisabledArea`, `gatingDataSafety`, `settingsRepo`, `migration-safety`, `migration-v20` (the no-settings-row case now seeds a project), `migration-v21` (its kept-table list excludes the five v24 drops), and every `verno` 23 → 24.

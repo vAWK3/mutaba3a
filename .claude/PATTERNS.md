@@ -2322,6 +2322,7 @@ Every in-product suggestion claims a slot while mounted (`useMalafatMomentStore.
 
 When an optional area leaves the product:
 - **Code**: delete the pages, drawers, hooks, repositories, store slices, types, i18n keys (both locales) and CSS. Drop the key from `FEATURE_KEYS` and the `FeatureKey` union, and drop its probe. A stored switch is then inert, because `resolveFeatures` drops unknown keys and `useFeatureNotice` filters through `FEATURE_KEYS`.
+- **CSS**: before deleting a stylesheet, check how it's loaded. One imported by an eagerly loaded module (a drawer mounted in AppShell) is global, and its unscoped rules may be styling live screens (MUT-226: `.segment-control`). Move any rule a live component depends on into its base stylesheet.
 - **URLs**: replace the route with an unconditional `beforeLoad` redirect home. The router has no not-found component, and a bookmark must land somewhere real.
 - **Guards**: add a `src/__tests__/noDead<Area>Modules.test.ts` covering deleted paths, deleted names and retired i18n keys.
 - **Data**: the default is ADR-029, so the tables stay. Their row types go in `src/db/retained/`, with a retention test (MUT-145).

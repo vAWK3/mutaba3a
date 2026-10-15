@@ -45,6 +45,9 @@
 - `/planning` and `/retainers` redirect to Home.
 - Four optional areas remain: Expenses, Insights, Projects, Currency conversions.
 
+### Fixed (qa-reconcile review)
+- `StatusSegment` (the client profile's and project detail's status filter) kept its look. `PlanAssumptionDrawer.css` was imported eagerly through AppShell, and its unscoped `.segment-control`/`.segment-button` rules overrode the base ones in `index.css`. Deleting it shrank the padding and radius, swapped the background and stopped wrapping. Those effective values now live in the `index.css` base rule. Computed style on a built client page matches main exactly.
+
 ### Technical
 - New tests:
   - `migration-v24.test.ts` (upgrade, cleanup, restore, migration-safety snapshot);

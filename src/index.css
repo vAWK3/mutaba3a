@@ -1040,26 +1040,34 @@ td {
   color: var(--muted);
 }
 
-/* Segment Control */
+/* Segment Control. Until MUT-226 the planning drawer's eagerly loaded
+   stylesheet restyled these globally, and that is what StatusSegment (client
+   profile, project detail) has always shown; its values now live here. */
 .segment-control {
   display: flex;
-  background: var(--bg);
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 2px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1);
 }
 
 .segment-button {
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
   border-radius: var(--radius-sm);
+  cursor: pointer;
   font-size: var(--text-label);
   font-weight: var(--weight-medium);
   color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  transition: all 0.2s;
 }
 
 .segment-button:hover {
   color: var(--text);
+  background: var(--surface-3);
 }
 
 .segment-button.active {
