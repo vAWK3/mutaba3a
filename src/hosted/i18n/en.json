@@ -215,7 +215,8 @@
         "gross": "Amount",
         "paid": "Paid",
         "outstanding": "Outstanding",
-        "status": "Status"
+        "status": "Status",
+        "date": "Date"
       },
       "dueFrom": "Due from",
       "dueTo": "Due to",
@@ -440,7 +441,7 @@
       "paidInFull": "Paid in full",
       "stillOwed": "{amount} still owed",
       "exceeds": "Exceeds what's left ({amount})",
-      "honest": "Check the amount: a recorded payment can't be changed yet.",
+      "honest": "You can fix the date later; the amount can’t be changed yet.",
       "nothingLeft": "Nothing left to pay on this entry",
       "nothingLeftBody": "It was paid or removed since this page loaded.",
       "saved": "Payment recorded · {amount} from {client}",
@@ -545,6 +546,20 @@
       "menuLink": "Malafat, for law firms and accounting offices",
       "menuSwitch": "Show Malafat suggestions",
       "saveFailed": "Couldn't save. Try again."
+    },
+    "redate": {
+      "owedTitle": "Change the date",
+      "paymentTitle": "Change the received date",
+      "date": "Date",
+      "receivedOn": "Received on",
+      "dueStays": "Due {date} — stays as it is",
+      "number": "Payment {number}",
+      "payments": "Payments on this entry",
+      "paymentLine": "{date} · {amount}",
+      "seePayments": "See this client’s payments",
+      "conflict": "This changed elsewhere. The latest date is shown: check it and save again.",
+      "gone": "This entry is no longer available.",
+      "dateRequired": "Pick a date."
     }
   }
 }
