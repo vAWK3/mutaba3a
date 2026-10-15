@@ -112,7 +112,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.26.2-mut130';
+export const API_VERSION = '1.26.3-mut199';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -276,7 +276,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         `Error codes: ${Object.keys(ERROR_CODES).join(', ')}. Every error is {"error":{"code","message","details?","requestId"}}.`,
         '',
-        'Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED.',
+        'Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\\/`, `\\u00e9`) do not count; array order and values do.',
         '',
         'PATCH routes require `If-Match: <version>` (optimistic concurrency).',
         '',

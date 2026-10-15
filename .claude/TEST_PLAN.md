@@ -2588,3 +2588,11 @@ Run (Node 22, 2026-10-15): server `typecheck`, `lint`, `openapi:check` clean; `n
 | `server/src/__tests__/routes-m4.test.ts` › a write that loses a lock conflict | Route (memory store, `LockConflict` stubbed) | 1 | Record and allocate answer 409 `PREVIEW_STALE`; reverse answers 409 `VERSION_MISMATCH`, and a new request then reverses |
 
 The ticket's "drive a deadlock between an allocation and an outcome write" can no longer be produced: both now lock in id order. The third DB test drives a real deadlock with a raw connection that locks against the order, instead.
+
+## MUT-199 — Canonical idempotency fingerprint (2026-10-15, ADR-085)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `server/src/__tests__/idempotency-fingerprint.test.ts` (new) | Unit + route (memory store) | 6 | The widget's body and the app's body for one capture fingerprint identically. Nested keys, whitespace and `\u` escapes don't count; a value, array order, method and path do; a non-JSON body counts byte for byte. A replay with reordered keys and `\/` gets the stored 201 with `Idempotent-Replayed` and the same id, while a changed value is 422 `IDEMPOTENCY_KEY_REUSED`. A key stored under the old byte fingerprint still replays |
+
+The phone-side AC ("the row shows saved") follows from the server returning the stored 2xx. It is not exercised end to end from the Flutter app here.

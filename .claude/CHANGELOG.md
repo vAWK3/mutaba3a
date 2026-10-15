@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Idempotency compares JSON bodies by meaning (MUT-199, ADR-085, API 1.26.3-mut199)
+
+**Why:** the fingerprint hashed the raw body. The phone widget (Swift: random key order, `\/`) and the app's replay (Dart) send the same capture as different bytes, so the app's replay after a lost widget response was refused as `IDEMPOTENCY_KEY_REUSED`.
+
+### Fixed
+- A JSON body is fingerprinted canonically: keys sorted at every depth, with no whitespace or escaping differences. The app's replay of a widget save now gets the stored 2xx. Different values and array order are still a different request.
+- Keys stored before the change still replay a byte-identical request, through a fallback to the byte fingerprint (ADR-085 §3).
+
+### Changed
+- API 1.26.3-mut199. The API description says how bodies compare. OpenAPI and hosted types are regenerated.
+
+### Technical
+- `requestFingerprint` is exported from `server/src/idempotency.ts`.
+- Files: `server/src/{idempotency,app}.ts`, `server/src/__tests__/idempotency-fingerprint.test.ts` (new), the `routes-m*` version pins, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`.
+
 ## [Unreleased] - 2026-10-15 — Payment writes lock in id order; a lost lock is a 409 (MUT-130, TD-104, API 1.26.2-mut130)
 
 **Why:** the contingency outcome writes lock upfront receivables in id order. Allocations and reversals locked them in request order, so the two could deadlock, and the payments side answered the loser with a 500.
