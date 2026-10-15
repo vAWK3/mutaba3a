@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Demo mode shows its summary and opens a sample business (MUT-220)
+
+**Why:** `activateDemo` set `showConfirmModal` to false, so AppShell unmounted the dialog before its summary rendered. The switch to the demo business ran before the business list refetched, so `useActiveProfile`'s repair put the person straight back on their own business. The dialog also promised "1 business profile" when it seeds 3.
+
+### Fixed
+- After Show Demo the dialog shows the Demo Mode Activated summary, now with a Businesses count. Get Started closes it and reloads.
+- The demo seed refetches every query before making the first demo business active, so the repair has nothing to fix and the app opens on the sample business.
+- The dialog says how many businesses it creates, from the seed's own list: "{count} business profiles", in English and Arabic.
+
+### Technical
+- `activateDemo` no longer closes the dialog.
+- QA `web.onboarding.demo-summary` is automated (no `test.fail`, no `manual`). `web.onboarding.demo-mode` follows the new flow: summary, Get Started, already on the sample business.
+- Files: `src/demo/demoStore.ts`, `src/components/modals/DemoSeedModal.tsx`, both translation files, the new `DemoSeedModal.test.tsx`, `qa/specs/web/onboarding.spec.ts`, `qa/features/web/onboarding.yaml`.
+
 ## [Unreleased] - 2026-10-15 — QA specs wait for Owed now before reading it (MUT-178)
 
 **Why:** `@web.clients.owed-now-parity`, `@web.home` and `@web.brand.type` read Home's Owed now with `allTextContents()` (or checked the loaded font faces) straight after `goto`. That doesn't wait, so the specs raced Home's receivables query and usually failed.

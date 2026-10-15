@@ -142,8 +142,8 @@ test('with Projects on, Get Started counts three steps, and Skip for now sticks'
   });
 });
 
-// ?demo=1 is the internal sales-demo switch. Show Demo seeds three sample businesses; this spec
-// checks what works today. The summary step after seeding never shows (onboarding.demo-summary).
+// ?demo=1 is the internal sales-demo switch. Show Demo seeds three sample businesses, shows a summary,
+// and Get Started opens the first of them (MUT-220; the summary itself is onboarding.demo-summary).
 test('demo mode seeds sample businesses, freezes time and resets', { tag: '@web.onboarding.demo-mode' }, async ({ page, step }) => {
   const demo = page.getByRole('dialog', { name: 'Activate Demo Mode' });
   const banner = page.getByRole('banner').filter({ hasText: 'Demo Mode' });
@@ -158,19 +158,20 @@ test('demo mode seeds sample businesses, freezes time and resets', { tag: '@web.
 
   await step('Read what the demo will create', async () => {
     await expect(demo).toBeVisible();
+    await expect(demo).toContainText('3 business profiles');
     await expect(demo).toContainText('10 clients with contact info');
     await expect(demo).toContainText('60+ transactions (6 months history)');
   });
 
-  await step('Click Show Demo', async () => {
+  await step('Click Show Demo, then Get Started on the summary', async () => {
     await demo.getByRole('button', { name: 'Show Demo' }).click();
+    await demo.getByRole('button', { name: 'Get Started' }).click({ timeout: 30_000 });
     await expect(banner).toBeVisible({ timeout: 30_000 });
     await expect(demo).toBeHidden();
   });
 
-  await step('Switch to a sample business: its clients are there', async () => {
-    await businessSwitcher(page, /Default Profile/).click();
-    await sampleBusiness.click();
+  await step('The app is on a sample business: its clients are there', async () => {
+    await expect(businessSwitcher(page, /Default Profile/)).toHaveCount(0);
     await page.goto('/app/clients');
     await expect(page.getByRole('link', { name: 'مطعم الشرق' }).first()).toBeVisible();
   });
@@ -198,11 +199,6 @@ test('demo mode seeds sample businesses, freezes time and resets', { tag: '@web.
 });
 
 test('after Show Demo, a summary opens the app on a sample business', { tag: '@web.onboarding.demo-summary' }, async ({ page, step }) => {
-  // Manual in onboarding.yaml (product bug): activateDemo() sets showConfirmModal false, which unmounts
-  // DemoSeedModal before its success state renders, so there is no summary and no reload; and the
-  // active-profile repair puts the app straight back on the person's own default business. Written to the
-  // intended behaviour; test.fail keeps the run green until the fix lands, then flags this to be unmarked.
-  test.fail(true, 'DemoSeedModal unmounts before its success state: activateDemo() closes the confirm modal');
   const demo = page.getByRole('dialog', { name: 'Activate Demo Mode' });
 
   await step('Open /?demo=1 on a fresh install, skip the welcome, and click Show Demo', async () => {
