@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Payment writes lock in id order; a lost lock is a 409 (MUT-130, TD-104, API 1.26.2-mut130)
+
+**Why:** the contingency outcome writes lock upfront receivables in id order. Allocations and reversals locked them in request order, so the two could deadlock, and the payments side answered the loser with a 500.
+
+### Fixed
+- Recording, allocating, settling and reversing lock every receivable they touch in id order before writing, so they can no longer deadlock with an outcome write (or with each other).
+- A lock conflict that still happens answers 409, never 500: `PREVIEW_STALE` on record and allocate (preview again), `VERSION_MISMATCH` on reverse and settle (send again). Nothing is written.
+
+### Changed
+- API 1.26.2-mut130. The reverse route's description names the new 409. OpenAPI and hosted types are regenerated.
+
+### Technical
+- `LockConflict` lives in `server/src/repositories/memory.ts`. The Prisma store's `asLockConflict` and `lockReceivablesInIdOrder` are in `prisma.ts`. Pattern added to PATTERNS.md.
+- Files: `server/src/repositories/{memory,prisma}.ts`, `server/src/routes/{payments,receivables}.ts`, `server/src/app.ts`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, tests below.
+
 ## [Unreleased] - 2026-10-15 — Oversized amounts are a 422, not a 500 (MUT-126, TD-100, API 1.26.1-mut126)
 
 **Why:** `parseMoney` accepted any number of digits. An amount whose minor units overflow Postgres `BIGINT` passed validation, then failed inside the write with a Prisma error, and the caller got a 500.

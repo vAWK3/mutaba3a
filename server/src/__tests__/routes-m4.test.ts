@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import pino from 'pino';
 import { createApp, API_VERSION } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
-import { MemoryLedgerStore } from '../repositories/memory.js';
+import { LockConflict, MemoryLedgerStore } from '../repositories/memory.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
@@ -420,8 +420,8 @@ describe('contract', () => {
   it('publishes every M4 path, the reason vocabularies and the version', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.26.1-mut126');
-    expect(API_VERSION).toBe('1.26.1-mut126');
+    expect(doc.info.version).toBe('1.26.2-mut130');
+    expect(API_VERSION).toBe('1.26.2-mut130');
     for (const path of ['/v1/allocations/preview', '/v1/payments', '/v1/payments/{paymentId}', '/v1/payments/{paymentId}/allocations', '/v1/payments/{paymentId}/reverse', '/v1/receivables/{receivableId}/credits', '/v1/operations/{idempotencyKey}']) {
       expect(doc.paths[path], path).toBeDefined();
     }
@@ -430,5 +430,35 @@ describe('contract', () => {
     }
     expect(doc.components.schemas.Receivable.properties.credited).toBeDefined();
     expect(Object.keys(doc.components.schemas)).toEqual(expect.arrayContaining(['Payment', 'Allocation', 'AllocationPreviewRequest', 'AllocationPreviewResponse', 'CreatePaymentRequest', 'Credit', 'Operation']));
+  });
+});
+
+describe('a write that loses a lock conflict (MUT-130)', () => {
+  // Postgres rolls the loser back (40P01 / 40001) and the Prisma store raises LockConflict; nothing was written.
+  it('recording, allocating and reversing answer 409, never 500, and a later request goes through', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const { receivables: recs } = await receivables(h, f, ['300.00', '500.00']);
+
+    const create = vi.spyOn(h.store.payments, 'create').mockRejectedValueOnce(new LockConflict());
+    const lost = await pay(h, f, '300.00', [{ receivableId: recs[0].id, amount: '300.00' }]);
+    expect(lost.res.status).toBe(409);
+    expect(lost.body.error.details.reason).toBe('PREVIEW_STALE');
+    create.mockRestore();
+    const { body: payment } = await pay(h, f, '600.00', [{ receivableId: recs[0].id, amount: '300.00' }]);
+
+    vi.spyOn(h.store.payments, 'allocate').mockRejectedValueOnce(new LockConflict());
+    const more = [{ receivableId: recs[1].id, amount: '300.00' }];
+    const pp = await preview(h, f, { paymentId: payment.id, allocations: more });
+    const allocate = await h.app.request(`/v1/payments/${payment.id}/allocations`, json({ allocations: more, previewToken: pp.previewToken }, { ...f.auth, ...idem() }));
+    expect(allocate.status).toBe(409);
+    expect((await read(allocate)).error.details.reason).toBe('PREVIEW_STALE');
+
+    vi.spyOn(h.store.payments, 'reverse').mockRejectedValueOnce(new LockConflict());
+    const reverse = await h.app.request(`/v1/payments/${payment.id}/reverse`, json({ reason: 'wrong client' }, { ...f.auth, ...idem() }));
+    expect(reverse.status).toBe(409);
+    expect((await read(reverse)).error.details.reason).toBe('VERSION_MISMATCH');
+    const retried = await h.app.request(`/v1/payments/${payment.id}/reverse`, json({ reason: 'wrong client' }, { ...f.auth, ...idem() }));
+    expect(retried.status).toBe(200);
   });
 });

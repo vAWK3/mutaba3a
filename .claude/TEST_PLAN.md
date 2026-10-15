@@ -2579,3 +2579,12 @@ Run (Node 22, 2026-10-15): server `typecheck`, `lint`, `openapi:check` clean; `n
 | `server/src/__tests__/money.test.ts` | Unit | +2 (1 rewritten) | The bound parses, either sign, in USD/ILS and JOD; one minor unit above it, and a 20-digit amount, throw `MoneyParseError` |
 | `server/src/__tests__/routes-m3.test.ts` › validates … amounts | Route (memory store) | +1 assertion | An agreement preview with a 20-digit amount is 422 `AMOUNT_INVALID`, `field: 'amount'` |
 | `server/src/__tests__/routes-mut100.test.ts` › outcome validation | Route (memory store) | +1 assertion | A 20-digit `awardedAmount` is 422 `AMOUNT_INVALID`, `field: 'awardedAmount'` |
+
+## MUT-130 — Payment lock order and lock conflicts (2026-10-15, TD-104)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `server/src/repositories/__tests__/store-prisma-lock-order.test.ts` (new, `test:db`) | Integration (Postgres) | 3 | While another connection holds the lower receivable's row lock, a payment create (allocations high→low) and a reversal leave the higher row lockable (`FOR UPDATE NOWAIT`), so they lock in id order; both failed before the fix. A deadlock the write loses rejects with `LockConflict` (not a raw Prisma error) and writes no payment. Allocation rows keep the request order |
+| `server/src/__tests__/routes-m4.test.ts` › a write that loses a lock conflict | Route (memory store, `LockConflict` stubbed) | 1 | Record and allocate answer 409 `PREVIEW_STALE`; reverse answers 409 `VERSION_MISMATCH`, and a new request then reverses |
+
+The ticket's "drive a deadlock between an allocation and an outcome write" can no longer be produced: both now lock in id order. The third DB test drives a real deadlock with a raw connection that locks against the order, instead.

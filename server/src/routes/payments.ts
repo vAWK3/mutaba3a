@@ -12,7 +12,7 @@ import { formatMoney, type Currency } from '../money.js';
 import { eligibleFor, resultingBalances, suggestAllocations, validateAllocations, type AllocationRequest, type AllocationStrategy } from '../payments/allocate.js';
 import { allocationSnapshot, paymentPreviewToken } from '../payments/preview-token.js';
 import { verifyPreviewToken } from '../preview-token.js';
-import { InsufficientCapacity } from '../repositories/memory.js';
+import { InsufficientCapacity, LockConflict } from '../repositories/memory.js';
 import { CAPTURE_UNDO_REASON, type JsonObject, type LedgerStore, type Organization, type PaymentRecord, type ReceivableRecord } from '../repositories/ports.js';
 import {
   AllocatePaymentRequestSchema,
@@ -235,6 +235,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         );
       } catch (err) {
         if (err instanceof InsufficientCapacity) throw new ApiError('CONFLICT', 'A receivable changed while the payment was being recorded; preview again', { reason: 'PREVIEW_STALE', entityId: err.entityId });
+        if (err instanceof LockConflict) throw new ApiError('CONFLICT', 'A receivable was being changed at the same moment; nothing was recorded, preview again', { reason: 'PREVIEW_STALE' });
         throw err;
       }
       await audit(actor, 'payment.recorded', 'payment', created.payment.id, { number: created.payment.number, customerId: src.customerId, amount: formatMoney({ minor: src.amountMinor, currency: src.currency }), currency: src.currency, allocations: created.allocations.length, unallocated: formatMoney({ minor: value.unallocatedMinor, currency: src.currency }), ...(body.replacesPaymentId ? { replacesPaymentId: body.replacesPaymentId } : {}) });
@@ -359,6 +360,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         result = await store.payments.allocate(organization.id, src.payment!.id, value.allocations, now);
       } catch (err) {
         if (err instanceof InsufficientCapacity) throw new ApiError('CONFLICT', 'The payment or a receivable changed while allocating; preview again', { reason: 'PREVIEW_STALE', entityId: err.entityId });
+        if (err instanceof LockConflict) throw new ApiError('CONFLICT', 'A receivable was being changed at the same moment; nothing was allocated, preview again', { reason: 'PREVIEW_STALE' });
         throw err;
       }
       if (!result) throw new ApiError('NOT_FOUND', 'No such payment');
@@ -375,7 +377,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/payments/{paymentId}/reverse',
       tags: ['Payments'],
       summary: 'Reverse a payment: every allocation undone, status REVERSED',
-      description: 'Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. Record a corrected payment with replacesPaymentId afterwards.',
+      description: 'Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('payments:write'), idempotent(store, 'payments.reverse')] as const,
       request: { params: PaymentIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(ReversePaymentRequestSchema) },
@@ -391,7 +393,10 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const payment = await mustGetPayment(organization.id, c.req.valid('param').paymentId);
       if (payment.status === 'REVERSED') throw new ApiError('CONFLICT', 'This payment is already reversed', { reason: 'ALREADY_REVERSED', reversedAt: payment.reversedAt?.toISOString() ?? null });
       const allocations = await store.payments.listAllocations(organization.id, payment.id);
-      const result = await store.payments.reverse(organization.id, payment.id, c.req.valid('json').reason, now);
+      const result = await store.payments.reverse(organization.id, payment.id, c.req.valid('json').reason, now).catch((err: unknown) => {
+        if (err instanceof LockConflict) throw new ApiError('CONFLICT', 'A receivable was being changed at the same moment; nothing was reversed, send the request again', { reason: 'VERSION_MISMATCH' });
+        throw err;
+      });
       if (!result) throw new ApiError('NOT_FOUND', 'No such payment');
       if (result.changed) await audit(actor, 'payment.reversed', 'payment', payment.id, { number: payment.number, reason: c.req.valid('json').reason, allocationsUndone: allocations.length, amount: formatMoney({ minor: payment.amountMinor, currency: payment.currency as Currency }) });
       return c.json(await viewOf(organization.id, result.payment, today), 200);
