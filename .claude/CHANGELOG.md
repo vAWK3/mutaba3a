@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Brand kit: the Loader & Splash delivery (MUT-203)
+
+**Why:** MUT-204/205 (iPhone) and MUT-206/207 (web and portal) build the bloom loader and the splash screens from one committed, as-delivered copy. Docs only; nothing ships.
+
+### Added
+- `docs/brand/loader/`: the bloom loader's Lottie JSONs (light and dark; the motion source of truth), plus the delivered SVG web component and Flutter painter as port references.
+- `docs/brand/splash/`: the native splash art, `flutter_native_splash.yaml` and the reference screen renders.
+- These are byte-identical to the 2026-10-14 export; the hashes are in `.claude/designs/mut-203-loader-splash-kit.md`.
+- `docs/brand/README.md` gains a motion source-of-truth paragraph and asset-map rows.
+
+---
+
 ## [Unreleased] - 2026-10-15 — Malafat in the phone app's Settings (MUT-192, mutaba3a-flutter)
 
 **Why:** epic MUT-189's last surface. Recorded here because ADR-078 lives here; the code is in the mutaba3a-flutter repo (`feature/mut-192-malafat-suggestions`).
