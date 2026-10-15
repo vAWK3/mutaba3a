@@ -35,11 +35,19 @@ interface HostedTableProps<Row> {
    * the ClientsPage link-in-cell precedent. Every other list is still read-only.
    */
   onRowClick?: (row: Row) => void;
+  /**
+   * MUT-224 (eng review R5): which column's cell hosts the row-link button. Default: the first. Payments points it
+   * at its date, because its first cell already holds the allocations expander (a button can't nest a button).
+   */
+  linkColumn?: string;
+  /** MUT-224 (R5): rows that may open. A refused row gets no row-link, no clickable look and no click handler. */
+  canOpen?: (row: Row) => boolean;
   /** Extra classes for a row, e.g. the after-save `row-flash` tint (MUT-91). */
   rowClassName?: (row: Row) => string | undefined;
 }
 
-export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowClick, rowClassName }: HostedTableProps<Row>) {
+export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowClick, linkColumn, canOpen, rowClassName }: HostedTableProps<Row>) {
+  const linkKey = linkColumn ?? columns[0]?.key;
   return (
     <div className="table-wrapper hp-table-wrapper">
       <table className="table" aria-label={label}>
@@ -55,13 +63,14 @@ export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowCl
         <tbody>
           {rows.map((row) => {
             const extra = detail?.(row);
-            const className = [onRowClick ? 'clickable' : undefined, rowClassName?.(row)].filter(Boolean).join(' ') || undefined;
+            const open = onRowClick && (canOpen?.(row) ?? true) ? onRowClick : undefined;
+            const className = [open ? 'clickable' : undefined, rowClassName?.(row)].filter(Boolean).join(' ') || undefined;
             return (
               <Fragment key={rowKey(row)}>
-                <tr className={className} onClick={onRowClick ? () => onRowClick(row) : undefined}>
-                  {columns.map((column, index) => (
+                <tr className={className} onClick={open ? () => open(row) : undefined}>
+                  {columns.map((column) => (
                     <td key={column.key} className={cellClass(column)}>
-                      {onRowClick && index === 0 ? <RowLink onActivate={() => onRowClick(row)}>{column.cell(row)}</RowLink> : column.cell(row)}
+                      {open && column.key === linkKey ? <RowLink onActivate={() => open(row)}>{column.cell(row)}</RowLink> : column.cell(row)}
                     </td>
                   ))}
                 </tr>
