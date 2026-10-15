@@ -28,6 +28,8 @@ export const conversionQueryKeys = {
 
 function invalidateConversionQueries(queryClient: ReturnType<typeof useQueryClient>) {
   invalidateTransactionQueries(queryClient);
+  // The list and single-conversion queries live under their own prefix (MUT-217).
+  queryClient.invalidateQueries({ queryKey: ['conversions'] });
 }
 
 /** Fetch conversion transactions with optional filters. Always filters by kind='conversion'. */

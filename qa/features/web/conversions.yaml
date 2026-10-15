@@ -12,11 +12,6 @@ features:
     title: Turn on Currency conversions and log a conversion with its implied rate (MUT-141)
     tier: secondary
     legacy: [MUT-141]
-    # Product bug: useConversionQueries' invalidateConversionQueries never invalidates the
-    # ['conversions', …] keys, so the Conversions list does not show a new, edited or deleted
-    # conversion until the page is reloaded. The spec asserts the correct behaviour (no reload)
-    # and passes with a reload added; switch this back to automated once the bug is fixed.
-    manual: true
     steps:
       - Turn on Currency conversions in Settings › Features
       - Open Conversions from the sidebar
@@ -39,8 +34,6 @@ features:
   - id: edit-delete
     title: Edit a conversion's amount, then delete it
     tier: tertiary
-    # Same product bug as `log`: the list and the reopened drawer stay stale until a reload.
-    manual: true
     steps:
       - Log a conversion of 500 USD to 1,800 ILS
       - Click its row, change the to-amount to 1,850, save

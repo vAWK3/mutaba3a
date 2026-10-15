@@ -2564,3 +2564,10 @@ Run (Node 22, 2026-10-15): server `typecheck`, `lint`, `openapi:check` clean; `n
 |---|---|---|---|
 | `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` › `a stale version (MUT-221)` | Component | +2 | On 409 the drawer shows the conflict toast, stays open, refills with the other device's values, and the next Save sends `If-Match: 4` after `3` (it failed before the fix); a background refetch of the same version keeps what was typed |
 | `qa/specs/portal/expenses.spec.ts` › `@portal.expenses.edit-conflict` | E2E (release-qa) | 1 | No longer manual; passes on a `vite preview --mode hosted` build with the other 4 portal expense specs |
+
+## MUT-217 — Conversions list refresh (2026-10-15)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/hooks/__tests__/useConversionQueries.test.tsx` (new) | Integration (hooks + fake IndexedDB) | 1 | With the list mounted, a created conversion appears, an update shows its new `toAmountMinor`, and a delete empties the list, all without a remount. It failed before the fix |
+| `qa/specs/web/conversions.spec.ts` › `@web.conversions.log`, `@web.conversions.edit-delete` | E2E (release-qa) | 2 | No longer manual; pass with no reload on a `vite preview` build, with the other 2 conversion specs |

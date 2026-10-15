@@ -44,9 +44,6 @@ async function stubFrankfurter(page: Page): Promise<void> {
   });
 }
 
-// manual: true in the catalog until the stale-list bug is fixed: invalidateConversionQueries
-// (src/hooks/useConversionQueries.ts) never invalidates ['conversions', …], so the list keeps the
-// old rows until a reload. This asserts the correct behaviour; it passes with a reload added.
 test(
   'turn on Conversions and log a conversion with its implied rate',
   { tag: '@web.conversions.log' },
@@ -121,9 +118,6 @@ test(
   },
 );
 
-// manual: true in the catalog until the stale-list bug is fixed: invalidateConversionQueries
-// (src/hooks/useConversionQueries.ts) never invalidates ['conversions', …], so the list keeps the
-// old rows until a reload. This asserts the correct behaviour; it passes with a reload added.
 test(
   'edit a conversion, then delete it',
   { tag: '@web.conversions.edit-delete' },
