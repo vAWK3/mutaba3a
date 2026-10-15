@@ -65,6 +65,20 @@ features:
       - Needs Attention has one row for the rule — "$80 monthly", three months not marked, $240
       - The drawer lists the three missed months
       - Needs Attention is gone and this month's payment is in the ledger, badged Recurring
+  - id: recurring-long-missed
+    title: A recurring expense missed for eight months shows every month in Needs Attention, counted from where it started (MUT-96)
+    tier: tertiary
+    paths:
+      - src/components/expenses/RecurringAttentionList.tsx
+      - src/components/expenses/recurringAttention.ts
+      - src/services/recurringExpenseService.ts
+    steps:
+      - Turn on Expenses
+      - New Expense → Recurring, monthly, starting the 1st eight months ago, no end
+      - Look at Needs Attention on the Expenses page
+    expect:
+      - The row says "9 payments since <month> not marked" for the start month, and totals $720
+      - Mark Paid lists all nine months
   - id: recurring-skip-snooze
     title: Skip one missed month and snooze the other; the snoozed one moves to Upcoming Expenses
     tier: tertiary

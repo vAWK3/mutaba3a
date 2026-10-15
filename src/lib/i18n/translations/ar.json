@@ -810,6 +810,14 @@
           "yearly": "{amount} سنويًا"
         },
         "notMarked": "لم يُسجَّل دفع {months}",
+        "notMarkedSince": {
+          "zero": "لا دفعات غير مسجَّلة منذ {since}",
+          "one": "دفعة واحدة منذ {since} لم تُسجَّل",
+          "two": "دفعتان منذ {since} لم تُسجَّلا",
+          "few": "{count} دفعات منذ {since} لم تُسجَّل",
+          "many": "{count} دفعة منذ {since} لم تُسجَّل",
+          "other": "{count} دفعة منذ {since} لم تُسجَّل"
+        },
         "total": "إجمالي غير المسجَّل",
         "actionsFor": "إجراءات {title}",
         "hint": "تُسجَّل كل دفعة كمصروف بتاريخها.",
