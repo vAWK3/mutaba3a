@@ -80,7 +80,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/inbox',
       tags: ['Inbox'],
       summary: 'Capture an amount now, decide where it belongs later',
-      description: 'occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. kind is fixed at capture.',
+      description: 'occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. A typo year is refused at once: not more than ten years before UTC yesterday (MUT-227); filing applies the exact floor. kind is fixed at capture.',
       security: SESSION_ONLY,
       // MUT-131: a lost response could otherwise be replayed into a duplicate entry — the same
       // protection every other create route (income, expenses, file-as-*) already has.
@@ -127,7 +127,8 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const patch: UpdateInboxEntryPatch = {
         ...(body.amount !== undefined ? { amountMinor: parseInboxAmount(body.amount, currency) } : {}),
         ...(body.currency !== undefined ? { currency: body.currency } : {}),
-        ...(body.occurredOn !== undefined ? { occurredOn: inboxDate(body.occurredOn, c.get('now')()) } : {}),
+        // An unchanged date is not re-checked, so an entry already older than MUT-227's floor stays editable.
+        ...(body.occurredOn !== undefined && body.occurredOn !== existing.occurredOn ? { occurredOn: inboxDate(body.occurredOn, c.get('now')()) } : {}),
         ...(body.note !== undefined ? { note: body.note } : {}),
         ...(body.captureSource !== undefined ? { captureSource: body.captureSource } : {}),
       };

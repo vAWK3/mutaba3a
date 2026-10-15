@@ -122,6 +122,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
     projectCustomerMismatch: t('hosted.expenses.errors.projectCustomerMismatch'),
     amountInvalid: t('hosted.expenses.errors.amountInvalid'),
     dateInvalid: t('hosted.expenses.errors.dateInvalid'),
+    dateTooOld: t('hosted.expenses.errors.dateTooOld'),
     conflict: t('hosted.expenses.errors.conflict'),
     network: t('hosted.expenses.errors.network'),
   };

@@ -275,6 +275,14 @@ describe('PATCH /v1/inbox/{entryId}', () => {
     expect(await read(res)).toMatchObject({ amount: '99.00', note: null, version: 2 });
   });
 
+  it('MUT-227: an entry already older than the floor accepts an edit that resends its unchanged date', async () => {
+    const { h, u } = await setup();
+    const old = await h.store.inboxEntries.create({ userId: u.userId, kind: 'EXPENSE', amountMinor: 5000n, currency: 'ILS', occurredOn: '2010-01-15', note: null, captureSource: null }, h.clock.now);
+    const res = await h.app.request(`/v1/inbox/${old.id}`, json({ occurredOn: '2010-01-15', note: 'old receipt' }, { ...u.me(), 'if-match': '1' }, 'PATCH'));
+    expect(res.status).toBe(200);
+    expect(await read(res)).toMatchObject({ occurredOn: '2010-01-15', note: 'old receipt' });
+  });
+
   it('refuses moving the date more than ten years back (MUT-227), and leaves the entry as it was', async () => {
     const { h, u, capture, list } = await setup();
     const created = (await read(await capture())) as { id: string };

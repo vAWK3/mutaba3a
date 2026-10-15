@@ -94,6 +94,15 @@ export function apiErrorReason(error: ApiError): string | undefined {
   return typeof details?.reason === 'string' ? details.reason : undefined;
 }
 
+/**
+ * MUT-227: which end of a date range a DATE_INVALID crossed. 'past' is the server's ten-year floor; undefined from
+ * an older server or a malformed date.
+ */
+export function apiErrorBound(error: ApiError): 'past' | 'future' | undefined {
+  const bound = (error.details as { bound?: unknown } | null)?.bound;
+  return bound === 'past' || bound === 'future' ? bound : undefined;
+}
+
 type UnauthorisedHandler = (error: ApiError) => void;
 let unauthorisedHandler: UnauthorisedHandler | null = null;
 

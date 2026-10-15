@@ -20,7 +20,7 @@ export function parseInboxAmount(text: string, currency: Currency): bigint {
 }
 
 /**
- * The capture date, validated as a date and nothing more.
+ * The capture date: a valid date, refused only when more than ten years old (MUT-227, below) and never for being in the future.
  *
  * Deliberately NOT rejected for being in the future, unlike `POST /v1/income`:
  * "later than today" is only answerable in some organization's timezone, and

@@ -112,8 +112,8 @@ export function owedVatFields(amountMinor: bigint): OwedVatFields {
  * accepted — ported to the server (MUT-65 addendum to ADR-038; see
  * DECISIONS.md). Distinct from `assertNotAbsurdDate` (agreements/compose.ts),
  * which only rejects a date more than ten years ahead: `POST /v1/payments`'s
- * `receivedOn` today applies only that ten-year ceiling, not a same-day cutoff,
- * so this is a new, stricter check for the two fields this ticket adds
+ * `receivedOn` applies that ten-year ceiling and MUT-227's floor, but no
+ * same-day cutoff, so this is a stricter check for the income-like dates
  * (`occurredOn`, settle's `paidAt`), not a verbatim reuse of an existing one.
  */
 export function assertNotFuture(date: IsoDate, today: IsoDate, field: string): void {

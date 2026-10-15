@@ -2354,5 +2354,9 @@ An income-like date (income, settle, re-date, conversion, income filing) is pars
 
 ### Pattern: A range refusal names its bound
 A `DATE_INVALID` raised by a range check carries `details.bound: 'past' | 'future'` (`DateBound`). A client branches on `bound` for its message and never redoes the date arithmetic; with no `bound` (an older server) it keeps its old message.
-**Instances**: `assertNotTooOld`, `assertNotFuture`, `assertNotAbsurdDate`; portal `incomeApiErrors.ts` `dateKey`.
+**Instances**: `assertNotTooOld`, `assertNotFuture`, `assertNotAbsurdDate`; the portal reads it once with `apiErrorBound` (`src/hosted/api/client.ts`) in the income, expense and conversion mappers.
+
+### Pattern: An edit re-checks a date only when it changes
+A PATCH that accepts a date compares it with the stored one first and validates only a changed value. Clients (the portal's drawers) resend every field, and a row stored before a rule existed must stay editable.
+**Instances**: `expensePatch`, the conversion and inbox PATCH routes (MUT-227).
 

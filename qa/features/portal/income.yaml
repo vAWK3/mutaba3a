@@ -34,6 +34,9 @@ features:
     tier: secondary
     paths:
       - src/hosted/components/incomeApiErrors.ts
+      - src/hosted/components/expenseApiErrors.ts
+      - src/hosted/components/conversionApiErrors.ts
+      - src/hosted/api/client.ts
       - src/hosted/i18n/en.json
       - src/hosted/i18n/ar.json
     steps:

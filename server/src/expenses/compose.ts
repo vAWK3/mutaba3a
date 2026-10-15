@@ -95,10 +95,14 @@ export async function assertCategoryChoosable(store: LedgerStore, organizationId
   if (category.archivedAt) throw validationError('CATEGORY_ARCHIVED', 'This category is archived; choose another or restore it', { field: 'categoryId' });
 }
 
-/** The patch fields a PATCH body sets, amount parsed in the row's own currency. */
+/**
+ * The patch fields a PATCH body sets, amount parsed in the row's own currency. A resent, unchanged `occurredOn` is
+ * left out rather than re-checked: the portal sends the date on every save, and a row already older than MUT-227's
+ * floor must stay editable.
+ */
 export function expensePatch(existing: ExpenseRecord, today: IsoDate, body: { occurredOn?: string | undefined; amount?: string | undefined; title?: string | null | undefined; vendor?: string | null | undefined; categoryId?: string | null | undefined; notes?: string | null | undefined }): UpdateExpensePatch {
   const patch: UpdateExpensePatch = {};
-  if (body.occurredOn !== undefined) patch.occurredOn = expenseOccurredOn(body.occurredOn, today);
+  if (body.occurredOn !== undefined && body.occurredOn !== existing.occurredOn) patch.occurredOn = expenseOccurredOn(body.occurredOn, today);
   if (body.amount !== undefined) patch.amountMinor = parseExpenseAmount(body.amount, existing.currency as Currency);
   if (body.title !== undefined) patch.title = body.title;
   if (body.vendor !== undefined) patch.vendor = body.vendor;

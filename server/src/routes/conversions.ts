@@ -53,7 +53,7 @@ export function conversionRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Conversions'],
       summary: 'Log a currency conversion',
       description:
-        'Two legs, each in its own currency and fractional digits. toCurrency must differ from currency. occurredOn may not be later than today (ADR-038); backdated is accepted.',
+        'Two legs, each in its own currency and fractional digits. toCurrency must differ from currency. occurredOn may not be later than today (ADR-038) and not more than ten years before it (MUT-227); backdated is accepted.',
       security: SESSION_ONLY,
       middleware: [requireScope('conversions:write'), idempotent(store, 'conversions.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateConversionRequestSchema) },
@@ -122,7 +122,7 @@ export function conversionRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Conversions'],
       summary: 'Change a conversion (optimistic, If-Match)',
       description:
-        'Any field. A currency comes with its own amount (422 AMOUNT_REQUIRED), each amount is read in the merged currency\'s digits, and the merged legs must differ (422 SAME_CURRENCY). occurredOn, when sent, may not be later than today. null clears the notes.',
+        'Any field. A currency comes with its own amount (422 AMOUNT_REQUIRED), each amount is read in the merged currency\'s digits, and the merged legs must differ (422 SAME_CURRENCY). occurredOn, when changed, may not be later than today and not more than ten years before it (MUT-227). null clears the notes.',
       security: SESSION_ONLY,
       middleware: [requireScope('conversions:write'), ifMatch()] as const,
       request: { params: ConversionIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateConversionRequestSchema) },
@@ -134,8 +134,9 @@ export function conversionRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const now = c.get('now')();
       const existing = await mustGet(organization.id, c.req.valid('param').conversionId);
       const patch = conversionPatch(existing, body);
-      // Stricter than expense PATCH, consistent with create; a notes-only edit of an old row is never refused.
-      if (patch.occurredOn !== undefined) pastMoneyDate(patch.occurredOn, todayFor(organization, now), 'occurredOn');
+      // Stricter than expense PATCH, consistent with create. Checked only when the date changes, so editing anything
+      // else on an old row is never refused (MUT-227).
+      if (patch.occurredOn !== undefined && patch.occurredOn !== existing.occurredOn) pastMoneyDate(patch.occurredOn, todayFor(organization, now), 'occurredOn');
       const result = await store.conversions.update(organization.id, existing.id, c.get('expectedVersion'), patch, now);
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such conversion');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);

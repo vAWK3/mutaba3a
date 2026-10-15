@@ -360,6 +360,17 @@ describe('PATCH /v1/conversions/{id} (MUT-194)', () => {
     expect((await read(res)).occurredOn).toBe('2016-10-12');
   });
 
+  it('MUT-227: a row already older than the floor accepts an edit that resends its unchanged date (the portal always sends it)', async () => {
+    const { h, a, p } = await setup();
+    const old = await h.store.conversions.create({ organizationId: a.org.id, occurredOn: '2009-05-01', amountMinor: 10000n, currency: 'USD', toAmountMinor: 36000n, toCurrency: 'ILS', notes: null, createdByUserId: p.userId }, h.clock.now);
+    const res = await patch(h, old.id, { occurredOn: '2009-05-01', notes: 'from the old ledger' }, { ...p.as(a.org.id), 'if-match': '1' });
+    expect(res.status).toBe(200);
+    expect(await read(res)).toMatchObject({ occurredOn: '2009-05-01', notes: 'from the old ledger' });
+    const moved = await patch(h, old.id, { occurredOn: '2009-05-02' }, { ...p.as(a.org.id), 'if-match': '2' });
+    expect(moved.status).toBe(422);
+    expect((await read(moved)).error.details).toMatchObject({ reason: 'DATE_INVALID', bound: 'past' });
+  });
+
   it('a notes-only edit of an old conversion is fine: the date is only checked when sent', async () => {
     const { h, a, p, create } = await setup();
     const created = await read(await create({ occurredOn: '2020-01-01' }));

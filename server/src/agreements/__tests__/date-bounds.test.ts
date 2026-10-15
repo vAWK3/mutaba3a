@@ -37,11 +37,7 @@ describe('assertNotTooOld (MUT-227)', () => {
   });
 
   it('says what is wrong in the message', () => {
-    try {
-      assertNotTooOld('2006-10-12', today, 'paidAt');
-    } catch (err) {
-      expect((err as ApiError).message).toBe('paidAt is more than ten years ago');
-    }
+    expect(() => assertNotTooOld('2006-10-12', today, 'paidAt')).toThrow('paidAt is more than ten years ago');
   });
 });
 

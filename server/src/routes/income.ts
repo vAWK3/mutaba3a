@@ -37,7 +37,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Income'],
       summary: 'Capture money received or owed, directly — no agreement, no allocation dance',
       description:
-        'What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today.',
+        'What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today and not more than ten years before it (MUT-227).',
       security: SESSION_ONLY,
       middleware: [requireScope('capture:write'), idempotent(store, 'income.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateIncomeRequestSchema) },
@@ -158,7 +158,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Income'],
       summary: 'Change the date of an income entry you captured (optimistic, If-Match)',
       description:
-        'Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate; a Received entry moves its payment\'s receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. occurredOn may not be later than the organization\'s today.',
+        'Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate; a Received entry moves its payment\'s receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. occurredOn may not be later than the organization\'s today, nor more than ten years before it (MUT-227).',
       security: SESSION_ONLY,
       middleware: [requireScope('capture:write'), ifMatch()] as const,
       request: { params: IncomeIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateIncomeRequestSchema) },

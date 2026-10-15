@@ -336,6 +336,7 @@
         "projectCustomerMismatch": "This matter belongs to a different client",
         "amountInvalid": "Enter a valid amount",
         "dateInvalid": "Enter a valid date",
+        "dateTooOld": "The date can't be more than ten years ago",
         "conflict": "This expense changed elsewhere — showing the latest version",
         "network": "Couldn't reach the server. Try again."
       }
@@ -372,6 +373,7 @@
         "amountInvalid": "Enter a valid amount",
         "toAmountInvalid": "Enter a valid amount",
         "dateInvalid": "Enter a valid date",
+        "dateTooOld": "The date can't be more than ten years ago",
         "sameCurrency": "Choose a different currency to convert to",
         "conflict": "This conversion changed elsewhere — showing the latest version",
         "network": "Couldn't reach the server. Try again."

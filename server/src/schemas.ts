@@ -2,6 +2,7 @@ import { z } from '@hono/zod-openapi';
 import { SCOPES } from './auth/scopes.js';
 import { ERROR_CODES } from './errors.js';
 import { CONTINGENCY_OUTCOMES, MAX_COMMISSION_RATE_BASIS_POINTS, MIN_COMMISSION_RATE_BASIS_POINTS, UPFRONT_TREATMENTS } from './agreements/contingency.js';
+import { DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT } from './agreements/compose.js';
 import { MAX_INSTALLMENTS } from './agreements/schedule.js';
 import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
 import { IMPORT_MAX_ROWS } from './import/plan.js';
@@ -458,10 +459,11 @@ export const PaymentTermsSchema = z.enum(PAYMENT_TERMS).openapi('PaymentTerms');
 export const IsoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD').openapi({ description: 'Calendar date in the organization timezone, YYYY-MM-DD' });
 
 /** MUT-227: the money-date rules, said once for every request field that carries them. */
-const PAST_MONEY_DATE = "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past.";
-const FLOORED_MONEY_DATE = "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past.";
+const PAST_MONEY_DATE = `Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (${DAYS_IN_PAST_LIMIT} days) before it: 422 DATE_INVALID with details.bound future or past.`;
+const FLOORED_MONEY_DATE = `Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today: 422 DATE_INVALID with details.bound past.`;
 const PastMoneyDateSchema = IsoDateSchema.openapi({ description: PAST_MONEY_DATE });
 const FlooredMoneyDateSchema = IsoDateSchema.openapi({ description: FLOORED_MONEY_DATE });
+const BoundedMoneyDateSchema = IsoDateSchema.openapi({ description: `Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today nor ten years (${DAYS_IN_FUTURE_LIMIT} days) after it: 422 DATE_INVALID with details.bound past or future. A replacement (replacesPaymentId) may keep the replaced payment's receivedOn, or a later one, below the floor.` });
 export const IsoMonthSchema = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM').openapi({ description: 'Calendar month, YYYY-MM' });
 /** Canonical decimal amount in the project currency, e.g. "10000.00". Validated against the currency exponent server-side. */
 export const AmountSchema = z.string().regex(/^-?\d+(\.\d+)?$/, 'canonical decimal').openapi({ description: 'Canonical decimal string; exactly the currency\'s fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID' });
@@ -1268,7 +1270,7 @@ export const CreatePaymentRequestSchema = z
     customerId: uuid,
     currency: CurrencySchema,
     amount: AmountSchema,
-    receivedOn: FlooredMoneyDateSchema,
+    receivedOn: BoundedMoneyDateSchema,
     method: PaymentMethodSchema,
     reference: z.string().max(120).optional(),
     notes: z.string().max(2000).optional(),
@@ -1424,7 +1426,7 @@ export const SettleReceivableRequestSchema = z
   .object({
     /** Defaults to the full outstanding amount. */
     amount: AmountSchema.optional(),
-    /** Defaults to today; rejected if later than today. */
+    /** Defaults to today; rejected if later than today or more than ten years before it (MUT-227). */
     paidAt: PastMoneyDateSchema.optional(),
     method: PaymentMethodSchema.optional(),
     captureSource: CaptureSourceSchema.optional(),
@@ -1896,7 +1898,7 @@ export const CreateInboxEntryRequestSchema = z
     kind: InboxEntryKindSchema,
     amount: AmountSchema.openapi({ description: 'Greater than zero, in the currency\'s fractional digits' }),
     currency: CurrencySchema,
-    occurredOn: IsoDateSchema.openapi({ description: 'May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check. Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past; filing applies the exact floor in the profile\'s timezone.' }),
+    occurredOn: IsoDateSchema.openapi({ description: `May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check. Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past; filing applies the exact floor in the profile's timezone.` }),
     note: inboxNote.optional(),
     captureSource: CaptureSourceSchema.optional(),
   })
@@ -1908,7 +1910,7 @@ export const UpdateInboxEntryRequestSchema = z
   .object({
     amount: AmountSchema.optional(),
     currency: CurrencySchema.optional(),
-    occurredOn: IsoDateSchema.optional().openapi({ description: 'Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past.' }),
+    occurredOn: IsoDateSchema.optional().openapi({ description: `Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past.` }),
     note: inboxNote.nullable().optional(),
     captureSource: CaptureSourceSchema.nullable().optional(),
   })

@@ -1,4 +1,4 @@
-import { ApiError, apiErrorReason } from '../api/client';
+import { ApiError, apiErrorBound, apiErrorReason } from '../api/client';
 
 /**
  * Maps the income/settle error vocabulary (MUT-65, MUT-61) onto the drawers,
@@ -36,8 +36,7 @@ function fieldOf(error: ApiError): string | undefined {
  * (future, or an older server with no bound) keeps the "later than today" sentence.
  */
 function dateKey(error: ApiError): string {
-  const bound = (error.details as { bound?: unknown } | null)?.bound;
-  return bound === 'past' ? 'hosted.income.errors.dateTooOld' : 'hosted.income.errors.dateFuture';
+  return apiErrorBound(error) === 'past' ? 'hosted.income.errors.dateTooOld' : 'hosted.income.errors.dateFuture';
 }
 
 function readOnlyToast(error: ApiError): string {

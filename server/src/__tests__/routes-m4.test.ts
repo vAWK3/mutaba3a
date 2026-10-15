@@ -247,6 +247,24 @@ describe('recording payments', () => {
     const readOnly = await firm(h, { scopes: ['payments:read', 'customers:write', 'projects:write', 'agreements:write', 'agreements:read'] });
     expect((await pay(h, readOnly, '1.00', [])).res.status).toBe(403);
   });
+
+  it('MUT-227: a replacement may keep the reversed payment\'s own date below the floor; anything earlier, or a fresh payment there, is refused', async () => {
+    const h = harness();
+    h.clock.now = new Date('2016-01-10T10:00:00Z');
+    const f = await firm(h);
+    const original = await pay(h, f, '5.00', [], { receivedOn: '2015-12-01' });
+    expect(original.res.status).toBe(201);
+    await h.app.request(`/v1/payments/${original.body.id}/reverse`, json({ reason: 'wrong client' }, { ...f.auth, ...idem() }));
+    h.clock.now = new Date('2026-10-08T10:00:00Z'); // the floor is now 2016-09-30
+
+    const fresh = await pay(h, f, '5.00', [], { receivedOn: '2015-12-01' });
+    expect(fresh.body.error.details).toEqual({ reason: 'DATE_INVALID', field: 'receivedOn', bound: 'past' });
+    const earlier = await pay(h, f, '5.00', [], { receivedOn: '2015-11-30', replacesPaymentId: original.body.id });
+    expect(earlier.body.error.details).toEqual({ reason: 'DATE_INVALID', field: 'receivedOn', bound: 'past' });
+    const kept = await pay(h, f, '5.00', [], { receivedOn: '2015-12-01', replacesPaymentId: original.body.id });
+    expect(kept.res.status).toBe(201);
+    expect(kept.body).toMatchObject({ receivedOn: '2015-12-01', replacesPaymentId: original.body.id });
+  });
 });
 
 describe('allocating later', () => {

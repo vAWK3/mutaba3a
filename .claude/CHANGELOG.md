@@ -39,7 +39,10 @@
 
 ### Changed
 - `DATE_INVALID` from a range check carries `details.bound` (`past` | `future`); the reason enum is unchanged. API 1.27.0-mut227; every floored request field says so in OpenAPI. OpenAPI and hosted types are regenerated.
-- Not changed: expense list and summary `from`/`to` filters still take any date, and rows already older than the floor stay readable and editable.
+- Not changed: expense list and summary `from`/`to` filters still take any date, and rows already older than the floor stay readable and editable. Expense, conversion and inbox PATCH skip a resent, unchanged date, because the portal sends it on every save (pre-landing review D1).
+- A Malafat correction (`replacesPaymentId`) may keep the reversed payment's date, or a later one, below the floor, so the second step of reverse-and-replace can't strand the money (review D4).
+- Expense and conversion forms also say "The date can't be more than ten years ago" (`apiErrorBound` in `src/hosted/api/client.ts`, review D2).
+- Still unbounded (follow-up, review D3): an Owed entry's `dueDate`, a credit's `effectiveDate`, an installment trigger date.
 
 ### Technical
 - `assertNotTooOld` and `DAYS_IN_PAST_LIMIT` beside the ceiling (`server/src/agreements/compose.ts`); `pastMoneyDate` (`server/src/income/compose.ts`) is the one call for income-like dates; `expenseOccurredOn` (`server/src/expenses/compose.ts`); `inboxDate(value, now)`.

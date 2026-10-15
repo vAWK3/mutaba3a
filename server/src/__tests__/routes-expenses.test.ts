@@ -259,6 +259,10 @@ describe('PATCH /v1/expenses/{id}', () => {
     const edited = await h.app.request(`/v1/expenses/${old.id}`, json({ notes: 'from the old ledger' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
     expect(edited.status).toBe(200);
     expect(await read(edited)).toMatchObject({ occurredOn: '2001-03-04', notes: 'from the old ledger' });
+    // The portal's drawer resends the unchanged date on every save: that must not refuse the edit.
+    const resent = await h.app.request(`/v1/expenses/${old.id}`, json({ occurredOn: '2001-03-04', title: 'Rent' }, { ...p.as(a.org.id), 'if-match': '2' }, 'PATCH'));
+    expect(resent.status).toBe(200);
+    expect(await read(resent)).toMatchObject({ occurredOn: '2001-03-04', title: 'Rent', version: 3 });
     const listed = await read(await h.app.request('/v1/expenses?from=2001-01-01&to=2001-12-31', { headers: p.as(a.org.id) }));
     expect(listed.items.map((x: Loose) => x.id)).toEqual([old.id]);
     const summary = await h.app.request('/v1/summaries/expenses?from=2001-01-01&to=2001-12-31', { headers: p.as(a.org.id) });
