@@ -86,20 +86,6 @@
 
 **Depends on / blocked by:** MUT-145 merged (it deletes `pdfArchival.ts`).
 
-## 10. "Delete all data" keeps businesses, expenses and payment records
-
-**What:** `dataset.wipeCoreData()` (`src/db/seed.ts` `deleteAllData`) clears transactions, projects, clients, categories and FX rates only. Business profiles, expenses, expense categories, payment records, receipts, vendors, recurring rules and occurrences all survive. (Retainers, projected income and plans no longer exist: Dexie v24 dropped them, MUT-226.)
-
-**Why:** The Settings button and its modal promise to delete all data.
-
-**Pros of fixing:** The button does what it says; a person handing the machine on gets a clean app.
-
-**Cons / cost / risk:** Product call first. Keeping businesses may be deliberate (so the app still opens on a business), and a fuller wipe is irreversible. The pre-delete CSV export would also need to cover the extra tables.
-
-**Context:** Found in MUT-47's eng review (2026-10-13, D8). MUT-47 moved it behind the dataset slot unchanged; `src/db/__tests__/dataset.test.ts` pins the current table set, so changing it is a deliberate test change.
-
-**Depends on / blocked by:** A product decision on what "all data" means.
-
 ## 11. The migration wizard writes no `updatedAt`
 
 **What:** `transactions.resolveNeedsReview` (moved from `MigrationWizard.tsx` in MUT-47) writes `{ profileId, needsReview: undefined }` and nothing else.

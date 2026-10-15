@@ -572,7 +572,8 @@
       "resetConfirm": "Are you sure you want to reset all data? This will replace your data with sample data.",
       "deleteModal": {
         "title": "Delete All Data",
-        "warning": "This will permanently delete all your local data including clients, projects, and transactions. This action cannot be undone.",
+        "warning": "This permanently deletes everything stored in this app on this device: your businesses, clients, projects, income, payments, expenses, receipts and conversions. It cannot be undone.",
+        "kept": "Kept: your language, theme and currency settings. Optional areas are switched off again.",
         "stepA": {
           "title": "Step 1: Back up",
           "desc": "Save a full backup first. Restore can bring everything back from it.",

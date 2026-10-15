@@ -64,7 +64,7 @@ describe('dataset.importLegacyV1', () => {
   });
 });
 
-describe('dataset.exportCoreTables and wipeCoreData', () => {
+describe('dataset.exportCoreTables and wipeAllData', () => {
   beforeEach(async () => {
     await db.clients.add({ id: 'c-1', name: 'A', archivedAt: now, createdAt: now, updatedAt: now });
     await db.projects.add({ id: 'p-1', name: 'P', createdAt: now, updatedAt: now });
@@ -86,19 +86,47 @@ describe('dataset.exportCoreTables and wipeCoreData', () => {
     expect(transactions.map((t) => t.id).sort()).toEqual(['t-gone', 't-live']);
   });
 
-  it('wipes exactly the five core tables and keeps profiles, expenses and settings', async () => {
-    await db.settings.add({ id: 'default', enabledCurrencies: ['USD'], defaultCurrency: 'USD' });
+  it('empties every table except settings (MUT-164)', async () => {
+    await db.settings.add({ id: 'default', enabledCurrencies: ['USD'], defaultCurrency: 'USD', defaultBaseCurrency: 'USD' });
+    // One row in every table, so a table added later can't be missed silently.
+    for (const table of db.tables) {
+      if (table.name === 'settings') continue;
+      if ((await table.count()) === 0) await table.put({ id: `${table.name}-1` });
+    }
 
-    await dataset().wipeCoreData();
+    await dataset().wipeAllData();
 
-    expect(await db.clients.count()).toBe(0);
-    expect(await db.projects.count()).toBe(0);
-    expect(await db.transactions.count()).toBe(0);
-    expect(await db.categories.count()).toBe(0);
-    expect(await db.fxRates.count()).toBe(0);
-    expect(await db.businessProfiles.count()).toBe(1);
-    expect(await db.expenses.count()).toBe(1);
-    expect(await db.settings.count()).toBe(1);
+    const leftovers = [];
+    for (const table of db.tables) {
+      if (table.name !== 'settings' && (await table.count()) > 0) leftovers.push(table.name);
+    }
+    expect(leftovers).toEqual([]);
+  });
+
+  it('keeps the settings preferences but turns the optional areas back off (MUT-164)', async () => {
+    await db.settings.add({
+      id: 'default',
+      enabledCurrencies: ['USD', 'ILS'],
+      defaultCurrency: 'ILS',
+      defaultBaseCurrency: 'USD',
+      lastBackupAt: now,
+      features: { expenses: true, projects: true },
+      featureNotice: ['expenses'],
+      malafatSuggestions: { off: true },
+    });
+
+    await dataset().wipeAllData();
+
+    const settings = await db.settings.get('default');
+    expect(settings).toMatchObject({
+      enabledCurrencies: ['USD', 'ILS'],
+      defaultCurrency: 'ILS',
+      defaultBaseCurrency: 'USD',
+      lastBackupAt: now,
+      malafatSuggestions: { off: true },
+      features: {},
+      featureNotice: [],
+    });
   });
 });
 

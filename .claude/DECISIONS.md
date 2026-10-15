@@ -3225,3 +3225,19 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - *Keeping the tables as retained types (the ADR-067 default).* Recommended, but the owner declined.
 - *A v24 that only drops the stores.* Rejected: it would leave the dead index and flags behind, against the "clean up everything" instruction.
 - *Also retiring the server retainers.* Out of scope by instruction; that would be a contract change with Malafat, the writer of record.
+
+## ADR-083: "Delete All Data" Empties Every Table but Settings; Settings Keep Preferences and Turn the Optional Areas Off
+
+**Status**: Active
+**Date**: 2026-10-15
+**Context**: MUT-164 (TODOS #10). `deleteAllData()` cleared five of the 19 tables, so businesses, expenses, receipt files and payment records survived a typed-"DELETE" confirmation that promised "all data". The owner answered the ticket's open questions on 2026-10-15: keep preferences, reset features.
+
+**Decision**:
+1. `deleteAllData()` (`dataset.wipeAllData`, renamed from `wipeCoreData`) clears **every table in `db.tables` except `settings`**, in one transaction. It enumerates the tables, so a table added later is cleared without editing it. Sample (`demo_`) rows go with everything else.
+2. The **settings row stays** with its preferences: enabled and default currencies, `lastBackupAt` (the backup step 1 just made), `malafatSuggestions`. Language and theme live in `localStorage` and are untouched.
+3. The **optional areas go back off**: `features = {}` and `featureNotice = []`. The data that switched them on is gone.
+4. The modal **refetches every query** (`invalidateQueries()` with no key) and resets the client stores that point at deleted rows: the saved active business, demo mode, and the onboarding walkthrough. With no business left, the welcome flow opens again.
+5. The modal says what is kept (`settings.data.deleteModal.kept`).
+
+**Not changed:** `clearDatabase()` still clears the six legacy tables only; it is the legacy (pre-v2) import's replace step, not a user action.
+

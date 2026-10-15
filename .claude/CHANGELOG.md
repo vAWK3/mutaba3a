@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — "Delete all data" deletes all data (MUT-164, ADR-083)
+
+**Why:** it cleared five of the 19 tables. Businesses, expenses, receipt files and payment records all survived a confirmation that promised "all data".
+
+### Fixed
+- Delete all data empties every table except settings, in one transaction. Settings keep currencies, the last-backup time and Malafat suggestions; the optional areas go back off.
+- Afterwards every query refetches, and the saved active business, demo mode and the onboarding walkthrough reset. With no business left, the welcome flow opens again.
+- The modal says what is deleted and what is kept, in English and Arabic.
+
+### Changed
+- `dataset.wipeCoreData` is now `dataset.wipeAllData`.
+
+### Technical
+- TODOS #10 removed (done).
+- Files: `src/db/{seed,dataset,interfaces}.ts`, `src/components/modals/DeleteAllDataModal.{tsx,css}`, both translation files, `qa/specs/web/data.spec.ts`, `qa/features/web/data.yaml`, the two test files below.
+
 ## [Unreleased] - 2026-10-15 — CSV import no longer calls new clients and projects duplicates (MUT-218)
 
 **Why:** `validateCSVImport` added the file's own client and project names to the "already exists" list before checking them, so every new client or project row matched itself and showed as Duplicate.

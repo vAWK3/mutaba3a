@@ -2532,3 +2532,11 @@ Web QA on `vite preview` builds (throwaway `QA_CONTEXT`, 2 workers): 111 passed 
 |---|---|---|---|
 | `src/utils/__tests__/csvValidation.test.ts` › `validateCSVImport (MUT-218)` | Unit | +4 | New client and project rows are New with no warning; names already in the app are still Duplicate; a name repeated in the file is Duplicate on the repeat only (trimmed); an income row referencing a client from the same file stays New. The first and third failed before the fix |
 | `qa/specs/web/data.spec.ts` › `@web.data.csv-new-client` | E2E (release-qa) | 1 | No longer manual: a new client reads New, and the summary shows New 2, Duplicates 0, with no duplicate notice. Passes on a `vite preview` build with the other 5 data specs |
+
+## MUT-164 — Delete all data (2026-10-15, ADR-083)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/db/__tests__/dataset.test.ts` | Integration (fake IndexedDB) | 2 (replaces the five-table test) | With a row in every table of `db.tables`, `wipeAllData` leaves only settings, so a new table can't be missed silently; settings keep currencies, `lastBackupAt` and `malafatSuggestions` while `features` and `featureNotice` are emptied |
+| `src/components/modals/__tests__/DeleteAllDataModal.test.tsx` | Component | +2 | After the delete, `invalidateQueries()` is called with no key, the active business is cleared, demo mode is off and the walkthrough is reset; the "kept" line exists in both locales and is shown |
+| `qa/specs/web/data.spec.ts` › `@web.data.delete-and-restore` (extended) | E2E (release-qa) | 1 | The dialog says what is kept; after deleting, the welcome comes back (no business left), Income is empty, and the backup restores the entry |

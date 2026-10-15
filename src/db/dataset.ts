@@ -172,7 +172,7 @@ export const datasetRepo = {
     return { clients, projects, transactions };
   },
 
-  wipeCoreData: deleteAllData,
+  wipeAllData: deleteAllData,
 
   integrityCheck: runIntegrityCheck,
 

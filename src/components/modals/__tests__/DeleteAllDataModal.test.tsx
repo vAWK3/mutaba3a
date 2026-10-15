@@ -4,7 +4,11 @@ import { renderWithProviders, screen, waitFor } from '../../../test/utils';
 import userEvent from '@testing-library/user-event';
 import en from '../../../lib/i18n/translations/en.json';
 import ar from '../../../lib/i18n/translations/ar.json';
+import { QueryClient } from '@tanstack/react-query';
 import { DeleteAllDataModal } from '../DeleteAllDataModal';
+import { useProfileStore } from '../../../lib/profileStore';
+import { useDemoStore } from '../../../demo/demoStore';
+import { useOnboardingStore } from '../../../lib/onboardingStore';
 
 /**
  * MUT-88 (ADR-072): Delete all data sits behind a real backup and a typed
@@ -14,7 +18,7 @@ import { DeleteAllDataModal } from '../DeleteAllDataModal';
 
 const { backUpNow, deleteAllData } = vi.hoisted(() => ({ backUpNow: vi.fn(), deleteAllData: vi.fn() }));
 vi.mock('../../../utils/backupDownload', () => ({ backUpNow }));
-// getRepositories().base.dataset.wipeCoreData delegates to this (MUT-47).
+// getRepositories().base.dataset.wipeAllData delegates to this (MUT-47).
 vi.mock('../../../db/seed', () => ({ deleteAllData }));
 
 const copy = (locale: typeof en) => locale.settings.data.deleteModal;
@@ -109,5 +113,34 @@ describe('DeleteAllDataModal', () => {
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalled());
     expect(deleteAllData).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches every query and forgets the deleted business, sample and walkthrough (MUT-164)', async () => {
+    const invalidate = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
+    useProfileStore.getState().setActiveProfile('bp-gone');
+    useDemoStore.getState().activateDemo('2026-10-01T00:00:00.000Z');
+    useOnboardingStore.getState().completeStep('client', 'c-gone');
+    const { onSuccess } = renderModal();
+    await backUp(en);
+    await userEvent.type(confirmField(en), 'DELETE');
+
+    await userEvent.click(screen.getByRole('button', { name: copy(en).stepB.btn }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    expect(invalidate).toHaveBeenCalledWith();
+    expect(useProfileStore.getState().activeProfileId).toBe('');
+    expect(useDemoStore.getState().isActive).toBe(false);
+    expect(useOnboardingStore.getState().completedSteps).toEqual([]);
+    invalidate.mockRestore();
+  });
+
+  it('says what it deletes and what it keeps, in both languages', () => {
+    for (const locale of [en, ar]) {
+      expect(copy(locale).warning).not.toBe('');
+      expect(copy(locale).kept).toBeTruthy();
+    }
+    renderModal();
+    expect(screen.getByText(copy(en).warning)).toBeInTheDocument();
+    expect(screen.getByText(copy(en).kept)).toBeInTheDocument();
   });
 });
