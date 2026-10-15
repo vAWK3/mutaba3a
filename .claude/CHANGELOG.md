@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — The web QA baseline goes green: the phone bar fits, the slow-route loader is held in builds (MUT-231)
+
+**Why:** nine release-QA cells failed on main (the baseline MUT-226 recorded on a093306), so the web suite could never pass with no retries.
+- `@web.landing.375` (4 cells) is an app bug. `f1e8c43` put "Sign in now" in the landing bar beside the switch and the bar's button, whose slot is kept even while it is hidden. On phones that left the wordmark 47 of 110 px at 375 EN (EN at 481–487 px clipped too).
+- `@web.brand.loader-slow-route` (5 cells) was a spec problem. `holdInsightsCode` matched only dev-server module paths, and a build's service worker serves the precached chunk with no request. Once the chunk was held, light and dark hit axe's best-practice `page-has-heading-one`: the loader stands in for the whole page, TopBar h1 included. They hit it on the dev server too, so those two cells had never passed.
+
+### Fixed
+- At ≤640 px, Sign in and the bar's button share one slot. Sign in shows while the hero's button is on screen; once it has scrolled away, the bar's button fades in over it, and the hidden one leaves the tab order. Wider screens are unchanged. The wordmark fits at 320, 375, 414 and 481 in both languages.
+
+### Technical
+- `LandingHeader`: `.landing-header-slot[data-cta-visible]` wraps the sign-in link and `HeaderCta`. It is `display: contents` above 640 px and a one-cell grid below. CSS in `LandingPage.css`.
+- `brand.spec.ts`: the slow-route tests sit in a `describe` with `serviceWorkers: 'block'`. `holdInsightsCode` also holds the built chunk that exports `InsightsPage`. `KNOWN_AXE_VIOLATIONS.loader` = `page-has-heading-one`, by design, like `portalBoot`'s `region`.
+- `landing.spec.ts` `@web.landing.375` now also checks Sign in is shown at the top and hidden once scrolled.
+- Files: `src/pages/landing/components/LandingHeader.tsx`, `src/pages/landing/LandingPage.css`, `src/pages/landing/__tests__/LandingHeader.test.tsx`, `qa/specs/web/{brand,landing}.spec.ts`, `qa/support/axe.ts`, `qa/features/web/landing.yaml`.
+
 ## [Unreleased] - 2026-10-15 — Hosted portal: change the date of a saved income entry and a recorded payment (MUT-224)
 
 **Why:** MUT-223 gave the server re-dating; the portal still had no way to fix a wrong day on an Owed entry or a recorded payment. Expenses could already be re-dated. ADR-083 (MUT-224 amendment).
