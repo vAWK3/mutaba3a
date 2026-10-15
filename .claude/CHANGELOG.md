@@ -43,6 +43,28 @@
 - `landing.spec.ts` `@web.landing.375` now also checks Sign in is shown at the top and hidden once scrolled.
 - Files: `src/pages/landing/components/LandingHeader.tsx`, `src/pages/landing/LandingPage.css`, `src/pages/landing/__tests__/LandingHeader.test.tsx`, `qa/specs/web/{brand,landing}.spec.ts`, `qa/support/axe.ts`, `qa/features/web/landing.yaml`.
 
+## [Unreleased] - 2026-10-15 — Hosted portal: change the date of a saved income entry and a recorded payment (MUT-224)
+
+**Why:** MUT-223 gave the server re-dating; the portal still had no way to fix a wrong day on an Owed entry or a recorded payment. Expenses could already be re-dated. ADR-083 (MUT-224 amendment).
+
+### Added
+- `RedateDrawer` (one drawer, two kinds): `?income=<receivableId>` changes an Owed entry's date (PATCH /v1/income) and `?payment=<paymentId>` a recorded payment's received date (PATCH /v1/payments). It reads the record fresh, sends If-Match at that version, refills on a 409 re-read, shows a 422 under the date and a 404 as no longer available. A settled entry lists its payment lines, found by scanning the client's first 50 payments, with a "See this client's payments" fallback (TD-145).
+- Receivables: a **Date** column (postingDate) before Due; own Owed rows open the drawer by their row-link. Payments: the user's own posted capture opens it from its Received cell.
+- `HostedTable` `linkColumn` and `canOpen`; `redateAffordancesFor`, `canRedateOwed`, `canRedatePayment`; `usePayment`, `usePaymentsForEntry`, `useRedateOwed`, `useRedatePayment`; `api.payment`, `redateIncome`, `redatePayment`.
+- Release-QA: `portal.income.redate-{owed,received,payment,no-future,conflict,malafat-readonly}` and `portal.expenses.redate-expense`; the portal stub serves the new routes.
+
+### Changed
+- The Record payment note now reads "You can fix the date later; the amount can't be changed yet." (en + ar).
+- Record payment and the Payments expander stop propagation, so they never open the re-date drawer.
+
+### Not changed
+- Malafat-fed and unowned profiles: no row-link, no clickable look, and `?income=` / `?payment=` deep links render nothing.
+
+### Fixed in review (qa-reconcile)
+- A record the server would refuse (an undone payment, someone else's capture, an entry Malafat posted) opened a working Save that did nothing: GET answers 200 there and only the PATCH says 404, which was mapped to a silent re-read. The drawer now checks `canRedateOwed` / `canRedatePayment` on the record it loaded and shows "no longer available"; a 404 on save also toasts it.
+- A save that answered after the drawer closed called the old `onClose` and closed whatever drawer was open by then (resetting its filters). It now does nothing once unmounted.
+- A background refetch with a new version replaced a typed date, and Save then closed without saving. The date now refills only after a 409's re-read or when nothing was typed.
+
 ## [Unreleased] - 2026-10-15 — Expenses Needs attention reaches back to the rule's start (MUT-96, TD-069)
 
 **Why:** `getDueOccurrences` asked only for the last 90 days, so a monthly rule that started six months ago and was never marked silently lost its oldest months, from the row and from the totals.

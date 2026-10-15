@@ -239,3 +239,29 @@ test('An expense changed on another device: Save is refused, the drawer shows th
     expect(api.last('PATCH', /^\/v1\/expenses\//)?.headers['if-match']).toBe('2');
   });
 });
+
+test('An expense’s date is changed in the edit drawer and the list shows the new day (MUT-224 regression)', { tag: '@portal.expenses.redate-expense' }, async ({ page, step }) => {
+  const taxi = expense(61, { amount: '45.00', title: 'Taxi to court', occurredOn: '2026-10-03', categoryId: travel.id });
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, categories: [office_, travel], expenses: [taxi] });
+  const drawer = page.getByRole('dialog', { name: 'Edit expense' });
+
+  await step('Open Expenses and choose the expense', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`);
+    await page.getByRole('table', { name: 'Expenses' }).getByRole('button', { name: /Oct 3, 2026/ }).click();
+    await expect(drawer).toBeVisible();
+  });
+
+  await step('Change only its date and save', async () => {
+    await drawer.getByLabel('Date').fill('2026-09-28');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  await step('The server got the new date with If-Match, and the row shows it', async () => {
+    const patch = api.last('PATCH', /^\/v1\/expenses\//);
+    expect(patch?.headers['if-match']).toBe('1');
+    expect(patch?.body).toMatchObject({ occurredOn: '2026-09-28' });
+    await expect(page.getByRole('table', { name: 'Expenses' })).toContainText('Sep 28, 2026');
+  });
+});
+

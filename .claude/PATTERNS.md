@@ -2346,3 +2346,13 @@ Every write that locks more than one receivable takes the row locks in ascending
 
 A lock conflict that still happens (40P01 / 40001) is turned into `LockConflict` (`repositories/memory.ts`) by `asLockConflict`, and the route answers 409, never 500. Postgres rolled the transaction back, so nothing was written. A new multi-receivable write uses the same helper and the same mapping.
 
+## Patterns added by MUT-224 (2026-10-15)
+
+### Pattern: A row whose first cell holds a button links from another cell
+When a clickable `HostedTable` row already has a button in its first cell (the Payments expander), put the row-link in another cell with `linkColumn`, gate rows with `canOpen`, and have every inner button `stopPropagation` so it never opens the row too. Never nest the row-link around a button.
+**Instances**: `PaymentsList` (`linkColumn="received"`), `ReceivablesList` (Record payment stops propagation).
+
+### Pattern: One drawer for two record kinds calls both reads unconditionally
+`RedateDrawer` calls `useReceivable(…, kind === 'owed')` and `usePayment(…, kind === 'payment')` every render and picks one, so hooks never run conditionally. A new version refills the form through a render-time adjustment, not an effect, and only after a 409's re-read or when the field is untouched: a background refetch never replaces typed input. The drawer also re-checks the gate (`canRedate…`) on the record it loaded, since a GET can succeed where the PATCH would 404, and a save that answers after unmount neither closes nor toasts.
+**Instances**: `RedateDrawer`.
+

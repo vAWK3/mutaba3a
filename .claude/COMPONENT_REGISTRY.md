@@ -1741,6 +1741,10 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `components/IncomeDrawerHost.tsx` `IncomeDrawerHost`, `focusAfterSettle`, `SETTLE_BUTTON_ATTR` | The drawers a page mounts; focus rule after a full payment. |
 | `components/Toast.tsx` `show(message, { tone: 'info' })` | Info tone in a persistent polite live region; message-only calls keep the error alert. MUT-91 extends the same options object. |
 | `components/HostedTable.tsx` `Column.stickyEnd` | Pins a column to the inline end (row actions on narrow windows). |
+| `components/HostedTable.tsx` `linkColumn`, `canOpen` (MUT-224, eng review R5) | `linkColumn` picks which column's cell hosts the row-link (default: first; Payments uses `received` because its first cell is the expander). `canOpen(row)` false: no row-link, no `clickable`, no click handler. Inner buttons that must not open the row call `stopPropagation`. | `PaymentsList`, `ReceivablesList` |
+| `components/RedateDrawer.tsx` (MUT-224) | `RedateDrawer` (`kind: 'owed' \| 'payment'`, `profile`, `id`, `onClose`, `onOpenPayment`, `onSeePayments`): date-only edit at the loaded version; refill on a new version (render-time adjustment); payment lines for a settled entry via `usePaymentsForEntry` | `IncomeDrawerHost` |
+| `data/incomeAffordances.ts` `redateAffordancesFor`, `canRedateOwed`, `canRedatePayment` (MUT-224) | Profile-level re-date gate (owned + capture/payments write) and the row checks (ADJUSTMENT not VOID; own POSTED capture) | Receivables, Payments, Client detail, `IncomeDrawerHost` |
+| `data/incomeQueries.ts` `usePayment`, `usePaymentsForEntry`, `useRedateOwed`, `useRedatePayment` (MUT-224) | One payment read fresh; a settled entry's payments (first 50 of the client, TD-145); the two date PATCHes, invalidating income lists, records and summaries | `RedateDrawer` |
 | `components/ClientPicker.tsx`, `ProjectPicker.tsx`, `components/ui/EntityTypeahead.tsx` `id` prop | Lets a `<label htmlFor>` name the typeahead input. |
 | `format/dates.ts` `todayInZone(timeZone, now?)` | Today's calendar date in an IANA zone; browser-calendar fallback for an unknown zone. |
 

@@ -3245,6 +3245,9 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 **Alternatives Considered**: `capture:write` on PATCH /v1/payments so every refusal is 404 (rejected D2: puts a /v1/payments route under the capture row MUT-61 kept separate, and edits the matrix + brief the drift test pins); a `requireUnallocated` store option (rejected D3: guards a race that cannot occur on owned profiles); re-deriving `dueDate` from the new date (rejected: the server cannot tell a defaulted EOM_15 due date from a chosen one)
 
+
+**MUT-224 amendment (2026-10-15, portal):** the portal has no single income list, so `?income=` is an Owed entry (Receivables row → PATCH /v1/income) and `?payment=` any payment the person recorded (Payments row → PATCH /v1/payments), Received and settle alike (eng review R2). Receivables gains a Date column so a re-dated entry visibly moves (R3). A settled entry's paid date is shown by scanning the client's first 50 payments for allocations to it, falling back to a link to the client's Payments (R4, TD-145); a server `?receivableId=` filter would be exact. Payments rows link from their Received cell through `HostedTable` `linkColumn`/`canOpen` (R5).
+
 ## ADR-084: "Delete All Data" Empties Every Table but Settings; Settings Keep Preferences and Turn the Optional Areas Off
 
 **Status**: Active
