@@ -2611,3 +2611,10 @@ Full web suite on 2026-10-15 (after MUT-218/164/217/178): 114 passed, 9 failed, 
 |---|---|---|---|
 | `src/components/modals/__tests__/DemoSeedModal.test.tsx` (new) | Component + fake IndexedDB (seed stubbed) | 3 | In an AppShell-like shell, Show Demo leads to the summary with "3 Businesses" (it unmounted before the fix); the first demo business stays active through `useActiveProfile`'s repair (it switched back to the person's own before the fix); the preview names the count from the seed list, and both locales take `{count}` |
 | `qa/specs/web/onboarding.spec.ts` › `@web.onboarding.demo-summary`, `@web.onboarding.demo-mode` | E2E (release-qa) | 2 | demo-summary is automated; demo-mode follows the summary flow. All 6 onboarding specs pass 18/18 with `--repeat-each 3 --retries 0` |
+
+## MUT-95 — Sample payment records (2026-10-15, TD-063)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/demo/__tests__/seedPayments.test.ts` (new) | Integration (fake IndexedDB, real seed) | 3 | Every sample income entry's records add up to what it has received (paid: its amount; part-paid: `receivedAmountMinor`), none future-dated, all `demo_`. A 1,000 payment on a part-paid entry raises its received amount by exactly 1,000 (before the fix it reset to 1,000), and the guard refuses one minor unit over the true remainder. `removeDemoData` leaves no payment on a sample entry |
+| `qa/specs/web/record-payment.spec.ts` › `@web.record-payment.sample-part-paid` (new) | E2E (release-qa) | 1 | On `/?sample=1`, Income for All Time: paying 1,000 on the part-paid entry leaves exactly 1,000 less owed. 3/3 with `--repeat-each 3`; fails on the old seed |
