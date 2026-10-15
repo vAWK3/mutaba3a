@@ -122,7 +122,10 @@ describe('CheckingSession (MUT-207 D4)', () => {
     prefersReducedMotion(true);
     pageStartsNow(0);
     const { container } = renderChecking();
-    advance(LOADER_DELAY_MS + LOADER_SLOW_MS);
+    // Two steps: the loader mounts at LOADER_DELAY_MS and starts its own 3 s
+    // timer in an effect, which React commits only between advances.
+    advance(LOADER_DELAY_MS);
+    advance(LOADER_SLOW_MS);
     expect(container.querySelector('.brand-loader__caption')).toHaveTextContent('Still connecting…');
   });
 });
@@ -157,14 +160,32 @@ describe('the session check gives up at 15 s (MUT-207 DR6)', () => {
 
   const flush = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
 
+  /**
+   * The portal's routes load lazily, so /v1/me (and its 15 s deadline) starts
+   * a few real ticks after render, not at fake time 0. Yield real macrotasks
+   * until the request is in flight, so the clock below is measured from it.
+   */
+  async function untilMeRequested(meCalls: () => number) {
+    for (let i = 0; i < 200 && meCalls() === 0; i++) {
+      await act(async () => {
+        await new Promise((resolve) => setImmediate(resolve));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+    }
+    expect(meCalls()).toBe(1);
+  }
+
   it('keeps checking until 15 s, then offers Retry, which checks again', async () => {
     const { meCalls } = slowThenOk();
     renderPortal('/');
+    await untilMeRequested(meCalls);
     await flush(ME_TIMEOUT_MS - 100);
     expect(screen.getByRole('status')).toHaveTextContent('Still connecting…');
     expect(screen.queryByRole('alert')).toBeNull();
 
     await flush(100);
+    // TanStack Query hands the error to React through a setTimeout(0), which the fake clock holds.
+    await flush(1);
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent("Can't reach Mutaba3a right now");
     expect(screen.queryByRole('status')).toBeNull();
@@ -178,9 +199,12 @@ describe('the session check gives up at 15 s (MUT-207 DR6)', () => {
     const unhandled = vi.fn();
     process.on('unhandledRejection', unhandled);
     try {
-      slowThenOk();
+      const { meCalls } = slowThenOk();
       renderPortal('/');
+      await untilMeRequested(meCalls);
       await flush(ME_TIMEOUT_MS);
+      // TanStack Query hands the error to React through a setTimeout(0), which the fake clock holds.
+      await flush(1);
       expect(screen.getByRole('alert')).toBeInTheDocument();
       expect(unhandled).not.toHaveBeenCalled();
     } finally {
