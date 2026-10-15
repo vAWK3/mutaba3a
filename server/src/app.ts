@@ -9,6 +9,7 @@ import { SCOPES } from './auth/scopes.js';
 import { requestScopedStore } from './auth/store-guard.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from './auth/users.js';
 import { ApiError, ERROR_CODES } from './errors.js';
+import type { CachedFxRates } from './fx-rates.js';
 import type { Logger } from './logger.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
 import type { LedgerStore } from './repositories/ports.js';
@@ -23,6 +24,7 @@ import { summaryRoutes } from './routes/summaries.js';
 import { expenseCategoryRoutes } from './routes/expense-categories.js';
 import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, profileRoutes } from './routes/profiles.js';
 import { conversionRoutes } from './routes/conversions.js';
+import { FX_ORGANIZATION_INDEPENDENT_ROUTES, fxRateRoutes } from './routes/fx-rates.js';
 import { expenseRoutes } from './routes/expenses.js';
 import { incomeRoutes } from './routes/income.js';
 import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from './inbox/routes-keys.js';
@@ -68,6 +70,8 @@ export interface AppDependencies {
   portal?: { distDir: string } | null;
   /** iOS/Android app-association files (MUT-111). Null or absent = neither well-known path exists. */
   appAssociation?: AppAssociationConfig | null;
+  /** Reference exchange rates (MUT-228), cached per instance. Null or absent = GET /v1/fx-rates answers 503 FX_RATES_UNAVAILABLE. */
+  fxRates?: CachedFxRates | null;
 }
 
 /**
@@ -112,7 +116,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.26.3-mut199';
+export const API_VERSION = '1.27.0-mut228';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -182,7 +186,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       sessions,
       // Built on first request, after every route below has registered its OpenAPI definition.
       routeAccess: () => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes)),
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
@@ -232,6 +236,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', expenseCategoryRoutes(store));
   app.route('/', incomeRoutes(store));
   app.route('/', conversionRoutes(store));
+  app.route('/', fxRateRoutes(deps.fxRates ?? null));
   app.route('/', inboxRoutes(store));
   app.route('/', profileRoutes(store));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));

@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.26.3-mut199
+  version: 1.27.0-mut228
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -322,6 +322,7 @@ components:
                 - RATE_LIMITED
                 - INTERNAL
                 - ATTACHMENTS_NOT_CONFIGURED
+                - FX_RATES_UNAVAILABLE
             message:
               type: string
             details:
@@ -4658,6 +4659,55 @@ components:
           nullable: true
           maxLength: 4000
       additionalProperties: false
+    FxRatesResponse:
+      type: object
+      properties:
+        base:
+          $ref: "#/components/schemas/Currency"
+        rateDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: The ECB reference date the rates are for (its last business day), YYYY-MM-DD
+          example: 2026-10-15
+        fetchedAt:
+          type: string
+          format: date-time
+          description: When this server instance read the rates from the provider
+        source:
+          type: string
+          enum:
+            - live
+            - stale
+          description: live = inside the cache window; stale = the last refresh failed and these are the last good rates
+        rates:
+          type: array
+          items:
+            $ref: "#/components/schemas/FxRate"
+          description: Every supported currency, base included (rate 1), in the supported-currency order
+      required:
+        - base
+        - rateDate
+        - fetchedAt
+        - source
+        - rates
+    FxRate:
+      type: object
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        rate:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          description: Units of `currency` per 1 `base`, rounded to 6 decimal places
+          example: 0.322356
+        derived:
+          type: boolean
+          description: "True when exactly one side of the pair is JOD: the ECB publishes no JOD rate, so it comes from the USD peg (1 USD = 0.709 JOD)"
+      required:
+        - currency
+        - rate
+        - derived
     InboxEntryPage:
       type: object
       properties:
@@ -10748,6 +10798,61 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/fx-rates:
+    get:
+      tags:
+        - Exchange rates
+      summary: Reference exchange rates for every supported currency against a base, for display
+      description: "ECB reference rates (via Frankfurter), cached per server instance for FX_RATES_TTL_MINUTES. JOD is derived from the USD peg. When a refresh fails the last good rates come back with source=stale; with nothing cached the route answers 503 FX_RATES_UNAVAILABLE, never a zero rate. Display only: no record stores these rates."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/Currency"
+              - description: The currency the rates are quoted against; the phone sends the target profile’s default currency
+          required: true
+          description: The currency the rates are quoted against; the phone sends the target profile’s default currency
+          name: base
+          in: query
+      responses:
+        "200":
+          description: Rates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FxRatesResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "No rates to serve: the provider is down and this instance has none cached, or no rate source is configured"
           content:
             application/json:
               schema:

@@ -7857,6 +7857,93 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/fx-rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reference exchange rates for every supported currency against a base, for display
+         * @description ECB reference rates (via Frankfurter), cached per server instance for FX_RATES_TTL_MINUTES. JOD is derived from the USD peg. When a refresh fails the last good rates come back with source=stale; with nothing cached the route answers 503 FX_RATES_UNAVAILABLE, never a zero rate. Display only: no record stores these rates.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The currency the rates are quoted against; the phone sends the target profile’s default currency */
+                    base: components["schemas"]["Currency"] & unknown;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Rates */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FxRatesResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No rates to serve: the provider is down and this instance has none cached, or no rate source is configured */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/inbox": {
         parameters: {
             query?: never;
@@ -9602,7 +9689,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED";
+                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -11224,6 +11311,36 @@ export interface components {
             toAmount?: string;
             toCurrency?: components["schemas"]["Currency"] & unknown;
             notes?: string | null;
+        };
+        FxRatesResponse: {
+            base: components["schemas"]["Currency"];
+            /**
+             * @description The ECB reference date the rates are for (its last business day), YYYY-MM-DD
+             * @example 2026-10-15
+             */
+            rateDate: string;
+            /**
+             * Format: date-time
+             * @description When this server instance read the rates from the provider
+             */
+            fetchedAt: string;
+            /**
+             * @description live = inside the cache window; stale = the last refresh failed and these are the last good rates
+             * @enum {string}
+             */
+            source: "live" | "stale";
+            /** @description Every supported currency, base included (rate 1), in the supported-currency order */
+            rates: components["schemas"]["FxRate"][];
+        };
+        FxRate: {
+            currency: components["schemas"]["Currency"];
+            /**
+             * @description Units of `currency` per 1 `base`, rounded to 6 decimal places
+             * @example 0.322356
+             */
+            rate: number;
+            /** @description True when exactly one side of the pair is JOD: the ECB publishes no JOD rate, so it comes from the USD peg (1 USD = 0.709 JOD) */
+            derived: boolean;
         };
         InboxEntryPage: {
             items: components["schemas"]["InboxEntry"][];

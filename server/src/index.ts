@@ -7,6 +7,7 @@ import { PrismaLedgerStore } from './repositories/prisma.js';
 import { GcsAttachmentStorage } from './attachments/storage.js';
 import { SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
 import { createArgon2Hasher } from './auth/users.js';
+import { CachedFxRates, FrankfurterSource } from './fx-rates.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -52,6 +53,11 @@ const app = createApp({
           androidSha256Fingerprints: config.ANDROID_SHA256_FINGERPRINTS.split(','),
         }
       : null,
+  fxRates: new CachedFxRates({
+    source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
+    ttlMs: config.FX_RATES_TTL_MINUTES * 60_000,
+    logger,
+  }),
 });
 if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; attachments routes answer 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
