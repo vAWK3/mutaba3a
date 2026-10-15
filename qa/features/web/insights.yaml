@@ -1,0 +1,27 @@
+app: web
+area: insights
+title: Insights (optional area)
+tier: secondary
+paths:
+  - src/pages/insights/**
+  - src/db/aggregations.ts
+features:
+  - id: summary
+    title: Turn on Insights and see this month summarise logged income
+    tier: secondary
+    steps:
+      - Turn on Insights in Settings › Advanced features
+      - Log $1,200 still owed by a client and $300 already received
+      - Open Insights from the sidebar
+    expect:
+      - The Summary reads Paid Income $300, Unpaid Receivables $1,200 and Net (Paid - Expenses) $300
+      - The Monthly Trend shows this month with the $300 received
+  - id: unpaid-aging
+    title: The Unpaid view ages what clients owe and totals it by client
+    tier: tertiary
+    steps:
+      - Turn on Insights, log $500 for a client that fell due 10 days ago
+      - Open Insights and choose Unpaid
+    expect:
+      - The 1-30 days overdue bucket holds 1 entry for $500, Current (not due) holds none
+      - Outstanding by Client lists the client with 1 entry for $500

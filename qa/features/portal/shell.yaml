@@ -1,0 +1,88 @@
+app: portal
+area: shell
+title: Signed-in portal shell
+tier: secondary
+# Every signed-in portal page boots through these: the entry, router, query client, the one
+# API client and its types, both dictionaries, money and date formatting, the shell and the
+# shared list pieces. Every spec in qa/specs/portal/ (bar sign-in) runs them.
+paths:
+  - src/hosted/main.tsx
+  - src/hosted/HostedApp.tsx
+  - src/hosted/router.tsx
+  - src/hosted/queryClient.ts
+  - src/hosted/api/client.ts
+  - src/hosted/api/schema.d.ts
+  - src/hosted/i18n/en.json
+  - src/hosted/i18n/ar.json
+  - src/hosted/format/DecimalAmount.tsx
+  - src/hosted/format/dates.ts
+  - src/hosted/shell/HostedShell.tsx
+  - src/hosted/shell/usePopover.ts
+  - src/hosted/pages/views/shared.tsx
+  - src/hosted/components/HostedTable.tsx
+  - src/hosted/components/QueryView.tsx
+  - src/hosted/components/Icons.tsx
+  - src/hosted/components/Toast.tsx
+  - src/hosted/data/queries.ts
+  - src/hosted/data/filters.ts
+features:
+  - id: navigate
+    title: Signed in, the portal opens on the first profile's overview (owed, overdue, proposed, overdue clients first, per currency), every section is one click away, and عربي turns it right to left
+    tier: core # the portal is unusable for everyone signed in if this breaks
+    paths:
+      - src/hosted/pages/views/OverviewPage.tsx
+      - src/hosted/session/AuthGate.tsx
+      - src/components/filters/SegmentedTabs.tsx
+    steps:
+      - Sign in and open the portal at /
+      - Read the overview, then switch it to USD
+      - Visit each section from the sidebar
+      - Open the account menu and choose عربي
+    expect:
+      - / lands on the first profile's Overview with the ILS strip (Owed 4,500.00, Overdue 1,200.00, Proposed 800.00), an As of line, and the overdue client first
+      - USD shows the USD block and puts currency=USD in the URL
+      - Each section's heading shows and its link is aria-current
+      - The page turns rtl with the Arabic section names
+      - Every profile call carried X-Mutaba3a-Profile for that profile
+  - id: switch-profile
+    title: The profile switcher lists each profile with its kind, closes on Escape, keeps the section when switching, and a profile not on the account says so
+    tier: secondary
+    paths:
+      - src/hosted/shell/ProfileSwitcher.tsx
+      - src/hosted/shell/usePopover.ts
+      - src/hosted/data/profileRules.ts
+    steps:
+      - Open Payments on one office and open the switcher
+      - Press Escape, then switch to the second office
+      - Open a profile id that is not on the account, then Go to the first profile
+    expect:
+      - Each profile shows Hosted and its kind (Business, Income recorded by Malafat), with the local-profiles footer
+      - Escape closes the menu and focus returns to the switcher
+      - Switching lands on the same section for the other profile, whose figures are fetched with its own header
+      - An unknown profile reads "This profile isn't available" and its button opens the first profile
+  - id: client-detail
+    title: A client opens to its summary (last payment, per-currency strip, matters), then its own receivables, payments and documents
+    tier: secondary
+    paths:
+      - src/hosted/pages/views/ClientDetailPage.tsx
+      - src/hosted/pages/views/ClientsPage.tsx
+    steps:
+      - Open Clients and choose a client
+      - Read the summary
+      - Open the Receivables, Payments and Documents tabs, then All clients
+    expect:
+      - The summary shows Last payment, the ILS strip and each matter with its status
+      - Each tab lists only this client's records, without a client column, and asks the server with that customerId
+      - All clients returns to the list
+  - id: no-profiles
+    title: An account with no profile yet is offered New profile beside Sign out (MUT-183)
+    tier: secondary
+    paths:
+      - src/hosted/session/AuthGate.tsx
+      - src/hosted/shell/ProfileDrawers.tsx
+    steps:
+      - Sign in to an account with no profile
+      - Choose New profile, then Back
+    expect:
+      - '"You don''t have a profile yet" shows, with no section navigation'
+      - New profile opens its drawer (newProfile=true); Back closes it; Sign out is beside it

@@ -7,6 +7,9 @@ paths:
   - src/components/drawers/PartialPaymentDrawer.css
   - src/pages/income/IncomePage.tsx
   - src/pages/income/incomeRows.ts
+  - src/lib/paymentEntry.ts
+  - src/components/ui/RecordPaymentButton.*
+  - src/components/ui/PaymentStatusBadge.tsx
 features:
   - id: full-settle
     title: "Record Payment on an unpaid row settles it in full in two clicks (MUT-86)"

@@ -1,0 +1,85 @@
+app: portal
+area: expenses
+title: Expenses in the portal
+tier: secondary
+paths:
+  - src/hosted/pages/views/ExpensesList.tsx
+  - src/hosted/components/ExpenseDrawer.tsx
+  - src/hosted/components/expenseApiErrors.ts
+  - src/hosted/components/ClientPicker.tsx
+  - src/hosted/components/ProjectPicker.tsx
+  - src/hosted/components/Drawer.tsx
+  - src/hosted/components/SavedNotice.tsx
+  - src/hosted/data/expenseQueries.ts
+  - src/hosted/data/anchoredList.ts
+  - src/hosted/data/attemptKey.ts
+  - src/hosted/format/currencies.ts
+features:
+  - id: create
+    title: Record an expense; the drawer says what is missing, takes a currency's own decimals (JOD 3), and the expense is listed and filterable
+    tier: secondary
+    steps:
+      - Open Expenses and choose Record expense
+      - Save it empty, then with 12.345 in USD
+      - Switch to JOD, add a title, vendor and client, and save
+      - Filter by another category, then Clear filters
+    expect:
+      - The date defaults to today in the profile's zone; empty Save shows "Enter a valid amount" and "Required"; 12.345 is refused in USD
+      - POST /v1/expenses gets the JOD expense with an Idempotency-Key
+      - The row shows its category, client and amount, and "Saved" is announced
+      - The category filter sends categoryId and says "Nothing matches these filters." until cleared
+  - id: edit-receipts
+    title: Edit an expense; attach a receipt (start, PUT to the signed bucket, complete), download and remove it, and save a change with If-Match
+    tier: secondary
+    paths:
+      - src/hosted/components/ReceiptUploader.tsx
+      - src/hosted/data/download.ts
+    steps:
+      - Open an expense from the list
+      - Attach a text file, then a PDF
+      - Download the receipt, then delete it
+      - Change the title and save
+    expect:
+      - The drawer opens filled in at ?expense=<id>
+      - The text file is refused with "Receipts must be a PDF, JPEG or PNG file." and nothing is sent
+      - The PDF is started, PUT to the storage bucket and completed, then listed
+      - Download hands the signed link to the browser as a download; Delete removes it
+      - PATCH carries If-Match 1 and the new title, which the list shows
+  - id: delete
+    title: Delete an expense after confirming; a refused stale save keeps the drawer open with a message
+    tier: secondary
+    steps:
+      - Open an expense and save a change the server refuses as stale
+      - Delete it and confirm the prompt
+    expect:
+      - '"This expense changed elsewhere" is shown and the drawer stays open'
+      - DELETE is sent, the drawer closes and the row is gone
+  - id: saved-show
+    title: An expense saved outside the current filter is announced with Show, which starts the list at it; a gone anchor drops itself (MUT-91)
+    tier: secondary
+    paths:
+      - src/hosted/components/SavedNotice.tsx
+      - src/hosted/data/anchoredList.ts
+    steps:
+      - Open Expenses filtered to Travel and record an Office supplies expense
+      - Choose Show, then Show latest
+      - Open an old link anchored on an expense that no longer exists
+    expect:
+      - '"Expense saved" with Show appears because the filtered list cannot show it'
+      - Show puts anchor=<id> in the URL, sends it to the server, focuses "Showing from a saved entry" and lists the expense; Show latest removes it
+      - The stale anchor is dropped and the plain list shows
+  - id: edit-conflict
+    title: An expense changed on another device is refused on Save, the drawer then shows the latest version, and saving again works
+    tier: secondary
+    manual: true
+    # Product bug: ExpenseDrawer's 409 handling (applyExpenseApiError, src/hosted/components/expenseApiErrors.ts)
+    # only toasts "This expense changed elsewhere — showing the latest version"; nothing re-reads the
+    # expense, so the drawer keeps the old values and version and every later Save sends the same
+    # stale If-Match and is refused again. ConversionDrawer invalidates its query on CONFLICT (MUT-194 D6).
+    # The spec states the correct behaviour; un-manual it once fixed.
+    steps:
+      - Open an expense; meanwhile it is changed elsewhere
+      - Change the title and save, then save again
+    expect:
+      - The first save is refused and the drawer shows the latest amount
+      - The second save goes through with If-Match of the latest version

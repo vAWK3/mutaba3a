@@ -1,0 +1,41 @@
+# Reports became the Insights page's presets: /reports redirects to /insights (router.tsx),
+# which the optional Insights area gates. src/pages/reports/** is no longer routed (dead code).
+app: web
+area: reports
+title: Reports (Insights presets and CSV export)
+tier: secondary
+paths:
+  - src/pages/insights/InsightsPage.tsx
+features:
+  - id: legacy-link
+    title: An old /reports link lands on Insights once it is on, and on Home while it is off
+    tier: tertiary
+    steps:
+      - Open /reports on a fresh install
+      - Turn on Insights in Settings › Advanced features
+      - Open /reports again
+    expect:
+      - With Insights off, /reports lands on Home
+      - With Insights on, /reports lands on /insights, showing the Summary, Clients, Projects, Expenses and Unpaid presets and Export CSV
+  - id: presets
+    title: The period and currency filters narrow the report, and each preset shows its own table
+    tier: secondary
+    steps:
+      - Turn on Insights, log $1,200 owed by a client, open Insights
+      - Switch Period to Last Month, then This Year
+      - Choose USD in the currency filter, then Both
+      - Choose Clients, Projects, Expenses and Unpaid in turn
+    expect:
+      - Last Month leaves the $1,200 out of Unpaid Receivables, This Year brings it back
+      - USD drops the ILS column
+      - Clients lists the client with $1,200; Projects says No projects found; Expenses says No expenses in this period; Unpaid puts $1,200 in Current (not due)
+  - id: export-csv
+    title: Export CSV downloads the open preset for the chosen dates
+    tier: secondary
+    steps:
+      - Turn on Insights, log $1,200 owed by a client and $300 received, open Insights
+      - Click Export CSV on the Summary
+      - Choose Clients and click Export CSV again
+    expect:
+      - A download named insights-summary-<from>-<to>.csv with Paid Income 300, Unpaid Receivables 1200 and Net 300 in the USD column
+      - A download named insights-clients-<from>-<to>.csv with the client's row, Unpaid USD 1200

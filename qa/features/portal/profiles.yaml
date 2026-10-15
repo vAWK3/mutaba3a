@@ -1,0 +1,69 @@
+app: portal
+area: profiles
+title: Hosted profiles
+tier: secondary
+# New profile and Manage profiles (MUT-183), the shell's drawers, opened from the switcher.
+paths:
+  - src/hosted/shell/ProfileDrawers.tsx
+  - src/hosted/shell/ProfileSwitcher.tsx
+  - src/hosted/components/ProfilesManageDrawer.tsx
+  - src/hosted/components/ProfileEditForm.tsx
+  - src/hosted/components/ProfileTypeCards.tsx
+  - src/hosted/components/ProfileBanner.tsx
+  - src/hosted/components/profileApiErrors.ts
+  - src/hosted/components/profileFormSchema.ts
+  - src/hosted/components/Drawer.tsx
+  - src/hosted/data/profileQueries.ts
+  - src/hosted/data/profileRules.ts
+  - src/hosted/format/currencies.ts
+features:
+  - id: edit
+    title: Edit a profile's name and currency in Manage profiles; a change made elsewhere first is refused with Reload, which loads the latest
+    tier: secondary
+    steps:
+      - Open Manage profiles from the switcher and choose the open profile
+      - Meanwhile it is renamed elsewhere; rename it and change the currency, and save
+      - Reload, rename and change the currency again, and save
+    expect:
+      - The list shows the used count, Open now, each kind, and the Malafat firm locked
+      - The pane shows Name, Currency and the time zone, and Save waits for a change
+      - The stale save (If-Match 1) shows "This profile was changed elsewhere…" with Reload; Reload shows the name it has now
+      - The save sends If-Match 2 with only name and currency; "Profile saved", and the list and switcher show the new name
+  - id: type-change
+    title: Change a profile's type; the cards say what each seeds, the confirm counts the expenses that lose a category, and the note leads to Expenses
+    tier: secondary
+    steps:
+      - Open a Business profile in Manage profiles and choose Personal
+      - Save, go Back, then Save and Switch to Personal
+      - Open Expenses from the note
+    expect:
+      - Both cards show what they seed
+      - Save asks the server for the preview first and focuses "Switch to Personal?" with "3 expenses will become uncategorized."; nothing is saved yet
+      - Back returns focus to Save; the switch sends PATCH {type PERSONAL} once
+      - The list notes "Now Personal. 3 expenses are uncategorized." and Open Expenses goes to that profile's Expenses with the drawer closed
+  - id: create
+    title: New profile asks for a name and a type, lets the zone be changed, says so at the cap, and opens the new profile
+    tier: secondary
+    paths:
+      - src/hosted/components/ProfileCreateDrawer.tsx
+      - src/hosted/format/timezones.ts
+    steps:
+      - Choose + New profile in the switcher and create it empty
+      - Name it Home, Personal, JOD, change the zone to Asia/Amman, and create while the server says the cap is reached
+      - Open it again and create
+    expect:
+      - Empty Create shows "Enter a name" and "Choose Personal or Business"
+      - Change reveals and focuses the time zone list
+      - The cap refusal shows "You've reached your limit of 6 profiles." and Create profile turns aria-disabled
+      - POST /v1/profiles gets exactly the choices with an Idempotency-Key; "Home is ready" and the new profile's Overview opens
+  - id: limits
+    title: At the cap New profile stays focusable but does nothing and says why; a Malafat-fed profile cannot be edited, even from a link
+    tier: secondary
+    steps:
+      - With six owned profiles, open the switcher and press Enter on New profile
+      - Open Manage profiles
+      - Open a link to edit the Malafat-fed profile
+    expect:
+      - New profile is aria-disabled with "You've used 6 of 6 profiles" and opens nothing
+      - The Malafat firm's row is not a button and reads "Managed in Malafat. Change it there."; New profile is aria-disabled there too
+      - The link shows the profile list, not an edit pane

@@ -1,0 +1,49 @@
+app: portal
+area: conversions
+title: Currency conversions in the portal
+tier: secondary
+paths:
+  - src/hosted/pages/views/ConversionsList.tsx
+  - src/hosted/components/ConversionDrawer.tsx
+  - src/hosted/components/conversionFormSchema.ts
+  - src/hosted/components/conversionApiErrors.ts
+  - src/hosted/components/Drawer.tsx
+  - src/hosted/components/SavedNotice.tsx
+  - src/hosted/data/conversionQueries.ts
+  - src/hosted/data/anchoredList.ts
+  - src/hosted/data/attemptKey.ts
+  - src/hosted/format/currencies.ts
+features:
+  - id: log
+    title: Log a conversion; the drawer shows the implied rate, refuses a currency to itself, and the conversion is listed and filterable (MUT-161)
+    tier: secondary
+    steps:
+      - Open Conversions and choose Log conversion
+      - Type 1000 USD to 3700 ILS
+      - Set the from currency to ILS and save, then back to USD with a note and save
+      - Filter to EUR
+    expect:
+      - '"Implied rate: 1 USD = 3.7000 ILS" shows'
+      - ILS to ILS is refused with "Choose a different currency to convert to" and nothing is sent
+      - POST /v1/conversions gets both legs, today and the note with an Idempotency-Key; the row shows $1,000.00 and ₪3,700.00
+      - The currency filter sends currency=EUR and nothing matches
+  - id: edit
+    title: Edit a conversion; a change made elsewhere first is loaded into the drawer, then the edit saves at the latest version (MUT-194)
+    tier: secondary
+    steps:
+      - Open a conversion from the list; meanwhile its note is changed elsewhere
+      - Change the ILS leg and save, then change it again and save
+    expect:
+      - The first save (If-Match 1) is refused, "This conversion changed elsewhere" shows, and the drawer refills with the latest note
+      - The second save carries If-Match 2 and both legs, and the list shows the new amount
+  - id: delete
+    title: Delete a conversion; the prompt names both legs, Cancel keeps it, OK removes it, and its old link says it is gone (MUT-194)
+    tier: secondary
+    steps:
+      - Open a conversion by its link and choose Delete, then Cancel
+      - Choose Delete again and OK
+      - Open its old link
+    expect:
+      - The prompt reads "Delete this conversion ($1,000.00 → ₪3,700.00)? This can't be undone."; Cancel sends nothing
+      - OK sends DELETE and the list is empty
+      - The old link shows "This conversion no longer exists"

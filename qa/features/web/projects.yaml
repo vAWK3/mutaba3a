@@ -1,0 +1,51 @@
+app: web
+area: projects
+title: Projects (optional area)
+tier: secondary
+paths:
+  - src/pages/projects/ProjectsPage.tsx
+  - src/components/drawers/ProjectDrawer.tsx
+  - src/components/ui/CurrencySummaryPopup.tsx
+  - src/db/aggregations.ts
+features:
+  - id: create
+    title: Turn on Projects and create a project for a client in the drawer
+    tier: secondary
+    steps:
+      - Turn on Projects in Settings › Advanced features
+      - Open Projects from the sidebar
+      - Add a client, then + Add › Project
+      - Name the project, pick the client and a field, save
+    expect:
+      - The empty Projects index says No projects found
+      - The project appears in the index with its client and field, and the strip reads 1 project
+  - id: index-totals
+    title: Income logged against a project (picked in the income drawer's project typeahead) shows in its Unpaid total
+    tier: secondary
+    paths:
+      - src/components/ui/ProjectTypeahead.tsx
+      - src/hooks/useClientProjectCascade.ts
+    steps:
+      - Turn on Projects, add a client and a project for it
+      - + Add › Income, type a title and $1,200, open More details, pick the project in the project field
+      - Save, open Projects, open the Unpaid amount's currency breakdown on the project's row
+    expect:
+      - Picking the project fills in its client
+      - The project's Unpaid breakdown shows $1,200 USD
+  - id: detail
+    title: The project detail lists income logged against it and adds more with the project prefilled
+    tier: secondary
+    paths:
+      - src/pages/projects/ProjectDetailPage.tsx
+      - src/components/filters/StatusSegment.tsx
+      - src/components/ui/ProjectTypeahead.tsx
+      - src/hooks/useClientProjectCascade.ts
+    steps:
+      - Turn on Projects, create a project for a client, log $800 of income against it
+      - Open the project from the Projects index
+      - Click Add Transaction, fill a title and $200, save
+      - Open the Transactions tab
+    expect:
+      - The detail page is titled with the project and names its client
+      - The income drawer opens with the project and its client already filled in
+      - The Transactions tab lists both entries with their amounts, and the Unpaid breakdown reads $1,000 USD

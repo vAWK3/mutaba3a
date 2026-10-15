@@ -332,3 +332,29 @@ test('with a second business, Clients shows one Malafat suggestion; its link ope
     await expect(card).toHaveCount(0);
   });
 });
+
+test(
+  'Add Client names a client, refusing an empty name, and lists it',
+  { tag: '@web.clients.add-client' },
+  async ({ page, step }) => {
+    await step('Open a fresh install at /clients', async () => {
+      await openFreshApp(page, '/clients');
+    });
+
+    const drawer = page.getByRole('dialog').filter({ hasText: 'New Client' });
+    await step('Click Add Client, then Save with the name empty', async () => {
+      await page.getByRole('button', { name: 'Add Client' }).click();
+      await expect(drawer).toBeVisible();
+      await drawer.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(drawer.getByText('Name is required')).toBeVisible();
+      await expect(drawer).toBeVisible();
+    });
+
+    await step('Type "Acme Studio" and Save', async () => {
+      await drawer.getByPlaceholder('Client name...').fill('Acme Studio');
+      await drawer.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(drawer).toBeHidden();
+      await expect(page.getByRole('link', { name: 'Acme Studio' }).first()).toBeVisible();
+    });
+  },
+);

@@ -1,0 +1,87 @@
+app: web
+area: businesses
+title: Businesses (profiles)
+tier: secondary
+paths:
+  - src/hooks/useActiveProfile.ts
+  - src/lib/profileStore.ts
+  - src/components/ui/profileAvatarStyle.ts
+features:
+  - id: create
+    title: Add a second business from Settings; the switcher lists both and the app keeps working in the first
+    tier: secondary
+    paths:
+      - src/components/drawers/BusinessProfileDrawer.tsx
+      - src/db/profileDefault.ts
+      - src/components/ui/ProfileBadge.tsx
+      - src/components/ui/ProfileBadge.css
+    steps:
+      - Open a fresh install, then Settings
+      - Click + Add Profile, type a name, pick ILS as the default currency, save
+      - Open the sidebar's business switcher
+      - Switch to the new business and open a new income entry
+    expect:
+      - With one business the top bar names no business
+      - Settings lists both; the first stays the only Default
+      - The switcher lists both businesses; the top bar names the working one (the first)
+      - In the new business a new income entry starts in ILS and is filed in it
+  - id: switch
+    title: Switching business in the sidebar shows only that business's entries, and the choice survives a reload
+    tier: secondary
+    paths:
+      - src/components/ui/ProfileBadge.tsx
+    steps:
+      - With two businesses, log an entry in the first
+      - Switch to the second in the sidebar and log an entry there
+      - Reload
+      - Switch back to the first
+    expect:
+      - The top bar names the working business, with its initial as a badge
+      - Each business's Income list shows only its own entry
+      - After a reload the app is still in the business chosen last
+  - id: quick-picker
+    title: Under All businesses, + Add asks which business first; Escape cancels and the pick files the entry there (MUT-57, MUT-89)
+    tier: secondary
+    legacy: [MUT-57, MUT-89]
+    paths:
+      - src/components/ui/ProfileQuickPicker.tsx
+      - src/components/ui/ProfileQuickPicker.css
+      - src/hooks/useProfileAwareAction.ts
+      - src/hooks/useAddMenuActions.ts
+    steps:
+      - With two businesses, choose All businesses on Home
+      - Click Add, then Income
+      - Press ArrowDown, then Escape
+      - Click Add, Income, pick the second business, log an entry
+    expect:
+      - The top bar reads All businesses
+      - A "Choose profile" list of both businesses opens with focus on the first; ArrowDown moves to the second
+      - Escape closes it with no drawer and focus back on Add
+      - The pick opens New Income, and the saved entry is in the second business only
+  - id: all-businesses
+    title: All businesses on Home and Clients tags each row with its business; other screens never offer it; picking a business turns it off (MUT-89)
+    tier: secondary
+    legacy: [MUT-89]
+    paths:
+      - src/components/ui/ProfileBadge.tsx
+      - src/components/ui/ProfileBadge.css
+    steps:
+      - Log an entry due soon in each of two businesses
+      - Open the switcher on Income
+      - On Home choose All businesses, then open Clients
+      - Pick the first business
+    expect:
+      - Income's switcher has no All businesses
+      - Home's Needs Attention lists both entries, each tagged with its business name
+      - Clients keeps All businesses and tags each client with its business
+      - Picking a business turns it off; Clients then lists only that business's client
+  - id: shared-client
+    title: A client billed by two businesses shows an entry count per business on Clients
+    tier: tertiary
+    paths:
+      - src/db/crossProfileStats.ts
+    steps:
+      - Log an entry for the same client in each of two businesses
+      - Open Clients
+    expect:
+      - The client is listed once, with a "1 entries" badge for each business, titled with the business name

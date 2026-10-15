@@ -1,7 +1,7 @@
 # Mutaba3a release entry points.
 #
-#   make release web      Netlify frontend  (bump → gates → commit → push main)
-#   make release server   Cloud Run API + hosted portal (bump → gates → deploy.sh)
+#   make release web      Netlify frontend  (bump → gates → commit → push main → tag web-v<x>)
+#   make release server   Cloud Run API + hosted portal (bump → gates → deploy.sh → tag api-v<x>)
 #   make release full     server, then web — each gated and confirmed on its own
 #
 # Desktop (DMG, notarization, GitHub release) is a separate pipeline
@@ -198,6 +198,7 @@ release-web: preflight-web
 	git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock; \
 	git diff --cached --quiet || git commit -m "release: web v$$version"; \
 	git push origin $(RELEASE_BRANCH); \
+	scripts/tag-release.sh web "$$version" --push; \
 	printf '\n$(C_GREEN)✓ v%s pushed to %s — Netlify is building$(C_OFF)\n' "$$version" '$(RELEASE_BRANCH)'; \
 	printf '$(C_DIM)Watch the build, then hard-reload the site and confirm the version in Settings.$(C_OFF)\n\n'
 
@@ -239,7 +240,8 @@ release-server: preflight-server
 	  printf '$(C_CYAN)▶ pushing %s so %s is reachable by everyone else$(C_OFF)\n' '$(RELEASE_BRANCH)' "$$sha"; \
 	  git push origin $(RELEASE_BRANCH); \
 	fi; \
-	cd server && ./scripts/deploy.sh
+	(cd server && ./scripts/deploy.sh); \
+	scripts/tag-release.sh api "$$version" --push
 
 # ---------------------------------------------------------------------------
 # release full — server then web, back to back. Server first so the API a

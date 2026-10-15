@@ -5,6 +5,8 @@ tier: core
 paths:
   - src/pages/clients/**
   - src/components/clients/**
+  - src/hooks/useSortState.ts
+  - src/components/ui/SortableHeader.*
 features:
   - id: owed-now-parity
     title: "The Clients strip's Owed Now equals Home's, including a No client row (MUT-83)"
@@ -115,4 +117,15 @@ features:
     expect:
       - One card for law firms and accounting offices with a link tagged web-local and second-business; none while searching
       - The link opens Malafat's contact page in a new tab; the card goes and stays gone after a reload
-
+  - id: add-client
+    title: Add Client on an empty Clients page names a client, refusing an empty name, and lists it
+    tier: secondary
+    paths:
+      - src/components/drawers/ClientDrawer.tsx
+    steps:
+      - Open a fresh install at /clients
+      - Click Add Client, then Save with the name empty
+      - Type "Acme Studio" and Save
+    expect:
+      - '"Name is required" shows and the drawer stays open'
+      - The drawer closes and Acme Studio is listed on Clients

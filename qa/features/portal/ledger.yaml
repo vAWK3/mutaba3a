@@ -1,0 +1,72 @@
+app: portal
+area: ledger
+title: Receivables, payments and documents
+tier: secondary
+# The portal's read lists (hosted-portal.md §7.3): filters in the URL, the shared table.
+paths:
+  - src/hosted/components/FilterControls.tsx
+  - src/hosted/components/HostedTable.tsx
+  - src/hosted/components/QueryView.tsx
+  - src/hosted/components/ReadOnlyNotice.tsx
+  - src/hosted/data/filters.ts
+  - src/hosted/data/queries.ts
+  - src/hosted/pages/views/shared.tsx
+features:
+  - id: receivables
+    title: Receivables opens on what is still open; Settled, All, client, matter and currency filters narrow it in the URL, and Clear filters undoes them
+    tier: secondary
+    paths:
+      - src/hosted/pages/views/ReceivablesList.tsx
+    steps:
+      - Open Receivables
+      - Choose Settled, then All
+      - Pick a client, then the currency USD
+      - Clear filters
+    expect:
+      - Open is selected and the server is asked for status=OPEN; overdue and partly paid entries show their status and outstanding
+      - Settled lists only the paid entry
+      - The client filter sends customerId and the matter filter offers only that client's matters
+      - A filter with no match says "Nothing matches these filters."; Clear filters returns to the open list
+  - id: payments
+    title: Payments lists what was received; a row opens to show which receivables it paid, and the status and date filters reach the server
+    tier: secondary
+    paths:
+      - src/hosted/pages/views/PaymentsList.tsx
+    steps:
+      - Open Payments
+      - Show where a payment went, then one applied nowhere, and hide it
+      - Choose Reversed, then set Received from
+    expect:
+      - Each payment shows its method, amount, not-yet-applied amount and status
+      - The allocations table names the matter, the amount applied and what is left; an unapplied payment says so
+      - Reversed sends status=REVERSED; Received from sends receivedAfter
+  - id: documents
+    title: Documents lists invoices and receipts; Download goes to a signed link the browser saves, a failed download says so, and still-uploading files offer none
+    tier: secondary
+    paths:
+      - src/hosted/pages/views/DocumentsList.tsx
+      - src/hosted/data/download.ts
+    steps:
+      - Open Documents
+      - Download a file while the server fails, then again
+      - Filter to receipts
+    expect:
+      - Each document shows its client and invoice number; a pending upload reads "Still uploading" with no Download
+      - A failed download shows "Couldn't prepare the download. Try again."
+      - Download hands the signed storage URL to the browser as a download and the page stays
+      - The Type filter sends kind=RECEIPT
+  - id: read-only
+    title: On a Malafat-fed profile, Receivables and Payments say Malafat records income there and offer no Add income or Record payment, even from a link
+    tier: secondary
+    paths:
+      - src/hosted/components/ReadOnlyNotice.tsx
+      - src/hosted/data/incomeAffordances.ts
+      - src/hosted/components/IncomeDrawerHost.tsx
+    steps:
+      - Open Receivables on a Malafat-fed firm, then Payments
+      - Open Payments with ?newIncome=received
+      - Open Payments on an owned profile
+    expect:
+      - The note "Malafat records income and payments for this profile. To change them, use Malafat." shows, with no Add income or Record payment
+      - The link opens no drawer
+      - An owned profile shows no note and offers Add income

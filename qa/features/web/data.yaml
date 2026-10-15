@@ -1,0 +1,123 @@
+app: web
+area: data
+title: Your data (import, back up, restore, delete, unassigned records)
+tier: secondary
+# Every flow below enters through Settings › Your data › Restore, which reads the
+# picked file once and says where it goes (dataFiles), and reaches storage through
+# the dataset repository.
+paths:
+  - src/db/dataset.ts
+  - src/lib/dataFiles.ts
+features:
+  - id: csv-import
+    title: A CSV of income imports through Restore, with a validation preview that holds back the broken row
+    tier: secondary
+    paths:
+      - src/pages/settings/ImportDataPage.tsx
+      - src/pages/settings/ImportDataPage.css
+      - src/components/csv/CSVValidationPreview.tsx
+      - src/components/csv/CSVValidationPreview.css
+      - src/utils/csv.ts
+      - src/utils/csvValidation.ts
+      - src/db/csvImport.ts
+    steps:
+      - Open Settings, click Restore… and pick a CSV with one client and three income rows, one of them without a date
+      - Choose the business to file it under, then Next Validate Data
+      - Read the preview, then Import 3 Rows (the client and the two good entries)
+      - Open Income
+    expect:
+      - The preview counts 1 client and 3 income rows
+      - Validation shows 4 rows, 3 selected; both good income rows are New and ticked, the undated one is an error ("Date is required for income") whose checkbox cannot be ticked
+      - The import reports 2 transactions
+      - Income lists both good entries under the new client, one Paid and one Unpaid; the broken row is not there
+  - id: csv-new-client
+    title: A client that is new to this device shows as New in the CSV validation preview, not Duplicate
+    tier: tertiary
+    manual: true
+    # Product bug: validateCSVImport (src/utils/csvValidation.ts) adds the CSV's own client and
+    # project names to the "already exists" list before validating, so every new client or project
+    # row in a CSV is labelled Duplicate ("Client with this name already exists") and the preview
+    # says "1 duplicate detected. Existing records will be reused". The row still imports as a new
+    # client. The spec states the correct behaviour; un-manual it once fixed.
+    paths:
+      - src/utils/csvValidation.ts
+      - src/components/csv/CSVValidationPreview.tsx
+    steps:
+      - Click Restore… and pick a CSV with a client that does not exist yet and one entry for it
+      - Choose the business, then Next Validate Data
+    expect:
+      - The client row reads New with no warning
+      - The summary shows New 2, Duplicates 0, and no "duplicate detected" notice
+  - id: business-import
+    title: A business exported as JSON comes back through Restore as a new business
+    tier: secondary
+    paths:
+      - src/pages/settings/ImportDataPage.tsx
+      - src/db/profileImport.ts
+    steps:
+      - Log one entry, then export the default business as JSON from Export a business
+      - Click Restore… and pick that file
+      - Choose Create a new profile instead of the suggested merge, then Import JSON
+    expect:
+      - The import page names the business and suggests merging into the matching one
+      - It reports 1 profile and 1 transaction imported
+      - Settings › Businesses now lists two businesses
+  - id: delete-and-restore
+    title: Delete all data asks for a backup and the typed word, and that backup restores everything
+    tier: secondary
+    paths:
+      - src/components/modals/DeleteAllDataModal.tsx
+      - src/components/modals/DeleteAllDataModal.css
+      - src/components/modals/RestoreBackupModal.tsx
+      - src/db/backup.ts
+      - src/utils/backupDownload.ts
+    steps:
+      - Log one entry, then Back up now in Settings › Your data
+      - Click Delete all data…, back up in step 1, type DELETE and delete permanently
+      - Open Income
+      - Back in Settings, click Restore…, pick the backup and Replace everything
+    expect:
+      - Back up now downloads mutaba3a-backup-v<schema>-<date>.json and the row says when it last happened
+      - The typed word stays disabled until the backup is made, and Delete permanently until the word is typed
+      - After deleting, the app returns Home and Income is empty
+      - The restore dialog names the backup's date and record count, and after Replace everything the entry and its client are back
+  - id: unassigned-records
+    title: Records from an old export with no business show a banner; Review now assigns them and the integrity check comes back clean
+    tier: tertiary
+    paths:
+      - src/pages/settings/ImportDataPage.tsx
+      - src/components/layout/OrphanedRecordsBanner.tsx
+      - src/components/drawers/OrphanedRecordsDrawer.tsx
+      - src/hooks/useOrphanedRecords.ts
+      - src/db/orphanedRecords.ts
+      - src/db/integrityCheck.ts
+    steps:
+      - Click Restore… and pick a pre-business (legacy) JSON export with one client and one income entry, then Import JSON
+      - Run the Data Integrity Check in Settings
+      - Click Review now on the banner and Assign all to Default Profile
+      - Run the check again and open Income
+    expect:
+      - The import page warns that a legacy file replaces everything
+      - The banner says 2 records aren't assigned to any profile, and the check finds 2 issues
+      - The drawer lists the client and the entry; assigning them closes it with "2 records assigned." and the banner goes away
+      - The check now finds no issues, and the entry shows in Income
+  - id: older-backup
+    title: A backup made by an older build restores in full - the pending migration review comes back, receipts download as a ZIP, retained invoices and engagements survive
+    tier: tertiary
+    paths:
+      - src/components/modals/MigrationWizard.tsx
+      - src/components/modals/MigrationWizard.css
+      - src/lib/zipExport.ts
+      - src/db/retained/documentSchema.ts
+      - src/db/retained/engagementSchema.ts
+      - src/db/backup.ts
+    steps:
+      - Restore a backup that still carries an entry flagged for the v17 migration review, an uploaded receipt, an issued invoice and an engagement
+      - In the Data Migration dialog, download a backup, continue, review the entry, Migrate now twice, Done
+      - Reload, then Download ZIP under Export receipts
+      - Back up now
+    expect:
+      - The Data Migration review opens by itself and lists the flagged entry with its amount
+      - After migrating it says Migration Complete and does not come back after a reload
+      - The receipts ZIP holds the receipt under <business>/<month>/
+      - The new backup still carries the invoice and the engagement, and the entry is no longer flagged

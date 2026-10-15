@@ -6,6 +6,21 @@ paths:
   - src/pages/income/**
   - src/components/drawers/IncomeDrawer.tsx
   - src/lib/incomeSearch.ts
+  - src/components/drawers/incomeFormSchema.ts
+  - src/components/drawers/index.ts
+  - src/lib/incomeEntry.ts
+  - src/hooks/useIncomeQueries.ts
+  - src/hooks/useIncomeFilters.ts
+  - src/components/filters/index.ts
+  - src/components/filters/SearchInput.tsx
+  - src/components/filters/DateRangeControl.tsx
+  # The client field and the top bar's "+ Add" menu every income spec opens the drawer through
+  - src/components/ui/ClientTypeahead.tsx
+  - src/components/ui/EntityTypeahead.*
+  - src/components/ui/typeaheadHighlight.ts
+  - src/hooks/useAddMenuActions.ts
+  - src/hooks/useMenuButton.ts
+  - src/lib/dom/focusable.ts
 features:
   - id: fast-path
     title: "Title, Tab, amount, Tab, client, Enter saves — the 3-field fast path (MUT-5)"

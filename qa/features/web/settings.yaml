@@ -46,6 +46,7 @@ features:
       - src/lib/useMalafatSuggestions.ts
       - src/lib/malafatMomentStore.ts
       - src/components/drawers/BusinessProfileDrawer.tsx
+      - src/lib/malafatBusinessAdded.ts
       - src/components/layout/GoHostedCard.tsx
     steps:
       - Open Settings, read the Mutaba3a + Malafat row, add a second business, read the note, dismiss it, reload, switch the suggestions off

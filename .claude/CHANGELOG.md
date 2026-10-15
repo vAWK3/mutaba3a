@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Release QA: a true baseline, and the catalog covers the whole app
+
+**Why:** `release-qa plan` compared every release against `v0.0.67`, the last desktop tag, because `make release web|server` committed `release: web|api v<x>` but never tagged it, so all 287 commits since were "in scope" and every feature was touched. And 36% of web files / 30% of portal files were claimed by a QA feature, so most changes reached no QA check at all. ADR-081.
+
+### Added
+- `scripts/tag-release.sh <web|api> <version> [--push]`: annotated `web-v<x>` / `api-v<x>` tag on HEAD, never moving an existing tag; `--backfill` tags every past `release: <app> v<x>` commit, dated like the commit so `--sort=-creatordate` orders them. Tests: `scripts/__tests__/tag-release.test.ts` (temp git repos + Makefile/qa-config wiring).
+- `make release web` tags after the push; `make release server` tags after `deploy.sh` succeeds. Both push the tag.
+- 74 release-qa features (146 total in 29 areas): web `foundation` (core: data survives a reload), `expenses`, `retainers`, `conversions`, `projects`, `reports`, `insights`, `planning`, `data` (CSV import, backup/restore, delete all, unassigned records, migration wizard), `onboarding`, `businesses`, and `clients.add-client`; portal `shell` (core), `session` (core), `ledger`, `income`, `expenses`, `conversions`, `profiles`. One tagged spec per feature, each passing twice on preview builds. `qa/support/portalApi.ts` is an in-memory hosted API for portal specs.
+
+### Changed
+- `qa/qa.config.mjs`: web reads its baseline from `web-v*`, the portal from `api-v*` (it ships in the API image). Tauri-only `UpdateBanner`/`useTauriUpdater` leave the web watch; the portal-only `SegmentedTabs` moves to the portal's.
+- Existing areas claim the shared files their specs already drive (income: typeahead, + Add menu, filters; record-payment; drawer-motion: `ui/drawer/**`; landing; navigation; brand; settings).
+- Coverage: web 36% → 92% of watched files mapped, portal 30% → 100%. The 31 web files left are dead code or unreachable (TD-143).
+
+### Found (product bugs, specs written to the correct behaviour and marked `manual: true` until fixed)
+- Web Conversions list never refreshes after log/edit/delete (`useConversionQueries` invalidates no `['conversions']` key) — `web.conversions.log`, `.edit-delete`.
+- CSV import labels every new client/project "Duplicate" (`csvValidation.ts` seeds the existing-names set with the CSV's own names) — `web.data.csv-new-client`.
+- Planning's Projections CSV exports confidence ×100 (7500%) (`exportPlan.ts:42`) — `web.planning.export-confidence` (`test.fail`).
+- Demo mode closes before its summary and leaves you on your own business (`DemoSeedModal` + `useActiveProfile` repair effect) — `web.onboarding.demo-summary` (`test.fail`).
+- Portal expense drawer never refetches on 409, so every later Save is refused again (`expenseApiErrors.ts`) — `portal.expenses.edit-conflict`.
+- Not specced: the retainer schedule panel shows `slice(-6)` (the far future, never the due periods) for open-ended retainers; CSV `conversion` rows import with no profileId.
+
 ## [Unreleased] - 2026-10-15 — The boot splash: the mark on the canvas before JS, handing off to the loader (MUT-207)
 
 **Why:** `index.html` and `hosted.html` shipped an empty `#root`, so a cold or slow load painted the browser's white (even in dark mode) for seconds, then a second, different screen: the portal's wordmark that jumped 18 px when its spinner came, or the landing's unlocalised "Loading...". Brief: `.claude/designs/mut-207-boot-splash.md` (eng review R1, design review DR3–DR18). ADR-080.

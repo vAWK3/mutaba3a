@@ -1,0 +1,72 @@
+app: portal
+area: income
+title: Income capture on an owned profile
+tier: secondary
+# Add income and Record payment (MUT-133). Not core: only owned profiles write income here.
+paths:
+  - src/hosted/components/IncomeDrawerHost.tsx
+  - src/hosted/components/IncomeCaptureDrawer.tsx
+  - src/hosted/components/incomeForm.ts
+  - src/hosted/components/incomeApiErrors.ts
+  - src/hosted/components/ClientPicker.tsx
+  - src/hosted/components/ProjectPicker.tsx
+  - src/hosted/components/Drawer.tsx
+  - src/hosted/components/Toast.tsx
+  - src/hosted/data/incomeAffordances.ts
+  - src/hosted/data/incomeQueries.ts
+  - src/hosted/data/attemptKey.ts
+features:
+  - id: add-received
+    title: Add income, Received, from Payments sends the canonical amount, client and method with an Idempotency-Key, says Saved, and lists the payment
+    tier: secondary
+    paths:
+      - src/hosted/pages/views/PaymentsList.tsx
+    steps:
+      - Open Payments and choose + Add income
+      - Type 1,200, pick Client 1, open More details and choose Bank transfer
+      - Save income
+    expect:
+      - Received is chosen and the defaults read "ILS · today · cash"
+      - POST /v1/income gets {kind received, amount 1200.00, ILS, today, the client, BANK} with an Idempotency-Key
+      - The drawer closes, "Saved · ₪1,200.00 received from Client 1" is announced, the payment is listed, and focus returns to + Add income
+  - id: owed-errors
+    title: Add income, Owed, says at the field what is missing or wrong, keeps the entry through a refusal or a dropped connection, and a retry reuses the attempt's Idempotency-Key
+    tier: secondary
+    paths:
+      - src/hosted/pages/views/ReceivablesList.tsx
+    steps:
+      - Open Receivables and choose + Add income
+      - Save with nothing filled in, then with $50
+      - Fill 750 for Client 1 and save while the server says that client is not on the profile
+      - Pick Client 2 and save while the connection drops, then save again
+    expect:
+      - Owed is chosen; empty Save shows "Enter an amount" and "Owed needs a client"; $50 shows "That amount is in USD; this entry is in ILS"
+      - The refusal shows "This client isn't on this profile" under Client
+      - The dropped save shows "Couldn't reach the server. Try again." and keeps the values
+      - The retry saves once under the same Idempotency-Key as the dropped try (a different one from the refused body), and the entry is open on Receivables with Record payment
+  - id: record-payment
+    title: Record payment on an open Owed entry offers what is left, says what a typed amount leaves, refuses more than is left, and shows the entry partly paid
+    tier: secondary
+    paths:
+      - src/hosted/components/RecordPaymentDrawer.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+    steps:
+      - Open Receivables and choose Record payment on the entry captured in the portal
+      - Type 700, then 200 by bank transfer, and record while the server says less is left now
+      - Record again
+    expect:
+      - Only the captured (ADJUSTMENT) entry offers Record payment; the drawer is titled "Record payment · ₪500.00 left" with 500.00 filled in and "Paid in full"
+      - 700 reads "Exceeds what's left" and Record payment is disabled; 200 reads "₪300.00 still owed"
+      - The race shows "That's more than what's left now (₪150.00)" and keeps 200
+      - POST …/settle gets {200.00, today, BANK}; "Payment recorded · ₪200.00 from Client 1" is announced and the entry is Partly paid with 300.00 left
+  - id: from-client
+    title: Add income from a client's page starts as Owed with that client filled in
+    tier: secondary
+    paths:
+      - src/hosted/pages/views/ClientDetailPage.tsx
+    steps:
+      - Open a client and choose + Add income
+      - Type 300 and save, then open the Receivables tab
+    expect:
+      - Owed is chosen and Client shows the client
+      - The POST names that client, and the entry is on the client's Receivables

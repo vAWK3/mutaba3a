@@ -6,6 +6,7 @@ tier: tertiary
 paths:
   - src/components/drawers/Drawer.tsx
   - src/lib/motion/**
+  - src/components/ui/drawer/**
 features:
   - id: escape-exit
     title: Escape closes a drawer at once, and its exit snapshot slides out to the trailing edge

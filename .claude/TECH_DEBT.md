@@ -18,6 +18,25 @@
 
 ## Open Debt
 
+### TD-143: Dead and unreachable web code found while mapping the release-QA catalog
+**Status**: Open
+**Ticket**: none (found 2026-10-15, release-QA coverage pass)
+**Added**: 2026-10-15
+**Priority**: Low
+**Impact**: These 31 files are the only web files no QA feature claims, because nothing a user does reaches them. Each one still costs review and type-check time, and makes `release-qa lint` noisy.
+- Imported by nothing: `src/assets/react.svg`, `components/filters/{CurrencyTabs,TypeSegment}.tsx`, `components/transactions/**` (3), `components/ui/{InlineStats,StepperInput(.css),UnifiedAmount,ProfileContextChip(.css)}`, `components/ui/VendorTypeahead.css`, `components/modals/ProfilePickerModal(.css)`, `hooks/{useTransactionActions,useTransactionFilters}.ts`, `lib/aggregations.ts` (the app uses `db/aggregations.ts`), `pages/reports/**` (2; `/reports` redirects to `/insights`), `pages/retainers/index.ts`, `services/oauth/**` (3) + `services/tokenStore.ts`.
+- Reachable but not by a person: `components/examples/ThemeDemo(.css)` (the `/theme-demo` dev route ships to production), `db/migration-safety.ts` (console logs and an internal backup on upgrade, nothing visible), `db/retained/monthCloseSchema.ts` (types only).
+- A product question: `components/ui/MacDownloadBanner(.css)` still offers the desktop download to Mac browsers although the desktop is retired until v2.
+**Fix**: delete the first group, drop or gate `/theme-demo`, decide the Mac banner; re-run `release-qa lint`.
+
+### TD-144: Drawer form labels are not tied to their inputs
+**Status**: Open
+**Ticket**: none (found 2026-10-15, release-QA specs)
+**Added**: 2026-10-15
+**Priority**: Medium
+**Impact**: In the Expense, Retainer, Project, Client and Plan Assumption drawers (web) and the hosted expense drawer's Client/Matter pickers, `<label>`s have no `htmlFor`/`id` pairing, so screen readers announce unnamed fields and specs must find them by placeholder. The web Insights currency filter has no accessible name.
+**Fix**: pair each label with its control (the Income drawer already does), then switch the specs to `getByLabel`.
+
 ### TD-142: The portal's account menu holds a Language row that is no menu child
 **Status**: Open
 **Ticket**: none (found by MUT-191's axe check, 2026-10-15)

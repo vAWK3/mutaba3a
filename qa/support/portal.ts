@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, Request, Route } from '@playwright/test';
 
 /**
  * A signed-in hosted portal with every /v1 call stubbed (MUT-191), so a portal
@@ -26,7 +26,7 @@ export interface StubProfile {
 export const office = (id: string, name: string): StubProfile => ({ id, name, type: 'BUSINESS', owned: true, writerOfRecord: null });
 export const malafatFirm = (): StubProfile => ({ id: FIRM, name: 'Haddad & Partners', type: null, owned: false, writerOfRecord: 'MALAFAT' });
 
-function hostedProfile(p: StubProfile) {
+export function hostedProfile(p: StubProfile) {
   const fed = p.writerOfRecord === 'MALAFAT';
   return {
     id: p.id,
@@ -46,7 +46,7 @@ function hostedProfile(p: StubProfile) {
   };
 }
 
-function customer(i: number) {
+export function customer(i: number) {
   return {
     id: `0000${String(i).padStart(4, '0')}-0000-4000-8000-000000000000`,
     name: `Client ${i + 1}`,
@@ -68,9 +68,24 @@ export interface PortalStub {
   malafatChanges: unknown[];
 }
 
+/** The signed-in person's `/v1/me` answer for these profiles (the shape openSignedInPortal serves). */
+export function meBody(profiles: StubProfile[], language: 'en' | 'ar' = 'en', suggestions = { off: false, dismissed: [] as string[] }) {
+  return {
+    user: { id: '99999999-9999-4999-8999-999999999999', email: 'nour@office.ps', displayName: 'Nour Haddad', locale: language, malafatSuggestions: suggestions },
+    profiles: profiles.map(hostedProfile),
+    limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },
+  };
+}
+
+/**
+ * A spec's own answer for a /v1 call, asked before the defaults below: return
+ * true once it has fulfilled (or aborted) the route, false to fall through.
+ */
+export type PortalHandler = (route: Route, request: Request, url: URL) => Promise<boolean> | boolean;
+
 export async function openSignedInPortal(
   page: Page,
-  { profiles, clients = 0, language = 'en', path }: { profiles: StubProfile[]; clients?: number; language?: 'en' | 'ar'; path: string },
+  { profiles, clients = 0, language = 'en', path, handle }: { profiles: StubProfile[]; clients?: number; language?: 'en' | 'ar'; path: string; handle?: PortalHandler },
 ): Promise<PortalStub> {
   const stub: PortalStub = { malafatChanges: [] };
   let list = profiles;
@@ -81,15 +96,8 @@ export async function openSignedInPortal(
     const request = route.request();
     const { pathname } = new URL(request.url());
     const method = request.method();
-    if (method === 'GET' && pathname === '/v1/me') {
-      return route.fulfill(
-        json({
-          user: { id: '99999999-9999-4999-8999-999999999999', email: 'nour@office.ps', displayName: 'Nour Haddad', locale: language, malafatSuggestions: suggestions },
-          profiles: list.map(hostedProfile),
-          limits: { ownedProfiles: list.filter((p) => p.owned).length, maxOwnedProfiles: 6 },
-        }),
-      );
-    }
+    if (handle && (await handle(route, request, new URL(request.url())))) return;
+    if (method === 'GET' && pathname === '/v1/me') return route.fulfill(json(meBody(list, language, suggestions)));
     if (method === 'PATCH' && pathname === '/v1/me/malafat-suggestions') {
       const change = request.postDataJSON() as { off?: boolean; dismiss?: string[] };
       stub.malafatChanges.push(change);

@@ -15,8 +15,9 @@ export default {
     web: {
       label: 'Web app',
       platform: 'web',
-      // Mutaba3a tags releases (v0.0.N); Malafat's apps use commit-grep instead.
-      release: { strategy: 'tag', pattern: 'v*' },
+      // `make release web` tags web-v<version> (scripts/tag-release.sh). The plain v* tags
+      // belong to the retired desktop pipeline and stopped at v0.0.67.
+      release: { strategy: 'tag', pattern: 'web-v*', version: 'web-v(.+)' },
       watch: [
         'src/**',
         '!src/**/__tests__/**',
@@ -25,6 +26,11 @@ export default {
         '!src/**/*.d.ts',
         '!src/hosted/**', // separate deploy target (MUT-34/45) — its own future qa app, not this one
         '!src/demo/**', // seed data for local dev, not a user-facing flow
+        // Desktop-only (Tauri): they render nothing in a browser, so no web spec can reach them.
+        '!src/components/ui/UpdateBanner.*',
+        '!src/hooks/useTauriUpdater.ts',
+        // Only the hosted portal renders it; it is in the portal app's watch instead.
+        '!src/components/filters/SegmentedTabs.tsx',
       ],
       baseURL: 'http://localhost:5173',
       attachURL: 'http://localhost:5173',
@@ -37,9 +43,11 @@ export default {
     portal: {
       label: 'Hosted portal',
       platform: 'web',
-      release: { strategy: 'tag', pattern: 'v*' },
+      // The portal ships inside the API image (server/scripts/deploy.sh builds dist-hosted),
+      // so its last release is the last `make release server`: api-v<version>.
+      release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
       // The portal's own code, plus the shared token and font files it renders with (MUT-102)
-      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', '!src/hosted/**/__tests__/**', '!src/**/*.test.{ts,tsx}'],
+      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/components/filters/SegmentedTabs.tsx', '!src/hosted/**/__tests__/**', '!src/**/*.test.{ts,tsx}'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',

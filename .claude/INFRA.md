@@ -40,6 +40,8 @@ the hosted epic's server side, i.e. users and sessions, server-enforced
 writability, and expenses. Database migrations are applied through
 `mut42_expenses`.
 
+> **Release tags (ADR-081, 2026-10-15).** `make release web` pushes a `web-v<x>` tag with the release commit; `make release server` pushes `api-v<x>` once `deploy.sh` succeeds. release-qa reads its baseline from them (web ← `web-v*`, portal ← `api-v*`). Past releases were backfilled locally; push them once with `git push origin --tags`.
+
 > **Observed 2026-10-14 (MUT-174 planning):** production `GET /health` reports `version: eb4a9c8` (main at the `release: api v0.3.7` commit), so production now carries everything on main through MUT-194, including MUT-61 capture and MUT-100/107 contingency. The rows below still show the last *recorded* deploy; whoever deploys next should refresh them.
 
 One known defect: production applied the **original** M7 migration, so the

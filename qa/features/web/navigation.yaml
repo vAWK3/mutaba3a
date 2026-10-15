@@ -7,6 +7,7 @@ paths:
   - src/components/layout/**
   - src/router.tsx
   - src/lib/features/**
+  - src/hooks/useCheckForUpdates.ts
 features:
   - id: core-sidebar
     title: A fresh install shows the core four (Home, Clients, Income, Settings) and each one navigates

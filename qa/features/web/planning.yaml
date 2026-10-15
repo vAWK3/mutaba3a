@@ -1,0 +1,69 @@
+app: web
+area: planning
+title: Planning (optional area)
+tier: secondary
+paths:
+  - src/pages/planning/**
+  - src/db/planRepository.ts
+  - src/hooks/usePlanQueries.ts
+  - src/services/planCalculationService.ts
+features:
+  - id: create-plan
+    title: Turn on Planning and create a first plan from the empty state
+    tier: secondary
+    steps:
+      - Turn on Planning in Settings › Advanced features
+      - Open Planning from the sidebar
+      - Click Create Your First Plan
+    expect:
+      - The empty state reads Start Planning Your Finances
+      - My Plan opens on its Base scenario, with an empty Assumptions panel offering + Add Revenue and a Monthly Cash Flow timeline ending at $0
+  - id: add-assumption
+    title: Adding plan assumptions through the drawer updates the timeline and the summary
+    tier: secondary
+    paths:
+      - src/components/drawers/PlanAssumptionDrawer.tsx
+      - src/components/drawers/PlanAssumptionDrawer.css
+      - src/components/ui/CurrencySummaryPopup.tsx
+    steps:
+      - Turn on Planning and create a plan
+      - In Assumptions click + Add, choose Revenue, label it Retainer income, enter 1000, keep Recurring Monthly, save
+      - Open Avg Monthly Revenue's currency breakdown
+      - Add a $400 monthly Expenses assumption, Studio rent
+    expect:
+      - Retainer income is listed as Monthly at $1,000, the timeline ends at $12,000, the Avg Monthly Revenue breakdown reads $1,000 USD, and the plan insight says it is self-sustaining
+      - After Studio rent the timeline ends at $7,200 and Break-Even is reached
+  - id: edit-assumption
+    title: An assumption opens in its drawer to edit, and can be deleted
+    tier: tertiary
+    paths:
+      - src/components/drawers/PlanAssumptionDrawer.tsx
+    steps:
+      - Turn on Planning, create a plan, add a $1,000 monthly revenue assumption
+      - Click the assumption, change the amount to 500, save
+      - Click it again, Delete, confirm
+    expect:
+      - The Edit Assumption drawer opens with 1000, and after saving the timeline ends at $6,000
+      - After deleting, the assumption is gone and the timeline ends at $0
+  - id: export
+    title: Export downloads the projections and the assumptions as CSV
+    tier: tertiary
+    steps:
+      - Turn on Planning, create a plan, add a $1,000 monthly revenue assumption
+      - Click Export › Projections (CSV), then Export › Assumptions (CSV)
+    expect:
+      - My_Plan_<date>.csv has the header row and 12 months, opening at 0.00 USD and closing at 12000.00 USD
+      - My_Plan_assumptions_<date>.csv lists Retainer income as revenue, recurring, 1000.00 USD, monthly, likely
+  - id: export-confidence
+    title: "The projections export's Confidence % column reads 75% for a Likely assumption (bug: it reads 7500%)"
+    tier: tertiary
+    manual: true
+    paths:
+      - src/pages/planning/utils/exportPlan.ts
+    steps:
+      - Turn on Planning, create a plan, add a Likely $1,000 monthly revenue assumption
+      - Click Export › Projections (CSV)
+    expect:
+      - Every month's Confidence % reads 75%
+    # Known bug: exportPlan.ts multiplies confidenceScore by 100, but planCalculationService already returns a
+    # percentage, so the column reads 7500%. The spec (test.fail) asserts the correct value; unmark manual when fixed.

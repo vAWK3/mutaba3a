@@ -2476,3 +2476,16 @@ Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 | `qa/specs/web/brand.spec.ts` | E2E | `@web.brand.boot-splash`: scripts off, OS light/dark, `/app/` and `/`: canvas background, the right mark loaded, 80 px, centred ±1 px |
 | `qa/specs/portal/signin.spec.ts` | E2E | `@portal.signin.boot-splash`: scripts off light/dark; the hand-off (React's mark or loader keeps the static centre and size ±1 px, then the status); axe on the boot screen light/dark. `@portal.signin.boot-slow-session` (updated): mark first, no wordmark, the bloom in place without a fade, "Still connecting…" at 3 s, sign-in, no CSP error; reduced motion writes the words under a still mark |
 
+
+## Release-QA catalog covers the whole app; release tags (2026-10-15, ADR-081)
+
+| Where | Kind | What it proves |
+|---|---|---|
+| `scripts/__tests__/tag-release.test.ts` | Unit (temp git repos) | `tag-release.sh` writes annotated `web-v<x>`/`api-v<x>` on HEAD, is idempotent, never moves a tag, rejects bad args; `--backfill` tags every `release:` commit dated like it, newest first by `creatordate`; `make release web/server` call it (server only after `deploy.sh`); qa config reads `web-v*` / `api-v*` |
+| `qa/specs/web/foundation.spec.ts` | E2E (release-qa, **core**) | `.persists`: an unpaid and a paid entry survive a reload (Dexie + repository + UI kit); `.row-actions-duplicate` |
+| `qa/specs/web/{expenses,retainers,conversions,projects,reports,insights,planning,data,onboarding,businesses}.spec.ts` | E2E (release-qa) | One test per feature in the matching `qa/features/web/*.yaml`; each optional area is switched on through Settings → Advanced features |
+| `qa/specs/portal/{shell,session,ledger,income,expenses,conversions,profiles}.spec.ts` | E2E (release-qa, stubbed `/v1` via `qa/support/portalApi.ts`) | `shell.navigate` and `session.return-to-next` are core; income/expense writes assert POST bodies and Idempotency-Key reuse on retry; 409 handling per drawer |
+
+- Catalog: 146 features in 29 areas (25 core). Mapped: web 92% (31 left, all TD-143), portal 100%.
+- `manual: true` until their bugs are fixed (specs already assert the right behaviour): `web.conversions.log`, `.edit-delete`, `web.data.csv-new-client`, `web.planning.export-confidence`, `web.onboarding.demo-summary`, `portal.expenses.edit-conflict`. Unmark each when its fix lands.
+- On `vite preview` builds, `web.brand.loader-slow-route` (delays `/src/...`, dev-server only by design), `web.landing.375` (the known 375 px header regression) and `portal.signin.boot-slow-session` fail; `release-qa release` uses dev servers. The other 165 pass with 4 workers.

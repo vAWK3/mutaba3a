@@ -14,6 +14,7 @@ paths:
   - public/og-card-*
   - src/components/brand/**
   - src/lib/theme/themeColorMeta.ts
+  - src/assets/brand/**
 features:
   - id: contrast-app
     title: Home, the payment drawer, Income, the income drawer, Clients beside a profile and Settings pass axe in light and dark, colour contrast included (MUT-102)

@@ -1,0 +1,114 @@
+app: web
+area: onboarding
+title: First run, Get Started and the sample data
+tier: secondary
+paths:
+  - src/components/modals/WelcomeModal.tsx
+  - src/components/modals/WelcomeModal.css
+  - src/components/modals/index.ts # the barrel AppShell mounts the welcome and the demo dialog from
+features:
+  - id: welcome-set-up
+    title: "The Welcome dialog's Set Up Now names the first business; cancelling the drawer brings the welcome back"
+    tier: secondary
+    paths:
+      - src/components/drawers/BusinessProfileDrawer.tsx
+      - src/db/seed.ts # initDatabase: a fresh install's first boot writes the default settings
+      - src/db/profileDefault.ts
+    steps:
+      - Open a fresh install
+      - Click Set Up Now
+      - Cancel the drawer
+      - Click Set Up Now again, type a business name, save
+      - Reload, then open Settings
+    expect:
+      - The welcome steps aside while the drawer is open and comes back when it is cancelled
+      - After saving, the welcome is gone (also after a reload) and the sidebar switcher shows the new business
+      - Settings lists it as the Default business
+  - id: get-started
+    title: "Skip for now makes a USD Default Profile; Home's Get Started shows two steps and Add Client takes you to the dashboard"
+    tier: secondary
+    paths:
+      - src/components/onboarding/**
+      - src/lib/onboardingStore.ts
+      - src/components/drawers/ClientDrawer.tsx
+    steps:
+      - Open a fresh install and click Skip for now
+      - Read Home's Get Started card
+      - Click Add Client, name the client, save
+    expect:
+      - The sidebar switcher shows Default Profile, and the top bar's rate reads from $1
+      - Get Started shows "Add Your First Client" with steps 1 and 2 only (Projects is off)
+      - After saving, Home shows Owed now instead of Get Started, and the client is on Clients
+  - id: get-started-skip
+    title: With Projects on, Get Started counts three steps; its Skip for now leaves an empty Home that stays after a reload
+    tier: tertiary
+    paths:
+      - src/components/onboarding/**
+      - src/lib/onboardingStore.ts
+    steps:
+      - Open a fresh install, skip the welcome, turn Projects on in Settings
+      - Open Home and read Get Started
+      - Click Skip for now
+      - Reload
+    expect:
+      - The step indicator shows 1, 2 and 3
+      - Home shows "Nothing to track yet" with Add income
+      - After the reload Home is still the empty state, with no Get Started and no welcome
+  - id: demo-mode
+    title: "?demo=1 offers demo mode: Show Demo seeds sample businesses under a Demo Mode banner that freezes time and resets"
+    tier: tertiary
+    paths:
+      - src/components/modals/DemoSeedModal.tsx
+      - src/components/modals/DemoSeedModal.css
+      - src/components/ui/DemoBanner.tsx
+      - src/components/ui/DemoBanner.css
+      - src/db/demoData.ts
+      - src/db/profileDefault.ts
+    steps:
+      - Open /?demo=1 on a fresh install and skip the welcome
+      - Read the Activate Demo Mode dialog and click Show Demo
+      - Switch to a sample business in the sidebar and open Clients
+      - Click Freeze Time, then Real Time
+      - Click Reset and confirm
+    expect:
+      - The dialog lists what the demo creates (10 clients, 60+ transactions)
+      - After Show Demo the dialog closes and a Demo Mode banner sits at the top
+      - The sample business's clients are listed
+      - Freeze Time shows "Time: Jan 15, 2025"; Real Time clears it
+      - Reset removes the banner and the sample; only Default Profile is left, with no clients
+  - id: demo-summary
+    title: "After Show Demo, a Demo Mode Activated summary opens the app on a sample business (bug: no summary, app stays on your own business)"
+    tier: tertiary
+    manual: true
+    # Product bug: DemoSeedModal.handleSeed calls activateDemo(), whose store update sets
+    # showConfirmModal false, so AppShell unmounts the modal before its success state renders: no
+    # "Demo Mode Activated" summary, no Get Started, no reload. Its setActiveProfile(demo id) then loses
+    # to useActiveProfile's repair (the profiles query has not refetched yet), so the app stays on the
+    # person's own default business with the sample out of sight. The spec asserts the intended
+    # behaviour under test.fail; switch this back to automated once fixed.
+    paths:
+      - src/components/modals/DemoSeedModal.tsx
+      - src/components/modals/DemoSeedModal.css
+    steps:
+      - Open /?demo=1 on a fresh install, skip the welcome, click Show Demo
+      - Read the summary and click Get Started
+    expect:
+      - The dialog shows "Demo Mode Activated" with the counts of clients, projects and transactions
+      - Get Started reloads the app on a sample business, with money owed on Home
+  - id: sample
+    title: "The landing page's ?sample=1 opens a sample business with no dialogs; Start with your own asks first when you added something, then clears it (MUT-78)"
+    tier: secondary
+    legacy: [MUT-78]
+    paths:
+      - src/components/ui/SampleDataBar.tsx
+      - src/components/ui/SampleDataBar.css
+      - src/db/demoData.ts
+    steps:
+      - Open /?sample=1 on a fresh install
+      - Add an income entry while looking around
+      - Click Start with your own, then Keep looking
+      - Click Start with your own, then Start fresh
+    expect:
+      - No welcome; the sample bar says "You're looking at sample data." and Home shows the sample business with money owed
+      - Start with your own warns "This also removes the 1 thing you added while looking around."; Keep looking brings the bar back
+      - Start fresh removes the bar and lands on the first run (the welcome and Get Started)

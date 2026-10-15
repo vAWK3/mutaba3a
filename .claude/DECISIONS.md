@@ -3148,3 +3148,20 @@ Mutaba3a records what happened (income, expenses, who owes what). It does not is
 - The portal's boot screen no longer spells the product name; sign-in and the error screen still do.
 - The session check now has a 15 s deadline (DR6): a hung `/v1/me` ends in BootUnreachable with Retry.
 
+---
+
+## ADR-081: Web and API Releases Are Tagged `web-v<x>` / `api-v<x>`, and release-qa Reads Its Baseline From Those Tags
+
+**Status**: Active
+**Date**: 2026-10-15
+**Context**: release-qa scopes a run to what changed since each app's last release. Its config read the newest `v*` tag, but since ADR-043 the web and API ship through `make release web|server`, which committed `release: web|api v<x>` and created no tag; `v*` tags came only from the desktop pipeline, retired at `v0.0.67`. Every QA plan therefore treated 287 commits as new. The hosted portal ships inside the API image (`server/scripts/deploy.sh` builds `dist-hosted`), not with the Netlify web deploy.
+
+**Decision**:
+1. `make release web` tags `web-v<version>` after its push; `make release server` tags `api-v<version>` after `deploy.sh` succeeds (a failed roll leaves no tag). Both push the tag. The desktop keeps plain `v*`.
+2. Tagging lives in `scripts/tag-release.sh`. It never moves a tag that already points elsewhere (a "keep version" release), and says so; the baseline then stays at the older commit, which can only widen QA scope, never hide a change.
+3. release-qa: web `{ strategy: 'tag', pattern: 'web-v*' }`, portal `pattern: 'api-v*'`.
+4. Past releases were backfilled locally with `tag-release.sh --backfill`, each tag dated like its commit.
+
+**Consequences**: `release-qa plan` scopes to real changes again. The backfilled tags exist only in this checkout until pushed (`git push origin --tags`). A release that keeps its version reuses the old tag.
+
+**Alternatives Considered**: release-qa's `commit-grep` strategy on `^release: web v` (Malafat's approach; rejected: tags are also what people and `git describe` read, and a tag survives a reworded commit); one shared tag for web + portal (rejected: they deploy separately, so their baselines differ).

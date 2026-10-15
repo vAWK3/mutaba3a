@@ -6,6 +6,10 @@ paths:
   - src/pages/landing/**
   - src/content/download-config.ts
   - src/content/malafatLinks.ts
+  - src/lib/goHosted.ts
+  - src/hooks/useInView.ts
+  - src/hooks/useDocumentTitle.ts
+  - src/hooks/useLatestRelease.ts
 features:
   - id: header-cta
     title: The header button appears only once the hero button has scrolled away, and goes to the same place (MUT-77)

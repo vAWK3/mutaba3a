@@ -1,0 +1,59 @@
+app: web
+area: retainers
+title: Retainers
+tier: secondary
+paths:
+  - src/pages/retainers/RetainersPage.tsx
+  - src/pages/retainers/RetainersPage.css
+  - src/components/drawers/RetainerDrawer.tsx
+  - src/hooks/useRetainerQueries.ts
+  - src/db/retainerRepository.ts
+features:
+  - id: create
+    title: Turn on Retainers and create a retainer for a client, with a live schedule preview
+    tier: secondary
+    steps:
+      - Turn on Retainers in Settings › Features
+      - Log some work for a new client
+      - Open Retainers from the sidebar
+      - Click New Retainer, pick the client, type an amount
+      - Read the schedule preview and save
+    expect:
+      - Picking the client fills the title as "<client> retainer"
+      - The preview lists six monthly periods at the amount, then "and more..."
+      - The list shows the retainer as a Monthly Draft with its client and amount, nothing due now
+  - id: schedule
+    title: Activating a retainer projects its schedule; past periods are due, later ones upcoming
+    tier: secondary
+    steps:
+      - Create a monthly retainer from the 1st of last month to the end of next month, paid on the 1st
+      - Select it in the list and click Activate
+    expect:
+      - The inspector shows the retainer as Active, with Pause offered
+      - The schedule shows two Due periods and one Upcoming, each at the retainer's amount
+      - The list's Due Now column shows the two due periods' total
+  - id: match-payment
+    title: Match a received payment to a due retainer period
+    tier: secondary
+    paths:
+      - src/components/drawers/RetainerMatchingDrawer.tsx
+    steps:
+      - Log a received payment from a new client
+      - Create and activate a retainer for that client with two due periods
+      - Click Match Payment, pick the payment, pick one of the retainer's due periods
+      - Confirm the match
+    expect:
+      - The drawer shows "Payment Matched!" and closes, with a "Payment matched successfully" toast
+      - The schedule shows one period Received and one still Due
+      - Due Now drops by the matched amount
+  - id: lifecycle
+    title: Pause, resume and end a retainer, then archive it
+    tier: tertiary
+    steps:
+      - Create and activate a retainer
+      - Pause it (confirm), Resume it, End it (confirm)
+      - Edit it and Archive it (confirm)
+    expect:
+      - The status follows Paused → Active → Ended, and pausing cancels the upcoming period
+      - An ended retainer offers no Pause
+      - The archived retainer leaves the list

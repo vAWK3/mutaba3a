@@ -1,0 +1,63 @@
+app: portal
+area: session
+title: Portal session
+tier: secondary
+# mut-43-auth-states.md: the gate to sign-in, sign-out, expiry and the cross-tab channel.
+paths:
+  - src/hosted/session/AuthGate.tsx
+  - src/hosted/session/SessionBridge.tsx
+  - src/hosted/session/endSession.ts
+  - src/hosted/session/me.tsx
+features:
+  - id: return-to-next
+    title: A signed-out link goes through sign-in and lands where it pointed; a next that leaves the portal lands on its home instead
+    tier: core # every signed-out visit reaches sign-in through this gate
+    paths:
+      - src/hosted/session/safeNext.ts
+      - src/hosted/pages/auth/SignInPage.tsx
+    steps:
+      - While signed out, open a link to recorded payments and sign in
+      - Open sign-in with next=//evil.example/steal and sign in
+    expect:
+      - The link goes to /sign-in?next=<the link>; signing in posts the credentials and lands on Payments with Recorded selected
+      - The off-site next is ignored and the first profile's Overview opens
+  - id: sign-out
+    title: Sign out that fails keeps you signed in and says so; then it ends the session, and the next sign-in after a sign-out starts at home
+    tier: secondary
+    paths:
+      - src/hosted/session/useSignOut.ts
+      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/components/Toast.tsx
+    steps:
+      - Sign out from the account menu while offline
+      - Sign out again
+      - Open the payments page again
+      - Sign in from /sign-in?reason=signed_out&next=<payments>
+    expect:
+      - '"Couldn''t sign out. Check your connection and try again." shows and the page stays'
+      - Sign-in reads "You've signed out." at /sign-in?reason=signed_out
+      - The payments page asks to sign in first and shows no figure
+      - After a sign-out the next sign-in lands on the portal's home, not the old page
+  - id: other-tab
+    title: Signing out in one tab signs the other tab out at once, leaving no figure on screen
+    tier: secondary
+    paths:
+      - src/hosted/session/channel.ts
+      - src/hosted/session/SessionBridge.tsx
+    steps:
+      - Open Payments in one tab and Receivables in another
+      - Sign out in the second tab
+    expect:
+      - The first tab moves to sign-in with "You've signed out." without a request of its own, and only one DELETE was sent
+  - id: expired
+    title: A session that expires mid-use goes to sign-in saying so and returns to the same view after signing in
+    tier: secondary
+    paths:
+      - src/hosted/session/SessionBridge.tsx
+      - src/hosted/api/client.ts
+    steps:
+      - On Receivables, let the session expire on the server and choose Settled
+      - Sign in
+    expect:
+      - Sign-in reads "You've been signed out. Sign in again to continue." with reason=expired and next=the settled view
+      - Signing in returns to the settled receivables
