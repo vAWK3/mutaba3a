@@ -1,0 +1,43 @@
+/* The bloom loader (MUT-206, ADR-079). Colours from the --mark-* tokens, which follow
+   data-theme through the theme cascade; sizes are the SVG's own attributes. */
+
+.brand-loader {
+  position: relative; /* the caption's anchor; also clips its .sr-only label to the loader (TD-141) */
+  display: inline-flex;
+  flex: none;
+  line-height: 0;
+}
+
+.brand-loader__svg {
+  display: block;
+  overflow: visible;
+}
+
+.brand-loader-dot { fill: var(--mark-dot); }
+.brand-loader-lavender { fill: var(--mark-lavender); }
+.brand-loader-rose { fill: var(--mark-rose); }
+.brand-loader-peach { fill: var(--mark-peach); }
+
+/* DR3: a loader that appears after its delay fades in; one shown at once (delay 0, a chained wait) doesn't. */
+.brand-loader--enter {
+  animation: brand-loader-fade var(--duration-fade) var(--ease-spring) backwards;
+}
+
+/* DR5/DR7: under the mark, out of the flow, so the mark never moves when it appears. */
+.brand-loader__caption {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-4));
+  /* Physical centring is direction-neutral: the same in Arabic and English */
+  left: 50%;
+  translate: -50% 0;
+  white-space: nowrap;
+  line-height: var(--leading-normal);
+  font-size: var(--text-label);
+  color: var(--muted);
+  animation: brand-loader-fade var(--duration-fade) var(--ease-spring) backwards;
+}
+
+@keyframes brand-loader-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

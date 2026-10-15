@@ -19,6 +19,7 @@ import { todayInZone, todayLocalISO } from '../format/dates';
 import { useAttemptKey } from '../data/attemptKey';
 import type { CreateExpenseRequest, UpdateExpenseRequest } from '../api/client';
 import { HOSTED_CURRENCIES } from '../format/currencies';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 /**
  * The hosted portal's expense capture (MUT-44). Builds on
@@ -201,8 +202,8 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
   if (isLoading) {
     return (
       <Drawer title={t('common.loading')} onClose={onClose} closeLabel={t('common.close')}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

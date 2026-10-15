@@ -101,6 +101,8 @@
   --ease-spring: var(--m-ease-spring);
   --ease-overshoot: var(--m-ease-overshoot);
   --duration-press: var(--m-dur-press);
+  /* A loader or the content after it fading in (MUT-206 DR3): short, so a brief wait barely registers */
+  --duration-fade: 150ms;
   --duration-toggle: var(--m-dur-toggle);
   --duration-nav: var(--m-dur-nav);
   --stagger-step: var(--m-stagger);
@@ -111,6 +113,7 @@
 @media (prefers-reduced-motion: reduce) {
   :root {
     --duration-press: 0ms;
+    --duration-fade: 0ms;
     --duration-toggle: 0ms;
     --duration-nav: 0ms;
     --stagger-step: 0ms;
@@ -242,6 +245,12 @@
 
   /* Depth: the card shadow switches with the primitives */
   --shadow-2: var(--m-shadow-card);
+
+  /* The mark's fills, for the bloom loader (MUT-206): the dot turns butter in dark, like mark-dark.svg */
+  --mark-dot: var(--m-mark-dot);
+  --mark-lavender: var(--m-mark-lavender);
+  --mark-rose: var(--m-mark-rose);
+  --mark-peach: var(--m-mark-peach);
 }
 
 /* ============================================

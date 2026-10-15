@@ -7,7 +7,9 @@
     "close": "Close",
     "loading": "Loading...",
     "saving": "Saving...",
-    "opensInNewTab": "(opens in a new tab)"
+    "opensInNewTab": "(opens in a new tab)",
+    "loaderLabel": "Loading",
+    "loadingSlow": "Still loading…"
   },
   "hosted": {
     "brand": "Mutaba3a",

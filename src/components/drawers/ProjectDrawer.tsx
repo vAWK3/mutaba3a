@@ -17,6 +17,7 @@ import {
 import { useActiveProfile } from '../../hooks/useActiveProfile';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
+import { BrandLoader } from '../brand/BrandLoader';
 
 const FIELD_KEYS = ['design', 'development', 'consulting', 'marketing', 'legal', 'maintenance', 'other'] as const;
 
@@ -112,8 +113,8 @@ export function ProjectDrawer() {
   if (mode === 'edit' && projectLoading) {
     return (
       <Drawer title={t('common.loading')} onClose={closeProjectDrawer}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

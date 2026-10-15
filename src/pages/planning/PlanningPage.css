@@ -28,14 +28,6 @@
   margin: 0.25rem 0 0;
 }
 
-/* Loading state */
-.planning-page .loading-state {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 300px;
-}
-
 /* Empty state */
 .planning-page .empty-state {
   display: flex;

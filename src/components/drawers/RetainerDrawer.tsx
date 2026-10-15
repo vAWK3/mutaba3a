@@ -16,6 +16,7 @@ import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
 import { Select } from '../ui';
 import type { Currency, RetainerCadence, RetainerStatus } from '../../types';
+import { BrandLoader } from '../brand/BrandLoader';
 
 const schema = z.object({
   profileId: z.string().min(1, 'Profile is required'),
@@ -217,8 +218,8 @@ export function RetainerDrawer() {
   if (isLoading) {
     return (
       <Drawer title={t('common.loading')} onClose={closeRetainerDrawer}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

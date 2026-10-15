@@ -25,6 +25,7 @@ import { exportPlanToCSV, exportAssumptionsToCSV } from './utils/exportPlan';
 import './PlanningPage.css';
 
 import type { PlanFilters } from '../../types';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 export function PlanningPage() {
   const t = useT();
@@ -339,8 +340,8 @@ export function PlanningPage() {
       </header>
 
       {isLoading ? (
-        <div className="loading-state">
-          <div className="spinner" />
+        <div className="loading">
+          <BrandLoader size={64} slowCaption={t('common.loadingSlow')} />
         </div>
       ) : plan ? (
         <>

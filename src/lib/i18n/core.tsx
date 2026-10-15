@@ -119,6 +119,16 @@ export function useT(): (key: string, vars?: TranslationVars) => string {
   return useLanguage().t;
 }
 
+/**
+ * `t` when a language provider is mounted, else `null`. For shared chrome that
+ * renders on every surface and must never be the thing that throws (BrandLoader,
+ * MUT-206): page tests that mock the app's `lib/i18n` module mount no provider
+ * of this core. Everything else uses `useT`.
+ */
+export function useOptionalT(): ((key: string, vars?: TranslationVars) => string) | null {
+  return useContext(LanguageContext)?.t ?? null;
+}
+
 /** Just the direction. */
 export function useDirection(): Direction {
   return useLanguage().direction;

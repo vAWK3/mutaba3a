@@ -17,11 +17,12 @@ const PORTAL_LANGUAGE_KEY = 'mutaba3a-portal-language';
 
 /** The portal's own sign-in title, read from its translation files so a copy change needs no spec change. */
 const portalI18n = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/hosted/i18n');
-type AuthCopy = { hosted: { auth: { title: string; request: { lead: string; link: string } } } };
+type AuthCopy = { hosted: { auth: { title: string; checking: string; request: { lead: string; link: string } } } };
 const auth = (language: 'en' | 'ar') => (JSON.parse(fs.readFileSync(path.join(portalI18n, `${language}.json`), 'utf8')) as AuthCopy).hosted.auth;
 const AUTH = { en: auth('en'), ar: auth('ar') } as const;
 const HEADING = { en: AUTH.en.title, ar: AUTH.ar.title } as const;
 const REQUEST = { en: AUTH.en.request, ar: AUTH.ar.request } as const;
+const AUTH_CHECKING = { en: AUTH.en.checking, ar: AUTH.ar.checking } as const;
 
 async function openSignIn(page: Page, language: 'en' | 'ar') {
   await page.route('**/v1/**', (route) =>
@@ -134,3 +135,43 @@ test.describe('in an English browser where nobody chose a language', () => {
   });
 });
 
+
+/**
+ * MUT-206: the boot screen while /v1/me is slow. The wordmark first, the bloom
+ * loader once the check has taken 0.4 s, then sign-in; and the loader's inline
+ * SVG and bundled CSS trip no Content Security Policy rule.
+ */
+test(
+  'a slow session check shows the wordmark, then the bloom loader named "Checking your session", then sign-in',
+  { tag: '@portal.signin.boot-slow-session' },
+  async ({ page, step }) => {
+    const cspErrors: string[] = [];
+    page.on('console', (message) => {
+      if (/Content Security Policy/i.test(message.text())) cspErrors.push(message.text());
+    });
+    await page.route('**/v1/**', async (route) => {
+      if (new URL(route.request().url()).pathname.endsWith('/v1/me')) await new Promise((resolve) => setTimeout(resolve, 3_000));
+      await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
+    });
+    await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [PORTAL_LANGUAGE_KEY, 'en'] as const);
+
+    await step('Open the portal while the session check is slow', async () => {
+      await page.goto('/');
+      await expect(page.getByText('Mutaba3a', { exact: true })).toBeVisible();
+    });
+
+    await step('After 0.4 s the bloom loader says it is checking the session', async () => {
+      const status = page.getByRole('status');
+      await expect(status).toHaveText(AUTH_CHECKING.en);
+      await expect(status.locator('svg path')).toHaveCount(4);
+    });
+
+    await step('Then sign-in', async () => {
+      await expect(page.getByRole('heading', { level: 1, name: HEADING.en })).toBeVisible({ timeout: 10_000 });
+    });
+
+    await step('No Content Security Policy violation', async () => {
+      expect(cspErrors).toEqual([]);
+    });
+  },
+);

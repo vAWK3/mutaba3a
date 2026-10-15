@@ -9,7 +9,7 @@
 
 | Category | Components |
 |----------|------------|
-| **Layout** | AppShell, SidebarNav, BrandMark, TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
+| **Layout** | AppShell, SidebarNav, BrandMark, BrandLoader (page/section waits), TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientRetainersCard, ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |
 | **Drawers** | TransactionDrawer, ClientDrawer, ProjectDrawer, ExpenseDrawer, LegacyExpenseEditDrawer, ConversionDrawer (currency conversion logging), RecurringMarkPaidDrawer, RetainerDrawer, BusinessProfileDrawer, OrphanedRecordsDrawer, PartialPaymentDrawer (Record payment) |
 | **Forms** | Input, Select, StepperInput, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
@@ -88,6 +88,24 @@ Tests: `src/components/brand/__tests__/BrandMark.test.tsx`, `SidebarNav.brand.te
 Used by the portal's `Wordmark` (`src/hosted/components/Brand.tsx`, same API as before) and the landing header. `SidebarNav` keeps its own inline lockup, because it collapses to the mark.
 
 Tests: `src/components/brand/__tests__/Wordmark.test.tsx`, `src/hosted/components/__tests__/Brand.test.tsx`.
+
+### BrandLoader
+**Location**: `src/components/brand/BrandLoader.tsx` (+ `BrandLoader.css`, path data in `bloomLoaderData.ts`)
+**Purpose**: The bloom loader (MUT-206, ADR-079): the mark folds into four drops and blooms back over a 4.5 s loop. Inline SMIL, fills from the `--mark-*` tokens (so it follows ThemeToggle), no `style` attribute (portal CSP). The one loader for every page, section and drawer wait in the app and the portal; inline button spinners (`Button`, `.hp-inline-spinner`) and skeletons stay.
+
+```tsx
+<div className="loading">
+  <BrandLoader size={64} slowCaption={t('common.loadingSlow')} />   {/* full page */}
+</div>
+<div className="loading loading--section">
+  <BrandLoader size={40} />                                          {/* section or drawer body */}
+</div>
+<BrandLoader size={96} delay={0} label={t('hosted.auth.checking')} />
+```
+
+Props: `size` (24 | 40 | 64 | 96), `label` (default `common.loaderLabel`), `delay` (default `LOADER_DELAY_MS` = 400; `0` shows at once, no fade), `slowCaption` (shown and announced from `LOADER_SLOW_MS` = 3000, full-page waits only), `className`. Behaviour: a `role="status"` span from mount, empty during the delay around a same-size blank SVG; then a fresh SVG (keyed) and the label as `.sr-only` text, or as a visible caption under reduced motion (no `<animate>` children, the still mark). A loader mounting within `LOADER_CHAIN_MS` (100) of a shown one unmounting shows at once. Exports `LOADER_DELAY_MS`, `LOADER_SLOW_MS`, `LOADER_CHAIN_MS`, `__resetLoaderChainForTests()` (tests only). Import by direct path in the portal (no barrel).
+
+Tests: `src/components/brand/__tests__/BrandLoader.test.tsx`, `bloomLoaderData.test.ts` (parity with `docs/brand/loader/*.json`), `src/styles/__tests__/brand.test.ts` (fills, fade token, `.loading` boxes).
 
 ### ThemeToggle
 **Location**: `src/components/layout/ThemeToggle.tsx`

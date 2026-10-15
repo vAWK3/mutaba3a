@@ -10,6 +10,7 @@ import { useClient, useCreateClient, useUpdateClient, useArchiveClient, useBusin
 import { useActiveProfile } from '../../hooks/useActiveProfile';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
+import { BrandLoader } from '../brand/BrandLoader';
 
 const schema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -102,8 +103,8 @@ export function ClientDrawer() {
   if (mode === 'edit' && clientLoading) {
     return (
       <Drawer title={t('common.loading')} onClose={closeClientDrawer}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

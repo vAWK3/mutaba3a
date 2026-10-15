@@ -11,6 +11,7 @@ import { useT } from '../../lib/i18n';
 import { useDemoStore, seedDemoData, getDemoProfileIds } from '../../demo';
 import type { DemoDataStats } from '../../demo';
 import { useProfileStore } from '../../lib/profileStore';
+import { BrandLoader } from '../brand/BrandLoader';
 import './DemoSeedModal.css';
 
 interface DemoSeedModalProps {
@@ -140,7 +141,7 @@ export function DemoSeedModal({ onClose }: DemoSeedModalProps) {
 
           {seedStatus === 'seeding' && (
             <div className="demo-seeding">
-              <div className="demo-spinner" />
+              <BrandLoader size={64} />
               <p>{t('demo.modal.seeding')}</p>
             </div>
           )}

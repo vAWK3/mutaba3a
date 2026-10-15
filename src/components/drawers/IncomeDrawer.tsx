@@ -51,6 +51,7 @@ import { useClientProjectCascade } from '../../hooks/useClientProjectCascade';
 import type { TxStatus } from '../../types';
 import { CURRENCIES, INCOME_STATUSES, schema, type FormData } from './incomeFormSchema';
 import { paymentLocalDay } from '../../lib/dates';
+import { BrandLoader } from '../brand/BrandLoader';
 
 /**
  * IncomeDrawer
@@ -414,8 +415,8 @@ export function IncomeDrawer() {
   if (mode === 'edit' && txLoading) {
     return (
       <Drawer title={t('common.loading')} onClose={closeIncomeDrawer}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

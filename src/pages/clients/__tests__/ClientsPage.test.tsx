@@ -19,9 +19,11 @@
  * tags each row with its businesses, and splits the muted rows per business.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, within, act } from '@testing-library/react';
+import { render, screen, fireEvent, within, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClientsPage } from '../ClientsPage';
+import { LoaderI18n } from '../../../test/loaderI18n';
+import { LOADER_DELAY_MS } from '../../../components/brand/BrandLoader';
 import * as useQueries from '../../../hooks/useQueries';
 import { combineOwed } from '../../../db/aggregations';
 import { owedEntriesSearch } from '../../../lib/incomeSearch';
@@ -217,7 +219,9 @@ function renderPage(props: React.ComponentProps<typeof ClientsPage> = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ClientsPage {...props} />
+      <LoaderI18n>
+        <ClientsPage {...props} />
+      </LoaderI18n>
     </QueryClientProvider>
   );
 }
@@ -450,10 +454,37 @@ describe('ClientsPage', () => {
       expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
     });
 
-    it('shows a spinner while loading', () => {
+    // MUT-206: the bloom loader, named after its 400 ms delay. Real timers (eng review Q1).
+    it('shows the bloom loader while loading', async () => {
       mockSummaries([], true);
-      const { container } = renderPage();
-      expect(container.querySelector('.spinner')).toBeInTheDocument();
+      renderPage();
+      const loader = await screen.findByRole('status');
+      await waitFor(() => expect(loader).toHaveTextContent(/loading/i));
+    });
+
+    // MUT-206 DR8: a loader only when there is nothing to show yet. A refetch keeps the rows.
+    it('keeps the rows through a background refetch, with no loader', async () => {
+      renderPage();
+      expect(names()).toHaveLength(4);
+
+      vi.spyOn(useQueries, 'useClientOwedIndex').mockImplementation(
+        () =>
+          ({
+            data: { clients: [delta, beta, acme, gamma], total: combineOwed([delta, beta, acme, gamma].map((r) => r.owed)), noClient: NOTHING, archivedClients: NOTHING },
+            isLoading: false,
+            isPending: false,
+            isFetching: true,
+          }) as unknown as ReturnType<typeof useQueries.useClientOwedIndex>,
+      );
+      // The query refetches in the background (an invalidation): data stays, isFetching is on. Re-render the page.
+      fireEvent.click(within(header('Owed now')).getByRole('button'));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, LOADER_DELAY_MS + 100));
+      });
+
+      expect(names()).toHaveLength(4);
+      expect(document.querySelector('.brand-loader')).toBeNull();
+      expect(screen.queryAllByRole('status').filter((node) => /loading/i.test(node.textContent ?? ''))).toEqual([]);
     });
   });
 

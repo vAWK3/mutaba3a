@@ -2449,3 +2449,17 @@ Run: `npx vitest run src/pages/landing`; `release-qa lint`.
 |------|------|--------|
 | `src/pages/settings/__tests__/HostedAccountEntry.css.test.ts` | Unit (stylesheet) | the row is `position: relative` with a `minmax(0, 1fr)` track; its button wraps (`white-space: normal`, `block-size: auto`, `min-block-size: var(--space-8)`, `max-inline-size: 100%`); no physical properties in the file |
 | `qa/specs/web/brand.spec.ts` | E2E | `@web.brand.layout` (now maps `HostedAccountEntry.tsx/.css`): Settings fits 375 px in light/dark × English/Arabic |
+
+### MUT-206 — the bloom loader (2026-10-15, ADR-079)
+| File | Type | Covers |
+|------|------|--------|
+| `src/components/brand/__tests__/bloomLoaderData.test.ts` | Unit (parity) | duration and box from the Lottie file; layer order; per piece `keyTimes` = t/270, every keyframe path = the Lottie bezier (absolute control points), `keySplines` = the easing handles; seamless loop; dark file moves like light; one turn about (50, 50) with the rotation keys; each class's token hex = the JSON fill, light and dark |
+| `src/components/brand/__tests__/BrandLoader.test.tsx` | Component | empty status with the same footprint for 400 ms, then "Loading"/"جارٍ التحميل" as text (no aria-label); fresh SVG on show; `delay={0}` shows at once without the fade; the fade after a delay; reduced motion: no animate children, `d` = frame 0, the word shown once; 4 animate + 1 animateTransform at 4.5 s; slow caption at 3 s with the SVG unchanged; chained waits (50 ms chains, 150 ms waits, a placeholder doesn't chain); no timer left on unmount; no `style` attribute; old spinner selectors and keyframes gone from every stylesheet |
+| `src/styles/__tests__/brand.test.ts` | Unit (stylesheet) | `--mark-*` equal the token hexes in all four theme states; `--duration-fade` 150 ms, 0 under reduced motion; `.loading` 50vh centred, `.loading--section` top-aligned, `.content-enter` on the fade token; drift/harness cover the new `--m-mark-*` |
+| `src/lib/i18n/__tests__/loaderKeys.test.ts` | Unit | loader label and slow caption in the app and portal dictionaries; the Import page's keys in Arabic with the same vars; the row plural forms |
+| `src/pages/settings/__tests__/ImportDataPage.copy.test.tsx` | Component + static | the idle step in Arabic; no Latin JSX text in the page (file extensions exempt) |
+| `ClientsPage.test.tsx`, `ProjectsPage.test.tsx`, `OverviewPage.test.tsx` | Component | the loader's status says Loading (real timers, `findByRole` + text); DR8: a background refetch keeps the rows and shows no loader |
+| `src/hosted/session/__tests__/auth-states.test.tsx` | Integration | S1: no status before 400 ms, then "Checking your session" as the status text |
+| `qa/specs/web/brand.spec.ts` | E2E | `@web.brand.loader-slow-route`: Insights' code held 2 s, light and dark (empty status, then the bloom named Loading in the theme's dot colour, axe, then the page); reduced motion (still mark + word); 1440×900 English and Arabic (centred in the page column ±1 px, not mirrored) |
+| `qa/specs/portal/signin.spec.ts` | E2E | `@portal.signin.boot-slow-session`: `/v1/me` held 3 s → wordmark, then the loader's status "Checking your session", then sign-in, no CSP console error |
+

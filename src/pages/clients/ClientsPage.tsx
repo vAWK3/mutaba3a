@@ -41,6 +41,7 @@ import { formatAmount, formatPaymentDate, formatRelativeDate, cn } from '../../l
 import { useT, useLanguage, useDirection, getLocale } from '../../lib/i18n';
 import { useTp } from '../../lib/i18n/plural';
 import type { ClientOwedIndexRow, Currency } from '../../types';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 /** Direction a column sorts in when first clicked: names A–Z, money and dates biggest/newest first. */
 const FIRST_CLICK_DIR: Record<ClientSortField, SortDir> = {
@@ -338,8 +339,8 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
       </div>
 
       {isPending ? (
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       ) : items.length === 0 ? (
         <EmptyState

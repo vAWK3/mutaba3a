@@ -15,6 +15,7 @@ import { formatAmount, getDateRangePreset, cn } from '../../lib/utils';
 import { isReceivable, daysOverdue, todayLocalISO } from '../../lib/dates';
 import { accumulateIncomeAmount } from '../../db/aggregations';
 import type { CurrencyMode, Currency, TransactionDisplay } from '../../types';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 // Preset tab types
 type InsightsTab = 'summary' | 'clients' | 'projects' | 'expenses' | 'unpaid';
@@ -421,7 +422,7 @@ export function InsightsPage() {
     if (isLoading) {
       return (
         <div className="loading">
-          <div className="spinner" />
+          <BrandLoader size={64} slowCaption={t('common.loadingSlow')} />
         </div>
       );
     }

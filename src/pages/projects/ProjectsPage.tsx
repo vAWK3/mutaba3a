@@ -10,6 +10,7 @@ import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useDrawerStore } from '../../lib/stores';
 import { formatRelativeDate } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 type SortField = 'name' | 'net' | 'unpaid' | 'activity';
 
@@ -124,8 +125,8 @@ export function ProjectsPage() {
         </div>
 
         {isLoading ? (
-          <div className="loading">
-            <div className="spinner" />
+          <div className="loading loading--section">
+            <BrandLoader size={40} />
           </div>
         ) : projects.length === 0 ? (
           <EmptyState

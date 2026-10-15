@@ -12,6 +12,7 @@ import { useDrawerStore } from '../../lib/stores';
 import { useOnboardingStore } from '../../lib/onboardingStore';
 import { todayLocalISO } from '../../lib/dates';
 import { useT } from '../../lib/i18n';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 /**
  * OverviewPage (Home) — MUT-8 / ADR-036
@@ -71,7 +72,7 @@ export function OverviewPage() {
       <div className="page-content">
         {isDeciding ? (
           <div className="loading">
-            <div className="spinner" />
+            <BrandLoader size={64} slowCaption={t('common.loadingSlow')} />
           </div>
         ) : isNewUser ? (
           <EmptyState

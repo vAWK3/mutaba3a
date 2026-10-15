@@ -24,6 +24,7 @@ import { todayLocalISO } from '../../lib/dates';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { toWorkRow, type WorkRow } from './clientProfileRows';
 import type { TxStatus } from '../../types';
+import { BrandLoader } from '../brand/BrandLoader';
 
 export interface ClientWorkSectionProps {
   clientId: string;
@@ -153,8 +154,8 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
           </div>
 
           {isLoading ? (
-            <div className="loading">
-              <div className="spinner" />
+            <div className="loading loading--section">
+              <BrandLoader size={40} />
             </div>
           ) : rows.length === 0 ? (
             <div className="card-empty">
@@ -164,7 +165,7 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
               </button>
             </div>
           ) : (
-            <div className="data-table client-work-table">
+            <div className="data-table client-work-table content-enter">
               <table>
                 <thead>
                   <tr>

@@ -2,9 +2,10 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProjectsPage } from '../ProjectsPage';
+import { LoaderI18n } from '../../../test/loaderI18n';
 import * as useQueries from '../../../hooks/useQueries';
 
 // Mock router
@@ -106,7 +107,7 @@ function renderWithProviders(component: React.ReactNode) {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      {component}
+      <LoaderI18n>{component}</LoaderI18n>
     </QueryClientProvider>
   );
 }
@@ -228,14 +229,16 @@ describe('ProjectsPage', () => {
   });
 
   describe('Loading state', () => {
-    it('shows loading indicator when fetching', () => {
+    // MUT-206: the bloom loader, named after its 400 ms delay. Real timers (eng review Q1).
+    it('shows the bloom loader while the list loads', async () => {
       vi.spyOn(useQueries, 'useProjectSummaries').mockReturnValue({
         data: undefined,
         isLoading: true,
       } as ReturnType<typeof useQueries.useProjectSummaries>);
 
       renderWithProviders(<ProjectsPage />);
-      expect(document.querySelector('.spinner')).toBeInTheDocument();
+      const loader = await screen.findByRole('status');
+      await waitFor(() => expect(loader).toHaveTextContent(/loading/i));
     });
   });
 

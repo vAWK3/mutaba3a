@@ -91,6 +91,22 @@
     "butterInk": {
       "oklch": "oklch(0.419 0.083 74.8)",
       "hex": "#67450A"
+    },
+    "markDot": {
+      "oklch": "oklch(0.55 0.14 295)",
+      "hex": "#795DBA"
+    },
+    "markLavender": {
+      "oklch": "oklch(0.78 0.1 295)",
+      "hex": "#BCABF1"
+    },
+    "markRose": {
+      "oklch": "oklch(0.78 0.11 10)",
+      "hex": "#F499A7"
+    },
+    "markPeach": {
+      "oklch": "oklch(0.8 0.11 55)",
+      "hex": "#F5AB77"
     }
   },
   "font": {
@@ -271,6 +287,22 @@
     "butterInk": {
       "oklch": "oklch(0.9 0.09 95)",
       "hex": "#F0DE99"
+    },
+    "markDot": {
+      "oklch": "oklch(0.92 0.07 95)",
+      "hex": "#F3E5B0"
+    },
+    "markLavender": {
+      "oklch": "oklch(0.78 0.1 295)",
+      "hex": "#BCABF1"
+    },
+    "markRose": {
+      "oklch": "oklch(0.78 0.11 10)",
+      "hex": "#F499A7"
+    },
+    "markPeach": {
+      "oklch": "oklch(0.82 0.11 60)",
+      "hex": "#F9B379"
     }
   }
 }

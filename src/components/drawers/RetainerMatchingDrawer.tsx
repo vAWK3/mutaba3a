@@ -15,6 +15,7 @@ import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { useToast } from '../../lib/toastStore';
 import type { ProjectedIncomeDisplay, RetainerMatchSuggestion, MatchScoreBreakdown } from '../../types';
 import { CheckCircleIcon, ChevronDownIcon, ArrowRightIcon } from '../icons';
+import { BrandLoader } from '../brand/BrandLoader';
 
 // Step Progress Indicator
 function StepIndicator({ currentStep }: { currentStep: 1 | 2 }) {
@@ -409,15 +410,15 @@ function TransactionSelector({ onSelect, onCreateNew }: TransactionSelectorProps
       </div>
 
       {isLoading ? (
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       ) : filteredTransactions.length === 0 ? (
         <div className="matching-empty">
           <p>{search ? t('retainerMatching.noMatchingTransactions') : t('retainerMatching.noUnlinkedTransactions')}</p>
         </div>
       ) : (
-        <div className="matching-list">
+        <div className="matching-list content-enter">
           {filteredTransactions.map((tx) => (
             <button key={tx.id} className="matching-item" onClick={() => onSelect(tx.id)}>
               <div className="matching-item-main">
@@ -493,8 +494,8 @@ function ProjectedIncomeSelector({ transactionId, onSelect }: ProjectedIncomeSel
       </div>
 
       {isLoading ? (
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       ) : (
         <>

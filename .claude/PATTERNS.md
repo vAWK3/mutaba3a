@@ -2051,6 +2051,9 @@ When a mode belongs to a few screens ("All businesses" on Home and Clients):
 ### A query that waits is pending, not loading
 In TanStack Query 5, `isLoading` is `isPending && isFetching`, so a query with `enabled: false` reports `isLoading: false`. A page that decides an empty or new-user state from `isLoading` will flash it while the query waits. Decide on `isPending`, or on the value the query waits for (`scope === undefined`).
 
+### A loader only when there is nothing to show (MUT-206 DR8)
+Show `BrandLoader` only while there is no data yet: TanStack `isPending`/`isLoading` (both false once data exists), or a Dexie live query's `undefined`. A background refetch (`isFetching` with data) keeps the content on screen. Never key a loader on `isFetching`. Test: `ClientsPage.test.tsx` › keeps the rows through a background refetch.
+
 ### A blank id must not mean "everything" while it loads: gate at the root
 Repository reads treat a falsy business as "every record". Rather than guarding each page, `BusinessesGate` in AppShell mounts the routed page only once the businesses have loaded, the way AppShell already holds it while the visitor sample is prepared. New pages inherit the guard.
 
@@ -2266,6 +2269,18 @@ Vitest defines no `__BUILD_MODE__` / `__PORTAL_URL__`; a component that reads on
 
 ### Pattern: A dismissible suggestion snoozes in localStorage and fails open
 A "hide for N days" timestamp lives in localStorage (a UI preference, never in backups). Unparseable, missing or future values count as due, so a skewed clock or a hand edit can't hide it forever; a storage that throws shows the suggestion and the dismissal holds for the tab.
+
+## Patterns added by MUT-206 (2026-10-15)
+
+### Pattern: Waits use BrandLoader; inline button spinners and skeletons don't
+A page, section or drawer waiting for its data shows `BrandLoader` in a `.loading` box: 64 with `slowCaption={t('common.loadingSlow')}` for a full page (centred, 50vh), 40 in `.loading loading--section` for a section or drawer body (top-aligned). The route fallback (`PageLoader`) is the same 64 loader in the same box, so code download plus data load read as one wait (a loader mounting within 100 ms of a shown one skips its delay). Keep: the 16 px button spinners (`Button isLoading`, `.hp-inline-spinner`), the portal `Skeleton`s (they reserve layout), blank root gates. Never add a CSS ring spinner. Content replacing a loader may take `.content-enter` (a 150 ms fade). A site with its own visible text beside the loader (the import step, the demo seed modal) hides the loader's reduced-motion caption visually so the two don't overlap.
+**Instances**: every site listed in `mut-206-brand-loader.md` D6. Guard: `BrandLoader.test.tsx` › old spinners are gone.
+
+### Pattern: A status that is there before it speaks
+A live region must exist before its text changes, or some screen readers never announce it. `BrandLoader` renders its `role="status"` span from mount, empty, and sets its text (never an `aria-label`: a status takes its name from the author, not the content) when the wait becomes worth announcing. Tests read it with `findByRole('status')` + `toHaveTextContent`, not `toHaveAccessibleName`.
+
+### Pattern: Shared chrome reads i18n without throwing
+A component that renders on every surface (app, landing, portal) imports from `lib/i18n/core` (the portal must not bundle the app dictionaries) and, when a missing provider must not crash it (page tests mock the app's `lib/i18n` module and mount no core provider), uses `useOptionalT()`: `t` or `null`. Page tests that assert such a component's text wrap the page in `LoaderI18n` (`src/test/loaderI18n.tsx`).
 
 ## Patterns added by MUT-202 (2026-10-14)
 

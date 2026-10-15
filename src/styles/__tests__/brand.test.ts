@@ -506,6 +506,30 @@ describe('tokens', () => {
     }
   });
 
+  it('the fade token is 150ms, and reduced motion zeroes it (MUT-206 DR3)', () => {
+    for (const state of [LIGHT, DARK]) {
+      expect(new Tokens(theme, state).ms('--duration-fade')).toBe(150);
+      expect(new Tokens(theme, { ...state, reducedMotion: true }).ms('--duration-fade')).toBe(0);
+    }
+  });
+
+  it.each(STATES)('the bloom loader’s fills are the mark’s colours for the theme it renders (%s, MUT-206 D2)', (_name, state) => {
+    const tokens = new Tokens(theme, state);
+    const palette = schemeOf(state) === 'light' ? tokensJson.color : tokensJson.colorDark;
+    const pieces = [
+      ['--mark-dot', palette.markDot.hex],
+      ['--mark-lavender', palette.markLavender.hex],
+      ['--mark-rose', palette.markRose.hex],
+      ['--mark-peach', palette.markPeach.hex],
+    ] as const;
+    const wrong = pieces
+      .map(([name, hex]) => ({ name, expected: hex, actual: toHex(tokens.color(name)) }))
+      .filter(({ actual, expected }) => !channelsClose(actual, expected));
+    expect(wrong).toEqual([]);
+    // The dot follows the mark files: purple on light, butter on dark
+    expect(tokens.raw('--mark-dot')).toBe('var(--m-mark-dot)');
+  });
+
   it('TD-048 font half: a :lang() font-family rule styles only <html>, so inline elements inherit', () => {
     const offenders: string[] = [];
     themeRoot.walkRules((rule) => {
@@ -978,5 +1002,31 @@ describe('literals', () => {
     it('lists only rules that still lack mono (remove fixed ones from KNOWN_TABULAR_WITHOUT_MONO)', () => {
       expect(KNOWN_TABULAR_WITHOUT_MONO.filter((rule) => !tabular.includes(rule))).toEqual([]);
     });
+  });
+});
+
+/** MUT-206 DR1: where a loader waits. Full-page waits sit centred in a tall box; sections wait at the top. */
+describe('loader boxes', () => {
+  function decls(selector: string): Record<string, string> {
+    const found: Record<string, string> = {};
+    parseCss(repoPath('src/index.css')).walkRules((rule) => {
+      if (!rule.selectors.map((s) => s.trim()).includes(selector)) return;
+      rule.walkDecls((decl) => {
+        found[decl.prop] = decl.value;
+      });
+    });
+    return found;
+  }
+
+  it('.loading is a centred box half the viewport tall', () => {
+    expect(decls('.loading')).toMatchObject({ display: 'flex', 'align-items': 'center', 'justify-content': 'center', 'min-height': '50vh' });
+  });
+
+  it('.loading--section aligns its loader to the top with token padding', () => {
+    expect(decls('.loading--section')).toMatchObject({ 'align-items': 'flex-start', 'min-height': '120px', 'padding-block': 'var(--space-8)' });
+  });
+
+  it('.content-enter fades in on the fade token and leaves nothing behind', () => {
+    expect(decls('.content-enter').animation).toMatch(/var\(--duration-fade\) var\(--ease-spring\) backwards/);
   });
 });

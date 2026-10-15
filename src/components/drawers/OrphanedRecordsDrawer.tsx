@@ -9,6 +9,7 @@ import { startingProfileId, type OrphanTable, type OrphanedRecordSet } from '../
 import { formatAmount, formatDate } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import type { BusinessProfile, Currency } from '../../types';
+import { BrandLoader } from '../brand/BrandLoader';
 
 const GROUP_ORDER: readonly OrphanTable[] = ['clients', 'projects', 'transactions', 'expenses'];
 const NO_PROFILES: BusinessProfile[] = [];
@@ -99,8 +100,8 @@ export function OrphanedRecordsDrawer() {
   if (recordsLoading || profilesLoading) {
     return (
       <Drawer title={t('orphanedRecords.title')} onClose={closeOrphanedRecordsDrawer}>
-        <div className="loading">
-          <div className="spinner" />
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
         </div>
       </Drawer>
     );

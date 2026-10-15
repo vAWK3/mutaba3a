@@ -18,6 +18,7 @@ import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import { formatAmount, getDateRangePreset, cn } from '../../lib/utils';
 import { isReceivable, daysOverdue, todayLocalISO } from '../../lib/dates';
 import type { ReportType, CurrencyMode, Currency, TransactionDisplay } from '../../types';
+import { BrandLoader } from '../../components/brand/BrandLoader';
 
 // Report type options
 const REPORT_TYPES: { value: ReportType; labelKey: string }[] = [
@@ -280,7 +281,7 @@ export function ReportsPage() {
     if (isLoading) {
       return (
         <div className="loading">
-          <div className="spinner" />
+          <BrandLoader size={64} slowCaption={t('common.loadingSlow')} />
         </div>
       );
     }
