@@ -325,8 +325,8 @@ export interface IDatasetRepository {
   csvValidationContext(): Promise<{ clientNames: string[]; projectNames: string[] }>;
   importCsvRows(rows: CsvImportRow[], options: CsvImportOptions): Promise<{ transactions: number }>;
   exportCoreTables(): Promise<{ clients: Client[]; projects: Project[]; transactions: Transaction[] }>;
-  /** Clears transactions, projects, clients, categories and FX rates; everything else is kept (TODOS #10). */
-  wipeCoreData(): Promise<void>;
+  /** Empties every table but settings; settings keep their preferences, optional areas go off (MUT-164). */
+  wipeAllData(): Promise<void>;
   integrityCheck(): Promise<IntegrityResult>;
   findOrphanedRecords(): Promise<OrphanedRecordSet>;
   /** Switch on the optional areas loaded data belongs to; never throws. */

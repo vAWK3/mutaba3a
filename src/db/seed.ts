@@ -64,23 +64,21 @@ export async function repairDatabase(): Promise<MigrationValidationResult> {
 }
 
 /**
- * Clear all data tables except settings.
- * Settings are preserved to maintain user preferences.
+ * "Delete all data" (MUT-164): empty every table except settings, in one
+ * transaction. The settings row keeps the person's preferences (currencies,
+ * last backup, Malafat suggestions); the optional areas go back to off, since
+ * the data that switched them on is gone. Every table is enumerated, so a
+ * table added later is cleared without touching this function.
  */
 export async function deleteAllData(): Promise<void> {
-  await db.transaction(
-    'rw',
-    [db.transactions, db.projects, db.clients, db.categories, db.fxRates],
-    async () => {
-      await db.transactions.clear();
-      await db.projects.clear();
-      await db.clients.clear();
-      await db.categories.clear();
-      await db.fxRates.clear();
-      // Settings are intentionally preserved (user preference)
-    }
-  );
-  console.log('All data deleted (settings preserved)');
+  const dataTables = db.tables.filter((table) => table.name !== db.settings.name);
+  await db.transaction('rw', [...dataTables, db.settings], async () => {
+    await Promise.all(dataTables.map((table) => table.clear()));
+    await db.settings.toCollection().modify((settings) => {
+      settings.features = {};
+      settings.featureNotice = [];
+    });
+  });
 }
 
 /**

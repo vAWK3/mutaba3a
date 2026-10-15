@@ -2549,3 +2549,11 @@ Pre-landing review additions: firm-profile capture → 404 via PATCH /v1/payment
 Release-QA: server-only; the user-visible scenarios (plan §7) are automated by MUT-224's portal spec. `release-qa lint`: no errors, portal 100% mapped.
 
 Run (Node 22, 2026-10-15): server `typecheck`, `lint`, `openapi:check` clean; `npm test` 90 files, 1806 passed, 23 skipped; `test:db` (Postgres :54329) 1982 passed, 1 failed: `routes-m6` audit listing returned two same-millisecond rows swapped (`payment.reversed` before `payment.recorded`), the known TODOS #8 ordering flake. Re-run alone 3/3 green. Root `lint`, `typecheck`, `test:run` (317 files, 4394 passed, 4 skipped) and `build` clean.
+
+## MUT-164 — Delete all data (2026-10-15, ADR-084)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/db/__tests__/dataset.test.ts` | Integration (fake IndexedDB) | 2 (replaces the five-table test) | With a row in every table of `db.tables`, `wipeAllData` leaves only settings, so a new table can't be missed silently; settings keep currencies, `lastBackupAt` and `malafatSuggestions` while `features` and `featureNotice` are emptied |
+| `src/components/modals/__tests__/DeleteAllDataModal.test.tsx` | Component | +2 | After the delete, `invalidateQueries()` is called with no key, the active business is cleared, demo mode is off and the walkthrough is reset; the "kept" line exists in both locales and is shown |
+| `qa/specs/web/data.spec.ts` › `@web.data.delete-and-restore` (extended) | E2E (release-qa) | 1 | The dialog says what is kept; after deleting, the welcome comes back (no business left), Income is empty, and the backup restores the entry |

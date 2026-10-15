@@ -63,17 +63,20 @@ features:
       - src/components/modals/DeleteAllDataModal.tsx
       - src/components/modals/DeleteAllDataModal.css
       - src/components/modals/RestoreBackupModal.tsx
+      - src/db/seed.ts
       - src/db/backup.ts
       - src/utils/backupDownload.ts
     steps:
       - Log one entry, then Back up now in Settings › Your data
       - Click Delete all data…, back up in step 1, type DELETE and delete permanently
+      - Skip the welcome that comes back
       - Open Income
       - Back in Settings, click Restore…, pick the backup and Replace everything
     expect:
       - Back up now downloads mutaba3a-backup-v<schema>-<date>.json and the row says when it last happened
       - The typed word stays disabled until the backup is made, and Delete permanently until the word is typed
-      - After deleting, the app returns Home and Income is empty
+      - The dialog says what is kept (language, theme and currency settings)
+      - After deleting, the app returns Home, the welcome comes back because no business is left (MUT-164), and Income is empty
       - The restore dialog names the backup's date and record count, and after Replace everything the entry and its client are back
   - id: unassigned-records
     title: Records from an old export with no business show a banner; Review now assigns them and the integrity check comes back clean

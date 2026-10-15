@@ -1859,7 +1859,7 @@ has only `base`.
 (`src/__tests__/seamLint.test.ts`). The one exception is `initDatabase()` in
 `main.tsx`. Whole-database work is on `dataset` (`serializeBackup`,
 `restoreBackup`, `exportProfile`, `importProfile`, `importLegacyV1`,
-`csvValidationContext`, `importCsvRows`, `exportCoreTables`, `wipeCoreData`,
+`csvValidationContext`, `importCsvRows`, `exportCoreTables`, `wipeAllData`,
 `integrityCheck`, `findOrphanedRecords`, `reconcileFeaturesAfterLoad`); sample
 data on `demoData`.
 

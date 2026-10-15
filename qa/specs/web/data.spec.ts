@@ -235,6 +235,7 @@ test(
       const remove = dialog.getByRole('button', { name: 'Delete permanently' });
       await expect(word).toBeDisabled();
       await expect(remove).toBeDisabled();
+      await expect(dialog).toContainText('Kept: your language, theme and currency settings.');
 
       const download = await downloadFrom(page, () => dialog.getByRole('button', { name: 'Back up', exact: true }).click());
       backupFile = { name: download.suggestedFilename(), mimeType: 'application/json', buffer: await readDownload(download) };
@@ -245,6 +246,13 @@ test(
       await expect(dialog).toBeHidden();
       await expect(main.getByText('All data deleted successfully')).toBeVisible();
       await expect(page).toHaveURL(/\/app\/?$/);
+    });
+
+    await step('No business is left, so the welcome comes back; Skip for now', async () => {
+      const welcome = page.getByRole('dialog', { name: 'Welcome to Mutaba3a' });
+      await expect(welcome).toBeVisible();
+      await welcome.getByRole('button', { name: 'Skip for now' }).click();
+      await expect(welcome).toBeHidden();
     });
 
     await step('Open Income: it is empty', async () => {

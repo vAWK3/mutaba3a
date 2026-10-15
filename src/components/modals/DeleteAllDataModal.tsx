@@ -4,6 +4,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getRepositories } from '../../db';
 import { useT } from '../../lib/i18n';
 import { useBackUp } from '../../hooks/useQueries';
+import { useProfileStore } from '../../lib/profileStore';
+import { useOnboardingStore } from '../../lib/onboardingStore';
+import { useDemoStore } from '../../demo/demoStore';
 import './DeleteAllDataModal.css';
 
 /**
@@ -70,17 +73,15 @@ export function DeleteAllDataModal({ onClose, onSuccess }: DeleteAllDataModalPro
   const handleDelete = async () => {
     setDeleteStatus('deleting');
     try {
-      await getRepositories().base.dataset.wipeCoreData();
+      await getRepositories().base.dataset.wipeAllData();
 
-      // Invalidate all queries
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['clients'] });
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
-      queryClient.invalidateQueries({ queryKey: ['overviewTotals'] });
-      queryClient.invalidateQueries({ queryKey: ['attentionReceivables'] });
-      queryClient.invalidateQueries({ queryKey: ['clientSummaries'] });
-      queryClient.invalidateQueries({ queryKey: ['projectSummaries'] });
+      // Nothing cached describes the device any more (MUT-164). The saved
+      // business, sample session and walkthrough all point at deleted rows;
+      // with no business left, the welcome flow opens again.
+      useProfileStore.getState().reset();
+      useDemoStore.getState().deactivateDemo();
+      useOnboardingStore.getState().resetOnboarding();
+      queryClient.invalidateQueries();
 
       onSuccess();
     } catch (error) {
@@ -115,7 +116,10 @@ export function DeleteAllDataModal({ onClose, onSuccess }: DeleteAllDataModalPro
           {/* Warning message */}
           <div className="modal-warning">
             <WarningIcon />
-            <p>{t('settings.data.deleteModal.warning')}</p>
+            <div className="modal-warning-text">
+              <p>{t('settings.data.deleteModal.warning')}</p>
+              <p>{t('settings.data.deleteModal.kept')}</p>
+            </div>
           </div>
 
           {/* Step A: Back up */}
