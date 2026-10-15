@@ -2340,3 +2340,9 @@ Expenses and conversions are hidden by entity type (`SESSION_ONLY_ENTITY_TYPES`)
 Read the row, refuse 404 unless it is the person's own, compare its `version` with If-Match (409 with `currentVersion`), then write with the ownership predicate and `version` in the WHERE and re-read under the same predicate (`not_found` vs `stale`). The read gives the exact old value for the audit row; the predicate in the re-read means a stale answer never reveals a row the person may not touch.
 **Instances**: `receivables.redateAdjustment`, `payments.redateCapture`, `routes/income.ts` PATCH, `redateOwnCapture` in `routes/payments.ts`.
 
+## Lock Receivables in Id Order (MUT-130)
+
+Every write that locks more than one receivable takes the row locks in ascending id order before it changes anything: `lockReceivablesInIdOrder` in `server/src/repositories/prisma.ts` for payments, and `upfrontMoved` for the contingency outcome writes. Two writes that lock in the same order can't deadlock. The write then works in its own order on rows it already holds, so allocation rows keep the request's order.
+
+A lock conflict that still happens (40P01 / 40001) is turned into `LockConflict` (`repositories/memory.ts`) by `asLockConflict`, and the route answers 409, never 500. Postgres rolled the transaction back, so nothing was written. A new multi-receivable write uses the same helper and the same mapping.
+

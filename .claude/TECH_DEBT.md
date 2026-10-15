@@ -332,7 +332,7 @@
 **Fix**: none planned — screenshot tooling, plus (since 2026-10-13) the occasional manual refresh of the store-review account in prod, where a few extra recent entries are harmless. If it ever matters, the fix would be a `GET /v1/income` (or similar) list route the script could use to check existence before creating, replacing the date-keyed Idempotency-Key scheme.
 
 ### TD-104: A payment allocation or reversal that loses a deadlock answers 500
-**Status**: Open
+**Status**: Resolved 2026-10-15 (MUT-130): `applyAllocations` (create, allocate, settle, filing) and `payments.reverse` lock every receivable in id order before writing, the order the outcome writes use, so the two can't deadlock. A lock conflict that still happens becomes `LockConflict`, answered 409: `PREVIEW_STALE` on record and allocate, `VERSION_MISMATCH` on reverse and settle. API 1.26.2-mut130.
 **Ticket**: MUT-130
 **Added**: 2026-10-13 (MUT-100 re-review; payments code unchanged, newly reachable)
 **Priority**: Low

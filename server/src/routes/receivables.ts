@@ -7,7 +7,7 @@ import { idempotent } from '../idempotency.js';
 import { assertNotFuture } from '../income/compose.js';
 import { formatMoney, type Currency } from '../money.js';
 import { checkCredit, splitCredit } from '../payments/credit.js';
-import { InsufficientCapacity } from '../repositories/memory.js';
+import { InsufficientCapacity, LockConflict } from '../repositories/memory.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import {
   CreditRequestSchema,
@@ -210,7 +210,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         );
       } catch (err) {
         // The FOR UPDATE re-read found the capacity gone: another settle landed between our read and this write.
-        if (err instanceof InsufficientCapacity) throw new ApiError('CONFLICT', 'The receivable changed while settling; re-read and retry', { reason: 'VERSION_MISMATCH' });
+        if (err instanceof InsufficientCapacity || err instanceof LockConflict) throw new ApiError('CONFLICT', 'The receivable changed while settling; re-read and retry', { reason: 'VERSION_MISMATCH' });
         throw err;
       }
       const settled = await store.receivables.getById(organization.id, receivable.id);

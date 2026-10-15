@@ -2,7 +2,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import type { KeyScope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
 import { categoryNameKey } from '../expenses/names.js';
-import { ForeignKeyViolation, InsufficientCapacity, StateConflict, UniqueViolation } from './memory.js';
+import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
@@ -1027,7 +1027,7 @@ export class PrismaLedgerStore implements LedgerStore {
           return await this.prisma.$transaction((tx) => createPaymentTx(tx, input, at));
         } catch (err) {
           if (attempt === 0 && isUniqueViolation(err) && String((err as Prisma.PrismaClientKnownRequestError).meta?.target ?? '').includes('year')) continue;
-          throw err;
+          throw asLockConflict(err);
         }
       }
     },
@@ -1066,6 +1066,8 @@ export class PrismaLedgerStore implements LedgerStore {
         const full = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
         const allocations = await applyAllocations(tx, full, requested, at);
         return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), allocations };
+      }).catch((err: unknown) => {
+        throw asLockConflict(err);
       });
     },
     reverse: async (organizationId, paymentId, reason, at) => {
@@ -1075,11 +1077,13 @@ export class PrismaLedgerStore implements LedgerStore {
         const { count } = await tx.payment.updateMany({ where: { id: paymentId, status: 'POSTED' }, data: { status: 'REVERSED', reversedAt: at, reversalReason: reason, allocatedMinor: 0n, version: { increment: 1 }, updatedAt: at } });
         if (count !== 1) return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), changed: false };
         const allocations = await tx.paymentAllocation.findMany({ where: { paymentId } });
+        await lockReceivablesInIdOrder(tx, allocations.map((a) => a.receivableId));
         for (const a of allocations) {
-          await lockReceivable(tx, a.receivableId);
           await settleReceivable(tx, a.receivableId, { paidMinor: { decrement: a.amountMinor } });
         }
         return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), changed: true };
+      }).catch((err: unknown) => {
+        throw asLockConflict(err);
       });
     },
     findReplacedBy: (organizationId, paymentId) => this.prisma.payment.findFirst({ where: { organizationId, replacesPaymentId: paymentId, status: 'POSTED' } }),
@@ -1481,6 +1485,11 @@ async function upfrontMoved(tx: Tx, organizationId: string, seen: ReadonlyArray<
   return seen.some((s) => now.get(s.id) !== s.version);
 }
 
+/** A lock conflict becomes the store's LockConflict (MUT-130), so the routes answer 409, not 500; anything else passes through. */
+function asLockConflict(err: unknown): unknown {
+  return isLockConflict(err) ? new LockConflict() : err;
+}
+
 /** Postgres aborted the transaction to break a deadlock or a serialization conflict (40P01 / 40001): safe to retry. */
 export function isLockConflict(err: unknown): boolean {
   if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false;
@@ -1511,6 +1520,15 @@ async function lockReceivable(tx: Tx, receivableId: string): Promise<{ id: strin
   const row = rows[0];
   if (!row) throw new ForeignKeyViolation('payment_allocations.receivableId');
   return row;
+}
+
+/**
+ * Locks every receivable a write will touch, in id order: the order the contingency outcome writes lock the upfront
+ * receivables (`upfrontMoved`), so a payment write and an outcome write can't deadlock (MUT-130). The caller then
+ * works in its own order on rows it already holds.
+ */
+async function lockReceivablesInIdOrder(tx: Tx, receivableIds: readonly string[]): Promise<void> {
+  for (const id of [...new Set(receivableIds)].sort()) await lockReceivable(tx, id);
 }
 
 /** Applies a sum change, then recomputes status from the sums and bumps the version. */
@@ -1591,7 +1609,9 @@ async function createAdjustmentTx(tx: Tx, input: CreateAdjustmentReceivableInput
 async function applyAllocations(tx: Tx, payment: PaymentRecord, requested: readonly AllocationInput[], at: Date): Promise<AllocationRecord[]> {
   const created: AllocationRecord[] = [];
   let total = 0n;
+  await lockReceivablesInIdOrder(tx, requested.map((a) => a.receivableId));
   for (const a of requested) {
+    // Already held: this re-read sees the sums an earlier allocation in this loop moved.
     const r = await lockReceivable(tx, a.receivableId);
     if (r.status !== 'OPEN' || a.amountMinor <= 0n || a.amountMinor > r.grossMinor - r.paidMinor - r.creditedMinor) throw new InsufficientCapacity(a.receivableId);
     created.push(await tx.paymentAllocation.create({ data: { organizationId: payment.organizationId, paymentId: payment.id, receivableId: a.receivableId, amountMinor: a.amountMinor, createdAt: at } }));

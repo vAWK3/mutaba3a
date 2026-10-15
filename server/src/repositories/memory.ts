@@ -1565,6 +1565,17 @@ export class StateConflict extends Error {
   }
 }
 
+/**
+ * Postgres aborted the write to break a deadlock or a serialization conflict (40P01 / 40001), so nothing was written
+ * and a retry can succeed (MUT-130). Only the Prisma store raises it; the memory store has no locks.
+ */
+export class LockConflict extends Error {
+  constructor() {
+    super('the write lost a lock conflict and was rolled back');
+    this.name = 'LockConflict';
+  }
+}
+
 /** A receivable (or payment) can no longer absorb an allocation or credit — a race the preview token did not see (M4). */
 export class InsufficientCapacity extends Error {
   constructor(readonly entityId: string) {
