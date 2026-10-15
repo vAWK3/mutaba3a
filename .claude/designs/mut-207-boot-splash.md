@@ -44,7 +44,7 @@ The iPhone app gets a native splash (MUT-205); the web gets nothing.
 2. `index.html` and `hosted.html`: add the `<link>` after the theme-color metas, and the splash markup inside `#root`. Add an HTML comment citing MUT-207 and the CSP.
 3. `src/components/brand/BootSplash.tsx` (D3), with `markUrl`/`markDarkUrl` imports as in `BrandMark`. `main.tsx`: `LandingLoader` becomes `BootSplash`.
 4. `src/hosted/pages/auth/BootScreens.tsx` `CheckingSession` (D4). It imports `LOADER_DELAY_MS` from `BrandLoader` and drops its own constant (MUT-206 already pointed it there).
-5. `scripts/check-bundles.ts`: for each built entry HTML (web, desktop, hosted), the `#root .boot-splash` markup is present, and its `<img src>`, `<source srcset>` and stylesheet `href` resolve to files inside the dist. Same shape as the existing "every CSS `url()` resolves" rule.
+5. `scripts/check-bundles.ts`: for each built entry HTML (web, desktop, hosted), the `#root .boot-splash` markup is present, and its `<img src>`, `<source srcset>` and stylesheet `href` resolve to files inside the dist **or are `data:` URIs**. Vite inlines assets under `assetsInlineLimit` (4 KB). `mark.svg` is a file today only because of its 7.8 KB C2PA blob; a cleaned mark would be inlined (eng review A2). Same shape as the existing "every CSS `url()` resolves" rule.
 6. Knowledge files: COMPONENT_REGISTRY (BootSplash), PATTERNS ("First paint is the boot splash; keep `BootSplash.tsx` and the HTML in step"), DECISIONS (ADR-080), CHANGELOG, TEST_PLAN, and the kit README asset map (the splash consumer).
 
 ## Tests (TDD: written first)
@@ -77,3 +77,37 @@ One extra request of about 300 B, render-blocking but tiny, and cached immutable
 - Worktree `.claude/worktrees/mut-207` on `feature/mut-207-boot-splash`, cut after MUT-206 merges.
 - Check `hosted-offer.html` (a copy of the built `index.html`) contains the splash. It should, with no extra work.
 - The desktop build: `npm run build:desktop`, then open `dist-desktop/index.html` from disk with JS off to see the splash render from relative URLs.
+
+## Design review amendments (/plan-design-review, 2026-10-15)
+
+Decisions approved one by one in the design review. The full record is in `mini-crm/.claude/designs/mut-206-brand-loader.md` › Design review.
+
+- **DR3 (D5 → A), applied here.** CheckingSession's swap from `BrandMark` to `BrandLoader delay={0}`, and BootSplash's swap, never fade (identical picture). Test 5 asserts no `.brand-loader--enter` on that loader.
+- **DR5 Long-wait caption (D7 → A).** CheckingSession passes `slowCaption={t('hosted.auth.connectingSlow')}` = "Still connecting…" / "ما زلنا نتصل…" (new portal keys). The static pre-JS splash has no text (the language is unknown). Test 5 is extended: the caption appears at 3000 ms and the mark's box is unchanged. QA `boot-slow-session` uses a 4 s `/v1/me` delay to see it.
+- **DR6 Boot timeout (D8 → A).** `src/hosted/session/me.tsx` `meQuery` (already `retry: false`) becomes `queryFn: ({ signal }) => api.me({ signal: AbortSignal.any([signal, AbortSignal.timeout(ME_TIMEOUT_MS)]) })`, with `ME_TIMEOUT_MS = 15_000` (the iPhone's `Env.requestTimeout`). `api.me` forwards `signal` to the existing `request()` option (`client.ts:112/175`). A timeout is a non-401 error, so `AuthGate` renders the existing `BootUnreachable` with Retry; `SignInPage`'s `useQuery(meQuery)` inherits it too. Tests (fake timers, a never-resolving `fetch` mock): at 14.9 s CheckingSession still shows; at 15 s BootUnreachable shows; Retry refetches. Check that the client turns the `TimeoutError` into an `ApiError` (status 0), not an unhandled rejection.
+- **DR7 (D9 → A), applied here.** Under reduced motion CheckingSession's loader shows "Checking your session" / "جارٍ التحقق من جلستك" as visible text when it appears at 400 ms, then "Still connecting…" at 3 s. The QA spec's `reducedMotion: 'reduce'` run asserts the visible text.
+- **DR9 Boot delay counts from page start (D11 → A).** CheckingSession's still-mark phase lasts `bootDelayMs() = Math.max(0, LOADER_DELAY_MS - performance.now())`, an exported pure helper in `BootScreens.tsx`, instead of a fixed 400 ms. On a slow load it is 0 and the mark blooms the moment React mounts (frame 0 is the mark, so there is still no jump). On a fast load it is unchanged. In-content loaders keep 400 ms from mount. DR5's 3 s caption still counts from mount; that wasn't part of this decision. Tests: `bootDelayMs` with a mocked `performance.now()` of 100 → 300, 400 → 0, and 2500 → 0; CheckingSession with `now = 2500` shows the loader on first render.
+- **DR10 Landing fallback blooms (D12 → A).** `BootSplash` renders the static mark (identical to the HTML splash) and, after `bootDelayMs()` (DR9), swaps to `BrandLoader size={96} delay={0}` with no fade, so the still frame is identical. No slow caption on landing. It renders inside `LandingProviders` (`src/pages/landing/LandingProviders.tsx`: Theme and Language), so `useT` and the label resolve. Test 3 (BootSplash ≡ HTML) compares the **first render only**, with that carve-out noted in the test. A new test: with `performance.now()` at 2500, `BootSplash` shows the `status` loader on its first render.
+- **DR12 Boot background follows the app theme after load (D14 → A).** `boot-splash.css` keeps its `prefers-color-scheme` rule for pre-JS paint, and adds `:root[data-theme="dark"] .boot-splash, :root[data-theme="dark"] { background: #221B2D }` and `:root[data-theme="light"] .boot-splash, :root[data-theme="light"] { background: #FCF6ED }`. These mirror the selector order of `brand/mutaba3a-theme.css:59/88`, so a forced theme beats the media query. Once ThemeProvider sets `data-theme`, CheckingSession's background, `BrandMark` (`resolvedTheme`) and `BrandLoader` (`data-theme` fills) come from the same theme. D6 (pre-JS follows the OS) is unchanged. Test 4 becomes four states (OS light/dark × data-theme none/opposite), each asserting the background hex equals the token for the effective theme.
+- **DR14 (D16 → A), applied here.** CheckingSession's container is `.boot-splash` **without** `aria-hidden` (only the static HTML splash has it). The test asserts `container.closest('[aria-hidden="true"]') === null` and that the `status` gets "Checking your session" / "جارٍ التحقق من جلستك" as text content when the loader shows.
+- **DR18 Boot mark stays a fixed 80 px (D20 → A).** Confirms D1 and D4 as a design decision: an 80 px static mark, and `BrandLoader size={96}` (inner mark 80 px) in CheckingSession and BootSplash, on every viewport. The phone web mark is deliberately calmer than the iPhone's 144 pt launch mark.
+<!-- DR-END -->
+
+# Design review (/plan-design-review, 2026-10-15)
+
+The full review (passes, storyboard, litmus, tasks DT1–DT11) is in `mut-206-brand-loader.md`. This brief's approved amendments are DR3, DR5–DR7, DR9, DR10, DR12, DR14 and DR18, listed above under **Design review amendments**.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
+| Outside Review | codex via `/plan-eng-review`; Claude subagent via `/plan-design-review` | Independent 2nd opinion | 2 | eng: unavailable; design: in-host subagent completed, codex unavailable | design subagent: 11 findings (9 accepted into decisions, 2 suppressed as contradicted by code or docs) |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | ISSUES OPEN (all resolved into the plan) | 7 issues, 0 critical gaps |
+| Design Review | `/plan-design-review` | UI/UX gaps | 1 | CLEAR | score: 4/10 → 9/10, 18 decisions |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
+
+- **OUTSIDE COVERAGE:** codex unavailable (not installed) in both the eng and design phases. The design phase ran one native Claude subagent (in-host), which is not counted as external coverage.
+- **VERDICT:** DESIGN CLEARED (every rated pass is 9+ and no decisions are unresolved). The eng review completed with all 7 findings folded in. Its logged status is ISSUES OPEN because the count is recorded, not because anything is outstanding. Ready to implement: MUT-203, then (MUT-204 → MUT-205) in parallel with (MUT-206 → MUT-207).
+
+NO UNRESOLVED DECISIONS
