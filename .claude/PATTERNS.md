@@ -2282,6 +2282,17 @@ A live region must exist before its text changes, or some screen readers never a
 ### Pattern: Shared chrome reads i18n without throwing
 A component that renders on every surface (app, landing, portal) imports from `lib/i18n/core` (the portal must not bundle the app dictionaries) and, when a missing provider must not crash it (page tests mock the app's `lib/i18n` module and mount no core provider), uses `useOptionalT()`: `t` or `null`. Page tests that assert such a component's text wrap the page in `LoaderI18n` (`src/test/loaderI18n.tsx`).
 
+## Patterns added by MUT-207 (2026-10-15)
+
+### Pattern: First paint is the boot splash; keep `BootSplash.tsx` and the HTML in step
+Both entry HTML files ship the boot splash inside `#root` (markup and a linked `boot-splash.css`, never inline style or script: the portal CSP), and React's first render replaces it. Anything React shows first on a boot path draws the same picture in the same place: the landing's Suspense fallback is `BootSplash` (first render = the HTML splash), the portal's session check is `.boot-splash` + `BrandMark` 80 then `BrandLoader` 96 (whose frame 0 is that mark). Change the HTML and `BootSplash.tsx` together; `brand-head.test.ts` compares them and `check-bundles` proves the built splash's files ship. The splash has no text (the language and font are unknown before JS) and follows the OS scheme until ThemeProvider sets `data-theme`.
+
+### Pattern: A boot screen times its still mark from page start
+A boot screen's 400 ms grace counts from `performance.now()` (page start), not from mount: `bootDelayMs()`. On a slow load the page has already waited, so the mark blooms the moment React mounts. In-content loaders keep their 400 ms from mount. Tests set the page clock with `pageStartsNow(offset)` (`src/test/pageStart.ts`).
+
+### Pattern: A boot request has a deadline
+A request a whole screen waits on (the portal's `/v1/me`) aborts after a deadline (`AbortSignal.any([signal, AbortSignal.timeout(ME_TIMEOUT_MS)])`), and the client maps the `TimeoutError` to a network `ApiError`, so the existing unreachable screen with Retry takes over instead of a loader that never ends. Keep TanStack's `signal` in the mix so a cancelled query still aborts.
+
 ## Patterns added by MUT-202 (2026-10-14)
 
 ### Pattern: A surface's default is not a stored preference

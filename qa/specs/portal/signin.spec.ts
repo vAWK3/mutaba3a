@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
-import { SCHEMES, computedFont, loadedFaces, watchFontRequests } from '../../support/brand';
+import { CANVAS_HEX, SCHEMES, bootMarkBox, computedFont, hexToRgb, loadedFaces, watchFontRequests } from '../../support/brand';
 
 /**
  * The hosted portal's sign-in page in Brand v2 (MUT-102). Every /v1 call is
@@ -17,12 +17,13 @@ const PORTAL_LANGUAGE_KEY = 'mutaba3a-portal-language';
 
 /** The portal's own sign-in title, read from its translation files so a copy change needs no spec change. */
 const portalI18n = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/hosted/i18n');
-type AuthCopy = { hosted: { auth: { title: string; checking: string; request: { lead: string; link: string } } } };
+type AuthCopy = { hosted: { auth: { title: string; checking: string; connectingSlow: string; request: { lead: string; link: string } } } };
 const auth = (language: 'en' | 'ar') => (JSON.parse(fs.readFileSync(path.join(portalI18n, `${language}.json`), 'utf8')) as AuthCopy).hosted.auth;
 const AUTH = { en: auth('en'), ar: auth('ar') } as const;
 const HEADING = { en: AUTH.en.title, ar: AUTH.ar.title } as const;
 const REQUEST = { en: AUTH.en.request, ar: AUTH.ar.request } as const;
 const AUTH_CHECKING = { en: AUTH.en.checking, ar: AUTH.ar.checking } as const;
+const AUTH_CONNECTING_SLOW = { en: AUTH.en.connectingSlow, ar: AUTH.ar.connectingSlow } as const;
 
 async function openSignIn(page: Page, language: 'en' | 'ar') {
   await page.route('**/v1/**', (route) =>
@@ -137,33 +138,46 @@ test.describe('in an English browser where nobody chose a language', () => {
 
 
 /**
- * MUT-206: the boot screen while /v1/me is slow. The wordmark first, the bloom
- * loader once the check has taken 0.4 s, then sign-in; and the loader's inline
- * SVG and bundled CSS trip no Content Security Policy rule.
+ * The boot screen while /v1/me is slow (MUT-206, reshaped by MUT-207 D4): the
+ * mark first (the static splash, then React's, in the same spot), blooming in
+ * place once the check has taken 0.4 s from page start, saying what it is
+ * doing, "Still connecting…" from 3 s (DR5), then sign-in. No wordmark text.
+ * The loader's inline SVG and bundled CSS trip no Content Security Policy rule.
  */
+async function openWithSlowSession(page: Page, ms: number) {
+  const cspErrors: string[] = [];
+  page.on('console', (message) => {
+    if (/Content Security Policy/i.test(message.text())) cspErrors.push(message.text());
+  });
+  await page.route('**/v1/**', async (route) => {
+    if (new URL(route.request().url()).pathname.endsWith('/v1/me')) await new Promise((resolve) => setTimeout(resolve, ms));
+    await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
+  });
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [PORTAL_LANGUAGE_KEY, 'en'] as const);
+  return () => cspErrors;
+}
+
 test(
-  'a slow session check shows the wordmark, then the bloom loader named "Checking your session", then sign-in',
+  'a slow session check shows the mark, which blooms in place saying "Checking your session", then "Still connecting…", then sign-in',
   { tag: '@portal.signin.boot-slow-session' },
   async ({ page, step }) => {
-    const cspErrors: string[] = [];
-    page.on('console', (message) => {
-      if (/Content Security Policy/i.test(message.text())) cspErrors.push(message.text());
-    });
-    await page.route('**/v1/**', async (route) => {
-      if (new URL(route.request().url()).pathname.endsWith('/v1/me')) await new Promise((resolve) => setTimeout(resolve, 3_000));
-      await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
-    });
-    await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [PORTAL_LANGUAGE_KEY, 'en'] as const);
+    const cspErrors = await openWithSlowSession(page, 4_000);
 
     await step('Open the portal while the session check is slow', async () => {
       await page.goto('/');
-      await expect(page.getByText('Mutaba3a', { exact: true })).toBeVisible();
+      await expect(page.locator('.boot-splash').first()).toBeVisible();
+      await expect(page.getByText('Mutaba3a', { exact: true })).toHaveCount(0);
     });
 
-    await step('After 0.4 s the bloom loader says it is checking the session', async () => {
+    await step('The mark blooms in place and says it is checking the session', async () => {
       const status = page.getByRole('status');
       await expect(status).toHaveText(AUTH_CHECKING.en);
       await expect(status.locator('svg path')).toHaveCount(4);
+      await expect(status).not.toHaveClass(/brand-loader--enter/);
+    });
+
+    await step('After 3 s it says it is still connecting', async () => {
+      await expect(page.getByRole('status')).toHaveText(AUTH_CONNECTING_SLOW.en, { timeout: 5_000 });
     });
 
     await step('Then sign-in', async () => {
@@ -171,7 +185,102 @@ test(
     });
 
     await step('No Content Security Policy violation', async () => {
-      expect(cspErrors).toEqual([]);
+      expect(cspErrors()).toEqual([]);
+    });
+  },
+);
+
+test(
+  'reduced motion: the slow session check holds the still mark and writes what it is doing',
+  { tag: '@portal.signin.boot-slow-session' },
+  async ({ page, step }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openWithSlowSession(page, 4_000);
+
+    await step('Open the portal while the session check is slow', async () => {
+      await page.goto('/');
+    });
+
+    await step('The words show under the still mark, then the slow ones', async () => {
+      const caption = page.locator('.boot-splash .brand-loader__caption');
+      await expect(caption).toHaveText(AUTH_CHECKING.en);
+      await expect(page.locator('.boot-splash animate, .boot-splash animateTransform')).toHaveCount(0);
+      await expect(caption).toHaveText(AUTH_CONNECTING_SLOW.en, { timeout: 5_000 });
+    });
+  },
+);
+
+for (const scheme of SCHEMES) {
+  test(`${scheme} mode: the boot screen passes axe`, { tag: '@portal.signin.boot-splash' }, async ({ page, step }) => {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await openWithSlowSession(page, 10_000);
+    await step('Open the portal while the session check is slow', async () => {
+      await page.goto('/');
+      await expect(page.getByRole('status')).toHaveText(AUTH_CHECKING.en);
+    });
+    await step('Check accessibility', async () => {
+      await expectOnlyKnownAxeViolations(page, 'portalBoot');
+    });
+  });
+}
+
+/** MUT-207: before any JavaScript, the portal is the 80 px mark centred on the canvas, in the OS's scheme. */
+test.describe('before JavaScript', () => {
+  test.use({ javaScriptEnabled: false });
+
+  for (const scheme of SCHEMES) {
+    test(`${scheme} OS: the portal opens on the mark, centred on the canvas`, { tag: '@portal.signin.boot-splash' }, async ({ page, step }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await step('Open the portal with scripts off', async () => {
+        await page.goto('/');
+        const mark = page.locator('#root > .boot-splash img.boot-splash-mark');
+        await expect(mark).toBeVisible();
+        expect(await page.locator('.boot-splash').evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(hexToRgb(CANVAS_HEX[scheme]));
+        expect(await mark.evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+        const viewport = page.viewportSize()!;
+        const { cx, cy, size } = await bootMarkBox(page);
+        expect(Math.abs(cx - viewport.width / 2)).toBeLessThanOrEqual(1);
+        expect(Math.abs(cy - viewport.height / 2)).toBeLessThanOrEqual(1);
+        expect(size).toBe(80);
+      });
+    });
+  }
+});
+
+test(
+  'the hand-off: once React mounts, the mark (or the loader that replaced it) is the static mark, same place and size',
+  { tag: '@portal.signin.boot-splash' },
+  async ({ browser, page, step }) => {
+    let still = { cx: 0, cy: 0, size: 0 };
+    await step('Measure the static mark with scripts off', async () => {
+      const context = await browser.newContext({ javaScriptEnabled: false, viewport: page.viewportSize() ?? undefined });
+      const off = await context.newPage();
+      await off.goto(new URL('/', test.info().project.use.baseURL).href);
+      await expect(off.locator('.boot-splash img')).toBeVisible();
+      still = await bootMarkBox(off);
+      await context.close();
+    });
+
+    const cspErrors = await openWithSlowSession(page, 3_000);
+    await step('Open the portal with /v1/me held 3 s', async () => {
+      await page.goto('/');
+      // React's boot screen has no aria-hidden; the static splash has
+      await expect(page.locator('#root > .boot-splash:not([aria-hidden])')).toBeVisible();
+    });
+
+    await step('The mark has not moved or changed size', async () => {
+      const mounted = await bootMarkBox(page);
+      expect(Math.abs(mounted.cx - still.cx)).toBeLessThanOrEqual(1);
+      expect(Math.abs(mounted.cy - still.cy)).toBeLessThanOrEqual(1);
+      expect(Math.abs(mounted.size - still.size)).toBeLessThanOrEqual(1);
+    });
+
+    await step('After 0.4 s the bloom loader says it is checking the session', async () => {
+      await expect(page.getByRole('status')).toHaveText(AUTH_CHECKING.en);
+    });
+
+    await step('No Content Security Policy violation', async () => {
+      expect(cspErrors()).toEqual([]);
     });
   },
 );

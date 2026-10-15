@@ -43,7 +43,7 @@ Change a value in the JSON first, then in both platform files. `src/styles/__tes
 | `icon-192.png`, `icon-512.png`, `maskable-512.png`, `icon-1024.png` | `public/icons/` | PWA manifest (`PWA_MANIFEST` in `vite.config.ts`); `icon-1024.png` is the desktop icon source |
 | `og-card-ar-1200x630.png` | `public/` | link-preview card (`og:image`, `summary_large_image`), web build only, kept out of the SW precache (MUT-104) |
 | `og-card-en-1200x630.png`, `og-mark-1200.png` | `docs/brand/` | kit references, not shipped (the English card; the original square mark) |
-| `mark.svg`, `mark-dark.svg` | `src/assets/brand/` | `BrandMark` (theme-aware) in the sidebar and the portal `Wordmark`; the landing header is MUT-77 (bundled, so all builds get it) |
+| `mark.svg`, `mark-dark.svg` | `src/assets/brand/` | `BrandMark` (theme-aware) in the sidebar and the portal `Wordmark`; the landing header is MUT-77 (bundled, so all builds get it); the boot splash in `index.html`/`hosted.html` and `BootSplash` (MUT-207: a `<picture>` picks the dark file by OS before JS), and the portal's boot screen (`BrandMark` 80) |
 | Thmanyah Sans 400/500/700, Thmanyah Serif Display 400/700 (`.otf`, delivered bytes) | `src/assets/fonts/` | UI in every build: declared once in `src/styles/brand/fonts.css` and bundled, so web, desktop (offline) and portal all serve hashed copies under `/assets/` (MUT-102, D4). sha256-pinned in `brand.test.ts` and checked in every dist by `check-bundles` |
 | IBM Plex Mono 400/500, UI | `@fontsource/ibm-plex-mono` (OFL woff2), imported by `fonts.css` | figures in every build, portal included |
 | iOS AppIcon set, Android mipmaps | Flutter repo (`ios/Runner/Assets.xcassets`, `android/app/src/main/res`) | iPhone/Android app |
@@ -54,6 +54,7 @@ Change a value in the JSON first, then in both platform files. `src/styles/__tes
 | `mutaba3a_loader.dart` (`CustomPainter`) | `docs/brand/loader/` | reference for `Mutaba3aLoader` in the Flutter repo (MUT-204); not shipped from here |
 | `splash.png`, `splash-dark.png` (768×768, mark 576 px), `android12.png`, `android12-dark.png` (1152×1152, mark 500 px), `flutter_native_splash.yaml` | `docs/brand/splash/` | input for the iPhone/Android native launch screen (MUT-205), copied to the Flutter repo's `assets/splash/`; not shipped from here |
 | `splash-{light,dark}-{1290x2796,1080x2400}.png` | `docs/brand/splash/screens/` | reference renders for QA comparison only (MUT-205, MUT-207); the generated launch screen, not these renders, is the size spec |
+| Web and portal boot splash (no new asset) | `index.html`, `hosted.html`, `src/styles/brand/boot-splash.css` | MUT-207, ADR-080: the 80 px mark on the canvas before any JS, from the same `mark.svg`/`mark-dark.svg`; `boot-splash.css` writes the two canvas hexes (pinned to the token file by `brand-head.test.ts`); the web splash is 80 px on every viewport, calmer than the iPhone's 144 pt launch mark |
 
 ## Typography
 

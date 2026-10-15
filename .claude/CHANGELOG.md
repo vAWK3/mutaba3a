@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — The boot splash: the mark on the canvas before JS, handing off to the loader (MUT-207)
+
+**Why:** `index.html` and `hosted.html` shipped an empty `#root`, so a cold or slow load painted the browser's white (even in dark mode) for seconds, then a second, different screen: the portal's wordmark that jumped 18 px when its spinner came, or the landing's unlocalised "Loading...". Brief: `.claude/designs/mut-207-boot-splash.md` (eng review R1, design review DR3–DR18). ADR-080.
+
+### Added
+- Both heads link `src/styles/brand/boot-splash.css` and put the splash inside `#root`: a hidden `.boot-splash` with a `<picture>` (the dark mark for a dark OS) around an 80 px `<img>`. Markup and a linked stylesheet only, so it passes the portal CSP; React's first render replaces it.
+- `boot-splash.css`: a fixed, centred splash on the canvas (`#FCF6ED` / `#221B2D`, pinned to the token file), the page behind it the same, and `data-theme` rules so a forced theme wins once ThemeProvider runs (DR12).
+- `BootSplash` (`src/components/brand/BootSplash.tsx`): the same markup from React, as the landing, download, privacy and /hosted Suspense fallback (replacing `LandingLoader`); it blooms into `BrandLoader` 96 in place after `bootDelayMs()` (DR10).
+- `bootDelayMs()` (`src/components/brand/bootDelay.ts`): `LOADER_DELAY_MS` counted from page start, so a slow load blooms at once (DR9).
+- Portal: `hosted.auth.connectingSlow` ("Still connecting…" / "ما زلنا نتصل…"); `ME_TIMEOUT_MS` (15 s).
+- `check-bundles`: every built entry (web, its /hosted copy, desktop, portal) opens `#root` with the splash, and its marks and stylesheets resolve inside the dist or are `data:` URIs.
+- QA: `@web.brand.boot-splash`, `@portal.signin.boot-splash`; `@portal.signin.boot-slow-session` updated to the mark-first screen.
+
+### Changed
+- Portal S1 (`CheckingSession`) is "the mark becomes the loader" (D4, eng review R1): inside `.boot-splash`, the 80 px `BrandMark` until `bootDelayMs()`, then `BrandLoader` 96 (`delay={0}`, no fade) saying "Checking your session", then "Still connecting…" from 3 s. The wordmark text is gone from the boot screen (BootUnreachable keeps it); the container has no `aria-hidden` (DR14).
+- `meQuery` gives up after 15 s (`AbortSignal.any([signal, AbortSignal.timeout(ME_TIMEOUT_MS)])`); the timeout is a network `ApiError` (status 0), so AuthGate shows BootUnreachable with Retry instead of a loader that never ends (DR6). `api.me` forwards a signal.
+
+### Removed
+- `LandingLoader` and its inline style (`main.tsx`).
+
 ## [Unreleased] - 2026-10-15 — The bloom loader replaces the page and section spinners (MUT-206)
 
 **Why:** the app and the portal showed five unrelated rings and an unlocalised "Loading..." on lazy routes. Brand v2 has a designed loader: the mark folds into drops and blooms back over a 4.5 s loop. Brief: `.claude/designs/mut-206-brand-loader.md` (eng review R1–R5, design review DR1–DR16). ADR-079.

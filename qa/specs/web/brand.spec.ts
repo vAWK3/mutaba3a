@@ -5,7 +5,10 @@ import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { ar, chooseLanguageScript, LANGUAGE_KEYS } from '../../support/i18n';
 import {
   CANVAS,
+  CANVAS_HEX,
   MARK_DOT,
+  bootMarkBox,
+  hexToRgb,
   SCHEMES,
   attachScreenshot,
   computedFont,
@@ -468,3 +471,36 @@ for (const language of ['en', 'ar'] as const) {
     },
   );
 }
+
+/**
+ * MUT-207: the boot splash before any JavaScript. With scripts off, every
+ * entry is what a slow connection shows until the bundle runs: the 80 px mark
+ * centred on the canvas, in the OS's scheme.
+ */
+test.describe('before JavaScript', () => {
+  test.use({ javaScriptEnabled: false });
+
+  for (const scheme of SCHEMES) {
+    test(`${scheme} OS: the app and the landing open on the mark, centred on the canvas`, { tag: '@web.brand.boot-splash' }, async ({ page, step }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const path of ['/app/', '/']) {
+        await step(`Open ${path} with scripts off`, async () => {
+          await page.goto(path);
+          const mark = page.locator('#root > .boot-splash img.boot-splash-mark');
+          await expect(mark).toBeVisible();
+          expect(await page.locator('.boot-splash').evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(hexToRgb(CANVAS_HEX[scheme]));
+          expect(await mark.evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+          const src = await mark.evaluate((img) => (img as HTMLImageElement).currentSrc);
+          if (scheme === 'dark') expect(src).toMatch(/mark-dark/);
+          else expect(src).not.toMatch(/mark-dark/);
+          const viewport = page.viewportSize()!;
+          const { cx, cy, size } = await bootMarkBox(page);
+          expect(Math.abs(cx - viewport.width / 2)).toBeLessThanOrEqual(1);
+          expect(Math.abs(cy - viewport.height / 2)).toBeLessThanOrEqual(1);
+          expect(size).toBe(80);
+          await attachScreenshot(page, `boot-splash-${scheme}${path === '/' ? '-landing' : '-app'}`);
+        });
+      }
+    });
+  }
+});

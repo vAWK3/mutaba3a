@@ -16,6 +16,29 @@ const tokens = JSON.parse(fs.readFileSync(tokensFile, 'utf8'));
 /** The canvas each scheme paints, as the brand CSS declares it. */
 export const CANVAS = { light: tokens.color.canvas.oklch as string, dark: tokens.colorDark.canvas.oklch as string };
 
+/** The canvas as the static boot splash writes it (MUT-207): hex, the way boot-splash.css paints before JS. */
+export const CANVAS_HEX = { light: tokens.color.canvas.hex as string, dark: tokens.colorDark.canvas.hex as string };
+
+/** `#RRGGBB` as the `rgb(r, g, b)` a computed style reports. */
+export function hexToRgb(hex: string): string {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** The boot splash's mark before JS, or what took its place after: centre and drawn mark size (MUT-207). */
+export async function bootMarkBox(page: Page): Promise<{ cx: number; cy: number; size: number }> {
+  return page.evaluate(() => {
+    const img = document.querySelector<HTMLElement>('.boot-splash .boot-splash-mark');
+    const svg = document.querySelector<SVGSVGElement>('.boot-splash svg');
+    const element = img ?? svg;
+    if (!element) throw new Error('no boot mark on screen');
+    const box = element.getBoundingClientRect();
+    // The loader's 120-unit box draws the mark in its inner 100 units
+    const size = img ? box.width : (box.width * 100) / 120;
+    return { cx: box.x + box.width / 2, cy: box.y + box.height / 2, size };
+  });
+}
+
 /** The bloom loader's dot, per scheme (MUT-206): purple on light, butter on dark. */
 export const MARK_DOT = { light: tokens.color.markDot.oklch as string, dark: tokens.colorDark.markDot.oklch as string };
 

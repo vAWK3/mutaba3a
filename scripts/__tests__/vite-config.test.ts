@@ -361,6 +361,19 @@ describe('vite.config', () => {
       expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:hosted-offer-html');
     });
 
+    // MUT-207: /hosted is a copy of the built index.html, so it opens on the same boot splash.
+    it('keeps the boot splash and its stylesheet in the /hosted copy', () => {
+      const found = (resolve('web').plugins ?? []).flat().find((p) => p && typeof p === 'object' && 'name' in p && p.name === 'mutaba3a:hosted-offer-html');
+      const emitFile = vi.fn();
+      const splash = '<div id="root"><div class="boot-splash" aria-hidden="true"><picture><source srcset="/assets/mark-dark-x.svg" media="(prefers-color-scheme: dark)"><img class="boot-splash-mark" src="/assets/mark-x.svg" width="80" height="80" alt=""></picture></div></div>';
+      const index = INDEX.replace('<div id="root"></div>', splash).replace('</head>', '<link rel="stylesheet" crossorigin href="/assets/index-x.css"></head>');
+      const bundle = { 'index.html': { type: 'asset', fileName: 'index.html', source: index } };
+      (found as { generateBundle: (this: unknown, o: unknown, b: unknown) => void }).generateBundle.call({ emitFile }, {}, bundle);
+      const copy = String(emitFile.mock.calls[0][0].source);
+      expect(copy).toContain(splash);
+      expect(copy).toContain('<link rel="stylesheet" crossorigin href="/assets/index-x.css">');
+    });
+
     it('is served at /hosted by Netlify, ahead of the SPA catch-all, and never precached', () => {
       const toml = readFileSync(repoPath('netlify.toml'), 'utf8');
       const hostedRule = toml.indexOf(`from = "/hosted"\n  to = "/${HOSTED_OFFER_FILE}"\n  status = 200`);

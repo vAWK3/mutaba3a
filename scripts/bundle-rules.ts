@@ -148,3 +148,63 @@ export function fontProblems({ files, sources, html }: FontCheck): string[] {
   for (const href of preloadedFonts(html)) problems.push(`the entry HTML preloads a font (${href}); swap loads it without delaying first paint`);
   return problems;
 }
+
+export interface BootSplashCheck {
+  /** The built entry HTML's path, and its text. */
+  htmlPath: string;
+  html: string;
+  /** The dist root it belongs to. */
+  dist: string;
+  exists: (path: string) => boolean;
+  read: (path: string) => string;
+}
+
+const attr = (tag: string, name: string) => new RegExp(`\\b${name}="([^"]*)"`, 'i').exec(tag)?.[1] ?? null;
+
+/** A URL in a built entry HTML: `data:` is inline; anything else is a file inside the dist, or null when it isn't. */
+function distFile(url: string, htmlPath: string, dist: string): string | null | 'inline' {
+  if (url.startsWith('data:')) return 'inline';
+  const root = resolve(dist);
+  const clean = url.replace(/[?#].*$/, '');
+  const path = clean.startsWith('/') ? join(root, clean) : resolve(dirname(htmlPath), clean);
+  return path.startsWith(root + sep) ? path : null;
+}
+
+/**
+ * The boot splash in a built entry HTML (MUT-207, ADR-080): `#root` opens with
+ * `.boot-splash`, and its mark (`<img src>`), dark mark (`<source srcset>`) and
+ * every linked stylesheet resolve to files inside the dist, or are `data:` URIs
+ * (Vite inlines assets under 4 KB; eng review A2). One of those stylesheets
+ * must carry the `.boot-splash` rules. Same shape as the CSS `url()` rule.
+ */
+export function bootSplashProblems({ htmlPath, html, dist, exists, read }: BootSplashCheck): string[] {
+  const problems: string[] = [];
+  const root = /<div\b[^>]*\bid="root"[^>]*>([\s\S]*?)<\/picture>/i.exec(html);
+  if (!root || !/^\s*<div\b[^>]*\bclass="boot-splash"/i.test(root[1])) return ['#root does not open with the .boot-splash markup'];
+
+  const urls: [string, string | null][] = [];
+  const img = /<img\b[^>]*>/i.exec(root[1])?.[0];
+  const source = /<source\b[^>]*>/i.exec(root[1])?.[0];
+  urls.push(['the mark <img src>', img ? attr(img, 'src') : null]);
+  urls.push(['the dark mark <source srcset>', source ? attr(source, 'srcset') : null]);
+  const sheets = [...html.matchAll(/<link\b[^>]*>/gi)].map((m) => m[0]).filter((tag) => /\brel="stylesheet"/i.test(tag));
+  for (const sheet of sheets) urls.push(['a stylesheet <link href>', attr(sheet, 'href')]);
+  if (sheets.length === 0) problems.push('the entry links no stylesheet, so the splash paints unstyled');
+
+  let styled = false;
+  for (const [what, url] of urls) {
+    if (!url) {
+      problems.push(`${what} is missing`);
+      continue;
+    }
+    const file = distFile(url, htmlPath, dist);
+    if (file === 'inline') continue;
+    if (!file || !exists(file)) {
+      problems.push(`${what} "${url}" has no file in ${dist}`);
+      continue;
+    }
+    if (what.startsWith('a stylesheet') && /\.boot-splash\b/.test(read(file))) styled = true;
+  }
+  if (sheets.length > 0 && !styled) problems.push('no linked stylesheet carries the .boot-splash rules');
+  return problems;
+}

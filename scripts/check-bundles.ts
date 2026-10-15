@@ -9,11 +9,15 @@
  * byte-identical, bundles no retired face, preloads no font (ADR-058), and
  * every CSS url() resolves to a file inside that dist (offline proof for
  * desktop; for web, no font silently answered by the index.html fallback).
+ *
+ * Boot splash (MUT-207): every built entry HTML opens #root with the splash,
+ * and its mark, dark mark and stylesheets resolve inside the dist (or are
+ * data: URIs).
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { HOSTED_RULES, LOCAL_RULES, extractOrigins, findForbidden, fontProblems, newOrigins, unresolvedUrls, type Rule } from './bundle-rules';
+import { HOSTED_RULES, LOCAL_RULES, bootSplashProblems, extractOrigins, findForbidden, fontProblems, newOrigins, unresolvedUrls, type Rule } from './bundle-rules';
 
 const TEXT_FILE = /\.(js|mjs|html|css|json|webmanifest)$/;
 const FONT_FILE = /\.(otf|ttf|woff2?)$/;
@@ -52,6 +56,23 @@ function checkBrandFonts(dir: string): string[] {
   return problems;
 }
 
+/** The entry HTML files each dist serves: the web build also emits the /hosted page's copy of index.html. */
+const ENTRY_HTML: Record<string, string[]> = {
+  'dist-web': ['index.html', 'hosted-offer.html'],
+  'dist-desktop': ['index.html'],
+  'dist-hosted': ['index.html'],
+};
+
+function checkBootSplash(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return ENTRY_HTML[dir].flatMap((name) => {
+    const htmlPath = join(dir, name);
+    if (!existsSync(htmlPath)) return [`${htmlPath} is missing`];
+    const read = (path: string) => readFileSync(path, 'utf8');
+    return bootSplashProblems({ htmlPath, html: read(htmlPath), dist: dir, exists: existsSync, read }).map((problem) => `${htmlPath}: ${problem}`);
+  });
+}
+
 function check(dir: string, rules: Rule[], origins: string[]): string[] {
   if (!existsSync(dir)) return [`${dir} is missing: build it first`];
   const problems: string[] = [];
@@ -70,6 +91,7 @@ const problems = [
   ...check('dist-desktop', LOCAL_RULES, allowlist.local),
   ...check('dist-hosted', HOSTED_RULES, allowlist.hosted),
   ...['dist-web', 'dist-desktop', 'dist-hosted'].flatMap(checkBrandFonts),
+  ...['dist-web', 'dist-desktop', 'dist-hosted'].flatMap(checkBootSplash),
 ];
 
 if (problems.length > 0) {
@@ -77,5 +99,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  'Bundle check passed: dist-web and dist-desktop carry no portal code; dist-hosted carries no local storage and no self-service account door; every dist ships Thmanyah unmodified, preloads no font, and resolves every CSS url().',
+  'Bundle check passed: dist-web and dist-desktop carry no portal code; dist-hosted carries no local storage and no self-service account door; every dist ships Thmanyah unmodified, preloads no font, resolves every CSS url(), and opens on a boot splash whose assets resolve.',
 );

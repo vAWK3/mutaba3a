@@ -13,13 +13,19 @@
     <link rel="apple-touch-icon" sizes="180x180" href="./public/apple-touch-icon.png" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FCF6ED" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#221B2D" />
+    <link rel="stylesheet" href="./src/styles/brand/boot-splash.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
     <meta name="referrer" content="same-origin" />
     <title>Mutaba3a</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      The boot splash (MUT-207, ADR-080): the mark on the brand canvas until React mounts and replaces
+      #root's content. Markup and a linked stylesheet only, no inline style or script, so it passes the
+      portal CSP (default-src 'self'). Keep it in step with src/components/brand/BootSplash.tsx.
+    -->
+    <div id="root"><div class="boot-splash" aria-hidden="true"><picture><source srcset="./src/assets/brand/mark-dark.svg" media="(prefers-color-scheme: dark)"><img class="boot-splash-mark" src="./src/assets/brand/mark.svg" width="80" height="80" alt=""></picture></div></div>
     <script type="module" src="/src/hosted/main.tsx"></script>
   </body>
 </html>

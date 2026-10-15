@@ -137,3 +137,17 @@ features:
       - The page replaces the loader once its code arrives
       - Under reduced motion the mark is still, with "Loading" written under it
       - The mark's centre is the page column's centre (±1 px) and the mark is never mirrored
+  - id: boot-splash
+    title: Before any JavaScript the app and the landing show the 80 px mark centred on the brand canvas, in the OS's light or dark scheme (MUT-207)
+    tier: core
+    paths:
+      - index.html
+      - src/styles/brand/boot-splash.css
+      - src/components/brand/BootSplash.tsx
+      - src/components/brand/bootDelay.ts
+      - src/main.tsx
+    steps:
+      - With scripts off, under OS light then OS dark, open /app/ and /
+    expect:
+      - The splash's background is the canvas the token file names for that scheme
+      - The mark is loaded (the dark file under OS dark), 80 px, and centred in the window (±1 px)

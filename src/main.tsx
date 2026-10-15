@@ -21,6 +21,7 @@ import { HOSTED_OFFER_URL } from "./content/download-config";
 import { marketingPath } from "./pages/landing/marketingPath";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
+import { BootSplash } from "./components/brand/BootSplash";
 import "./components/ui/ErrorBoundary.css";
 import { handleVersionChange } from "./lib/platform";
 import { removeRetiredStorageKeys } from "./lib/retiredStorage";
@@ -70,22 +71,6 @@ const HostedOfferPage =
 
 const queryClient = createAppQueryClient();
 
-// Simple loading fallback for landing pages
-const LandingLoader = () => (
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      height: "100vh",
-      background: "var(--bg)",
-      color: "var(--muted)",
-    }}
-  >
-    Loading...
-  </div>
-);
-
 function App() {
   // Web build: handle landing routes outside router
   if (__BUILD_MODE__ === "web") {
@@ -94,7 +79,7 @@ function App() {
     if (path === "/" && LandingPage) {
       return (
         <LandingProviders>
-          <Suspense fallback={<LandingLoader />}>
+          <Suspense fallback={<BootSplash />}>
             <LandingPage />
           </Suspense>
         </LandingProviders>
@@ -104,7 +89,7 @@ function App() {
     if (path === "/download" && DownloadPage) {
       return (
         <LandingProviders>
-          <Suspense fallback={<LandingLoader />}>
+          <Suspense fallback={<BootSplash />}>
             <DownloadPage />
           </Suspense>
         </LandingProviders>
@@ -114,7 +99,7 @@ function App() {
     if (path === "/privacy" && PrivacyPolicyPage) {
       return (
         <LandingProviders>
-          <Suspense fallback={<LandingLoader />}>
+          <Suspense fallback={<BootSplash />}>
             <PrivacyPolicyPage />
           </Suspense>
         </LandingProviders>
@@ -124,7 +109,7 @@ function App() {
     if (path === HOSTED_OFFER_URL && HostedOfferPage) {
       return (
         <LandingProviders>
-          <Suspense fallback={<LandingLoader />}>
+          <Suspense fallback={<BootSplash />}>
             <HostedOfferPage />
           </Suspense>
         </LandingProviders>

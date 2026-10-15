@@ -38,6 +38,7 @@
         "link": "Request one"
       },
       "checking": "Checking your session",
+      "connectingSlow": "Still connecting…",
       "boot": {
         "title": "Can't reach Mutaba3a right now",
         "body": "Figures aren't stored on this device, so nothing is shown until the connection is back.",
