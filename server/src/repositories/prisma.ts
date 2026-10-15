@@ -363,7 +363,7 @@ export class PrismaLedgerStore implements LedgerStore {
       })),
     list: async (organizationId, filter: AuditFilter, page) => {
       const rows = await this.prisma.auditEvent.findMany({
-        where: { organizationId, ...entityTypeWhere(filter), ...(filter.entityId ? { entityId: filter.entityId } : {}), ...(filter.action ? { action: filter.action } : {}), ...cursorWhere(page) },
+        where: { organizationId, ...entityTypeWhere(filter), ...(filter.entityId ? { entityId: filter.entityId } : {}), ...actionWhere(filter), ...cursorWhere(page) },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: page.limit + 1,
       });
@@ -1443,6 +1443,13 @@ function conversionCursorWhere(cursor: ConversionCursor | null): Prisma.Conversi
 
 function toExpenseCategory(row: Prisma.ExpenseCategoryGetPayload<object>): ExpenseCategoryRecord {
   return { id: row.id, organizationId: row.organizationId, name: row.name, color: row.color, archivedAt: row.archivedAt, version: row.version, createdAt: row.createdAt, updatedAt: row.updatedAt };
+}
+
+/** `action` equals the filter's and is none of the excluded ones (MUT-223); the same shape as entityTypeWhere. */
+function actionWhere(filter: AuditFilter): { action?: Prisma.StringFilter } {
+  const excluded = filter.excludeActions ?? [];
+  if (!filter.action && excluded.length === 0) return {};
+  return { action: { ...(filter.action ? { equals: filter.action } : {}), ...(excluded.length ? { notIn: [...excluded] } : {}) } };
 }
 
 /** `entityType` equals the filter's and is none of the excluded ones (MUT-42). */

@@ -269,6 +269,8 @@ export interface AuditFilter {
   action?: string;
   /** Entity types left out of the listing (MUT-42: expense activity never reaches Malafat's key). */
   excludeEntityTypes?: readonly string[];
+  /** MUT-223: actions to leave out — a session's own edits on an entity type Malafat otherwise reads (receivable, payment). */
+  excludeActions?: readonly string[];
 }
 
 export interface AuditRepository {

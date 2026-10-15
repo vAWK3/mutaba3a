@@ -491,7 +491,8 @@ export class MemoryLedgerStore implements LedgerStore {
             (!filter.entityType || e.entityType === filter.entityType) &&
             (!filter.entityId || e.entityId === filter.entityId) &&
             (!filter.action || e.action === filter.action) &&
-            !(filter.excludeEntityTypes ?? []).includes(e.entityType),
+            !(filter.excludeEntityTypes ?? []).includes(e.entityType) &&
+            !(filter.excludeActions ?? []).includes(e.action),
         ),
         page,
       ),
