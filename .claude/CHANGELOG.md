@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — The sample's part-paid entries come with payment records (MUT-95, TD-063)
+
+**Why:** payment records own payment state (ADR-039). The sample seeded part-paid entries with a received amount and no record, so the first real payment summed the records alone and Owed now went up (₪4,001.28 left, pay ₪2,000, then ₪4,300 left). The overpayment guard counted records only, too.
+
+### Fixed
+- The sample writes one payment record for every paid and part-paid entry, adding up to what it has received, by the v23 backfill's rule. Each is dated on the entry's paid or issue date, never after today.
+- A payment on a part-paid sample entry now lowers what is owed by exactly that amount, and the guard uses the true remainder. Payments shows each seeded payment once, with no "Recorded on the entry" fallback row.
+- Removing the sample removes every payment on a sample entry, including ones the visitor recorded.
+
+### Technical
+- `DEMO_PREFIXES.paymentRecord` = `demo_payment_`. `samplePaymentRecords` lives in `src/db/demoData.ts`, beside the backfill rule it reuses.
+- New QA feature `web.record-payment.sample-part-paid`. It failed on the old seed (expected 3001.28, got 5300).
+- Files: `src/db/demoData.ts`, `src/demo/constants.ts`, `src/demo/__tests__/seedPayments.test.ts` (new), `qa/specs/web/record-payment.spec.ts`, `qa/features/web/record-payment.yaml`.
+
 ## [Unreleased] - 2026-10-15 — Demo mode shows its summary and opens a sample business (MUT-220)
 
 **Why:** `activateDemo` set `showConfirmModal` to false, so AppShell unmounted the dialog before its summary rendered. The switch to the demo business ran before the business list refetched, so `useActiveProfile`'s repair put the person straight back on their own business. The dialog also promised "1 business profile" when it seeds 3.
