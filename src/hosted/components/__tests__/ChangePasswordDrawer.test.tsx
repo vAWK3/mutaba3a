@@ -29,6 +29,22 @@ describe('Change password drawer (MUT-237)', () => {
     expect(screen.getByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
   });
 
+  it('a show/hide toggle on each field reveals what was typed, independently', async () => {
+    const { user } = portal(`/p/${ORG_A}?changePassword=true`);
+    const dialog = await screen.findByRole('dialog', { name: 'Change password' });
+    const current = within(dialog).getByLabelText('Current password');
+    const next = within(dialog).getByLabelText('New password');
+    await user.type(current, 'the old one');
+    await user.type(next, 'a brand new long password');
+    expect(current).toHaveAttribute('type', 'password');
+    expect(next).toHaveAttribute('type', 'password');
+    await user.click(within(dialog).getAllByRole('button', { name: 'Show' })[0]);
+    expect(current).toHaveAttribute('type', 'text');
+    expect(next).toHaveAttribute('type', 'password');
+    await user.click(within(dialog).getByRole('button', { name: 'Hide' }));
+    expect(current).toHaveAttribute('type', 'password');
+  });
+
   it('also opens directly from the URL', async () => {
     portal(`/p/${ORG_A}?changePassword=true`);
     expect(await screen.findByRole('dialog', { name: 'Change password' })).toBeInTheDocument();

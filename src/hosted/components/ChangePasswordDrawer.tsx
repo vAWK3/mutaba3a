@@ -10,9 +10,11 @@ import { useToast } from './Toast';
 /**
  * Change your own password (MUT-237), from the account menu. Reuses the
  * setup page's password rule and field shape (`setupLink.ts`): a visible
- * hint, inline refusal before anything is sent, no confirm field. A wrong
- * current password is a banner, not a field error — it isn't this field
- * that's invalid, the account doesn't recognise it.
+ * hint, a show/hide toggle on each field, inline refusal before anything is
+ * sent, no confirm field — mistyping a password that's never shown is the one
+ * failure mode a toggle exists to prevent. A wrong current password is a
+ * banner, not a field error — it isn't this field that's invalid, the
+ * account doesn't recognise it.
  */
 
 const POLICY_VARS = { min: NEW_PASSWORD_POLICY.minLength, max: NEW_PASSWORD_POLICY.maxLength };
@@ -28,6 +30,8 @@ export function ChangePasswordDrawer({ onClose }: { onClose: () => void }) {
   const ids = useId();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
   const [fieldError, setFieldError] = useState<FieldError | null>(null);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [pending, setPending] = useState(false);
@@ -93,37 +97,47 @@ export function ChangePasswordDrawer({ onClose }: { onClose: () => void }) {
           <label className="form-label" htmlFor={`${ids}-current`}>
             {t('hosted.account.changePassword.current')}
           </label>
-          <input
-            ref={currentRef}
-            id={`${ids}-current`}
-            className="input"
-            type="password"
-            autoComplete="current-password"
-            dir="ltr"
-            autoFocus
-            readOnly={pending}
-            value={currentPassword}
-            aria-describedby={banner ? bannerId : undefined}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-          />
+          <div className="hp-password">
+            <input
+              ref={currentRef}
+              id={`${ids}-current`}
+              className="input"
+              type={showCurrent ? 'text' : 'password'}
+              autoComplete="current-password"
+              dir="ltr"
+              autoFocus
+              readOnly={pending}
+              value={currentPassword}
+              aria-describedby={banner ? bannerId : undefined}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+            />
+            <button type="button" className="hp-password-toggle press" aria-pressed={showCurrent} aria-controls={`${ids}-current`} onClick={() => setShowCurrent((shown) => !shown)}>
+              {t(showCurrent ? 'hosted.auth.hide' : 'hosted.auth.show')}
+            </button>
+          </div>
         </div>
 
         <div className="form-group">
           <label className="form-label" htmlFor={`${ids}-new`}>
             {t('hosted.account.changePassword.new')}
           </label>
-          <input
-            id={`${ids}-new`}
-            className={`input ${fieldError ? 'input-error' : ''}`}
-            type="password"
-            autoComplete="new-password"
-            dir="ltr"
-            readOnly={pending}
-            value={newPassword}
-            aria-invalid={Boolean(fieldError)}
-            aria-describedby={[ruleId, fieldError ? errorId : null].filter(Boolean).join(' ')}
-            onChange={(e) => setNewPassword(e.target.value)}
-          />
+          <div className="hp-password">
+            <input
+              id={`${ids}-new`}
+              className={`input ${fieldError ? 'input-error' : ''}`}
+              type={showNew ? 'text' : 'password'}
+              autoComplete="new-password"
+              dir="ltr"
+              readOnly={pending}
+              value={newPassword}
+              aria-invalid={Boolean(fieldError)}
+              aria-describedby={[ruleId, fieldError ? errorId : null].filter(Boolean).join(' ')}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <button type="button" className="hp-password-toggle press" aria-pressed={showNew} aria-controls={`${ids}-new`} onClick={() => setShowNew((shown) => !shown)}>
+              {t(showNew ? 'hosted.auth.hide' : 'hosted.auth.show')}
+            </button>
+          </div>
           <p className="form-hint" id={ruleId}>
             {t('hosted.setup.rule', POLICY_VARS)}
           </p>
