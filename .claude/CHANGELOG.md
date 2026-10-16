@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-16 — Inbox count for the Capture hub (MUT-240, API 1.30.0-mut240)
+
+**Why:** the Capture hub's Recent handle (MUT-230 §6/§17a) wants an exact "N to file" without paging the whole `GET /v1/inbox` list; `countByUser` already existed but was classified `operator`-only.
+
+### Added
+- `GET /v1/inbox/count` → `{count}`, session/device-session auth, no `X-Mutaba3a-Profile` — the fifth organization-independent inbox route, next to the four CRUD ones.
+
+### Changed
+- `STORE_ACCESS.inboxEntries.countByUser` reclassified `operator` → `sessionOnly`: the same basis as the inbox's other methods. `/admin`'s per-user support lookup still calls it, unaffected — admin routes run with no store guard at all.
+
+### Technical
+- Route tests cover zero/non-zero/cross-user isolation and the 401/403 principal checks; `route-security.test.ts`'s generated operation inventory picks the new route up automatically.
+
 ## [Unreleased] - 2026-10-16 — Portal: set your password from a setup link (MUT-236, ADR-088)
 
 **Why:** since MUT-235 a new or reset account gets a one-time link `<portal>/setup#<token>`, and the portal had no page for it, so nobody could finish setting up. Ships in the same `make release server` as MUT-235.

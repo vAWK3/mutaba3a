@@ -82,8 +82,6 @@ describe('STORE_ACCESS', () => {
       'accountSetup.issue',
       'accountSetup.redeem',
       'apiKeys.create',
-      // MUT-66: the support-only per-user inbox count; the inbox itself is the person's, not the operator's.
-      'inboxEntries.countByUser',
       'memberships.grant',
       'memberships.revoke',
       'organizations.create',
@@ -132,20 +130,23 @@ describe('owned profiles (MUT-182)', () => {
 });
 
 describe('the inbox (MUT-66)', () => {
-  it('accepts a session and no other principal for the five session-only methods', () => {
+  it('accepts a session and no other principal for the six session-only methods', () => {
     expect(storeRefusal('session', null, 'sessionOnly')).toBeNull();
     expect(storeRefusal('session', 'MALAFAT', 'sessionOnly')).toBeNull();
     expect(storeRefusal('apiKey', null, 'sessionOnly')?.code).toBe('PRINCIPAL_NOT_ACCEPTED');
   });
 
-  it('classifies the inbox’s own methods: sessionOnly to capture, operator to count, the ledger’s own domains to file', () => {
+  // MUT-240: countByUser moved from operator to sessionOnly so the Capture hub's own
+  // GET /v1/inbox/count route can call it; /admin's per-user lookup runs with no guard
+  // at all, so this reclassification does not change what it can reach.
+  it('classifies the inbox’s own methods: sessionOnly to capture and to count, the ledger’s own domains to file', () => {
     expect(STORE_ACCESS.inboxEntries).toEqual({
       create: 'sessionOnly',
       getById: 'sessionOnly',
       list: 'sessionOnly',
       update: 'sessionOnly',
       delete: 'sessionOnly',
-      countByUser: 'operator',
+      countByUser: 'sessionOnly',
       fileAsExpense: { write: 'expenses' },
       fileAsIncome: { write: 'payments' },
     });
