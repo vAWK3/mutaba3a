@@ -56,6 +56,7 @@ import type {
   MembershipRecord,
   MembershipRepository,
   SessionRecord,
+  SetupLinkPurpose,
   SessionRepository,
   UserRecord,
   UserRepository,
@@ -303,6 +304,7 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const o of this.orgs.values()) {
         if (o.slug === input.personal.slug) throw new UniqueViolation('organizations.slug');
       }
+      if (input.setupLink) this.assertSetupDigestFree(input.setupLink.tokenDigest);
       const user: UserRecord = {
         id: randomUUID(),
         email: input.email,
@@ -328,6 +330,7 @@ export class MemoryLedgerStore implements LedgerStore {
       this.people.set(user.id, user);
       this.orgs.set(personalOrganization.id, personalOrganization);
       for (const m of memberships) this.members.set(membershipKey(user.id, m.organizationId), m);
+      if (input.setupLink) this.storeSetupLink(user.id, input.setupLink, input.at);
       return { user: { ...user }, memberships: memberships.map((m) => ({ ...m })), personalOrganization: { ...personalOrganization } };
     },
     getById: async (id) => clone(this.people.get(id)),
@@ -342,6 +345,8 @@ export class MemoryLedgerStore implements LedgerStore {
       const u = this.people.get(id);
       if (!u) return null;
       Object.assign(u, { status, updatedAt: at });
+      // MUT-235 review fix: a disable kills open setup links, so re-enabling never revives one.
+      if (status === 'DISABLED') this.cancelOpenSetupLinks(id, at);
       return { ...u };
     },
     recordFailedSignIn: async (id, at, lockUntil) => {
@@ -369,7 +374,12 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const s of this.sessionsById.values()) {
         if (s.tokenDigest === input.tokenDigest) throw new UniqueViolation('sessions.tokenDigest');
       }
-      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('sessions.userId');
+      const owner = this.people.get(input.userId);
+      if (!owner) throw new ForeignKeyViolation('sessions.userId');
+      // MUT-235 review: a session for a credential that changed (or a person disabled) since sign-in checked it is refused.
+      if (input.verifiedPasswordHash !== undefined && (owner.passwordHash !== input.verifiedPasswordHash || owner.status !== 'ACTIVE')) {
+        throw new StateConflict('user', 'CREDENTIAL_CHANGED');
+      }
       const record: SessionRecord = {
         id: randomUUID(),
         userId: input.userId,
@@ -411,32 +421,39 @@ export class MemoryLedgerStore implements LedgerStore {
     return count;
   }
 
+  private cancelOpenSetupLinks(userId: string, at: Date): void {
+    for (const link of this.setupLinks.values()) {
+      if (link.userId === userId && link.usedAt === null && link.cancelledAt === null) link.cancelledAt = at;
+    }
+  }
+
+  private assertSetupDigestFree(tokenDigest: string): void {
+    for (const link of this.setupLinks.values()) {
+      if (link.tokenDigest === tokenDigest) throw new UniqueViolation('account_setup_tokens.tokenDigest');
+    }
+  }
+
+  private storeSetupLink(userId: string, input: { tokenDigest: string; purpose: SetupLinkPurpose; expiresAt: Date }, at: Date): AccountSetupTokenRecord {
+    const record: AccountSetupTokenRecord = { id: randomUUID(), userId, ...input, createdAt: at, usedAt: null, cancelledAt: null };
+    this.setupLinks.set(record.id, record);
+    return record;
+  }
+
   // Each method runs to completion without an await, which is the in-memory stand-in for the Prisma transaction and row lock.
   readonly accountSetup: AccountSetupRepository = {
     issue: async (input) => {
       const person = this.people.get(input.userId);
       if (!person) throw new ForeignKeyViolation('account_setup_tokens.userId');
-      for (const link of this.setupLinks.values()) {
-        if (link.tokenDigest === input.tokenDigest) throw new UniqueViolation('account_setup_tokens.tokenDigest');
-      }
+      // Re-checked here, not only in the route, so a disable that lands first can never be followed by a fresh link.
+      if (person.status !== 'ACTIVE') throw new StateConflict('user', 'USER_DISABLED');
+      this.assertSetupDigestFree(input.tokenDigest);
       if (input.lock) {
-        Object.assign(person, { passwordHash: null, updatedAt: input.at });
+        // Stamping passwordChangedAt makes the session check refuse a session a racing sign-in inserts after the lock.
+        Object.assign(person, { passwordHash: null, passwordChangedAt: input.at, updatedAt: input.at });
         this.revokeSessionsOf(person.id, 'setup_link_lock', input.at);
       }
-      for (const link of this.setupLinks.values()) {
-        if (link.userId === input.userId && link.usedAt === null && link.cancelledAt === null) link.cancelledAt = input.at;
-      }
-      const record: AccountSetupTokenRecord = {
-        id: randomUUID(),
-        userId: input.userId,
-        tokenDigest: input.tokenDigest,
-        purpose: input.purpose,
-        createdAt: input.at,
-        expiresAt: input.expiresAt,
-        usedAt: null,
-        cancelledAt: null,
-      };
-      this.setupLinks.set(record.id, record);
+      this.cancelOpenSetupLinks(input.userId, input.at);
+      const record = this.storeSetupLink(input.userId, { tokenDigest: input.tokenDigest, purpose: input.purpose, expiresAt: input.expiresAt }, input.at);
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       return { ...record };
     },

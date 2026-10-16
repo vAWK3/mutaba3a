@@ -38,6 +38,20 @@ export function setupLinkState(link: AccountSetupTokenRecord | null, person: Pic
   return 'valid';
 }
 
+const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * Where a link points: PORTAL_ORIGIN when configured, otherwise the host the operator called, always https except on
+ * a loopback host. Behind Cloud Run TLS ends at the front end, so the request reaches the server as plain http; a
+ * link must never inherit that (MUT-235 review).
+ */
+export function setupLinkOrigin(portalOrigin: string | undefined, requestUrl: string): string {
+  if (portalOrigin) return portalOrigin;
+  const url = new URL(requestUrl);
+  if (!LOOPBACK_HOSTS.has(url.hostname)) url.protocol = 'https:';
+  return url.origin;
+}
+
 /** The token rides in the fragment, which browsers never send: it stays out of request lines, logs and Referer headers. */
 export function setupUrl(origin: string, token: string): string {
   return `${origin.replace(/\/+$/, '')}/setup#${token}`;

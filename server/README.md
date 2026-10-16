@@ -30,7 +30,9 @@ only: there is no signup, invite or "forgot password" anywhere. Since MUT-235
 `rotate:password` print a one-time **setup link** once, on its own line (72 hours;
 `--valid-hours 1–720`). Send it over a secure channel. The person opens it, sets
 their own password (12–128 characters) on the portal's `/setup` page (MUT-236),
-then signs in on the portal or the app:
+then signs in on the portal or the app. The link points at `PORTAL_ORIGIN` when it is set; otherwise at the
+host you called, always over https except on `localhost`/`127.0.0.1`/`[::1]`, so a LAN or docker-compose
+development host needs `PORTAL_ORIGIN` set to its plain-http origin:
 
 ```bash
 export MUTABA3A_ADMIN_TOKEN=$(grep MUTABA3A_ADMIN_TOKEN .env | cut -d= -f2)

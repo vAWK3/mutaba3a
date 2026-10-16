@@ -367,6 +367,13 @@ describe('password reset and status', () => {
     expect(res.status).toBe(200);
     const body = await read(res);
     expect(body.setupLink.purpose).toBe('RESET');
+    expect(body.lock).toBe(true);
+    // The audit row is the forensic record that the operator force-signed-out the account.
+    // Both links are issued at the same fake-clock instant, so match the rows by content, not order.
+    const issued = (await h.store.audit.list(org.id, { action: 'user.setup_link_issued' }, { limit: 10, cursor: null })).items.map((e) => e.metadata);
+    expect(issued).toHaveLength(2);
+    expect(issued).toContainEqual({ purpose: 'RESET', expiresAt: body.setupLink.expiresAt, lock: true });
+    expect(issued).toContainEqual({ purpose: 'SETUP', expiresAt: setupLink.expiresAt });
     expect((await signIn(SETUP_TEST_PASSWORD)).status).toBe(401);
     expect((await h.app.request('/v1/me', { headers: { cookie } })).status).toBe(401);
     expect((await h.app.request('/v1/me', { headers: { authorization: `Bearer ${device}` } })).status).toBe(401);
@@ -383,6 +390,17 @@ describe('password reset and status', () => {
     const res = await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', {}));
     expect(res.status).toBe(409);
     expect((await read(res)).error.details).toEqual({ reason: 'USER_DISABLED' });
+  });
+
+  it('the optional body may be absent; a JSON content type with an empty body is a 422, never a 500 (TD-148)', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const { user } = await createUser(h, org.id);
+    expect((await h.app.request(`/admin/v1/users/${user.id}/setup-link`, { method: 'POST', headers: admin })).status).toBe(200);
+    const empty = await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST'));
+    expect(empty.status).toBe(422);
+    expect((await read(empty)).error.code).toBe('VALIDATION_FAILED');
+    expect((await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', {}))).status).toBe(200);
   });
 
   it('the old password route is gone', async () => {

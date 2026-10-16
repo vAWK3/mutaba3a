@@ -2376,6 +2376,10 @@ A PATCH that accepts a date compares it with the stored one first and validates 
 A one-time link carries 256 random bits in the URL **fragment** (never sent to a server, so never in a log or Referer). The store keeps only `sessionDigest(pepper, token)`, the same digest sessions use. Redeeming claims the row with a conditional update (`usedAt IS NULL AND cancelledAt IS NULL AND expiresAt > at`) inside the transaction that performs the effect, after locking the owner's row (`FOR NO KEY UPDATE`). A lost claim writes nothing, and of two concurrent redeems exactly one wins. Issuing a new one cancels the owner's open ones under the same lock.
 **Instances**: `AccountSetupRepository.issue` / `redeem` (memory + Prisma), `routes/account-setup.ts`.
 
+### Pattern: A session is created only for the credential that was verified
+Sign-in passes `verifiedPasswordHash` to `sessions.create`; the store re-reads the person's hash and status under `FOR SHARE`, which conflicts with the `FOR NO KEY UPDATE` that a credential change (setup-link lock or redeem) holds until it commits. A sign-in that verified a password the operator has just revoked is refused with the ordinary `INVALID_CREDENTIALS` instead of slipping a session in after the revocation. Any future credential change (MUT-237) takes the same row lock.
+**Instances**: `auth/sign-in.ts`, `SessionRepository.create` (memory + Prisma).
+
 ### Pattern: Tests provision a person the way the person would
 A route test that needs a signed-in person calls `provisionUser(app, body)` from `server/src/__tests__/helpers/provision.ts`: admin create, then the setup link redeemed with a known password. No test reaches into the store to set a password, so the setup flow is exercised by every suite that signs in.
 **Instances**: ~20 route suites, `routes-users.test.ts`.

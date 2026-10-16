@@ -1177,6 +1177,11 @@ export interface CreateUserInput {
   /** The firm this user belongs to, if any. */
   organizationId?: string;
   personal: { name: string; slug: string; defaultCurrency: string; timezone: string };
+  /**
+   * MUT-235 (review fix): the person's first setup link, written in the same transaction as the user, so a
+   * create never leaves an account with neither a password nor a link. UniqueViolation on a duplicate digest.
+   */
+  setupLink?: { tokenDigest: string; purpose: SetupLinkPurpose; expiresAt: Date };
   at: Date;
 }
 
@@ -1247,6 +1252,12 @@ export interface CreateSessionInput {
   idleExpiresAt: Date;
   absoluteExpiresAt: Date;
   userAgent: string | null;
+  /**
+   * MUT-235 review: the hash sign-in just verified. When given, the session is created only while the person is
+   * ACTIVE and still has exactly this hash, checked under a shared lock on their row, so it waits for a concurrent
+   * lock or redeem to commit. Otherwise StateConflict('user', 'CREDENTIAL_CHANGED') and nothing is written.
+   */
+  verifiedPasswordHash?: string;
 }
 
 export interface SessionRepository {

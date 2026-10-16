@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import pino from 'pino';
 import { createApp } from '../app.js';
-import { SIGN_IN_POLICY } from '../auth/sessions.js';
+import { generateDeviceSessionToken, sessionDigest, SIGN_IN_POLICY } from '../auth/sessions.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from '../auth/users.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
@@ -23,7 +23,9 @@ const SAME_ORIGIN = { origin: 'http://localhost' };
 const NEW_PASSWORD = 'a-long-enough-passphrase';
 const realHasher = createArgon2Hasher(ARGON2_MINIMUMS);
 
-function harness() {
+const PEPPER = 'session-pepper-with-at-least-32-chars!!';
+
+function harness(opts: { portalOrigin?: string } = {}) {
   const store = new MemoryLedgerStore();
   const clock = { now: new Date('2026-10-20T09:00:00Z') };
   const hasher: PasswordHasher & { verify: ReturnType<typeof vi.fn> } = {
@@ -39,7 +41,7 @@ function harness() {
     version: '0.1.0-test',
     now: () => clock.now,
     passwordHasher: hasher,
-    sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: false, trustedProxyHops: 1, deviceIdleDays: 30, deviceAbsoluteDays: 180 },
+    sessions: { pepper: PEPPER, idleMinutes: 120, absoluteHours: 12, secureCookie: false, trustedProxyHops: 1, deviceIdleDays: 30, deviceAbsoluteDays: 180, ...opts },
   });
   return { app, store, clock, hasher };
 }
@@ -179,6 +181,36 @@ describe('POST /v1/account-setup (MUT-235)', () => {
     }
   });
 
+  it('of two concurrent redeems, one sets the password and the other is told the link was used', async () => {
+    const h = harness();
+    const p = await provision(h);
+    const [a, b] = await Promise.all([redeem(h, p.token, 'first-password-wins'), redeem(h, p.token, 'second-password-x')]);
+    expect([a.status, b.status].sort()).toEqual([200, 410]);
+    const loser = a.status === 410 ? a : b;
+    expect((await read(loser)).error.details).toEqual({ state: 'used' });
+    const winner = a.status === 200 ? 'first-password-wins' : 'second-password-x';
+    expect((await signIn(h, p.email, winner)).status).toBe(201);
+  });
+
+  it('audits user.password_set as the person, naming the link that set it', async () => {
+    const h = harness();
+    const p = await provision(h);
+    await redeem(h, p.token);
+    const [membership] = await h.store.memberships.listByUser(p.id);
+    const events = (await h.store.audit.list(membership!.organizationId, { action: 'user.password_set' }, { limit: 10, cursor: null })).items;
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ actorType: 'USER', actorId: p.id, metadata: { purpose: 'SETUP', linkId: expect.any(String) } });
+  });
+
+  it('the redeem route spends the same per-address budget as check', async () => {
+    const h = harness();
+    const ip = { ...SAME_ORIGIN, 'x-forwarded-for': '203.0.113.10' };
+    for (let i = 0; i < SIGN_IN_POLICY.ipPerMinute; i++) await redeem(h, 'D'.repeat(43), NEW_PASSWORD, ip);
+    const limited = await redeem(h, 'D'.repeat(43), NEW_PASSWORD, ip);
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('retry-after')).not.toBeNull();
+  });
+
   it('limits attempts per address, on a budget separate from sign-in', async () => {
     const h = harness();
     const ip = { ...SAME_ORIGIN, 'x-forwarded-for': '203.0.113.9' };
@@ -209,5 +241,76 @@ describe('an account whose link was never used (AC 2)', () => {
       const [a, b] = [await read(pendingRes), await read(wrongRes)];
       expect({ code: a.error.code, message: a.error.message }).toEqual({ code: b.error.code, message: b.error.message });
     }
+  });
+});
+
+describe('review fixes (qa-reconcile, 2026-10-16)', () => {
+  it('a link issued before a disable stays dead after re-enabling the person', async () => {
+    const h = harness();
+    const p = await provision(h);
+    await h.app.request(`/admin/v1/users/${p.id}/disable`, json({}, admin));
+    await h.app.request(`/admin/v1/users/${p.id}/enable`, json({}, admin));
+    const res = await redeem(h, p.token);
+    expect(res.status).toBe(410);
+    expect((await read(res)).error.details).toEqual({ state: 'superseded' });
+  });
+
+  it('setting a password lifts a sign-in lockout, so the sign-in straight after works', async () => {
+    const h = harness();
+    const p = await provision(h);
+    for (let i = 0; i < SIGN_IN_POLICY.maxFailures; i++) await signIn(h, p.email, 'somebody-guessing-wrong');
+    expect((await redeem(h, p.token)).status).toBe(200);
+    expect((await signIn(h, p.email, NEW_PASSWORD)).status).toBe(201);
+  });
+
+  it('a sign-in that started before a --lock cannot keep the session it creates after it', async () => {
+    const h = harness();
+    const p = await provision(h);
+    await redeem(h, p.token);
+    hours(h, 1);
+    const lockedAt = h.clock.now;
+    expect((await h.app.request(`/admin/v1/users/${p.id}/setup-link`, json({ lock: true }, admin))).status).toBe(200);
+    // The racing sign-in verified the old password a minute earlier and inserts its session only now.
+    const token = generateDeviceSessionToken();
+    await h.store.sessions.create({
+      userId: p.id,
+      tokenDigest: sessionDigest(PEPPER, token),
+      kind: 'device',
+      at: new Date(lockedAt.getTime() - 60_000),
+      idleExpiresAt: new Date(lockedAt.getTime() + 86_400_000),
+      absoluteExpiresAt: new Date(lockedAt.getTime() + 86_400_000),
+      userAgent: null,
+    });
+    expect((await h.app.request('/v1/me', { headers: { authorization: `Bearer ${token}` } })).status).toBe(401);
+  });
+
+  it('a sign-in whose password check overlaps a --lock is refused, not handed a session', async () => {
+    const h = harness();
+    const p = await provision(h);
+    await redeem(h, p.token);
+    // The operator's lock commits while this sign-in is still verifying the (correct, stolen) old password.
+    h.hasher.verify.mockImplementationOnce(async (stored: string, given: string) => {
+      const ok = await realHasher.verify(stored, given);
+      await h.app.request(`/admin/v1/users/${p.id}/setup-link`, json({ lock: true }, admin));
+      return ok;
+    });
+    const res = await deviceSignIn(h, p.email, NEW_PASSWORD);
+    expect(res.status).toBe(401);
+    expect((await read(res)).error.code).toBe('INVALID_CREDENTIALS');
+  });
+
+  it('a link is https even when the request reached the server as plain http (TLS ends at the proxy)', async () => {
+    const h = harness();
+    const res = await h.app.request('http://mutaba3a-api.run.app/admin/v1/users', json({ email: `p${++seq}@firm.ps`, displayName: 'P', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin));
+    expect((await read(res)).setupLink.url).toMatch(/^https:\/\/mutaba3a-api\.run\.app\/setup#[A-Za-z0-9_-]{43}$/);
+  });
+
+  it('a configured PORTAL_ORIGIN is where links point, and the only origin that may redeem them', async () => {
+    const h = harness({ portalOrigin: 'https://portal.example' });
+    const created = await read(await h.app.request('/admin/v1/users', json({ email: `p${++seq}@firm.ps`, displayName: 'P', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
+    expect(created.setupLink.url).toMatch(/^https:\/\/portal\.example\/setup#[A-Za-z0-9_-]{43}$/);
+    const token = setupTokenOf(created.setupLink.url);
+    expect((await redeem(h, token, NEW_PASSWORD, { origin: 'http://localhost' })).status).toBe(403);
+    expect((await redeem(h, token, NEW_PASSWORD, { origin: 'https://portal.example' })).status).toBe(200);
   });
 });

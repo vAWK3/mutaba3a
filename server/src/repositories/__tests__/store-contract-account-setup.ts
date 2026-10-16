@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ForeignKeyViolation } from '../memory.js';
+import { ForeignKeyViolation, StateConflict, UniqueViolation } from '../memory.js';
 import type { AuditEventInput, IssueSetupLinkInput, LedgerStore, UserRecord } from '../ports.js';
 
 /**
@@ -109,7 +109,10 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       const cookie = await openSession(store, user.id);
       const device = await store.sessions.create({ userId: user.id, tokenDigest: digest(), kind: 'device', at: at(1), idleExpiresAt: at(9), absoluteExpiresAt: at(9), userAgent: null });
       await store.accountSetup.issue(issueInput(user.id, { purpose: 'RESET', lock: true, at: at(4) }));
-      expect((await store.users.getById(user.id))?.passwordHash).toBeNull();
+      const locked = await store.users.getById(user.id);
+      expect(locked?.passwordHash).toBeNull();
+      // Review fix: stamping the change makes the session check refuse a session a racing sign-in inserts after the lock.
+      expect(locked?.passwordChangedAt.toISOString()).toBe(at(4).toISOString());
       for (const s of [cookie, device]) {
         const found = await store.sessions.findByDigest(s.tokenDigest);
         expect(found?.revokedAt?.toISOString()).toBe(at(4).toISOString());
@@ -185,6 +188,74 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
           await store.users.setStatus(user.id, 'DISABLED', at(2));
           return { tokenDigest: link.tokenDigest, at: at(3) };
         }));
+    });
+
+    it('disabling a person cancels their open links, so re-enabling does not revive one', async () => {
+      const store = await makeStore();
+      const { user } = await person(store);
+      const link = await store.accountSetup.issue(issueInput(user.id));
+      await store.users.setStatus(user.id, 'DISABLED', at(2));
+      expect((await store.accountSetup.findByDigest(link.tokenDigest))?.cancelledAt?.toISOString()).toBe(at(2).toISOString());
+      await store.users.setStatus(user.id, 'ACTIVE', at(3));
+      expect(await store.accountSetup.redeem({ tokenDigest: link.tokenDigest, passwordHash: NEW_HASH, at: at(4), audit: [] })).toBeNull();
+    });
+
+    it('a user created with a setup link gets it in the same transaction', async () => {
+      const store = await makeStore();
+      const tokenDigest = digest();
+      const { user } = await store.users.create({
+        email: `p-${unique()}@firm.ps`,
+        displayName: 'Nour',
+        passwordHash: null,
+        locale: 'en',
+        personal: { name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
+        setupLink: { tokenDigest, purpose: 'SETUP', expiresAt: at(73) },
+        at: at(1),
+      });
+      expect(await store.accountSetup.findByDigest(tokenDigest)).toMatchObject({ userId: user.id, purpose: 'SETUP', usedAt: null, cancelledAt: null });
+    });
+
+    it('a create whose link cannot be stored leaves no user behind', async () => {
+      const store = await makeStore();
+      const { user: first } = await person(store);
+      const taken = await store.accountSetup.issue(issueInput(first.id));
+      const email = `p-${unique()}@firm.ps`;
+      await expect(
+        store.users.create({
+          email,
+          displayName: 'Nour',
+          passwordHash: null,
+          locale: 'en',
+          personal: { name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
+          setupLink: { tokenDigest: taken.tokenDigest, purpose: 'SETUP', expiresAt: at(73) },
+          at: at(1),
+        }),
+      ).rejects.toBeInstanceOf(UniqueViolation);
+      expect(await store.users.findByEmail(email)).toBeNull();
+    });
+
+    it('a session tied to the verified hash is created only while that hash and an active status still hold', async () => {
+      const store = await makeStore();
+      const { user } = await person(store, HASH);
+      const session = (overrides: { verifiedPasswordHash?: string } = {}) =>
+        store.sessions.create({ userId: user.id, tokenDigest: digest(), kind: 'device', at: at(1), idleExpiresAt: at(9), absoluteExpiresAt: at(9), userAgent: null, ...overrides });
+      await expect(session({ verifiedPasswordHash: HASH })).resolves.toMatchObject({ userId: user.id });
+      await store.accountSetup.issue(issueInput(user.id, { purpose: 'RESET', lock: true, at: at(2) }));
+      await expect(session({ verifiedPasswordHash: HASH })).rejects.toBeInstanceOf(StateConflict);
+      const link = await store.accountSetup.issue(issueInput(user.id, { at: at(3) }));
+      await store.accountSetup.redeem({ tokenDigest: link.tokenDigest, passwordHash: NEW_HASH, at: at(4), audit: [] });
+      await expect(session({ verifiedPasswordHash: HASH })).rejects.toBeInstanceOf(StateConflict);
+      await store.users.setStatus(user.id, 'DISABLED', at(5));
+      await expect(session({ verifiedPasswordHash: NEW_HASH })).rejects.toBeInstanceOf(StateConflict);
+    });
+
+    it('issue refuses a person who is no longer active, and writes nothing', async () => {
+      const store = await makeStore();
+      const { user } = await person(store, HASH);
+      await store.users.setStatus(user.id, 'DISABLED', at(1));
+      const input = issueInput(user.id, { at: at(2) });
+      await expect(store.accountSetup.issue(input)).rejects.toBeInstanceOf(StateConflict);
+      expect(await store.accountSetup.findByDigest(input.tokenDigest)).toBeNull();
     });
 
     it('just before expiry still redeems', async () => {

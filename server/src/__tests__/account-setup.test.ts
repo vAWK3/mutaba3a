@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateSetupToken, NEW_PASSWORD_POLICY, SETUP_LINK_POLICY, setupLinkState, setupUrl } from '../auth/account-setup.js';
+import { generateSetupToken, NEW_PASSWORD_POLICY, SETUP_LINK_POLICY, setupLinkOrigin, setupLinkState, setupUrl } from '../auth/account-setup.js';
 import { NewPasswordSchema } from '../schemas.js';
 import type { AccountSetupTokenRecord, UserRecord } from '../repositories/ports.js';
 
@@ -68,6 +68,23 @@ describe('setupUrl (MUT-235)', () => {
 
   it('ignores a trailing slash on the origin', () => {
     expect(setupUrl('https://portal.example/', 'abc')).toBe('https://portal.example/setup#abc');
+  });
+});
+
+describe('setupLinkOrigin (MUT-235 review)', () => {
+  it('uses PORTAL_ORIGIN when configured', () => {
+    expect(setupLinkOrigin('https://portal.example', 'http://api.run.app/admin/v1/users')).toBe('https://portal.example');
+  });
+
+  it('upgrades a plain-http request to https on any real host (TLS ended at the proxy)', () => {
+    expect(setupLinkOrigin(undefined, 'http://mutaba3a-api.run.app/admin/v1/users')).toBe('https://mutaba3a-api.run.app');
+    expect(setupLinkOrigin(undefined, 'http://api.example.com:8443/x')).toBe('https://api.example.com:8443');
+  });
+
+  it('keeps http on a loopback host, for local development', () => {
+    expect(setupLinkOrigin(undefined, 'http://localhost:8787/x')).toBe('http://localhost:8787');
+    expect(setupLinkOrigin(undefined, 'http://127.0.0.1:8787/x')).toBe('http://127.0.0.1:8787');
+    expect(setupLinkOrigin(undefined, 'http://[::1]:8787/x')).toBe('http://[::1]:8787');
   });
 });
 

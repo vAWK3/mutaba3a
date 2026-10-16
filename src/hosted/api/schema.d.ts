@@ -11725,6 +11725,7 @@ export interface components {
         IssueSetupLinkResponse: {
             user: components["schemas"]["UserSummary"];
             setupLink: components["schemas"]["SetupLink"];
+            lock: boolean;
         };
         IssueSetupLinkRequest: {
             validHours?: number;

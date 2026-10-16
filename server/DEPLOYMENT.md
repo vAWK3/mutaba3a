@@ -283,8 +283,11 @@ The first `./scripts/deploy.sh` after this change creates it; nothing to do by
 hand.
 
 Portal users are operator-issued exactly like keys (ADR-037, TD-018): there is
-no signup, invite or password-reset route in any environment. The one-time
-password is printed **once**; deliver it like a key secret.
+no signup, invite or "forgot password" route in any environment. Since MUT-235
+(ADR-088) the operator never handles a password: `provision:user` prints a
+one-time **setup link** **once** (72 hours; `--valid-hours 1–720`). Deliver it
+like a key secret. The person sets their own password through it on the portal's
+`/setup` page (MUT-236) and then signs in on the portal or the app.
 
 ```bash
 npm run provision:user -- --url "$URL" --email nour@firm.ps --name "Nour Haddad" \
@@ -300,8 +303,10 @@ A person in two firms gets a second membership:
 `npm run grant:user -- --url "$URL" --email nour@firm.ps --organization-id <uuid>`.
 Every account change is audited as `ADMIN` on each organization the person belongs
 to, their personal profile included (`user.created`, `membership.granted`,
-`membership.revoked`, `user.password_reset`, `user.disabled`, `user.enabled`; the
-personal profile also gets `organization.created`).
+`membership.revoked`, `user.setup_link_issued`, `user.disabled`, `user.enabled`; the
+personal profile also gets `organization.created`). When the person sets their
+password through a link, `user.password_set` is audited as `USER`. Events from before
+MUT-235 keep the old action `user.password_reset`.
 
 As of MUT-45, the portal is live at the service's own URL (`$URL/`) — a
 provisioned person can sign in there directly; `POST /v1/sessions` and
@@ -417,13 +422,14 @@ branded URL becomes a real requirement, not before.
 | Roll back the service | `IMAGE_TAG=<old sha> ./scripts/deploy.sh` — migrations are forward-only; a rollback that needs a schema revert is a new migration |
 | Logs | `gcloud run services logs read mutaba3a-api --region=me-west1 --limit=200` (pino JSON; `requestId` matches the error envelope Malafat shows) |
 | Rotate the admin token | `cd infrastructure/terraform && terraform apply -var-file=production.tfvars -var image_tag=<current sha> -replace=random_password.admin_token`, then `./scripts/deploy.sh` so the new revision reads the new version |
-| Sign every portal user out | `terraform apply … -replace=random_password.session_pepper`, then `./scripts/deploy.sh` (the pepper keys every session digest; a new one voids them all) |
+| Sign every portal user out | `terraform apply … -replace=random_password.session_pepper`, then `./scripts/deploy.sh` (the pepper keys every session digest; a new one voids them all). It also voids every open setup link (MUT-235 digests them with the same pepper): reissue links with `rotate:password` for anyone still without a password |
 | Rotate the DB password | same with `-replace=random_password.db` (Cloud SQL user and the URL secret update together), then redeploy |
 | Revoke a firm's key | `curl -X POST "$URL/admin/v1/api-keys/<id>/revoke" -H "x-admin-token: $MUTABA3A_ADMIN_TOKEN" -H 'content-type: application/json' -d '{"reason":"…"}'`; key ids are on `GET /admin/v1/organizations/<id>` |
 | Audit trail of a firm | `GET /admin/v1/organizations/<id>/audit` with the admin token |
 | Sign one portal user out everywhere | `npm run revoke:sessions -- --url "$URL" --email <email>` |
-| Reset a portal user's password | `npm run rotate:password -- --url "$URL" --email <email>` (prints the new one-time password once) |
-| Disable / re-enable a portal user | `npm run disable:user -- --url "$URL" --email <email>` / `npm run enable:user …` |
+| Reset a portal user's password | `npm run rotate:password -- --url "$URL" --email <email>` prints a new setup link once; their current password keeps working until they use it (MUT-235) |
+| Lock a hijacked portal account | `npm run rotate:password -- --url "$URL" --email <email> --lock` — the password stops working and every session is signed out now; send them the printed link |
+| Disable / re-enable a portal user | `npm run disable:user -- --url "$URL" --email <email>` / `npm run enable:user …`. Disabling also cancels any open setup link (MUT-235): a person re-enabled before setting a password needs `rotate:password` for a new one |
 | Remove a person's access to a firm | `npm run revoke:user -- --url "$URL" --email <email> --organization-id <uuid>` |
 | psql against production | `TF_STATE_BUCKET=<bucket> npm run db:psql` (`scripts/db.sh`: proxy up on 127.0.0.1:5440 for the session, down on exit) |
 | Check pending migrations | `TF_STATE_BUCKET=<bucket> npm run db:migrate:status` — read-only; run it before a release to see what `deploy.sh` will apply |
@@ -432,6 +438,7 @@ branded URL becomes a real requirement, not before.
 | Re-run the post-roll repairs by hand | `TF_STATE_BUCKET=<bucket> npm run db:proxy` in one terminal, then `DATABASE_URL=<printed URL> npm run post-roll` — what `deploy.sh` step 6 does on every deploy; only needed if that step failed |
 | After the first release carrying MUT-100 (`1.16.0-mut100`) | `npm run db:psql`, then `SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'AgreementType';` must list `CONTINGENCY` (it arrives alone in its own migration); `/openapi.json` reports `1.16.0-mut100`; `npm run smoke` passes |
 | Roll back past MUT-100 | Harmless while `SELECT count(*) FROM agreements WHERE type = 'CONTINGENCY'` is 0 (the new columns and enum value stay). **Once any exists, roll forward only:** an older revision's Prisma client has no `CONTINGENCY` in its enum, so every read that returns such an agreement (agreement lists, project and customer summaries) fails for that organization; it also reads commission installments as ordinary ones, and drops an unknown `contingency` field on create, making a FIXED agreement silently (TD-098) |
+| Roll back past MUT-235 | Harmless while `SELECT count(*) FROM users WHERE "passwordHash" IS NULL` is 0 (the new table stays unused). **Once any exists, roll forward only:** every account created since, and every `--lock`, has a NULL password, which an older revision's Prisma client cannot read (P2032), so sign-in and every lookup of those people fail with a 500 and the old admin reset cannot fix them. If a rollback is unavoidable, first set those rows to the argon2id hash of a random throwaway password (still unusable), then reissue links after rolling forward |
 | Roll back past MUT-182 | Safe for the schema: the old revision writes personal profiles without `ownerUserId`/`profileType`, the CHECKs allow that, and the next deploy's post-roll `repairPersonalOwnership` stamps them. But once any user has created a profile (`SELECT count(*) FROM organizations WHERE "ownerUserId" IS NOT NULL AND "personalOwnerUserId" IS NULL` > 0), an older revision treats those as operator firms: it would issue them API keys, bind them to Malafat or share them on request. **Roll forward only** once that count is above 0, or refuse every such operator request while the old revision serves |
 | Delete a user who owns profiles (a privacy request) | Users are normally disabled, never deleted. If one must go, first remove (or hand to an operator) every organization with `"ownerUserId" = '<user id>'` and its rows: `organizations.ownerUserId` is `ON DELETE RESTRICT` (MUT-182), exactly as `personalOwnerUserId` is (MUT-120), so the user delete is refused while any remain |
 | Backups | Cloud SQL automated daily at 03:00 + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg` |

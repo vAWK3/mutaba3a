@@ -273,7 +273,7 @@ Tests made obsolete: routes-users.test.ts cases asserting `initialPassword` and 
 
 | Path | Realistic failure | Covered by | User sees |
 |---|---|---|---|
-| issue | PORTAL_ORIGIN unset in prod → link built from the request origin | origin fallback + admin test | a correct link (portal and API share an origin) |
+| issue | PORTAL_ORIGIN unset in prod → link built from the request origin | `setupLinkOrigin` forces https off loopback (qa-reconcile fix; the request reaches the server as plain http behind Cloud Run) + route test | an https link on the portal's host |
 | redeem | two tabs submit the same link | conditional claim + race test | the second tab gets "already used" (410) |
 | redeem | link expires while the form is open | 410 `expired` | "ask for a new link" (MUT-236) |
 | sign-in | pending account tries to sign in | null-hash dummy verify | the usual wrong-password message |

@@ -2,8 +2,8 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { setupLinkState, type SetupLinkState } from '../auth/account-setup.js';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
-import { clientIp, isSameOriginRequest, sessionDigest } from '../auth/sessions.js';
-import type { PasswordHasher } from '../auth/users.js';
+import { clientIp, isSameOriginRequest, sessionDigest, type SignInThrottle } from '../auth/sessions.js';
+import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { AccountSetupTokenRecord, AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
@@ -31,12 +31,14 @@ export interface AccountSetupRouteOptions {
   passwordHasher: PasswordHasher;
   settings: SessionSettings;
   ipLimiter: RateLimiter;
+  /** The sign-in throttle (shared with both sign-in routes); a successful redeem clears the person's lock in it. */
+  throttle: SignInThrottle;
 }
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHono<AppEnv> {
-  const { store, passwordHasher, settings, ipLimiter } = options;
+  const { store, passwordHasher, settings, ipLimiter, throttle } = options;
   const app = new OpenAPIHono<AppEnv>();
 
   async function guard(c: Context<AppEnv>): Promise<Date> {
@@ -105,22 +107,27 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       const tokenDigest = sessionDigest(settings.pepper, token);
       const { link, person } = await lookUp(token);
       const state = setupLinkState(link, person, now);
-      if (state !== 'valid' || !person) throw unusable(refusalOf(state));
+      if (state !== 'valid' || !link || !person) throw unusable(refusalOf(state));
       // Hash before claiming, so the slow part never runs inside the transaction.
       const passwordHash = await passwordHasher.hash(password);
-      const audit = await passwordSetAudit(c, person);
-      const redeemed = await store.accountSetup.redeem({ tokenDigest, passwordHash, at: now, audit });
+      const audit = await passwordSetAudit(c, person, link);
+      // A fresh instant after the slow hash: the expiry check and passwordChangedAt must not predate a sign-in that ran meanwhile.
+      const at = c.get('now')();
+      const redeemed = await store.accountSetup.redeem({ tokenDigest, passwordHash, at, audit });
       if (!redeemed) {
-        // Lost a race (another tab, a newer link, a disable): say what the link is now.
+        // Lost a race (another tab, a newer link, a disable, expiry during hashing): say what the link is now.
         const again = await lookUp(token);
-        const after = setupLinkState(again.link, again.person, now);
+        const after = setupLinkState(again.link, again.person, at);
         throw unusable(after === 'valid' ? 'used' : after);
       }
+      // The database lockout is cleared by the redeem; the in-process sign-in throttle is cleared here, so the sign-in that follows works.
+      throttle.clear(normalizeEmail(redeemed.email));
       return c.json({ email: redeemed.email }, 200);
     },
   );
 
-  async function passwordSetAudit(c: Context<AppEnv>, person: UserRecord): Promise<AuditEventInput[]> {
+  /** Names the link that set the password, so an investigation can tie it to the `user.setup_link_issued` that made it. */
+  async function passwordSetAudit(c: Context<AppEnv>, person: UserRecord, link: AccountSetupTokenRecord): Promise<AuditEventInput[]> {
     return (await store.memberships.listByUser(person.id)).map((m) => ({
       organizationId: m.organizationId,
       actorType: 'USER',
@@ -128,6 +135,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       action: 'user.password_set',
       entityType: 'user',
       entityId: person.id,
+      metadata: { purpose: link.purpose, linkId: link.id },
       requestId: c.get('requestId'),
     }));
   }

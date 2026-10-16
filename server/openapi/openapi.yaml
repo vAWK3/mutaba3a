@@ -5279,9 +5279,12 @@ components:
           $ref: "#/components/schemas/UserSummary"
         setupLink:
           $ref: "#/components/schemas/SetupLink"
+        lock:
+          type: boolean
       required:
         - user
         - setupLink
+        - lock
     IssueSetupLinkRequest:
       type: object
       properties:

@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { contextStorage } from 'hono/context-storage';
+import { HTTPException } from 'hono/http-exception';
 import { serveStatic } from '@hono/node-server/serve-static';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
 import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
@@ -161,6 +162,12 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       if (err.status >= 500) deps.logger.error({ requestId, err }, err.message);
       return c.json(err.toEnvelope(requestId), err.status);
     }
+    // TD-148 (MUT-235 review): Hono's validator throws a 400 HTTPException for an unparseable body (e.g. a JSON
+    // content type with no body). That is the client's input, so it is a validation failure, never a 500.
+    if (err instanceof HTTPException && err.status === 400) {
+      const invalid = new ApiError('VALIDATION_FAILED', err.message || 'Request body could not be parsed');
+      return c.json(invalid.toEnvelope(requestId), invalid.status);
+    }
     deps.logger.error({ requestId, err }, 'unhandled error');
     const internal = new ApiError('INTERNAL', 'Unexpected server error');
     return c.json(internal.toEnvelope(requestId), internal.status);
@@ -219,7 +226,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     }),
   );
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
-  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter }));
+  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle }));
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', customerRoutes(store));
   app.route('/', projectRoutes(store));

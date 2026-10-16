@@ -209,13 +209,14 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
   rotate: async ({ client, need, optional, flag, out }) => {
     const user = await client.userByEmail(need('email'));
     const hours = validHours(optional);
-    const lock = flag('lock');
-    const { setupLink } = await client.call<{ setupLink: SetupLink }>('POST', `/admin/v1/users/${user.id}/setup-link`, {
+    const issued = await client.call<{ setupLink: SetupLink; lock: boolean }>('POST', `/admin/v1/users/${user.id}/setup-link`, {
       ...(hours === undefined ? {} : { validHours: hours }),
-      lock,
+      lock: flag('lock'),
     });
+    const { setupLink } = issued;
     out(`setup link issued for ${user.email}`);
-    out(lock ? 'Their password no longer works and every session is signed out.' : 'Their current password keeps working until they use this link.');
+    // From the server's answer, not the flag: the message must say what actually happened.
+    out(issued.lock ? 'Their password no longer works and every session is signed out.' : 'Their current password keeps working until they use this link.');
     printSetupLink(out, setupLink);
   },
   disable: async (ctx) => setStatus(ctx, 'disable'),

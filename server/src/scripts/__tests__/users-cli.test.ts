@@ -11,8 +11,8 @@ const TOKEN = 'cli-admin-token-with-at-least-32-characters';
 const URL_BASE = 'http://mutaba3a.test';
 const PEPPER = 'cli-session-pepper-with-at-least-32-chars';
 
-/** MUT-235: the printed setup links. */
-const links = (out: string[]) => out.filter((l) => /^http:\/\/mutaba3a\.test\/setup#[A-Za-z0-9_-]{43}$/.test(l));
+/** MUT-235: the printed setup links — https even though the CLI called the API over http (only loopback keeps http). */
+const links = (out: string[]) => out.filter((l) => /^https:\/\/mutaba3a\.test\/setup#[A-Za-z0-9_-]{43}$/.test(l));
 
 function harness() {
   const store = new MemoryLedgerStore();

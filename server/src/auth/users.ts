@@ -3,8 +3,9 @@ import { hash as argon2Hash, verify as argon2Verify } from '@node-rs/argon2';
 
 /**
  * Human principals on the hosted service (ADR-037, MUT-37). Users are issued by
- * an operator only — there is no signup, invite or self-service reset — so the
- * only secrets this module creates are operator-delivered one-time passwords.
+ * an operator only — there is no signup, invite or "forgot password". Since
+ * MUT-235 (ADR-088) the operator hands out setup links (auth/account-setup.ts),
+ * never a password: people choose their own.
  */
 
 /** Emails are compared after trimming, NFKC folding and lower-casing, so `Ｐartner@Firm.ps ` and `partner@firm.ps` are one account. */
@@ -12,7 +13,10 @@ export function normalizeEmail(raw: string): string {
   return raw.normalize('NFKC').trim().toLowerCase();
 }
 
-/** 18 random bytes → exactly 24 base64url characters (144 bits). Shown once to the operator, never stored. */
+/**
+ * 18 random bytes → exactly 24 base64url characters (144 bits), never stored. Since MUT-235 no operator
+ * sees one: it feeds sign-in's dummy hash and the demo seed's self-set password.
+ */
 const ONE_TIME_PASSWORD_BYTES = 18;
 
 export function generateOneTimePassword(): string {

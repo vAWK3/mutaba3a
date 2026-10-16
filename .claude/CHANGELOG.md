@@ -44,7 +44,18 @@
 - `no-self-registration.test.ts` pins the public operations to exactly sign-in and the setup-link pair; ADR-037 §1 carries an override note.
 
 ### Removed
-- `POST /admin/v1/users/{id}/password` and the `initialPassword` / `PasswordResetResponse` shapes. Only the operator CLI and the seed script called them; both are updated.
+- **Breaking, admin surface only:** `POST /admin/v1/users/{id}/password` and the `initialPassword` / `PasswordResetResponse` shapes. Only the operator CLI and the seed script called them; both are updated, so run the new CLI only against a server at 1.29.0-mut235 or later (an older CLI against this server gets 404 on reset). Malafat and the phone never call admin routes.
+
+### Fixed (qa-reconcile, before landing)
+- Links are https in production: `PORTAL_ORIGIN` is unset there and Cloud Run hands the server plain http, so links came out `http://…`. Now `PORTAL_ORIGIN` when set, else the request host over https (loopback keeps http).
+- Disabling a person cancels their open links; re-enabling no longer revives an old one.
+- `--lock` stamps `passwordChangedAt`, and sign-in now creates its session only while the hash it verified is still the person's (re-checked under a shared row lock), so a sign-in overlapping a lock is refused instead of keeping a session; redeem uses a fresh instant after hashing.
+- Issuing a link re-checks that the person is active under its row lock (409 `USER_DISABLED`), so a racing disable cannot be followed by a fresh link.
+- Setting a password clears the in-process sign-in throttle, so the sign-in straight after works even after failed attempts.
+- `POST /admin/v1/users` writes the first link in the same transaction as the user.
+- A JSON content type with an empty body is 422 `VALIDATION_FAILED` app-wide, not 500 (TD-148).
+- `…/setup-link` echoes `lock`, and the CLI prints from the server's answer; `user.password_set` names the link.
+- DEPLOYMENT.md: setup-link onboarding, `--lock`, the new audit actions, a "Roll back past MUT-235" row, and the pepper rotation voiding open links.
 
 ### Technical
 - Migration `20261016090000_mut235_account_setup_tokens` (additive): `account_setup_tokens`, enum `SetupLinkPurpose`, `users.passwordHash` nullable. `AccountSetupRepository` (memory + Prisma): issue cancels open links under a `FOR NO KEY UPDATE` row lock; redeem claims inside the password transaction. Operator-only in the store guard.

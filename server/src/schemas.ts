@@ -464,7 +464,14 @@ export const IssueSetupLinkRequestSchema = z
   })
   .openapi('IssueSetupLinkRequest');
 
-export const IssueSetupLinkResponseSchema = z.object({ user: UserSummarySchema, setupLink: SetupLinkSchema }).openapi('IssueSetupLinkResponse');
+export const IssueSetupLinkResponseSchema = z
+  .object({
+    user: UserSummarySchema,
+    setupLink: SetupLinkSchema,
+    /** Whether the password was cleared and every session revoked by this call: what the server did, not what was asked. */
+    lock: z.boolean(),
+  })
+  .openapi('IssueSetupLinkResponse');
 
 export const SetupLinkCheckRequestSchema = z.object({ token: SetupTokenSchema }).openapi('SetupLinkCheckRequest');
 

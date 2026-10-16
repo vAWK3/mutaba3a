@@ -32,8 +32,16 @@
 **Impact**: `GET /admin/v1/users/{id}` shows no "setup pending" or open-link expiry, so when someone says "I never got in", the operator just issues a new link. That is safe (it supersedes the old one) but blind.
 **Fix**: add `passwordSet: boolean` and the open link's `expiresAt` to the admin user detail, plus a `show` CLI command.
 
-### TD-148: A JSON content-type with an empty body is a 500 on routes with an optional body
+### TD-149: A lost redeem response reads as "link already used"
 **Status**: Open
+**Ticket**: MUT-236 (portal handling)
+**Added**: 2026-10-16 (MUT-235 qa-reconcile, red team)
+**Priority**: Low
+**Impact**: `POST /v1/account-setup` is not idempotent. If the response is lost after the commit (a network blip, a proxy timeout) or the person double-submits, the retry gets 410 `state: used`, although the password they typed was set.
+**Fix**: MUT-236 disables submit while in flight and treats `used` after a timeout as "try signing in". If that proves not enough, make a retry with the same password answer 200.
+
+### TD-148: A JSON content-type with an empty body is a 500 on routes with an optional body
+**Status**: Resolved 2026-10-16 (MUT-235 qa-reconcile): the app error handler maps Hono's 400 `HTTPException` (an unparseable body) to 422 `VALIDATION_FAILED`; `routes-users.test.ts` pins the empty-body case on `…/setup-link`.
 **Ticket**: none (found 2026-10-16, MUT-235 build)
 **Added**: 2026-10-16
 **Priority**: Low

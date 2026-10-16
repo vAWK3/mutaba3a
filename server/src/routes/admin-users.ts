@@ -1,13 +1,13 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
-import { generateSetupToken, SETUP_LINK_POLICY, setupUrl } from '../auth/account-setup.js';
+import { generateSetupToken, SETUP_LINK_POLICY, setupLinkOrigin, setupUrl } from '../auth/account-setup.js';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { sessionDigest } from '../auth/sessions.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
-import { ForeignKeyViolation, UniqueViolation } from '../repositories/memory.js';
+import { ForeignKeyViolation, StateConflict, UniqueViolation } from '../repositories/memory.js';
 import type { AuditEventInput, JsonObject, LedgerStore, Organization, SetupLinkPurpose, UserRecord } from '../repositories/ports.js';
 import {
   CreateUserRequestSchema,
@@ -88,26 +88,40 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
   }
 
   /**
+   * MUT-235: a fresh link. The token appears only in `view.url`, returned once; the store gets its digest.
+   */
+  function newSetupLink(c: Context<AppEnv>, purpose: SetupLinkPurpose, validHours: number | undefined) {
+    const at = c.get('now')();
+    const token = generateSetupToken();
+    const expiresAt = new Date(at.getTime() + (validHours ?? SETUP_LINK_POLICY.defaultHours) * 3_600_000);
+    const view = { url: setupUrl(setupLinkOrigin(sessions.portalOrigin, c.req.url), token), expiresAt: expiresAt.toISOString(), purpose };
+    return { at, tokenDigest: sessionDigest(sessions.pepper, token), purpose, expiresAt, view };
+  }
+
+  const setupLinkMetadata = (link: ReturnType<typeof newSetupLink>, lock: boolean): JsonObject => ({
+    purpose: link.purpose,
+    expiresAt: link.view.expiresAt,
+    ...(lock ? { lock: true } : {}),
+  });
+
+  /**
    * MUT-235: one transaction cancels the person's open link, issues this one and audits it (and, with `lock`,
-   * clears the password and revokes every session). Only the token's digest is stored; the URL is returned once.
+   * clears the password and revokes every session).
    */
   async function issueSetupLink(c: Context<AppEnv>, user: UserRecord, options: { purpose: SetupLinkPurpose; validHours?: number | undefined; lock: boolean }) {
-    const now = c.get('now')();
-    const token = generateSetupToken();
-    const expiresAt = new Date(now.getTime() + (options.validHours ?? SETUP_LINK_POLICY.defaultHours) * 3_600_000);
-    const metadata: JsonObject = { purpose: options.purpose, expiresAt: expiresAt.toISOString(), ...(options.lock ? { lock: true } : {}) };
+    const link = newSetupLink(c, options.purpose, options.validHours);
     const organizationIds = await memberOrganizations(user.id);
     if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action: 'user.setup_link_issued' }, 'account change on a user with no memberships; no organization to audit');
     await store.accountSetup.issue({
       userId: user.id,
-      tokenDigest: sessionDigest(sessions.pepper, token),
-      purpose: options.purpose,
-      at: now,
-      expiresAt,
+      tokenDigest: link.tokenDigest,
+      purpose: link.purpose,
+      at: link.at,
+      expiresAt: link.expiresAt,
       lock: options.lock,
-      audit: auditEvents(c, organizationIds, user.id, 'user.setup_link_issued', metadata),
+      audit: auditEvents(c, organizationIds, user.id, 'user.setup_link_issued', setupLinkMetadata(link, options.lock)),
     });
-    return { url: setupUrl(sessions.portalOrigin ?? new URL(c.req.url).origin, token), expiresAt: expiresAt.toISOString(), purpose: options.purpose };
+    return link.view;
   }
 
   async function audit(c: Context<AppEnv>, organizationIds: string[], userId: string, action: AuditAction, metadata?: JsonObject) {
@@ -152,46 +166,52 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       if (firm && profileOwnerOf(firm)) throw ownedProfileConflict(firm, 'A profile a person owns belongs to them and cannot be anyone else’s organization');
       const settings = resolvePersonalSettings(body, firm);
       if (!settings) throw new ApiError('VALIDATION_FAILED', 'defaultCurrency and timezone are required when no organizationId is given');
+      // MUT-235: no password until the person sets one through their link, and that first link commits with the user
+      // (review fix), so a create never leaves an account with neither.
+      const link = newSetupLink(c, 'SETUP', body.setupLinkValidHours);
+      let created: Awaited<ReturnType<typeof store.users.create>>;
       try {
-        const { user, memberships, personalOrganization } = await store.users.create({
+        created = await store.users.create({
           email,
           displayName: body.displayName,
-          // MUT-235: no password until the person sets one through their link.
           passwordHash: null,
           locale: body.locale,
           ...(firm ? { organizationId: firm.id } : {}),
           personal: personalProfileFor(body.locale, settings),
-          at: c.get('now')(),
+          setupLink: { tokenDigest: link.tokenDigest, purpose: link.purpose, expiresAt: link.expiresAt },
+          at: link.at,
         });
-        await store.audit.append({
-          organizationId: personalOrganization.id,
-          actorType: 'ADMIN',
-          actorId: null,
-          action: 'organization.created',
-          entityType: 'organization',
-          entityId: personalOrganization.id,
-          metadata: { personal: true, ownerUserId: user.id },
-          requestId: c.get('requestId'),
-        });
-        await audit(c, memberships.map((m) => m.organizationId), user.id, 'user.created', { email: user.email, displayName: user.displayName });
-        const setupLink = await issueSetupLink(c, user, { purpose: 'SETUP', validHours: body.setupLinkValidHours, lock: false });
-        return c.json(
-          {
-            user: serializeUser(user),
-            memberships: memberships.map(serializeMembership),
-            personalProfile: { id: personalOrganization.id, name: personalOrganization.name },
-            setupLink,
-          },
-          201,
-        );
       } catch (err) {
-        // MUT-120: the transaction also writes the personal organization, so only an email clash is reported as one.
+        // MUT-120: the transaction also writes the personal organization (and now the link), so only an email clash is reported as one.
         if (err instanceof UniqueViolation) {
           throw new ApiError('CONFLICT', err.constraint.includes('email') ? 'A user with this email already exists' : 'A conflicting record already exists; retry the request');
         }
         if (err instanceof ForeignKeyViolation) throw new ApiError('NOT_FOUND', 'Organization not found');
         throw err;
       }
+      const { user, memberships, personalOrganization } = created;
+      await store.audit.append({
+        organizationId: personalOrganization.id,
+        actorType: 'ADMIN',
+        actorId: null,
+        action: 'organization.created',
+        entityType: 'organization',
+        entityId: personalOrganization.id,
+        metadata: { personal: true, ownerUserId: user.id },
+        requestId: c.get('requestId'),
+      });
+      const organizationIds = memberships.map((m) => m.organizationId);
+      await audit(c, organizationIds, user.id, 'user.created', { email: user.email, displayName: user.displayName });
+      await audit(c, organizationIds, user.id, 'user.setup_link_issued', setupLinkMetadata(link, false));
+      return c.json(
+        {
+          user: serializeUser(user),
+          memberships: memberships.map(serializeMembership),
+          personalProfile: { id: personalOrganization.id, name: personalOrganization.name },
+          setupLink: link.view,
+        },
+        201,
+      );
     },
   );
 
@@ -326,8 +346,16 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       // The body is optional: with none, the validator is skipped and nothing is defaulted, hence the explicit fallbacks.
       const body: { validHours?: number | undefined; lock?: boolean | undefined } = c.req.valid('json') ?? {};
       const purpose: SetupLinkPurpose = user.passwordHash === null ? 'SETUP' : 'RESET';
-      const setupLink = await issueSetupLink(c, user, { purpose, validHours: body.validHours, lock: body.lock === true });
-      return c.json({ user: serializeUser((await store.users.getById(user.id)) ?? user), setupLink }, 200);
+      const lock = body.lock === true;
+      let setupLink: Awaited<ReturnType<typeof issueSetupLink>>;
+      try {
+        setupLink = await issueSetupLink(c, user, { purpose, validHours: body.validHours, lock });
+      } catch (err) {
+        // A disable that committed after the check above: the store refuses under its row lock (MUT-235 review).
+        if (err instanceof StateConflict) throw new ApiError('CONFLICT', 'A disabled user cannot use a setup link; enable them first', { reason: 'USER_DISABLED' });
+        throw err;
+      }
+      return c.json({ user: serializeUser((await store.users.getById(user.id)) ?? user), setupLink, lock }, 200);
     },
   );
 
