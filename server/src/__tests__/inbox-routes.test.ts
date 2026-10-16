@@ -267,6 +267,52 @@ describe('GET /v1/inbox', () => {
   });
 });
 
+// MUT-240: the Capture hub's Recent handle wants an exact "N to file" without paging a whole list.
+describe('GET /v1/inbox/count', () => {
+  it('reports zero, then tracks as entries arrive', async () => {
+    const { h, u, capture } = await setup();
+    expect(await read(await h.app.request('/v1/inbox/count', { headers: u.me() }))).toEqual({ count: 0 });
+    await capture();
+    expect(await read(await h.app.request('/v1/inbox/count', { headers: u.me() }))).toEqual({ count: 1 });
+    await capture();
+    await capture();
+    expect(await read(await h.app.request('/v1/inbox/count', { headers: u.me() }))).toEqual({ count: 3 });
+  });
+
+  it('never counts another person’s entries', async () => {
+    const h = harness();
+    const mine = await person(h);
+    const theirs = await person(h);
+    await h.app.request('/v1/inbox', json(BASE, mine.me(idem())));
+    for (let i = 0; i < 4; i += 1) await h.app.request('/v1/inbox', json(BASE, theirs.me(idem())));
+
+    expect(await read(await h.app.request('/v1/inbox/count', { headers: mine.me() }))).toEqual({ count: 1 });
+    expect(await read(await h.app.request('/v1/inbox/count', { headers: theirs.me() }))).toEqual({ count: 4 });
+  });
+
+  it('401 with no session at all', async () => {
+    const h = harness();
+    expect((await h.app.request('/v1/inbox/count')).status).toBe(401);
+  });
+
+  it('ignores an X-Mutaba3a-Profile header, as the other inbox routes do', async () => {
+    const h = harness();
+    const org = await organization(h, 'Firm');
+    const u = await person(h, [org.id]);
+    await h.app.request('/v1/inbox', json(BASE, u.me({ ...idem(), 'x-mutaba3a-profile': org.id })));
+    const res = await h.app.request('/v1/inbox/count', { headers: u.me({ 'x-mutaba3a-profile': org.id }) });
+    expect(res.status).toBe(200);
+    expect(await read(res)).toEqual({ count: 1 });
+  });
+
+  it('refuses an API key outright — a key has no person behind it, so no inbox', async () => {
+    const h = harness();
+    const org = await organization(h, 'Firm');
+    const key = (await read(await h.app.request(`/admin/v1/organizations/${org.id}/api-keys`, json({ name: 'Malafat', scopes: SCOPES }, admin)))) as { secret: string };
+    expect((await h.app.request('/v1/inbox/count', { headers: { authorization: `Bearer ${key.secret}` } })).status).toBe(403);
+  });
+});
+
 describe('PATCH /v1/inbox/{entryId}', () => {
   it('changes what was captured and bumps the version', async () => {
     const { h, u, capture } = await setup();

@@ -16,6 +16,7 @@ import {
   FileAsExpenseRequestSchema,
   FileAsIncomeRequestSchema,
   IfMatchHeaderSchema,
+  InboxCountSchema,
   InboxEntryIdParamSchema,
   InboxEntryPageSchema,
   InboxEntrySchema,
@@ -71,6 +72,24 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const q = c.req.valid('query');
       const page = await store.inboxEntries.list(owner(c), { limit: q.limit, cursor: q.cursor ? decodeInboxCursor(q.cursor) : null });
       return c.json({ items: page.items.map(serializeInboxEntry), nextCursor: page.nextCursor ? encodeInboxCursor(page.nextCursor) : null }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/inbox/count',
+      tags: ['Inbox'],
+      summary: 'How many unsorted entries are waiting',
+      description:
+        'Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile. ' +
+        'MUT-240: the Capture hub\'s Recent handle wants an exact "N to file" without paging a whole list.',
+      security: SESSION_ONLY,
+      responses: { 200: { description: 'The count', content: { 'application/json': { schema: InboxCountSchema } } }, ...errorResponses },
+    }),
+    async (c) => {
+      const count = await store.inboxEntries.countByUser(owner(c));
+      return c.json({ count }, 200);
     },
   );
 
