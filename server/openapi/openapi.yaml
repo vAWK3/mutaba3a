@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.29.0-mut235
+  version: 1.30.0-mut237
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -365,6 +365,21 @@ components:
           uniqueItems: true
       additionalProperties: false
       minProperties: 1
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          $ref: "#/components/schemas/NewPassword"
+      required:
+        - currentPassword
+        - newPassword
+    NewPassword:
+      type: string
+      minLength: 12
+      maxLength: 128
+      description: 12 to 128 characters; no composition rules.
     DeviceSession:
       allOf:
         - $ref: "#/components/schemas/Me"
@@ -439,11 +454,6 @@ components:
       required:
         - token
         - password
-    NewPassword:
-      type: string
-      minLength: 12
-      maxLength: 128
-      description: 12 to 128 characters; no composition rules.
     IntegrationStatusResponse:
       type: object
       properties:
@@ -5470,6 +5480,42 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Invalid body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/me/password:
+    post:
+      tags:
+        - Sessions
+      summary: Change your own password (MUT-237)
+      description: Revokes every other session, web and device; this one stays signed in. A wrong current password counts toward the same lockout a wrong sign-in attempt would.
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204":
+          description: Password changed
+        "401":
+          description: INVALID_CREDENTIALS — the current password is wrong, or the account is locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed (the new password is 12 to 128 characters)
           content:
             application/json:
               schema:

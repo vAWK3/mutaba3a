@@ -84,6 +84,8 @@ const SESSION_OPERATIONS = [
   'GET /v1/me',
   // MUT-191: the person's Malafat suggestion preferences (organization-independent, like GET /v1/me)
   'PATCH /v1/me/malafat-suggestions',
+  // MUT-237: a person changes their own password (organization-independent, like GET /v1/me)
+  'POST /v1/me/password',
   'GET /v1/payments',
   'GET /v1/payments/{paymentId}',
   'GET /v1/projects',
@@ -104,9 +106,9 @@ const SESSION_OPERATIONS = [
 const DEVICE_SESSION_OPERATIONS = [...SESSION_OPERATIONS.filter((k) => k !== 'DELETE /v1/sessions/current'), 'DELETE /v1/device-sessions/current'].sort();
 /** Sign-in (MUT-38, MUT-64) and the setup-link pair (MUT-235): the only operations that take no credential. */
 const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POST /v1/account-setup/check', 'POST /v1/account-setup'];
-const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'DELETE /v1/sessions/current'];
+const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'POST /v1/me/password', 'DELETE /v1/sessions/current'];
 /** MUT-64: the device-session equivalent of IDENTITY_OPERATIONS — GET /v1/me is shared, sign-out is its own route. */
-const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'DELETE /v1/device-sessions/current'];
+const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'POST /v1/me/password', 'DELETE /v1/device-sessions/current'];
 
 interface Operation {
   key: string;

@@ -463,6 +463,109 @@ describe('organization selection (X-Mutaba3a-Profile)', () => {
   });
 });
 
+describe('POST /v1/me/password — change your own password (MUT-237)', () => {
+  const change = (token: string, body: unknown, extra: Record<string, string> = SAME_ORIGIN) =>
+    ({ method: 'POST', headers: { 'content-type': 'application/json', ...withSession(token, extra) }, body: JSON.stringify(body) }) as const;
+  const NEW_PASSWORD = 'a different long enough passphrase';
+
+  it('sets the new password, revokes every other session (web and device) and keeps this one, audits it', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const current = await signIn(h, p.email, p.password);
+    const other = await signIn(h, p.email, p.password);
+    const device = await deviceSignIn(h, p.email, p.password);
+
+    const res = await h.app.request('/v1/me/password', change(current.token, { currentPassword: p.password, newPassword: NEW_PASSWORD }));
+    expect(res.status).toBe(204);
+
+    expect((await h.app.request('/v1/me', { headers: withSession(current.token) })).status).toBe(200);
+    expect((await h.app.request('/v1/me', { headers: withSession(other.token) })).status).toBe(401);
+    expect((await h.app.request('/v1/me', { headers: withDevice(device.token) })).status).toBe(401);
+
+    const changed = await h.store.users.getById(p.id);
+    expect(changed?.passwordChangedAt.toISOString()).toBe(h.clock.now.toISOString());
+    expect((await signIn(h, p.email, p.password)).res.status).toBe(401);
+    expect((await signIn(h, p.email, NEW_PASSWORD)).res.status).toBe(201);
+
+    const events = (await h.store.audit.list(f.org.id, { entityType: 'user', action: 'user.password_changed' }, { limit: 10, cursor: null })).items;
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ actorType: 'USER', actorId: p.id, entityId: p.id });
+  });
+
+  it('works from a device session too, keeping that device session live', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await deviceSignIn(h, p.email, p.password);
+    const res = await h.app.request('/v1/me/password', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...withDevice(token) },
+      body: JSON.stringify({ currentPassword: p.password, newPassword: NEW_PASSWORD }),
+    });
+    expect(res.status).toBe(204);
+    expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(200);
+  });
+
+  it('refuses a wrong current password with 401, without touching the password, and counts toward the shared sign-in lockout (D1)', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+
+    for (let i = 0; i < SIGN_IN_POLICY.maxFailures; i++) {
+      const res = await h.app.request('/v1/me/password', change(token, { currentPassword: 'wrong', newPassword: NEW_PASSWORD }));
+      expect(res.status).toBe(401);
+      expect((await read(res)).error.code).toBe('INVALID_CREDENTIALS');
+    }
+    expect((await h.store.users.getById(p.id))?.lockedUntil).not.toBeNull();
+    // The same account lockout a wrong sign-in would trip: locked out there too, not just on this route.
+    expect((await signIn(h, p.email, p.password)).res.status).toBe(401);
+
+    minutes(h, SIGN_IN_POLICY.lockMs / 60_000);
+    const ok = await h.app.request('/v1/me/password', change(token, { currentPassword: p.password, newPassword: NEW_PASSWORD }));
+    expect(ok.status).toBe(204);
+  });
+
+  it('refuses a new password outside 12-128 characters with 422, and changes nothing', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+    for (const bad of ['short', 'x'.repeat(129)]) {
+      const res = await h.app.request('/v1/me/password', change(token, { currentPassword: p.password, newPassword: bad }));
+      expect(res.status).toBe(422);
+    }
+    expect((await signIn(h, p.email, p.password)).res.status).toBe(201);
+  });
+
+  it('refuses a cross-site request, an API key, and no session', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+    const cross = await h.app.request('/v1/me/password', change(token, { currentPassword: p.password, newPassword: NEW_PASSWORD }, { origin: 'https://evil.example' }));
+    expect(cross.status).toBe(403);
+    expect((await read(cross)).error.code).toBe('CROSS_SITE_REQUEST');
+    const byKey = await h.app.request('/v1/me/password', json({ currentPassword: p.password, newPassword: NEW_PASSWORD }, f.auth));
+    expect(byKey.status).toBe(403);
+    expect((await read(byKey)).error.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+    const none = await h.app.request('/v1/me/password', json({ currentPassword: p.password, newPassword: NEW_PASSWORD }, SAME_ORIGIN));
+    expect(none.status).toBe(401);
+  });
+
+  it('never logs the current or new password', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+    await h.app.request('/v1/me/password', change(token, { currentPassword: p.password, newPassword: NEW_PASSWORD }));
+    const text = h.logs.join('');
+    expect(text).not.toContain(p.password);
+    expect(text).not.toContain(NEW_PASSWORD);
+  });
+});
+
 describe('session rate limit and log hygiene', () => {
   it('rate-limits a session like a key', async () => {
     const h = harness({ limit: 3 });

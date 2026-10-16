@@ -337,6 +337,74 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change your own password (MUT-237)
+         * @description Revokes every other session, web and device; this one stays signed in. A wrong current password counts toward the same lockout a wrong sign-in attempt would.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChangePasswordRequest"];
+                };
+            };
+            responses: {
+                /** @description Password changed */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description INVALID_CREDENTIALS — the current password is wrong, or the account is locked */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (the new password is 12 to 128 characters) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/device-sessions": {
         parameters: {
             query?: never;
@@ -9868,6 +9936,12 @@ export interface components {
             off?: boolean;
             dismiss?: components["schemas"]["MalafatMoment"][];
         };
+        ChangePasswordRequest: {
+            currentPassword: string;
+            newPassword: components["schemas"]["NewPassword"];
+        };
+        /** @description 12 to 128 characters; no composition rules. */
+        NewPassword: string;
         DeviceSession: components["schemas"]["Me"] & {
             token: string;
         };
@@ -9895,8 +9969,6 @@ export interface components {
             token: string;
             password: components["schemas"]["NewPassword"];
         };
-        /** @description 12 to 128 characters; no composition rules. */
-        NewPassword: string;
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];
             apiKey: components["schemas"]["ApiKeySummary"];
