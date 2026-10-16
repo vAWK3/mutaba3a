@@ -2675,6 +2675,17 @@ This retires the nine-cell baseline from the MUT-226 and MUT-178 notes above. On
 
 The phone flows that use it (MUT-229) and a live call to Frankfurter are not exercised here; the provider is faked.
 
+## MUT-236 — portal /setup page (2026-10-16, ADR-088 §8)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/hosted/pages/auth/__tests__/setupLink.test.ts` (new) | Unit | 8 | 11/12/128/129 and emoji (UTF-16, as zod) boundaries; the policy equals the OpenAPI `NewPassword` minLength/maxLength (drift); token from the router hash; 410 × each state, unknown/missing state → invalid, `used` after a lost answer → try sign-in, 422/429 (whole minutes)/0/5xx/non-API errors; which failures count as a lost answer |
+| `src/hosted/pages/auth/__tests__/SetupPage.test.tsx` (new) | Component (real router + query client, stubbed fetch) | 26 | check body is `{ token }` and the location loses its hash; EN/AR (RTL) from the check's locale, a stored choice wins; RESET wording; one visible read-only username input, new-password field, rule as accessible description, autofocus; no re-check on focus (A1); short/long refused inline with nothing sent; redeem → sign-in bodies → Home; button held while saving, second click sends nothing; 410 expired mid-form; plain used without sign-in; lost answer then used → signed in (D3), or "probably saved" when that sign-in fails; 429 minutes; sign-in failure after redeem → "saved"; each refused state's heading with no input and no banned self-service wording; Arabic refusal; 422 → invalid; no fragment → incomplete with no request; check unreachable → Try again → form; check 429; a second link pasted into the same tab is checked; another tab's sign-out leaves `/setup` |
+| `server/src/__tests__/well-known-routes.test.ts` (changed) | Route | +1 | no AASA `applinks` pattern claims `/setup` |
+| `qa/specs/portal/setup.spec.ts` (new) | Release-QA (Playwright, preview build) | 5 | `@portal.setup.set-password` EN + AR (URL `/setup` with no `#`, read-only email, axe), `refused-links`, `password-rule`, `answer-lost` |
+
+Unchanged and green: `auth-states.test.tsx` (sign-in's rate-limit minutes after the `retryMinutes` move), `BootScreens.test.tsx` (default label), `parity.test.ts`, `check-bundles` in `npm run build`. Known pre-existing release-QA failures: `@portal.signin.boot-slow-session` ×2 (TD-150).
+
 ## MUT-235 — setup links replace printed passwords (2026-10-16, ADR-088)
 
 | File | Kind | Tests | What it proves |

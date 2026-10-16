@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
-import { api, ApiError } from '../../api/client';
+import { api, ApiError, retryMinutes } from '../../api/client';
 import { LanguageSwitch, Wordmark } from '../../components/Brand';
 import { ME_KEY, meQuery } from '../../session/me';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
@@ -37,15 +37,9 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function hostedOfferHref(): string {
   return typeof __HOSTED_OFFER_URL__ !== 'undefined' ? __HOSTED_OFFER_URL__ : '';
 }
-const SECONDS_PER_MINUTE = 60;
-
-function minutesFrom(error: ApiError): number {
-  return Math.max(1, Math.ceil((error.retryAfterSeconds ?? SECONDS_PER_MINUTE) / SECONDS_PER_MINUTE));
-}
-
 function bannerFor(error: unknown): Banner {
   if (error instanceof ApiError && error.status === 401) return { kind: 'invalid' };
-  if (error instanceof ApiError && error.status === 429) return { kind: 'rateLimited', minutes: minutesFrom(error) };
+  if (error instanceof ApiError && error.status === 429) return { kind: 'rateLimited', minutes: retryMinutes(error) };
   return { kind: 'unreachable' };
 }
 

@@ -50,6 +50,9 @@ export type CreateProfileRequest = Schemas['CreateProfileRequest'];
 export type UpdateProfileRequest = Schemas['UpdateProfileRequest'];
 export type UpdateProfileResponse = Schemas['UpdateProfileResponse'];
 export type ProfileTypeChange = Schemas['ProfileTypeChange'];
+export type SetupLinkCheck = Schemas['SetupLinkCheckResponse'];
+/** Why a setup link can't be used (MUT-235): the check's non-valid states, and `details.state` on a 410. */
+export type SetupLinkRefusal = Exclude<SetupLinkCheck['state'], 'valid'>;
 
 type ServerErrorCode = Schemas['ErrorEnvelope']['error']['code'];
 export type ApiErrorCode = ServerErrorCode | 'NETWORK' | 'UNKNOWN';
@@ -103,6 +106,13 @@ export function apiErrorReason(error: ApiError): string | undefined {
 export function apiErrorBound(error: ApiError): 'past' | 'future' | undefined {
   const bound = (error.details as { bound?: unknown } | null)?.bound;
   return bound === 'past' || bound === 'future' ? bound : undefined;
+}
+
+const SECONDS_PER_MINUTE = 60;
+
+/** A 429's wait in whole minutes, at least one, for "try again in N minutes" (sign-in and setup pages). */
+export function retryMinutes(error: ApiError): number {
+  return Math.max(1, Math.ceil((error.retryAfterSeconds ?? SECONDS_PER_MINUTE) / SECONDS_PER_MINUTE));
 }
 
 type UnauthorisedHandler = (error: ApiError) => void;
@@ -209,6 +219,11 @@ export const api = {
   me: (options: { signal?: AbortSignal } = {}) => request<Get<'/v1/me'>>('GET', '/v1/me', { signal: options.signal }),
   signIn: (body: Schemas['SignInRequest']) => request<OkJson<'/v1/sessions', 'post'>>('POST', SIGN_IN_PATH, { body }),
   signOut: () => request<void>('DELETE', '/v1/sessions/current'),
+  /** MUT-235/236: the setup-link token travels in the body only, never in a URL. */
+  checkSetupLink: (token: string, signal?: AbortSignal) =>
+    request<SetupLinkCheck>('POST', '/v1/account-setup/check', { body: { token }, signal }),
+  redeemSetupLink: (body: Schemas['SetupLinkRedeemRequest'], signal?: AbortSignal) =>
+    request<OkJson<'/v1/account-setup', 'post'>>('POST', '/v1/account-setup', { body, signal }),
   /** MUT-191: off replaces; dismissals are added to what the account holds. */
   changeMalafatSuggestions: (body: MalafatSuggestionsChange) => request<MalafatSuggestions>('PATCH', '/v1/me/malafat-suggestions', { body }),
 

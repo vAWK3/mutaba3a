@@ -30,6 +30,15 @@ describe('wellKnownRoutes (MUT-111)', () => {
       expect(body.applinks.details).toEqual([{ appID: '4LCWA596X7.com.barmajiyat.mutaba3a', paths: ALLOWED_PATHS }]);
       expect(body.webcredentials).toEqual({ apps: ['4LCWA596X7.com.barmajiyat.mutaba3a'] });
     });
+
+    it('claims no /setup path, so a setup link always opens in the browser (MUT-236)', async () => {
+      const body = await read(await app.request('/.well-known/apple-app-site-association'));
+      const paths: string[] = body.applinks.details[0].paths;
+      const literal = (part: string) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+      const claims = (pattern: string, path: string) => new RegExp(`^${pattern.split('*').map(literal).join('.*')}$`).test(path);
+      expect(claims('/capture*', '/capture/x')).toBe(true);
+      for (const path of ['/setup', '/setup/']) expect(paths.filter((pattern) => claims(pattern, path))).toEqual([]);
+    });
   });
 
   describe('GET /.well-known/assetlinks.json', () => {

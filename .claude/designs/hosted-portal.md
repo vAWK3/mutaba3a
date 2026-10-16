@@ -254,6 +254,7 @@ Tests generated from the table (MUT-39):
 - **`HostedShell`:** a sidebar with Overview, Clients, Receivables, Payments and Documents (plus Expenses from MUT-44), the profile switcher, the user menu (name, language, sign out), and the page. No `TopBar` "+ Add" menu: the only create action in the portal is MUT-44's expense drawer.
 - **Routes** (TanStack Router, code-based like `src/router.tsx`; base `/`):
   - `/sign-in`
+  - `/setup#<token>` (MUT-236): a setup link's page, public like sign-in; the token is stripped from the address bar on arrival (ADR-088 §8)
   - `/` (redirects to the first profile)
   - `/p/$profileId/` (overview)
   - `…/clients` and `…/clients/$customerId`

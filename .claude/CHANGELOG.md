@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-16 — Portal: set your password from a setup link (MUT-236, ADR-088)
+
+**Why:** since MUT-235 a new or reset account gets a one-time link `<portal>/setup#<token>`, and the portal had no page for it, so nobody could finish setting up. Ships in the same `make release server` as MUT-235.
+
+### Added
+- `/setup` (public, like `/sign-in`): reads the token from the fragment and strips it from the address bar at once (router `replace` = `history.replaceState`), checks the link once, and opens in the account's locale unless this browser holds a chosen language (MUT-209). Expired, used, superseded, unknown and incomplete links each get their own heading in EN and AR and no form; "used" offers Go to sign in.
+- The form: the email in a visible read-only `autocomplete="username"` input (D2), one `autocomplete="new-password"` field with Show/Hide, the 12–128 rule always shown and enforced before any request. Save redeems, then signs in through `POST /v1/sessions` and lands on Home; if that sign-in fails, "Your password is saved" with a link to sign in.
+- TD-149: Save is disabled while saving; a "used" answer after an attempt that got no answer (network, timeout, 5xx) first signs in with the typed password (D3), and only if that fails says the password is probably saved.
+- Release-QA `qa/features/portal/setup.yaml` (set-password, refused-links, password-rule, answer-lost) + `qa/specs/portal/setup.spec.ts`; the in-memory API answers the setup routes.
+
+### Changed
+- `CheckingSession` takes an optional `label` ("Checking your link" on `/setup`).
+- `SessionBridge`: another tab's sign-out no longer sends a tab on `/setup` to sign-in (it would lose the token).
+- `retryMinutes(error)` moved to `src/hosted/api/client.ts`; sign-in and setup share it.
+
+### Fixed (build)
+- A second setup link pasted into a tab already on `/setup` changes only the fragment; the page now checks the new token instead of showing the old one's answer.
+
+### Technical
+- `src/hosted/pages/auth/setupLink.ts` (policy mirrored from the server and pinned to the OpenAPI `NewPassword` bounds by a test, token reading, redeem-failure mapping); `api.checkSetupLink` / `api.redeemSetupLink`; the check query never refetches (eng review A1). `well-known-routes.test.ts` names `/setup` as never claimed by the AASA paths.
+
 ## [Unreleased] - 2026-10-16 — Setup links replace printed passwords (MUT-235, ADR-088, API 1.29.0-mut235)
 
 **Why:** `provision:user` and `rotate:password` printed a password Basel delivered by hand, so until it was used the operator knew a working password to someone's money, and nobody could change their own. Onboarding the first paying hosted users needs something people trust, without self-service signup.
