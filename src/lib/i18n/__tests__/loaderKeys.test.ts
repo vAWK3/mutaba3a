@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import en from '../translations/en.json';
-import ar from '../translations/ar.json';
+import en from '../translations/en';
+import ar from '../translations/ar';
 import portalEn from '../../../hosted/i18n/en.json';
 import portalAr from '../../../hosted/i18n/ar.json';
 

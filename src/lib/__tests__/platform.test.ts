@@ -52,6 +52,19 @@ describe('handleVersionChange', () => {
     vi.restoreAllMocks();
   });
 
+  it('returns the version the last start ran, or null on a fresh install (MUT-24)', () => {
+    expect(handleVersionChange('1.0.0')).toBeNull();
+    expect(handleVersionChange('1.0.0')).toBe('1.0.0');
+    expect(handleVersionChange('1.1.0')).toBe('1.0.0');
+  });
+
+  it('returns null when storage throws', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    expect(handleVersionChange('1.0.0')).toBeNull();
+  });
+
   it('should store current version on first run', () => {
     handleVersionChange('1.0.0');
     expect(localStorage.getItem(LAST_KNOWN_VERSION_KEY)).toBe('1.0.0');

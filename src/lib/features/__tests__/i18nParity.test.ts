@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import en from '../../i18n/translations/en.json';
-import ar from '../../i18n/translations/ar.json';
+import en from '../../i18n/translations/en';
+import ar from '../../i18n/translations/ar';
 import { FEATURE_KEYS } from '../features';
 
 type Dict = Record<string, unknown>;

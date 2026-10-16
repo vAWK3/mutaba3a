@@ -9,7 +9,7 @@ import { ConversionDrawer } from "../drawers/ConversionDrawer";
 import { LegacyExpenseEditDrawer } from "../drawers/LegacyExpenseEditDrawer";
 import { PartialPaymentDrawer } from "../drawers/PartialPaymentDrawer";
 import { OrphanedRecordsDrawer } from "../drawers/OrphanedRecordsDrawer";
-import { WelcomeModal, DemoSeedModal, MigrationWizard } from "../modals";
+import { WelcomeModal, DemoSeedModal, MigrationWizard, WhatsNewModal, WhatsNewController } from "../modals";
 import { OrphanedRecordsBanner } from "./OrphanedRecordsBanner";
 import { DemoBanner } from "../ui/DemoBanner";
 import { SampleDataBar } from "../ui/SampleDataBar";
@@ -165,6 +165,8 @@ export function AppShell({ children }: AppShellProps) {
 
       <SavedFlashAnnouncer />
       <WelcomeModal />
+      <WhatsNewController />
+      <WhatsNewModal />
       <MigrationWizard />
 
       {showConfirmModal && (

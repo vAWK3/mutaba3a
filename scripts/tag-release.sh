@@ -13,6 +13,9 @@
 #
 # A tag that already points at another commit is never moved — that happens
 # when a release keeps its version — and the script says so instead.
+#
+# A web tag's message carries that version's English lines from
+# release-notes.json as it stood in the tagged commit (MUT-24).
 
 set -euo pipefail
 
@@ -24,6 +27,20 @@ RELEASE_SUBJECT_RE="^release: ($APPS_PATTERN) v[0-9]"
 usage() {
   printf '%susage: %s <web|api> <version> [--push] | --backfill%s\n' "$C_RED" "$0" "$C_NC" >&2
   exit 2
+}
+
+# tag_message <app> <version> <commit>
+tag_message() {
+  local app="$1" version="$2" commit="$3"
+  local subject="Release ${app} v${version}" notes=""
+  if [[ "$app" == web ]]; then
+    notes=$(git show "${commit}:release-notes.json" 2>/dev/null | node -e '
+      let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
+        try { const lines = JSON.parse(s)[process.argv[1]]?.en ?? [];
+              process.stdout.write(lines.map((l) => `- ${l}`).join("\n")); } catch {}
+      });' "$version" || true)
+  fi
+  if [[ -n "$notes" ]]; then printf '%s\n\n%s' "$subject" "$notes"; else printf '%s' "$subject"; fi
 }
 
 # tag_commit <app> <version> <commit> [push]
@@ -42,7 +59,7 @@ tag_commit() {
     # Dated like the release commit, so `git tag --sort=-creatordate` (how
     # release-qa picks the baseline) orders backfilled tags correctly.
     GIT_COMMITTER_DATE="$(git log -1 --format=%cI "$commit")" \
-      git tag -a "$tag" -m "Release ${app} v${version}" "$commit"
+      git tag -a "$tag" -m "$(tag_message "$app" "$version" "$commit")" "$commit"
     printf '%s✓ tagged %s at %s%s\n' "$C_GREEN" "$tag" "$(git rev-parse --short "$commit")" "$C_NC"
   fi
 

@@ -76,6 +76,44 @@
 ### Technical
 - Files: `src/styles/brand/mutaba3a.tokens.json`, `src/styles/brand/mutaba3a-theme.css`, `src/styles/theme.css`, `src/test/css/brandCss.ts`, `src/styles/__tests__/brand.test.ts`, `src/index.css`, the 15 other component/page stylesheets and 9 TSX files above, `qa/specs/web/brand.spec.ts`, `qa/specs/portal/shell.spec.ts`, `qa/features/web/brand.yaml`, `qa/features/portal/shell.yaml`, `docs/brand/README.md`.
 
+## [Unreleased] - 2026-10-16 — TODO.md cleared: locale split, key check, What's new (MUT-24, ADR-151)
+
+**Why:** `TODO.md` was a second backlog. MUT-24 tracks its items; this lands A (locale split) and B (What's new). C (coverage, web CI) landed separately above.
+
+### Added
+- **What's new** (`WhatsNewModal` + `WhatsNewController`, `src/lib/whatsNew/`). On the first start after an update it shows every version since the one this browser last dismissed, newest first, in the chosen language. Got it, Escape or the backdrop dismiss it, and Settings › About reopens the running version's notes.
+  - A fresh install never sees it. It waits while the welcome or the sample setup owns the screen.
+  - Storage keys: `whats-new-seen-version`, seeded at start from `handleVersionChange`, which now returns the previous version.
+- `release-notes.json` (repo root): user-facing en + ar lines per version, the one place notes are written (ADR-151).
+  - `make release-web` stops after the bump without a well-formed entry (`npm run release:notes -- <v>`).
+  - `tag-release.sh` puts the English lines in the web tag's message, read from the tagged commit.
+  - 0.1.7's entry is a draft from the commits since `web-v0.1.6`.
+- `MUTABA3A_APP_VERSION` build override (`appVersion()` in `vite.config.ts`, x.y.z or the build fails), so a QA build can run as the version the notes describe before the bump.
+- `npm run i18n:check` / `scripts/i18n-keys.ts`: fails on a key code asks for that the dictionary lacks, and on a key nothing can reach. It gates `test:run` through `scripts/__tests__/i18n-keys.test.ts`.
+- Release-QA `qa/features/web/whats-new.yaml` (after-update, fresh-install, reopen-arabic) and `qa/specs/web/whats-new.spec.ts`, passing on a 0.1.7 preview build.
+
+### Changed
+- **The app's locale files are split by feature:** `src/lib/i18n/translations/{en,ar}/*.json`, 19 files each, holding whole namespaces, so no key path changed. `index.ts` composes them with `composeDictionary`, which throws if two files define one namespace.
+  - `translations.test.ts` checks file/namespace parity and full en/ar parity.
+  - The parity checker is shared with the portal (`src/test/i18nParity.ts`). Arabic `…Singular` strings may drop `{count}` (TD-156).
+- `compareVersions` moved from `useCheckForUpdates` to `src/lib/whatsNew/releaseNotes.ts`. `APP_VERSION` lives in `src/lib/appVersion.ts`.
+
+### Fixed
+- Projects: a search with no match showed `projects.emptyFiltered`, `projects.emptyFilteredCount` and `projects.clearSearch` as raw text in both languages. The keys did not exist, and `t()` returns the key, so the `|| fallback` never ran. The keys now exist; the count is a six-form plural.
+- Expenses by category: an uncategorized group was titled `common.noCategory`. It now uses `common.uncategorized`.
+
+### Removed
+- 121 orphaned keys in both languages (bulk upload, the old reports page and transaction drawer, profile switcher copy, …) and `bulkUpload.json`.
+- The unused hand-written `Translations` interface (`src/lib/i18n/types.ts`).
+- `ExpenseDrawer`'s dead `|| 'fallback'` toasts.
+- `TODO.md`.
+
+### Technical
+- Dictionaries: en 15.4 KB gz, ar 18.3 KB gz (before: 16.6 / 19.7). Both are still loaded eagerly. Lazy-loading would save only the inactive language, and the Arabic default needs `ar` on first paint.
+- Debt found on the way: TD-156 (six Arabic `…Singular` strings are pre-plural copies), TD-157 (the key check cannot see a key built from an undotted variable).
+
+---
+
 ## [Unreleased] - 2026-10-16 — Change your own password (MUT-237, ADR-037 amendment)
 
 **Why:** setting a password only ever happened through an operator-issued setup link (MUT-235/236); nobody signed in could change one they already knew, so a routine password change meant asking Basel for a fresh link.

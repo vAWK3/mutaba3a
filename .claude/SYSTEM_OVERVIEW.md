@@ -168,6 +168,7 @@ ESLint enforces it (MUT-47, ADR-071).
 
 ### Implemented (v0.0.48)
 
+- **What's new (MUT-24 / ADR-151)**: after an update the app shows the new versions' notes once, from `release-notes.json` (en + ar), until dismissed. Settings › About reopens them. A fresh install never sees them. `make release-web` refuses a version without notes, and the web tag carries them.
 - **Home (MUT-8 / ADR-036)** — `/` answers how much am I owed, who is late, and what came in. Owed now is the largest figure, per currency, over every receivable in the profile. Needs attention lists overdue items and items due within 7 days, oldest first. Recent payments shows the last 10 across clients, including income saved as received. Every row opens its client. **MUT-82 (ADR-055):** each Needs attention row has an always-visible Record Payment that opens the payment drawer in place (remaining amount, today). A payment that settles the row slides it out while Owed now changes in the same render (both read one receivables query); a partial payment keeps the row with its new amount; a toast offers Undo, which deletes that payment record so the entry is recalculated exactly (one Undo at a time; it outlives the screen). The client cell is a keyboard-reachable link. A new install that skipped onboarding sees one action, Add income. The forecast strip, month actuals and guidance feed are gone, and MUT-58 deleted the money-event read side only they used (`useMoneyEventQueries`, `moneyEventRepository`, and the refresh every write path ran for it). The `moneyEventVersions` sync table stayed then (ADR-029); MUT-73 dropped it with the other sync tables in Dexie v21 (ADR-053).
 - **All businesses (MUT-89 / ADR-051)** — a lens on the owed screens only, Home and Clients (routes tagged `staticData.owedLens`). With two or more businesses the switcher lists "All businesses" there.
   - **What it shows:** Owed now per currency across every live business, never summed, and a business tag on each row. Unassigned records and archived businesses stay out.
@@ -223,7 +224,7 @@ ESLint enforces it (MUT-47, ADR-071).
 | Business Profiles | ✅ Complete | Multi-identity, branding |
 | Data Export/Import | ✅ Complete | ZIP backup/restore |
 | Demo Mode | ✅ Complete | Sample data, time-frozen |
-| i18n | ✅ Complete | English, Arabic, RTL |
+| i18n | ✅ Complete | English, Arabic, RTL; locale files per feature (`translations/<lang>/*.json`), en/ar parity and missing/orphaned-key checks in `test:run` (MUT-24) |
 | Dark Theme | ✅ Complete | CSS variables theming |
 | Brand v2 chrome (MUT-104, ADR-073) | ✅ Complete | Favicon (SVG light/dark + PNG fallbacks), apple-touch icon, theme-color that follows the in-app theme, Brand v2 PWA manifest, full-bleed desktop icons (`npm run icons:desktop`), theme-aware `BrandMark` in the sidebar and portal, Arabic 1200×630 link-preview card (web build, `MUTABA3A_PUBLIC_ORIGIN`) |
 | Brand v2 (MUT-102, ADR-058) | ✅ Complete | Two-layer tokens (`--m-*` from the brand JSON → one semantic map in `theme.css`); AAA light text (7:1), dark 4.5:1, checked in Node and by axe; Thmanyah Sans / Serif Display bundled unmodified from `src/assets/fonts` in web, desktop and portal (no preload: it cost ~700 ms of LCP; runtime-cached in the PWA); Plex Mono figures; body 16, brand radii and motion tokens |
@@ -531,6 +532,7 @@ mini-crm/
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-10-16 | 0.1.6 | MUT-24: locale files split by feature + key check (121 orphans removed, 2 raw-key bugs fixed); What's new after an update from `release-notes.json`, with a release gate (ADR-151) |
 | 2026-10-16 | 0.0.65 | MUT-237: change your own password from the account menu (`POST /v1/me/password`, API 1.31.0-mut237); other sessions revoked, this one stays signed in |
 | 2026-10-16 | 0.0.65 | MUT-236: portal `/setup` page for setup links (check, set password, sign in; token stripped from the URL); ships with MUT-235 in one server release |
 | 2026-02-09 | 0.0.48 | Initial SYSTEM_OVERVIEW created |

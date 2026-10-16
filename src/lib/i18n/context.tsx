@@ -2,8 +2,8 @@
 import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import type { Language } from './types';
 import { I18nProvider, detectSystemLanguage, type Dictionary } from './core';
-import enTranslations from './translations/en.json';
-import arTranslations from './translations/ar.json';
+import enTranslations from './translations/en';
+import arTranslations from './translations/ar';
 
 export { useLanguage, useT, useDirection, getLocale, DEFAULT_LANGUAGE } from './core';
 

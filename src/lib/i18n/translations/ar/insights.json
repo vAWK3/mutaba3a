@@ -1,0 +1,22 @@
+{
+  "insights": {
+    "title": "التحليلات",
+    "tabs": {
+      "summary": "ملخص",
+      "clients": "العملاء",
+      "projects": "المشاريع",
+      "expenses": "المصروفات",
+      "unpaid": "غير المحصّل"
+    },
+    "monthlyTrend": {
+      "title": "الاتجاه الشهري",
+      "income": "الدخل",
+      "expenses": "المصروفات"
+    },
+    "unpaid": {
+      "byClient": "المستحقات حسب العميل",
+      "byProject": "المستحقات حسب المشروع",
+      "invoices": "الإدخالات"
+    }
+  }
+}

@@ -147,7 +147,7 @@ export function ExpensesLedgerPage() {
 
     for (const expense of expenses) {
       const categoryId = expense.categoryId || 'uncategorized';
-      const categoryName = expense.categoryName || t('common.noCategory');
+      const categoryName = expense.categoryName || t('common.uncategorized');
 
       if (!groups.has(categoryId)) {
         groups.set(categoryId, {

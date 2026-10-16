@@ -1,0 +1,29 @@
+{
+  "overview": {
+    "title": "الرئيسية",
+    "kpi": {
+      "paidIncome": "الإيرادات المحصّلة",
+      "unpaidReceivables": "المستحقات غير المحصّلة",
+      "expenses": "المصروفات",
+      "net": "الصافي (الإيرادات - المصروفات)"
+    },
+    "needsAttention": "يتطلب الانتباه",
+    "noAttention": "لا توجد مستحقات متأخرة أو قادمة",
+    "welcome": {
+      "addClient": "إضافة عميل",
+      "addProject": "إضافة مشروع",
+      "addIncome": "إضافة إيراد"
+    },
+    "recentPayments": "أحدث الدفعات",
+    "noPayments": "لا توجد دفعات مسجلة بعد",
+    "noClient": "بدون عميل",
+    "paymentRecorded": "تم تسجيل {amount} من {client}",
+    "paymentRecordedNoClient": "تم تسجيل {amount}",
+    "undoFailed": "تعذّر التراجع. لا تزال الدفعة مسجّلة.",
+    "empty": {
+      "title": "لا يوجد ما يُتابَع بعد",
+      "description": "أضف ما أنجزته لعميل وقيمته. ستعرض الصفحة الرئيسية بعدها ما هو مستحق لك، ومن تأخر، وما وصلك.",
+      "action": "إضافة إيراد"
+    }
+  }
+}

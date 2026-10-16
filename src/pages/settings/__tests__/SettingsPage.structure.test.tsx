@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderWithProviders, screen } from '../../../test/utils';
 import { db } from '../../../db/database';
 import { ThemeProvider } from '../../../lib/theme';
-import en from '../../../lib/i18n/translations/en.json';
+import en from '../../../lib/i18n/translations/en';
 
 /**
  * MUT-88 (ADR-072), AC "each action exists exactly once": the whole Settings

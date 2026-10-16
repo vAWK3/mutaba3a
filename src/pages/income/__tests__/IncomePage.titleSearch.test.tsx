@@ -13,7 +13,7 @@ import { db } from '../../../db/database';
 import { getDateRangePreset } from '../../../lib/utils';
 import type { IncomeSearch } from '../../../lib/incomeSearch';
 import type { Client, Transaction } from '../../../types';
-import en from '../../../lib/i18n/translations/en.json';
+import en from '../../../lib/i18n/translations/en';
 import { IncomePage } from '../IncomePage';
 
 const PROFILE = 'p-1';

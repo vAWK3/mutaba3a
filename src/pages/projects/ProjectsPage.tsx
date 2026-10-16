@@ -10,6 +10,7 @@ import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useDrawerStore } from '../../lib/stores';
 import { formatRelativeDate } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
+import { useTp } from '../../lib/i18n/plural';
 import { BrandLoader } from '../../components/brand/BrandLoader';
 
 type SortField = 'name' | 'net' | 'unpaid' | 'activity';
@@ -17,6 +18,7 @@ type SortField = 'name' | 'net' | 'unpaid' | 'activity';
 export function ProjectsPage() {
   const { openProjectDrawer } = useDrawerStore();
   const t = useT();
+  const tp = useTp();
   const locale = getLocale(useLanguage().language);
   const [search, setSearch] = useState('');
 
@@ -131,13 +133,13 @@ export function ProjectsPage() {
         ) : projects.length === 0 ? (
           <EmptyState
             title={search && allProjects.length > 0
-              ? t('projects.emptyFiltered') || 'No projects match your search'
+              ? t('projects.emptyFiltered')
               : t('projects.empty')}
             description={search && allProjects.length > 0
-              ? `${allProjects.length} ${t('projects.emptyFilteredCount') || 'projects total.'}`
+              ? tp('projects.emptyFilteredCount', allProjects.length)
               : search ? t('projects.emptySearch') : t('projects.emptyHint')}
             action={search && allProjects.length > 0
-              ? { label: t('projects.clearSearch') || 'Clear search', onClick: () => setSearch('') }
+              ? { label: t('projects.clearSearch'), onClick: () => setSearch('') }
               : { label: t('projects.addProject'), onClick: () => openProjectDrawer({ mode: 'create' }) }
             }
           />

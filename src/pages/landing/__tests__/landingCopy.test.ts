@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import en from '../../../lib/i18n/translations/en.json';
-import ar from '../../../lib/i18n/translations/ar.json';
+import en from '../../../lib/i18n/translations/en';
+import ar from '../../../lib/i18n/translations/ar';
 import { CURRENCY_NAME_KEYS } from '../landingCopy';
 
 type Tree = { [key: string]: string | Tree };

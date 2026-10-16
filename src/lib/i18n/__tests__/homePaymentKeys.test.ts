@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import en from '../translations/en.json';
-import ar from '../translations/ar.json';
+import en from '../translations/en';
+import ar from '../translations/ar';
 
 // MUT-82: the Undo toast after a payment recorded from Home, and its failure
 // message, exist in both locales with their placeholders.

@@ -20,7 +20,7 @@
 | **Expenses** | RecurringAttentionList (+ `recurringAttention` helpers), RecurringOccurrenceCard (read-only, forecast) |
 | **Tables** | DataTable, CellAmount, CellStatus, CellDate |
 | **Filters** | DateRangeControl, SearchInput, StatusSegment, useIncomeFilters (URL model for /income), useClientsSearch (URL model for the Clients list) |
-| **Feedback** | Toast, Modal, RestoreBackupModal, DeleteAllDataModal |
+| **Feedback** | Toast, Modal, RestoreBackupModal, DeleteAllDataModal, WhatsNewModal (+ WhatsNewController) |
 | **Money** | OwedNowSummary, partitionOwedNow (helper), clients index muted rows, CurrencyAmounts, AmountWithConversion, CurrencySummaryPopup, FxRateReadout (top bar), CurrencyBadge |
 | **Icons** | Custom SVG icons (see Icons section) |
 
@@ -294,7 +294,7 @@ Tests: `src/pages/settings/__tests__/AdvancedFeaturesSection.test.tsx`.
 
 ### AboutSection
 **Location**: `src/pages/settings/AboutSection.tsx`
-**Purpose**: Settings › About — merges the former About/Updates/Desktop App sections under one heading (MUT-139: these three had no standalone test, so merging was low-risk; `SettingsPage.a11y.test.tsx` requires zero h3 subheadings, so the merged content is flat `.settings-row` entries, not nested subsections). Owns `useCheckForUpdates()`, app version display (shown once, in the update-status row — not duplicated in the About blurb), support links, and the mac/Windows download links. Uses `.settings-section-quiet` (MUT-139 visual pass): no card chrome, smaller title — the least load-bearing content on the page gets the least visual weight.
+**Purpose**: Settings › About — merges the former About/Updates/Desktop App sections under one heading (MUT-139: these three had no standalone test, so merging was low-risk; `SettingsPage.a11y.test.tsx` requires zero h3 subheadings, so the merged content is flat `.settings-row` entries, not nested subsections). Owns `useCheckForUpdates()`, app version display (shown once, in the update-status row — not duplicated in the About blurb), support links, a "What's new" row that reopens the running version's notes when `release-notes.json` has any (MUT-24), and the mac/Windows download links. Uses `.settings-section-quiet` (MUT-139 visual pass): no card chrome, smaller title — the least load-bearing content on the page gets the least visual weight.
 
 ```tsx
 <AboutSection />   // rendered by SettingsPage between AdvancedFeaturesSection and YourDataSection
@@ -332,6 +332,38 @@ Tests: `src/pages/settings/__tests__/YourDataSection.test.tsx` (every DataToolsS
 ```
 
 Tests: `src/components/modals/__tests__/RestoreBackupModal.test.tsx`.
+
+---
+
+### WhatsNewModal / WhatsNewController
+**Location**: `src/components/modals/WhatsNewModal.tsx` (+ `.css`); state in `src/lib/whatsNew/` (MUT-24, ADR-151)
+**Purpose**: "What's new". `WhatsNewController` (mounted in AppShell) opens it once per start when `pendingNotes(RELEASE_NOTES, APP_VERSION)` is non-empty, and waits while there is no business yet or the sample is being set up. `WhatsNewModal` renders the store's entries newest first: a "Version <bdi dir=ltr>x.y.z</bdi>" heading and the lines in the active language. Got it, Escape or the backdrop call `markWhatsNewSeen(current)`. It uses the `DeleteAllDataModal.css` shell.
+- **To reopen it:** call `useWhatsNewStore().openWhatsNew([latestNotesUpTo(RELEASE_NOTES, APP_VERSION)])`, as Settings › About does.
+- **`src/lib/whatsNew` exports:**
+  - `compareVersions` (the one semver compare; `useCheckForUpdates` uses it), `notesSince`, `latestNotesUpTo`, `releaseNotesProblems`;
+  - `seedSeenVersion`, `pendingNotes`, `markWhatsNewSeen`, `WHATS_NEW_SEEN_KEY`;
+  - `useWhatsNewStore` and `RELEASE_NOTES`.
+
+```tsx
+<WhatsNewController />   // AppShell, next to WelcomeModal
+<WhatsNewModal />
+```
+
+Tests: `src/components/modals/__tests__/WhatsNewModal.test.tsx`, `src/lib/whatsNew/__tests__/*`.
+
+---
+
+### composeDictionary / parityProblems (i18n)
+**Location**: `src/lib/i18n/translations/compose.ts`; `src/test/i18nParity.ts` (tests only)
+**Purpose**: `composeDictionary(PARTS)` joins a language's per-feature JSON files into one typed dictionary and throws when two files define one namespace (MUT-24). `parityProblems(en, ar)` lists every shape, `{var}`, empty-string and plural-form difference between two dictionaries. The app (`translations.test.ts`) and the portal (`hosted/i18n/__tests__/parity.test.ts`) both use it. Arabic `…Singular` strings may drop `{count}`.
+
+Tests: `src/lib/i18n/__tests__/translations.test.ts`.
+
+---
+
+### APP_VERSION
+**Location**: `src/lib/appVersion.ts`
+**Purpose**: The running version (`__APP_VERSION__`, or "0.0.0" where no build defined it). Use it instead of declaring the global again. Its build-time source is `appVersion(process.env.MUTABA3A_APP_VERSION)` in `vite.config.ts`.
 
 ---
 

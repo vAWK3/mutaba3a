@@ -64,6 +64,22 @@
 **Impact**: `POST /v1/me/password` verifies the current password and hashes the new one before `users.changePassword` takes the row lock. If an operator `--lock` (or a setup-link redeem) commits in that window, the change still writes its new hash afterwards. The caller's session is already revoked by then, so it isn't re-stamped and stays signed out, but the account has a password the lock meant to clear.
 **Fix**: pass the hash the route verified into `changePassword` and refuse (`StateConflict('user', 'CREDENTIAL_CHANGED')`, mapped to 403 `CURRENT_PASSWORD_WRONG` or 401) when the locked row's hash differs, or when the kept session is no longer live, the same check sign-in's `verifiedPasswordHash` makes under `FOR SHARE`.
 
+### TD-156: Six Arabic `…Singular` strings are pre-plural copies
+**Status**: Open
+**Ticket**: none (MUT-24)
+**Added**: 2026-10-16
+**Priority**: Low
+**Impact**: `settings.importBackupDoneSingular`, `orphanedRecords.assignedSingular` / `partialFailureSingular` and `integrity.orphanedRecordSingular` / `checkIssuesSingular` / `toastIssuesSingular` pick singular or plural with `count === 1 ? …Singular : …` instead of `tp()`. So Arabic dual and few/many forms fall back to one plural string. The parity check allows these Arabic singulars to drop `{count}`.
+**Fix**: turn each pair into one CLDR plural (all six Arabic forms) read with `tp()`, delete the `…Singular` keys, then drop `isArabicSingular` from `src/test/i18nParity.ts`.
+
+### TD-157: The key check cannot see a key built from an undotted variable
+**Status**: Open
+**Ticket**: none (MUT-24)
+**Added**: 2026-10-16
+**Priority**: Low
+**Impact**: `scripts/i18n-keys.ts` reads source text, not types. A key built as `` `${ns}.title` `` with `ns = 'reports'` (no dot) is invisible to it, so a used key would be reported orphaned. That fails loudly in `test:run`, so the check is the safe way round. The opposite gap: a dotted namespace literal (`'landing.hostedOffer'`) marks everything under it as reachable, so an orphan in such a namespace is missed.
+**Fix**: if either bites, track the key arguments through a TypeScript AST pass (ts-morph), or type `t()` keys from the composed dictionary.
+
 ### TD-150: The portal's boot-slow-session release-QA specs race the 4 s session stub
 **Status**: Open
 **Ticket**: none (found 2026-10-16, MUT-236 build)

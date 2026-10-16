@@ -1,0 +1,22 @@
+{
+  "0.1.7": {
+    "en": [
+      "A \"What's new\" note like this one now opens once after each update. Open it again any time from Settings › About.",
+      "Financial Planning and the local Retainers area have been retired, so the app stays focused on your clients, work and payments.",
+      "Delete all data now clears everything except your settings.",
+      "In a CSV import, clients and projects that don't exist yet are marked New instead of Duplicate.",
+      "The Conversions list updates as soon as you save.",
+      "Recurring expenses under Needs attention now go back to the day the rule starts.",
+      "Searching Projects with no match now says so, with a button to clear the search."
+    ],
+    "ar": [
+      "تظهر الآن ملاحظة «ما الجديد» مثل هذه مرة واحدة بعد كل تحديث. يمكنك فتحها متى شئت من الإعدادات ‹ حول التطبيق.",
+      "أوقفنا التخطيط المالي وقسم العقود الشهرية المحلية، ليبقى التطبيق مركّزًا على عملائك وأعمالك ودفعاتك.",
+      "يمسح «حذف جميع البيانات» الآن كل شيء ما عدا إعداداتك.",
+      "عند الاستيراد من ملف CSV، تظهر العملاء والمشاريع غير الموجودة بعلامة «جديد» بدلًا من «مكرر».",
+      "تتحدّث قائمة تحويلات العملات فور الحفظ.",
+      "تمتد المصروفات المتكررة في «تحتاج انتباه» الآن إلى يوم بدء القاعدة.",
+      "إذا لم يطابق البحث في المشاريع أي نتيجة، تقول الصفحة ذلك الآن مع زر لمسح البحث."
+    ]
+  }
+}

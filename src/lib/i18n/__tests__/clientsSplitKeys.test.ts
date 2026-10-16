@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import en from '../translations/en.json';
-import ar from '../translations/ar.json';
+import en from '../translations/en';
+import ar from '../translations/ar';
 
 // MUT-84: the split view's profile pane label and its announcement
 const TEXT_KEYS = ['clients.split.profile', 'clients.split.showing'] as const;

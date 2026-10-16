@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders, screen } from '../../../test/utils';
 import { db } from '../../../db/database';
 import { ThemeProvider } from '../../../lib/theme';
-import en from '../../../lib/i18n/translations/en.json';
+import en from '../../../lib/i18n/translations/en';
 
 /** MUT-187: the "Hosted account" row sits in Settings › Businesses, in the web build only. */
 

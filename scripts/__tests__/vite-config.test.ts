@@ -12,6 +12,7 @@ import configFn, {
   PWA_INCLUDE_ASSETS,
   PWA_MANIFEST,
   PWA_WORKBOX,
+  appVersion,
   netlifyFormsHtml,
   portalUrl,
   socialMetaTags,
@@ -24,8 +25,9 @@ import {
   HOSTED_REQUEST_FORM_NAME,
   NETLIFY_FORMS_PATH,
 } from '../../src/pages/landing/hostedRequest';
-import ar from '../../src/lib/i18n/translations/ar.json';
+import ar from '../../src/lib/i18n/translations/ar';
 import tokens from '../../src/styles/brand/mutaba3a.tokens.json';
+import pkg from '../../package.json';
 import { repoPath } from '../../src/test/css/brandCss';
 import { pngSize } from '../../src/test/pngSize';
 
@@ -151,7 +153,7 @@ describe('vite.config', () => {
 
     it('hands Vite structured meta attrs (never raw HTML), so <, " and & in the copy get escaped at serialization, not double-escaped here', async () => {
       vi.resetModules();
-      vi.doMock('../../src/lib/i18n/translations/ar.json', () => ({
+      vi.doMock('../../src/lib/i18n/translations/ar', () => ({
         default: {
           landing: {
             hero: {
@@ -181,9 +183,21 @@ describe('vite.config', () => {
         expect(byKey['og:title']).toBe('<script>alert(1)</script> "quoted" & ampersand');
         expect(byKey['og:description']).toBe('sub & "quoted" <b>bold</b>');
       } finally {
-        vi.doUnmock('../../src/lib/i18n/translations/ar.json');
+        vi.doUnmock('../../src/lib/i18n/translations/ar');
         vi.resetModules();
       }
+    });
+  });
+
+  describe('app version (MUT-24)', () => {
+    it('is package.json\'s version unless MUTABA3A_APP_VERSION says otherwise', () => {
+      expect(appVersion(undefined)).toBe(pkg.version);
+      expect(appVersion('0.1.7')).toBe('0.1.7');
+      expect(resolve('web').define?.__APP_VERSION__).toBe(JSON.stringify(pkg.version));
+    });
+
+    it.each(['v0.1.7', '0.1', '0.1.7-beta', ''])('refuses %j, failing the build', (value) => {
+      expect(() => appVersion(value)).toThrow(/MUTABA3A_APP_VERSION/);
     });
   });
 

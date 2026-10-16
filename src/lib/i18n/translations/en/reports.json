@@ -1,0 +1,21 @@
+{
+  "reports": {
+    "exportCsv": "Export CSV",
+    "print": "Print",
+    "currencyMode": {
+      "usd": "USD",
+      "ils": "ILS",
+      "both": "Both"
+    },
+    "sections": {
+      "unpaidAging": "Unpaid Receivables Aging"
+    },
+    "aging": {
+      "current": "Current (not due)",
+      "days1to30": "1-30 days overdue",
+      "days31to60": "31-60 days overdue",
+      "days60plus": "60+ days overdue"
+    },
+    "noExpenses": "No expenses in this period"
+  }
+}

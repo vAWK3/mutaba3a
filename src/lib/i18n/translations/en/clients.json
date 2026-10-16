@@ -1,0 +1,83 @@
+{
+  "clients": {
+    "title": "Clients",
+    "empty": "No clients found",
+    "emptySearch": "Try adjusting your search",
+    "emptyHint": "Add your first client to get started",
+    "addClient": "Add Client",
+    "searchPlaceholder": "Search clients...",
+    "notFound": "Client not found",
+    "notFoundHint": "This client may have been deleted or doesn't exist.",
+    "confirmArchive": "Are you sure you want to archive this client?",
+    "columns": {
+      "client": "Client",
+      "activeProjects": "Active Projects",
+      "paidIncome": "Paid Income",
+      "unpaid": "Unpaid",
+      "lastPayment": "Last Payment",
+      "lastActivity": "Last Activity",
+      "owedNow": "Owed Now",
+      "overdue": "Overdue"
+    },
+    "summary": {
+      "clientsCount": "{count} clients",
+      "clientsCountOne": "1 client"
+    },
+    "detail": {
+      "noReceivables": "No receivables",
+      "noReceivablesHint": "All payments have been received."
+    },
+    "profile": {
+      "owedNow": "Owed now",
+      "nothingOwed": "Nothing owed",
+      "overdueAmount": "{amount} overdue",
+      "nothingOverdue": "Nothing overdue",
+      "work": {
+        "title": "Work and billing",
+        "add": "Add income",
+        "what": "What",
+        "untitled": "Untitled",
+        "emptyTitle": "No work recorded for this client yet",
+        "emptyHint": "Add what you did and what it's worth. That's all it takes.",
+        "noMatches": "No entries match these filters",
+        "clearFilters": "Clear filters"
+      },
+      "payments": {
+        "title": "Payments",
+        "for": "For",
+        "openEntry": "Open income entry"
+      }
+    },
+    "emptyFiltered": "No clients match your search",
+    "emptyFilteredCount": "{count} clients in total.",
+    "clearSearch": "Clear search",
+    "split": {
+      "profile": "Client profile",
+      "showing": "Showing {name}"
+    },
+    "crossProfileTxCount": "{count} entries",
+    "index": {
+      "settled": "Settled",
+      "neverPaid": "Never paid",
+      "oldestOverdue": "oldest {days}d",
+      "owedOrderHint": "Ordered by today's exchange rate. Amounts are never converted.",
+      "bucket": {
+        "noClient": {
+          "one": "No client · 1 entry",
+          "other": "No client · {count} entries"
+        },
+        "archivedClients": {
+          "one": "Archived clients · 1",
+          "other": "Archived clients · {count}"
+        }
+      }
+    },
+    "malafat": {
+      "label": "A suggestion for law firms and accounting offices",
+      "clientThreshold": "Lots of clients to keep track of? If you run a law firm or an accounting office, Malafat manages clients, documents and fee agreements, and connects to a Mutaba3a hosted account.",
+      "secondBusiness": "Running more than one office? If one of them is a law firm or an accounting office, Malafat manages clients, documents and fee agreements, and connects to a Mutaba3a hosted account.",
+      "cta": "See Malafat",
+      "dismiss": "Don't show this again"
+    }
+  }
+}

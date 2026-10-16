@@ -1,0 +1,36 @@
+{
+  "integrity": {
+    "orphanedRecordSingular": "سجل واحد غير مرتبط بأي ملف تجاري.",
+    "orphanedRecordPlural": "عدد السجلات غير المرتبطة بأي ملف تجاري: {count}",
+    "reviewNow": "مراجعة الآن",
+    "dismiss": "إغلاق",
+    "checkClean": "لا توجد مشكلات. عدد السجلات المفحوصة: {total}",
+    "checkIssuesSingular": "تم العثور على مشكلة واحدة. عدد السجلات المفحوصة: {total}",
+    "checkIssuesPlural": "عدد المشكلات: {count}، عدد السجلات المفحوصة: {total}",
+    "checkFailed": "فشل فحص سلامة البيانات",
+    "toastClean": "اكتمل فحص سلامة البيانات دون مشكلات",
+    "toastIssuesSingular": "تم العثور على مشكلة واحدة في سلامة البيانات",
+    "toastIssuesPlural": "عدد مشكلات سلامة البيانات: {count}"
+  },
+  "orphanedRecords": {
+    "title": "سجلات غير مرتبطة",
+    "description": "هذه السجلات لا تنتمي إلى أي ملف تجاري، لذلك لا تظهر في قوائم أي ملف. اختر الملف الذي ينتمي إليه كل سجل.",
+    "descriptionSingleProfile": "هذه السجلات لا تنتمي إلى أي ملف تجاري، لذلك لا تظهر في قوائم أي ملف.",
+    "groups": {
+      "clients": "العملاء ({count})",
+      "projects": "المشاريع ({count})",
+      "transactions": "الإيرادات ({count})",
+      "expenses": "المصروفات ({count})"
+    },
+    "assignAllTo": "تعيين الكل إلى {profile}",
+    "profileFor": "الملف التجاري لـ {record}",
+    "untitledIncome": "إيراد",
+    "untitledExpense": "مصروف",
+    "noProfiles": "أضف ملفاً تجارياً أولاً، ثم عيّن هذه السجلات له.",
+    "allAssigned": "كل السجلات مرتبطة بملف تجاري.",
+    "assignedSingular": "تم تعيين سجل واحد.",
+    "assignedPlural": "عدد السجلات التي تم تعيينها: {count}",
+    "partialFailureSingular": "تعذّر تعيين سجل واحد، وما زال ظاهراً أدناه.",
+    "partialFailurePlural": "عدد السجلات التي تعذّر تعيينها: {count}. ما زالت ظاهرة أدناه."
+  }
+}

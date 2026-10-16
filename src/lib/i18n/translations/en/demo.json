@@ -1,0 +1,43 @@
+{
+  "demo": {
+    "modal": {
+      "title": "Activate Demo Mode",
+      "infoTitle": "Demo Mode",
+      "infoDesc": "This will populate the app with realistic sample data for demonstration purposes. Your existing data will not be affected.",
+      "willCreate": "Demo data will include:",
+      "item": {
+        "profile": "{count} business profiles",
+        "clients": "10 clients with contact info",
+        "projects": "15 projects across various fields",
+        "transactions": "60+ transactions (6 months history)",
+        "expenses": "25+ expenses with categories"
+      },
+      "seeding": "Creating demo data...",
+      "successTitle": "Demo Mode Activated",
+      "successDesc": "Sample data has been created. The page will reload to show your demo data.",
+      "errorTitle": "Failed to Create Demo Data",
+      "errorDesc": "An error occurred while creating demo data. Please try again.",
+      "seedButton": "Show Demo",
+      "doneButton": "Get Started",
+      "tryAgain": "Try Again"
+    },
+    "banner": {
+      "label": "Demo Mode",
+      "frozenTo": "Time: {date}",
+      "freeze": "Freeze Time",
+      "unfreeze": "Real Time",
+      "freezeTime": "Freeze time for consistent screenshots",
+      "unfreezeTime": "Return to real-time",
+      "reset": "Reset",
+      "resetting": "Resetting...",
+      "resetDemo": "Remove demo data and exit demo mode",
+      "resetConfirm": "Are you sure you want to reset demo mode? All demo data will be removed."
+    },
+    "stats": {
+      "businesses": "Businesses",
+      "clients": "Clients",
+      "projects": "Projects",
+      "transactions": "Transactions"
+    }
+  }
+}

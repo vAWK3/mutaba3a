@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { DEFAULT_SETTINGS } from '../../../db/defaultSettings';
 import { createMockBusinessProfile } from '../../../test/utils';
-import en from '../../../lib/i18n/translations/en.json';
+import en from '../../../lib/i18n/translations/en';
 
 // Vite injects this at build time; the page reads it when the module loads
 vi.hoisted(() => {
@@ -55,15 +55,15 @@ vi.mock('../../../components/modals', () => ({
 // Sections with their own tests render only their card and title here, so
 // the page's order is observable without their hooks (MUT-88).
 vi.mock('../AdvancedFeaturesSection', async () => {
-  const { settings } = (await import('../../../lib/i18n/translations/en.json')).default;
+  const { settings } = (await import('../../../lib/i18n/translations/en')).default;
   return { AdvancedFeaturesSection: () => <div className="settings-section"><h2 className="settings-section-title">{settings.features.title}</h2></div> };
 });
 vi.mock('../AboutSection', async () => {
-  const { settings } = (await import('../../../lib/i18n/translations/en.json')).default;
+  const { settings } = (await import('../../../lib/i18n/translations/en')).default;
   return { AboutSection: () => <div className="settings-section"><h2 className="settings-section-title">{settings.about.title}</h2></div> };
 });
 vi.mock('../YourDataSection', async () => {
-  const { settings } = (await import('../../../lib/i18n/translations/en.json')).default;
+  const { settings } = (await import('../../../lib/i18n/translations/en')).default;
   return { YourDataSection: () => <div className="settings-section"><h2 className="settings-section-title">{settings.yourData.title}</h2></div> };
 });
 

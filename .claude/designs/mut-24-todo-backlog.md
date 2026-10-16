@@ -1,6 +1,6 @@
 # MUT-24 — Clear the TODO.md backlog
 
-Status: **DRAFT, awaiting Basel's approval** (2026-10-16). Branch `feature/mut-24-todo-backlog`.
+Status: **A and B built** on `feature/mut-24-todo-backlog`. **C** is running in its own session and branch (`claude/mut-24-coverage-*`). Approved by Basel 2026-10-16 (D1–D3 below).
 
 MUT-24 collects three independent items from the old `TODO.md`:
 
@@ -45,7 +45,20 @@ Desktop is out of scope everywhere: the Tauri app is retired until v2. B's "work
   - **Orphaned**: a defined leaf no literal reaches and no declared dynamic prefix covers → error.
   - Dynamic keys (91 template-literal `t(\`…${x}\`)` calls) are covered by an explicit `DYNAMIC_KEY_PREFIXES` list in the script. Each entry names the file that builds the key, so the list cannot rot silently.
   - Orphans found on the first run are deleted in a separate commit, so the split commit stays a pure move.
-- **Lazy loading (AC 4): not doing it**, unless measurement says otherwise. The web app is one SPA and needs both languages' common strings on its first screen. I will record the gzip size of the two dictionaries in the bundle report before and after. If it is under ~25 KB gz, splitting chunks costs more round-trips than it saves.
+- **Lazy loading (AC 4): not done.**
+  - Measured gzipped dictionary sizes: en 15.4 KB, ar 18.3 KB; before the orphan cleanup they were 16.6 KB and 19.7 KB.
+  - Lazy-loading could only skip the inactive language, at most ~15–18 KB gz once. It would cost an async load on every language switch. The Arabic default needs `ar` on first paint anyway.
+  - Loading stays eager.
+
+### What the build found (2026-10-16)
+- **Two live raw-key bugs**, both fixed with tests that use the real dictionaries:
+  - Projects' search-miss state asked for three keys that never existed: `projects.emptyFiltered`, `projects.emptyFilteredCount` and `projects.clearSearch`.
+  - Expenses' uncategorized group asked for `common.noCategory`.
+  - `t()` returns the key on a miss, so each `|| 'fallback'` beside the call never ran.
+- **121 orphaned keys**, left by deleted screens, are gone from both languages, along with `bulkUpload.json`.
+- The scanner learned three dynamic shapes: a template literal with a dot before its first `${`, a concatenation onto a dotted literal, and a dotted namespace constant. Its limits are TD-157.
+- **Six Arabic `…Singular` strings drop `{count}`.** That is correct Arabic, so the parity rule allows exactly that (TD-156: make them plurals).
+- The unused hand-written `Translations` interface is deleted.
 
 ### Risk
 
@@ -63,13 +76,16 @@ This is a pure move. The safety net is a test that deep-equals the composed dict
 
 ### Design
 
-- **Detection.** `handleVersionChange` returns `{ previous: string | null, current }` instead of `void`. `main.tsx` stores the result in a tiny module (`src/lib/whatsNew/versionChange.ts`), and nothing re-reads storage.
-  - `previous === null` means a fresh install, so nothing is shown (AC 3).
-  - Storage that throws also means nothing is shown.
+- **Detection, as built.** `handleVersionChange` returns the previous version (`string | null`). `main.tsx` passes it to `seedSeenVersion(previous, APP_VERSION)`.
+  - The seed writes `whats-new-seen-version` once: the running version on a fresh install, so nothing shows (AC 3); the previous version on an upgrade.
+  - Keying on the seen version, not on `previous`, keeps the notes until they are dismissed. `handleVersionChange` rewrites `app-last-known-version` on every start, so a tab closed without dismissing would otherwise lose them.
+  - Storage that throws means nothing shows.
 - **Content: one source of release notes, used everywhere.** This is the decision for Basel; see the ledger below.
-  - Recommended: `release-notes.json` at the repo root, keyed by version, `{ "0.1.7": { "date": "…", "en": ["…"], "ar": ["…"] } }`.
+  - Chosen (D1): `release-notes.json` at the repo root, keyed by version, `{ "0.1.7": { "en": ["…"], "ar": ["…"] } }`. There is no date: the notes are written before the release day is known.
   - The app bundles it (Vite JSON import, tree-shaken to the versions it needs).
-  - `scripts/release.ts` refuses to tag a web release whose version has no entry, and writes the English notes into the tag message.
+  - **Web releases go through `make release-web`, not `scripts/release.ts`** (that is the desktop pipeline).
+    - The Makefile runs `npm run release:notes -- <v>` after the bump and before the build, and stops without an entry.
+    - `tag-release.sh` writes the English lines into the `web-v*` tag message, from the tagged commit.
   - This makes it the one place notes are written (AC 4). The parity test covers it: every entry has both languages with the same number of lines.
 - **What it shows.** Every entry newer than `previous` and up to `current`, newest first, so a user who skipped versions sees all of them.
   - If there is no entry in that range (a patch with nothing user-facing), nothing is shown and the version is marked seen.
@@ -90,41 +106,7 @@ This is a pure move. The safety net is a test that deep-equals the composed dict
 
 ### Baseline (main 9866f0f, 2026-10-16, Node 22, v8)
 
-Measured with `npx vitest run --coverage --coverage.reportOnFailure` over all 385 files under `src/`. 4,414 tests passed and 4 timed out under instrumentation (see §C.5).
-
-| Lines | Statements | Functions | Branches |
-|---|---|---|---|
-| **89.48** | 88.55 | 87.24 | 81.07 |
-
-The 70% target was already met: TEST_PLAN's "~65%" dated from 2026-03. The gap was where the risk sits. The files with the most uncovered lines were `src/db/database.ts` (42.6% lines, 26.9% branches: no historical `upgrade()` before v20 had ever run in a test), `migration-safety.ts` (72.9 / 61.7), `expenseRepository.ts` (74.6 / 61.5) and `csvImport.ts` (68.2 / 51.9, the third record-less paid writer of MUT-60). The portal's MUT-227 `moneyDateFloor` had no test. The pure money and date helpers (`lib/utils`, `currencyAmounts`, `dates`, `fxService`, `paymentEntry`, `incomeEntry`, `attention`) were already at 100%.
-
-### Result (branch `claude/mut-24-coverage-227bdc`, 2026-10-16)
-
-**Status: BUILT.** All risk files are at target, and the thresholds are enforced in `vitest.config.ts` and in `.github/workflows/web-ci.yml`.
-
-| | Lines | Statements | Functions | Branches |
-|---|---|---|---|---|
-| Final | **91.69** | 91.01 | 88.74 | 84.12 |
-| Enforced global floor | 91 | 91 | 88 | 84 |
-
-| Risk file | Baseline L / B | Final L / B | Floor |
-|---|---|---|---|
-| `db/database.ts` (every `upgrade()`) | 42.6 / 26.9 | 100 / 98.9 | 95 |
-| `db/migration-safety.ts` | 72.9 / 61.7 | 100 / 98.3 | 95 |
-| `db/csvImport.ts` | 68.2 / 51.9 | 100 / 98.7 | 95 |
-| `db/expenseRepository.ts` | 74.6 / 61.5 | 99.4 / 99.4 | 95 |
-| `db/repository.ts` (payment records) | 98.9 / 92.7 | 99.3 / 95.5 | 95 |
-| `db/aggregations.ts` (owed, ageing filters) | 99.4 / 92.6 | 100 / 100 | 100 |
-| `components/clients/clientIndexRows.ts` (overdue days) | 100 / 84.4 | 100 / 100 | 100 |
-| `hosted/format/dates.ts` (MUT-227 floor) | 100 / 83.3 | 100 / 100 | 100 |
-| `hosted/components/incomeApiErrors.ts` (MUT-227 bound) | 95.1 / 83.9 | 100 / 98.2 | 95 |
-| `hosted/components/conversionApiErrors.ts` | 66.7 / 68.8 | 100 / 100 | 100 |
-| `db/profileDefault.ts` | 100 / 83.3 | 100 / 100 | 100 |
-| pure money/date/FX helpers (12 files) | 100 / 100 | 100 / 100 | 100 |
-
-How the migrations are tested: `src/test/legacyDexie.ts` derives the schema at any past version from `database.ts`'s own `stores()` history. `migration-history.test.ts` creates a database at v(n−1), seeds it in that version's shape, and opens the current `MiniCrmDatabase` over it, so v(n)'s upgrade and every later one run.
-
-Found on the way and deferred: TD-153 (a future-dated paid CSV row throws after its income row is written, which leaves a record-less paid entry and a half-done import), TD-154 (the expense ledger's year/month filters and v15's day inference read a date-only string as UTC midnight, wrong west of UTC), TD-155 (more coverage-only timeouts when the host is loaded).
+_Filled in from `npx vitest run --coverage`; see §C.4._
 
 ### Plan
 
@@ -137,20 +119,22 @@ Found on the way and deferred: TD-153 (a future-dated paid CSV row throws after 
    - The exact file list comes from the baseline report, ranked by (risk × uncovered lines).
 3. **Then breadth** until overall lines reach 70%. Hooks and pages are covered through their existing test harnesses (`renderWithProviders`), not by snapshot tests. Coverage must come from assertions on behaviour.
 4. **Make it visible (AC 4).**
-   - `vitest.config.ts` gets `coverage.thresholds`: global floors at the measured run (lines 91, statements 91, functions 88, branches 84, all well over 70), plus per-file floors for the risk files. `json-summary` and `text-summary` reporters are added, and `reportOnFailure` is on.
+   - `vitest.config.ts` gets `coverage.thresholds`: global lines/statements 70 (ratchet), plus per-glob thresholds for the risk files. `json-summary` and `text-summary` reporters are added.
    - `npm run test:coverage` fails below threshold.
-   - There was **no web CI workflow** (only `server-ci.yml` and `build-windows.yml`). D2 approved one: `.github/workflows/web-ci.yml` runs lint, typecheck and `test:coverage` on PRs and pushes to main, and appends `scripts/coverage-summary.ts`'s markdown table to the job summary.
-5. **Known issue (done).** Under coverage instrumentation, `ClientsPage.test.tsx` "sorts overdue by how late…" (5.3 s) and `ClientDetailPage.test.tsx` "renders Owed Now, Work and billing and Payments together…" (5.7 s) exceed the 5 s default. The baseline run surfaced four more: BootSplash's first test, IncomeDrawer's "picks a client whose exact name was typed", hosted views' "prefills the client on Client detail" and ProfileCreateDrawer's CR1. Each of the six takes `SLOW_UNDER_COVERAGE` (15 s, `src/test/timeouts.ts`) as a per-test option. The global timeout stays at 5 s. When the host's load average climbed to 100–700 (parallel sessions, Android Studio, Xcode), about 20 more tests crossed 5 s and passed on rerun. TD-155 tracks that: if Web CI shows one, it gets the same per-test option.
+   - There is **no web CI workflow today** (only `server-ci.yml` and `build-windows.yml`). The decision ledger asks whether to add `.github/workflows/web-ci.yml`, which would run lint, typecheck and `test:coverage` and write the summary to the job summary.
+5. **Known issue.** Under coverage instrumentation, `ClientsPage.test.tsx` "sorts overdue by how late…" exceeds the 5 s default timeout (5.3 s). Fix it by giving that test a longer timeout or cutting its seed size, not by raising the global timeout.
 
 ---
 
 ## Decision ledger (for Basel)
 
-| # | Question | Recommendation |
+Resolved with Basel, 2026-10-16:
+
+| # | Question | Decision |
 |---|---|---|
-| D1 | Where release notes live (B, AC 4) | A root `release-notes.json` (en + ar per version). `release.ts` refuses a web release without an entry and uses it for the tag message. |
-| D2 | Add a web CI workflow for coverage visibility (C, AC 4) | **Approved by Basel 2026-10-16, built.** `web-ci.yml` with lint, typecheck and `test:coverage` plus the job summary, on PRs and pushes to main (skips server-only and docs-only changes). It costs only Actions minutes. |
-| D3 | Order of work | A, then B (B adds `whatsNew` keys into the split layout), then C. C can run in its own worktree and session in parallel with A+B, because it only adds tests and config. |
+| D1 | Where release notes live (B, AC 4) | A root `release-notes.json` (en + ar per version). The `make release-web` gate and the tag message both read it (ADR-151). |
+| D2 | Web CI workflow for coverage visibility (C, AC 4) | Yes: `web-ci.yml` (built in the C session). |
+| D3 | Order of work | A, then B here. C runs in parallel in its own session and worktree. |
 
 ## Impact
 
@@ -159,10 +143,16 @@ Found on the way and deferred: TD-153 (a future-dated paid CSV row throws after 
 - **Bundle:** B adds the notes (a few KB). A is neutral.
 - **Cost:** D2 adds Actions minutes per push.
 - ADRs:
-  - A new ADR for release notes as a single source.
-  - The parity/orphan gate goes in `PATTERNS.md`, not an ADR.
+  - ADR-151: release notes as a single source, and the seen-version rule.
+  - The locale layout and the key check are in `PATTERNS.md`.
+- New build input: `MUTABA3A_APP_VERSION` (x.y.z, or the build fails). A QA build runs as the version the notes describe before the bump. It is unset in release builds (`INFRA.md`).
 
-## QA scenarios (release-qa → `qa/features/web/whats-new.yaml`)
+## QA scenarios (release-qa → `qa/features/web/whats-new.yaml`; 3/3 passing on a `MUTABA3A_APP_VERSION=0.1.7` preview build)
+
+As built:
+- Scenarios 1 and 2 are `after-update`.
+- Scenario 3 is `fresh-install`.
+- Scenarios 4 and 5 are `reopen-arabic`. Reopening from About in Arabic covers RTL, because the auto-open path and the Arabic rendering share one component, already covered by unit tests.
 
 1. **Upgrade shows notes.**
    - Steps: start the app with `app-last-known-version` set to the previous version.

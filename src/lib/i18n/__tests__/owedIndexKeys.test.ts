@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import en from '../translations/en.json';
-import ar from '../translations/ar.json';
+import en from '../translations/en';
+import ar from '../translations/ar';
 
 // MUT-83: the clients index's muted rows and /income's client-scope chip
 const TEXT_KEYS = ['income.clientScope.none', 'income.clientScope.archived', 'income.clientScope.clear'] as const;

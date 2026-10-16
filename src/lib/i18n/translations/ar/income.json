@@ -1,0 +1,22 @@
+{
+  "income": {
+    "empty": "لا توجد إيرادات بعد",
+    "emptyHint": "أضف أول إيراد للبدء في التتبع",
+    "addIncome": "إضافة إيراد",
+    "summary": {
+      "received": "المحصّل",
+      "unpaid": "غير المحصّل"
+    },
+    "status": {
+      "all": "الكل",
+      "unpaid": "غير مدفوع",
+      "received": "مدفوع",
+      "overdue": "متأخر"
+    },
+    "clientScope": {
+      "none": "بدون عميل",
+      "archived": "عملاء مؤرشفون",
+      "clear": "إزالة الفلتر: {name}"
+    }
+  }
+}

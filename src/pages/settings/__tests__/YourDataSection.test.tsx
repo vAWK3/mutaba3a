@@ -6,8 +6,8 @@ import { db } from '../../../db/database';
 import { settingsRepo } from '../../../db/repository';
 import { takePendingImport } from '../../../lib/dataFiles';
 import { useToastStore, type Toast } from '../../../lib/toastStore';
-import en from '../../../lib/i18n/translations/en.json';
-import ar from '../../../lib/i18n/translations/ar.json';
+import en from '../../../lib/i18n/translations/en';
+import ar from '../../../lib/i18n/translations/ar';
 import { YourDataSection } from '../YourDataSection';
 
 /**

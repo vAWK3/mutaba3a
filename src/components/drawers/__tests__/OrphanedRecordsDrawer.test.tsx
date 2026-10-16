@@ -6,8 +6,8 @@ import { db } from '../../../db/database';
 import { getRepositories } from '../../../db/provider';
 import { useDrawerStore } from '../../../lib/stores';
 import { useToastStore } from '../../../lib/toastStore';
-import en from '../../../lib/i18n/translations/en.json';
-import ar from '../../../lib/i18n/translations/ar.json';
+import en from '../../../lib/i18n/translations/en';
+import ar from '../../../lib/i18n/translations/ar';
 import type { BusinessProfile, Client, Expense, Project, Transaction } from '../../../types';
 import { OrphanedRecordsDrawer } from '../OrphanedRecordsDrawer';
 

@@ -1,0 +1,32 @@
+{
+  "conversions": {
+    "title": "Conversions",
+    "addButton": "Log conversion",
+    "empty": "No conversions logged yet",
+    "emptyHint": "Log a conversion to record money moved between currencies",
+    "confirmDelete": "Delete this conversion? This can't be undone.",
+    "deleteSuccess": "Conversion deleted",
+    "deleteError": "Failed to delete conversion",
+    "columns": {
+      "date": "Date",
+      "from": "From",
+      "to": "To",
+      "rate": "Rate",
+      "notes": "Note"
+    },
+    "drawer": {
+      "new": "Log Conversion",
+      "edit": "Edit Conversion",
+      "profile": "Business",
+      "profilePlaceholder": "Select a business",
+      "fromAmount": "From amount",
+      "fromCurrency": "From currency",
+      "toAmount": "To amount",
+      "toCurrency": "To currency",
+      "impliedRate": "Rate: 1 {from} = {rate} {to}",
+      "date": "Date",
+      "notes": "Note",
+      "notesPlaceholder": "Optional note"
+    }
+  }
+}

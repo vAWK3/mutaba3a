@@ -1,0 +1,22 @@
+{
+  "income": {
+    "empty": "No income yet",
+    "emptyHint": "Add your first income to start tracking",
+    "addIncome": "Add Income",
+    "summary": {
+      "received": "Received",
+      "unpaid": "Unpaid"
+    },
+    "status": {
+      "all": "All",
+      "unpaid": "Unpaid",
+      "received": "Received",
+      "overdue": "Overdue"
+    },
+    "clientScope": {
+      "none": "No client",
+      "archived": "Archived clients",
+      "clear": "Clear filter: {name}"
+    }
+  }
+}

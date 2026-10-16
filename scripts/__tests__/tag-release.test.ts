@@ -95,6 +95,53 @@ describe('tag-release.sh <app> <version>', () => {
   });
 });
 
+describe('web tags carry the release notes (MUT-24)', () => {
+  const NOTES = {
+    '1.2.3': { en: ['First change', 'Second change'], ar: ['التغيير الأول', 'التغيير الثاني'] },
+  };
+
+  function commitNotes(subject: string, date: string) {
+    writeFileSync(join(repo, 'release-notes.json'), JSON.stringify(NOTES));
+    git('add', 'release-notes.json');
+    return commit(subject, date);
+  }
+
+  const message = (tag: string) => git('tag', '-l', '--format=%(contents)', tag);
+
+  it("writes the version's English lines under the subject", () => {
+    commitNotes('release: web v1.2.3', '2026-10-01T10:00:00Z');
+    expect(tagRelease('web', '1.2.3').status).toBe(0);
+    expect(message('web-v1.2.3')).toBe('Release web v1.2.3\n\n- First change\n- Second change');
+  });
+
+  it('keeps the subject alone when the version has no notes, or there is no notes file', () => {
+    commitNotes('release: web v1.2.4', '2026-10-01T10:00:00Z');
+    tagRelease('web', '1.2.4');
+    expect(message('web-v1.2.4')).toBe('Release web v1.2.4');
+
+    rmSync(join(repo, 'release-notes.json'));
+    git('add', '-A');
+    commit('release: web v1.2.5', '2026-10-02T10:00:00Z');
+    tagRelease('web', '1.2.5');
+    expect(message('web-v1.2.5')).toBe('Release web v1.2.5');
+  });
+
+  it('reads the notes of the commit it tags, so a backfilled tag gets that release’s notes', () => {
+    commitNotes('release: web v1.2.3', '2026-10-01T10:00:00Z');
+    writeFileSync(join(repo, 'release-notes.json'), '{}');
+    git('add', 'release-notes.json');
+    commit('docs: drop notes', '2026-10-02T10:00:00Z');
+    expect(tagRelease('--backfill').status).toBe(0);
+    expect(message('web-v1.2.3')).toContain('- First change');
+  });
+
+  it('never puts notes on an API tag', () => {
+    commitNotes('release: api v1.2.3', '2026-10-01T10:00:00Z');
+    tagRelease('api', '1.2.3');
+    expect(message('api-v1.2.3')).toBe('Release api v1.2.3');
+  });
+});
+
 describe('tag-release.sh --backfill', () => {
   it('tags every past release commit, dated like the commit so the newest sorts first', () => {
     const web1 = commit('release: web v0.1.0', '2026-10-01T10:00:00Z');
@@ -136,6 +183,13 @@ describe('release tags are wired end to end', () => {
 
   it('make release web tags the web release and pushes the tag', () => {
     expect(recipe('release-web')).toMatch(/scripts\/tag-release\.sh web "\$\$version" --push/);
+  });
+
+  it('make release web refuses a version without release notes, after the bump and before the build (MUT-24)', () => {
+    const body = recipe('release-web');
+    expect(body).toMatch(/npm run --silent release:notes -- "\$\$version"/);
+    expect(body.indexOf('release:notes')).toBeGreaterThan(body.indexOf('scripts/bump-version.sh web'));
+    expect(body.indexOf('release:notes')).toBeLessThan(body.indexOf('test:bundles'));
   });
 
   it('make release server tags the API release after deploy.sh succeeds', () => {

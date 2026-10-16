@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chooseLanguage } from '../../../test/language';
 import { act, renderWithProviders, screen, userEvent, waitFor } from '../../../test/utils';
-import en from '../../../lib/i18n/translations/en.json';
-import ar from '../../../lib/i18n/translations/ar.json';
+import en from '../../../lib/i18n/translations/en';
+import ar from '../../../lib/i18n/translations/ar';
 import { GO_HOSTED_DISMISSED_KEY, GO_HOSTED_SNOOZE_DAYS } from '../../../lib/goHosted';
 import { HOSTED_OFFER_URL } from '../../../content/download-config';
 import { useSampleSessionStore } from '../../../demo/sampleSessionStore';

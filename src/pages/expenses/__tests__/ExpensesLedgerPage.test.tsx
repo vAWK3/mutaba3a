@@ -28,7 +28,7 @@ vi.mock('../../../lib/i18n', () => ({
       'transactions.columns.amount': 'Amount',
       'transactions.emptySearch': 'No results found',
       'common.loading': 'Loading...',
-      'common.noCategory': 'Uncategorized',
+      'common.uncategorized': 'Uncategorized',
       'common.duplicate': 'Duplicate',
       'common.delete': 'Delete',
       'expenses.confirmDelete': 'Are you sure you want to delete this expense?',
@@ -393,6 +393,18 @@ describe('ExpensesLedgerPage', () => {
         const groupHeaders = document.querySelectorAll('.expenses-group-header');
         expect(groupHeaders.length).toBe(2);
       });
+    });
+    it('puts an expense with no category under Uncategorized (MUT-24: was the missing common.noCategory)', async () => {
+      vi.spyOn(useExpenseQueries, 'useExpenses').mockReturnValue({
+        data: [createMockExpense({ id: 'exp-none', categoryId: undefined, categoryName: undefined })],
+        isLoading: false,
+      } as ReturnType<typeof useExpenseQueries.useExpenses>);
+      renderWithProviders();
+
+      fireEvent.click(await screen.findByRole('tab', { name: /by category/i }));
+
+      const header = await screen.findByText('Uncategorized', { selector: '.expenses-group-header *' });
+      expect(header).toBeInTheDocument();
     });
   });
 

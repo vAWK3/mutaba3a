@@ -24,12 +24,14 @@ import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { BootSplash } from "./components/brand/BootSplash";
 import "./components/ui/ErrorBoundary.css";
 import { handleVersionChange } from "./lib/platform";
+import { APP_VERSION } from "./lib/appVersion";
+import { seedSeenVersion } from "./lib/whatsNew/whatsNewState";
 import { removeRetiredStorageKeys } from "./lib/retiredStorage";
 
 // Handle version changes early (clears update caches when app updates)
-// This ensures users who install a new DMG see the correct version
-declare const __APP_VERSION__: string | undefined;
-handleVersionChange(__APP_VERSION__ || "0.0.0");
+// This ensures users who install a new DMG see the correct version.
+// "What's new" starts from the version this browser last ran (MUT-24).
+seedSeenVersion(handleVersionChange(APP_VERSION), APP_VERSION);
 removeRetiredStorageKeys();
 
 // Lazy load landing pages (only imported in web build, tree-shaken from desktop)

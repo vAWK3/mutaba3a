@@ -226,21 +226,21 @@ export function ExpenseDrawer() {
       if (!confirm(t('expenses.confirmDelete'))) return;
       try {
         await deleteRuleMutation.mutateAsync(recurringRuleId);
-        showToast(t('expenses.recurringDeleteSuccess') || 'Recurring rule deleted successfully');
+        showToast(t('expenses.recurringDeleteSuccess'));
         closeExpenseDrawer();
       } catch (error) {
         console.error('Failed to delete recurring rule:', error);
-        showToast(t('expenses.deleteError') || 'Failed to delete recurring rule', { duration: 5000 });
+        showToast(t('expenses.deleteError'), { duration: 5000 });
       }
     } else if (expenseId) {
       if (!confirm(t('expenses.confirmDelete'))) return;
       try {
         await deleteExpenseMutation.mutateAsync(expenseId);
-        showToast(t('expenses.deleteSuccess') || 'Expense deleted successfully');
+        showToast(t('expenses.deleteSuccess'));
         closeExpenseDrawer();
       } catch (error) {
         console.error('Failed to delete expense:', error);
-        showToast(t('expenses.deleteError') || 'Failed to delete expense', { duration: 5000 });
+        showToast(t('expenses.deleteError'), { duration: 5000 });
       }
     }
   };
