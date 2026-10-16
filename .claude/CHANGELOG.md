@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-16 — Brand v2 spacing guard: spacing comes from tokens (MUT-165, ADR-089)
+
+**Why:** MUT-103 made colours, radii and font sizes token-only, but 175 hard-coded px/rem padding, margin and gap values remained, so the density it set could drift back one value at a time. The brand JSON's spacing scale also disagreed with the web's `--space-*`, and nothing read it.
+
+### Changed
+- **One spacing scale (D7/D8).** `mutaba3a.tokens.json` `space` is now the union `[2,4,6,8,10,12,16,20,24,28,32,40,48,56,64,96]`; `mutaba3a-theme.css` gains `--m-space-<n>` (rem), and `theme.css`'s `--space-0-5`…`--space-16` read them. Pixel-identical on the web; Flutter has no scale.
+- **Named sizes (D5/D6)** in `theme.css` Layout: `--demo-banner-height` (the banner and both shell offsets), `--checkbox-size` (the recurring drawer's checkbox and its indent), and `--landing-section-pad(-compact)`, `--landing-hero-pad-end`, `--landing-page-top(-compact)`. Pixel-identical.
+- **The sweep:** 124 CSS declarations in 16 files and 51 TSX style-object values in 9 files move onto their exact `--space-*` step (`'var(--space-N)'` strings in TSX). `-1px` becomes `calc(var(--space-px) * -1)`, and token px fallbacks go.
+- **Visible (D4):** the segmented control's track padding and thumb inset go 3px → 2px together (the control is 2px shorter), as do the cross-profile badge's gap and the Settings section icon's nudge (1px higher).
+
+### Added
+- `brand.test.ts` › `literals`: the `spacing` kind. CSS `padding*`/`margin*`/`gap`/`row-gap`/`column-gap` with a non-zero px or rem (negatives, fallbacks, `calc()` terms), one `var()` hop to a component custom property holding a raw length (D10), and TSX style-object spacing keys (`SCRIPT_SPACING`). `KNOWN_LITERALS` froze 175 and is empty again.
+- `brand.test.ts` › `drift`/`tokens`: the JSON and `--m-space-*` agree both ways, and every `--space-N` reads the N × 4px step.
+- Release QA: `@web.brand.layout` covers the landing page and `/privacy` in every cell (D9), and its Settings step asserts each segmented highlight is centred (D11). `@portal.shell.navigate` attaches shell screenshots in English and Arabic.
+
+### Technical
+- Files: `src/styles/brand/mutaba3a.tokens.json`, `src/styles/brand/mutaba3a-theme.css`, `src/styles/theme.css`, `src/test/css/brandCss.ts`, `src/styles/__tests__/brand.test.ts`, `src/index.css`, the 15 other component/page stylesheets and 9 TSX files above, `qa/specs/web/brand.spec.ts`, `qa/specs/portal/shell.spec.ts`, `qa/features/web/brand.yaml`, `qa/features/portal/shell.yaml`, `docs/brand/README.md`.
+
 ## [Unreleased] - 2026-10-16 — Change your own password (MUT-237, ADR-037 amendment)
 
 **Why:** setting a password only ever happened through an operator-issued setup link (MUT-235/236); nobody signed in could change one they already knew, so a routine password change meant asking Basel for a fresh link.

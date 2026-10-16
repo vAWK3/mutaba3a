@@ -2675,6 +2675,24 @@ This retires the nine-cell baseline from the MUT-226 and MUT-178 notes above. On
 
 The phone flows that use it (MUT-229) and a live call to Frankfurter are not exercised here; the provider is faked.
 
+## MUT-165 — Brand v2 spacing guard (2026-10-16, ADR-089)
+
+Plan: `.claude/designs/mut-165-spacing-guard.md` (Section 3 test review). Each new guard was written first and failed for the right reason (the drift tests on the missing `--m-space-*`; the literal fixtures on the missing `spacing` kind).
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/styles/__tests__/brand.test.ts` › `drift` | Unit (node, CSS) | +1 | JSON `space` and `--m-space-*` agree both ways, each `--m-space-<n>` is n px |
+| `src/styles/__tests__/brand.test.ts` › `tokens` | Unit (node, CSS) | +1 | every `--space-N` (bar 0/px) reads exactly `var(--m-space-<N×4>)`, so a typo can't move a step |
+| `src/styles/__tests__/brand.test.ts` › `literals › in CSS` | Unit (fixtures) | +11 catches, +13 leaves alone, +2 | px and rem, negative margins, `var()` fallbacks, `calc()` terms, logical sides, row/column gap; one `var()` hop (in-file and across files); `0`/`auto`/`%`/`em`/token/`calc(token * -1)`, `inset`, a custom-property definition and print rules pass; `lengthCustomProperties` collects only raw-length definitions. `padding: 12px` moved from "leaves alone" to "catches" |
+| `src/styles/__tests__/brand.test.ts` › `literals › in TS and TSX` | Unit (fixtures) | +8 catches, +8 leaves alone, +1 | `gap: 8`, `marginTop: 16`, `'24px 0'`, `'0.5rem'`, negatives; token strings, `0`, `'auto'`, `'5%'`, `const gap = 8`, `gap={2}`, a type annotation pass; `SCRIPT_SIZE` and `SCRIPT_SPACING` are key-disjoint |
+| `src/styles/__tests__/brand.test.ts` › `literals › the repo` | Repo scan | 0 new (reused) | `KNOWN_LITERALS` froze 175 spacing literals, shrank per sweep commit (175 → 130 → 64 → 13 → 0) and is `{}` |
+| `qa/specs/web/brand.spec.ts` `@web.brand.layout` | Release-QA (Playwright) | 8 cells, 2 steps more | the landing page and `/privacy` fit 375/1280 × EN/AR × light/dark with screenshots (D9); each Settings segmented highlight's insets equal its track padding (D11) |
+| `qa/specs/portal/shell.spec.ts` `@portal.shell.navigate` | Release-QA (Playwright) | +1 step | shell screenshots in English and Arabic (D9) |
+
+**What was run (Node 22, preview builds):** `npm run lint` 0 errors (4 pre-existing warnings in untouched files) · `npm run typecheck` clean · `npm run test:run` 323 files, 4,462 passed, 4 skipped · `npm run build` passed · `release-qa lint` no errors (6 pre-existing unmapped web files) · full Playwright suite (web + portal, 2 workers, no retries) 188 passed, 2 failed (the pre-existing cells below). Matrix before (T1+T2 tree, pixel-identical to main) vs after: 82 screenshots, 59 identical; every other difference also appears between two runs of the same tree (drawers captured mid-fade, two same-day Income rows swapping order, the portal's loader), plus 7 anti-aliased pixels on one Clients edge. The D4 3px → 2px snap sits below the fold in the Settings screenshot; the D11 assertion passed in every cell. `KNOWN_OVERFLOW`/`KNOWN_AXE_VIOLATIONS` unchanged.
+
+**Pre-existing, not MUT-165:** `@web.brand.layout` at 375px in Arabic fails on unchanged main 1150d40 too: Income and the income drawer measure 727px against the 726px `KNOWN_OVERFLOW` cap (TD-083).
+
 ## MUT-237 — change your own password (2026-10-16, ADR-037 amendment)
 
 | File | Kind | Tests | What it proves |

@@ -3367,3 +3367,23 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Plain SHA-256 of the token (the ticket's wording): the session HMAC is the same cost, one helper instead of two, and stronger.
 
 **Consequences**: MUT-236 (portal `/setup` page) is served by the same server build, so both ship in one `make release server`, and no server release should go out between their merges. MUT-237/238 (change your own password) reuse `NEW_PASSWORD_POLICY`. Old token rows are never pruned (TD-146).
+
+## ADR-089: One Spacing Scale, the Union, Canonical in the Brand JSON; Sizes Past It Are Named Layout Tokens; Spacing Joins the Literal Guard
+
+**Status**: Active (extends ADR-058 and MUT-103's literal guard)
+**Date**: 2026-10-16
+**Context**: MUT-165, epic MUT-101. MUT-103 made colours, radii and font sizes token-only, but spacing stayed unguarded: 175 px/rem padding, margin and gap values outside `src/styles` (124 CSS declarations, 51 TSX style-object values). The brand JSON shipped a `space` scale (`[4, 8, 12, 16, 20, 24, 28, 32, 48, 56, 96]`) that nothing read and that disagreed with `theme.css`'s `--space-*` (which has 2, 6, 10, 40 and 64 in about 110 places). Eng review 2026-10-16, decisions D2–D12 in `.claude/designs/mut-165-spacing-guard.md`.
+
+**Decision**:
+1. **One scale, the union (D7/D8).** `mutaba3a.tokens.json` `space` is `[2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64, 96]`. `mutaba3a-theme.css` mirrors it as `--m-space-<n>` in rem (primitives only, PD7). `theme.css`'s `--space-0-5`…`--space-16` read `var(--m-space-<N×4>)`; `--space-0` and `--space-px` stay literal. Web pixel-identical. The Flutter app has no spacing scale, so it is untouched. `brand.test.ts` › `drift` checks the JSON and `--m-space-*` both ways, and › `tokens` checks every `--space-N` reads the N × 4px step.
+2. **Sizes past the scale that one component needs are named layout tokens in `theme.css`, not new steps (D5/D6).** `--demo-banner-height` (36px) and `--checkbox-size` (18px) each feed both a size and the offset that clears it. `--landing-section-pad` (112) / `-compact` (80), `--landing-hero-pad-end` (96) and `--landing-page-top` (160) / `-compact` (120) name the landing rhythm, so the app's dense scale stays capped at 64px.
+3. **3px snaps to 2px (D4).** The segmented control's track padding and its thumb's top/bottom inset move together to `--space-0-5`; so do the cross-profile badge gap and the Settings icon nudge.
+4. **The literal guard covers spacing (D2/D3/D10).** `padding*`, `margin*` (physical and logical), `gap`, `row-gap` and `column-gap` may not hold a non-zero px or rem length outside `src/styles`, negatives, `var()` fallbacks and `calc()` terms included; `0`, `auto`, `%`, `em` and `calc()` over tokens pass. One `var()` hop is followed: a spacing value that reads a custom property a component stylesheet sets to a raw length fails. In TS/TSX, a style-object spacing key given a non-zero number (React renders px) or a string holding a px/rem length fails; values become `'var(--space-N)'` strings in place. `KNOWN_LITERALS` froze the 175 and is empty again.
+
+**Alternatives rejected**:
+- px only, CSS only (the ticket's wording): rem and `style={{ gap: 8 }}` would stay open dodges.
+- The JSON as delivered as law: about 110 dense-screen sites would snap 1–8px, re-doing MUT-103's density.
+- Bigger general steps (`--space-20/24/28/30/40`) for the landing: a 160px step would become legal app padding.
+- A `--space-0-75` (3px) step: a scale step for three uses invites the next off-scale request.
+
+**Consequences**: a new spacing value is a `--space-*` step or a named layout token; adding a step means editing the JSON first, then `--m-space-*` (the drift test fails otherwise). rem tokens scale with the reader's browser font size where the px they replaced did not (better for accessibility; the 375px matrix runs at the default size only). `/privacy`'s 160px top room may be stale since MUT-77 (D12 follow-up).
