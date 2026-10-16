@@ -20,6 +20,7 @@ import { MIGRATED_PAYMENT_NOTE } from '../../../db/database';
 import { useSavedFlashStore } from '../../../lib/savedFlashStore';
 import type { IncomeFilters } from '../../../hooks/useIncomeQueries';
 import type { PaymentByClientRow, TransactionDisplay } from '../../../types';
+import { SLOW_UNDER_COVERAGE } from '../../../test/timeouts';
 
 // Mock router
 const mockNavigate = vi.fn();
@@ -267,7 +268,7 @@ describe('ClientDetailPage', () => {
   });
 
   describe('one page, no tabs', () => {
-    it('renders Owed Now, Work and billing and Payments together with no tab buttons', () => {
+    it('renders Owed Now, Work and billing and Payments together with no tab buttons', SLOW_UNDER_COVERAGE, () => {
       renderPage();
 
       expect(screen.getByRole('region', { name: 'Owed now' })).toBeInTheDocument();

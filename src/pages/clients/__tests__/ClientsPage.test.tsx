@@ -31,6 +31,7 @@ import { useProfileStore, useOwedScreenStore } from '../../../lib/profileStore';
 import * as crossProfileStats from '../../../db/crossProfileStats';
 import type { ClientsSearch } from '../../../components/clients/clientsSearch';
 import type { BusinessProfile, ClientSummary, OwedBucket, OwedBusinessBuckets } from '../../../types';
+import { SLOW_UNDER_COVERAGE } from '../../../test/timeouts';
 
 const mockNavigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
@@ -319,7 +320,7 @@ describe('ClientsPage', () => {
       expect(header('Owed now')).toHaveAttribute('aria-sort', 'ascending');
     });
 
-    it('sorts overdue by how late, newest payment first, latest activity first, and names A–Z', () => {
+    it('sorts overdue by how late, newest payment first, latest activity first, and names A–Z', SLOW_UNDER_COVERAGE, () => {
       renderPage();
 
       fireEvent.click(within(header('Overdue')).getByRole('button'));

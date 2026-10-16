@@ -20,6 +20,7 @@ import { IncomeDrawer } from '../drawers/IncomeDrawer';
 import { LanguageProvider } from '../../lib/i18n';
 import { formatAmount, formatDate, todayISO } from '../../lib/utils';
 import { useProfileStore, useOwedScreenStore } from '../../lib/profileStore';
+import { SLOW_UNDER_COVERAGE } from '../../test/timeouts';
 
 function createTestQueryClient() {
   return new QueryClient({
@@ -534,7 +535,7 @@ describe('IncomeDrawer', () => {
       expect(await transactionRepo.list({})).toHaveLength(0);
     });
 
-    it('picks a client whose exact name was typed when the box is left', async () => {
+    it('picks a client whose exact name was typed when the box is left', SLOW_UNDER_COVERAGE, async () => {
       const user = userEvent.setup();
       const client = await clientRepo.create({ name: 'Acme Corp' });
       renderDrawer();

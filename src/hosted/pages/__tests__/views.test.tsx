@@ -19,6 +19,7 @@ import {
   payment,
   receivable,
 } from './fixtures';
+import { SLOW_UNDER_COVERAGE } from '../../../test/timeouts';
 
 /** hosted-portal.md §7.3–§7.5 and the MUT-43 test plan §6–§7. */
 
@@ -480,7 +481,7 @@ describe('Income writes on a personal profile (MUT-133)', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: '+ Add income' }));
   });
 
-  it('prefills the client on Client detail and records a payment from its Receivables tab', async () => {
+  it('prefills the client on Client detail and records a payment from its Receivables tab', SLOW_UNDER_COVERAGE, async () => {
     const { user, router } = portal(`/p/${ORG_A}/clients/${C1}`, {
       [`GET /v1/customers/${C1}`]: () => ok(CUSTOMERS[0]),
       [`GET /v1/summaries/customers/${C1}`]: () => ok({ customerId: C1, lastPaymentOn: null, currencies: [] }),
