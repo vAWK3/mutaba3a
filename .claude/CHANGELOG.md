@@ -44,7 +44,7 @@
 
 ### Technical
 - Coverage went from 89.48 / 88.55 / 87.24 / 81.07 to 91.69 / 91.01 / 88.74 / 84.12 (lines / statements / functions / branches). Per-file numbers are in `.claude/designs/mut-24-todo-backlog.md` §C and TEST_PLAN.
-- Debt found on the way: TD-151 (a future-dated paid CSV row stops the import halfway and leaves a record-less paid entry), TD-152 (two date-only reads treated as UTC midnight west of UTC), TD-153 (coverage-only timeouts that get worse under host load).
+- Debt found on the way: TD-153 (a future-dated paid CSV row stops the import halfway and leaves a record-less paid entry), TD-154 (two date-only reads treated as UTC midnight west of UTC), TD-155 (coverage-only timeouts that get worse under host load).
 
 ## [Unreleased] - 2026-10-16 — Change your own password (MUT-237, ADR-037 amendment)
 

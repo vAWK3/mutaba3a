@@ -18,7 +18,7 @@
 
 ## Open Debt
 
-### TD-151: A future-dated paid CSV row stops the import halfway and leaves a record-less paid entry
+### TD-153: A future-dated paid CSV row stops the import halfway and leaves a record-less paid entry
 **Status**: Open
 **Ticket**: none (found 2026-10-16, MUT-24 §C coverage pass)
 **Added**: 2026-10-16
@@ -26,7 +26,7 @@
 **Impact**: `importCsvRows` (`src/db/csvImport.ts`) runs outside a Dexie transaction. For a `paid` income row it adds the transaction, then calls `paymentRecordRepo.create`, which refuses a `paidAt` later than today (MUT-18). The import then throws. The rows before it stay imported. This row stays as `status: 'paid'` with no PaymentRecord, which is the record-less paid shape MUT-60 removed (TD-029). Nothing after it is imported.
 **Fix**: validate the payment date before writing (skip or clamp a future `paidAt`, and report it in the preview). Or run the whole import in one `db.transaction('rw', …)` so a failure rolls everything back. Add a test with a future-dated paid row.
 
-### TD-152: Two date reads still take a date-only string as UTC midnight (west of UTC)
+### TD-154: Two date reads still take a date-only string as UTC midnight (west of UTC)
 **Status**: Open
 **Ticket**: none (found 2026-10-16, MUT-24 §C coverage pass)
 **Added**: 2026-10-16
@@ -34,7 +34,7 @@
 **Impact**: `expenseRepo.list`'s `year`/`month` filters use `new Date(e.occurredAt).getFullYear()`/`getMonth()`. West of UTC, an expense dated `2026-01-01` counts as December 2025. The v15 Dexie upgrade inferred `dayOfMonth`/`monthOfYear` from `new Date(rule.startDate)` the same way. That upgrade has already run for every user, so it is history only. `migration-history.test.ts` uses local-noon timestamps so it stays green under `npm run test:tz`.
 **Fix**: compare the string's `YYYY-MM` prefix in `expenseRepo.list`, as the `dateFrom`/`dateTo` filters next to it already do. Add a case to the `test:tz` run.
 
-### TD-153: A few tests cross the 5 s timeout only under coverage, and more when the machine is loaded
+### TD-155: A few tests cross the 5 s timeout only under coverage, and more when the machine is loaded
 **Status**: Open
 **Ticket**: MUT-24 §C
 **Added**: 2026-10-16

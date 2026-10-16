@@ -124,7 +124,7 @@ The 70% target was already met: TEST_PLAN's "~65%" dated from 2026-03. The gap w
 
 How the migrations are tested: `src/test/legacyDexie.ts` derives the schema at any past version from `database.ts`'s own `stores()` history. `migration-history.test.ts` creates a database at v(n−1), seeds it in that version's shape, and opens the current `MiniCrmDatabase` over it, so v(n)'s upgrade and every later one run.
 
-Found on the way and deferred: TD-151 (a future-dated paid CSV row throws after its income row is written, which leaves a record-less paid entry and a half-done import), TD-152 (the expense ledger's year/month filters and v15's day inference read a date-only string as UTC midnight, wrong west of UTC), TD-153 (more coverage-only timeouts when the host is loaded).
+Found on the way and deferred: TD-153 (a future-dated paid CSV row throws after its income row is written, which leaves a record-less paid entry and a half-done import), TD-154 (the expense ledger's year/month filters and v15's day inference read a date-only string as UTC midnight, wrong west of UTC), TD-155 (more coverage-only timeouts when the host is loaded).
 
 ### Plan
 
@@ -140,7 +140,7 @@ Found on the way and deferred: TD-151 (a future-dated paid CSV row throws after 
    - `vitest.config.ts` gets `coverage.thresholds`: global floors at the measured run (lines 91, statements 91, functions 88, branches 84, all well over 70), plus per-file floors for the risk files. `json-summary` and `text-summary` reporters are added, and `reportOnFailure` is on.
    - `npm run test:coverage` fails below threshold.
    - There was **no web CI workflow** (only `server-ci.yml` and `build-windows.yml`). D2 approved one: `.github/workflows/web-ci.yml` runs lint, typecheck and `test:coverage` on PRs and pushes to main, and appends `scripts/coverage-summary.ts`'s markdown table to the job summary.
-5. **Known issue (done).** Under coverage instrumentation, `ClientsPage.test.tsx` "sorts overdue by how late…" (5.3 s) and `ClientDetailPage.test.tsx` "renders Owed Now, Work and billing and Payments together…" (5.7 s) exceed the 5 s default. The baseline run surfaced four more: BootSplash's first test, IncomeDrawer's "picks a client whose exact name was typed", hosted views' "prefills the client on Client detail" and ProfileCreateDrawer's CR1. Each of the six takes `SLOW_UNDER_COVERAGE` (15 s, `src/test/timeouts.ts`) as a per-test option. The global timeout stays at 5 s. When the host's load average climbed to 100–700 (parallel sessions, Android Studio, Xcode), about 20 more tests crossed 5 s and passed on rerun. TD-153 tracks that: if Web CI shows one, it gets the same per-test option.
+5. **Known issue (done).** Under coverage instrumentation, `ClientsPage.test.tsx` "sorts overdue by how late…" (5.3 s) and `ClientDetailPage.test.tsx` "renders Owed Now, Work and billing and Payments together…" (5.7 s) exceed the 5 s default. The baseline run surfaced four more: BootSplash's first test, IncomeDrawer's "picks a client whose exact name was typed", hosted views' "prefills the client on Client detail" and ProfileCreateDrawer's CR1. Each of the six takes `SLOW_UNDER_COVERAGE` (15 s, `src/test/timeouts.ts`) as a per-test option. The global timeout stays at 5 s. When the host's load average climbed to 100–700 (parallel sessions, Android Studio, Xcode), about 20 more tests crossed 5 s and passed on rerun. TD-155 tracks that: if Web CI shows one, it gets the same per-test option.
 
 ---
 

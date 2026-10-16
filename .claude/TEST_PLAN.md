@@ -113,7 +113,7 @@ Risk files (lines / branches, baseline → final), floors 100 = pure, 95 = risk:
 | `src/lib/utils.ts`, `currencyAmounts.ts`, `paymentEntry.ts`, `incomeEntry.ts`, `fx/fxService.ts`, `dates.ts`, `attention.ts`, `pages/income/incomeRows.ts`, `clients/clientProfileRows.ts`, `expenses/recurringAttention.ts`, `ui/AmountWithConversion.tsx`, `hosted/format/DecimalAmount.tsx` | money, minor units, FX, overdue | 100 / 100 | 100 / 100 | 100 |
 | `src/components/ui/CurrencySummaryPopup.tsx` (not floored) | unified ILS total | 53.0 / 44.1 | 100 / 94.9 | — |
 
-New harness: `src/test/legacyDexie.ts` (`schemaAt(n)`, `createDatabaseAt(name, n, rows)`) builds a database as version n left it, so an upgrade test opens the current `MiniCrmDatabase` over it. Use it for every new Dexie version. `src/test/timeouts.ts` `SLOW_UNDER_COVERAGE` is the per-test timeout for a test that crosses 5 s only under instrumentation (TD-153).
+New harness: `src/test/legacyDexie.ts` (`schemaAt(n)`, `createDatabaseAt(name, n, rows)`) builds a database as version n left it, so an upgrade test opens the current `MiniCrmDatabase` over it. Use it for every new Dexie version. `src/test/timeouts.ts` `SLOW_UNDER_COVERAGE` is the per-test timeout for a test that crosses 5 s only under instrumentation (TD-155).
 
 Unreachable branches left uncovered on purpose: `if (table)` in migration-safety's two loops over a hand-kept list of existing tables (TD-074), and v14's `amountMinor || 0` (v18 rewrites it).
 
