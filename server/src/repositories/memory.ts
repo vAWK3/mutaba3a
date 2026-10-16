@@ -367,6 +367,14 @@ export class MemoryLedgerStore implements LedgerStore {
       Object.assign(u, { malafatSuggestions: applyMalafatChange(u.malafatSuggestions, change), updatedAt: at });
       return { ...u, malafatSuggestions: u.malafatSuggestions && { ...u.malafatSuggestions, dismissed: [...u.malafatSuggestions.dismissed] } };
     },
+    changePassword: async (input) => {
+      const u = this.people.get(input.userId);
+      if (!u) return null;
+      Object.assign(u, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
+      this.revokeSessionsOf(u.id, 'password_changed', input.at, input.exceptSessionId);
+      for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return { ...u };
+    },
   };
 
   readonly sessions: SessionRepository = {
@@ -410,10 +418,11 @@ export class MemoryLedgerStore implements LedgerStore {
     revokeAllForUser: async (userId, reason, at) => this.revokeSessionsOf(userId, reason, at),
   };
 
-  private revokeSessionsOf(userId: string, reason: string, at: Date): number {
+  /** `exceptSessionId` (MUT-237): a person's own session stays live while every other one is revoked. */
+  private revokeSessionsOf(userId: string, reason: string, at: Date, exceptSessionId?: string): number {
     let count = 0;
     for (const s of this.sessionsById.values()) {
-      if (s.userId === userId && !s.revokedAt) {
+      if (s.userId === userId && !s.revokedAt && s.id !== exceptSessionId) {
         Object.assign(s, { revokedAt: at, revokedReason: reason });
         count++;
       }

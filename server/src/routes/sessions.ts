@@ -3,11 +3,11 @@ import { deleteCookie, setCookie } from 'hono/cookie';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { signIn, warmDummyHash } from '../auth/sign-in.js';
 import { clientIp, isSameOriginRequest, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
-import type { PasswordHasher } from '../auth/users.js';
+import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { LedgerStore, UserRecord } from '../repositories/ports.js';
-import { ErrorEnvelopeSchema, MalafatSuggestionsChangeSchema, MalafatSuggestionsSchema, MeSchema, SignInRequestSchema } from '../schemas.js';
+import type { AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
+import { ChangePasswordRequestSchema, ErrorEnvelopeSchema, MalafatSuggestionsChangeSchema, MalafatSuggestionsSchema, MeSchema, SignInRequestSchema } from '../schemas.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { hostedProfileFor } from '../serializers.js';
 import { MAX_OWNED_PROFILES } from './profiles.js';
@@ -29,7 +29,12 @@ export interface SessionRouteOptions {
 }
 
 /** Session routes that act on the person rather than an organization: no X-Mutaba3a-Profile. */
-export const ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set(['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'DELETE /v1/sessions/current']);
+export const ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
+  'GET /v1/me',
+  'PATCH /v1/me/malafat-suggestions',
+  'DELETE /v1/sessions/current',
+  'POST /v1/me/password',
+]);
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
@@ -141,7 +146,75 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
     },
   );
 
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/me/password',
+      tags: ['Sessions'],
+      summary: 'Change your own password (MUT-237)',
+      description: 'Revokes every other session, web and device; this one stays signed in. A wrong current password counts toward the same lockout a wrong sign-in attempt would.',
+      security: [{ session: [] }, { deviceSession: [] }],
+      request: { body: { required: true, content: { 'application/json': { schema: ChangePasswordRequestSchema } } } },
+      responses: {
+        204: { description: 'Password changed' },
+        // Not 401: the session is still valid, and a 401 here would trip the portal's generic session-expired handler.
+        403: errorResponse('CURRENT_PASSWORD_WRONG (the current password is wrong, or the account is locked), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED'),
+        422: errorResponse('Validation failed (the new password is 12 to 128 characters)'),
+      },
+    }),
+    async (c) => {
+      // No same-origin check here: authenticate() already enforces it for the cookie branch (middleware.ts:172),
+      // and a device bearer token has no comparable CSRF signal to check (same reasoning as GET /v1/me below).
+      const { user, session } = c.get('identity');
+      const { currentPassword, newPassword } = c.req.valid('json');
+      const key = normalizeEmail(user.email);
+      const now = c.get('now')();
+      // The session already proves identity; there is no "unknown email" to hide, so no dummy-hash timing defense is needed here.
+      const locked = throttle.isLocked(key, now) || (user.lockedUntil ? user.lockedUntil.getTime() > now.getTime() : false);
+      const matches = !locked && user.passwordHash !== null && (await passwordHasher.verify(user.passwordHash, currentPassword));
+      if (locked || !matches) {
+        if (!locked) {
+          const lockUntil = throttle.recordFailure(key, now);
+          await store.users.recordFailedSignIn(user.id, now, lockUntil);
+          // ADR-037 decision 4: a real lockout is always written to the audit log too, whichever route trips it.
+          if (lockUntil) for (const event of await lockedOutAudit(store, c.get('requestId'), user)) await store.audit.append(event);
+        }
+        throw new ApiError('CURRENT_PASSWORD_WRONG', 'Current password is wrong');
+      }
+      throttle.clear(key);
+      // Hash before the transaction, same reasoning as redeem (account-setup.ts): the slow part never runs inside the lock.
+      const passwordHash = await passwordHasher.hash(newPassword);
+      const at = c.get('now')();
+      await store.users.changePassword({ userId: user.id, passwordHash, exceptSessionId: session.id, at, audit: await changePasswordAudit(store, c.get('requestId'), user) });
+      return c.body(null, 204);
+    },
+  );
+
   return app;
+
+  async function lockedOutAudit(ledger: LedgerStore, requestId: string | null, person: UserRecord): Promise<AuditEventInput[]> {
+    return (await ledger.memberships.listByUser(person.id)).map((m) => ({
+      organizationId: m.organizationId,
+      actorType: 'USER',
+      actorId: person.id,
+      action: 'user.locked_out',
+      entityType: 'user',
+      entityId: person.id,
+      requestId,
+    }));
+  }
+
+  async function changePasswordAudit(ledger: LedgerStore, requestId: string | null, person: UserRecord): Promise<AuditEventInput[]> {
+    return (await ledger.memberships.listByUser(person.id)).map((m) => ({
+      organizationId: m.organizationId,
+      actorType: 'USER',
+      actorId: person.id,
+      action: 'user.password_changed',
+      entityType: 'user',
+      entityId: person.id,
+      requestId,
+    }));
+  }
 }
 
 /** Exported for routes/device-sessions.ts (MUT-64): both sign-in surfaces return the same Me shape. */

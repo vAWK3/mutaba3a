@@ -219,6 +219,8 @@ export const api = {
   me: (options: { signal?: AbortSignal } = {}) => request<Get<'/v1/me'>>('GET', '/v1/me', { signal: options.signal }),
   signIn: (body: Schemas['SignInRequest']) => request<OkJson<'/v1/sessions', 'post'>>('POST', SIGN_IN_PATH, { body }),
   signOut: () => request<void>('DELETE', '/v1/sessions/current'),
+  /** MUT-237: revokes every other session, web and device; this one stays signed in. */
+  changePassword: (body: Schemas['ChangePasswordRequest']) => request<void>('POST', '/v1/me/password', { body }),
   /** MUT-235/236: the setup-link token travels in the body only, never in a URL. */
   checkSetupLink: (token: string, signal?: AbortSignal) =>
     request<SetupLinkCheck>('POST', '/v1/account-setup/check', { body: { token }, signal }),

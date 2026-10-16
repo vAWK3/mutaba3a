@@ -337,6 +337,65 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change your own password (MUT-237)
+         * @description Revokes every other session, web and device; this one stays signed in. A wrong current password counts toward the same lockout a wrong sign-in attempt would.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChangePasswordRequest"];
+                };
+            };
+            responses: {
+                /** @description Password changed */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description CURRENT_PASSWORD_WRONG (the current password is wrong, or the account is locked), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (the new password is 12 to 128 characters) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/device-sessions": {
         parameters: {
             query?: never;
@@ -8233,6 +8292,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/inbox/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many unsorted entries are waiting
+         * @description Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile. MUT-240: the Capture hub's Recent handle wants an exact "N to file" without paging a whole list.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The count */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InboxCount"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/inbox/{entryId}": {
         parameters: {
             query?: never;
@@ -9854,7 +9979,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE";
+                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -9868,6 +9993,12 @@ export interface components {
             off?: boolean;
             dismiss?: components["schemas"]["MalafatMoment"][];
         };
+        ChangePasswordRequest: {
+            currentPassword: string;
+            newPassword: components["schemas"]["NewPassword"];
+        };
+        /** @description 12 to 128 characters; no composition rules. */
+        NewPassword: string;
         DeviceSession: components["schemas"]["Me"] & {
             token: string;
         };
@@ -9895,8 +10026,6 @@ export interface components {
             token: string;
             password: components["schemas"]["NewPassword"];
         };
-        /** @description 12 to 128 characters; no composition rules. */
-        NewPassword: string;
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];
             apiKey: components["schemas"]["ApiKeySummary"];
@@ -11556,6 +11685,9 @@ export interface components {
         };
         /** @enum {string} */
         InboxEntryKind: "income" | "expense";
+        InboxCount: {
+            count: number;
+        };
         CreateInboxEntryRequest: {
             kind: components["schemas"]["InboxEntryKind"];
             /** @description Greater than zero, in the currency's fractional digits */

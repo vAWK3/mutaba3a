@@ -2675,6 +2675,19 @@ This retires the nine-cell baseline from the MUT-226 and MUT-178 notes above. On
 
 The phone flows that use it (MUT-229) and a live call to Frankfurter are not exercised here; the provider is faked.
 
+## MUT-237 — change your own password (2026-10-16, ADR-037 amendment)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `server/src/repositories/__tests__/store-contract-change-password.ts` (new; memory + Postgres) | Contract | 5 each | sets the hash, stamps `passwordChangedAt`, clears a lockout; revokes every other session (cookie and device), keeps the caller's own; writes its audit rows; unknown user → null, nothing written; a session tied to the old verified hash is refused once the row-lock has committed |
+| `server/src/__tests__/routes-sessions.test.ts` (changed) | Route (memory store) | +6 | sets the password, revokes other web and device sessions, keeps this one, audits `user.password_changed`; works from a device session too; a wrong current password is 403 `CURRENT_PASSWORD_WRONG` (never 401) and counts toward the shared sign-in lockout, which a subsequent sign-in also trips (D1); new password outside 12–128 is 422 and changes nothing; cross-site/API-key/no-session refused; the current and new passwords never appear in a log line |
+| `server/src/__tests__/route-security.test.ts` (changed) | Contract | 0 new (exhaustive snapshot updated) | `POST /v1/me/password` is in the session and device-session surfaces, organization-independent, and an API key is refused on it |
+| `src/hosted/components/__tests__/ChangePasswordDrawer.test.tsx` (new) | Component (real router + query client, stubbed fetch) | 7 | opens from the account menu and from the URL, not a page; current/new-password `autocomplete`; success closes with a toast; under-12 refused inline with nothing sent; a wrong current password banners and keeps focus on the field; the button holds while saving, a second click sends one request; Cancel sends nothing |
+| `src/hosted/data/__tests__/filters.test.ts` (changed) | Unit | +1 | `changePassword` is carried by the same `omitShellOverlay`/`pickShellOverlay` the profile drawers use |
+| `qa/specs/portal/account.spec.ts` (new) | Release-QA (Playwright, in-place env) | 3 | `@portal.account.change-password`, `wrong-current-password`, `password-rule` |
+
+Unchanged and green: `routes-m2/m3/m4/m5/m6/m8.test.ts` (pinned `API_VERSION` string bumped to 1.31.0-mut237, no behaviour change); `no-self-registration.test.ts` (the path carries no forbidden word).
+
 ## MUT-236 — portal /setup page (2026-10-16, ADR-088 §8)
 
 | File | Kind | Tests | What it proves |

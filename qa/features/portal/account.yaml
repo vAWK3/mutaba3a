@@ -1,0 +1,35 @@
+app: portal
+area: account
+title: Change your own password
+tier: secondary
+# Change password (MUT-237), the account menu's drawer, opened from UserMenu.
+paths:
+  - src/hosted/shell/AccountDrawers.tsx
+  - src/hosted/shell/UserMenu.tsx
+  - src/hosted/components/ChangePasswordDrawer.tsx
+  - src/hosted/pages/auth/setupLink.ts
+features:
+  - id: change-password
+    title: Change your password from the account menu
+    tier: secondary # self-service; a hosted account also works fine without ever using it
+    steps:
+      - From the account menu, choose Change password
+      - Enter the current password and a new one, and Save
+    expect:
+      - The drawer opens over the current page, not as a page
+      - Save closes the drawer with a "Password changed" toast, still signed in
+      - The request carried the typed current and new passwords
+  - id: wrong-current-password
+    title: A wrong current password shows a banner and keeps the drawer open, the typed new password included
+    tier: secondary
+    steps:
+      - Open Change password and enter a wrong current password and a valid new one, and Save
+    expect:
+      - '"Current password is wrong." shows as a banner; the drawer stays open with what was typed'
+  - id: password-rule
+    title: A new password under 12 characters is refused under the field before anything is sent
+    tier: secondary
+    steps:
+      - Open Change password, enter the correct current password and an 11-character new one, and Save
+    expect:
+      - The field says "Use at least 12 characters."; nothing reaches the server

@@ -3,6 +3,7 @@ import { LanguageSwitch } from '../components/Brand';
 import { useMe } from '../session/me';
 import { useSignOut } from '../session/useSignOut';
 import { usePopover } from './usePopover';
+import { useAccountDrawers } from './AccountDrawers';
 import { MalafatMenuItems } from '../components/MalafatPortal';
 import type { HostedProfile } from '../api/client';
 
@@ -23,7 +24,13 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
   const t = useT();
   const { user } = useMe();
   const { signOut, signingOut } = useSignOut();
-  const { open, toggle, buttonRef, panelRef } = usePopover();
+  const { open, close, toggle, buttonRef, panelRef } = usePopover();
+  const accountDrawers = useAccountDrawers();
+
+  function openChangePassword() {
+    close(false);
+    accountDrawers.open();
+  }
 
   return (
     <div className="hp-usermenu">
@@ -53,6 +60,9 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
           <div className="hp-menu-sep" role="separator" />
           <button type="button" role="menuitem" className="hp-menu-item press" disabled={signingOut} onClick={() => void signOut()}>
             {t('hosted.auth.signOut')}
+          </button>
+          <button type="button" role="menuitem" className="hp-menu-item press" onClick={openChangePassword}>
+            {t('hosted.auth.changePassword')}
           </button>
           {/* After Sign out, so Sign out stays the menu's first item (focus on open) */}
           <MalafatMenuItems profile={profile} />

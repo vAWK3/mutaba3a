@@ -1212,6 +1212,23 @@ export interface UserRepository {
    * devices or tabs never undo each other's dismissals. Null for an unknown user.
    */
   updateMalafatSuggestions(id: string, change: MalafatSuggestionsChange, at: Date): Promise<UserRecord | null>;
+  /**
+   * MUT-237: a signed-in person changes their own password. One transaction under the same row-lock
+   * discipline ADR-088 §7a added for `--lock`/redeem: sets the password (clearing any lockout), revokes
+   * every other session for this user — web and device, `exceptSessionId` stays live — and appends `audit`.
+   * Null for an unknown user.
+   */
+  changePassword(input: ChangePasswordInput): Promise<UserRecord | null>;
+}
+
+export interface ChangePasswordInput {
+  userId: string;
+  passwordHash: string;
+  /** This session keeps working; every other session for this user is revoked. */
+  exceptSessionId: string;
+  at: Date;
+  /** Written in the same transaction. */
+  audit: AuditEventInput[];
 }
 
 export interface MembershipRepository {

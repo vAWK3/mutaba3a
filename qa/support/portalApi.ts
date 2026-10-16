@@ -312,6 +312,8 @@ export interface FakeApiSeed {
   signedIn?: boolean;
   /** The setup link `/setup#<token>` carries (MUT-236); `valid` turns `used` once redeemed, as on the server. */
   setupLink?: StubSetupLink;
+  /** The account's password (MUT-237): POST /v1/me/password checks it against this. */
+  currentPassword?: string;
 }
 
 export type SetupLinkState = 'valid' | 'expired' | 'used' | 'superseded' | 'invalid';
@@ -342,6 +344,7 @@ export class FakeApi {
   private readonly onceQueue: { method: string; path: RegExp; answer: OnceAnswer }[] = [];
   private serial = 500;
   private setupLink: StubSetupLink | null;
+  private currentPassword: string;
 
   constructor(seed: FakeApiSeed) {
     this.signedIn = seed.signedIn ?? true;
@@ -358,6 +361,7 @@ export class FakeApi {
     this.customerSummaries = new Map((seed.customerSummaries ?? []).map((s) => [s.customerId, s]));
     this.uncategorized = seed.uncategorizedOnTypeChange ?? 0;
     this.setupLink = seed.setupLink ?? null;
+    this.currentPassword = seed.currentPassword ?? 'the-current-password';
   }
 
   /** The setup link changed behind the page's back: a lost answer that committed, a newer link, an expiry. */
@@ -467,6 +471,7 @@ export class FakeApi {
       }
     }
     if (resource === 'me' && method === 'GET' && !id) return json(this.me(language));
+    if (resource === 'me' && id === 'password' && method === 'POST') return this.changePasswordAnswer(e.body as { currentPassword?: string; newPassword?: string } | null);
 
     if (resource === 'profiles') return this.profileAnswer(e, id, sub);
 
@@ -500,6 +505,13 @@ export class FakeApi {
     if (resource === 'expenses') return this.expenseAnswer(e, id, sub, subId, action);
     if (resource === 'conversions') return this.conversionAnswer(e, id);
     return undefined;
+  }
+
+  /** MUT-237: a wrong current password is refused; a correct one replaces it, as the server does. */
+  private changePasswordAnswer(body: { currentPassword?: string; newPassword?: string } | null) {
+    if (body?.currentPassword !== this.currentPassword) return json({ error: { code: 'CURRENT_PASSWORD_WRONG', message: 'Current password is wrong' } }, 403);
+    this.currentPassword = body.newPassword ?? this.currentPassword;
+    return { status: 204, body: '' };
   }
 
   /** The two public setup routes (MUT-235): the check names the account only for a valid link; a redeem uses it up. */
