@@ -56,6 +56,19 @@ describe('pickDefaultProfileId', () => {
     expect(pickDefaultProfileId(profiles)).toBe('real-late');
   });
 
+  it('ranks real before demo whichever order the rows come in', () => {
+    const real = profile('real', { createdAt: LATE });
+    const demos = ['demo_a', 'demo_b', 'demo_c'].map((id) => profile(id, { createdAt: EARLY }));
+    expect(pickDefaultProfileId([real, ...demos])).toBe('real');
+    expect(pickDefaultProfileId([...demos, real])).toBe('real');
+  });
+
+  it('treats a profile with no createdAt as the oldest (legacy rows)', () => {
+    const profiles = [profile('dated', { createdAt: EARLY }), profile('legacy', { createdAt: undefined })];
+    expect(pickDefaultProfileId(profiles)).toBe('legacy');
+    expect(pickDefaultProfileId([...profiles].reverse())).toBe('legacy');
+  });
+
   it('never picks an archived profile, even a flagged or preferred one', () => {
     const profiles = [
       profile('archived', { isDefault: true, archivedAt: EARLY, createdAt: EARLY }),

@@ -3,6 +3,27 @@ import Dexie from 'dexie';
 import { MiniCrmDatabase, MIGRATED_PAYMENT_NOTE } from '../database';
 import { createDatabaseAt, schemaAt, uniqueDbName } from '../../test/legacyDexie';
 
+/** Let one case make a late upgrade's helper fail; every other case runs the real one. */
+const failing = vi.hoisted(() => ({ features: false, defaultProfile: false }));
+
+vi.mock('../../lib/features/features', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../lib/features/features')>();
+  return {
+    ...real,
+    reconcileFeaturesWithData: (...args: Parameters<typeof real.reconcileFeaturesWithData>) =>
+      failing.features ? Promise.reject(new Error('features unavailable')) : real.reconcileFeaturesWithData(...args),
+  };
+});
+
+vi.mock('../profileDefault', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../profileDefault')>();
+  return {
+    ...real,
+    enforceSingleDefaultProfile: (...args: Parameters<typeof real.enforceSingleDefaultProfile>) =>
+      failing.defaultProfile ? Promise.reject(new Error('profiles unavailable')) : real.enforceSingleDefaultProfile(...args),
+  };
+});
+
 /**
  * MUT-24 §C: every historical `upgrade()` in database.ts, run from the shape
  * the version before it left on disk. v20–v24 have their own files; this one
@@ -29,6 +50,8 @@ afterEach(async () => {
     await Dexie.delete(d.name);
   }
   vi.restoreAllMocks();
+  failing.features = false;
+  failing.defaultProfile = false;
 });
 
 const profile = (id: string, isDefault: boolean) => ({ id, name: id, isDefault, createdAt: now });
@@ -108,16 +131,19 @@ describe('v11 — documents get a PDF version', () => {
 describe('v13 — clients, projects and transactions join a profile', () => {
   const core = {
     clients: [{ id: 'c1', name: 'Acme', createdAt: now, updatedAt: now }, { id: 'c2', name: 'Kept', profileId: 'mine', createdAt: now, updatedAt: now }],
-    projects: [{ id: 'p1', name: 'Site', clientId: 'c1', createdAt: now, updatedAt: now }],
-    transactions: [income('t1', {})],
+    projects: [
+      { id: 'p1', name: 'Site', clientId: 'c1', createdAt: now, updatedAt: now },
+      { id: 'p2', name: 'Kept', profileId: 'mine', createdAt: now, updatedAt: now },
+    ],
+    transactions: [income('t1', {}), income('t2', { profileId: 'mine' })],
   };
 
   it('assigns every unassigned record to the default profile', async () => {
     const db = await upgradeFrom(12, { businessProfiles: [profile('other', false), profile('main', true)], ...core });
 
     expect((await db.clients.orderBy('id').toArray()).map((c) => c.profileId)).toEqual(['main', 'mine']);
-    expect((await db.projects.get('p1'))?.profileId).toBe('main');
-    expect((await db.transactions.get('t1'))?.profileId).toBe('main');
+    expect((await db.projects.orderBy('id').toArray()).map((p) => p.profileId)).toEqual(['main', 'mine']);
+    expect((await db.transactions.orderBy('id').toArray()).map((t) => t.profileId)).toEqual(['main', 'mine']);
   });
 
   it('uses the first profile when none is default', async () => {
@@ -239,10 +265,12 @@ describe('v18 — payment records from accumulated totals', () => {
     const db = await upgradeFrom(17, rows([
       income('by-updated', { profileId: 'bp1', receivedAmountMinor: 100, updatedAt: '2026-01-09T00:00:00.000Z' }),
       income('by-created', { profileId: 'bp1', status: 'paid', updatedAt: undefined, createdAt: '2026-01-03T00:00:00.000Z' }),
+      income('part-by-created', { profileId: 'bp1', receivedAmountMinor: 100, updatedAt: undefined, createdAt: '2026-01-02T00:00:00.000Z' }),
     ]));
 
     expect((await recordsFor(db, 'by-updated'))[0].paidAt).toBe('2026-01-09T00:00:00.000Z');
     expect((await recordsFor(db, 'by-created'))[0].paidAt).toBe('2026-01-03T00:00:00.000Z');
+    expect((await recordsFor(db, 'part-by-created'))[0].paidAt).toBe('2026-01-02T00:00:00.000Z');
   });
 
   it('writes nothing for unpaid, deleted or expense rows', async () => {
@@ -256,7 +284,41 @@ describe('v18 — payment records from accumulated totals', () => {
   });
 });
 
+describe('v23 — soft-deleted payment records do not count as cover', () => {
+  it('backfills the full amount when the only record was deleted', async () => {
+    const db = await upgradeFrom(22, {
+      businessProfiles: [profile('bp1', true)],
+      transactions: [income('paid', { profileId: 'bp1', status: 'paid', paidAt: '2026-01-04', receivedAmountMinor: 10000 })],
+      paymentRecords: [{ id: 'gone', transactionId: 'paid', amountMinor: 10000, paidAt: '2026-01-04', deletedAt: now, createdAt: now, updatedAt: now }],
+    });
+
+    const live = (await db.paymentRecords.where('transactionId').equals('paid').toArray()).filter((r) => !r.deletedAt);
+    expect(live).toEqual([expect.objectContaining({ amountMinor: 10000, paidAt: '2026-01-04', notes: MIGRATED_PAYMENT_NOTE })]);
+  });
+});
+
 describe('late upgrades log instead of throwing', () => {
+  it('v20 keeps the database openable when switching areas on fails', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    failing.features = true;
+
+    const db = await upgradeFrom(19, { businessProfiles: [profile('bp1', true)] });
+
+    expect(db.verno).toBe(24);
+    expect(errors).toHaveBeenCalledWith('[db] v20: could not auto-enable optional areas:', expect.any(Error));
+  });
+
+  it('v22 keeps the database openable when the default-business repair fails', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    failing.defaultProfile = true;
+
+    const db = await upgradeFrom(21, { businessProfiles: [profile('a', true), profile('b', true)] });
+
+    expect(db.verno).toBe(24);
+    expect((await db.businessProfiles.toArray()).filter((p) => p.isDefault)).toHaveLength(2);
+    expect(errors).toHaveBeenCalledWith('[db] v22: could not repair the default business:', expect.any(Error));
+  });
+
   it('v23 keeps the database openable when the backfill fails', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(crypto, 'randomUUID').mockImplementation(() => {
