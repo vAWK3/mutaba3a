@@ -287,6 +287,35 @@ describe('CachedFxRates', () => {
     await expect(h.cache.get()).resolves.toMatchObject({ source: 'live' });
   });
 
+  it.each([
+    ['too old', '2026-10-01'],
+    ['in the future', '2026-10-20'],
+  ])('a provider answer %s does not replace good cached rates: they keep coming back as stale', async (_label, rateDate) => {
+    const h = harness();
+    await h.cache.get();
+    h.advance(TTL);
+    h.state.snapshot = { rateDate, perEur: { USD: 9, ILS: 9 } };
+    await expect(h.cache.get()).resolves.toEqual({ snapshot: SNAPSHOT, fetchedAt: new Date('2026-10-15T12:00:00Z'), source: 'stale' });
+    expect(h.state.calls).toBe(2);
+  });
+
+  it('a request that joins a failing warm-up is refused, and the next request tries the provider again', async () => {
+    const h = harness();
+    h.gate.hold = true;
+    h.state.fail = true;
+    const warming = h.cache.warm();
+    const joined = h.cache.get().catch((e: unknown) => e);
+    await Promise.resolve();
+    h.release();
+    await warming;
+    expect(await joined).toMatchObject({ code: 'FX_RATES_UNAVAILABLE' });
+    expect(h.state.calls).toBe(1);
+    h.gate.hold = false;
+    h.state.fail = false;
+    await expect(h.cache.get()).resolves.toMatchObject({ source: 'live' });
+    expect(h.state.calls).toBe(2);
+  });
+
   it('warm() fills the cache, so the first request does not call the provider', async () => {
     const h = harness();
     await h.cache.warm();
