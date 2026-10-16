@@ -43,13 +43,15 @@ features:
     expect:
       - Labels keep their colour, no underline appears, the hero button stays at least 4.5:1
   - id: "375"
-    title: At 375 px in English and Arabic the bar fits and overlaps nothing (MUT-77)
+    title: At 320 and 375 px in English and Arabic the bar fits and overlaps nothing (MUT-77, MUT-231)
     tier: secondary
-    legacy: [MUT-77]
+    legacy: [MUT-77, MUT-231]
     steps:
-      - Open the landing page at 375 px wide, in English then Arabic
+      - Open the landing page at 375 px wide, then 320, in English then Arabic
+      - Scroll past the hero's button
     expect:
       - The wordmark is not clipped and does not overlap the actions; 44 px tap targets
+      - Sign in shows at the top; once scrolled, the bar's button takes its place
   - id: title
     title: The tab title follows the language
     tier: tertiary

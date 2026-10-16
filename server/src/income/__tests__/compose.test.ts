@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../errors.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
-import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, isOwnCapture, isOwnProfile, owedVatFields, redateTo, resolveIncomeLinks } from '../compose.js';
+import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, isOwnCapture, isOwnProfile, owedVatFields, pastMoneyDate, redateTo, resolveIncomeLinks } from '../compose.js';
 
 const PERSONAL = incomeCaptureRulesFor(null);
 const MALAFAT = incomeCaptureRulesFor('MALAFAT');
@@ -141,7 +141,7 @@ describe('assertNotFuture', () => {
     try {
       assertNotFuture('2026-10-13', today, 'occurredOn');
     } catch (err) {
-      expect((err as ApiError).details).toMatchObject({ reason: 'DATE_INVALID', field: 'occurredOn' });
+      expect((err as ApiError).details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' });
     }
   });
 
@@ -197,5 +197,42 @@ describe('redateTo (MUT-223)', () => {
         expect((err as ApiError).details).toMatchObject({ reason: 'DATE_INVALID', field: 'receivedOn' });
       }
     }
+  });
+
+  it('refuses a date more than ten years before the organization\'s today (MUT-227)', () => {
+    // Jerusalem's today is 2026-10-13, so the floor is 2016-10-05.
+    expect(redateTo('2016-10-05', organization, lateUtc, 'occurredOn')).toBe('2016-10-05');
+    try {
+      redateTo('2016-10-04', organization, lateUtc, 'occurredOn');
+      expect.unreachable();
+    } catch (err) {
+      expect((err as ApiError).details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
+    }
+  });
+});
+
+describe('pastMoneyDate (MUT-227)', () => {
+  const today = '2026-10-12';
+  const reasonOf = (raw: string) => {
+    try {
+      pastMoneyDate(raw, today, 'occurredOn');
+    } catch (err) {
+      return (err as ApiError).details;
+    }
+    return null;
+  };
+
+  it('returns the date when it is between the floor and today, both inclusive', () => {
+    expect(pastMoneyDate(today, today, 'occurredOn')).toBe(today);
+    expect(pastMoneyDate('2016-10-04', today, 'occurredOn')).toBe('2016-10-04');
+  });
+
+  it.each([
+    ['an impossible date', '2026-02-30', { reason: 'DATE_INVALID', field: 'occurredOn' }],
+    ['tomorrow', '2026-10-13', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' }],
+    ['the day before the floor', '2016-10-03', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' }],
+    ['a typo year', '0001-01-01', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' }],
+  ])('refuses %s', (_label, raw, details) => {
+    expect(reasonOf(raw)).toEqual(details);
   });
 });

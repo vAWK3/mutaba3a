@@ -56,6 +56,15 @@ export function formatSize(bytes: number, language: Language): string {
  * that check must use the same zone, not the browser's. An unknown zone falls
  * back to the browser calendar rather than throwing inside a form.
  */
+/** MUT-227: the server refuses a money date more than this many days before the profile's today (ADR-086). */
+export const MONEY_DATE_FLOOR_DAYS = 3660;
+
+/** The earliest money date the server accepts, given the profile's today (YYYY-MM-DD). */
+export function moneyDateFloor(today: string): string {
+  const [y, m, d] = today.split('-').map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! - MONEY_DATE_FLOOR_DAYS)).toISOString().slice(0, 10);
+}
+
 export function todayInZone(timeZone: string, now: Date = new Date()): string {
   try {
     // en-CA formats a calendar date as YYYY-MM-DD.

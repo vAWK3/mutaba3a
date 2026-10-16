@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-15 — Hosted API serves reference exchange rates (MUT-228, ADR-086, API 1.27.0-mut228)
+## [Unreleased] - 2026-10-15 — Hosted API serves reference exchange rates (MUT-228, ADR-087, API 1.28.0-mut228)
 
 **Why:** the phone (MUT-229) shows what a foreign-currency amount is in the profile's own currency and the market rate beside a logged conversion. The server had no rates, and copying the web's browser-side Frankfurter call into a second client would drift.
 
@@ -39,7 +39,66 @@
 - Config: `FX_RATES_URL` (https; plain http only for a localhost stub), `FX_RATES_TTL_MINUTES` (240), `FX_RATES_TIMEOUT_MS` (3000).
 
 ### Technical
-- `server/src/fx-rates.ts` (`crossRates`, `FrankfurterSource`, `CachedFxRates`: single-flight, stale on failure, 60 s backoff, a 7-day age cap on the ECB rate date (future or invalid dates refused too), no redirects, per instance like TD-017; filled once at startup by `warm()`, whose failure does not start the backoff), `server/src/routes/fx-rates.ts`, schemas, `app.ts`/`index.ts` wiring; OpenAPI and `src/hosted/api/schema.d.ts` regenerated; version pins in the route tests moved to 1.27.0-mut228.
+- `server/src/fx-rates.ts` (`crossRates`, `FrankfurterSource`, `CachedFxRates`: single-flight, stale on failure, 60 s backoff, a 7-day age cap on the ECB rate date (future or invalid dates refused too), no redirects, per instance like TD-017; filled once at startup by `warm()`, whose failure does not start the backoff), `server/src/routes/fx-rates.ts`, schemas, `app.ts`/`index.ts` wiring; OpenAPI and `src/hosted/api/schema.d.ts` regenerated; version pins in the route tests moved to 1.28.0-mut228.
+
+## [Unreleased] - 2026-10-15 — Money dates have a ten-year floor (MUT-227, ADR-086, API 1.27.0-mut227)
+
+**Why:** the hosted API accepted any valid past date, so a typo like `0001-01-01` or 2006 for 2026 saved silently. Since MUT-223 a settled entry or payment can also be re-dated, so one typo could move it decades back and skew aging, `lastPaymentOn` and month views.
+
+### Fixed
+- Every hosted money date is refused more than ten years (3660 days) before the organization's today, on create and on edit: income, settle, both re-dates, `POST /v1/payments` (Malafat's key included), expenses, conversions and inbox filing. The floor day itself is accepted. 422 `DATE_INVALID` with `details.bound: 'past'`.
+- Inbox capture and edit refuse a typo year straight away, measured leniently from UTC's yesterday, so capture never refuses a date filing would accept.
+- The portal's Add income and Record payment say "The date can't be more than ten years ago" instead of "later than today" for such a date (`hosted.income.errors.dateTooOld`, en + ar).
+
+### Changed
+- `DATE_INVALID` from a range check carries `details.bound` (`past` | `future`); the reason enum is unchanged. API 1.27.0-mut227; every floored request field says so in OpenAPI. OpenAPI and hosted types are regenerated.
+- Not changed: expense list and summary `from`/`to` filters still take any date, and rows already older than the floor stay readable and editable. Expense, conversion and inbox PATCH skip a resent, unchanged date, because the portal sends it on every save (pre-landing review D1).
+- A Malafat correction (`replacesPaymentId`) may keep the reversed payment's date, or a later one, below the floor, so the second step of reverse-and-replace can't strand the money (review D4).
+- Expense and conversion forms also say "The date can't be more than ten years ago" (`apiErrorBound` in `src/hosted/api/client.ts`, review D2).
+- MUT-224's re-date drawer (landed first) now refuses a date before the floor itself, with `min` on the date input (`moneyDateFloor` in `src/hosted/format/dates.ts`), routes a server refusal by `bound` (`mapRedateError`), and still closes untouched for an entry already older than the floor.
+- Still unbounded (follow-up, review D3): an Owed entry's `dueDate`, a credit's `effectiveDate`, an installment trigger date.
+
+### Technical
+- `assertNotTooOld` and `DAYS_IN_PAST_LIMIT` beside the ceiling (`server/src/agreements/compose.ts`); `pastMoneyDate` (`server/src/income/compose.ts`) is the one call for income-like dates; `expenseOccurredOn` (`server/src/expenses/compose.ts`); `inboxDate(value, now)`.
+- The phone half (too-old labels for an outbox row and File from Recent) is on mutaba3a-flutter `feature/mut-227-date-floor`.
+- Files: `server/src/{agreements,income,expenses,inbox}/compose.ts`, `server/src/routes/{income,receivables,payments,expenses,conversions,inbox}.ts`, `server/src/{schemas,app}.ts`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/components/incomeApiErrors.ts`, `src/hosted/i18n/{en,ar}.json`, `qa/features/portal/income.yaml`, `qa/specs/portal/income.spec.ts`, tests below.
+
+## [Unreleased] - 2026-10-15 — The web QA baseline goes green: the phone bar fits, the slow-route loader is held in builds (MUT-231)
+
+**Why:** nine release-QA cells failed on main (the baseline MUT-226 recorded on a093306), so the web suite could never pass with no retries.
+- `@web.landing.375` (4 cells) is an app bug. `f1e8c43` put "Sign in now" in the landing bar beside the switch and the bar's button, whose slot is kept even while it is hidden. On phones that left the wordmark 47 of 110 px at 375 EN (EN at 481–487 px clipped too).
+- `@web.brand.loader-slow-route` (5 cells) was a spec problem. `holdInsightsCode` matched only dev-server module paths, and a build's service worker serves the precached chunk with no request. Once the chunk was held, light and dark hit axe's best-practice `page-has-heading-one`: the loader stands in for the whole page, TopBar h1 included. They hit it on the dev server too, so those two cells had never passed.
+
+### Fixed
+- At ≤640 px, Sign in and the bar's button share one slot. Sign in shows while the hero's button is on screen; once it has scrolled away, the bar's button fades in over it, and the hidden one leaves the tab order. Wider screens are unchanged. The wordmark fits at 320, 375, 414 and 481 in both languages.
+
+### Technical
+- `LandingHeader`: `.landing-header-slot[data-cta-visible]` wraps the sign-in link and `HeaderCta`. It is `display: contents` above 640 px and a one-cell grid below. CSS in `LandingPage.css`.
+- `brand.spec.ts`: the slow-route tests sit in a `describe` with `serviceWorkers: 'block'`. `holdInsightsCode` also holds the built chunk that exports `InsightsPage`. `KNOWN_AXE_VIOLATIONS.loader` = `page-has-heading-one`, by design, like `portalBoot`'s `region`.
+- `landing.spec.ts` `@web.landing.375` now also checks Sign in is shown at the top and hidden once scrolled.
+- Files: `src/pages/landing/components/LandingHeader.tsx`, `src/pages/landing/LandingPage.css`, `src/pages/landing/__tests__/LandingHeader.test.tsx`, `qa/specs/web/{brand,landing}.spec.ts`, `qa/support/axe.ts`, `qa/features/web/landing.yaml`.
+
+## [Unreleased] - 2026-10-15 — Hosted portal: change the date of a saved income entry and a recorded payment (MUT-224)
+
+**Why:** MUT-223 gave the server re-dating; the portal still had no way to fix a wrong day on an Owed entry or a recorded payment. Expenses could already be re-dated. ADR-083 (MUT-224 amendment).
+
+### Added
+- `RedateDrawer` (one drawer, two kinds): `?income=<receivableId>` changes an Owed entry's date (PATCH /v1/income) and `?payment=<paymentId>` a recorded payment's received date (PATCH /v1/payments). It reads the record fresh, sends If-Match at that version, refills on a 409 re-read, shows a 422 under the date and a 404 as no longer available. A settled entry lists its payment lines, found by scanning the client's first 50 payments, with a "See this client's payments" fallback (TD-145).
+- Receivables: a **Date** column (postingDate) before Due; own Owed rows open the drawer by their row-link. Payments: the user's own posted capture opens it from its Received cell.
+- `HostedTable` `linkColumn` and `canOpen`; `redateAffordancesFor`, `canRedateOwed`, `canRedatePayment`; `usePayment`, `usePaymentsForEntry`, `useRedateOwed`, `useRedatePayment`; `api.payment`, `redateIncome`, `redatePayment`.
+- Release-QA: `portal.income.redate-{owed,received,payment,no-future,conflict,malafat-readonly}` and `portal.expenses.redate-expense`; the portal stub serves the new routes.
+
+### Changed
+- The Record payment note now reads "You can fix the date later; the amount can't be changed yet." (en + ar).
+- Record payment and the Payments expander stop propagation, so they never open the re-date drawer.
+
+### Not changed
+- Malafat-fed and unowned profiles: no row-link, no clickable look, and `?income=` / `?payment=` deep links render nothing.
+
+### Fixed in review (qa-reconcile)
+- A record the server would refuse (an undone payment, someone else's capture, an entry Malafat posted) opened a working Save that did nothing: GET answers 200 there and only the PATCH says 404, which was mapped to a silent re-read. The drawer now checks `canRedateOwed` / `canRedatePayment` on the record it loaded and shows "no longer available"; a 404 on save also toasts it.
+- A save that answered after the drawer closed called the old `onClose` and closed whatever drawer was open by then (resetting its filters). It now does nothing once unmounted.
+- A background refetch with a new version replaced a typed date, and Save then closed without saving. The date now refills only after a 409's re-read or when nothing was typed.
 
 ## [Unreleased] - 2026-10-15 — Expenses Needs attention reaches back to the rule's start (MUT-96, TD-069)
 

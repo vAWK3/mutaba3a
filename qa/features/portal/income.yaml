@@ -29,6 +29,24 @@ features:
       - Received is chosen and the defaults read "ILS · today · cash"
       - POST /v1/income gets {kind received, amount 1200.00, ILS, today, the client, BANK} with an Idempotency-Key
       - The drawer closes, "Saved · ₪1,200.00 received from Client 1" is announced, the payment is listed, and focus returns to + Add income
+  - id: date-too-old
+    title: Add income dated more than ten years back is refused at the date field with "can't be more than ten years ago", not "later than today", and keeps the entry
+    tier: secondary
+    paths:
+      - src/hosted/components/incomeApiErrors.ts
+      - src/hosted/components/expenseApiErrors.ts
+      - src/hosted/components/conversionApiErrors.ts
+      - src/hosted/api/client.ts
+      - src/hosted/i18n/en.json
+      - src/hosted/i18n/ar.json
+    steps:
+      - Open Payments and choose + Add income
+      - Type 1,200, pick Client 1, open More details and set the date to 2001-03-04
+      - Save income while the server refuses the date as more than ten years ago (DATE_INVALID, bound past)
+    expect:
+      - POST /v1/income was sent with occurredOn 2001-03-04
+      - The date field says "The date can't be more than ten years ago" and does not say "later than today"
+      - The drawer stays open with 1,200 and the date still filled in
   - id: owed-errors
     title: Add income, Owed, says at the field what is missing or wrong, keeps the entry through a refusal or a dropped connection, and a retry reuses the attempt's Idempotency-Key
     tier: secondary
@@ -70,3 +88,79 @@ features:
     expect:
       - Owed is chosen and Client shows the client
       - The POST names that client, and the entry is on the client's Receivables
+  - id: redate-owed
+    title: An Owed entry's date is changed from Receivables; the Date column shows it, its due date stays, and the save carries If-Match (MUT-224)
+    tier: secondary
+    paths:
+      - src/hosted/components/RedateDrawer.tsx
+      - src/hosted/components/HostedTable.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+      - src/hosted/data/filters.ts
+      - src/hosted/api/client.ts
+    steps:
+      - Open Receivables and open the Owed entry from its row
+      - Pick a date last month and save
+    expect:
+      - The drawer opens at ?income=<id> titled "Change the date", says the due date stays as it is, and nothing but the date is editable
+      - PATCH /v1/income/<id> gets {occurredOn} with If-Match 1
+      - The drawer closes, ?income is cleared, the row's Date shows the new day and its Due is unchanged
+  - id: redate-received
+    title: A Received payment's date is changed from Payments by its Received cell, and the list shows the new day (MUT-224)
+    tier: secondary
+    paths:
+      - src/hosted/components/RedateDrawer.tsx
+      - src/hosted/pages/views/PaymentsList.tsx
+    steps:
+      - Open Payments and open the payment from its Received date
+      - Pick an earlier day and save
+    expect:
+      - The drawer opens at ?payment=<id> titled "Change the received date"
+      - PATCH /v1/payments/<id> gets {receivedOn} with If-Match 1
+      - The row's Received shows the new day
+  - id: redate-payment
+    title: A settled entry lists its payment; opening that payment and changing its date updates the entry's payment line (MUT-224)
+    tier: secondary
+    paths:
+      - src/hosted/components/RedateDrawer.tsx
+      - src/hosted/components/RecordPaymentDrawer.tsx
+    steps:
+      - Record payment in full on the Owed entry
+      - Open the entry (Settled), then open its payment line
+      - Pick an earlier day and save, then open the entry again
+    expect:
+      - The settled entry's drawer lists "<date> · <amount>" for its payment
+      - The payment line opens ?payment=<id>, and PATCH /v1/payments/<id> gets the new receivedOn
+      - The entry's drawer now lists the payment with the new date
+  - id: redate-no-future
+    title: The date picker stops at the profile's today, and a later date typed in is refused at the field without a request (MUT-224)
+    tier: secondary
+    paths:
+      - src/hosted/components/RedateDrawer.tsx
+    steps:
+      - Open an Owed entry
+      - Type tomorrow's date and save
+    expect:
+      - The date field's max is today in the profile's timezone
+      - The message "The date can't be later than today" shows under the date and no PATCH is sent
+  - id: redate-conflict
+    title: A date changed on another device is refused on Save; the drawer refills with the latest date and saving again works (MUT-224)
+    tier: secondary
+    paths:
+      - src/hosted/components/RedateDrawer.tsx
+      - src/hosted/components/incomeApiErrors.ts
+    steps:
+      - Open an Owed entry; meanwhile it is re-dated elsewhere
+      - Pick a day and save, then save again
+    expect:
+      - The first save is refused with "This changed elsewhere…" and the date field shows the other device's day
+      - The second save goes through with If-Match 2
+  - id: redate-malafat-readonly
+    title: A Malafat-fed profile offers no date change on Receivables or Payments, even from a deep link (MUT-224)
+    tier: secondary
+    paths:
+      - src/hosted/data/incomeAffordances.ts
+    steps:
+      - Open the Malafat-fed firm's Receivables at ?income=<id>
+      - Open its Payments at ?payment=<id>
+    expect:
+      - No row is clickable and no drawer opens on either list

@@ -42,6 +42,8 @@ export type CreateIncomeRequest = Schemas['CreateIncomeRequest'];
 export type IncomeResponse = Schemas['IncomeResponse'];
 export type PaymentMethod = Schemas['PaymentMethod'];
 export type SettleReceivableRequest = Schemas['SettleReceivableRequest'];
+export type UpdateIncomeRequest = Schemas['UpdateIncomeRequest'];
+export type UpdatePaymentRequest = Schemas['UpdatePaymentRequest'];
 export type SettleReceivableResponse = Schemas['SettleReceivableResponse'];
 export type ProfileType = Schemas['ProfileType'];
 export type CreateProfileRequest = Schemas['CreateProfileRequest'];
@@ -92,6 +94,15 @@ export class ApiError extends Error {
 export function apiErrorReason(error: ApiError): string | undefined {
   const details = error.details as { reason?: unknown } | null;
   return typeof details?.reason === 'string' ? details.reason : undefined;
+}
+
+/**
+ * MUT-227: which end of a date range a DATE_INVALID crossed. 'past' is the server's ten-year floor; undefined from
+ * an older server or a malformed date.
+ */
+export function apiErrorBound(error: ApiError): 'past' | 'future' | undefined {
+  const bound = (error.details as { bound?: unknown } | null)?.bound;
+  return bound === 'past' || bound === 'future' ? bound : undefined;
 }
 
 type UnauthorisedHandler = (error: ApiError) => void;
@@ -217,6 +228,8 @@ export const api = {
     request<Get<'/v1/receivables/{receivableId}'>>('GET', `/v1/receivables/${encodeURIComponent(receivableId)}`, { profileId }),
   payments: (profileId: string, query: Query<'/v1/payments'> = {}) =>
     request<Get<'/v1/payments'>>('GET', '/v1/payments', { profileId, query }),
+  payment: (profileId: string, paymentId: string) =>
+    request<Get<'/v1/payments/{paymentId}'>>('GET', `/v1/payments/${encodeURIComponent(paymentId)}`, { profileId }),
   attachments: (profileId: string, query: Query<'/v1/attachments'> = {}) =>
     request<Get<'/v1/attachments'>>('GET', '/v1/attachments', { profileId, query }),
   attachmentDownload: (profileId: string, attachmentId: string) =>
@@ -273,6 +286,11 @@ export const api = {
     request<IncomeResponse>('POST', '/v1/income', { profileId, body, idempotencyKey }),
   settleReceivable: (profileId: string, receivableId: string, body: SettleReceivableRequest, idempotencyKey: string) =>
     request<SettleReceivableResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/settle`, { profileId, body, idempotencyKey }),
+  // MUT-224 (MUT-223's routes): date only, If-Match on the version the drawer loaded; no Idempotency-Key, a replay is a 409.
+  redateIncome: (profileId: string, incomeId: string, body: UpdateIncomeRequest, version: string) =>
+    request<IncomeResponse>('PATCH', `/v1/income/${encodeURIComponent(incomeId)}`, { profileId, body, ifMatchVersion: version }),
+  redatePayment: (profileId: string, paymentId: string, body: UpdatePaymentRequest, version: string) =>
+    request<Payment>('PATCH', `/v1/payments/${encodeURIComponent(paymentId)}`, { profileId, body, ifMatchVersion: version }),
 
   // Profiles (MUT-182/183): session routes, no X-Mutaba3a-Profile header. Create carries an
   // attempt-scoped Idempotency-Key; the PATCH sends the version read when the edit opened.

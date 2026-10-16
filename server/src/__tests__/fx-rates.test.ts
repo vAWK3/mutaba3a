@@ -12,7 +12,7 @@ import {
 } from '../fx-rates.js';
 import { SUPPORTED_CURRENCIES } from '../money.js';
 
-/** MUT-228 (ADR-086): reference rates for display, proxied from the ECB via Frankfurter. */
+/** MUT-228 (ADR-087): reference rates for display, proxied from the ECB via Frankfurter. */
 
 const SNAPSHOT: EcbSnapshot = { rateDate: '2026-10-15', perEur: { USD: 1.1208, ILS: 3.4769 } };
 const rateOf = (rates: ReturnType<typeof crossRates>, currency: string) => rates.find((r) => r.currency === currency)!;

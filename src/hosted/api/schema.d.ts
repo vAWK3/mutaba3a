@@ -4505,7 +4505,7 @@ export interface paths {
         put?: never;
         /**
          * Settle a receivable directly, with one payment and one allocation
-         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today, matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404.
+         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404.
          */
         post: {
             parameters: {
@@ -4939,7 +4939,7 @@ export interface paths {
         head?: never;
         /**
          * Change the date of a payment you recorded (optimistic, If-Match)
-         * @description Date only: amount, client and allocations are never touched, and a settled entry's paid date follows (ADR-038). Only a POSTED payment this person captured (POST /v1/income Received, or a settle) on a profile they own; any other id answers 404. On a Malafat-fed profile the session holds no payments:write, so this answers 403 READ_ONLY_PROFILE before any lookup, as settle does. receivedOn may not be later than the organization's today. The payment number keeps its year.
+         * @description Date only: amount, client and allocations are never touched, and a settled entry's paid date follows (ADR-038). Only a POSTED payment this person captured (POST /v1/income Received, or a settle) on a profile they own; any other id answers 404. On a Malafat-fed profile the session holds no payments:write, so this answers 403 READ_ONLY_PROFILE before any lookup, as settle does. receivedOn may not be later than the organization's today, nor more than ten years before it (MUT-227). The payment number keeps its year.
          */
         patch: {
             parameters: {
@@ -7219,7 +7219,7 @@ export interface paths {
         put?: never;
         /**
          * Capture money received or owed, directly — no agreement, no allocation dance
-         * @description What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today.
+         * @description What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today and not more than ten years before it (MUT-227).
          */
         post: {
             parameters: {
@@ -7373,7 +7373,7 @@ export interface paths {
         head?: never;
         /**
          * Change the date of an income entry you captured (optimistic, If-Match)
-         * @description Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate; a Received entry moves its payment's receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. occurredOn may not be later than the organization's today.
+         * @description Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate; a Received entry moves its payment's receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. occurredOn may not be later than the organization's today, nor more than ten years before it (MUT-227).
          */
         patch: {
             parameters: {
@@ -7549,7 +7549,7 @@ export interface paths {
         put?: never;
         /**
          * Log a currency conversion
-         * @description Two legs, each in its own currency and fractional digits. toCurrency must differ from currency. occurredOn may not be later than today (ADR-038); backdated is accepted.
+         * @description Two legs, each in its own currency and fractional digits. toCurrency must differ from currency. occurredOn may not be later than today (ADR-038) and not more than ten years before it (MUT-227); backdated is accepted.
          */
         post: {
             parameters: {
@@ -7770,7 +7770,7 @@ export interface paths {
         head?: never;
         /**
          * Change a conversion (optimistic, If-Match)
-         * @description Any field. A currency comes with its own amount (422 AMOUNT_REQUIRED), each amount is read in the merged currency's digits, and the merged legs must differ (422 SAME_CURRENCY). occurredOn, when sent, may not be later than today. null clears the notes.
+         * @description Any field. A currency comes with its own amount (422 AMOUNT_REQUIRED), each amount is read in the merged currency's digits, and the merged legs must differ (422 SAME_CURRENCY). occurredOn, when changed, may not be later than today and not more than ten years before it (MUT-227). null clears the notes.
          */
         patch: {
             parameters: {
@@ -8019,7 +8019,7 @@ export interface paths {
         put?: never;
         /**
          * Capture an amount now, decide where it belongs later
-         * @description occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. kind is fixed at capture.
+         * @description occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. A typo year is refused at once: not more than ten years before UTC yesterday (MUT-227); filing applies the exact floor. kind is fixed at capture.
          */
         post: {
             parameters: {
@@ -10703,7 +10703,7 @@ export interface components {
         SettleReceivableRequest: {
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             paidAt?: string;
             method?: components["schemas"]["PaymentMethod"];
             captureSource?: components["schemas"]["CaptureSource"];
@@ -10795,7 +10795,7 @@ export interface components {
             currency: components["schemas"]["Currency"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. The first replacement of a reversed payment (replacesPaymentId, none posted yet) may keep that payment's receivedOn, or a later one, below the floor. */
             receivedOn: string;
             method: components["schemas"]["PaymentMethod"];
             reference?: string;
@@ -10810,7 +10810,7 @@ export interface components {
             nextCursor: string | null;
         };
         UpdatePaymentRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             receivedOn: string;
         };
         AllocatePaymentRequest: {
@@ -11117,7 +11117,7 @@ export interface components {
             completedAt: string | null;
         };
         CreateExpenseRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. */
             occurredOn: string;
             /** @description Greater than zero, in the currency's fractional digits */
             amount: string;
@@ -11137,7 +11137,7 @@ export interface components {
             captureSource?: components["schemas"]["CaptureSource"];
         };
         UpdateExpenseRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date. */
             occurredOn?: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
@@ -11249,7 +11249,7 @@ export interface components {
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             currency: components["schemas"]["Currency"];
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             occurredOn: string;
             /** Format: uuid */
             customerId?: string;
@@ -11263,7 +11263,7 @@ export interface components {
             captureSource?: components["schemas"]["CaptureSource"];
         };
         UpdateIncomeRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             occurredOn: string;
         };
         Conversion: {
@@ -11287,7 +11287,7 @@ export interface components {
             updatedAt: string;
         };
         CreateConversionRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             occurredOn: string;
             /** @description Greater than zero, in the currency's fractional digits */
             amount: string;
@@ -11302,7 +11302,7 @@ export interface components {
             nextCursor: string | null;
         };
         UpdateConversionRequest: {
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. Checked only when it differs from the stored date. */
             occurredOn?: string;
             /** @description In the merged currency's fractional digits (the body's `currency`, else the row's) */
             amount?: string;
@@ -11370,7 +11370,7 @@ export interface components {
             /** @description Greater than zero, in the currency's fractional digits */
             amount: string;
             currency: components["schemas"]["Currency"];
-            /** @description May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check. */
+            /** @description May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check. Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past; filing applies the exact floor in the profile's timezone. */
             occurredOn: string;
             note?: string;
             captureSource?: components["schemas"]["CaptureSource"];
@@ -11379,7 +11379,7 @@ export interface components {
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
             currency?: components["schemas"]["Currency"];
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            /** @description Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date. */
             occurredOn?: string;
             note?: string | null;
             captureSource?: components["schemas"]["CaptureSource"] & unknown;

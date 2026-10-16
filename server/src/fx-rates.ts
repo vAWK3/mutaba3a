@@ -4,7 +4,7 @@ import type { Logger } from './logger.js';
 import { SUPPORTED_CURRENCIES, type Currency } from './money.js';
 
 /**
- * Reference exchange rates for display (MUT-228, ADR-086).
+ * Reference exchange rates for display (MUT-228, ADR-087).
  *
  * The ECB publishes a daily euro reference rate for USD and ILS; Frankfurter
  * serves it as JSON with no key. JOD is not in the ECB set, so it is derived

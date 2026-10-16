@@ -21,6 +21,21 @@ describe('income drawer URL state (MUT-133)', () => {
     expect(parseClientDetail({ tab: 'receivables', settle: R })).toEqual({ tab: 'receivables', settle: R });
   });
 
+  it('accepts only a uuid for the re-date drawers ?income= and ?payment= (MUT-224)', () => {
+    expect(parseIncomeDrawer({ income: R })).toEqual({ income: R });
+    expect(parseIncomeDrawer({ payment: R })).toEqual({ payment: R });
+    expect(parseIncomeDrawer({ income: 'nope', payment: '1' })).toEqual({});
+    expect(parseReceivablesPage({ status: 'ALL', income: R })).toEqual({ status: 'ALL', income: R });
+    expect(parsePaymentsPage({ status: 'POSTED', payment: R })).toEqual({ status: 'POSTED', payment: R });
+    expect(parseClientDetail({ tab: 'payments', payment: R })).toEqual({ tab: 'payments', payment: R });
+  });
+
+  it('splits the re-date drawers out with the others (MUT-224)', () => {
+    const { filters, drawer } = splitIncomeDrawer({ status: 'OPEN' as const, income: R, payment: R });
+    expect(filters).toEqual({ status: 'OPEN' });
+    expect(drawer).toEqual({ income: R, payment: R });
+  });
+
   it('splits drawer state out so a list never receives it (eng review R1)', () => {
     const { filters, drawer } = splitIncomeDrawer({ status: 'OPEN' as const, customerId: 'x', newIncome: 'owed' as const, settle: R });
     expect(filters).toEqual({ status: 'OPEN', customerId: 'x' });

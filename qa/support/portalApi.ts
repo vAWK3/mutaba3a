@@ -10,6 +10,8 @@ import { customer, meBody, openSignedInPortal, type StubProfile } from './portal
  */
 
 export const STAMP = '2026-10-01T09:00:00.000Z';
+/** The signed-in user meBody publishes (qa/support/portal.ts). */
+const STUB_USER_ID = '99999999-9999-4999-8999-999999999999';
 /** The receipt and document bucket, the origin the portal's CSP allows for uploads (server/src/app.ts). */
 export const STORAGE = 'https://storage.googleapis.com/qa-bucket';
 
@@ -55,7 +57,7 @@ export function project(n: number, customerId: string, name: string, currency: C
 
 export function receivable(
   n: number,
-  r: { customerId: string; projectId?: string | null; gross: string; paid?: string; currency?: Currency; status?: string; origin?: string; dueDate?: string; title?: string | null },
+  r: { customerId: string; projectId?: string | null; gross: string; paid?: string; currency?: Currency; status?: string; origin?: string; dueDate?: string; postingDate?: string; title?: string | null },
 ) {
   const paid = r.paid ?? '0.00';
   return {
@@ -75,7 +77,7 @@ export function receivable(
     vatTreatment: null,
     vatRateBasisPoints: 0,
     dueDate: r.dueDate ?? '2026-11-15',
-    postingDate: '2026-10-01',
+    postingDate: r.postingDate ?? '2026-10-01',
     postedAt: STAMP,
     status: r.status ?? 'DUE',
     title: r.title ?? null,
@@ -99,7 +101,18 @@ export function allocation(n: number, a: { receivableId: string; projectId: stri
 
 export function payment(
   n: number,
-  p: { customerId: string | null; amount: string; currency?: Currency; receivedOn?: string; method?: 'CASH' | 'BANK'; status?: 'POSTED' | 'REVERSED'; allocations?: ReturnType<typeof allocation>[]; number?: string },
+  p: {
+    customerId: string | null;
+    amount: string;
+    currency?: Currency;
+    receivedOn?: string;
+    method?: 'CASH' | 'BANK';
+    status?: 'POSTED' | 'REVERSED';
+    allocations?: ReturnType<typeof allocation>[];
+    number?: string;
+    /** MUT-224: captured by the signed-in user (what the server says for their own Received or settle). */
+    mine?: boolean;
+  },
 ) {
   const allocations = p.allocations ?? [];
   const allocated = allocations.reduce((sum, a) => sum + toMinor(a.amount), 0);
@@ -110,7 +123,7 @@ export function payment(
     projectId: null,
     origin: 'capture',
     captureSource: 'app',
-    capturedBy: null,
+    capturedBy: p.mine ? { userId: STUB_USER_ID, displayName: 'Nour Haddad' } : null,
     currency: p.currency ?? 'ILS',
     amount: p.amount,
     allocated: toDecimal(allocated),
@@ -444,10 +457,12 @@ export class FakeApi {
       return page(this.projects.filter((p) => !customerId || p.customerId === customerId));
     }
     if (resource === 'receivables') return this.receivableAnswer(e, id, sub);
-    if (resource === 'payments' && method === 'GET') {
+    if (resource === 'payments' && method === 'GET' && !id) {
       return page(this.payments.filter((p) => (!q('status') || p.status === q('status')) && (!q('customerId') || p.customerId === q('customerId'))));
     }
+    if (resource === 'payments' && id) return this.paymentAnswer(e, id);
     if (resource === 'income' && method === 'POST') return this.income(e.body ?? {});
+    if (resource === 'income' && method === 'PATCH' && id) return this.redateIncome(e, id);
     if (resource === 'attachments' && method === 'GET') {
       if (!id) return page(this.attachments.filter((a) => (!q('kind') || a.kind === q('kind')) && (!q('customerId') || a.customerId === q('customerId'))));
       const found = this.attachments.find((a) => a.id === id);
@@ -531,6 +546,7 @@ export class FakeApi {
         receivedOn: body.paidAt,
         method: body.method,
         allocations: [allocation(this.serial++, { receivableId: found.id, projectId: found.projectId ?? uid(0xa, 0), amount: body.amount, left: found.outstanding })],
+        mine: true,
       });
       this.payments.unshift(made);
       return json({ receivable: found, payment: made }, 201);
@@ -542,13 +558,51 @@ export class FakeApi {
     const b = body as { kind: 'received' | 'owed'; amount: string; currency: Currency; occurredOn: string; customerId?: string; title?: string; dueDate?: string; method?: 'CASH' | 'BANK'; notes?: string };
     const n = this.serial++;
     if (b.kind === 'owed') {
-      const made = receivable(n, { customerId: b.customerId ?? '', gross: b.amount, currency: b.currency, dueDate: b.dueDate, title: b.title ?? null });
+      const made = receivable(n, { customerId: b.customerId ?? '', gross: b.amount, currency: b.currency, dueDate: b.dueDate, postingDate: b.occurredOn, title: b.title ?? null });
       this.receivables.unshift(made);
       return json({ id: made.id, kind: 'owed', amount: b.amount, currency: b.currency, occurredOn: b.occurredOn, customerId: b.customerId ?? null, projectId: null, title: b.title ?? null, notes: b.notes ?? null, dueDate: made.dueDate, status: 'open' }, 201);
     }
-    const made = payment(n, { customerId: b.customerId ?? null, amount: b.amount, currency: b.currency, receivedOn: b.occurredOn, method: b.method });
+    const made = payment(n, { customerId: b.customerId ?? null, amount: b.amount, currency: b.currency, receivedOn: b.occurredOn, method: b.method, mine: true });
     this.payments.unshift(made);
     return json({ id: made.id, kind: 'received', amount: b.amount, currency: b.currency, occurredOn: b.occurredOn, customerId: b.customerId ?? null, projectId: null, title: null, notes: b.notes ?? null, dueDate: null, status: 'unallocated' }, 201);
+  }
+
+  /** MUT-224: GET one payment; PATCH its received date with If-Match (MUT-223), allocations untouched. */
+  private paymentAnswer(e: Logged, id: string) {
+    const found = this.payments.find((p) => p.id === id);
+    if (!found) return notFound();
+    if (e.method === 'GET') return json(found);
+    if (e.method === 'PATCH') {
+      if (e.headers['if-match'] !== String(found.version)) return conflict('VERSION_MISMATCH');
+      found.receivedOn = (e.body as { receivedOn: string }).receivedOn;
+      found.version += 1;
+      return json(found);
+    }
+    return undefined;
+  }
+
+  /** MUT-224: PATCH /v1/income/{id} moves an Owed entry's postingDate (its due date stays). */
+  private redateIncome(e: Logged, id: string) {
+    const found = this.receivables.find((r) => r.id === id);
+    if (!found) return notFound();
+    if (e.headers['if-match'] !== String(found.version)) return conflict('VERSION_MISMATCH');
+    found.postingDate = (e.body as { occurredOn: string }).occurredOn;
+    found.version += 1;
+    return json({ id: found.id, kind: 'owed', amount: found.gross, currency: found.currency, occurredOn: found.postingDate, customerId: found.customerId, projectId: found.projectId, title: found.title, notes: null, dueDate: found.dueDate, status: found.status === 'PAID' ? 'settled' : 'open', version: found.version });
+  }
+
+  /** MUT-224: an Owed entry or a payment re-dated on another device: its version moves on. */
+  redatedElsewhere(id: string, date: string) {
+    const r = this.receivables.find((x) => x.id === id);
+    if (r) {
+      r.postingDate = date;
+      r.version += 1;
+      return;
+    }
+    const p = this.payments.find((x) => x.id === id);
+    if (!p) throw new Error(`no receivable or payment ${id}`);
+    p.receivedOn = date;
+    p.version += 1;
   }
 
   private expenseAnswer(e: Logged, id?: string, sub?: string, subId?: string, action?: string) {

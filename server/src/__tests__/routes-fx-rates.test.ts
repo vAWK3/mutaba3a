@@ -6,7 +6,7 @@ import { CachedFxRates, JOD_PER_USD, type EcbSnapshot, type FxRateSource } from 
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 
-/** MUT-228 (ADR-086): GET /v1/fx-rates — reference rates for display, sessions only, no profile. */
+/** MUT-228 (ADR-087): GET /v1/fx-rates — reference rates for display, sessions only, no profile. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 const read = (res: Response): Promise<Loose> => res.json() as Promise<Loose>;

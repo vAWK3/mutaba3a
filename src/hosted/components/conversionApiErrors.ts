@@ -1,5 +1,5 @@
 import type { UseFormSetError } from 'react-hook-form';
-import { ApiError, apiErrorReason } from '../api/client';
+import { ApiError, apiErrorBound, apiErrorReason } from '../api/client';
 import type { ConversionFormValues } from './conversionFormSchema';
 
 /**
@@ -12,6 +12,8 @@ export interface ConversionErrorLabels {
   amountInvalid: string;
   toAmountInvalid: string;
   dateInvalid: string;
+  /** MUT-227: the server's ten-year floor (details.bound past). */
+  dateTooOld: string;
   sameCurrency: string;
   conflict: string;
   network: string;
@@ -42,7 +44,7 @@ export function applyConversionApiError(
         else setError('fromAmount', { type: 'manual', message: labels.amountInvalid });
         return;
       case 'DATE_INVALID':
-        setError('occurredAt', { type: 'manual', message: labels.dateInvalid });
+        setError('occurredAt', { type: 'manual', message: apiErrorBound(error) === 'past' ? labels.dateTooOld : labels.dateInvalid });
         return;
       case 'SAME_CURRENCY':
         setError('toCurrency', { type: 'manual', message: labels.sameCurrency });

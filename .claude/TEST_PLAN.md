@@ -2605,6 +2605,18 @@ The phone-side AC ("the row shows saved") follows from the server returning the 
 
 Full web suite on 2026-10-15 (after MUT-218/164/217/178): 114 passed, 9 failed, all on the main baseline (5× `loader-slow-route`, 4× `landing.375`). `csv-new-client`, `conversions.log` and `conversions.edit-delete` now pass unattended.
 
+## MUT-224 — hosted portal: change the date of a saved income entry and a recorded payment (2026-10-15, ADR-083 amendment)
+
+| Suite | Cases |
+|---|---|
+| `src/hosted/data/__tests__/incomeAffordances.test.ts` | `redateAffordancesFor` (owned + capture/payments write; Malafat-fed and unowned: neither); `canRedateOwed` (ADJUSTMENT, open or settled; not VOID, INSTALLMENT, no capture write, unowned); `canRedatePayment` (own POSTED capture incl. allocated; not REVERSED, integration, someone else's, no payments write, Malafat-fed) |
+| `src/hosted/data/__tests__/filters.test.ts` | `?income=` / `?payment=` keep a uuid, drop a malformed id, survive page parsers, and split out of list filters |
+| `src/hosted/components/__tests__/HostedTable.test.tsx` | `linkColumn` moves the row-link; `canOpen` false gives no link, no `clickable`, no handler; existing row-link tests unchanged |
+| `src/hosted/components/__tests__/RedateDrawer.test.tsx` | Owed: read-only summary, `max` = profile today, "Due … stays as it is"; save → PATCH /v1/income with If-Match 3 and `{occurredOn}`; unchanged date closes with no request; 409 → re-read, refill, conflict toast, next save If-Match 4; 422 inline; 404 gone; no payments request for an unpaid entry; settled entry lists only its payment lines (one opens `?payment=`); incomplete page → See payments. Payment: PATCH /v1/payments with `{receivedOn}` and If-Match. Arabic labels. Review fixes: a background re-read keeps a typed date and saves at the new version, refills an untouched one; a save answering after unmount doesn't close; an INSTALLMENT entry, a REVERSED payment and someone else's capture show "no longer available" with no Save; a 404 on save says so |
+| `src/hosted/components/__tests__/RecordPaymentDrawer.test.tsx` | the reworded note |
+| `src/hosted/pages/__tests__/views.test.tsx` › MUT-224 | Receivables Date column; Record payment opens only `?settle=`; Enter on the row-link opens `?income=`; Payments: own capture links from Received (3rd cell), expander doesn't open, REVERSED row inert; Malafat-fed: no row-link, deep links render nothing |
+| Release-QA (portal, preview build) | `portal.income.redate-owed`, `-received`, `-payment`, `-no-future`, `-conflict`, `-malafat-readonly`, `portal.expenses.redate-expense` |
+
 ## MUT-220 — Demo mode summary and active business (2026-10-15)
 
 | File | Kind | Tests | What it proves |
@@ -2627,7 +2639,32 @@ Full web suite on 2026-10-15 (after MUT-218/164/217/178): 114 passed, 9 failed, 
 | `src/components/expenses/__tests__/RecurringAttentionList.test.tsx` › a long-running rule | Component | +3 | 37 payments read "37 payments since Oct 2023 not marked" with a $2,960 total; three still read "Aug, Sep, Oct"; Arabic uses the many form ("37 دفعة منذ") |
 | `qa/specs/web/expenses.spec.ts` › `@web.expenses.recurring-long-missed` (new) | E2E (release-qa) | 1 | A rule from eight months ago: "9 payments since <month> not marked", $720, nine months in Mark Paid. Passes with the other recurring specs |
 
-## MUT-228 — GET /v1/fx-rates (2026-10-15, ADR-086)
+## MUT-231 — The web QA baseline (2026-10-15)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `src/pages/landing/__tests__/LandingHeader.test.tsx` › one slot | Component | +1 | The sign-in link and the bar's button sit in `.landing-header-slot`, which carries `data-cta-visible` false at the top and true once the button shows. The phone CSS keys off it. Failed before the fix (no slot) |
+| `qa/specs/web/landing.spec.ts` › `@web.landing.375` | E2E (release-qa) | 4 (extended) | 320 and 375, EN and AR: the wordmark is not clipped, Sign in shows at the top and is hidden once scrolled, the button fits. Failed on main ("wordmark clipped: 110px in 47px") |
+| `qa/specs/web/brand.spec.ts` › `@web.brand.loader-slow-route` | E2E (release-qa) | 5 (fixed) | Now holds Insights in a build too, with service workers blocked, and accepts `page-has-heading-one` on the loader screen. 5/5 on a dev server; 27/27 with the landing cells, `--repeat-each 3 --retries 0`, on a preview build |
+
+This retires the nine-cell baseline from the MUT-226 and MUT-178 notes above. On preview builds `loader-slow-route` now passes as well, so it is no longer dev-server-only.
+
+## MUT-227 — a ten-year floor on hosted money dates (2026-10-15, ADR-086)
+
+| Suite | Cases |
+|---|---|
+| `server/src/agreements/__tests__/date-bounds.test.ts` (new) | `DAYS_IN_PAST_LIMIT` is 3660 and equals the ceiling; the floor day and today pass; floor − 1 → `{ reason: DATE_INVALID, field, bound: past }`; `0001-01-01`; the message; the ceiling now says `bound: future` |
+| `server/src/income/__tests__/compose.test.ts` | `assertNotFuture` carries `bound: future`; `pastMoneyDate` (today and the floor day pass; impossible date, tomorrow, floor − 1, `0001-01-01`); `redateTo` refuses below the org-timezone floor |
+| `server/src/inbox/__tests__/compose.test.ts` | lenient capture floor from UTC yesterday; at four instants, capture accepts every timezone's exact floor (Etc/GMT+12, Kiritimati, UTC, Jerusalem) |
+| Route suites | `income-routes` (received + owed), `receivables-settle` (nothing recorded), `income-redate` (both PATCHes, nothing moved), `routes-m4` (API-key `POST /v1/payments`), `routes-expenses` (create + patch; a seeded 2001 row is editable without its date and listed by `from=2001-01-01`, and its summary range works), `routes-conversions` (create + patch), `inbox-routes` (capture + patch), `inbox-filing` (both filings refuse below the profile's floor and keep the entry, matching the direct create's details) |
+| `src/hosted/components/__tests__/incomeApiErrors.test.ts` | `bound: past` → `dateTooOld`; `future` or no bound → `dateFuture`, for income and settle |
+| Release-QA | `portal.income.date-too-old` (`qa/specs/portal/income.spec.ts`): passing, recorded |
+| Regression | version pins in routes-m2..m8 moved to 1.27.0-mut227; every other date test unchanged and green |
+| qa-reconcile additions | per endpoint group: `0001-01-01` on settle and both re-dates, the floor day accepted on expense, conversion and inbox PATCH, and on both filings |
+| MUT-224 integration (merged second) | `RedateDrawer.test.tsx`: `min` is today − 3660; a date before it is refused with no request; a server `bound: past` reads "more than ten years ago"; an unchanged pre-floor entry closes with no request. `incomeApiErrors.test.ts`: `mapRedateError` past / future / no bound |
+| pre-landing review fixes | an unchanged pre-floor date resent with another edit → 200 on expense, conversion and inbox PATCH (written failing first); `routes-m4` replacement keeps the reversed payment's 2015 date (201), an earlier date or a fresh payment there → 422 bound past; `expenseApiErrors` + new `conversionApiErrors.test.ts` map bound past to `dateTooOld`; the floor message test asserts with `toThrow` |
+
+## MUT-228 — GET /v1/fx-rates (2026-10-15, ADR-087)
 
 | File | Kind | Tests | What it proves |
 |---|---|---|---|

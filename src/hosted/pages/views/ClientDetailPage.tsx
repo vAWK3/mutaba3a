@@ -8,7 +8,7 @@ import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView, Skeleton } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { splitIncomeDrawer, type ClientDetailSearch, type ClientTab } from '../../data/filters';
-import { incomeAffordancesFor } from '../../data/incomeAffordances';
+import { incomeAffordancesFor, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawerHost';
 import { useCustomer, useCustomerSummary, useProjectDirectory } from '../../data/queries';
 import { DecimalAmount } from '../../format/DecimalAmount';
@@ -40,6 +40,7 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
   // MUT-133: drawer state lives beside the tab's filters, never in them (eng review R1).
   const { filters: rest, drawer } = splitIncomeDrawer(search);
   const { kinds, canSettle } = incomeAffordancesFor(profile);
+  const redate = redateAffordancesFor(profile);
   // The header copy carries ADD_BUTTON_ATTR (focus returns there after a save); the empty state reuses it without.
   const openAdd = () => setSearch({ ...rest, newIncome: kinds.includes('owed') ? 'owed' : kinds[0] });
   const addButton = (header: boolean) =>
@@ -82,6 +83,7 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
               setFilters={(f) => setSearch({ tab, projectId: f.projectId, currency: f.currency, status: f.status, dueFrom: f.dueFrom, dueTo: f.dueTo })}
               addAction={addButton(false)}
               onRecordPayment={canSettle ? (receivableId) => setSearch({ ...rest, settle: receivableId }) : undefined}
+              onRedate={redate.owed ? (receivableId) => setSearch({ ...rest, income: receivableId }) : undefined}
             />
           )}
           {tab === 'payments' && (
@@ -90,12 +92,21 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
               filters={{ status: search.paymentStatus, receivedFrom: search.receivedFrom, receivedTo: search.receivedTo }}
               setFilters={(f) => setSearch({ tab, paymentStatus: f.status, receivedFrom: f.receivedFrom, receivedTo: f.receivedTo })}
               addAction={addButton(false)}
+              onRedate={redate.payments ? (paymentId) => setSearch({ ...rest, payment: paymentId }) : undefined}
             />
           )}
           {tab === 'documents' && (
             <DocumentsList fixedCustomerId={customerId} filters={{ kind: search.kind }} setFilters={(f) => setSearch({ tab, kind: f.kind })} />
           )}
-          <IncomeDrawerHost profile={profile} drawer={drawer} defaultCustomerId={customerId} onClose={() => setSearch(rest)} />
+          <IncomeDrawerHost
+            profile={profile}
+            drawer={drawer}
+            defaultCustomerId={customerId}
+            onClose={() => setSearch(rest)}
+            onOpen={(next) => setSearch({ ...rest, ...next })}
+            // Already on this client: "See this client's payments" is its own Payments tab.
+            onSeePayments={() => setSearch({ tab: 'payments' })}
+          />
         </>
       )}
     </QueryView>

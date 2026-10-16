@@ -1,9 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
+import { useNavigate } from '@tanstack/react-router';
 import type { HostedProfile, SettleReceivableResponse } from '../api/client';
-import { incomeAffordancesFor } from '../data/incomeAffordances';
+import { incomeAffordancesFor, redateAffordancesFor } from '../data/incomeAffordances';
 import type { IncomeDrawerSearch } from '../data/filters';
 import { IncomeCaptureDrawer } from './IncomeCaptureDrawer';
 import { RecordPaymentDrawer } from './RecordPaymentDrawer';
+import { useMe } from '../session/me';
+import { RedateDrawer } from './RedateDrawer';
 
 /**
  * The income drawers a page owns (MUT-133, eng review R1): Receivables,
@@ -57,10 +60,22 @@ export interface IncomeDrawerHostProps {
   onClose: () => void;
   /** Client detail prefills the client. */
   defaultCustomerId?: string;
+  /** MUT-224: replace the drawer state, e.g. a settled entry's payment line opens `?payment=`. */
+  onOpen: (next: IncomeDrawerSearch) => void;
+  /** MUT-224: where "See this client's payments" goes; default: the client's Payments tab. */
+  onSeePayments?: (customerId: string) => void;
 }
 
-export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId }: IncomeDrawerHostProps) {
+/**
+ * One drawer at a time, first match wins when a link carries several: settle, then Add income, then the re-date
+ * drawers (eng review: precedence). A drawer the gate doesn't offer here renders nothing.
+ */
+export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, onOpen, onSeePayments }: IncomeDrawerHostProps) {
   const { kinds, canSettle } = incomeAffordancesFor(profile);
+  const redate = redateAffordancesFor(profile);
+  const navigate = useNavigate();
+  const userId = useMe().user.id;
+  const seePayments = onSeePayments ?? ((customerId: string) => void navigate({ to: `/p/${profile.id}/clients/${customerId}`, search: { tab: 'payments' } } as never));
   if (drawer.settle && canSettle) {
     const receivableId = drawer.settle;
     return (
@@ -80,6 +95,22 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId }
   if (drawer.newIncome && kinds.length > 0) {
     return (
       <IncomeCaptureDrawer profile={profile} initialKind={drawer.newIncome} defaultCustomerId={defaultCustomerId} onClose={onClose} onSaved={focusAfterAdd} />
+    );
+  }
+  const redateTarget = drawer.income && redate.owed ? { kind: 'owed' as const, id: drawer.income } : drawer.payment && redate.payments ? { kind: 'payment' as const, id: drawer.payment } : null;
+  if (redateTarget) {
+    return (
+      <RedateDrawer
+        // One drawer state per record: a date typed for one row never carries to another.
+        key={`${redateTarget.kind}:${redateTarget.id}`}
+        kind={redateTarget.kind}
+        profile={profile}
+        id={redateTarget.id}
+        userId={userId}
+        onClose={onClose}
+        onOpenPayment={(paymentId) => onOpen({ payment: paymentId })}
+        onSeePayments={seePayments}
+      />
     );
   }
   return null;

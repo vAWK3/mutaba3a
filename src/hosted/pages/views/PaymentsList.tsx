@@ -8,12 +8,12 @@ import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { isNarrowed, splitIncomeDrawer, type PaymentFilters, type PaymentsPageSearch, type PaymentStatusFilter } from '../../data/filters';
-import { incomeAffordancesFor } from '../../data/incomeAffordances';
+import { canRedatePayment, incomeAffordancesFor, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawerHost';
 import { useCustomerDirectory, usePayments, useProjectDirectory } from '../../data/queries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
-import { useProfile } from '../../session/me';
+import { useMe, useProfile } from '../../session/me';
 import { NoMatch, PageHeader, ShowMore, StatusBadge } from './shared';
 
 /**
@@ -33,9 +33,11 @@ interface PaymentRow {
   unallocated: string;
   status: string;
   allocations: Allocation[];
+  /** MUT-224: the user's own posted capture on a profile they own: its date can be changed. */
+  redatable: boolean;
 }
 
-function shape(items: Payment[], customers: Map<string, Customer>, language: 'en' | 'ar', methodLabel: (method: string) => string): PaymentRow[] {
+function shape(items: Payment[], customers: Map<string, Customer>, language: 'en' | 'ar', methodLabel: (method: string) => string, redatable: (p: Payment) => boolean): PaymentRow[] {
   return items.map((p) => ({
     id: p.id,
     number: p.number,
@@ -47,6 +49,7 @@ function shape(items: Payment[], customers: Map<string, Customer>, language: 'en
     unallocated: p.unallocated,
     status: p.status,
     allocations: p.allocations,
+    redatable: redatable(p),
   }));
 }
 
@@ -56,10 +59,13 @@ interface PaymentsListProps {
   fixedCustomerId?: string;
   /** The page's Add income button, repeated as the empty state's action (MUT-133). */
   addAction?: ReactNode;
+  /** MUT-224: present where the gate offers re-dating; the user's own posted capture then opens `?payment=`. */
+  onRedate?: (paymentId: string) => void;
 }
 
-export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction }: PaymentsListProps) {
+export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, onRedate }: PaymentsListProps) {
   const profile = useProfile();
+  const userId = useMe().user.id;
   const { t, language } = useLanguage();
   const list = usePayments(profile.id, fixedCustomerId ? { ...filters, customerId: fixedCustomerId } : filters);
   const customers = useCustomerDirectory(profile.id);
@@ -67,8 +73,11 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction }
   const [open, setOpen] = useState<Set<string>>(() => new Set());
 
   const rows = useMemo(
-    () => (list.data && customers.data ? shape(list.data, customers.data, language, (m) => t(`hosted.payments.method.${m}`)) : undefined),
-    [list.data, customers.data, language, t],
+    () =>
+      list.data && customers.data
+        ? shape(list.data, customers.data, language, (m) => t(`hosted.payments.method.${m}`), (p) => canRedatePayment(profile, p, userId))
+        : undefined,
+    [list.data, customers.data, language, t, profile, userId],
   );
 
   const toggle = useCallback(
@@ -94,7 +103,11 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction }
               className="hp-expand press"
               aria-expanded={open.has(r.id)}
               aria-label={t(open.has(r.id) ? 'hosted.payments.hideAllocations' : 'hosted.payments.showAllocations')}
-              onClick={() => toggle(r.id)}
+              onClick={(event) => {
+                // MUT-224: the row opens the re-date drawer; the expander only shows where the money went.
+                event.stopPropagation();
+                toggle(r.id);
+              }}
             >
               <span aria-hidden="true">{open.has(r.id) ? '▾' : '▸'}</span>
             </button>
@@ -152,6 +165,10 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction }
               rows={r}
               rowKey={(row) => row.id}
               detail={(row) => (open.has(row.id) ? <Allocations row={row} matters={matters} /> : null)}
+              onRowClick={onRedate ? (row) => onRedate(row.id) : undefined}
+              // The first cell holds the expander, and a button can't nest a button (eng review R5).
+              linkColumn="received"
+              canOpen={(row) => row.redatable}
             />
             <ShowMore hasMore={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
           </>
@@ -199,6 +216,7 @@ export function PaymentsPage({ search, setSearch }: { search: PaymentsPageSearch
   const { t } = useLanguage();
   const { filters, drawer } = splitIncomeDrawer(search);
   const { kinds } = incomeAffordancesFor(profile);
+  const redate = redateAffordancesFor(profile);
   // The header copy carries ADD_BUTTON_ATTR (focus returns there after a save); the empty state reuses it without.
   const openAdd = () => setSearch({ ...filters, newIncome: kinds.includes('received') ? 'received' : kinds[0] });
   const addButton = (header: boolean) =>
@@ -210,8 +228,13 @@ export function PaymentsPage({ search, setSearch }: { search: PaymentsPageSearch
   return (
     <>
       <PageHeader title={t('hosted.payments.title')}>{addButton(true)}</PageHeader>
-      <PaymentsList filters={filters} setFilters={setSearch} addAction={addButton(false)} />
-      <IncomeDrawerHost profile={profile} drawer={drawer} onClose={() => setSearch(filters)} />
+      <PaymentsList
+        filters={filters}
+        setFilters={setSearch}
+        addAction={addButton(false)}
+        onRedate={redate.payments ? (paymentId) => setSearch({ ...filters, payment: paymentId }) : undefined}
+      />
+      <IncomeDrawerHost profile={profile} drawer={drawer} onClose={() => setSearch(filters)} onOpen={(next) => setSearch({ ...filters, ...next })} />
     </>
   );
 }

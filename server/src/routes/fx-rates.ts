@@ -8,7 +8,7 @@ import { errorResponses, validationResponse } from './shared.js';
 /** Reference rates read no organization's data, like GET /v1/me: no X-Mutaba3a-Profile. */
 export const FX_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set(['GET /v1/fx-rates']);
 
-/** /v1/fx-rates (MUT-228, ADR-086). `rates` null = no rate source configured: the route answers 503 FX_RATES_UNAVAILABLE. */
+/** /v1/fx-rates (MUT-228, ADR-087). `rates` null = no rate source configured: the route answers 503 FX_RATES_UNAVAILABLE. */
 export function fxRateRoutes(rates: CachedFxRates | null): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 

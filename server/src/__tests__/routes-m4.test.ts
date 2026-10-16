@@ -226,6 +226,10 @@ describe('recording payments', () => {
     };
     expect(await bad({ receivedOn: '2026-02-30' })).toBe('DATE_INVALID');
     expect(await bad({ receivedOn: '2099-01-01' })).toBe('DATE_INVALID');
+    // MUT-227: the floor applies to Malafat's API-key payments too; today is 2026-10-08, so the floor is 2016-09-30.
+    expect(await bad({ receivedOn: '2016-09-29' })).toBe('DATE_INVALID');
+    expect((await pay(h, f, '10.00', [], { receivedOn: '0001-01-01' })).body.error.details).toEqual({ reason: 'DATE_INVALID', field: 'receivedOn', bound: 'past' });
+    expect((await pay(h, f, '10.00', [], { receivedOn: '2016-09-30' })).res.status).toBe(201);
     expect(await bad({ method: 'CARD' })).toBeUndefined(); // schema
     expect(await bad({ replacesPaymentId: '00000000-0000-4000-8000-000000000000' })).toBe('REPLACES_NOT_REVERSED');
     const posted = await pay(h, f, '5.00', []);
@@ -242,6 +246,27 @@ describe('recording payments', () => {
     expect((await pay(h, f, '1.00', [], {}, {})).res.status).toBe(422); // Idempotency-Key required
     const readOnly = await firm(h, { scopes: ['payments:read', 'customers:write', 'projects:write', 'agreements:write', 'agreements:read'] });
     expect((await pay(h, readOnly, '1.00', [])).res.status).toBe(403);
+  });
+
+  it('MUT-227: a replacement may keep the reversed payment\'s own date below the floor; anything earlier, or a fresh payment there, is refused', async () => {
+    const h = harness();
+    h.clock.now = new Date('2016-01-10T10:00:00Z');
+    const f = await firm(h);
+    const original = await pay(h, f, '5.00', [], { receivedOn: '2015-12-01' });
+    expect(original.res.status).toBe(201);
+    await h.app.request(`/v1/payments/${original.body.id}/reverse`, json({ reason: 'wrong client' }, { ...f.auth, ...idem() }));
+    h.clock.now = new Date('2026-10-08T10:00:00Z'); // the floor is now 2016-09-30
+
+    const fresh = await pay(h, f, '5.00', [], { receivedOn: '2015-12-01' });
+    expect(fresh.body.error.details).toEqual({ reason: 'DATE_INVALID', field: 'receivedOn', bound: 'past' });
+    const earlier = await pay(h, f, '5.00', [], { receivedOn: '2015-11-30', replacesPaymentId: original.body.id });
+    expect(earlier.body.error.details).toEqual({ reason: 'DATE_INVALID', field: 'receivedOn', bound: 'past' });
+    const kept = await pay(h, f, '5.00', [], { receivedOn: '2015-12-01', replacesPaymentId: original.body.id });
+    expect(kept.res.status).toBe(201);
+    expect(kept.body).toMatchObject({ receivedOn: '2015-12-01', replacesPaymentId: original.body.id });
+    // The exemption is the one correction, not a standing licence: a second replacement of the same payment is floored.
+    const again = await pay(h, f, '5.00', [], { receivedOn: '2015-12-01', replacesPaymentId: original.body.id });
+    expect(again.body.error.details).toEqual({ reason: 'DATE_INVALID', field: 'receivedOn', bound: 'past' });
   });
 });
 
@@ -420,8 +445,8 @@ describe('contract', () => {
   it('publishes every M4 path, the reason vocabularies and the version', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.27.0-mut228');
-    expect(API_VERSION).toBe('1.27.0-mut228');
+    expect(doc.info.version).toBe('1.28.0-mut228');
+    expect(API_VERSION).toBe('1.28.0-mut228');
     for (const path of ['/v1/allocations/preview', '/v1/payments', '/v1/payments/{paymentId}', '/v1/payments/{paymentId}/allocations', '/v1/payments/{paymentId}/reverse', '/v1/receivables/{receivableId}/credits', '/v1/operations/{idempotencyKey}']) {
       expect(doc.paths[path], path).toBeDefined();
     }

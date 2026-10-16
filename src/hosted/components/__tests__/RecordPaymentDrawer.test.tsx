@@ -98,7 +98,8 @@ describe('RecordPaymentDrawer (MUT-133)', () => {
     const heading = await screen.findByRole('heading', { name: /left/ });
     expect(strip(heading.textContent)).toBe('Record payment · ₪5,000.00 left');
     expect(await screen.findByText('Al-Quds Bakery · Lease dispute · due Oct 15, 2026')).toBeInTheDocument();
-    expect(screen.getByText("Check the amount: a recorded payment can't be changed yet.")).toBeInTheDocument();
+    // MUT-224: the date can now be fixed; only the amount still can't.
+    expect(screen.getByText('You can fix the date later; the amount can’t be changed yet.')).toBeInTheDocument();
   });
 
   it('records the full amount it shows, always sending it, dated today in the profile\'s zone (R2, R3)', async () => {

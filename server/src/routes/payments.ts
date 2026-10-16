@@ -1,9 +1,9 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { keyAuth, postingActorOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
-import { assertIsoDate, assertNotAbsurdDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
+import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
-import type { IsoDate } from '../dates.js';
+import { compareIsoDates, type IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
@@ -213,11 +213,18 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const today = todayFor(organization, now);
       assertIsoDate(body.receivedOn, 'receivedOn');
       assertNotAbsurdDate(body.receivedOn, today, 'receivedOn');
+      let replacedOn: IsoDate | null = null;
       if (body.replacesPaymentId) {
         const replaced = await store.payments.getById(organization.id, body.replacesPaymentId);
         if (!replaced || replaced.status !== 'REVERSED') throw validationError('REPLACES_NOT_REVERSED', 'replacesPaymentId must name a REVERSED payment', { field: 'replacesPaymentId' });
         if (replaced.customerId !== body.customerId) throw validationError('REPLACES_CUSTOMER_MISMATCH', 'The replaced payment belongs to another customer', { field: 'replacesPaymentId' });
+        // Only the first replacement keeps the exemption below: it is the one correction, not a standing licence.
+        if (!(await store.payments.findReplacedBy(organization.id, replaced.id))) replacedOn = replaced.receivedOn;
       }
+      // MUT-227 floor. A correction (reverse, then record with replacesPaymentId) may keep the reversed payment's own
+      // date, or move it later, even below the floor: the reversal has already committed, and refusing the second
+      // step would leave the money with no payment at all (ADR-086).
+      if (replacedOn === null || compareIsoDates(body.receivedOn, replacedOn) < 0) assertNotTooOld(body.receivedOn, today, 'receivedOn');
       await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: actor.apiKeyId, requestId: actor.requestId });
       const src = await source(organization, { customerId: body.customerId, currency: body.currency, amount: body.amount });
       const explicit = parseAllocations(body.allocations, src.currency) ?? [];
@@ -312,7 +319,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Payments'],
       summary: 'Change the date of a payment you recorded (optimistic, If-Match)',
       description:
-        'Date only: amount, client and allocations are never touched, and a settled entry\'s paid date follows (ADR-038). Only a POSTED payment this person captured (POST /v1/income Received, or a settle) on a profile they own; any other id answers 404. On a Malafat-fed profile the session holds no payments:write, so this answers 403 READ_ONLY_PROFILE before any lookup, as settle does. receivedOn may not be later than the organization\'s today. The payment number keeps its year.',
+        'Date only: amount, client and allocations are never touched, and a settled entry\'s paid date follows (ADR-038). Only a POSTED payment this person captured (POST /v1/income Received, or a settle) on a profile they own; any other id answers 404. On a Malafat-fed profile the session holds no payments:write, so this answers 403 READ_ONLY_PROFILE before any lookup, as settle does. receivedOn may not be later than the organization\'s today, nor more than ten years before it (MUT-227). The payment number keeps its year.',
       security: [{ session: [] }, { deviceSession: [] }],
       middleware: [requireScope('payments:write'), ifMatch()] as const,
       request: { params: PaymentIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdatePaymentRequestSchema) },

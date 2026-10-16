@@ -2346,3 +2346,27 @@ Every write that locks more than one receivable takes the row locks in ascending
 
 A lock conflict that still happens (40P01 / 40001) is turned into `LockConflict` (`repositories/memory.ts`) by `asLockConflict`, and the route answers 409, never 500. Postgres rolled the transaction back, so nothing was written. A new multi-receivable write uses the same helper and the same mapping.
 
+## Patterns added by MUT-224 (2026-10-15)
+
+### Pattern: A row whose first cell holds a button links from another cell
+When a clickable `HostedTable` row already has a button in its first cell (the Payments expander), put the row-link in another cell with `linkColumn`, gate rows with `canOpen`, and have every inner button `stopPropagation` so it never opens the row too. Never nest the row-link around a button.
+**Instances**: `PaymentsList` (`linkColumn="received"`), `ReceivablesList` (Record payment stops propagation).
+
+### Pattern: One drawer for two record kinds calls both reads unconditionally
+`RedateDrawer` calls `useReceivable(…, kind === 'owed')` and `usePayment(…, kind === 'payment')` every render and picks one, so hooks never run conditionally. A new version refills the form through a render-time adjustment, not an effect, and only after a 409's re-read or when the field is untouched: a background refetch never replaces typed input. The drawer also re-checks the gate (`canRedate…`) on the record it loaded, since a GET can succeed where the PATCH would 404, and a save that answers after unmount neither closes nor toasts.
+**Instances**: `RedateDrawer`.
+
+## Patterns added by MUT-227 (2026-10-15)
+
+### Pattern: A money date goes through one composite check, never hand-paired checks
+An income-like date (income, settle, re-date, conversion, income filing) is parsed with `pastMoneyDate(raw, today, field)` from `server/src/income/compose.ts`: valid, not later than `today`, not more than `DAYS_IN_PAST_LIMIT` days back. An expense date uses `expenseOccurredOn` (floor, no future check). `today` is always `todayFor(organization, now)`. A query filter (`from`/`to`) uses the plain iso parser instead, so it can still reach old rows.
+**Instances**: `routes/{income,receivables,conversions,inbox}.ts`, `redateTo`, `expensePatch`.
+
+### Pattern: A range refusal names its bound
+A `DATE_INVALID` raised by a range check carries `details.bound: 'past' | 'future'` (`DateBound`). A client branches on `bound` for its message and never redoes the date arithmetic; with no `bound` (an older server) it keeps its old message.
+**Instances**: `assertNotTooOld`, `assertNotFuture`, `assertNotAbsurdDate`; the portal reads it once with `apiErrorBound` (`src/hosted/api/client.ts`) in the income, expense and conversion mappers.
+
+### Pattern: An edit re-checks a date only when it changes
+A PATCH that accepts a date compares it with the stored one first and validates only a changed value. Clients (the portal's drawers) resend every field, and a row stored before a rule existed must stay editable.
+**Instances**: `expensePatch`, the conversion and inbox PATCH routes (MUT-227).
+

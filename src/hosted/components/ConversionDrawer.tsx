@@ -84,6 +84,7 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
     amountInvalid: t('hosted.conversions.errors.amountInvalid'),
     toAmountInvalid: t('hosted.conversions.errors.toAmountInvalid'),
     dateInvalid: t('hosted.conversions.errors.dateInvalid'),
+    dateTooOld: t('hosted.conversions.errors.dateTooOld'),
     sameCurrency: t('hosted.conversions.errors.sameCurrency'),
     conflict: t('hosted.conversions.errors.conflict'),
     network: t('hosted.conversions.errors.network'),

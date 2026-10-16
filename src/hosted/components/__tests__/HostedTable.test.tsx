@@ -106,3 +106,32 @@ describe('HostedTable row-link (MUT-194, D8/D11)', () => {
     expect(css).toMatch(/\.row-link:focus-visible\s*\{[^}]*box-shadow:\s*var\(--focus-ring\)/);
   });
 });
+
+describe('HostedTable linkColumn and canOpen (MUT-224, eng review R5)', () => {
+  function renderWith(props: { linkColumn?: string; canOpen?: (row: Row) => boolean; onRowClick?: (row: Row) => void }) {
+    render(<HostedTable label="Ledger" columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={props.onRowClick ?? vi.fn()} linkColumn={props.linkColumn} canOpen={props.canOpen} />);
+    return screen.getByRole('table', { name: 'Ledger' });
+  }
+
+  it('linkColumn puts the row-link in that column instead of the first', () => {
+    const table = renderWith({ linkColumn: 'amount' });
+    const buttons = within(table).getAllByRole('button');
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveTextContent('$100.00');
+    const firstRowCells = within(table).getAllByRole('row')[1]!.querySelectorAll('td');
+    expect(buttons[0]!.closest('td')).toBe(firstRowCells[1]);
+    expect(firstRowCells[0]!.querySelector('button')).toBeNull();
+  });
+
+  it('a row canOpen refuses has no row-link, no clickable look and no click handler', async () => {
+    const user = userEvent.setup();
+    const onRowClick = vi.fn();
+    const table = renderWith({ onRowClick, canOpen: (r) => r.id === 'r1' });
+    const [, open, closed] = within(table).getAllByRole('row');
+    expect(open).toHaveClass('clickable');
+    expect(closed).not.toHaveClass('clickable');
+    expect(within(closed!).queryByRole('button')).toBeNull();
+    await user.click(within(table).getByText('$200.00'));
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+});

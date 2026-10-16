@@ -4,7 +4,7 @@ import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreem
 import { postDueItems } from '../agreements/posting.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
-import { assertNotFuture } from '../income/compose.js';
+import { pastMoneyDate } from '../income/compose.js';
 import { formatMoney, type Currency } from '../money.js';
 import { checkCredit, splitCredit } from '../payments/credit.js';
 import { InsufficientCapacity, LockConflict } from '../repositories/memory.js';
@@ -156,7 +156,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Receivables'],
       summary: 'Settle a receivable directly, with one payment and one allocation',
       description:
-        'For a session\'s own captures, not Malafat\'s multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today, matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404.',
+        'For a session\'s own captures, not Malafat\'s multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404.',
       security: [{ session: [] }, { deviceSession: [] }],
       middleware: [requireScope('payments:write'), idempotent(store, 'receivables.settle')] as const,
       request: { params: ReceivableIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(SettleReceivableRequestSchema) },
@@ -181,8 +181,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (amountMinor > outstanding) {
         throw validationError('ALLOCATION_EXCEEDS_OUTSTANDING', 'The amount exceeds what is outstanding on this receivable', { outstanding: formatMoney({ minor: outstanding, currency }) });
       }
-      const paidAt = body.paidAt ? assertIsoDate(body.paidAt, 'paidAt') : today;
-      assertNotFuture(paidAt, today, 'paidAt');
+      const paidAt = body.paidAt ? pastMoneyDate(body.paidAt, today, 'paidAt') : today;
       const requestId = c.get('requestId');
 
       let created;
