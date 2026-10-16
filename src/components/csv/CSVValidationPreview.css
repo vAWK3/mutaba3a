@@ -1,15 +1,15 @@
 .csv-validation-preview {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
   max-height: 60vh;
 }
 
 /* Stats Summary */
 .validation-stats {
   display: flex;
-  gap: 1rem;
-  padding: 1rem;
+  gap: var(--space-4);
+  padding: var(--space-4);
   background: var(--surface-2);
   border-radius: 0.5rem;
   flex-wrap: wrap;
@@ -18,7 +18,7 @@
 .validation-stats .stat {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 .validation-stats .stat-label {
@@ -71,7 +71,7 @@
 }
 
 .validation-table th {
-  padding: 0.75rem 0.5rem;
+  padding: var(--space-3) var(--space-2);
   text-align: left;
   font-weight: 600;
   color: var(--text-secondary);
@@ -79,7 +79,7 @@
 }
 
 .validation-table td {
-  padding: 0.75rem 0.5rem;
+  padding: var(--space-3) var(--space-2);
   border-bottom: 1px solid var(--table-border);
 }
 
@@ -143,7 +143,7 @@
   height: 20px;
   border-radius: 50%;
   font-size: var(--text-label);
-  margin-right: 0.5rem;
+  margin-right: var(--space-2);
 }
 
 .status-icon.status-new {
@@ -168,7 +168,7 @@
 /* Type Badge */
 .type-badge {
   display: inline-block;
-  padding: 0.25rem 0.5rem;
+  padding: var(--space-1) var(--space-2);
   background-color: var(--accent-subtle);
   color: var(--on-accent-subtle);
   border-radius: 0.25rem;
@@ -185,21 +185,21 @@
 }
 
 .details-text > div {
-  margin-bottom: 0.125rem;
+  margin-bottom: var(--space-0-5);
 }
 
 /* Issues */
 .issues-list {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 .issue {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.5rem;
+  gap: var(--space-2);
+  padding: var(--space-2);
   border-radius: 0.25rem;
   font-size: var(--text-label);
   line-height: 1.4;
@@ -224,8 +224,8 @@
 .validation-notice {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-radius: 0.5rem;
   font-size: var(--text-label);
 }
