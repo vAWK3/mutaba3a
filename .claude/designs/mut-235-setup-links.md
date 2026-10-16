@@ -151,8 +151,9 @@ Nothing new in the COMPONENT_REGISTRY (server only). New pattern worth recording
 
 ## 6. Tech debt to record
 
-- TD: setup-token rows are never pruned. Add pruning if the table ever passes ~10k rows.
-- TD: admin user detail doesn't show whether a link is pending or a password is set. Add it if support needs it.
+- TD-146: setup-token rows are never pruned. Add pruning if the table ever passes ~10k rows.
+- TD-147: admin user detail doesn't show whether a link is pending or a password is set. Add it if support needs it.
+- TD-148 (found in the build): a JSON content-type with an empty body is a 500 on optional-body routes, including `…/setup-link`; the CLI and tests send `{}`.
 
 ## 7. Files
 
@@ -160,15 +161,19 @@ New: `server/src/auth/account-setup.ts`, `server/src/routes/account-setup.ts`, `
 
 Touched: `prisma/schema.prisma`, `repositories/ports.ts`, `repositories/memory.ts`, `repositories/prisma.ts`, `routes/admin-users.ts`, `schemas.ts`, `errors.ts`, `serializers.ts` (if any), `app.ts` (route + API_VERSION), `scripts/users.ts`, `scripts/seed-demo-account/adminAccount.ts`, `__tests__/no-self-registration.test.ts`, `__tests__/route-security.test.ts`, `__tests__/routes-users.test.ts`, `__tests__/logger.test.ts`, ~20 route tests (helper switch), `src/hosted/api/schema.d.ts`, `server/README.md`, `.claude/{DECISIONS,CHANGELOG,SYSTEM_OVERVIEW,PATTERNS,TECH_DEBT,TEST_PLAN}.md`, `.claude/designs/hosted-portal.md` §3.
 
-## 8. QA scenarios (release-qa, app `portal`)
+## 8. QA scenarios (release-qa)
 
-1. **Operator onboards a person with a link** (`tier: core`): the operator provisions a user (admin API with the QA admin token), checks the link (valid), sets a password through the setup route, then signs in on the portal's sign-in page with that password and lands on Home.
-2. **A used link can't be used again**: redeem, then check again → `used`, and a second redeem → 410.
-3. **A reset keeps the old password until the link is used**: rotate, sign in with the old password (works), redeem, sign in with the old password (refused), sign in with the new one (works).
+Build finding (2026-10-16): the release-qa catalog has no API app. The `portal` app stubs every `/v1` call with `page.route`, and `server/**` is in no app's `watch`. So a server-only ticket can't carry a passing Playwright spec. MUT-223 set the precedent: its scenarios moved to its portal ticket (MUT-224), and its own definition of done was the server suite. MUT-235 follows it.
 
-4. **A takeover reset locks the account at once** (D2): rotate with `--lock`; the old password is refused and an open portal session is signed out right away; redeem the link; sign in with the new password.
+**Automated here, in the server suite** (the operator half has no UI; these are the behaviours scenarios 1–4 promised):
+1. Operator onboards a person with a link → `routes-account-setup.test.ts` "sets the password; the person then signs in on the portal and the app with it", and `users-cli.test.ts` "create prints … the one-time setup link".
+2. A used link can't be used again → `routes-account-setup.test.ts` "refuses a used, expired, superseded or unknown link with 410 and why".
+3. A reset keeps the old password until the link is used → `routes-users.test.ts` "a reset issues a link and changes nothing else".
+4. A takeover reset locks the account at once (D2) → `routes-users.test.ts` "with lock, the old password and every session stop working at once", and `users-cli.test.ts` "rotate --lock".
 
-MUT-236 later replaces the API step in scenario 1 with the `/setup` UI.
+**Handed to MUT-236** (its brief must carry them as `qa/features/portal/setup.yaml` plus a passing spec against stubbed `/v1`): open a valid link, set a password, land signed in, in EN and AR; an expired, used, superseded or invalid link shows its own message and no form; a too-short password is refused inline; the fragment is gone from the address bar after reading.
+
+`release-qa lint` (2026-10-16): no errors; portal 100% of 98 watched files mapped. The regenerated `src/hosted/api/schema.d.ts` is already claimed.
 
 ---
 

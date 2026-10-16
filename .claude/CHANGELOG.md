@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-16 — Setup links replace printed passwords (MUT-235, ADR-088, API 1.29.0-mut235)
+
+**Why:** `provision:user` and `rotate:password` printed a password Basel delivered by hand, so until it was used the operator knew a working password to someone's money, and nobody could change their own. Onboarding the first paying hosted users needs something people trust, without self-service signup.
+
+### Added
+- `POST /v1/account-setup/check` and `POST /v1/account-setup`: public, same-origin, IP-limited (sharing the sign-in limiter under their own key). Check answers `valid` (email, locale, purpose, expiry) or only `expired | used | superseded | invalid`. Redeem sets a 12–128 character password, signs out every web and device session, issues none, and refuses an unusable link with 410 `SETUP_LINK_UNUSABLE` (`details.state`).
+- `POST /admin/v1/users/{id}/setup-link` (`validHours` 1–720, `lock`): an operator reset as a link. The current password works until the link is used; `lock` (a suspected takeover) clears it and revokes every session at once. A disabled user is 409 `USER_DISABLED`.
+- `npm run rotate:password -- --lock`, and `--valid-hours` on `provision:user` and `rotate:password`.
+- Audit actions `user.setup_link_issued` (ADMIN) and `user.password_set` (USER).
+
+### Changed
+- `POST /admin/v1/users` creates the account with no password and returns `setupLink` in place of `initialPassword` (optional `setupLinkValidHours`). The CLI prints the link once.
+- `npm run seed:demo-account` sets its fresh password through a setup link, the way a person would; `MUTABA3A_SEED_PASSWORD` behaves as before.
+- `no-self-registration.test.ts` pins the public operations to exactly sign-in and the setup-link pair; ADR-037 §1 carries an override note.
+
+### Removed
+- `POST /admin/v1/users/{id}/password` and the `initialPassword` / `PasswordResetResponse` shapes. Only the operator CLI and the seed script called them; both are updated.
+
+### Technical
+- Migration `20261016090000_mut235_account_setup_tokens` (additive): `account_setup_tokens`, enum `SetupLinkPurpose`, `users.passwordHash` nullable. `AccountSetupRepository` (memory + Prisma): issue cancels open links under a `FOR NO KEY UPDATE` row lock; redeem claims inside the password transaction. Operator-only in the store guard.
+- `server/src/auth/account-setup.ts` (`SETUP_LINK_POLICY`, `NEW_PASSWORD_POLICY`, `setupLinkState`, `setupUrl`), `server/src/routes/account-setup.ts`; route suites provision through `server/src/__tests__/helpers/provision.ts`; OpenAPI and `src/hosted/api/schema.d.ts` regenerated; version pins moved to 1.29.0-mut235.
+- Release: the `/setup` page is MUT-236, served by the same server build, so ship both in one `make release server`.
+
 ## [Unreleased] - 2026-10-15 — Hosted API serves reference exchange rates (MUT-228, ADR-087, API 1.28.0-mut228)
 
 **Why:** the phone (MUT-229) shows what a foreign-currency amount is in the profile's own currency and the market rate beside a logged conversion. The server had no rates, and copying the web's browser-side Frankfurter call into a second client would drift.

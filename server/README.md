@@ -25,8 +25,12 @@ MUTABA3A_ADMIN_TOKEN=$(grep MUTABA3A_ADMIN_TOKEN .env | cut -d= -f2) \
 Then from Malafat, Settings › Money & Mutaba3a › Connect, paste the secret.
 
 Give a person access to the hosted portal (MUT-37). Users are operator-issued
-only: there is no signup, invite or self-service reset anywhere. The one-time
-password prints once, on its own line:
+only: there is no signup, invite or "forgot password" anywhere. Since MUT-235
+(ADR-088) the operator never handles a password: `provision:user` and
+`rotate:password` print a one-time **setup link** once, on its own line (72 hours;
+`--valid-hours 1–720`). Send it over a secure channel. The person opens it, sets
+their own password (12–128 characters) on the portal's `/setup` page (MUT-236),
+then signs in on the portal or the app:
 
 ```bash
 export MUTABA3A_ADMIN_TOKEN=$(grep MUTABA3A_ADMIN_TOKEN .env | cut -d= -f2)
@@ -34,7 +38,8 @@ npm run provision:user -- --email nour@firm.ps --name "Nour Haddad" --organizati
 npm run provision:user -- --email solo@me.ps --name "Solo" --currency ILS --timezone Asia/Jerusalem   # no firm (MUT-120)
 npm run grant:user -- --email nour@firm.ps --organization-id <another uuid>   # a second firm
 npm run revoke:user -- --email nour@firm.ps --organization-id <uuid>
-npm run rotate:password -- --email nour@firm.ps                               # operator reset
+npm run rotate:password -- --email nour@firm.ps                               # reset: a new link; their current password works until it is used
+npm run rotate:password -- --email nour@firm.ps --lock                        # suspected takeover: the password and every session stop now
 npm run disable:user -- --email nour@firm.ps                                  # enable:user undoes it
 ```
 
@@ -95,7 +100,9 @@ person may open. Try it locally:
 
 ```bash
 curl -si -c /tmp/jar -H 'origin: http://localhost:8787' -H 'content-type: application/json' \
-  -d '{"email":"nour@firm.ps","password":"<one-time password>"}' http://localhost:8787/v1/sessions
+  -d '{"token":"<the part of the setup link after #>","password":"a-password-you-choose"}' http://localhost:8787/v1/account-setup
+curl -si -c /tmp/jar -H 'origin: http://localhost:8787' -H 'content-type: application/json' \
+  -d '{"email":"nour@firm.ps","password":"a-password-you-choose"}' http://localhost:8787/v1/sessions
 curl -s -b /tmp/jar http://localhost:8787/v1/me
 ```
 

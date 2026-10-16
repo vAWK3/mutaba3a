@@ -2370,3 +2370,12 @@ A `DATE_INVALID` raised by a range check carries `details.bound: 'past' | 'futur
 A PATCH that accepts a date compares it with the stored one first and validates only a changed value. Clients (the portal's drawers) resend every field, and a row stored before a rule existed must stay editable.
 **Instances**: `expensePatch`, the conversion and inbox PATCH routes (MUT-227).
 
+## Patterns added by MUT-235 (2026-10-16)
+
+### Pattern: A single-use link token is an HMAC digest claimed inside the side-effect transaction
+A one-time link carries 256 random bits in the URL **fragment** (never sent to a server, so never in a log or Referer). The store keeps only `sessionDigest(pepper, token)`, the same digest sessions use. Redeeming claims the row with a conditional update (`usedAt IS NULL AND cancelledAt IS NULL AND expiresAt > at`) inside the transaction that performs the effect, after locking the owner's row (`FOR NO KEY UPDATE`). A lost claim writes nothing, and of two concurrent redeems exactly one wins. Issuing a new one cancels the owner's open ones under the same lock.
+**Instances**: `AccountSetupRepository.issue` / `redeem` (memory + Prisma), `routes/account-setup.ts`.
+
+### Pattern: Tests provision a person the way the person would
+A route test that needs a signed-in person calls `provisionUser(app, body)` from `server/src/__tests__/helpers/provision.ts`: admin create, then the setup link redeemed with a known password. No test reaches into the store to set a password, so the setup flow is exercised by every suite that signs in.
+**Instances**: ~20 route suites, `routes-users.test.ts`.

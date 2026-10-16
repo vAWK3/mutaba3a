@@ -64,6 +64,7 @@
 | ADR-069 | Import Writes Expenses Through expenseRepo; a Legacy kind:'expense' Transaction Gets Its Own Minimal Edit Drawer, Not IncomeDrawer | Active | 2026-10 |
 | ADR-070 | Hosted Conversions Are Their Own Prisma Model, Create + Read Only, Behind New Hosted-Only UI | Active; §2 superseded by ADR-075 (2026-10-14) | 2026-10 |
 | ADR-075 | A Conversion Is Edited With If-Match and Soft-Deleted, Like an Expense; Malafat's Audit Feed Never Lists It (Supersedes ADR-070 §2) | Active | 2026-10 |
+| ADR-088 | Operator-Issued One-Time Setup Links Replace Printed Passwords; the Only Public Account Routes Are Sign-In and Redeeming a Link (Partial Override of ADR-037 §1) | Active | 2026-10 |
 
 ---
 
@@ -665,6 +666,7 @@ The superseded ADRs keep their text in place, so numbers and links stay stable; 
 | ADR-012 Operation Log (CRDT-like) for Sync | ADR-053 | 2026-10-12 | Device sync retired; the op-log and its table were dropped (Dexie v21) |
 | ADR-013 Local-Only Sync (LAN + File Bundle) | ADR-053 | 2026-10-12 | Device sync retired product-wide; local↔hosted sync is off the roadmap |
 | ADR-070 §2 (and §5's create-only drawer, no JOD) | ADR-075 | 2026-10-14 | MUT-194: a mistaken conversion is fixed or removed, not reversed with a second entry |
+| ADR-037 §1, "no … password-reset route" and operator-delivered passwords only | ADR-088 | 2026-10-16 | MUT-235: the operator issues a one-time setup link; the person sets their own password through one public route |
 
 ---
 
@@ -1603,6 +1605,15 @@ and gives no hosted web login. Full design, cost and test strategy:
    `MUTABA3A_ADMIN_TOKEN` and `npm run` wrappers. **No signup, invite or
    password-reset route exists in any environment**; a route-inventory test
    and a bundle test assert it.
+
+   > **Override note (2026-10-16, ADR-088, MUT-235).** Accounts are still
+   > created, granted, reset and disabled only by the operator, but the
+   > operator no longer handles passwords. Creating a user or resetting one
+   > issues a one-time setup link, and the person sets their own password
+   > through the one public route that redeems it (`POST /v1/account-setup`,
+   > plus `…/check`). Still no signup, invite or "forgot password" route:
+   > `no-self-registration.test.ts` now pins the public operations to exactly
+   > sign-in and that pair.
 2. **A hosted profile is `Membership × Organization`**, not a table. The
    client-side type is `ProfileSource = 'local' | 'hosted'`; the server only
    ever emits `hosted`. **Hosted profile data is a separate dataset from local
@@ -3316,3 +3327,26 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - The phone calls Frankfurter itself, like the web: two copies of the provider logic and the JOD derivation.
 - Persisting the last snapshot in the database so a cold start can serve stale: a table, a migration and two store implementations for a display-only hint the phone already caches (eng review D3).
 - A route-specific 400 for a bad `base`: the only 400 in the API (eng review D2).
+
+## ADR-088: Operator-Issued One-Time Setup Links Replace Printed Passwords; the Only Public Account Routes Are Sign-In and Redeeming a Link
+
+**Status**: Active (partial override of ADR-037 §1)
+**Date**: 2026-10-16
+**Context**: MUT-235, epic MUT-34. `provision:user` and `rotate:password` printed a password Basel delivered by hand. Until it was used, the operator knew a working password to someone's money, and nobody could ever change their own. Onboarding the first paying hosted users needs something people trust, without opening self-service signup (ADR-037 §1, MUT-185). Decided with Basel on 2026-10-16 (pm-intake); eng review the same day. Design: `.claude/designs/mut-235-setup-links.md`.
+
+**Decision**:
+1. **The operator never handles a password.** `POST /admin/v1/users` creates the account with no password (`users.passwordHash` NULL) and returns a one-time setup link. `POST /admin/v1/users/{id}/setup-link` replaces `…/password` for resets. The CLI prints the link once, after a "shown once" line.
+2. **A link is a 256-bit token in the URL fragment** (`<portal origin>/setup#<token>`), so it never reaches a request line, a log or a Referer. The store keeps only its HMAC-SHA256 under the session pepper (`sessionDigest`), so rotating the pepper also voids open links. A link lasts 72 hours (`--valid-hours`, 1–720), works once, and a newer link for the same person cancels it (`superseded`). Issuing locks the person's row, so they never hold two open links.
+3. **A reset changes nothing until the link is used**: the current password and sessions keep working. **`--lock`** (eng review D2, a suspected takeover) clears the password and revokes every web and device session in the same transaction as the link. Disabling can't stand in for it, because a disabled person's link is refused.
+4. **Two public routes, the only ones besides sign-in**: `POST /v1/account-setup/check` (valid → email, locale, purpose, expiry; otherwise only `expired | used | superseded | invalid`) and `POST /v1/account-setup` (a new password of 12–128 characters, NIST 800-63B, no composition rules). Both are same-origin only and share the sign-in IP limiter under their own key. A refused redeem is 410 `SETUP_LINK_UNUSABLE` with `details.state`.
+5. **Redeeming claims the link inside the transaction that sets the password**: it clears any lockout, revokes every session (`password_set`) and audits `user.password_set` as the USER. A lost or refused claim writes nothing. Redeeming issues **no session**: the portal signs in through `POST /v1/sessions`, so there is still one way to mint a session.
+6. **An account with no password signs in exactly like a wrong password**: `signIn` already verifies against the dummy hash when the stored one is null. That is one argon2 verify and the same 401 body. Pending accounts take the wrong-password path (a failure is recorded), as every existing account already does.
+7. Setup links are set in the browser only: `/setup` stays out of `ALLOWED_APPLINKS_PATHS`, so the phone needs no new screen. API 1.29.0-mut235; audit actions `user.setup_link_issued` (ADMIN, metadata purpose / expiresAt / lock) and `user.password_set` (USER) replace `user.password_reset`.
+
+**Alternatives rejected**:
+- A temporary password with a forced change at first sign-in: the operator still knows a working password until then, an unused one stays live, and the phone app would need a forced-change state.
+- Emailing the link: there is no email provider. Basel delivers links by hand, as before.
+- Issuing a session on redeem: a second way to mint one, with its own cookie and CSRF surface.
+- Plain SHA-256 of the token (the ticket's wording): the session HMAC is the same cost, one helper instead of two, and stronger.
+
+**Consequences**: MUT-236 (portal `/setup` page) is served by the same server build, so both ship in one `make release server`, and no server release should go out between their merges. MUT-237/238 (change your own password) reuse `NEW_PASSWORD_POLICY`. Old token rows are never pruned (TD-146).
