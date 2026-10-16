@@ -7,6 +7,7 @@ import { PrismaLedgerStore } from './repositories/prisma.js';
 import { GcsAttachmentStorage } from './attachments/storage.js';
 import { SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
 import { createArgon2Hasher } from './auth/users.js';
+import { CachedFxRates, FrankfurterSource } from './fx-rates.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -14,6 +15,12 @@ const store = PrismaLedgerStore.connect(config.DATABASE_URL);
 const rateLimiter = new SlidingWindowRateLimiter(config.RATE_LIMIT_PER_MINUTE);
 const signInThrottle = new SignInThrottle();
 const signInIpLimiter = new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute);
+
+const fxRates = new CachedFxRates({
+  source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
+  ttlMs: config.FX_RATES_TTL_MINUTES * 60_000,
+  logger,
+});
 
 const app = createApp({
   store,
@@ -52,6 +59,7 @@ const app = createApp({
           androidSha256Fingerprints: config.ANDROID_SHA256_FINGERPRINTS.split(','),
         }
       : null,
+  fxRates,
 });
 if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; attachments routes answer 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
@@ -60,6 +68,9 @@ if (!config.APPLE_TEAM_ID) logger.warn('APPLE_TEAM_ID/APPLE_BUNDLE_ID/ANDROID_PA
 const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
   logger.info({ port: info.port, env: config.NODE_ENV, keyEnvironment: config.API_KEY_ENVIRONMENT }, 'mutaba3a-api listening');
 });
+// MUT-228: production runs one instance, so every deploy starts with an empty rate cache. Fill it now
+// rather than on the first phone's request; a failure is logged and the first request tries again.
+void fxRates.warm();
 
 const pruneTimer = setInterval(() => {
   const now = new Date();

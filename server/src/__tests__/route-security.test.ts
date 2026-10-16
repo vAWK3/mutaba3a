@@ -60,6 +60,9 @@ const INBOX_OPERATIONS = [
 /** MUT-182: a person's own standalone profiles — session-only, naming no X-Mutaba3a-Profile (like /v1/me). */
 const PROFILE_OPERATIONS = ['POST /v1/profiles', 'PATCH /v1/profiles/{profileId}', 'GET /v1/profiles/{profileId}/type-change'];
 
+/** MUT-228: reference exchange rates — session-only, naming no X-Mutaba3a-Profile (like /v1/me). */
+const FX_OPERATIONS = ['GET /v1/fx-rates'];
+
 /** The portal's read surface (hosted-portal.md §5–§6), the two identity routes, and the expense operations. */
 const SESSION_OPERATIONS = [
   ...EXPENSE_OPERATIONS,
@@ -67,6 +70,7 @@ const SESSION_OPERATIONS = [
   ...CONVERSION_OPERATIONS,
   ...INBOX_OPERATIONS,
   ...PROFILE_OPERATIONS,
+  ...FX_OPERATIONS,
   'DELETE /v1/sessions/current',
   'GET /v1/agreements',
   'GET /v1/agreements/{agreementId}',
@@ -231,7 +235,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
-    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS].sort());
+    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...FX_OPERATIONS].sort());
     for (const op of sessionOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
@@ -241,7 +245,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every device-session-only operation (MUT-64)', async () => {
     const deviceOnly = operations.filter((o) => accepts(o, 'deviceSession') && !accepts(o, 'apiKey'));
-    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS].sort());
+    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...FX_OPERATIONS].sort());
     for (const op of deviceOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);

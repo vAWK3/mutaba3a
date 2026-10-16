@@ -142,3 +142,36 @@ describe('loadConfig — app association files (MUT-111)', () => {
     },
   );
 });
+
+describe('loadConfig — reference exchange rates (MUT-228)', () => {
+  it('defaults to Frankfurter, a 4-hour window and a 3-second timeout', () => {
+    expect(loadConfig(base)).toMatchObject({
+      FX_RATES_URL: 'https://api.frankfurter.dev/v1/latest',
+      FX_RATES_TTL_MINUTES: 240,
+      FX_RATES_TIMEOUT_MS: 3000,
+    });
+  });
+
+  it('accepts values inside the bounds', () => {
+    const config = loadConfig({ ...base, FX_RATES_URL: 'http://localhost:9999/latest', FX_RATES_TTL_MINUTES: '15', FX_RATES_TIMEOUT_MS: '10000' });
+    expect(config).toMatchObject({ FX_RATES_URL: 'http://localhost:9999/latest', FX_RATES_TTL_MINUTES: 15, FX_RATES_TIMEOUT_MS: 10000 });
+    expect(loadConfig({ ...base, FX_RATES_TTL_MINUTES: '1440', FX_RATES_TIMEOUT_MS: '500' })).toMatchObject({ FX_RATES_TTL_MINUTES: 1440, FX_RATES_TIMEOUT_MS: 500 });
+  });
+
+  it('accepts plain http only for a local stub', () => {
+    expect(loadConfig({ ...base, FX_RATES_URL: 'http://127.0.0.1:9999/latest' }).FX_RATES_URL).toBe('http://127.0.0.1:9999/latest');
+    expect(loadConfig({ ...base, FX_RATES_URL: 'http://localhost/latest' }).FX_RATES_URL).toBe('http://localhost/latest');
+  });
+
+  it.each([
+    ['FX_RATES_URL', 'not a url'],
+    ['FX_RATES_URL', 'http://api.frankfurter.dev/v1/latest'],
+    ['FX_RATES_URL', 'ftp://localhost/latest'],
+    ['FX_RATES_TTL_MINUTES', '14'],
+    ['FX_RATES_TTL_MINUTES', '1441'],
+    ['FX_RATES_TIMEOUT_MS', '499'],
+    ['FX_RATES_TIMEOUT_MS', '10001'],
+  ])('refuses %s=%s at boot, naming the variable', (name, value) => {
+    expect(() => loadConfig({ ...base, [name]: value })).toThrow(name);
+  });
+});

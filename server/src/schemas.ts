@@ -5,6 +5,7 @@ import { CONTINGENCY_OUTCOMES, MAX_COMMISSION_RATE_BASIS_POINTS, MIN_COMMISSION_
 import { DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT } from './agreements/compose.js';
 import { MAX_INSTALLMENTS } from './agreements/schedule.js';
 import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
+import { JOD_PER_USD } from './fx-rates.js';
 import { IMPORT_MAX_ROWS } from './import/plan.js';
 import { SUPPORTED_CURRENCIES } from './money.js';
 import { ITEM_STATUSES } from './agreements/status.js';
@@ -778,6 +779,27 @@ export const ContingencyTermsSchema = z
     upfrontTreatment: UpfrontTreatmentSchema,
   })
   .openapi('ContingencyTerms');
+
+/** MUT-228 (ADR-087): reference exchange rates for display. Never stored on a record. */
+export const FxRatesQuerySchema = z.object({
+  base: CurrencySchema.openapi({ description: 'The currency the rates are quoted against; the phone sends the target profile’s default currency' }),
+});
+export const FxRateSchema = z
+  .object({
+    currency: CurrencySchema,
+    rate: z.number().positive().openapi({ description: 'Units of `currency` per 1 `base`, rounded to 6 decimal places', example: 0.322356 }),
+    derived: z.boolean().openapi({ description: `True when exactly one side of the pair is JOD: the ECB publishes no JOD rate, so it comes from the USD peg (1 USD = ${JOD_PER_USD} JOD)` }),
+  })
+  .openapi('FxRate');
+export const FxRatesResponseSchema = z
+  .object({
+    base: CurrencySchema,
+    rateDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).openapi({ description: 'The ECB reference date the rates are for (its last business day), YYYY-MM-DD', example: '2026-10-15' }),
+    fetchedAt: z.string().datetime().openapi({ description: 'When this server instance read the rates from the provider' }),
+    source: z.enum(['live', 'stale']).openapi({ description: 'live = inside the cache window; stale = the last refresh failed and these are the last good rates' }),
+    rates: z.array(FxRateSchema).openapi({ description: 'Every supported currency, base included (rate 1), in the supported-currency order' }),
+  })
+  .openapi('FxRatesResponse');
 
 export const VatRateSchema = z
   .object({ id: uuid, rateBasisPoints: z.number().int().min(0).max(10000), effectiveFrom: IsoDateSchema, createdAt: z.string().datetime() })

@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-15 — Hosted API serves reference exchange rates (MUT-228, ADR-087, API 1.28.0-mut228)
+
+**Why:** the phone (MUT-229) shows what a foreign-currency amount is in the profile's own currency and the market rate beside a logged conversion. The server had no rates, and copying the web's browser-side Frankfurter call into a second client would drift.
+
+### Added
+- `GET /v1/fx-rates?base=` for sessions and device sessions (no API keys, no profile header): every supported currency against `base`, the ECB rate date, when this instance fetched them, and `live` or `stale`.
+- JOD is derived from the USD peg (0.709) and marked `derived`; the ECB publishes no JOD rate.
+- Error code `FX_RATES_UNAVAILABLE` (503): no rates to serve. A missing or unknown `base` is 422 `VALIDATION_FAILED`.
+- Config: `FX_RATES_URL` (https; plain http only for a localhost stub), `FX_RATES_TTL_MINUTES` (240), `FX_RATES_TIMEOUT_MS` (3000).
+
+### Technical
+- `server/src/fx-rates.ts` (`crossRates`, `FrankfurterSource`, `CachedFxRates`: single-flight, stale on failure, 60 s backoff, a 7-day age cap on the ECB rate date (future or invalid dates refused too), no redirects, per instance like TD-017; filled once at startup by `warm()`, whose failure does not start the backoff), `server/src/routes/fx-rates.ts`, schemas, `app.ts`/`index.ts` wiring; OpenAPI and `src/hosted/api/schema.d.ts` regenerated; version pins in the route tests moved to 1.28.0-mut228.
+
 ## [Unreleased] - 2026-10-15 — Money dates have a ten-year floor (MUT-227, ADR-086, API 1.27.0-mut227)
 
 **Why:** the hosted API accepted any valid past date, so a typo like `0001-01-01` or 2006 for 2026 saved silently. Since MUT-223 a settled entry or payment can also be re-dated, so one typo could move it decades back and skew aging, `lastPaymentOn` and month views.
