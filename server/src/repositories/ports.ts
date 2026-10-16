@@ -1253,6 +1253,12 @@ export interface SessionRecord {
   /** cookie: the browser portal session; device: a native app's bearer token (MUT-64). */
   kind: SessionKind;
   createdAt: Date;
+  /**
+   * MUT-237: when this session last proved the person's current password, `createdAt` at sign-in. The session
+   * middleware refuses one older than the person's `passwordChangedAt`; changing your own password re-stamps the
+   * kept session, so it survives the change while every other one fails. Never moves either deadline.
+   */
+  credentialsVerifiedAt: Date;
   lastSeenAt: Date;
   idleExpiresAt: Date;
   absoluteExpiresAt: Date;

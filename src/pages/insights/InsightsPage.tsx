@@ -524,14 +524,14 @@ export function InsightsPage() {
 
         {/* Monthly Trend Chart */}
         {monthlyTrend.length > 0 && (
-          <div className="monthly-trend-section" style={{ marginTop: 24 }}>
+          <div className="monthly-trend-section" style={{ marginTop: 'var(--space-6)' }}>
             <h3 className="section-title">{t('insights.monthlyTrend.title')}</h3>
-            <div className="monthly-trend-legend" style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 'var(--text-label)' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="monthly-trend-legend" style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-3)', fontSize: 'var(--text-label)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1-5)' }}>
                 <span style={{ width: 12, height: 12, backgroundColor: 'var(--success)', borderRadius: 'var(--radius-xs)' }} />
                 {t('insights.monthlyTrend.income')}
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1-5)' }}>
                 <span style={{ width: 12, height: 12, backgroundColor: 'var(--error)', borderRadius: 'var(--radius-xs)' }} />
                 {t('insights.monthlyTrend.expenses')}
               </span>
@@ -551,11 +551,11 @@ export function InsightsPage() {
                   <div key={m.month} className="monthly-trend-row" style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 12,
-                    marginBottom: 8,
+                    gap: 'var(--space-3)',
+                    marginBottom: 'var(--space-2)',
                   }}>
                     <span className="text-muted text-sm" style={{ minWidth: 70 }}>{m.label}</span>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-0-5)' }}>
                       <div style={{
                         height: 8,
                         backgroundColor: 'var(--success)',
@@ -767,7 +767,7 @@ export function InsightsPage() {
         {/* Outstanding by Client */}
         {outstandingByClient.length > 0 && (
           <>
-            <h3 className="section-title" style={{ marginTop: 24 }}>{t('insights.unpaid.byClient')}</h3>
+            <h3 className="section-title" style={{ marginTop: 'var(--space-6)' }}>{t('insights.unpaid.byClient')}</h3>
             <div className="data-table">
               <table>
                 <thead>
@@ -804,7 +804,7 @@ export function InsightsPage() {
         {/* Outstanding by Project */}
         {outstandingByProject.length > 0 && (
           <>
-            <h3 className="section-title" style={{ marginTop: 24 }}>{t('insights.unpaid.byProject')}</h3>
+            <h3 className="section-title" style={{ marginTop: 'var(--space-6)' }}>{t('insights.unpaid.byProject')}</h3>
             <div className="data-table">
               <table>
                 <thead>
@@ -848,7 +848,7 @@ export function InsightsPage() {
       <TopBar
         title={t('insights.title')}
         filterSlot={
-          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 24, flexWrap: 'nowrap' }}>
+          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 'var(--space-6)', flexWrap: 'nowrap' }}>
             <DateRangeControl
               dateFrom={dateRange.dateFrom}
               dateTo={dateRange.dateTo}
@@ -884,7 +884,7 @@ export function InsightsPage() {
             ))}
           </Select>
 
-          <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8 }}>
+          <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 'var(--space-2)' }}>
             <button
               className="btn btn-secondary"
               onClick={() => window.print()}

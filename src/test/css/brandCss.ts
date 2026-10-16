@@ -568,7 +568,18 @@ const NON_ZERO_PX = /(?<![\w.-])(?:\d*\.\d+|[1-9]\d*)px\b/;
 /** Inner radius = outer token − a border width: the one px a radius may carry. */
 const INNER_RADIUS = /calc\(\s*var\(--radius-[\w-]+\)\s*-\s*\d+px\s*\)/g;
 
-export type LiteralKind = 'colour' | 'radius' | 'font-size' | 'style-element';
+/**
+ * A non-zero px or rem length for spacing (MUT-165). Unlike `PX_OR_REM` it
+ * catches a negative margin (`-8px`), but still skips digits inside a
+ * custom-property name (`--gap-8px`).
+ */
+const LENGTH = String.raw`(?<![\w.])(?<!\w-)(?:\d*\.\d+|[1-9]\d*)(?:px|rem)\b`;
+const SPACING_LENGTH = new RegExp(LENGTH);
+/** padding*, margin* (physical and logical sides), gap, row-gap and column-gap. */
+const SPACING_PROP = /^(?:padding|margin)(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?$|^(?:row-|column-)?gap$/;
+const VAR_NAME = /var\(\s*(--[\w-]+)/g;
+
+export type LiteralKind = 'colour' | 'radius' | 'font-size' | 'spacing' | 'style-element';
 
 export interface Literal {
   line: number;
@@ -584,8 +595,26 @@ function inPrint(node: { parent?: unknown }): boolean {
   return false;
 }
 
-/** Every colour, px radius and px/rem font size written into a stylesheet's declarations, outside print rules. */
-export function cssLiterals(css: string): Literal[] {
+/** The custom properties a stylesheet sets to a raw px or rem length (`--pad: 8px`), outside print rules. */
+export function lengthCustomProperties(css: string): Set<string> {
+  const names = new Set<string>();
+  postcss.parse(css).walkDecls((decl) => {
+    if (decl.prop.startsWith('--') && !inPrint(decl) && SPACING_LENGTH.test(decl.value)) names.add(decl.prop);
+  });
+  return names;
+}
+
+/** A spacing value with a raw length, or one var() hop to a custom property that holds one (D10). */
+function spacingLiteral(value: string, lengths: Set<string>): boolean {
+  return SPACING_LENGTH.test(value) || [...value.matchAll(VAR_NAME)].some((match) => lengths.has(match[1]));
+}
+
+/**
+ * Every colour, px radius, px/rem font size and px/rem spacing written into a
+ * stylesheet's declarations, outside print rules. `lengths` names the custom
+ * properties holding a raw length (by default, those this stylesheet sets).
+ */
+export function cssLiterals(css: string, lengths: Set<string> = lengthCustomProperties(css)): Literal[] {
   const found: Literal[] = [];
   postcss.parse(css).walkDecls((decl) => {
     if (inPrint(decl)) return;
@@ -594,6 +623,7 @@ export function cssLiterals(css: string): Literal[] {
     if (COLOR_LITERAL.test(decl.value)) found.push({ line, kind: 'colour', text });
     if (/radius$/.test(decl.prop) && NON_ZERO_PX.test(decl.value.replace(INNER_RADIUS, ''))) found.push({ line, kind: 'radius', text });
     if (decl.prop === 'font-size' && PX_OR_REM.test(decl.value)) found.push({ line, kind: 'font-size', text });
+    if (SPACING_PROP.test(decl.prop) && spacingLiteral(decl.value, lengths)) found.push({ line, kind: 'spacing', text });
   });
   return found;
 }
@@ -602,9 +632,19 @@ export function cssLiterals(css: string): Literal[] {
 const SCRIPT_COLOR = /(?<!\b(?:href|to)=)(['"`])(#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^'"`\n]*\)|white|black)\1/gi;
 /** A style-object size key given a number, or a px/rem string. */
 const SCRIPT_SIZE = /\b(fontSize|border(?:(?:Top|Bottom|Start|End)(?:Left|Right|Start|End))?Radius)\s*:\s*(?:(['"`])\s*(?:\d*\.)?\d+(?:px|rem)?\s*\2|(?:\d*\.\d+|[1-9]\d*)(?![\w.]))/g;
+/**
+ * A style-object spacing key (MUT-165 D3; key-disjoint from `SCRIPT_SIZE`) given a
+ * non-zero number, which React renders as px, or a string holding a px/rem
+ * length anywhere (`'24px 0'`).
+ */
+const SCRIPT_SPACING = new RegExp(
+  String.raw`\b(?:(?:padding|margin)(?:Inline|Block)?(?:Top|Right|Bottom|Left|Start|End)?|gap|rowGap|columnGap)\s*:\s*` +
+    String.raw`(?:-?(?:\d*\.\d+|[1-9]\d*)(?![\w.])|(['"\x60])[^'"\x60\n]*?${LENGTH}[^'"\x60\n]*\1)`,
+  'g',
+);
 const STYLE_ELEMENT = /<style[\s>]/g;
 
-/** Literals in TS/TSX source: whole-string colours, numeric size keys, and (in TSX) `<style>` elements. */
+/** Literals in TS/TSX source: whole-string colours, numeric size and spacing keys, and (in TSX) `<style>` elements. */
 export function scriptLiterals(code: string, tsx = true): Literal[] {
   const lineAt = (index: number) => code.slice(0, index).split('\n').length;
   const found: Literal[] = [];
@@ -612,6 +652,7 @@ export function scriptLiterals(code: string, tsx = true): Literal[] {
   for (const match of code.matchAll(SCRIPT_SIZE)) {
     found.push({ line: lineAt(match.index), kind: match[1] === 'fontSize' ? 'font-size' : 'radius', text: match[0] });
   }
+  for (const match of code.matchAll(SCRIPT_SPACING)) found.push({ line: lineAt(match.index), kind: 'spacing', text: match[0] });
   if (tsx) for (const match of code.matchAll(STYLE_ELEMENT)) found.push({ line: lineAt(match.index), kind: 'style-element', text: match[0] });
   return found.sort((a, b) => a.line - b.line);
 }

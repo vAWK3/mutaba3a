@@ -83,7 +83,7 @@
 .hp-banner-error .hp-banner-icon { color: var(--error); }
 .hp-banner-info { background: var(--accent-2-subtle); border: 1px solid var(--border); }
 .hp-banner-info .hp-banner-icon { color: var(--accent-2); }
-.hp-banner-icon { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.hp-banner-icon { flex: none; width: 16px; height: 16px; margin-top: var(--space-0-5); }
 
 .hp-readonly {
   display: flex;
@@ -166,8 +166,8 @@
 [dir="rtl"] .hp-ltr-input { text-align: right; }
 
 .hp-password { position: relative; }
-.hp-password .input { padding-right: 64px; }
-[dir="rtl"] .hp-password .input { padding-right: var(--space-3); padding-left: 64px; }
+.hp-password .input { padding-right: var(--space-16); }
+[dir="rtl"] .hp-password .input { padding-right: var(--space-3); padding-left: var(--space-16); }
 .hp-password-toggle {
   position: absolute;
   inset-block-start: 50%;
@@ -230,7 +230,7 @@
   flex: none;
   font-size: var(--text-label);
   font-weight: var(--weight-medium);
-  padding: 1px var(--space-2);
+  padding: var(--space-px) var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--accent-subtle);
   color: var(--on-accent-subtle);
@@ -268,7 +268,7 @@
 .hp-option-sub { display: block; font-size: var(--text-label); color: var(--muted); }
 .hp-popover-foot { border-top: 1px solid var(--divider); margin: var(--space-1-5) 0 0; padding: var(--space-2) var(--space-2-5) var(--space-1); font-size: var(--text-label); color: var(--muted); }
 
-.hp-nav { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-2-5); }
+.hp-nav { display: flex; flex-direction: column; gap: var(--space-0-5); margin-top: var(--space-2-5); }
 .hp-nav a { padding: var(--space-1-5) var(--space-2-5); border-radius: var(--radius-md); color: var(--text-secondary); text-decoration: none; font-size: var(--text-body); }
 .hp-nav a:hover { background: var(--surface-hover); color: var(--text); }
 .hp-nav a.hp-nav-on { background: var(--surface-3); color: var(--text); font-weight: var(--weight-medium); }

@@ -372,6 +372,9 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!u) return null;
       Object.assign(u, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
       this.revokeSessionsOf(u.id, 'password_changed', input.at, input.exceptSessionId);
+      // The kept session is verified as of the change, so the middleware's passwordChangedAt check lets it through.
+      const kept = this.sessionsById.get(input.exceptSessionId);
+      if (kept && kept.userId === u.id && !kept.revokedAt) kept.credentialsVerifiedAt = input.at;
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       return { ...u };
     },
@@ -394,6 +397,7 @@ export class MemoryLedgerStore implements LedgerStore {
         tokenDigest: input.tokenDigest,
         kind: input.kind,
         createdAt: input.at,
+        credentialsVerifiedAt: input.at,
         lastSeenAt: input.at,
         idleExpiresAt: input.idleExpiresAt,
         absoluteExpiresAt: input.absoluteExpiresAt,

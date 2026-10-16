@@ -56,17 +56,24 @@ features:
       - The computed --bg is the light or dark canvas the state calls for, in all four states
       - The focused button has a box-shadow focus ring
   - id: layout
-    title: At 375px and 1280px, in English and Arabic, Home, Clients, Income, a drawer and Settings fit the window
+    title: At 375px and 1280px, in English and Arabic, Home, Clients, Income, a drawer, Settings, the landing page and the privacy page fit the window
     tier: secondary
     paths:
       # Settings › Businesses' Hosted account row: its nowrap button once made Settings scroll sideways at 375px
       - src/pages/settings/HostedAccountEntry.tsx
       - src/pages/settings/HostedAccountEntry.css
+      # MUT-165 D9/D11: the spacing sweep's landing surfaces and the segmented control's inset
+      - src/pages/landing/LandingPage.css
+      - src/pages/landing/PrivacyPolicyPage.css
+      - src/pages/landing/components/HeroSection.css
+      - src/components/ui/SegmentedControl.css
     steps:
       - Set the window to 375 × 812, then 1280 × 720, in each language
-      - Open each surface
+      - Open each surface, then the landing page and the privacy page
+      - On Settings, measure the Language and Theme controls' highlights
     expect:
       - The page never scrolls sideways and the drawer sits inside the window
+      - Each segmented highlight's top and bottom inset equal its track's padding, so it sits centred
       - A screenshot of each surface is attached for review
   - id: chrome-icons
     title: The tab shows the Brand v2 favicon, a cream tile in a light browser and a plum tile in a dark one, and the head has the PNG fallbacks and apple-touch icon (MUT-104)

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '../../support/qa';
+import { attachScreenshot } from '../../support/brand';
 import { OFFICE_A, OFFICE_B, customer, malafatFirm, office } from '../../support/portal';
 import { FakeApi, currencyBlock, customerSummary, payment, project, receivable, attachment, uid } from '../../support/portalApi';
 
@@ -63,6 +64,10 @@ test('signed in, the portal opens on the first profile’s overview and every se
     await expect(rows.nth(3)).toContainText('Client 3');
   });
 
+  await step('Screenshot the shell, for the spacing review (MUT-165 D9)', async () => {
+    await attachScreenshot(page, 'portal-shell-overview-en');
+  });
+
   await step('Switch the overview to USD', async () => {
     await page.getByRole('tab', { name: 'USD' }).click();
     await expect(page).toHaveURL(/currency=USD/);
@@ -86,6 +91,7 @@ test('signed in, the portal opens on the first profile’s overview and every se
     const nav = page.getByRole('navigation', { name: AR.sections });
     await expect(nav.getByRole('link', { name: AR.nav.clients, exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: AR_HOSTED.conversions.title })).toBeVisible();
+    await attachScreenshot(page, 'portal-shell-conversions-ar');
   });
 
   await step('Every figure came from this profile', async () => {

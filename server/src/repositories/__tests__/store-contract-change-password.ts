@@ -71,6 +71,33 @@ export function describeLedgerStoreChangePasswordContract(name: string, makeStor
       }
     });
 
+    it('re-stamps the kept session as verified against the new password, leaving its start and deadlines alone', async () => {
+      const store = await makeStore();
+      const { user } = await person(store, HASH);
+      const current = await openSession(store, user.id, 'device');
+      const other = await openSession(store, user.id, 'cookie');
+      expect(current.credentialsVerifiedAt.toISOString()).toBe(at(1).toISOString());
+      await store.users.changePassword(input({ userId: user.id, exceptSessionId: current.id }));
+      const kept = await store.sessions.findByDigest(current.tokenDigest);
+      // The session middleware refuses a session verified before passwordChangedAt; the kept one is now verified at it.
+      expect(kept?.credentialsVerifiedAt.toISOString()).toBe(at(3).toISOString());
+      expect(kept?.createdAt.toISOString()).toBe(at(1).toISOString());
+      expect(kept?.idleExpiresAt.toISOString()).toBe(at(2).toISOString());
+      expect(kept?.absoluteExpiresAt.toISOString()).toBe(at(9).toISOString());
+      expect((await store.sessions.findByDigest(other.tokenDigest))?.credentialsVerifiedAt.toISOString()).toBe(at(1).toISOString());
+    });
+
+    it("never re-stamps another person's session named as the one to keep", async () => {
+      const store = await makeStore();
+      const { user } = await person(store, HASH);
+      const { user: stranger } = await person(store, HASH);
+      const theirs = await openSession(store, stranger.id);
+      await store.users.changePassword(input({ userId: user.id, exceptSessionId: theirs.id }));
+      const found = await store.sessions.findByDigest(theirs.tokenDigest);
+      expect(found?.credentialsVerifiedAt.toISOString()).toBe(at(1).toISOString());
+      expect(found?.revokedAt).toBeNull();
+    });
+
     it('writes its audit rows', async () => {
       const store = await makeStore();
       const { user, orgIds } = await person(store, HASH);

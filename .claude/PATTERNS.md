@@ -859,9 +859,13 @@ const message = name === 'PaymentRecordError' ? t('drawer.income.savePaymentsCha
 
 The `--color-*`, `--font-size-*` and `--font-weight-*` names are defined nowhere: a reference to one is a dead style. `brand.test.ts` › `references` fails on any new undefined `var(--x)`; MUT-103 emptied the dead-reference allowlist that used to sit here, and the test now simply fails on any new one.
 
-### Pattern: No Literal Colour, Radius or Font Size Outside `src/styles` (MUT-103)
+### Pattern: No Literal Colour, Radius, Font Size or Spacing Outside `src/styles` (MUT-103, MUT-165)
 
-Every colour, px radius and px/rem font size outside `src/styles/` comes from a token — never a hex, `rgb()`/`hsl()`/`oklch()` function call, `white`/`black`, or a literal px/rem. `brand.test.ts` › `literals` (`cssLiterals`/`scriptLiterals` in `src/test/css/brandCss.ts`) enforces this on every `.css`/`.ts`/`.tsx` file; `KNOWN_LITERALS` is the shrink-only escape hatch while a surface is mid-sweep (empty since MUT-103 finished).
+Every colour, px radius, px/rem font size and px/rem spacing outside `src/styles/` comes from a token — never a hex, `rgb()`/`hsl()`/`oklch()` function call, `white`/`black`, or a literal px/rem. `brand.test.ts` › `literals` (`cssLiterals`/`scriptLiterals` in `src/test/css/brandCss.ts`) enforces this on every `.css`/`.ts`/`.tsx` file; `KNOWN_LITERALS` is the shrink-only escape hatch while a surface is mid-sweep (empty since MUT-165 finished).
+
+- **Spacing (MUT-165, ADR-089)**: `padding*`, `margin*` (physical and logical), `gap`, `row-gap`, `column-gap` take a `--space-*` step, `0`, `auto`, `%`, `em`, or `calc()` over tokens. A negative is `calc(var(--space-2) * -1)`; a hairline is `var(--space-px)`; a token never carries a px fallback (`var(--space-4, 16px)` fails). In a TSX style object, write `gap: 'var(--space-2)'`, never `gap: 8`. A size past the scale that one surface needs (a banner's height and the offset that clears it, the landing's section rhythm) is a named token in `theme.css`'s Layout block (`--demo-banner-height`, `--checkbox-size`, `--landing-*`), used for both the size and the offset — not a new scale step, and not `calc()` arithmetic that hides what it means.
+- **No local length variables for spacing**: `--pad: 8px; padding: var(--pad)` fails (the guard follows one `var()` hop). A component custom property read by spacing is set from a token (`--pad: var(--space-2)`).
+- **The scale lives in the brand JSON first** (`space`, mirrored as `--m-space-<n>`; `--space-N` = N × 4px). Adding a step means the JSON, then `mutaba3a-theme.css`, then `theme.css` (the drift tests fail otherwise).
 
 - **The only allowed literals are user data**: a business's or expense category's own colour (`ALLOWED_LITERAL_FILES`, each with a reason — e.g. `src/components/ui/profileAvatarStyle.ts`'s `DEFAULT_BUSINESS_COLOR`). Nothing else is exempt.
 - **No `<style>` element in TSX.** An inline stylesheet is invisible to the CSS guard; move it to a co-located `.css` file (e.g. `RecurringMarkPaidDrawer.css`).
@@ -890,7 +894,7 @@ Every colour, px radius and px/rem font size outside `src/styles/` comes from a 
 | Border | `border-color: var(--border)` | `--color-border` |
 | Font size | `font-size: var(--text-body)` (or the role: label, headline, title, figure, display) | a px literal |
 | Radius | `var(--radius-xs)`, `-sm`, `-md`, `-lg`, `-card`, `-hero`, `-pill` | a px literal |
-| Spacing | `padding: var(--space-4)` | Hardcoded `16px` |
+| Spacing | `padding: var(--space-4)`; inline `style={{ gap: 'var(--space-2)' }}`; negative `calc(var(--space-2) * -1)` | `16px`, `1rem`, `gap: 8`, `var(--space-4, 16px)` (the guard fails on each) |
 | Shadow | `box-shadow: var(--shadow-2)` | `--shadow-md` |
 | Focus | `box-shadow: var(--focus-ring)` | `outline: 2px solid` |
 | Motion | `transition: transform var(--duration-press) var(--ease-spring)`; scale by `var(--press-scale)` | literal ms (off-brand timing; the tokens also zero under reduced motion, and `--press-scale` goes to 1) |
