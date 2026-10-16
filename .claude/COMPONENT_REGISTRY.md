@@ -1760,6 +1760,13 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `format/currencies.ts` `HOSTED_CURRENCIES`, `HostedCurrency` | The one portal currency list, `satisfies readonly Currency[]` so a server-side addition fails typecheck here instead of silently excluding a currency. Shared by `FilterControls`, `ExpenseDrawer` and the profile forms (not yet `incomeForm.ts` — TD-125). |
 | `api/client.ts` `apiErrorReason(error)` | The one `details.reason` string extractor, replacing three near-identical inline reads in the expense/conversion/income error mappers (`fieldOf` is not yet shared the same way — TD-125/TD-136). |
 
+### Account menu (MUT-237, ADR-037 amendment)
+
+| Unit | Purpose |
+|---|---|
+| `shell/AccountDrawers.tsx` | Mounts account-level drawers (`?changePassword=`), a sibling of `ProfileDrawers` so account concerns don't grow that one's unrelated scope; same `go()`/URL-merge pattern, same `ProfileDrawerSearch` key registry (one shared overlay-key set every page's `useReplaceSearch` already carries forward). |
+| `components/ChangePasswordDrawer.tsx` | Current + new password, reusing `setupLink.ts`'s `passwordProblem`/`NEW_PASSWORD_POLICY` and field shape (visible rule hint, inline refusal before any request). A wrong current password is a banner (account doesn't recognise it), not a field error. |
+
 ## Hosted API modules (`server/src`) — reusable across milestones
 
 | Module | Purpose | Reuse |

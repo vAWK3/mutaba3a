@@ -28,6 +28,17 @@
 
 ---
 
+## [Unreleased] - 2026-10-16 — Change your own password (MUT-237, ADR-037 amendment)
+
+**Why:** setting a password only ever happened through an operator-issued setup link (MUT-235/236); nobody signed in could change one they already knew, so a routine password change meant asking Basel for a fresh link.
+
+### Added
+- `POST /v1/me/password` (session or device bearer, organization-independent like `GET /v1/me`): the current password is checked under the same email-keyed `SignInThrottle`/lockout a wrong sign-in would trip, so repeated wrong guesses here lock the account there too. On success: `users.changePassword` (one transaction, the same row-lock discipline ADR-088 §7a added for `--lock`/redeem) sets the hash, revokes every other session — web and device, the caller's own stays live — and audits `user.password_changed` (USER), distinct from `user.password_set`.
+- A wrong current password (or a locked account) answers `403 CURRENT_PASSWORD_WRONG`, not `401` — a new error code, since a 401 here would trip the portal's generic session-expired handler and sign the person out mid-form.
+- The account menu's "Change password" drawer (`?changePassword=true`, a new `AccountDrawers` controller beside `ProfileDrawers`), reusing the setup page's password-rule field shape; a wrong current password shows a banner and keeps the form, a short new password is refused inline.
+- Release-QA `qa/features/portal/account.yaml` (change-password, wrong-current-password, password-rule) + `qa/specs/portal/account.spec.ts`.
+- API 1.30.0-mut237.
+
 ## [Unreleased] - 2026-10-16 — Portal: set your password from a setup link (MUT-236, ADR-088)
 
 **Why:** since MUT-235 a new or reset account gets a one-time link `<portal>/setup#<token>`, and the portal had no page for it, so nobody could finish setting up. Ships in the same `make release server` as MUT-235.

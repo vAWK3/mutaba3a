@@ -1614,6 +1614,21 @@ and gives no hosted web login. Full design, cost and test strategy:
    > plus `…/check`). Still no signup, invite or "forgot password" route:
    > `no-self-registration.test.ts` now pins the public operations to exactly
    > sign-in and that pair.
+   >
+   > **Override note (2026-10-16, MUT-237).** A signed-in person may also
+   > change a password they already know, through `POST /v1/me/password` —
+   > authenticated, not public, so it adds nothing to the public-operations
+   > pin above and the route name carries no forbidden word
+   > (`no-self-registration.test.ts`'s path check). Distinct from a "forgot
+   > password" door: the current password is required and checked under the
+   > same lockout a wrong sign-in attempt would trip (shared `SignInThrottle`,
+   > keyed on the same normalised email). On success it revokes every other
+   > session, web and device, keeping the caller's own live, and audits
+   > `user.password_changed` (USER), distinct from `user.password_set` (the
+   > setup-link path). The wrong-current-password refusal answers `403
+   > CURRENT_PASSWORD_WRONG`, never `401`: the session is still valid, and a
+   > 401 would trip the portal's generic session-expired handler
+   > (`client.ts`'s `unauthorisedHandler`) and sign the person out mid-form.
 2. **A hosted profile is `Membership × Organization`**, not a table. The
    client-side type is `ProfileSource = 'local' | 'hosted'`; the server only
    ever emits `hosted`. **Hosted profile data is a separate dataset from local
