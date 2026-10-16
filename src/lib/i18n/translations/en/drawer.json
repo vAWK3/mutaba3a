@@ -26,27 +26,16 @@
       "paymentsRetry": "Try again"
     },
     "transaction": {
-      "new": "New Transaction",
-      "edit": "Edit Transaction",
-      "typeIncome": "Income",
-      "typeIncomeDesc": "Paid",
-      "typeReceivable": "Receivable",
-      "typeReceivableDesc": "Unpaid",
-      "typeExpense": "Expense",
-      "typeExpenseDesc": "Cost",
       "amount": "Amount",
       "amountPlaceholder": "0.00",
       "currency": "Currency",
       "date": "Date",
-      "dueDate": "Due Date",
       "profile": "Business Profile",
       "profilePlaceholder": "Select profile...",
       "client": "Client",
       "clientPlaceholder": "Search or create client...",
       "project": "Project",
       "projectPlaceholder": "Select project...",
-      "category": "Category",
-      "categoryPlaceholder": "Select category...",
       "notes": "Notes",
       "notesPlaceholder": "Additional notes..."
     },
@@ -104,10 +93,7 @@
       "frequency": "Frequency",
       "startDate": "Start Date",
       "endMode": "End Mode",
-      "endDate": "End Date",
-      "receipts": "Receipts",
-      "addReceipt": "Add Receipt",
-      "linkReceipt": "Link from Inbox"
+      "endDate": "End Date"
     },
     "businessProfile": {
       "sectionIdentity": "Identity",

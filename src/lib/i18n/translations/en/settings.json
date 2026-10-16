@@ -33,8 +33,7 @@
       "description": "Language, appearance and currency."
     },
     "language": {
-      "title": "Language",
-      "description": "Choose your preferred language"
+      "title": "Language"
     },
     "theme": {
       "title": "Theme",
@@ -46,7 +45,6 @@
     "currency": {
       "title": "Currency",
       "enabled": "Enabled Currencies",
-      "enabledDesc": "Select which currencies to track",
       "default": "Default Currency",
       "defaultDesc": "Default selection in filters"
     },
@@ -84,23 +82,12 @@
       "exportComplete": "Export Complete",
       "exportCompleteDesc": "Your data has been exported successfully.",
       "selectProfileDesc": "Select a business profile to export. All clients, projects, and transactions associated with this profile will be included.",
-      "exporting": "Exporting...",
-      "exported": "Exported successfully!",
-      "exportFailed": "Export failed",
       "exportFailedRetry": "Export failed. Please try again.",
       "noProfilesFound": "No business profiles found. Create a profile first.",
-      "importing": "Importing...",
-      "imported": "Imported successfully! Refreshing...",
       "importFailed": "Import failed: {error}",
-      "invalidFile": "Invalid backup file format",
       "downloadTemplate": "Download CSV Template",
-      "downloadTemplateBtn": "Download CSV Template",
       "deleteAllDesc": "Permanently delete all local data",
       "deleteAllBtn": "Delete all data…",
-      "reset": "Reset Data",
-      "resetDesc": "Reset to sample data for testing",
-      "resetBtn": "Reset Data",
-      "resetConfirm": "Are you sure you want to reset all data? This will replace your data with sample data.",
       "deleteModal": {
         "title": "Delete All Data",
         "warning": "This permanently deletes everything stored in this app on this device: your businesses, clients, projects, income, payments, expenses, receipts and conversions. It cannot be undone.",
@@ -134,7 +121,6 @@
       "kofi": "Ko-fi"
     },
     "updates": {
-      "title": "Updates",
       "checking": "Checking for updates...",
       "upToDate": "You're up to date",
       "currentVersion": "Current version",
@@ -158,7 +144,6 @@
     "exportReceiptsDone": "{count} receipts exported",
     "exportReceiptsFailed": "Receipts export failed",
     "desktopApp": {
-      "title": "Desktop App",
       "download": "Download Desktop App",
       "downloadDesc": "Get the native app for better performance",
       "downloadBtn": "Download",

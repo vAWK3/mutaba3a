@@ -10,8 +10,6 @@
     "needsAttention": "Needs Attention",
     "noAttention": "No overdue or upcoming receivables",
     "welcome": {
-      "title": "Welcome to Mutaba3a",
-      "description": "Start tracking your cash flow by adding your first client, project, or income entry.",
       "addClient": "Add Client",
       "addProject": "Add Project",
       "addIncome": "Add Income"

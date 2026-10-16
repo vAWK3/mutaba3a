@@ -1,18 +1,14 @@
 {
   "nav": {
     "home": "Home",
-    "overview": "Overview",
     "income": "Income",
     "insights": "Insights",
     "projects": "Projects",
     "clients": "Clients",
-    "transactions": "Transactions",
     "expenses": "Expenses",
     "conversions": "Conversions",
-    "reports": "Reports",
     "settings": "Settings",
     "theme": "Theme: {mode}",
-    "download": "Download",
     "new": "New",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
@@ -25,7 +21,6 @@
       "expense": "Add Expense",
       "client": "Add Client",
       "project": "Add Project",
-      "transaction": "New Transaction",
       "conversion": "Add Conversion"
     },
     "goHosted": {
@@ -43,12 +38,8 @@
     "conversion": "Conversion"
   },
   "profileSwitcher": {
-    "noProfile": "No Profile",
     "setUpBusiness": "Set up business",
-    "addProfile": "Add Business Profile",
     "manageProfiles": "Manage Profiles",
-    "switchTo": "Switch to {name}",
-    "current": "Current",
     "allProfiles": "All businesses"
   },
   "updateBanner": {
@@ -88,7 +79,6 @@
       "description": "Track your first payment"
     },
     "skip": "Skip for now",
-    "complete": "Go to Dashboard",
-    "stepOf": "Step {current} of {total}"
+    "complete": "Go to Dashboard"
   }
 }

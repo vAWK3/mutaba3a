@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { FEATURE_KEYS, FEATURE_DATA_PROBES } from '../lib/features/features';
+import en from '../lib/i18n/translations/en';
+import ar from '../lib/i18n/translations/ar';
 
 /**
  * MUT-226 guard: Financial Planning and the local (Dexie) Retainers area are
@@ -74,8 +76,10 @@ describe('planning and local retainers after MUT-226', () => {
   const lookup = (json: unknown, path: string) =>
     path.split('.').reduce<unknown>((node, key) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[key] : undefined), json);
 
-  it.each(['en', 'ar'])('the %s locale carries no planning or retainer copy', (locale) => {
-    const json = JSON.parse(readFileSync(join(ROOT, `lib/i18n/translations/${locale}.json`), 'utf8'));
+  it.each([
+    ['en', en],
+    ['ar', ar],
+  ])('the %s locale carries no planning or retainer copy', (_locale, json) => {
     expect(RETIRED_KEYS.filter((path) => lookup(json, path) !== undefined)).toEqual([]);
   });
 });

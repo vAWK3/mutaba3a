@@ -7,30 +7,20 @@
     "archive": "Archive",
     "add": "Add",
     "edit": "Edit",
-    "view": "View",
     "loading": "Loading...",
-    "downloading": "Downloading...",
     "search": "Search...",
     "close": "Close",
     "actions": "Actions",
-    "confirm": "Confirm",
     "noClient": "No client",
-    "noProject": "No project",
-    "all": "All",
     "markPaid": "Mark Paid",
     "duplicate": "Duplicate",
     "undo": "Undo",
     "previous": "Previous",
     "next": "Next",
     "uncategorized": "Uncategorized",
-    "noResults": "No results found",
-    "errorMessage": "An error occurred. Please try again.",
     "client": "Client",
-    "project": "Project",
     "profile": "Profile",
-    "selectProfile": "Select Profile...",
     "defaultProfile": "Default Profile",
-    "default": "Default",
     "sort": {
       "nameAZ": "Name (A-Z)",
       "nameZA": "Name (Z-A)",
@@ -46,21 +36,12 @@
     "loaderLabel": "Loading",
     "loadingSlow": "Still loading…"
   },
-  "currency": {
-    "USD": "USD",
-    "ILS": "ILS",
-    "EUR": "EUR",
-    "all": "All"
-  },
   "toast": {
-    "transactionDuplicated": "Transaction created",
-    "transactionUndone": "Transaction undone"
+    "transactionDuplicated": "Transaction created"
   },
   "time": {
     "today": "Today",
-    "yesterday": "Yesterday",
-    "daysOverdue": "{days} days overdue",
-    "dueInDays": "Due in {days} days"
+    "yesterday": "Yesterday"
   },
   "validation": {
     "required": "This field is required",
@@ -83,13 +64,6 @@
     "period": "Period",
     "periodFrom": "From",
     "periodTo": "To",
-    "all": "All",
-    "type": {
-      "all": "All",
-      "income": "Income",
-      "receivable": "Receivable",
-      "expense": "Expense"
-    },
     "status": {
       "all": "All",
       "paid": "Paid",
@@ -107,13 +81,7 @@
     "createNew": "Create new project"
   },
   "profile": {
-    "select": "Select Profile",
-    "selectPrompt": "Which profile is this for?",
-    "choose": "Choose profile",
-    "change": "change",
-    "badge": {
-      "viewingAll": "Viewing all profiles"
-    }
+    "choose": "Choose profile"
   },
   "savedFlash": {
     "saved": "Saved",

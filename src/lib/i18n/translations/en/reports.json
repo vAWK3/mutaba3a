@@ -1,43 +1,13 @@
 {
   "reports": {
-    "title": "Reports",
     "exportCsv": "Export CSV",
     "print": "Print",
-    "presets": {
-      "summary": "Summary",
-      "thisMonth": "This Month",
-      "thisYear": "This Year",
-      "byProject": "By Project",
-      "byClient": "By Client",
-      "expensesByProject": "Expenses by Project",
-      "unpaidAging": "Unpaid Aging"
-    },
-    "period": {
-      "month": "Month",
-      "quarter": "Quarter",
-      "year": "Year",
-      "custom": "Custom"
-    },
     "currencyMode": {
       "usd": "USD",
       "ils": "ILS",
       "both": "Both"
     },
-    "drillDown": {
-      "paidIncome": "View paid income transactions",
-      "unpaidIncome": "View unpaid receivables",
-      "expenses": "View expenses"
-    },
-    "search": {
-      "project": "Search projects...",
-      "client": "Search clients..."
-    },
-    "selectCurrencyForAmounts": "Select a specific currency to see amounts",
     "sections": {
-      "financialSummary": "Financial Summary",
-      "incomeByProject": "Income by Project",
-      "incomeByClient": "Income by Client",
-      "expensesByProject": "Expenses by Project",
       "unpaidAging": "Unpaid Receivables Aging"
     },
     "aging": {

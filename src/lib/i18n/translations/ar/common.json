@@ -7,30 +7,20 @@
     "archive": "أرشفة",
     "add": "إضافة",
     "edit": "تعديل",
-    "view": "عرض",
     "loading": "جارٍ التحميل...",
-    "downloading": "جارٍ التحميل...",
     "search": "بحث...",
     "close": "إغلاق",
     "actions": "الإجراءات",
-    "confirm": "تأكيد",
     "noClient": "بدون عميل",
-    "noProject": "بدون مشروع",
-    "all": "الكل",
     "markPaid": "تم الدفع",
     "duplicate": "نسخ",
     "undo": "تراجع",
     "previous": "السابق",
     "next": "التالي",
     "uncategorized": "بدون فئة",
-    "noResults": "لا توجد نتائج",
-    "errorMessage": "حدث خطأ. يرجى المحاولة مرة أخرى.",
     "client": "عميل",
-    "project": "مشروع",
     "profile": "الملف التجاري",
-    "selectProfile": "اختر ملف تجاري...",
     "defaultProfile": "الملف الافتراضي",
-    "default": "افتراضي",
     "sort": {
       "nameAZ": "الاسم (أ-ي)",
       "nameZA": "الاسم (ي-أ)",
@@ -46,21 +36,12 @@
     "loaderLabel": "جارٍ التحميل",
     "loadingSlow": "ما زلنا نحمّل…"
   },
-  "currency": {
-    "USD": "دولار",
-    "ILS": "شيكل",
-    "EUR": "يورو",
-    "all": "الكل"
-  },
   "toast": {
-    "transactionDuplicated": "تم إنشاء المعاملة",
-    "transactionUndone": "تم التراجع عن المعاملة"
+    "transactionDuplicated": "تم إنشاء المعاملة"
   },
   "time": {
     "today": "اليوم",
-    "yesterday": "أمس",
-    "daysOverdue": "متأخر {days} يوم",
-    "dueInDays": "مستحق خلال {days} يوم"
+    "yesterday": "أمس"
   },
   "validation": {
     "required": "هذا الحقل مطلوب",
@@ -83,13 +64,6 @@
     "period": "الفترة",
     "periodFrom": "من",
     "periodTo": "إلى",
-    "all": "الكل",
-    "type": {
-      "all": "الكل",
-      "income": "إيراد",
-      "receivable": "مستحق",
-      "expense": "مصروف"
-    },
     "status": {
       "all": "الكل",
       "paid": "مدفوع",
@@ -107,13 +81,7 @@
     "createNew": "إنشاء مشروع جديد"
   },
   "profile": {
-    "select": "اختر الملف",
-    "selectPrompt": "لأي ملف تريد الإضافة؟",
-    "choose": "اختر الملف",
-    "change": "تغيير",
-    "badge": {
-      "viewingAll": "عرض جميع الملفات"
-    }
+    "choose": "اختر الملف"
   },
   "savedFlash": {
     "saved": "تم الحفظ",

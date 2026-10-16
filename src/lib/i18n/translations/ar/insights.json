@@ -8,27 +8,14 @@
       "expenses": "المصروفات",
       "unpaid": "غير المحصّل"
     },
-    "period": {
-      "month": "شهر",
-      "year": "سنة"
-    },
-    "toggles": {
-      "includeUnpaid": "تضمين الدخل غير المحصّل"
-    },
-    "yearInsights": {
-      "title": "تحليلات السنة"
-    },
     "monthlyTrend": {
       "title": "الاتجاه الشهري",
       "income": "الدخل",
-      "expenses": "المصروفات",
-      "net": "الصافي",
-      "noData": "لا توجد بيانات لهذه الفترة"
+      "expenses": "المصروفات"
     },
     "unpaid": {
       "byClient": "المستحقات حسب العميل",
       "byProject": "المستحقات حسب المشروع",
-      "totalUnpaid": "إجمالي غير المحصّل",
       "invoices": "الإدخالات"
     }
   }

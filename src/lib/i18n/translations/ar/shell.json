@@ -1,18 +1,14 @@
 {
   "nav": {
     "home": "الرئيسية",
-    "overview": "نظرة عامة",
     "income": "الإيرادات",
     "insights": "التحليلات",
     "projects": "المشاريع",
     "clients": "العملاء",
-    "transactions": "المعاملات",
     "expenses": "المصروفات",
     "conversions": "تحويلات العملات",
-    "reports": "التقارير",
     "settings": "الإعدادات",
     "theme": "المظهر: {mode}",
-    "download": "تحميل",
     "new": "جديد",
     "collapse": "طي الشريط الجانبي",
     "expand": "توسيع الشريط الجانبي",
@@ -25,7 +21,6 @@
       "expense": "إضافة مصروف",
       "client": "إضافة عميل",
       "project": "إضافة مشروع",
-      "transaction": "معاملة جديدة",
       "conversion": "إضافة تحويل"
     },
     "goHosted": {
@@ -43,12 +38,8 @@
     "conversion": "تحويل"
   },
   "profileSwitcher": {
-    "noProfile": "لا يوجد ملف",
     "setUpBusiness": "إعداد النشاط التجاري",
-    "addProfile": "إضافة ملف تجاري",
     "manageProfiles": "إدارة الملفات",
-    "switchTo": "التبديل إلى {name}",
-    "current": "الحالي",
     "allProfiles": "كل الأعمال"
   },
   "updateBanner": {
@@ -88,7 +79,6 @@
       "description": "تتبع أول دفعة لك"
     },
     "skip": "تخطي الآن",
-    "complete": "الذهاب للوحة التحكم",
-    "stepOf": "الخطوة {current} من {total}"
+    "complete": "الذهاب للوحة التحكم"
   }
 }

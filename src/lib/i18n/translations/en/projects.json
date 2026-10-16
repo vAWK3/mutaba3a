@@ -12,7 +12,6 @@
     "clearSearch": "Clear search",
     "addProject": "Add Project",
     "searchPlaceholder": "Search projects...",
-    "allFields": "All fields",
     "notFound": "Project not found",
     "notFoundHint": "This project may have been deleted or doesn't exist.",
     "confirmArchive": "Are you sure you want to archive this project?",

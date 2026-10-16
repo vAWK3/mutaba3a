@@ -26,27 +26,16 @@
       "paymentsRetry": "حاول مرة أخرى"
     },
     "transaction": {
-      "new": "معاملة جديدة",
-      "edit": "تعديل المعاملة",
-      "typeIncome": "إيراد",
-      "typeIncomeDesc": "مدفوع",
-      "typeReceivable": "مستحق",
-      "typeReceivableDesc": "غير مدفوع",
-      "typeExpense": "مصروف",
-      "typeExpenseDesc": "تكلفة",
       "amount": "المبلغ",
       "amountPlaceholder": "0.00",
       "currency": "العملة",
       "date": "التاريخ",
-      "dueDate": "تاريخ الاستحقاق",
       "profile": "الملف التجاري",
       "profilePlaceholder": "اختر ملف...",
       "client": "العميل",
       "clientPlaceholder": "ابحث أو أنشئ عميل...",
       "project": "المشروع",
       "projectPlaceholder": "اختر مشروع...",
-      "category": "الفئة",
-      "categoryPlaceholder": "اختر فئة...",
       "notes": "ملاحظات",
       "notesPlaceholder": "ملاحظات إضافية..."
     },
@@ -104,10 +93,7 @@
       "frequency": "التكرار",
       "startDate": "تاريخ البدء",
       "endMode": "وضع الانتهاء",
-      "endDate": "تاريخ الانتهاء",
-      "receipts": "الإيصالات",
-      "addReceipt": "إضافة إيصال",
-      "linkReceipt": "ربط من الوارد"
+      "endDate": "تاريخ الانتهاء"
     },
     "businessProfile": {
       "sectionIdentity": "الهوية",

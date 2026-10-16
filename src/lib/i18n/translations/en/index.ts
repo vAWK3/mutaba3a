@@ -19,7 +19,6 @@ import reports from './reports.json';
 import settings from './settings.json';
 import drawer from './drawer.json';
 import fx from './fx.json';
-import bulkUpload from './bulkUpload.json';
 import integrity from './integrity.json';
 import demo from './demo.json';
 import download from './download.json';
@@ -40,7 +39,6 @@ export const PARTS = {
   settings,
   drawer,
   fx,
-  bulkUpload,
   integrity,
   demo,
   download,

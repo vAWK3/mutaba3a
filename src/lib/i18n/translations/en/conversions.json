@@ -1,7 +1,6 @@
 {
   "conversions": {
     "title": "Conversions",
-    "description": "Money moved between currencies, kept out of your income and expense totals",
     "addButton": "Log conversion",
     "empty": "No conversions logged yet",
     "emptyHint": "Log a conversion to record money moved between currencies",
