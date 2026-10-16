@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.30.0-mut237
+  version: 1.31.0-mut237
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -4853,6 +4853,14 @@ components:
       enum:
         - income
         - expense
+    InboxCount:
+      type: object
+      properties:
+        count:
+          type: integer
+          minimum: 0
+      required:
+        - count
     CreateInboxEntryRequest:
       type: object
       properties:
@@ -11185,6 +11193,40 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/inbox/count:
+    get:
+      tags:
+        - Inbox
+      summary: How many unsorted entries are waiting
+      description: "Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile. MUT-240: the Capture hub's Recent handle wants an exact \"N to file\" without paging a whole list."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: The count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InboxCount"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
           content:
             application/json:
               schema:

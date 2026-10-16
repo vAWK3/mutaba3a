@@ -2686,7 +2686,7 @@ The phone flows that use it (MUT-229) and a live call to Frankfurter are not exe
 | `src/hosted/data/__tests__/filters.test.ts` (changed) | Unit | +1 | `changePassword` is carried by the same `omitShellOverlay`/`pickShellOverlay` the profile drawers use |
 | `qa/specs/portal/account.spec.ts` (new) | Release-QA (Playwright, in-place env) | 3 | `@portal.account.change-password`, `wrong-current-password`, `password-rule` |
 
-Unchanged and green: `routes-m2/m3/m4/m5/m6/m8.test.ts` (pinned `API_VERSION` string bumped to 1.30.0-mut237, no behaviour change); `no-self-registration.test.ts` (the path carries no forbidden word).
+Unchanged and green: `routes-m2/m3/m4/m5/m6/m8.test.ts` (pinned `API_VERSION` string bumped to 1.31.0-mut237, no behaviour change); `no-self-registration.test.ts` (the path carries no forbidden word).
 
 ## MUT-236 — portal /setup page (2026-10-16, ADR-088 §8)
 

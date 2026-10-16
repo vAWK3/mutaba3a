@@ -1987,6 +1987,9 @@ export const InboxEntrySchema = z
 
 export const InboxEntryPageSchema = z.object({ items: z.array(InboxEntrySchema), nextCursor: z.string().nullable() }).openapi('InboxEntryPage');
 
+/** MUT-240: the Capture hub's Recent handle needs an exact count, not a full page. */
+export const InboxCountSchema = z.object({ count: z.number().int().nonnegative() }).openapi('InboxCount');
+
 export const CreateInboxEntryRequestSchema = z
   .object({
     kind: InboxEntryKindSchema,

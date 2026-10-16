@@ -100,7 +100,7 @@ export const ChangePasswordRequestSchema = z.object({ currentPassword: z.string(
 
 `currentPassword` is unconstrained (not `NewPasswordSchema` — it's whatever the person's existing password already is, which may predate the 12-char floor from an operator-set password before MUT-235, or may itself be exactly at the boundary; constraining it would wrongly reject a correct old password).
 
-Bump: API 1.30.0-mut237 (`API_VERSION` + `.claude/CHANGELOG.md`, per MUT-235/236's precedent).
+Bump: API 1.31.0-mut237 (`API_VERSION` + `.claude/CHANGELOG.md`, per MUT-235/236's precedent).
 
 ### 3.4 Logging (AC 4)
 

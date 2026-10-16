@@ -51,6 +51,7 @@ const CONVERSION_OPERATIONS = ['POST /v1/conversions', 'GET /v1/conversions', 'G
  */
 const INBOX_OPERATIONS = [
   'GET /v1/inbox',
+  'GET /v1/inbox/count',
   'POST /v1/inbox',
   'PATCH /v1/inbox/{entryId}',
   'DELETE /v1/inbox/{entryId}',

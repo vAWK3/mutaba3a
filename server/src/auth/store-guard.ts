@@ -197,8 +197,10 @@ export const STORE_ACCESS: StoreAccess = {
     list: 'sessionOnly',
     update: 'sessionOnly',
     delete: 'sessionOnly',
-    // Only /admin's per-user support lookup calls this.
-    countByUser: 'operator',
+    // MUT-240: the person's own count, for the Capture hub's Recent handle — the same
+    // basis as every other method here. /admin's per-user support lookup calls it too,
+    // unguarded, so this change does not touch that route's behaviour.
+    countByUser: 'sessionOnly',
     fileAsExpense: { write: 'expenses' },
     fileAsIncome: { write: 'payments' },
   },

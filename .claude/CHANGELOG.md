@@ -35,9 +35,22 @@
 ### Added
 - `POST /v1/me/password` (session or device bearer, organization-independent like `GET /v1/me`): the current password is checked under the same email-keyed `SignInThrottle`/lockout a wrong sign-in would trip, so repeated wrong guesses here lock the account there too. On success: `users.changePassword` (one transaction, the same row-lock discipline ADR-088 §7a added for `--lock`/redeem) sets the hash, revokes every other session — web and device, the caller's own stays live — and audits `user.password_changed` (USER), distinct from `user.password_set`.
 - A wrong current password (or a locked account) answers `403 CURRENT_PASSWORD_WRONG`, not `401` — a new error code, since a 401 here would trip the portal's generic session-expired handler and sign the person out mid-form.
-- The account menu's "Change password" drawer (`?changePassword=true`, a new `AccountDrawers` controller beside `ProfileDrawers`), reusing the setup page's password-rule field shape; a wrong current password shows a banner and keeps the form, a short new password is refused inline.
+- The account menu's "Change password" drawer (`?changePassword=true`, a new `AccountDrawers` controller beside `ProfileDrawers`), reusing the setup page's password-rule field shape — a show/hide toggle on each field included; a wrong current password shows a banner and keeps the form, a short new password is refused inline.
 - Release-QA `qa/features/portal/account.yaml` (change-password, wrong-current-password, password-rule) + `qa/specs/portal/account.spec.ts`.
-- API 1.30.0-mut237.
+- API 1.31.0-mut237 (stacked on 1.30.0-mut240, below).
+
+## [Unreleased] - 2026-10-16 — Inbox count for the Capture hub (MUT-240, API 1.30.0-mut240)
+
+**Why:** the Capture hub's Recent handle (MUT-230 §6/§17a) wants an exact "N to file" without paging the whole `GET /v1/inbox` list; `countByUser` already existed but was classified `operator`-only.
+
+### Added
+- `GET /v1/inbox/count` → `{count}`, session/device-session auth, no `X-Mutaba3a-Profile` — the fifth organization-independent inbox route, next to the four CRUD ones.
+
+### Changed
+- `STORE_ACCESS.inboxEntries.countByUser` reclassified `operator` → `sessionOnly`: the same basis as the inbox's other methods. `/admin`'s per-user support lookup still calls it, unaffected — admin routes run with no store guard at all.
+
+### Technical
+- Route tests cover zero/non-zero/cross-user isolation and the 401/403 principal checks; `route-security.test.ts`'s generated operation inventory picks the new route up automatically.
 
 ## [Unreleased] - 2026-10-16 — Portal: set your password from a setup link (MUT-236, ADR-088)
 
