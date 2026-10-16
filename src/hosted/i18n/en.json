@@ -54,7 +54,19 @@
         "goTo": "Go to {name}"
       },
       "signOut": "Sign out",
-      "signOutFailed": "Couldn't sign out. Check your connection and try again."
+      "signOutFailed": "Couldn't sign out. Check your connection and try again.",
+      "changePassword": "Change password"
+    },
+    "account": {
+      "changePassword": {
+        "title": "Change password",
+        "current": "Current password",
+        "new": "New password",
+        "submit": "Save",
+        "saving": "Saving…",
+        "success": "Password changed",
+        "wrongCurrent": "Current password is wrong."
+      }
     },
     "setup": {
       "checking": "Checking your link",

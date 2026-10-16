@@ -90,4 +90,10 @@ describe('shell overlay keys (MUT-183 R1)', () => {
     const next = { status: 'PAID', customerId: 'x' };
     expect({ ...pickShellOverlay(prev), ...next }).toEqual({ status: 'PAID', customerId: 'x', manageProfiles: '1' });
   });
+
+  it('carries the account menu\'s Change password drawer the same way (MUT-237)', () => {
+    const search = { status: 'OPEN', changePassword: 'true' };
+    expect(omitShellOverlay(search)).toEqual({ status: 'OPEN' });
+    expect(pickShellOverlay(search)).toEqual({ changePassword: 'true' });
+  });
 });

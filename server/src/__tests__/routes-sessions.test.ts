@@ -507,7 +507,7 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(200);
   });
 
-  it('refuses a wrong current password with 401, without touching the password, and counts toward the shared sign-in lockout (D1)', async () => {
+  it('refuses a wrong current password with 403 (not 401, which would sign the portal out), and counts toward the shared sign-in lockout (D1)', async () => {
     const h = harness();
     const f = await firm(h);
     const p = await person(h, f.org.id);
@@ -515,8 +515,8 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
 
     for (let i = 0; i < SIGN_IN_POLICY.maxFailures; i++) {
       const res = await h.app.request('/v1/me/password', change(token, { currentPassword: 'wrong', newPassword: NEW_PASSWORD }));
-      expect(res.status).toBe(401);
-      expect((await read(res)).error.code).toBe('INVALID_CREDENTIALS');
+      expect(res.status).toBe(403);
+      expect((await read(res)).error.code).toBe('CURRENT_PASSWORD_WRONG');
     }
     expect((await h.store.users.getById(p.id))?.lockedUntil).not.toBeNull();
     // The same account lockout a wrong sign-in would trip: locked out there too, not just on this route.

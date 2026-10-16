@@ -235,13 +235,17 @@ export interface ProfileDrawerSearch {
   newProfile?: true;
   manageProfiles?: true;
   editProfile?: string;
+  /** MUT-237: the account menu's Change password drawer. Named here, not a separate registry, because this is the
+   * shell's one shared overlay-key set — every page's `useReplaceSearch` (via `pickShellOverlay`) must carry it
+   * forward across a filter change the same way it already does for the profile drawers. */
+  changePassword?: true;
 }
-export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile'] as const;
+export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword'] as const;
 
 const flag = (value: unknown): true | undefined => (value === true || value === 'true' || value === 1 || value === '1' ? true : undefined);
 
 export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
-  compact({ newProfile: flag(raw.newProfile), manageProfiles: flag(raw.manageProfiles), editProfile: id(raw.editProfile) });
+  compact({ newProfile: flag(raw.newProfile), manageProfiles: flag(raw.manageProfiles), editProfile: id(raw.editProfile), changePassword: flag(raw.changePassword) });
 
 /** A page's search without the shell's keys, so no list ever sees them. */
 export function omitShellOverlay<T extends object>(search: T): T {

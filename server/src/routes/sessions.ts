@@ -157,8 +157,8 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       request: { body: { required: true, content: { 'application/json': { schema: ChangePasswordRequestSchema } } } },
       responses: {
         204: { description: 'Password changed' },
-        401: errorResponse('INVALID_CREDENTIALS — the current password is wrong, or the account is locked'),
-        403: errorResponse('CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED'),
+        // Not 401: the session is still valid, and a 401 here would trip the portal's generic session-expired handler.
+        403: errorResponse('CURRENT_PASSWORD_WRONG (the current password is wrong, or the account is locked), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED'),
         422: errorResponse('Validation failed (the new password is 12 to 128 characters)'),
       },
     }),
@@ -179,7 +179,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
           // ADR-037 decision 4: a real lockout is always written to the audit log too, whichever route trips it.
           if (lockUntil) for (const event of await lockedOutAudit(store, c.get('requestId'), user)) await store.audit.append(event);
         }
-        throw new ApiError('INVALID_CREDENTIALS', 'Current password is wrong');
+        throw new ApiError('CURRENT_PASSWORD_WRONG', 'Current password is wrong');
       }
       throttle.clear(key);
       // Hash before the transaction, same reasoning as redeem (account-setup.ts): the slow part never runs inside the lock.
