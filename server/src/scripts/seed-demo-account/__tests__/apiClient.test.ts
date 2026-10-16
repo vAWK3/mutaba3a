@@ -5,7 +5,7 @@ import { ARGON2_MINIMUMS, createArgon2Hasher } from '../../../auth/users.js';
 import { SlidingWindowRateLimiter } from '../../../rate-limit.js';
 import { MemoryLedgerStore } from '../../../repositories/memory.js';
 import { adminClient } from '../../users.js';
-import { clientFor, signIn, ApiClientError, type ApiClientDeps } from '../apiClient.js';
+import { clientFor, redeemSetupLink, signIn, ApiClientError, type ApiClientDeps } from '../apiClient.js';
 
 const ADMIN_TOKEN = 'admin-token-with-at-least-32-characters-long';
 const URL_BASE = 'http://mutaba3a.test';
@@ -29,19 +29,24 @@ function harness() {
 interface CreatedUser {
   user: { id: string };
   personalProfile: { id: string; name: string };
-  initialPassword: string;
+  password: string;
 }
 
+const PASSWORD = 'seed-qa-password-for-tests';
+
+/** MUT-235: provisioned through the admin API, then the password set through the setup link it returns. */
 async function createPersonalUser(deps: ApiClientDeps, email: string): Promise<CreatedUser> {
   const admin = adminClient(deps.fetch, deps.baseUrl, ADMIN_TOKEN);
-  return admin.call<CreatedUser>('POST', '/admin/v1/users', { email, displayName: 'Seed QA', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+  const created = await admin.call<Omit<CreatedUser, 'password'> & { setupLink: { url: string } }>('POST', '/admin/v1/users', { email, displayName: 'Seed QA', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+  await redeemSetupLink(deps, created.setupLink.url, PASSWORD);
+  return { ...created, password: PASSWORD };
 }
 
 describe('seed-demo-account apiClient (MUT-136)', () => {
   it('signs in and resolves the personal profile as organizationId (MUT-120)', async () => {
     const { deps } = harness();
     const created = await createPersonalUser(deps, 'qa@mutaba3a.test');
-    const session = await signIn(deps, 'qa@mutaba3a.test', created.initialPassword);
+    const session = await signIn(deps, 'qa@mutaba3a.test', created.password);
     expect(session.organizationId).toBe(created.personalProfile.id);
     expect(session.token).toMatch(/^mds_/);
   });
@@ -49,7 +54,7 @@ describe('seed-demo-account apiClient (MUT-136)', () => {
   it('replays a customer create under the same Idempotency-Key instead of duplicating it', async () => {
     const { store, deps } = harness();
     const created = await createPersonalUser(deps, 'qa@mutaba3a.test');
-    const session = await signIn(deps, 'qa@mutaba3a.test', created.initialPassword);
+    const session = await signIn(deps, 'qa@mutaba3a.test', created.password);
     const client = clientFor(deps, session);
 
     const first = await client.createCustomer({ name: 'Al-Quds Bakery' }, 'seed-al-quds-bakery-customer');
@@ -63,7 +68,7 @@ describe('seed-demo-account apiClient (MUT-136)', () => {
   it('a different Idempotency-Key creates an independent customer even with an identical body', async () => {
     const { store, deps } = harness();
     const created = await createPersonalUser(deps, 'qa@mutaba3a.test');
-    const session = await signIn(deps, 'qa@mutaba3a.test', created.initialPassword);
+    const session = await signIn(deps, 'qa@mutaba3a.test', created.password);
     const client = clientFor(deps, session);
 
     await client.createCustomer({ name: 'Al-Quds Bakery' }, 'seed-key-a');
@@ -76,7 +81,7 @@ describe('seed-demo-account apiClient (MUT-136)', () => {
   it('creates a project under a customer, and a received income entry (a real Payment, origin CAPTURE)', async () => {
     const { store, deps } = harness();
     const created = await createPersonalUser(deps, 'qa@mutaba3a.test');
-    const session = await signIn(deps, 'qa@mutaba3a.test', created.initialPassword);
+    const session = await signIn(deps, 'qa@mutaba3a.test', created.password);
     const client = clientFor(deps, session);
 
     const customer = await client.createCustomer({ name: 'Al-Quds Bakery' }, 'seed-customer');
@@ -91,7 +96,7 @@ describe('seed-demo-account apiClient (MUT-136)', () => {
   it('settles an owed entry partially, leaving it part-paid with a real PaymentAllocation (not a raw field)', async () => {
     const { store, deps } = harness();
     const created = await createPersonalUser(deps, 'qa@mutaba3a.test');
-    const session = await signIn(deps, 'qa@mutaba3a.test', created.initialPassword);
+    const session = await signIn(deps, 'qa@mutaba3a.test', created.password);
     const client = clientFor(deps, session);
 
     const customer = await client.createCustomer({ name: 'Haddad Law Office' }, 'seed-customer');
@@ -115,7 +120,7 @@ describe('seed-demo-account apiClient (MUT-136)', () => {
   it('settles an owed entry in full, leaving it SETTLED', async () => {
     const { store, deps } = harness();
     const created = await createPersonalUser(deps, 'qa@mutaba3a.test');
-    const session = await signIn(deps, 'qa@mutaba3a.test', created.initialPassword);
+    const session = await signIn(deps, 'qa@mutaba3a.test', created.password);
     const client = clientFor(deps, session);
 
     const customer = await client.createCustomer({ name: 'Jerusalem Consulting Group' }, 'seed-customer');
@@ -129,7 +134,7 @@ describe('seed-demo-account apiClient (MUT-136)', () => {
   it('records an expense in its original currency', async () => {
     const { store, deps } = harness();
     const created = await createPersonalUser(deps, 'qa@mutaba3a.test');
-    const session = await signIn(deps, 'qa@mutaba3a.test', created.initialPassword);
+    const session = await signIn(deps, 'qa@mutaba3a.test', created.password);
     const client = clientFor(deps, session);
 
     await client.createExpense({ occurredOn: '2026-01-01', amount: '85.00', currency: 'ILS', title: 'Flour delivery', vendor: 'Unipack Supplies' }, 'seed-expense-1');
@@ -142,7 +147,7 @@ describe('seed-demo-account apiClient (MUT-136)', () => {
   it('throws a readable ApiClientError on a validation failure, naming the method, path and status', async () => {
     const { deps } = harness();
     const created = await createPersonalUser(deps, 'qa@mutaba3a.test');
-    const session = await signIn(deps, 'qa@mutaba3a.test', created.initialPassword);
+    const session = await signIn(deps, 'qa@mutaba3a.test', created.password);
     const client = clientFor(deps, session);
 
     await expect(client.createCustomer({ name: '' }, 'seed-bad-customer')).rejects.toThrow(ApiClientError);

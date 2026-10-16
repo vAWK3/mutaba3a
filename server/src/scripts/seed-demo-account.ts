@@ -93,11 +93,11 @@ export async function runSeedDemoAccount(argv: string[], deps: SeedDemoAccountDe
 
   try {
     const admin = adminClient(deps.fetch, baseUrl, deps.adminToken);
-    const credentials = await ensureSeedAccount(admin, { email, displayName, currency, timezone, locale, keepPassword: deps.seedPassword });
+    const apiDeps: ApiClientDeps = { fetch: deps.fetch, baseUrl };
+    const credentials = await ensureSeedAccount(admin, apiDeps, { email, displayName, currency, timezone, locale, keepPassword: deps.seedPassword });
     deps.out(`account ${credentials.userId} ${credentials.email}`);
     if (deps.seedPassword && credentials.rotated) deps.err('MUTABA3A_SEED_PASSWORD ignored: the account is new, so it was issued a password (below)');
 
-    const apiDeps: ApiClientDeps = { fetch: deps.fetch, baseUrl };
     const session = await signInOrExplain(apiDeps, email, credentials);
     const client = clientFor(apiDeps, session);
     deps.out(`profile ${session.organizationId}`);

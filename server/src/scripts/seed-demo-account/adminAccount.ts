@@ -1,13 +1,17 @@
+import { generateOneTimePassword } from '../../auth/users.js';
 import { CliError, type AdminClient } from '../users.js';
+import { redeemSetupLink, type ApiClientDeps } from './apiClient.js';
 
 /**
  * The admin-API half of seeding a demo account (MUT-136): get-or-create the
- * QA user, then rotate its password through the same admin surface
- * `npm run rotate:password` uses. Rotating every run means the script never
- * has to persist a secret to disk or assume a one-time-shown
- * `initialPassword` from a prior run is still known — the returned password
- * is always fresh and always correct for the account this call just touched.
- * The one exception is `keepPassword`, for credentials already handed out.
+ * QA user, then give it a fresh password. MUT-235: the admin surface no longer
+ * hands out passwords, so the script does what a person would — it asks for a
+ * setup link (the same call `npm run rotate:password` makes) and sets a
+ * freshly generated password through it. Doing that every run means the script
+ * never has to persist a secret to disk: the returned password is always fresh
+ * and always correct for the account this call just touched. Setting it signs
+ * out every session, as a rotation always did. The one exception is
+ * `keepPassword`, for credentials already handed out.
  */
 
 export interface EnsureSeedAccountOptions {
@@ -22,7 +26,7 @@ export interface EnsureSeedAccountOptions {
    * An existing account's current password, to use instead of rotating. For an
    * account whose credentials were handed to someone else (App Store / Play
    * reviewers): rotating would break them and revoke their sessions. Ignored
-   * when the account doesn't exist yet — the admin API only issues passwords.
+   * when the account doesn't exist yet — a new account has no password to keep.
    */
   keepPassword?: string | undefined;
 }
@@ -35,12 +39,15 @@ export interface SeedAccountCredentials {
   rotated: boolean;
 }
 
-export async function ensureSeedAccount(admin: AdminClient, options: EnsureSeedAccountOptions): Promise<SeedAccountCredentials> {
+export async function ensureSeedAccount(admin: AdminClient, api: ApiClientDeps, options: EnsureSeedAccountOptions): Promise<SeedAccountCredentials> {
   const { userId, created } = await findOrCreate(admin, options);
   if (options.keepPassword && !created) {
     return { userId, email: options.email, password: options.keepPassword, rotated: false };
   }
-  const { password } = await admin.call<{ password: string }>('POST', `/admin/v1/users/${userId}/password`);
+  const { setupLink } = await admin.call<{ setupLink: { url: string } }>('POST', `/admin/v1/users/${userId}/setup-link`, {});
+  // 24 base64url characters (144 bits): well past the 12-character floor.
+  const password = generateOneTimePassword();
+  await redeemSetupLink(api, setupLink.url, password);
   return { userId, email: options.email, password, rotated: true };
 }
 
