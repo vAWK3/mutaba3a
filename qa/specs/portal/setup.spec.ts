@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
+import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { OFFICE_A, office } from '../../support/portal';
 import { FakeApi, type SetupLinkState, type StubSetupLink } from '../../support/portalApi';
 
@@ -47,6 +48,10 @@ test('A valid setup link opens in the account’s language, sets the password an
     await expect(account).toHaveValue(EMAIL);
     await expect(account).not.toBeEditable();
     await expect(page.getByLabel('New password')).toHaveAttribute('autocomplete', 'new-password');
+  });
+
+  await step('The form passes axe, as sign-in does', async () => {
+    await expectOnlyKnownAxeViolations(page, 'portalSignIn');
   });
 
   await step('Type a new password and save', async () => {
