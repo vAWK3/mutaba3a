@@ -887,18 +887,13 @@ const ALLOWED_LITERAL_FILES: Record<string, string> = {
 };
 
 /**
- * Literals the sweep has not reached yet, per file. MUT-103 emptied it for
- * colours, radii and font sizes; MUT-165 froze the spacing literals here
- * (175: 124 CSS declarations and 51 style-object values, counted 2026-10-16 on
- * main 1150d40). Shrink-only: each MUT-165 sweep commit lowers or deletes its
- * entries; a new file, a higher count, or a stale count fails.
+ * Literals a sweep has not reached yet, per file. MUT-103 emptied it for
+ * colours, radii and font sizes; MUT-165 froze 175 spacing literals here (124
+ * CSS declarations and 51 style-object values, counted 2026-10-16 on main
+ * 1150d40) and emptied it again. Shrink-only: a new file, a higher count, or a
+ * stale count fails, so it stays empty.
  */
-const KNOWN_LITERALS: Record<string, number> = {
-  'src/hosted/hosted.css': 5,
-  'src/pages/landing/LandingPage.css': 3,
-  'src/pages/landing/PrivacyPolicyPage.css': 2,
-  'src/pages/landing/components/HeroSection.css': 3,
-};
+const KNOWN_LITERALS: Record<string, number> = {};
 
 /**
  * Rules asking for tabular figures without Plex Mono (Thmanyah has no tnum,
