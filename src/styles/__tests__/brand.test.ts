@@ -876,8 +876,8 @@ describe('accent-text guard', () => {
 
 /**
  * Literal guard (MUT-103, spacing since MUT-165): outside src/styles, a colour,
- * radius, font size, padding, margin or gap comes from a token. Allowed: user data (category and business colours),
- * listed here with the reason.
+ * radius, font size, padding, margin or gap comes from a token. Allowed: user
+ * data (category and business colours), listed here with the reason.
  */
 const ALLOWED_LITERAL_FILES: Record<string, string> = {
   'src/db/defaultExpenseCategories.ts': 'user data: the default expense category colours a user can recolour',
@@ -896,18 +896,9 @@ const ALLOWED_LITERAL_FILES: Record<string, string> = {
 const KNOWN_LITERALS: Record<string, number> = {
   'src/components/csv/CSVValidationPreview.css': 14,
   'src/components/drawers/BusinessProfileDrawer.tsx': 2,
-  'src/components/drawers/RecurringMarkPaidDrawer.css': 1,
-  'src/components/layout/FxRateReadout.css': 1,
-  'src/components/layout/ProfileSwitcher.css': 1,
   'src/components/modals/ExportDataModal.tsx': 8,
-  'src/components/modals/WelcomeModal.css': 2,
-  'src/components/ui/DemoBanner.css': 2,
-  'src/components/ui/EntityTypeahead.css': 4,
-  'src/components/ui/ProfileQuickPicker.css': 4,
   'src/components/ui/RecurringOccurrenceCard.css': 12,
-  'src/components/ui/SegmentedControl.css': 2,
   'src/hosted/hosted.css': 5,
-  'src/index.css': 28,
   'src/pages/conversions/ConversionsPage.tsx': 2,
   'src/pages/expenses/ExpensesLedgerPage.tsx': 5,
   'src/pages/income/IncomePage.tsx': 4,
