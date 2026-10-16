@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { NEW_PASSWORD_POLICY, SETUP_LINK_POLICY, SETUP_TOKEN_PATTERN } from './auth/account-setup.js';
 import { SCOPES } from './auth/scopes.js';
 import { ERROR_CODES } from './errors.js';
 import { CONTINGENCY_OUTCOMES, MAX_COMMISSION_RATE_BASIS_POINTS, MIN_COMMISSION_RATE_BASIS_POINTS, UPFRONT_TREATMENTS } from './agreements/contingency.js';
@@ -231,6 +232,18 @@ export const MembershipSchema = z
   .object({ organizationId: z.string().uuid(), createdAt: z.string().datetime() })
   .openapi('Membership');
 
+/** MUT-235: SETUP is a person's first password; RESET an operator reset of an existing one. */
+export const SetupLinkPurposeSchema = z.enum(['SETUP', 'RESET']).openapi('SetupLinkPurpose');
+
+/** MUT-235: returned to the operator once. The token lives only in the URL's fragment; the service keeps its digest. */
+export const SetupLinkSchema = z
+  .object({
+    url: z.string().url(),
+    expiresAt: z.string().datetime(),
+    purpose: SetupLinkPurposeSchema,
+  })
+  .openapi('SetupLink');
+
 export const CreateUserRequestSchema = z
   .object({
     email: z.string().trim().email().max(320),
@@ -243,6 +256,8 @@ export const CreateUserRequestSchema = z
     defaultCurrency: CurrencySchema.optional(),
     /** The personal profile's IANA timezone (MUT-120). Required with no organizationId; otherwise it overrides the firm's. */
     timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }).optional(),
+    /** MUT-235: how long the setup link lasts; defaults to 72 hours. */
+    setupLinkValidHours: z.number().int().min(SETUP_LINK_POLICY.minHours).max(SETUP_LINK_POLICY.maxHours).optional(),
   })
   .openapi('CreateUserRequest');
 
@@ -253,8 +268,8 @@ export const CreateUserResponseSchema = z
     memberships: z.array(MembershipSchema),
     /** The user's one personal profile (MUT-120), created with them: Personal / شخصي by locale. */
     personalProfile: z.object({ id: z.string().uuid(), name: z.string() }),
-    /** Shown exactly once; the service stores only its argon2id hash. Deliver it to the person over a secure channel. */
-    initialPassword: z.string(),
+    /** MUT-235: shown exactly once; deliver it to the person over a secure channel. They set their own password through it. */
+    setupLink: SetupLinkSchema,
   })
   .openapi('CreateUserResponse');
 
@@ -427,13 +442,49 @@ export const DeviceSessionSchema = MeSchema.extend({
 
 export const RevokeSessionsResponseSchema = z.object({ revoked: z.number().int().min(0) }).openapi('RevokeSessionsResponse');
 
-export const PasswordResetResponseSchema = z
+// ---- One-time setup links (MUT-235, ADR-088) -------------------------------
+
+/** NIST SP 800-63B length rule; no composition rules. Length is counted in UTF-16 units, so an emoji counts as two. */
+export const NewPasswordSchema = z
+  .string()
+  .min(NEW_PASSWORD_POLICY.minLength)
+  .max(NEW_PASSWORD_POLICY.maxLength)
+  .openapi('NewPassword', { description: `${NEW_PASSWORD_POLICY.minLength} to ${NEW_PASSWORD_POLICY.maxLength} characters; no composition rules.` });
+
+const SetupTokenSchema = z.string().regex(SETUP_TOKEN_PATTERN, 'must be a setup-link token');
+
+const ValidHoursSchema = z.number().int().min(SETUP_LINK_POLICY.minHours).max(SETUP_LINK_POLICY.maxHours);
+
+export const IssueSetupLinkRequestSchema = z
   .object({
-    user: UserSummarySchema,
-    /** The new one-time password, shown exactly once. */
-    password: z.string(),
+    /** Defaults to 72. */
+    validHours: ValidHoursSchema.optional(),
+    /** A suspected takeover: the current password stops working and every session is signed out now, not when the link is used. */
+    lock: z.boolean().default(false),
   })
-  .openapi('PasswordResetResponse');
+  .openapi('IssueSetupLinkRequest');
+
+export const IssueSetupLinkResponseSchema = z.object({ user: UserSummarySchema, setupLink: SetupLinkSchema }).openapi('IssueSetupLinkResponse');
+
+export const SetupLinkCheckRequestSchema = z.object({ token: SetupTokenSchema }).openapi('SetupLinkCheckRequest');
+
+export const SetupLinkCheckResponseSchema = z
+  .discriminatedUnion('state', [
+    z.object({
+      state: z.literal('valid'),
+      email: z.string(),
+      locale: UserLocaleSchema,
+      purpose: SetupLinkPurposeSchema,
+      expiresAt: z.string().datetime(),
+    }),
+    z.object({ state: z.enum(['expired', 'used', 'superseded', 'invalid']) }),
+  ])
+  .openapi('SetupLinkCheckResponse');
+
+export const SetupLinkRedeemRequestSchema = z.object({ token: SetupTokenSchema, password: NewPasswordSchema }).openapi('SetupLinkRedeemRequest');
+
+/** The portal signs in with this email and the password just set, through POST /v1/sessions. */
+export const SetupLinkRedeemResponseSchema = z.object({ email: z.string() }).openapi('SetupLinkRedeemResponse');
 
 // ---- Milestone 2: customers, projects, import --------------------------------
 

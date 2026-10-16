@@ -245,8 +245,8 @@ describe('contract', () => {
   it('publishes the M6 paths, components and version', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.28.0-mut228');
-    expect(API_VERSION).toBe('1.28.0-mut228');
+    expect(doc.info.version).toBe('1.29.0-mut235');
+    expect(API_VERSION).toBe('1.29.0-mut235');
     for (const path of ['/v1/summaries/organization', '/v1/summaries/customers/{customerId}', '/v1/summaries/projects/{projectId}', '/v1/audit', '/v1/attachments/uploads', '/v1/attachments/{attachmentId}/complete', '/v1/attachments', '/v1/attachments/{attachmentId}/download', '/v1/attachments/{attachmentId}']) {
       expect(doc.paths[path], path).toBeDefined();
     }

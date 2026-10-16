@@ -18,6 +18,7 @@ import { adminAuth, adminRoutes } from './routes/admin.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
 import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
+import { accountSetupRoutes } from './routes/account-setup.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { auditRoutes } from './routes/audit.js';
 import { summaryRoutes } from './routes/summaries.js';
@@ -117,7 +118,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.28.0-mut228';
+export const API_VERSION = '1.29.0-mut235';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -217,6 +218,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       ipLimiter: signInIpLimiter,
     }),
   );
+  // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
+  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter }));
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', customerRoutes(store));
   app.route('/', projectRoutes(store));
@@ -241,7 +244,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', inboxRoutes(store));
   app.route('/', profileRoutes(store));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
-  app.route('/', adminUserRoutes({ store, passwordHasher, logger: deps.logger }));
+  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions }));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {

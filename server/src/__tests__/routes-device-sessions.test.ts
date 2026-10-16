@@ -5,6 +5,7 @@ import { SIGN_IN_POLICY } from '../auth/sessions.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from '../auth/users.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { provisionUser } from './helpers/provision.js';
 
 /**
  * POST/DELETE /v1/device-sessions (MUT-64): the native app's bearer-token
@@ -56,8 +57,8 @@ async function firm(h: Harness) {
 }
 
 async function person(h: Harness, organizationId: string, email = `partner${++seq}@firm.ps`) {
-  const created = await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId }, admin)));
-  return { id: created.user.id as string, email, password: created.initialPassword as string, personalId: created.personalProfile.id as string };
+  const created = await provisionUser(h.app, { email, displayName: 'Nour Haddad', organizationId });
+  return { id: created.user.id as string, email, password: created.password as string, personalId: created.personalProfile.id as string };
 }
 
 async function deviceSignIn(h: Harness, email: string, password: string, headers: Record<string, string> = {}) {

@@ -7,6 +7,7 @@ import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from '../aut
 import { sessionAccess } from '../auth/writability.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { provisionUser } from './helpers/provision.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
@@ -64,8 +65,8 @@ async function firm(h: Harness) {
 }
 
 async function person(h: Harness, organizationId: string, email = `partner${++seq}@firm.ps`) {
-  const created = await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId }, admin)));
-  return { id: created.user.id as string, email, password: created.initialPassword as string, personalId: created.personalProfile.id as string };
+  const created = await provisionUser(h.app, { email, displayName: 'Nour Haddad', organizationId });
+  return { id: created.user.id as string, email, password: created.password as string, personalId: created.personalProfile.id as string };
 }
 
 async function signIn(h: Harness, email: string, password: string, headers: Record<string, string> = SAME_ORIGIN) {
@@ -340,14 +341,14 @@ describe('DELETE /v1/sessions/current — sign out', () => {
 });
 
 describe('operator actions end sessions', () => {
-  it('a password reset revokes every session of that user, cookie and device alike (MUT-64)', async () => {
+  it('a reset with --lock revokes every session of that user, cookie and device alike (MUT-64, MUT-235 D2)', async () => {
     const h = harness();
     const f = await firm(h);
     const p = await person(h, f.org.id);
     const one = await signIn(h, p.email, p.password);
     const two = await signIn(h, p.email, p.password);
     const device = await deviceSignIn(h, p.email, p.password);
-    await h.app.request(`/admin/v1/users/${p.id}/password`, json({}, admin));
+    await h.app.request(`/admin/v1/users/${p.id}/setup-link`, json({ lock: true }, admin));
     for (const s of [one, two]) expect((await h.app.request('/v1/me', { headers: withSession(s.token) })).status).toBe(401);
     expect((await h.app.request('/v1/me', { headers: withDevice(device.token) })).status).toBe(401);
   });
@@ -457,7 +458,8 @@ describe('organization selection (X-Mutaba3a-Profile)', () => {
     expect(posted).toHaveLength(1);
     expect(posted[0]).toMatchObject({ actorType: 'SYSTEM', actorId: null });
     const all = (await h.store.audit.list(f.org.id, {}, { limit: 200, cursor: null })).items;
-    expect(all.filter((e) => e.actorType === 'USER').map((e) => e.action)).toEqual(['user.signed_in']);
+    // The person's own two acts (MUT-235: setting their password through the link, then signing in); the read adds none.
+    expect(all.filter((e) => e.actorType === 'USER').map((e) => e.action).sort()).toEqual(['user.password_set', 'user.signed_in']);
   });
 });
 

@@ -4,6 +4,7 @@ import { createApp } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { provisionUser } from './helpers/provision.js';
 
 /**
  * MUT-194 (pre-review decision 2): conversions are a hosted profile's own
@@ -45,8 +46,8 @@ describe('GET /v1/audit never lists conversion activity (MUT-194)', () => {
     const org = await read(await app.request('/admin/v1/organizations', json({ name: 'Firm', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
     const apiKey = await read(await app.request(`/admin/v1/organizations/${org.id}/api-keys`, json({ name: 'Malafat', scopes: SCOPES }, admin)));
     const key = { authorization: `Bearer ${apiKey.secret}` };
-    const created = await read(await app.request('/admin/v1/users', json({ email: 'nour@firm.ps', displayName: 'Nour Haddad', organizationId: org.id, locale: 'en' }, admin)));
-    const signIn = await app.request('/v1/sessions', json({ email: 'nour@firm.ps', password: created.initialPassword }, SAME_ORIGIN));
+    const created = await provisionUser(app, { email: 'nour@firm.ps', displayName: 'Nour Haddad', organizationId: org.id, locale: 'en' });
+    const signIn = await app.request('/v1/sessions', json({ email: 'nour@firm.ps', password: created.password }, SAME_ORIGIN));
     const token = new RegExp(`${COOKIE}=([^;]*)`).exec(signIn.headers.get('set-cookie') ?? '')?.[1] ?? '';
     const session = { cookie: `${COOKIE}=${token}`, 'x-mutaba3a-profile': org.id, ...SAME_ORIGIN };
 

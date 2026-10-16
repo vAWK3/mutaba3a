@@ -6,6 +6,7 @@ import { SCOPES } from '../auth/scopes.js';
 import { sessionClaimKey } from '../idempotency.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { provisionUser } from './helpers/provision.js';
 
 /**
  * MUT-42 AC: "expenses are invisible to Malafat's API key, asserted by a
@@ -64,9 +65,9 @@ beforeAll(async () => {
   realIds.customerId = customer.id;
   realIds.projectId = project.id;
 
-  const person = await read(await app.request('/admin/v1/users', json({ email: 'nour@firm.ps', displayName: 'Nour', organizationId: org.id }, admin)));
+  const person = await provisionUser(app, { email: 'nour@firm.ps', displayName: 'Nour', organizationId: org.id });
   userId = person.user.id;
-  const signIn = await app.request('/v1/sessions', json({ email: 'nour@firm.ps', password: person.initialPassword }, SAME_ORIGIN));
+  const signIn = await app.request('/v1/sessions', json({ email: 'nour@firm.ps', password: person.password }, SAME_ORIGIN));
   session = { cookie: `${COOKIE}=${new RegExp(`${COOKIE}=([^;]*)`).exec(signIn.headers.get('set-cookie') ?? '')?.[1]}`, 'x-mutaba3a-profile': org.id, ...SAME_ORIGIN };
 
   const category = await read(await app.request('/v1/expense-categories', json({ name: CANARY_CATEGORY }, { ...session, 'idempotency-key': 'category-0000001' })));

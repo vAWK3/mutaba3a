@@ -1,19 +1,22 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
-import type { AppEnv } from '../auth/middleware.js';
-import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from '../auth/users.js';
+import { generateSetupToken, SETUP_LINK_POLICY, setupUrl } from '../auth/account-setup.js';
+import type { AppEnv, SessionSettings } from '../auth/middleware.js';
+import { sessionDigest } from '../auth/sessions.js';
+import { normalizeEmail } from '../auth/users.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
 import { ForeignKeyViolation, UniqueViolation } from '../repositories/memory.js';
-import type { JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
+import type { AuditEventInput, JsonObject, LedgerStore, Organization, SetupLinkPurpose, UserRecord } from '../repositories/ports.js';
 import {
   CreateUserRequestSchema,
   CreateUserResponseSchema,
   ErrorEnvelopeSchema,
   GrantMembershipRequestSchema,
   GrantMembershipResponseSchema,
-  PasswordResetResponseSchema,
+  IssueSetupLinkRequestSchema,
+  IssueSetupLinkResponseSchema,
   RemoveMembershipResponseSchema,
   RevokeSessionsResponseSchema,
   UserDetailSchema,
@@ -30,14 +33,16 @@ import { serializeMembership, serializeUser } from '../serializers.js';
  *
  * Each mutation is audited with actor ADMIN on every organization the user
  * belongs to after it (a removed membership is audited on the organization it
- * removed). Passwords are generated here, returned once, and stored only as
- * argon2id hashes; no route ever returns or logs a hash. A reset or a disable
- * also revokes every live session of the user (MUT-38).
+ * removed). MUT-235 (ADR-088): no route here knows anyone's password. Creating
+ * a user and resetting one issue a one-time setup link instead, returned once;
+ * the person sets their own password through it. A disable revokes every live
+ * session of the user (MUT-38); so does a reset with `lock`.
  */
 export interface AdminUserOptions {
   store: LedgerStore;
-  passwordHasher: PasswordHasher;
   logger: Logger;
+  /** The session pepper digests link tokens; the portal origin is where links point. */
+  sessions: Pick<SessionSettings, 'pepper' | 'portalOrigin'>;
 }
 
 const adminErrors = {
@@ -50,7 +55,7 @@ const MembershipParams = UserIdParam.extend({
   organizationId: z.string().uuid().openapi({ param: { name: 'organizationId', in: 'path' } }),
 });
 
-type AuditAction = 'user.created' | 'user.password_reset' | 'user.disabled' | 'user.enabled' | 'membership.granted' | 'membership.revoked';
+type AuditAction = 'user.created' | 'user.setup_link_issued' | 'user.disabled' | 'user.enabled' | 'membership.granted' | 'membership.revoked';
 
 /**
  * MUT-120: the personal profile's currency and timezone. The request wins; else the firm's;
@@ -66,26 +71,51 @@ function resolvePersonalSettings(
 }
 
 export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> {
-  const { store, passwordHasher, logger } = options;
+  const { store, logger, sessions } = options;
   const app = new OpenAPIHono<AppEnv>();
+
+  function auditEvents(c: Context<AppEnv>, organizationIds: string[], userId: string, action: AuditAction, metadata?: JsonObject): AuditEventInput[] {
+    return organizationIds.map((organizationId) => ({
+      organizationId,
+      actorType: 'ADMIN',
+      actorId: null,
+      action,
+      entityType: 'user',
+      entityId: userId,
+      ...(metadata ? { metadata } : {}),
+      requestId: c.get('requestId'),
+    }));
+  }
+
+  /**
+   * MUT-235: one transaction cancels the person's open link, issues this one and audits it (and, with `lock`,
+   * clears the password and revokes every session). Only the token's digest is stored; the URL is returned once.
+   */
+  async function issueSetupLink(c: Context<AppEnv>, user: UserRecord, options: { purpose: SetupLinkPurpose; validHours?: number | undefined; lock: boolean }) {
+    const now = c.get('now')();
+    const token = generateSetupToken();
+    const expiresAt = new Date(now.getTime() + (options.validHours ?? SETUP_LINK_POLICY.defaultHours) * 3_600_000);
+    const metadata: JsonObject = { purpose: options.purpose, expiresAt: expiresAt.toISOString(), ...(options.lock ? { lock: true } : {}) };
+    const organizationIds = await memberOrganizations(user.id);
+    if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action: 'user.setup_link_issued' }, 'account change on a user with no memberships; no organization to audit');
+    await store.accountSetup.issue({
+      userId: user.id,
+      tokenDigest: sessionDigest(sessions.pepper, token),
+      purpose: options.purpose,
+      at: now,
+      expiresAt,
+      lock: options.lock,
+      audit: auditEvents(c, organizationIds, user.id, 'user.setup_link_issued', metadata),
+    });
+    return { url: setupUrl(sessions.portalOrigin ?? new URL(c.req.url).origin, token), expiresAt: expiresAt.toISOString(), purpose: options.purpose };
+  }
 
   async function audit(c: Context<AppEnv>, organizationIds: string[], userId: string, action: AuditAction, metadata?: JsonObject) {
     if (organizationIds.length === 0) {
       logger.info({ requestId: c.get('requestId'), userId, action }, 'account change on a user with no memberships; no organization to audit');
       return;
     }
-    for (const organizationId of organizationIds) {
-      await store.audit.append({
-        organizationId,
-        actorType: 'ADMIN',
-        actorId: null,
-        action,
-        entityType: 'user',
-        entityId: userId,
-        ...(metadata ? { metadata } : {}),
-        requestId: c.get('requestId'),
-      });
-    }
+    for (const event of auditEvents(c, organizationIds, userId, action, metadata)) await store.audit.append(event);
   }
 
   async function memberOrganizations(userId: string): Promise<string[]> {
@@ -103,7 +133,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       method: 'post',
       path: '/admin/v1/users',
       tags: ['Admin'],
-      summary: 'Create a user with their personal profile and, optionally, a firm membership (one-time password returned once)',
+      summary: 'Create a user with their personal profile and, optionally, a firm membership (one-time setup link returned once)',
       security: [{ adminToken: [] }],
       request: { body: { required: true, content: { 'application/json': { schema: CreateUserRequestSchema } } } },
       responses: {
@@ -122,13 +152,12 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       if (firm && profileOwnerOf(firm)) throw ownedProfileConflict(firm, 'A profile a person owns belongs to them and cannot be anyone else’s organization');
       const settings = resolvePersonalSettings(body, firm);
       if (!settings) throw new ApiError('VALIDATION_FAILED', 'defaultCurrency and timezone are required when no organizationId is given');
-      const initialPassword = generateOneTimePassword();
-      const passwordHash = await passwordHasher.hash(initialPassword);
       try {
         const { user, memberships, personalOrganization } = await store.users.create({
           email,
           displayName: body.displayName,
-          passwordHash,
+          // MUT-235: no password until the person sets one through their link.
+          passwordHash: null,
           locale: body.locale,
           ...(firm ? { organizationId: firm.id } : {}),
           personal: personalProfileFor(body.locale, settings),
@@ -145,12 +174,13 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
           requestId: c.get('requestId'),
         });
         await audit(c, memberships.map((m) => m.organizationId), user.id, 'user.created', { email: user.email, displayName: user.displayName });
+        const setupLink = await issueSetupLink(c, user, { purpose: 'SETUP', validHours: body.setupLinkValidHours, lock: false });
         return c.json(
           {
             user: serializeUser(user),
             memberships: memberships.map(serializeMembership),
             personalProfile: { id: personalOrganization.id, name: personalOrganization.name },
-            initialPassword,
+            setupLink,
           },
           201,
         );
@@ -274,26 +304,30 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
   app.openapi(
     createRoute({
       method: 'post',
-      path: '/admin/v1/users/{userId}/password',
+      path: '/admin/v1/users/{userId}/setup-link',
       tags: ['Admin'],
-      summary: 'Operator password reset: issue a new one-time password (returned once)',
+      summary: 'Operator reset: issue a one-time setup link (returned once). The current password works until the link is used, unless `lock`',
       security: [{ adminToken: [] }],
-      request: { params: UserIdParam },
+      request: {
+        params: UserIdParam,
+        body: { required: false, content: { 'application/json': { schema: IssueSetupLinkRequestSchema } } },
+      },
       responses: {
-        200: { description: 'New password issued', content: { 'application/json': { schema: PasswordResetResponseSchema } } },
+        200: { description: 'Setup link issued; any earlier open link is cancelled', content: { 'application/json': { schema: IssueSetupLinkResponseSchema } } },
         404: notFound,
+        409: { description: 'The user is disabled (CONFLICT, details.reason USER_DISABLED); enable them first', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        422: { description: 'Validation failed', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
       },
     }),
     async (c) => {
-      const existing = await mustGetUser(c.req.valid('param').userId);
-      const password = generateOneTimePassword();
-      const now = c.get('now')();
-      const user = await store.users.setPassword(existing.id, await passwordHasher.hash(password), now);
-      if (!user) throw new ApiError('NOT_FOUND', 'User not found');
-      await store.sessions.revokeAllForUser(user.id, 'password_reset', now);
-      await audit(c, await memberOrganizations(user.id), user.id, 'user.password_reset');
-      return c.json({ user: serializeUser(user), password }, 200);
+      const user = await mustGetUser(c.req.valid('param').userId);
+      if (user.status !== 'ACTIVE') throw new ApiError('CONFLICT', 'A disabled user cannot use a setup link; enable them first', { reason: 'USER_DISABLED' });
+      // The body is optional: with none, the validator is skipped and nothing is defaulted, hence the explicit fallbacks.
+      const body: { validHours?: number | undefined; lock?: boolean | undefined } = c.req.valid('json') ?? {};
+      const purpose: SetupLinkPurpose = user.passwordHash === null ? 'SETUP' : 'RESET';
+      const setupLink = await issueSetupLink(c, user, { purpose, validHours: body.validHours, lock: body.lock === true });
+      return c.json({ user: serializeUser((await store.users.getById(user.id)) ?? user), setupLink }, 200);
     },
   );
 

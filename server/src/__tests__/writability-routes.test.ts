@@ -12,6 +12,7 @@ import { domainOfScope, matrixRow, sessionAccessFor, type Access } from '../auth
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 import type { LedgerStore } from '../repositories/ports.js';
+import { provisionUser } from './helpers/provision.js';
 
 /**
  * MUT-39: the writability matrix (hosted-portal.md §5) as route behaviour.
@@ -119,9 +120,9 @@ async function firm(h: Harness, opts: { malafat: boolean }) {
 async function partner(h: Harness, organizationIds: string[]) {
   const [first, ...rest] = organizationIds;
   const email = `partner${++seq}@firm.ps`;
-  const created = await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId: first }, admin)));
+  const created = await provisionUser(h.app, { email, displayName: 'Nour Haddad', organizationId: first });
   for (const organizationId of rest) await h.app.request(`/admin/v1/users/${created.user.id}/memberships`, json({ organizationId }, admin));
-  const res = await h.app.request('/v1/sessions', json({ email, password: created.initialPassword }, SAME_ORIGIN));
+  const res = await h.app.request('/v1/sessions', json({ email, password: created.password }, SAME_ORIGIN));
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
   return (profile: string, extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, 'x-mutaba3a-profile': profile, ...SAME_ORIGIN, ...extra });
 }
@@ -353,7 +354,8 @@ describe('lazy posting during a session read is a system act (ADR-037 decision 8
     expect(posted.filter((e) => e.action === 'installment.posted')).toHaveLength(posts.installment);
     expect(posted.filter((e) => e.action === 'retainer.charged')).toHaveLength(posts.charge);
     for (const e of posted) expect(e).toMatchObject({ actorType: 'SYSTEM', actorId: null });
-    expect(rows.filter((e) => e.actorType === 'USER').map((e) => e.action)).toEqual(['user.signed_in']);
+    // The person's own two acts (MUT-235: setting their password through the link, then signing in); the reads add none.
+    expect(rows.filter((e) => e.actorType === 'USER').map((e) => e.action).sort()).toEqual(['user.password_set', 'user.signed_in']);
   });
 });
 

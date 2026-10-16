@@ -44,4 +44,22 @@ describe('no self-registration route exists (MUT-37)', () => {
     const doc = (await (await inventory().request('/openapi.json')).json()) as { paths: Record<string, unknown> };
     expect(Object.keys(doc.paths)).toContain('/admin/v1/users');
   });
+
+  /**
+   * MUT-235 (ADR-088): the only operations anyone can call without a credential
+   * are signing in and redeeming an operator-issued setup link. A new public
+   * operation — a signup, an invite, a "forgot password" — fails this test.
+   */
+  it('the public operations are exactly sign-in and the setup-link pair', async () => {
+    const doc = (await (await inventory().request('/openapi.json')).json()) as {
+      paths: Record<string, Record<string, { security?: unknown[] }>>;
+    };
+    const publicOperations = Object.entries(doc.paths)
+      .filter(([path]) => path.startsWith('/v1/'))
+      .flatMap(([path, methods]) => Object.entries(methods).map(([method, op]) => ({ key: `${method.toUpperCase()} ${path}`, security: op.security })))
+      .filter((op) => Array.isArray(op.security) && op.security.length === 0)
+      .map((op) => op.key)
+      .sort();
+    expect(publicOperations).toEqual(['POST /v1/account-setup', 'POST /v1/account-setup/check', 'POST /v1/device-sessions', 'POST /v1/sessions']);
+  });
 });

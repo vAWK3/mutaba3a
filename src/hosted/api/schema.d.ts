@@ -456,6 +456,149 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/account-setup/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check a setup link before asking for a password */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetupLinkCheckRequest"];
+                };
+            };
+            responses: {
+                /** @description What the link is good for; only a valid one names its account */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SetupLinkCheckResponse"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/account-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set your password through a setup link (signs out every session; does not sign in) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetupLinkRedeemRequest"];
+                };
+            };
+            responses: {
+                /** @description Password set; sign in with POST /v1/sessions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SetupLinkRedeemResponse"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (the password is 12 to 128 characters) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/integration": {
         parameters: {
             query?: never;
@@ -9122,7 +9265,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Create a user with their personal profile and, optionally, a firm membership (one-time password returned once) */
+        /** Create a user with their personal profile and, optionally, a firm membership (one-time setup link returned once) */
         post: {
             parameters: {
                 query?: never;
@@ -9389,7 +9532,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/v1/users/{userId}/password": {
+    "/admin/v1/users/{userId}/setup-link": {
         parameters: {
             query?: never;
             header?: never;
@@ -9398,7 +9541,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Operator password reset: issue a new one-time password (returned once) */
+        /** Operator reset: issue a one-time setup link (returned once). The current password works until the link is used, unless `lock` */
         post: {
             parameters: {
                 query?: never;
@@ -9408,15 +9551,19 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["IssueSetupLinkRequest"];
+                };
+            };
             responses: {
-                /** @description New password issued */
+                /** @description Setup link issued; any earlier open link is cancelled */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["PasswordResetResponse"];
+                        "application/json": components["schemas"]["IssueSetupLinkResponse"];
                     };
                 };
                 /** @description Missing or invalid admin token */
@@ -9430,6 +9577,24 @@ export interface paths {
                 };
                 /** @description Unknown user or organization */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description The user is disabled (CONFLICT, details.reason USER_DISABLED); enable them first */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -9689,7 +9854,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE";
+                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -9706,6 +9871,32 @@ export interface components {
         DeviceSession: components["schemas"]["Me"] & {
             token: string;
         };
+        SetupLinkCheckResponse: {
+            /** @enum {string} */
+            state: "valid";
+            email: string;
+            locale: components["schemas"]["UserLocale"];
+            purpose: components["schemas"]["SetupLinkPurpose"];
+            /** Format: date-time */
+            expiresAt: string;
+        } | {
+            /** @enum {string} */
+            state: "expired" | "used" | "superseded" | "invalid";
+        };
+        /** @enum {string} */
+        SetupLinkPurpose: "SETUP" | "RESET";
+        SetupLinkCheckRequest: {
+            token: string;
+        };
+        SetupLinkRedeemResponse: {
+            email: string;
+        };
+        SetupLinkRedeemRequest: {
+            token: string;
+            password: components["schemas"]["NewPassword"];
+        };
+        /** @description 12 to 128 characters; no composition rules. */
+        NewPassword: string;
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];
             apiKey: components["schemas"]["ApiKeySummary"];
@@ -11471,7 +11662,7 @@ export interface components {
                 id: string;
                 name: string;
             };
-            initialPassword: string;
+            setupLink: components["schemas"]["SetupLink"];
         };
         UserSummary: {
             /** Format: uuid */
@@ -11494,6 +11685,13 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        SetupLink: {
+            /** Format: uri */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            purpose: components["schemas"]["SetupLinkPurpose"];
+        };
         CreateUserRequest: {
             /** Format: email */
             email: string;
@@ -11503,6 +11701,7 @@ export interface components {
             organizationId?: string;
             defaultCurrency?: components["schemas"]["Currency"];
             timezone?: string;
+            setupLinkValidHours?: number;
         };
         UserList: {
             users: components["schemas"]["UserSummary"][];
@@ -11523,9 +11722,14 @@ export interface components {
         RemoveMembershipResponse: {
             removed: boolean;
         };
-        PasswordResetResponse: {
+        IssueSetupLinkResponse: {
             user: components["schemas"]["UserSummary"];
-            password: string;
+            setupLink: components["schemas"]["SetupLink"];
+        };
+        IssueSetupLinkRequest: {
+            validHours?: number;
+            /** @default false */
+            lock: boolean;
         };
         UserStatusResponse: {
             user: components["schemas"]["UserSummary"];

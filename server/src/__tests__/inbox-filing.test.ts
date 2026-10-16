@@ -4,6 +4,7 @@ import { createApp } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { provisionUser } from './helpers/provision.js';
 
 /**
  * MUT-66 filing: an unsorted entry becomes a real record on one chosen
@@ -73,9 +74,9 @@ async function setup() {
   await h.store.integrations.connect({ organizationId: m.id, provider: 'MALAFAT', externalTenantId: `tenant-${seq}`, displayName: 'Firm', connectedByApiKeyId: mKey.apiKey.id, at: h.clock.now });
 
   const email = `partner${++seq}@firm.ps`;
-  const created = (await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId: p.id }, admin)))) as { user: { id: string }; initialPassword: string };
+  const created = await provisionUser(h.app, { email, displayName: 'Nour Haddad', organizationId: p.id });
   await h.app.request(`/admin/v1/users/${created.user.id}/memberships`, json({ organizationId: m.id }, admin));
-  const signIn = await h.app.request('/v1/sessions', json({ email, password: created.initialPassword }, SAME_ORIGIN));
+  const signIn = await h.app.request('/v1/sessions', json({ email, password: created.password }, SAME_ORIGIN));
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(signIn.headers.get('set-cookie') ?? '')?.[1] ?? '';
 
   const me = (extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, ...SAME_ORIGIN, ...extra });

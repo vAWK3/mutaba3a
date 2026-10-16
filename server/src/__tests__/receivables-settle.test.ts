@@ -5,6 +5,7 @@ import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { InsufficientCapacity, MemoryLedgerStore } from '../repositories/memory.js';
 import type { LedgerStore } from '../repositories/ports.js';
+import { provisionUser } from './helpers/provision.js';
 
 /** MUT-65 (locked-in AC 11): POST /v1/receivables/{id}/settle — a personal profile's own receivable, no preview/allocation dance. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,9 +55,9 @@ async function orgs(h: Harness) {
 async function person(h: Harness, organizationIds: string[]) {
   const [first, ...rest] = organizationIds;
   const email = `partner${++seq}@firm.ps`;
-  const created = (await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId: first }, admin)))) as { user: { id: string }; initialPassword: string };
+  const created = await provisionUser(h.app, { email, displayName: 'Nour Haddad', organizationId: first });
   for (const organizationId of rest) await h.app.request(`/admin/v1/users/${created.user.id}/memberships`, json({ organizationId }, admin));
-  const res = await h.app.request('/v1/sessions', json({ email, password: created.initialPassword }, SAME_ORIGIN));
+  const res = await h.app.request('/v1/sessions', json({ email, password: created.password }, SAME_ORIGIN));
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
   return (profile: string, extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, 'x-mutaba3a-profile': profile, ...SAME_ORIGIN, ...extra });
 }

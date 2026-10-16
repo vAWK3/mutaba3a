@@ -1,0 +1,147 @@
+import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import type { Context } from 'hono';
+import { setupLinkState, type SetupLinkState } from '../auth/account-setup.js';
+import type { AppEnv, SessionSettings } from '../auth/middleware.js';
+import { clientIp, isSameOriginRequest, sessionDigest } from '../auth/sessions.js';
+import type { PasswordHasher } from '../auth/users.js';
+import { ApiError } from '../errors.js';
+import type { RateLimiter } from '../rate-limit.js';
+import type { AccountSetupTokenRecord, AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
+import {
+  ErrorEnvelopeSchema,
+  SetupLinkCheckRequestSchema,
+  SetupLinkCheckResponseSchema,
+  SetupLinkRedeemRequestSchema,
+  SetupLinkRedeemResponseSchema,
+} from '../schemas.js';
+
+/**
+ * The two public routes a setup link reaches (MUT-235, ADR-088). They are the
+ * only public account routes besides sign-in: no signup, invite or "forgot
+ * password" exists (no-self-registration.test.ts pins the list).
+ *
+ * The token travels in the request body, never the URL. Both routes are
+ * same-origin only (the portal is the one browser caller) and share the
+ * sign-in IP limiter under their own key. Redeeming sets the password but
+ * issues no session: the portal then signs in through POST /v1/sessions, so
+ * there is still exactly one way to mint a session.
+ */
+export interface AccountSetupRouteOptions {
+  store: LedgerStore;
+  passwordHasher: PasswordHasher;
+  settings: SessionSettings;
+  ipLimiter: RateLimiter;
+}
+
+const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
+
+export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHono<AppEnv> {
+  const { store, passwordHasher, settings, ipLimiter } = options;
+  const app = new OpenAPIHono<AppEnv>();
+
+  async function guard(c: Context<AppEnv>): Promise<Date> {
+    if (!isSameOriginRequest(c.req, settings.portalOrigin)) {
+      throw new ApiError('CROSS_SITE_REQUEST', 'Set your password from the Mutaba3a portal itself');
+    }
+    const now = c.get('now')();
+    const ip = await ipLimiter.check(`account-setup:${clientIp((name) => c.req.header(name), settings.trustedProxyHops)}`, now);
+    if (!ip.allowed) {
+      c.header('Retry-After', String(ip.retryAfterSeconds));
+      throw new ApiError('RATE_LIMITED', 'Too many attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
+    }
+    return now;
+  }
+
+  async function lookUp(token: string): Promise<{ link: AccountSetupTokenRecord | null; person: UserRecord | null }> {
+    const link = await store.accountSetup.findByDigest(sessionDigest(settings.pepper, token));
+    return { link, person: link ? await store.users.getById(link.userId) : null };
+  }
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/account-setup/check',
+      tags: ['Sessions'],
+      summary: 'Check a setup link before asking for a password',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: SetupLinkCheckRequestSchema } } } },
+      responses: {
+        200: { description: 'What the link is good for; only a valid one names its account', content: { 'application/json': { schema: SetupLinkCheckResponseSchema } } },
+        403: errorResponse('CROSS_SITE_REQUEST'),
+        422: errorResponse('Validation failed'),
+        429: errorResponse('Too many attempts from this address'),
+      },
+    }),
+    async (c) => {
+      const now = await guard(c);
+      const { link, person } = await lookUp(c.req.valid('json').token);
+      const state = setupLinkState(link, person, now);
+      if (state === 'valid' && link && person) {
+        return c.json({ state, email: person.email, locale: person.locale, purpose: link.purpose, expiresAt: link.expiresAt.toISOString() }, 200);
+      }
+      return c.json({ state: refusalOf(state) }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/account-setup',
+      tags: ['Sessions'],
+      summary: 'Set your password through a setup link (signs out every session; does not sign in)',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: SetupLinkRedeemRequestSchema } } } },
+      responses: {
+        200: { description: 'Password set; sign in with POST /v1/sessions', content: { 'application/json': { schema: SetupLinkRedeemResponseSchema } } },
+        403: errorResponse('CROSS_SITE_REQUEST'),
+        410: errorResponse('SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid'),
+        422: errorResponse('Validation failed (the password is 12 to 128 characters)'),
+        429: errorResponse('Too many attempts from this address'),
+      },
+    }),
+    async (c) => {
+      const now = await guard(c);
+      const { token, password } = c.req.valid('json');
+      const tokenDigest = sessionDigest(settings.pepper, token);
+      const { link, person } = await lookUp(token);
+      const state = setupLinkState(link, person, now);
+      if (state !== 'valid' || !person) throw unusable(refusalOf(state));
+      // Hash before claiming, so the slow part never runs inside the transaction.
+      const passwordHash = await passwordHasher.hash(password);
+      const audit = await passwordSetAudit(c, person);
+      const redeemed = await store.accountSetup.redeem({ tokenDigest, passwordHash, at: now, audit });
+      if (!redeemed) {
+        // Lost a race (another tab, a newer link, a disable): say what the link is now.
+        const again = await lookUp(token);
+        const after = setupLinkState(again.link, again.person, now);
+        throw unusable(after === 'valid' ? 'used' : after);
+      }
+      return c.json({ email: redeemed.email }, 200);
+    },
+  );
+
+  async function passwordSetAudit(c: Context<AppEnv>, person: UserRecord): Promise<AuditEventInput[]> {
+    return (await store.memberships.listByUser(person.id)).map((m) => ({
+      organizationId: m.organizationId,
+      actorType: 'USER',
+      actorId: person.id,
+      action: 'user.password_set',
+      entityType: 'user',
+      entityId: person.id,
+      requestId: c.get('requestId'),
+    }));
+  }
+
+  return app;
+}
+
+type SetupLinkRefusal = Exclude<SetupLinkState, 'valid'>;
+
+/** A 'valid' state reaching a refusal means its link or person vanished between reads: treat it as unknown. */
+function refusalOf(state: SetupLinkState): SetupLinkRefusal {
+  return state === 'valid' ? 'invalid' : state;
+}
+
+function unusable(state: SetupLinkRefusal): ApiError {
+  return new ApiError('SETUP_LINK_UNUSABLE', 'This setup link can no longer be used; ask for a new one', { state });
+}
