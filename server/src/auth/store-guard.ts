@@ -66,6 +66,8 @@ export const STORE_ACCESS: StoreAccess = {
     recordSignIn: 'control',
     // MUT-191: a person's own preference, written by their session (identity row)
     updateMalafatSuggestions: { write: 'identity' },
+    // MUT-237: a person's own password, same identity-row write as updateMalafatSuggestions above.
+    changePassword: { write: 'identity' },
   },
   memberships: { grant: 'operator', revoke: 'operator', find: 'read', listByUser: 'read', listByOrganization: 'read' },
   sessions: { create: { write: 'identity' }, findByDigest: 'read', touch: 'control', revoke: { write: 'identity' }, revokeAllForUser: 'operator' },

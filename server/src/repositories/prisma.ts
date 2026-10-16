@@ -250,6 +250,23 @@ export class PrismaLedgerStore implements LedgerStore {
         const next = applyMalafatChange(locked.malafatSuggestions, change);
         return toUser(await tx.user.update({ where: { id }, data: { malafatSuggestions: next as unknown as Prisma.InputJsonValue, updatedAt: at } }));
       }),
+    // MUT-237: the same NO KEY UPDATE lock accountSetup.redeem takes, so a sign-in racing this call either
+    // commits first (then gets revoked below, unless it is the excepted session) or sees the new hash and refuses.
+    changePassword: (input) =>
+      this.prisma.$transaction(async (tx) => {
+        const [person] = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
+        if (!person) return null;
+        const user = await tx.user.update({
+          where: { id: input.userId },
+          data: { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at },
+        });
+        await tx.session.updateMany({
+          where: { userId: input.userId, revokedAt: null, id: { not: input.exceptSessionId } },
+          data: { revokedAt: input.at, revokedReason: 'password_changed' },
+        });
+        if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+        return toUser(user);
+      }),
   };
 
   readonly sessions: SessionRepository = {

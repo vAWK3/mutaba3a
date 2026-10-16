@@ -493,6 +493,16 @@ export const SetupLinkRedeemRequestSchema = z.object({ token: SetupTokenSchema, 
 /** The portal signs in with this email and the password just set, through POST /v1/sessions. */
 export const SetupLinkRedeemResponseSchema = z.object({ email: z.string() }).openapi('SetupLinkRedeemResponse');
 
+// ---- Changing your own password (MUT-237) ----------------------------------
+
+/**
+ * `currentPassword` is unconstrained: it is whatever the person's existing
+ * password already is, which may predate the 12-char floor (an operator-set
+ * password from before MUT-235) — constraining it would wrongly reject a
+ * correct old password.
+ */
+export const ChangePasswordRequestSchema = z.object({ currentPassword: z.string(), newPassword: NewPasswordSchema }).openapi('ChangePasswordRequest');
+
 // ---- Milestone 2: customers, projects, import --------------------------------
 
 export const ProviderSchema = z.enum(['MALAFAT']).openapi('Provider');
