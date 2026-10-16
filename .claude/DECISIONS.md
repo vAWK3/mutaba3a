@@ -1629,6 +1629,20 @@ and gives no hosted web login. Full design, cost and test strategy:
    > CURRENT_PASSWORD_WRONG`, never `401`: the session is still valid, and a
    > 401 would trip the portal's generic session-expired handler
    > (`client.ts`'s `unauthorisedHandler`) and sign the person out mid-form.
+   >
+   > **Fix (2026-10-16, MUT-237 reopened by MUT-238's release QA).** The
+   > session check compared `users.passwordChangedAt` with the session's
+   > `createdAt`, so the kept session, created before the change, was refused
+   > on its next request: on a real clock the caller was signed out too.
+   > Sessions now carry `credentialsVerifiedAt`, which is set at sign-in and
+   > backfilled from `createdAt`, and the check compares with it.
+   > `changePassword` re-stamps only the kept session (same person, still
+   > unrevoked) to the change's instant, inside the same `FOR NO KEY UPDATE`
+   > transaction. Every other session, and any session a racing sign-in
+   > inserts, keeps its sign-in instant and still fails the check, so §7a's
+   > race reasoning is unchanged. `createdAt`, `idleExpiresAt` and
+   > `absoluteExpiresAt` are untouched, so keeping a session never extends
+   > its life. Migration `20261016180000_mut237_session_credentials_verified_at`.
 2. **A hosted profile is `Membership × Organization`**, not a table. The
    client-side type is `ProfileSource = 'local' | 'hosted'`; the server only
    ever emits `hosted`. **Hosted profile data is a separate dataset from local

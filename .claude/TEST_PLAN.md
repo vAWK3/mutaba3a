@@ -2688,6 +2688,8 @@ The phone flows that use it (MUT-229) and a live call to Frankfurter are not exe
 
 Unchanged and green: `routes-m2/m3/m4/m5/m6/m8.test.ts` (pinned `API_VERSION` string bumped to 1.31.0-mut237, no behaviour change); `no-self-registration.test.ts` (the path carries no forbidden word).
 
+Fix (2026-10-16, kept session signed out on a real clock): the route tests now move the clock between sign-in and the change, which is what exposed the bug. The first test asserts the kept cookie session answers 200 and keeps its `createdAt` and absolute deadline. The device test asserts a second device session is 401, the kept one is still 200 five minutes later, and the old password no longer signs in. The lockout test's success after the lock is followed by a 200 `/v1/me`. A new route test shows a session that signed in with the new password is live, and a second change from the first session ends it. Store contract +2 each: the kept session's `credentialsVerifiedAt` is the change's instant with its start and deadlines unchanged, and the other session keeps its sign-in stamp; a different person's session named as `exceptSessionId` is neither re-stamped nor revoked. Not caught by `qa/specs/portal/account.spec.ts`: it runs on the in-memory `FakeApi`, not the real session middleware.
+
 ## MUT-236 — portal /setup page (2026-10-16, ADR-088 §8)
 
 | File | Kind | Tests | What it proves |

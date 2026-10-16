@@ -32,6 +32,14 @@
 **Impact**: `GET /admin/v1/users/{id}` shows no "setup pending" or open-link expiry, so when someone says "I never got in", the operator just issues a new link. That is safe (it supersedes the old one) but blind.
 **Fix**: add `passwordSet: boolean` and the open link's `expiresAt` to the admin user detail, plus a `show` CLI command.
 
+### TD-151: A `--lock` that lands mid-change is overwritten by the new password
+**Status**: Open
+**Ticket**: none (found 2026-10-16, MUT-237 kept-session fix)
+**Added**: 2026-10-16
+**Priority**: Low (an operator lock and a self-service change within the same ~100 ms)
+**Impact**: `POST /v1/me/password` verifies the current password and hashes the new one before `users.changePassword` takes the row lock. If an operator `--lock` (or a setup-link redeem) commits in that window, the change still writes its new hash afterwards. The caller's session is already revoked by then, so it isn't re-stamped and stays signed out, but the account has a password the lock meant to clear.
+**Fix**: pass the hash the route verified into `changePassword` and refuse (`StateConflict('user', 'CREDENTIAL_CHANGED')`, mapped to 403 `CURRENT_PASSWORD_WRONG` or 401) when the locked row's hash differs, or when the kept session is no longer live, the same check sign-in's `verifiedPasswordHash` makes under `FOR SHARE`.
+
 ### TD-150: The portal's boot-slow-session release-QA specs race the 4 s session stub
 **Status**: Open
 **Ticket**: none (found 2026-10-16, MUT-236 build)

@@ -365,19 +365,21 @@ model AccountSetupToken {
 /// HMAC-SHA256 digest (SESSION_TOKEN_PEPPER) of the token is stored, whether
 /// it travels as a cookie or a bearer token.
 model Session {
-  id                String      @id @default(uuid()) @db.Uuid
-  userId            String      @db.Uuid
-  user              User        @relation(fields: [userId], references: [id])
-  tokenDigest       String      @unique @db.VarChar(64)
-  kind              SessionKind @default(cookie)
-  createdAt         DateTime
-  lastSeenAt        DateTime
-  idleExpiresAt     DateTime
-  absoluteExpiresAt DateTime
-  revokedAt         DateTime?
-  revokedReason     String?
+  id                    String      @id @default(uuid()) @db.Uuid
+  userId                String      @db.Uuid
+  user                  User        @relation(fields: [userId], references: [id])
+  tokenDigest           String      @unique @db.VarChar(64)
+  kind                  SessionKind @default(cookie)
+  createdAt             DateTime
+  /// MUT-237: when this session last proved the current password; the middleware compares it with users.passwordChangedAt.
+  credentialsVerifiedAt DateTime
+  lastSeenAt            DateTime
+  idleExpiresAt         DateTime
+  absoluteExpiresAt     DateTime
+  revokedAt             DateTime?
+  revokedReason         String?
   /// Truncated to 200 characters; for the operator's eyes only.
-  userAgent         String?     @db.VarChar(200)
+  userAgent             String?     @db.VarChar(200)
 
   @@index([userId])
   @@map("sessions")

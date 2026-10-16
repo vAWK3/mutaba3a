@@ -264,6 +264,12 @@ export class PrismaLedgerStore implements LedgerStore {
           where: { userId: input.userId, revokedAt: null, id: { not: input.exceptSessionId } },
           data: { revokedAt: input.at, revokedReason: 'password_changed' },
         });
+        // The kept session just proved the old password and set the new one: verified as of the change, so the
+        // middleware's passwordChangedAt check lets it through. Its deadlines stay where sign-in put them.
+        await tx.session.updateMany({
+          where: { id: input.exceptSessionId, userId: input.userId, revokedAt: null },
+          data: { credentialsVerifiedAt: input.at },
+        });
         if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
         return toUser(user);
       }),
@@ -276,6 +282,7 @@ export class PrismaLedgerStore implements LedgerStore {
         tokenDigest: input.tokenDigest,
         kind: input.kind,
         createdAt: input.at,
+        credentialsVerifiedAt: input.at,
         lastSeenAt: input.at,
         idleExpiresAt: input.idleExpiresAt,
         absoluteExpiresAt: input.absoluteExpiresAt,
@@ -1801,6 +1808,7 @@ function toSession(row: Prisma.SessionGetPayload<object>): SessionRecord {
     tokenDigest: row.tokenDigest,
     kind: row.kind,
     createdAt: row.createdAt,
+    credentialsVerifiedAt: row.credentialsVerifiedAt,
     lastSeenAt: row.lastSeenAt,
     idleExpiresAt: row.idleExpiresAt,
     absoluteExpiresAt: row.absoluteExpiresAt,
