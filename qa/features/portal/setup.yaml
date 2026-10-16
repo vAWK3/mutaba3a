@@ -1,0 +1,56 @@
+app: portal
+area: setup
+title: Set your password from a setup link
+tier: core
+paths:
+  - src/hosted/pages/auth/SetupPage.tsx
+  - src/hosted/pages/auth/setupLink.ts
+features:
+  - id: set-password
+    title: A valid setup link opens in the account's language with the fragment gone from the address bar; setting a password signs the person in and lands on Home, in English and Arabic (MUT-236)
+    tier: core
+    legacy: [MUT-236]
+    paths:
+      - src/hosted/router.tsx
+      - src/hosted/api/client.ts
+      - src/hosted/i18n/HostedLanguageProvider.tsx
+    steps:
+      - With no language chosen in the browser, open a valid setup link for an English account
+      - Type a password of 12 or more characters and press Save and sign in
+      - Again for an Arabic account
+    expect:
+      - The page is in the account's language (Arabic right to left), and the address bar shows /setup with no #
+      - The email shows read-only above the new-password field
+      - Saving sends the token and the password, then signs in with that email and password
+      - The person lands on the first profile's Overview
+  - id: refused-links
+    title: An expired, used, superseded, unknown or incomplete setup link says so in its own words, in English and Arabic, and shows no password form (MUT-236)
+    tier: core
+    legacy: [MUT-236]
+    steps:
+      - Open an expired, a used, a superseded and an unknown setup link, then one with no token after the #
+      - Open an expired link in Arabic
+    expect:
+      - Each shows its own heading and no password field
+      - The used link offers Go to sign in
+      - The Arabic page reads right to left
+  - id: password-rule
+    title: A password shorter than 12 characters is refused under the field before anything is sent (MUT-236)
+    tier: secondary
+    legacy: [MUT-236]
+    steps:
+      - Open a valid setup link, type an 11-character password and press Save and sign in
+    expect:
+      - The field says "Use at least 12 characters." and nothing is sent to the server
+  - id: answer-lost
+    title: When a save gets no answer but went through, the retry signs the person in instead of calling the link used (TD-149, MUT-236 D3)
+    tier: secondary
+    legacy: [MUT-236, TD-149]
+    paths:
+      - src/hosted/session/SessionBridge.tsx
+    steps:
+      - Open a valid setup link and press Save and sign in while the connection drops
+      - Press Save and sign in again
+    expect:
+      - The first try says Mutaba3a couldn't be reached and keeps the typed password
+      - The second try lands on the first profile's Overview, signed in with the typed password

@@ -310,6 +310,16 @@ export interface FakeApiSeed {
   /** Expenses a type change would leave uncategorized (GET …/type-change). */
   uncategorizedOnTypeChange?: number;
   signedIn?: boolean;
+  /** The setup link `/setup#<token>` carries (MUT-236); `valid` turns `used` once redeemed, as on the server. */
+  setupLink?: StubSetupLink;
+}
+
+export type SetupLinkState = 'valid' | 'expired' | 'used' | 'superseded' | 'invalid';
+export interface StubSetupLink {
+  state: SetupLinkState;
+  email?: string;
+  locale?: 'en' | 'ar';
+  purpose?: 'SETUP' | 'RESET';
 }
 
 export class FakeApi {
@@ -331,6 +341,7 @@ export class FakeApi {
   private readonly uncategorized: number;
   private readonly onceQueue: { method: string; path: RegExp; answer: OnceAnswer }[] = [];
   private serial = 500;
+  private setupLink: StubSetupLink | null;
 
   constructor(seed: FakeApiSeed) {
     this.signedIn = seed.signedIn ?? true;
@@ -346,6 +357,12 @@ export class FakeApi {
     this.summary = seed.summary ?? [];
     this.customerSummaries = new Map((seed.customerSummaries ?? []).map((s) => [s.customerId, s]));
     this.uncategorized = seed.uncategorizedOnTypeChange ?? 0;
+    this.setupLink = seed.setupLink ?? null;
+  }
+
+  /** The setup link changed behind the page's back: a lost answer that committed, a newer link, an expiry. */
+  markSetupLink(state: SetupLinkState) {
+    if (this.setupLink) this.setupLink = { ...this.setupLink, state };
   }
 
   /** The next request matching method + path gets this answer instead (then normal service resumes). */
@@ -377,9 +394,15 @@ export class FakeApi {
   }
 
   /** Sign in with every /v1 call answered by this API (and openSignedInPortal's defaults behind it). */
-  async open(page: Page, path: string, language: 'en' | 'ar' = 'en') {
+  async open(page: Page, path: string, language: 'en' | 'ar' = 'en', options: { chooseLanguage?: boolean } = {}) {
     await page.context().route(`${STORAGE}/**`, (route) => this.serveStorage(route));
-    return openSignedInPortal(page, { profiles: this.profiles.map((p) => p.stub), language, path, handle: (route, request, url) => this.handle(route, request, url, language) });
+    return openSignedInPortal(page, {
+      profiles: this.profiles.map((p) => p.stub),
+      language,
+      path,
+      chooseLanguage: options.chooseLanguage,
+      handle: (route, request, url) => this.handle(route, request, url, language),
+    });
   }
 
   private async serveStorage(route: Route) {
@@ -410,6 +433,10 @@ export class FakeApi {
       const [{ answer }] = this.onceQueue.splice(queued, 1);
       if (answer === 'abort') await route.abort('failed');
       else await route.fulfill(json(answer.body ?? {}, answer.status));
+      return true;
+    }
+    if (entry.path.startsWith('/v1/account-setup')) {
+      await route.fulfill(this.setupAnswer(entry));
       return true;
     }
     const isSession = entry.path === '/v1/sessions' || entry.path === '/v1/sessions/current';
@@ -473,6 +500,19 @@ export class FakeApi {
     if (resource === 'expenses') return this.expenseAnswer(e, id, sub, subId, action);
     if (resource === 'conversions') return this.conversionAnswer(e, id);
     return undefined;
+  }
+
+  /** The two public setup routes (MUT-235): the check names the account only for a valid link; a redeem uses it up. */
+  private setupAnswer(e: Logged) {
+    const link = this.setupLink ?? { state: 'invalid' as const };
+    const email = link.email ?? 'nour@office.ps';
+    if (e.path === '/v1/account-setup/check') {
+      if (link.state !== 'valid') return json({ state: link.state });
+      return json({ state: 'valid', email, locale: link.locale ?? 'en', purpose: link.purpose ?? 'SETUP', expiresAt: '2026-10-19T09:00:00.000Z' });
+    }
+    if (link.state !== 'valid') return json({ error: { code: 'SETUP_LINK_UNUSABLE', message: 'Ask for a new link', details: { state: link.state } } }, 410);
+    this.markSetupLink('used');
+    return json({ email });
   }
 
   private nextId(kind: number) {

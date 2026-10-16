@@ -85,7 +85,22 @@ export type PortalHandler = (route: Route, request: Request, url: URL) => Promis
 
 export async function openSignedInPortal(
   page: Page,
-  { profiles, clients = 0, language = 'en', path, handle }: { profiles: StubProfile[]; clients?: number; language?: 'en' | 'ar'; path: string; handle?: PortalHandler },
+  {
+    profiles,
+    clients = 0,
+    language = 'en',
+    path,
+    handle,
+    chooseLanguage = true,
+  }: {
+    profiles: StubProfile[];
+    clients?: number;
+    language?: 'en' | 'ar';
+    path: string;
+    handle?: PortalHandler;
+    /** false: store no language choice, so the portal's own default and the account's locale apply (MUT-209, MUT-236). */
+    chooseLanguage?: boolean;
+  },
 ): Promise<PortalStub> {
   const stub: PortalStub = { malafatChanges: [] };
   let list = profiles;
@@ -120,7 +135,7 @@ export async function openSignedInPortal(
     if (method === 'GET') return route.fulfill(json({ items: [], nextCursor: null }));
     return route.fulfill(json({ error: { code: 'NOT_FOUND', message: 'Not stubbed' } }, 404));
   });
-  await page.addInitScript(
+  if (chooseLanguage) await page.addInitScript(
     ([key, value]) => {
       try {
         localStorage.setItem(key, value);
