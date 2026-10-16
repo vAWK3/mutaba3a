@@ -315,6 +315,14 @@ describe('drift', () => {
     for (const [key, px] of Object.entries(tokensJson.radius)) expect(tokens.px(`--m-radius-${key}`), key).toBe(px);
   });
 
+  it('the spacing scale equals the JSON both ways: one --m-space-<n> of n px per step, and no other (MUT-165 D8)', () => {
+    const tokens = new Tokens(brand, LIGHT);
+    const css = tokens.names().filter((name) => name.startsWith('--m-space-'));
+    expect(Object.fromEntries(css.map((name) => [name, tokens.px(name)]))).toEqual(
+      Object.fromEntries(tokensJson.space.map((px) => [`--m-space-${px}`, px])),
+    );
+  });
+
   it('the font roles name the JSON faces first', () => {
     const tokens = new Tokens(brand, LIGHT);
     const first = (name: string) => tokens.resolve(name).split(',')[0].replace(/["']/g, '').trim();
@@ -469,6 +477,17 @@ describe('tokens', () => {
     const radii = own.filter((name) => name.startsWith('--radius-'));
     expect(radii.length).toBeGreaterThan(6);
     for (const name of radii) expect(Object.values(tokensJson.radius), name).toContain(tokens.px(name));
+  });
+
+  it('every --space-N reads the brand step of N × 4px, so a typo cannot move a step (MUT-165 D8)', () => {
+    const tokens = new Tokens(theme, LIGHT);
+    // --space-0 and --space-px stay literal: zero and a hairline are not steps.
+    const steps = own.filter((name) => /^--space-\d/.test(name) && name !== '--space-0');
+    expect(steps.length).toBeGreaterThan(12);
+    const misread = steps
+      .map((name) => ({ name, raw: tokens.raw(name), want: `var(--m-space-${Number(name.slice('--space-'.length).replace('-', '.')) * 4})` }))
+      .filter(({ raw, want }) => raw !== want);
+    expect(misread).toEqual([]);
   });
 
   it('body text is 16px and the type roles equal the JSON scale', () => {
