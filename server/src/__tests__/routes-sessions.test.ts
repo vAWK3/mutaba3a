@@ -18,6 +18,7 @@ const ADMIN_TOKEN = 'test-admin-token-with-at-least-32-characters';
 const admin = { 'x-admin-token': ADMIN_TOKEN };
 const SAME_ORIGIN = { origin: 'http://localhost' };
 const COOKIE = '__Host-mut_session';
+const PEPPER = 'session-pepper-with-at-least-32-chars!!';
 const realHasher = createArgon2Hasher(ARGON2_MINIMUMS);
 
 function harness(opts: { limit?: number } = {}) {
@@ -37,7 +38,7 @@ function harness(opts: { limit?: number } = {}) {
     version: '0.1.0-test',
     now: () => clock.now,
     passwordHasher: hasher,
-    sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 },
+    sessions: { pepper: PEPPER, idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 },
   });
   return { app, store, clock, logs, hasher };
 }
@@ -475,11 +476,18 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     const current = await signIn(h, p.email, p.password);
     const other = await signIn(h, p.email, p.password);
     const device = await deviceSignIn(h, p.email, p.password);
+    // A real clock moves between signing in and changing the password; a session started before the change must survive it.
+    minutes(h, 5);
+    const before = (await h.store.sessions.findByDigest(sessionDigest(PEPPER, current.token)))!;
 
     const res = await h.app.request('/v1/me/password', change(current.token, { currentPassword: p.password, newPassword: NEW_PASSWORD }));
     expect(res.status).toBe(204);
 
     expect((await h.app.request('/v1/me', { headers: withSession(current.token) })).status).toBe(200);
+    // Keeping the session never extends its life: the absolute deadline is the one sign-in set.
+    const after = (await h.store.sessions.findByDigest(sessionDigest(PEPPER, current.token)))!;
+    expect(after.absoluteExpiresAt.toISOString()).toBe(before.absoluteExpiresAt.toISOString());
+    expect(after.createdAt.toISOString()).toBe(before.createdAt.toISOString());
     expect((await h.app.request('/v1/me', { headers: withSession(other.token) })).status).toBe(401);
     expect((await h.app.request('/v1/me', { headers: withDevice(device.token) })).status).toBe(401);
 
@@ -498,6 +506,8 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     const f = await firm(h);
     const p = await person(h, f.org.id);
     const { token } = await deviceSignIn(h, p.email, p.password);
+    const other = await deviceSignIn(h, p.email, p.password);
+    minutes(h, 5);
     const res = await h.app.request('/v1/me/password', {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...withDevice(token) },
@@ -505,6 +515,27 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     });
     expect(res.status).toBe(204);
     expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(200);
+    expect((await h.app.request('/v1/me', { headers: withDevice(other.token) })).status).toBe(401);
+    minutes(h, 5);
+    expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(200);
+    expect((await h.app.request('/v1/device-sessions', json({ email: p.email, password: p.password }))).status).toBe(401);
+  });
+
+  it('a session that signed in with the new password after the change is live too, and a later change still ends it', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const first = await signIn(h, p.email, p.password);
+    minutes(h, 5);
+    expect((await h.app.request('/v1/me/password', change(first.token, { currentPassword: p.password, newPassword: NEW_PASSWORD }))).status).toBe(204);
+    minutes(h, 5);
+    const second = await signIn(h, p.email, NEW_PASSWORD);
+    expect((await h.app.request('/v1/me', { headers: withSession(second.token) })).status).toBe(200);
+    minutes(h, 5);
+    // The first session changes the password again: the second (which signed in after the first change) is signed out.
+    expect((await h.app.request('/v1/me/password', change(first.token, { currentPassword: NEW_PASSWORD, newPassword: `${NEW_PASSWORD} again` }))).status).toBe(204);
+    expect((await h.app.request('/v1/me', { headers: withSession(first.token) })).status).toBe(200);
+    expect((await h.app.request('/v1/me', { headers: withSession(second.token) })).status).toBe(401);
   });
 
   it('refuses a wrong current password with 403 (not 401, which would sign the portal out), and counts toward the shared sign-in lockout (D1)', async () => {
@@ -525,6 +556,7 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     minutes(h, SIGN_IN_POLICY.lockMs / 60_000);
     const ok = await h.app.request('/v1/me/password', change(token, { currentPassword: p.password, newPassword: NEW_PASSWORD }));
     expect(ok.status).toBe(204);
+    expect((await h.app.request('/v1/me', { headers: withSession(token) })).status).toBe(200);
   });
 
   it('refuses a new password outside 12-128 characters with 422, and changes nothing', async () => {
@@ -583,7 +615,7 @@ describe('session rate limit and log hygiene', () => {
     const { token } = await signIn(h, p.email, p.password);
     await h.app.request('/v1/me', { headers: withSession(token) });
     await h.app.request('/v1/sessions/current', { method: 'DELETE', headers: withSession(token, SAME_ORIGIN) });
-    const session = (await h.store.sessions.findByDigest(sessionDigest('session-pepper-with-at-least-32-chars!!', token)))!;
+    const session = (await h.store.sessions.findByDigest(sessionDigest(PEPPER, token)))!;
     const text = h.logs.join('');
     expect(text).not.toContain(token);
     expect(text).not.toContain(session.tokenDigest);

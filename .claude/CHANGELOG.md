@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-16 — Fix: changing your password no longer signs out this session (MUT-237)
+
+**Why:** MUT-238's iPhone release QA found that after `POST /v1/me/password` the caller's own session got `401 SESSION_EXPIRED` on its next request, so the phone and the portal tab both signed out. The session check refused any session older than `passwordChangedAt`, and the kept session was always older. The route tests missed it because their clock never moved between sign-in and the change.
+
+### Fixed
+- `sessions.credentialsVerifiedAt` (new, NOT NULL, backfilled from `createdAt`): the session middleware compares `passwordChangedAt` with it instead of `createdAt`. `users.changePassword` re-stamps only the kept session, in the same locked transaction. Other sessions, and racing sign-ins, still fail the check. Neither expiry deadline moves.
+
+### Technical
+- Migration `20261016180000_mut237_session_credentials_verified_at` (additive + backfill). `SessionRecord.credentialsVerifiedAt` in the port, memory and Prisma stores. No API or OpenAPI change.
+- Tests now advance the clock before the change. Route: +1 test, and 3 changed to assert that the kept web or device session still answers 200, the absolute deadline and `createdAt` are unchanged, and the other sessions get 401. Store contract: +2 per store (the re-stamp; a session belonging to someone else is never re-stamped).
+- Files: `server/prisma/schema.prisma`, `server/prisma/migrations/20261016180000_…/migration.sql`, `server/src/auth/middleware.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/__tests__/routes-sessions.test.ts`, `server/src/repositories/__tests__/store-contract-change-password.ts`.
+
 ## [Unreleased] - 2026-10-16 — Brand v2 spacing guard: spacing comes from tokens (MUT-165, ADR-089)
 
 **Why:** MUT-103 made colours, radii and font sizes token-only, but 175 hard-coded px/rem padding, margin and gap values remained, so the density it set could drift back one value at a time. The brand JSON's spacing scale also disagreed with the web's `--space-*`, and nothing read it.

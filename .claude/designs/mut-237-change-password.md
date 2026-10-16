@@ -145,6 +145,7 @@ New keys under `hosted.account.changePassword.*` (EN/AR, RTL unaffected — it's
 ## 6. Impact
 
 - No migration: `passwordChangedAt`, `failedSignIns`, `lockedUntil` already exist on `User` (used today by setup-link redeem and sign-in).
+  - **Corrected 2026-10-16:** this missed that the session middleware refuses any session created before `passwordChangedAt`, the kept one included. The fix adds `sessions.credentialsVerifiedAt` (migration `20261016180000_mut237_session_credentials_verified_at`), which `changePassword` re-stamps on the kept session. See the ADR-037 MUT-237 fix note.
 - No Flutter change here (MUT-238 is the separate iPhone ticket, blocked by this one).
 - `ALLOWED_APPLINKS_PATHS`/app-links: unaffected, this is a `/v1` API route, not a portal page the phone would deep-link into.
 - Audit log gains one more `user.*` USER-actor event (`user.password_changed`, distinct from `user.password_set` which MUT-235/236 reserved for the setup-link path — an investigation should be able to tell "operator-issued link redeemed" from "person changed it themselves" apart).

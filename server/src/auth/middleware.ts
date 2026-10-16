@@ -256,7 +256,8 @@ async function authenticateDeviceSessionToken(c: Context<AppEnv>, token: string,
 /**
  * Shared by a cookie session and a device-session token: valid while
  * unrevoked, inside both deadlines, and its user is ACTIVE with no password
- * change since the session began. `rateLimitPrefix` keeps the two kinds'
+ * change since the session last proved the password (sign-in, or MUT-237's
+ * own change, which re-stamps only the session that made it). `rateLimitPrefix` keeps the two kinds'
  * per-session rate-limit buckets separate; `idleMs` is the caller's idle
  * window (cookie minutes vs. device days) for the touch recompute.
  */
@@ -281,7 +282,7 @@ async function validateSessionRecord(
   }
 
   const user = await store.users.getById(session.userId);
-  if (!user || user.status !== 'ACTIVE' || user.passwordChangedAt.getTime() > session.createdAt.getTime()) {
+  if (!user || user.status !== 'ACTIVE' || user.passwordChangedAt.getTime() > session.credentialsVerifiedAt.getTime()) {
     await store.sessions.revoke(session.id, 'account_changed', now);
     throw sessionExpired();
   }
