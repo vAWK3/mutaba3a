@@ -1,0 +1,31 @@
+{
+  "overview": {
+    "title": "Home",
+    "kpi": {
+      "paidIncome": "Paid Income",
+      "unpaidReceivables": "Unpaid Receivables",
+      "expenses": "Expenses",
+      "net": "Net (Paid - Expenses)"
+    },
+    "needsAttention": "Needs Attention",
+    "noAttention": "No overdue or upcoming receivables",
+    "welcome": {
+      "title": "Welcome to Mutaba3a",
+      "description": "Start tracking your cash flow by adding your first client, project, or income entry.",
+      "addClient": "Add Client",
+      "addProject": "Add Project",
+      "addIncome": "Add Income"
+    },
+    "recentPayments": "Recent Payments",
+    "noPayments": "No payments recorded yet",
+    "noClient": "No client",
+    "paymentRecorded": "Recorded {amount} from {client}",
+    "paymentRecordedNoClient": "Recorded {amount}",
+    "undoFailed": "Couldn't undo. The payment is still recorded.",
+    "empty": {
+      "title": "Nothing to track yet",
+      "description": "Add what you did for a client and what it's worth. Home then shows what you're owed, who is late, and what came in.",
+      "action": "Add income"
+    }
+  }
+}

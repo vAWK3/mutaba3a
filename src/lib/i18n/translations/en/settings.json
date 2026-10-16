@@ -1,0 +1,271 @@
+{
+  "settings": {
+    "title": "Settings",
+    "profile": {
+      "title": "Businesses",
+      "description": "Manage who you're billing as.",
+      "addProfile": "+ Add Profile",
+      "setDefault": "Set as Default",
+      "default": "Default",
+      "confirmArchive": "Are you sure you want to archive this business profile?",
+      "actionsFor": "Actions for {name}",
+      "empty": "No business profiles yet. Create one to start recording income.",
+      "hosted": {
+        "title": "Hosted account",
+        "description": "The free app keeps everything on this device. A hosted account keeps it on our servers, so your phone and laptop show the same numbers.",
+        "cta": "See hosted accounts",
+        "signInPrompt": "Already have an account?",
+        "signIn": "Sign in"
+      },
+      "malafat": {
+        "title": "Mutaba3a + Malafat",
+        "text": "For law firms and accounting offices: Malafat manages your clients, documents and fee agreements, and connects to a Mutaba3a hosted account.",
+        "businessAdded": "Is your new business a law firm or an accounting office? Malafat manages its clients, documents and fee agreements, and connects to a Mutaba3a hosted account.",
+        "noteLabel": "A suggestion for your new business",
+        "cta": "See Malafat",
+        "dismiss": "Don't show this again",
+        "switchLabel": "Show Malafat suggestions",
+        "switchDescription": "Occasional suggestions for law firms and accounting offices. This row stays."
+      }
+    },
+    "preferences": {
+      "title": "General",
+      "description": "Language, appearance and currency."
+    },
+    "language": {
+      "title": "Language",
+      "description": "Choose your preferred language"
+    },
+    "theme": {
+      "title": "Theme",
+      "description": "Choose your preferred appearance",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "currency": {
+      "title": "Currency",
+      "enabled": "Enabled Currencies",
+      "enabledDesc": "Select which currencies to track",
+      "default": "Default Currency",
+      "defaultDesc": "Default selection in filters"
+    },
+    "features": {
+      "title": "Features",
+      "description": "Optional areas. Off by default; turning one off hides it but never deletes its data.",
+      "autoEnabled": "Switched on for your existing data: {features}.",
+      "openSettings": "Open settings",
+      "dismiss": "Dismiss",
+      "items": {
+        "expenses": {
+          "label": "Expenses",
+          "description": "Track money out in a single ledger, with the vendors you pay"
+        },
+        "insights": {
+          "label": "Insights",
+          "description": "Reports and trends across clients and months"
+        },
+        "projects": {
+          "label": "Projects",
+          "description": "Group income entries under a project"
+        },
+        "conversions": {
+          "label": "Currency conversions",
+          "description": "Log money moved between currencies, kept out of your income and expense totals"
+        }
+      }
+    },
+    "data": {
+      "exportFormat": "Export Format",
+      "exportFormatCSV": "CSV (Recommended)",
+      "exportFormatJSON": "JSON (Legacy)",
+      "exportFormatCSVDesc": "CSV format can be opened in Excel/Sheets and re-imported using the import tool.",
+      "exportFormatJSONDesc": "JSON format includes all your data and settings. Use for complete backups.",
+      "exportComplete": "Export Complete",
+      "exportCompleteDesc": "Your data has been exported successfully.",
+      "selectProfileDesc": "Select a business profile to export. All clients, projects, and transactions associated with this profile will be included.",
+      "exporting": "Exporting...",
+      "exported": "Exported successfully!",
+      "exportFailed": "Export failed",
+      "exportFailedRetry": "Export failed. Please try again.",
+      "noProfilesFound": "No business profiles found. Create a profile first.",
+      "importing": "Importing...",
+      "imported": "Imported successfully! Refreshing...",
+      "importFailed": "Import failed: {error}",
+      "invalidFile": "Invalid backup file format",
+      "downloadTemplate": "Download CSV Template",
+      "downloadTemplateBtn": "Download CSV Template",
+      "deleteAllDesc": "Permanently delete all local data",
+      "deleteAllBtn": "Delete all data…",
+      "reset": "Reset Data",
+      "resetDesc": "Reset to sample data for testing",
+      "resetBtn": "Reset Data",
+      "resetConfirm": "Are you sure you want to reset all data? This will replace your data with sample data.",
+      "deleteModal": {
+        "title": "Delete All Data",
+        "warning": "This permanently deletes everything stored in this app on this device: your businesses, clients, projects, income, payments, expenses, receipts and conversions. It cannot be undone.",
+        "kept": "Kept: your language, theme and currency settings. Optional areas are switched off again.",
+        "stepA": {
+          "title": "Step 1: Back up",
+          "desc": "Save a full backup first. Restore can bring everything back from it.",
+          "btn": "Back up",
+          "exporting": "Backing up…",
+          "done": "Backed up",
+          "error": "Backup failed"
+        },
+        "stepB": {
+          "title": "Step 2: Confirm",
+          "confirmLabel": "Type {word} to confirm",
+          "confirmWord": "DELETE",
+          "btn": "Delete permanently",
+          "deleting": "Deleting…",
+          "error": "Deletion failed"
+        },
+        "success": "All data deleted successfully"
+      }
+    },
+    "about": {
+      "title": "About",
+      "name": "Mutaba3a",
+      "description": "A local-first financial tracking tool for freelancers and small businesses. Your data is stored locally in your browser using IndexedDB.",
+      "support": "Support this project",
+      "supportDesc": "If you find this tool useful, consider supporting its development",
+      "buyMeCoffee": "Buy Me a Coffee",
+      "kofi": "Ko-fi"
+    },
+    "updates": {
+      "title": "Updates",
+      "checking": "Checking for updates...",
+      "upToDate": "You're up to date",
+      "currentVersion": "Current version",
+      "latestVersion": "Latest version",
+      "updateAvailable": "A new version is available",
+      "updateNow": "Update Now",
+      "checkFailed": "Unable to check for updates"
+    },
+    "integrityCheck": "Data Integrity Check",
+    "integrityCheckDesc": "Scan all records for missing profiles or broken references.",
+    "integrityCheckRun": "Run Check",
+    "integrityCheckRunning": "Checking...",
+    "backupDone": "Backup downloaded",
+    "backupFailed": "Backup failed",
+    "importBackupDoneSingular": "Restored {count} record from backup (v{version})",
+    "importBackupDonePlural": "Restored {count} records from backup (v{version})",
+    "exportReceipts": "Export receipts",
+    "exportReceiptsDesc": "{count} uploaded receipt files, as a ZIP with one folder per profile and month",
+    "exportReceiptsNone": "No uploaded receipts in this database",
+    "exportReceiptsBtn": "Download ZIP",
+    "exportReceiptsDone": "{count} receipts exported",
+    "exportReceiptsFailed": "Receipts export failed",
+    "desktopApp": {
+      "title": "Desktop App",
+      "download": "Download Desktop App",
+      "downloadDesc": "Get the native app for better performance",
+      "downloadBtn": "Download",
+      "downloadMac": "Download for macOS",
+      "downloadWindows": "Download for Windows"
+    },
+    "import": {
+      "mode": {
+        "title": "Import as",
+        "create": "Create a new profile",
+        "createDesc": "Adds this business as a new profile with its own clients and income.",
+        "merge": "Merge into an existing profile",
+        "mergeDesc": "Adds the clients, projects and income to a profile you already have. The profile itself is not changed.",
+        "selectProfile": "Choose a profile…"
+      },
+      "fullBackup": "This is a full backup. Restore it from Settings → Your data → Restore; importing it here would replace your data with nothing.",
+      "nothingToImport": "This file has nothing to import. Choose a profile export, a legacy backup or a CSV file.",
+      "title": "Import Data",
+      "backToSettings": "← Back to Settings",
+      "select": {
+        "drop": "Drop a .json or .csv file here",
+        "orClick": "or click to select a file"
+      },
+      "help": {
+        "title": "Need help?",
+        "csvLabel": "CSV Import:",
+        "csv": "Download the template, fill it with your data, and upload it back.",
+        "jsonLabel": "JSON Import:",
+        "json": "Use exported backup files from this app."
+      },
+      "preview": {
+        "csvSummary": "CSV Import: {clients} clients, {projects} projects, {income} income, {expenses} expenses",
+        "profile": "Profile: {name}",
+        "unknownProfile": "Unknown",
+        "legacy": "Legacy format (all data)",
+        "exported": "Exported: {date}",
+        "csvProfileTitle": "Select Business Profile",
+        "csvProfilePlaceholder": "Select a profile...",
+        "csvProfileHelp": "Choose which business profile to associate imported data with",
+        "legacyWarning": "This is a legacy backup file. Importing will replace all existing data.",
+        "csvInfo": "New data will be added without replacing existing records. Clients and projects are matched by name."
+      },
+      "validate": {
+        "title": "Validate CSV Data"
+      },
+      "importing": {
+        "title": "Importing data...",
+        "body": "Please wait while we process your data."
+      },
+      "done": {
+        "title": "Import Complete!",
+        "imported": "Imported {items}",
+        "profiles": "{count} profile",
+        "transactions": "{count} transactions",
+        "separator": ", "
+      },
+      "failed": {
+        "title": "Import Failed"
+      },
+      "actions": {
+        "chooseDifferent": "Choose Different File",
+        "importJson": "Import JSON",
+        "validate": "Next: Validate Data",
+        "back": "← Back",
+        "importRows": {
+          "one": "Import {count} Row",
+          "other": "Import {count} Rows"
+        },
+        "importMore": "Import More Data",
+        "backToSettings": "Back to Settings",
+        "tryAgain": "Try Again"
+      },
+      "errors": {
+        "emptyCsv": "CSV file is empty",
+        "readFailed": "Failed to read file. Please select a valid {format} file.",
+        "wrongType": "Please drop a .json or .csv file",
+        "chooseProfile": "Choose a profile to merge into",
+        "failed": "Import failed"
+      }
+    },
+    "yourData": {
+      "title": "Your data",
+      "description": "Back up, restore and export.",
+      "backUp": "Back up",
+      "backUpBtn": "Back up now",
+      "backingUp": "Backing up…",
+      "lastBackup": "Last backed up: {date}",
+      "never": "Not backed up yet. A backup is one file holding everything on this device.",
+      "restore": "Restore",
+      "restoreDesc": "Open a backup, a business export or a CSV file.",
+      "restoreBtn": "Restore…",
+      "exportBusiness": "Export a business",
+      "exportBusinessDesc": "One business as CSV for spreadsheets, or as JSON to move it to another device.",
+      "exportBusinessBtn": "Export…",
+      "unknownFile": "This file isn't a Mutaba3a backup, a business export or a CSV file.",
+      "deleteZoneLabel": "Danger zone"
+    },
+    "restore": {
+      "title": "Replace everything with this backup?",
+      "records": {
+        "one": "{count} record",
+        "other": "{count} records"
+      },
+      "summary": "The backup from {date} holds {records}. Everything on this device now will be replaced by it.",
+      "unknownDate": "an unknown date",
+      "replace": "Replace everything",
+      "replacing": "Restoring…"
+    }
+  }
+}

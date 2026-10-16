@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import en from '../translations/en.json';
-import ar from '../translations/ar.json';
+import en from '../translations/en';
+import ar from '../translations/ar';
 
 // MUT-87: the Expenses Needs attention rows, their ⋯ menu and the mark-paid drawer
 const BASE = 'expenses.recurring.attention';

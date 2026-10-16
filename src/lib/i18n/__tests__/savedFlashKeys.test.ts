@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import en from '../translations/en.json';
-import ar from '../translations/ar.json';
+import en from '../translations/en';
+import ar from '../translations/ar';
 
 // MUT-81: the after-save message (not-visible path) and the Show action.
 const KEYS = [

@@ -1,0 +1,92 @@
+{
+  "clients": {
+    "title": "العملاء",
+    "empty": "لا يوجد عملاء",
+    "emptySearch": "حاول تعديل البحث",
+    "emptyHint": "أضف أول عميل للبدء",
+    "addClient": "إضافة عميل",
+    "searchPlaceholder": "بحث في العملاء...",
+    "notFound": "العميل غير موجود",
+    "notFoundHint": "قد يكون هذا العميل محذوفاً أو غير موجود.",
+    "confirmArchive": "هل أنت متأكد من أرشفة هذا العميل؟",
+    "columns": {
+      "client": "العميل",
+      "activeProjects": "المشاريع النشطة",
+      "paidIncome": "الإيرادات المحصّلة",
+      "unpaid": "غير المحصّل",
+      "expenses": "المصروفات",
+      "lastPayment": "آخر دفعة",
+      "lastActivity": "آخر نشاط",
+      "owedNow": "المستحق الآن",
+      "overdue": "المتأخر"
+    },
+    "summary": {
+      "clientsCount": "{count} عملاء",
+      "clientsCountOne": "عميل واحد"
+    },
+    "detail": {
+      "noReceivables": "لا توجد مستحقات",
+      "noReceivablesHint": "تم تحصيل جميع المستحقات."
+    },
+    "profile": {
+      "owedNow": "المستحق الآن",
+      "nothingOwed": "لا توجد مستحقات",
+      "overdueAmount": "{amount} متأخر",
+      "nothingOverdue": "لا شيء متأخر",
+      "work": {
+        "title": "العمل والفوترة",
+        "add": "إضافة إيراد",
+        "what": "العمل",
+        "untitled": "بدون عنوان",
+        "emptyTitle": "لم يُسجَّل أي عمل لهذا العميل بعد",
+        "emptyHint": "أضف ما أنجزته وقيمته. هذا كل ما يلزم.",
+        "noMatches": "لا توجد إدخالات تطابق عوامل التصفية",
+        "clearFilters": "مسح عوامل التصفية"
+      },
+      "payments": {
+        "title": "الدفعات",
+        "for": "مقابل",
+        "openEntry": "فتح إدخال الإيراد"
+      }
+    },
+    "emptyFiltered": "لا يوجد عملاء مطابقون للبحث",
+    "emptyFilteredCount": "{count} عميل إجمالاً.",
+    "clearSearch": "مسح البحث",
+    "split": {
+      "profile": "ملف العميل",
+      "showing": "يُعرض الآن: {name}"
+    },
+    "crossProfileTxCount": "{count} إدخال",
+    "index": {
+      "settled": "مسدَّد",
+      "neverPaid": "لم يدفع بعد",
+      "oldestOverdue": "الأقدم {days} يوم",
+      "owedOrderHint": "مرتّبة حسب سعر الصرف اليوم. لا تُحوَّل المبالغ أبداً.",
+      "bucket": {
+        "noClient": {
+          "zero": "بدون عميل · لا إدخالات",
+          "one": "بدون عميل · إدخال واحد",
+          "two": "بدون عميل · إدخالان",
+          "few": "بدون عميل · {count} إدخالات",
+          "many": "بدون عميل · {count} إدخالًا",
+          "other": "بدون عميل · {count} إدخال"
+        },
+        "archivedClients": {
+          "zero": "عملاء مؤرشفون · {count}",
+          "one": "عملاء مؤرشفون · {count}",
+          "two": "عملاء مؤرشفون · {count}",
+          "few": "عملاء مؤرشفون · {count}",
+          "many": "عملاء مؤرشفون · {count}",
+          "other": "عملاء مؤرشفون · {count}"
+        }
+      }
+    },
+    "malafat": {
+      "label": "اقتراح لمكاتب المحاماة والمحاسبة",
+      "clientThreshold": "عملاء كثيرون تتابعهم؟ إن كنت تدير مكتب محاماة أو محاسبة، فإن Malafat يدير العملاء والمستندات واتفاقيات الأتعاب، ويتّصل بحساب مستضاف في متابعة.",
+      "secondBusiness": "تدير أكثر من مكتب؟ إن كان أحدها مكتب محاماة أو محاسبة، فإن Malafat يدير العملاء والمستندات واتفاقيات الأتعاب، ويتّصل بحساب مستضاف في متابعة.",
+      "cta": "اطّلع على Malafat",
+      "dismiss": "لا تُظهر هذا مجددًا"
+    }
+  }
+}

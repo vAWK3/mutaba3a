@@ -1,0 +1,36 @@
+{
+  "integrity": {
+    "orphanedRecordSingular": "{count} record isn't assigned to any profile.",
+    "orphanedRecordPlural": "{count} records aren't assigned to any profile.",
+    "reviewNow": "Review now",
+    "dismiss": "Dismiss",
+    "checkClean": "No issues found. Records checked: {total}.",
+    "checkIssuesSingular": "Found {count} issue. Records checked: {total}.",
+    "checkIssuesPlural": "Found {count} issues. Records checked: {total}.",
+    "checkFailed": "Integrity check failed",
+    "toastClean": "Data integrity check passed",
+    "toastIssuesSingular": "{count} data integrity issue found",
+    "toastIssuesPlural": "{count} data integrity issues found"
+  },
+  "orphanedRecords": {
+    "title": "Unassigned records",
+    "description": "These records don't belong to any business profile, so no profile's lists show them. Choose where each one belongs.",
+    "descriptionSingleProfile": "These records don't belong to any business profile, so no profile's lists show them.",
+    "groups": {
+      "clients": "Clients ({count})",
+      "projects": "Projects ({count})",
+      "transactions": "Income ({count})",
+      "expenses": "Expenses ({count})"
+    },
+    "assignAllTo": "Assign all to {profile}",
+    "profileFor": "Profile for {record}",
+    "untitledIncome": "Income entry",
+    "untitledExpense": "Expense",
+    "noProfiles": "Add a business profile first, then assign these records to it.",
+    "allAssigned": "Every record belongs to a profile.",
+    "assignedSingular": "{count} record assigned.",
+    "assignedPlural": "{count} records assigned.",
+    "partialFailureSingular": "{count} record couldn't be assigned. It's still listed below.",
+    "partialFailurePlural": "{count} records couldn't be assigned. They're still listed below."
+  }
+}

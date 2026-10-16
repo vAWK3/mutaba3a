@@ -8,7 +8,7 @@ import { LanguageProvider } from '../../../lib/i18n';
 import { FEATURE_KEYS, DEFAULT_FEATURES } from '../../../lib/features/features';
 import type { Settings } from '../../../types';
 import { AdvancedFeaturesSection } from '../AdvancedFeaturesSection';
-import en from '../../../lib/i18n/translations/en.json';
+import en from '../../../lib/i18n/translations/en';
 
 function installFakeSettings(initial: Partial<Settings> = {}) {
   let row: Settings = { ...DEFAULT_SETTINGS, ...initial };

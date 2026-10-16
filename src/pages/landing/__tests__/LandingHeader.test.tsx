@@ -6,7 +6,7 @@ import type { ReleaseInfo } from '../../../hooks/useLatestRelease';
 import { LandingHeader } from '../components/LandingHeader';
 import { HeroSection } from '../components/HeroSection';
 import { FakeIntersectionObserver, installFakeIntersectionObserver } from '../../../test/intersectionObserver';
-import en from '../../../lib/i18n/translations/en.json';
+import en from '../../../lib/i18n/translations/en';
 
 /**
  * The frosted bar (MUT-77, brief L9): wordmark, language switch, and a

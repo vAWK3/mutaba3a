@@ -4,8 +4,8 @@ import { act, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { I18nProvider } from '../../../lib/i18n/core';
 import type { Language } from '../../../lib/i18n/types';
-import en from '../../../lib/i18n/translations/en.json';
-import ar from '../../../lib/i18n/translations/ar.json';
+import en from '../../../lib/i18n/translations/en';
+import ar from '../../../lib/i18n/translations/ar';
 import { sourceFiles } from '../../../test/css/brandCss';
 import { BLOOM_PIECES } from '../bloomLoaderData';
 import {

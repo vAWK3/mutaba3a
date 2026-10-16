@@ -1,0 +1,59 @@
+{
+  "transactions": {
+    "emptySearch": "حاول تعديل البحث أو الفلاتر",
+    "addTransaction": "إضافة معاملة",
+    "searchPlaceholder": "بحث في المعاملات...",
+    "confirmDelete": "هل أنت متأكد من حذف هذه المعاملة؟",
+    "type": {
+      "income": "إيراد",
+      "expense": "مصروف",
+      "receivable": "مستحق"
+    },
+    "status": {
+      "paid": "مدفوع",
+      "unpaid": "غير مدفوع",
+      "partial": "جزئي ({percent}%)",
+      "overdue": "متأخر {days} يوم",
+      "dueIn": "مستحق خلال {days} يوم",
+      "dueToday": "مستحق اليوم"
+    },
+    "partialPayment": {
+      "title": "تسجيل دفعة",
+      "titleLeft": "تسجيل دفعة · المتبقي {amount}",
+      "received": "المحصّل حتى الآن",
+      "remaining": "المتبقي",
+      "amount": "مبلغ الدفعة",
+      "record": "تسجيل الدفعة",
+      "paidInFull": "مدفوع بالكامل",
+      "stillOwed": "يبقى {amount} مستحقًا",
+      "paymentRecorded": "تم تسجيل الدفعة",
+      "recordPayment": "تسجيل دفعة",
+      "history": "سجل الدفعات",
+      "noPayments": "لا توجد دفعات مسجلة بعد",
+      "editPayment": "تعديل الدفعة",
+      "loadFailed": "تعذّر تحميل دفعات هذا البند.",
+      "choosePayment": "اختر الدفعة التي تريد تعديلها.",
+      "updatePayment": "تحديث الدفعة",
+      "deletePayment": "حذف الدفعة",
+      "deleteConfirm": "هل أنت متأكد من حذف هذه الدفعة؟",
+      "paymentDeleted": "تم حذف الدفعة",
+      "paymentUpdated": "تم تحديث الدفعة",
+      "date": "تاريخ الدفعة",
+      "notes": "ملاحظات",
+      "addNote": "إضافة ملاحظة",
+      "amountMustBePositive": "يجب أن يكون مبلغ الدفعة أكبر من 0",
+      "overpayment": "مبلغ الدفعة يتجاوز الرصيد المتبقي البالغ {amount}",
+      "futureDate": "لا يمكن أن يكون تاريخ الدفعة في المستقبل"
+    },
+    "columns": {
+      "date": "التاريخ",
+      "type": "النوع",
+      "client": "العميل",
+      "project": "المشروع",
+      "category": "الفئة",
+      "amount": "المبلغ",
+      "status": "الحالة",
+      "description": "الوصف"
+    }
+  }
+}

@@ -24,7 +24,7 @@ import {
   HOSTED_REQUEST_FORM_NAME,
   NETLIFY_FORMS_PATH,
 } from '../../src/pages/landing/hostedRequest';
-import ar from '../../src/lib/i18n/translations/ar.json';
+import ar from '../../src/lib/i18n/translations/ar';
 import tokens from '../../src/styles/brand/mutaba3a.tokens.json';
 import { repoPath } from '../../src/test/css/brandCss';
 import { pngSize } from '../../src/test/pngSize';
@@ -151,7 +151,7 @@ describe('vite.config', () => {
 
     it('hands Vite structured meta attrs (never raw HTML), so <, " and & in the copy get escaped at serialization, not double-escaped here', async () => {
       vi.resetModules();
-      vi.doMock('../../src/lib/i18n/translations/ar.json', () => ({
+      vi.doMock('../../src/lib/i18n/translations/ar', () => ({
         default: {
           landing: {
             hero: {
@@ -181,7 +181,7 @@ describe('vite.config', () => {
         expect(byKey['og:title']).toBe('<script>alert(1)</script> "quoted" & ampersand');
         expect(byKey['og:description']).toBe('sub & "quoted" <b>bold</b>');
       } finally {
-        vi.doUnmock('../../src/lib/i18n/translations/ar.json');
+        vi.doUnmock('../../src/lib/i18n/translations/ar');
         vi.resetModules();
       }
     });

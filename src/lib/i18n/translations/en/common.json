@@ -1,0 +1,140 @@
+{
+  "common": {
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "archive": "Archive",
+    "add": "Add",
+    "edit": "Edit",
+    "view": "View",
+    "loading": "Loading...",
+    "downloading": "Downloading...",
+    "search": "Search...",
+    "close": "Close",
+    "actions": "Actions",
+    "confirm": "Confirm",
+    "noClient": "No client",
+    "noProject": "No project",
+    "all": "All",
+    "markPaid": "Mark Paid",
+    "duplicate": "Duplicate",
+    "undo": "Undo",
+    "previous": "Previous",
+    "next": "Next",
+    "uncategorized": "Uncategorized",
+    "noResults": "No results found",
+    "errorMessage": "An error occurred. Please try again.",
+    "client": "Client",
+    "project": "Project",
+    "profile": "Profile",
+    "selectProfile": "Select Profile...",
+    "defaultProfile": "Default Profile",
+    "default": "Default",
+    "sort": {
+      "nameAZ": "Name (A-Z)",
+      "nameZA": "Name (Z-A)",
+      "unpaidHigh": "Unpaid (High to Low)",
+      "unpaidLow": "Unpaid (Low to High)",
+      "activityRecent": "Recent Activity",
+      "activityOldest": "Oldest Activity",
+      "netHigh": "Net (High to Low)",
+      "netLow": "Net (Low to High)"
+    },
+    "pageTitle": "Mutaba3a — {page}",
+    "opensInNewTab": "(opens in a new tab)",
+    "loaderLabel": "Loading",
+    "loadingSlow": "Still loading…"
+  },
+  "currency": {
+    "USD": "USD",
+    "ILS": "ILS",
+    "EUR": "EUR",
+    "all": "All"
+  },
+  "toast": {
+    "transactionDuplicated": "Transaction created",
+    "transactionUndone": "Transaction undone"
+  },
+  "time": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "daysOverdue": "{days} days overdue",
+    "dueInDays": "Due in {days} days"
+  },
+  "validation": {
+    "required": "This field is required",
+    "amountRequired": "Amount is required",
+    "dateRequired": "Date is required",
+    "nameRequired": "Name is required",
+    "profileRequired": "Profile is required",
+    "amountInvalid": "Enter an amount like 1200 or 1,200.50",
+    "amountPositive": "Amount must be more than zero",
+    "amountBelowRecorded": "{amount} is already recorded as paid, so the amount can't be less",
+    "clientNotPicked": "Pick a client from the list, or press Enter to create it",
+    "amountCurrencyMismatch": "The amount is in {typed}, but this entry is in {currency}"
+  },
+  "filters": {
+    "thisMonth": "This Month",
+    "lastMonth": "Last Month",
+    "thisYear": "This Year",
+    "allTime": "All Time",
+    "custom": "Custom",
+    "period": "Period",
+    "periodFrom": "From",
+    "periodTo": "To",
+    "all": "All",
+    "type": {
+      "all": "All",
+      "income": "Income",
+      "receivable": "Receivable",
+      "expense": "Expense"
+    },
+    "status": {
+      "all": "All",
+      "paid": "Paid",
+      "unpaid": "Unpaid",
+      "overdue": "Overdue"
+    }
+  },
+  "client": {
+    "createNew": "Create new"
+  },
+  "vendor": {
+    "createNew": "Create new"
+  },
+  "project": {
+    "createNew": "Create new project"
+  },
+  "profile": {
+    "select": "Select Profile",
+    "selectPrompt": "Which profile is this for?",
+    "choose": "Choose profile",
+    "change": "change",
+    "badge": {
+      "viewingAll": "Viewing all profiles"
+    }
+  },
+  "savedFlash": {
+    "saved": "Saved",
+    "incomeSaved": "Saved to {client}",
+    "incomeSavedNoClient": "Entry saved",
+    "paymentSaved": "Payment recorded for {client}",
+    "paymentSavedNoClient": "Payment recorded",
+    "show": "Show"
+  },
+  "sample": {
+    "bar": {
+      "label": "Sample data",
+      "message": "You're looking at sample data.",
+      "start": "Start with your own",
+      "confirm": {
+        "one": "This also removes the {count} thing you added while looking around.",
+        "other": "This also removes the {count} things you added while looking around."
+      },
+      "confirmYes": "Start fresh",
+      "keep": "Keep looking"
+    },
+    "preparing": "Setting up the sample…"
+  }
+}

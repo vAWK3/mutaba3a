@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import en from '../translations/en.json';
-import ar from '../translations/ar.json';
+import en from '../translations/en';
+import ar from '../translations/ar';
 
 // MUT-86: the Record payment drawer's new strings exist in both locales, and
 // the one its single primary button replaced is gone from both.

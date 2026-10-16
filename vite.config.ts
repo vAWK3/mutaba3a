@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { VitePWA, type ManifestOptions, type VitePWAOptions } from "vite-plugin-pwa";
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json";
-import ar from "./src/lib/i18n/translations/ar.json";
+import ar from "./src/lib/i18n/translations/ar";
 import {
   HONEYPOT_FIELD,
   HOSTED_REQUEST_FIELDS,

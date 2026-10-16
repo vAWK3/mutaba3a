@@ -1,0 +1,51 @@
+{
+  "projects": {
+    "title": "المشاريع",
+    "empty": "لا توجد مشاريع",
+    "emptySearch": "حاول تعديل البحث",
+    "emptyHint": "أنشئ أول مشروع للبدء",
+    "addProject": "إضافة مشروع",
+    "searchPlaceholder": "بحث في المشاريع...",
+    "allFields": "جميع المجالات",
+    "notFound": "المشروع غير موجود",
+    "notFoundHint": "قد يكون هذا المشروع محذوفاً أو غير موجود.",
+    "confirmArchive": "هل أنت متأكد من أرشفة هذا المشروع؟",
+    "columns": {
+      "project": "المشروع",
+      "client": "العميل",
+      "field": "المجال",
+      "received": "المحصّل",
+      "paid": "المحصّل",
+      "unpaid": "غير المحصّل",
+      "expenses": "المصروفات",
+      "net": "الصافي",
+      "lastActivity": "آخر نشاط"
+    },
+    "summary": {
+      "projectsCount": "{count} مشاريع",
+      "projectsCountOne": "مشروع واحد",
+      "totalReceived": "إجمالي المحصّل",
+      "totalUnpaid": "إجمالي غير المحصّل",
+      "totalExpenses": "إجمالي المصروفات",
+      "totalNet": "إجمالي الصافي"
+    },
+    "tabs": {
+      "summary": "ملخص",
+      "transactions": "المعاملات"
+    },
+    "detail": {
+      "projectDetails": "تفاصيل المشروع",
+      "noTransactions": "لا توجد معاملات",
+      "noTransactionsHint": "أضف أول معاملة لهذا المشروع."
+    },
+    "fields": {
+      "design": "تصميم",
+      "development": "تطوير",
+      "consulting": "استشارات",
+      "marketing": "تسويق",
+      "legal": "قانوني",
+      "maintenance": "صيانة",
+      "other": "أخرى"
+    }
+  }
+}

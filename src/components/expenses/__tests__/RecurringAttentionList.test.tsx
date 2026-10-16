@@ -7,8 +7,8 @@ import type { ReactElement } from 'react';
 import { RecurringAttentionList } from '../RecurringAttentionList';
 import { groupOccurrencesByRule } from '../recurringAttention';
 import { I18nProvider } from '../../../lib/i18n/core';
-import en from '../../../lib/i18n/translations/en.json';
-import ar from '../../../lib/i18n/translations/ar.json';
+import en from '../../../lib/i18n/translations/en';
+import ar from '../../../lib/i18n/translations/ar';
 import type { Language } from '../../../lib/i18n';
 import type { VirtualOccurrenceDisplay } from '../../../types';
 

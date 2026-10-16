@@ -1,0 +1,51 @@
+{
+  "projects": {
+    "title": "Projects",
+    "empty": "No projects found",
+    "emptySearch": "Try adjusting your search",
+    "emptyHint": "Create your first project to get started",
+    "addProject": "Add Project",
+    "searchPlaceholder": "Search projects...",
+    "allFields": "All fields",
+    "notFound": "Project not found",
+    "notFoundHint": "This project may have been deleted or doesn't exist.",
+    "confirmArchive": "Are you sure you want to archive this project?",
+    "columns": {
+      "project": "Project",
+      "client": "Client",
+      "field": "Field",
+      "received": "Received",
+      "paid": "Paid",
+      "unpaid": "Unpaid",
+      "expenses": "Expenses",
+      "net": "Net",
+      "lastActivity": "Last Activity"
+    },
+    "summary": {
+      "projectsCount": "{count} projects",
+      "projectsCountOne": "1 project",
+      "totalReceived": "Total Received",
+      "totalUnpaid": "Total Unpaid",
+      "totalExpenses": "Total Expenses",
+      "totalNet": "Total Net"
+    },
+    "tabs": {
+      "summary": "Summary",
+      "transactions": "Transactions"
+    },
+    "detail": {
+      "projectDetails": "Project Details",
+      "noTransactions": "No transactions",
+      "noTransactionsHint": "Add your first transaction for this project."
+    },
+    "fields": {
+      "design": "Design",
+      "development": "Development",
+      "consulting": "Consulting",
+      "marketing": "Marketing",
+      "legal": "Legal",
+      "maintenance": "Maintenance",
+      "other": "Other"
+    }
+  }
+}

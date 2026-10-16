@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
-import en from '../../../lib/i18n/translations/en.json';
+import en from '../../../lib/i18n/translations/en';
 
 vi.hoisted(() => {
   (globalThis as Record<string, unknown>).__APP_VERSION__ = '1.2.3';

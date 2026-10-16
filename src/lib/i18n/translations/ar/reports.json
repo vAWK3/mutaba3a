@@ -1,0 +1,51 @@
+{
+  "reports": {
+    "title": "التقارير",
+    "exportCsv": "تصدير CSV",
+    "print": "طباعة",
+    "presets": {
+      "summary": "ملخص",
+      "thisMonth": "هذا الشهر",
+      "thisYear": "هذا العام",
+      "byProject": "حسب المشروع",
+      "byClient": "حسب العميل",
+      "expensesByProject": "المصروفات حسب المشروع",
+      "unpaidAging": "تقادم المستحقات"
+    },
+    "period": {
+      "month": "شهر",
+      "quarter": "ربع سنة",
+      "year": "سنة",
+      "custom": "مخصص"
+    },
+    "currencyMode": {
+      "usd": "دولار",
+      "ils": "شيكل",
+      "both": "الكل"
+    },
+    "drillDown": {
+      "paidIncome": "عرض الإيرادات المحصّلة",
+      "unpaidIncome": "عرض المستحقات غير المحصّلة",
+      "expenses": "عرض المصروفات"
+    },
+    "search": {
+      "project": "بحث في المشاريع...",
+      "client": "بحث في العملاء..."
+    },
+    "selectCurrencyForAmounts": "اختر عملة محددة لعرض المبالغ",
+    "sections": {
+      "financialSummary": "الملخص المالي",
+      "incomeByProject": "الإيرادات حسب المشروع",
+      "incomeByClient": "الإيرادات حسب العميل",
+      "expensesByProject": "المصروفات حسب المشروع",
+      "unpaidAging": "تقادم المستحقات غير المحصّلة"
+    },
+    "aging": {
+      "current": "الحالية (لم تستحق)",
+      "days1to30": "متأخرة 1-30 يوم",
+      "days31to60": "متأخرة 31-60 يوم",
+      "days60plus": "متأخرة أكثر من 60 يوم"
+    },
+    "noExpenses": "لا توجد مصروفات في هذه الفترة"
+  }
+}

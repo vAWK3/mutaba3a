@@ -3,8 +3,8 @@ import { chooseLanguage } from '../../../test/language';
 import { renderWithProviders, screen, userEvent } from '../../../test/utils';
 import type { IntegrityResult } from '../../../db/integrityCheck';
 import { useDrawerStore } from '../../../lib/stores';
-import en from '../../../lib/i18n/translations/en.json';
-import ar from '../../../lib/i18n/translations/ar.json';
+import en from '../../../lib/i18n/translations/en';
+import ar from '../../../lib/i18n/translations/ar';
 import { OrphanedRecordsBanner } from '../OrphanedRecordsBanner';
 
 const { runIntegrityCheck } = vi.hoisted(() => ({ runIntegrityCheck: vi.fn() }));

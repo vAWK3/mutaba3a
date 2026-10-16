@@ -5,8 +5,8 @@ import { db } from '../../../db/database';
 import { useDemoStore, getDemoProfileIds } from '../../../demo';
 import { useProfileStore } from '../../../lib/profileStore';
 import { useActiveProfile } from '../../../hooks/useActiveProfile';
-import en from '../../../lib/i18n/translations/en.json';
-import ar from '../../../lib/i18n/translations/ar.json';
+import en from '../../../lib/i18n/translations/en';
+import ar from '../../../lib/i18n/translations/ar';
 import { DemoSeedModal } from '../DemoSeedModal';
 
 /**

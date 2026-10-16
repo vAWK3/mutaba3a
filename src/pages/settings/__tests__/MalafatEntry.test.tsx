@@ -5,8 +5,8 @@ import type { MalafatSuggestions } from '../../../lib/malafatSuggestions';
 import { useMalafatMomentStore } from '../../../lib/malafatMomentStore';
 import { useDemoStore } from '../../../demo/demoStore';
 import { useSampleSessionStore } from '../../../demo/sampleSessionStore';
-import en from '../../../lib/i18n/translations/en.json';
-import ar from '../../../lib/i18n/translations/ar.json';
+import en from '../../../lib/i18n/translations/en';
+import ar from '../../../lib/i18n/translations/ar';
 import { MalafatEntry } from '../MalafatEntry';
 
 const state = vi.hoisted(() => ({

@@ -1,0 +1,35 @@
+{
+  "insights": {
+    "title": "Insights",
+    "tabs": {
+      "summary": "Summary",
+      "clients": "Clients",
+      "projects": "Projects",
+      "expenses": "Expenses",
+      "unpaid": "Unpaid"
+    },
+    "period": {
+      "month": "Month",
+      "year": "Year"
+    },
+    "toggles": {
+      "includeUnpaid": "Include unpaid income"
+    },
+    "yearInsights": {
+      "title": "Year Insights"
+    },
+    "monthlyTrend": {
+      "title": "Monthly Trend",
+      "income": "Income",
+      "expenses": "Expenses",
+      "net": "Net",
+      "noData": "No data for this period"
+    },
+    "unpaid": {
+      "byClient": "Outstanding by Client",
+      "byProject": "Outstanding by Project",
+      "totalUnpaid": "Total Unpaid",
+      "invoices": "Entries"
+    }
+  }
+}

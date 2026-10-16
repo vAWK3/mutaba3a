@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import en from '../translations/en.json';
-import ar from '../translations/ar.json';
+import en from '../translations/en';
+import ar from '../translations/ar';
 
 // TD-009: the accessible names added for the axe fixes exist in both locales
 const KEYS = [

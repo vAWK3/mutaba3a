@@ -1,0 +1,144 @@
+{
+  "common": {
+    "save": "حفظ",
+    "saving": "جارٍ الحفظ...",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "archive": "أرشفة",
+    "add": "إضافة",
+    "edit": "تعديل",
+    "view": "عرض",
+    "loading": "جارٍ التحميل...",
+    "downloading": "جارٍ التحميل...",
+    "search": "بحث...",
+    "close": "إغلاق",
+    "actions": "الإجراءات",
+    "confirm": "تأكيد",
+    "noClient": "بدون عميل",
+    "noProject": "بدون مشروع",
+    "all": "الكل",
+    "markPaid": "تم الدفع",
+    "duplicate": "نسخ",
+    "undo": "تراجع",
+    "previous": "السابق",
+    "next": "التالي",
+    "uncategorized": "بدون فئة",
+    "noResults": "لا توجد نتائج",
+    "errorMessage": "حدث خطأ. يرجى المحاولة مرة أخرى.",
+    "client": "عميل",
+    "project": "مشروع",
+    "profile": "الملف التجاري",
+    "selectProfile": "اختر ملف تجاري...",
+    "defaultProfile": "الملف الافتراضي",
+    "default": "افتراضي",
+    "sort": {
+      "nameAZ": "الاسم (أ-ي)",
+      "nameZA": "الاسم (ي-أ)",
+      "unpaidHigh": "المستحق (الأعلى أولاً)",
+      "unpaidLow": "المستحق (الأقل أولاً)",
+      "activityRecent": "النشاط الأحدث",
+      "activityOldest": "النشاط الأقدم",
+      "netHigh": "الصافي (الأعلى أولاً)",
+      "netLow": "الصافي (الأقل أولاً)"
+    },
+    "pageTitle": "متابعة — {page}",
+    "opensInNewTab": "(يُفتح في علامة تبويب جديدة)",
+    "loaderLabel": "جارٍ التحميل",
+    "loadingSlow": "ما زلنا نحمّل…"
+  },
+  "currency": {
+    "USD": "دولار",
+    "ILS": "شيكل",
+    "EUR": "يورو",
+    "all": "الكل"
+  },
+  "toast": {
+    "transactionDuplicated": "تم إنشاء المعاملة",
+    "transactionUndone": "تم التراجع عن المعاملة"
+  },
+  "time": {
+    "today": "اليوم",
+    "yesterday": "أمس",
+    "daysOverdue": "متأخر {days} يوم",
+    "dueInDays": "مستحق خلال {days} يوم"
+  },
+  "validation": {
+    "required": "هذا الحقل مطلوب",
+    "amountRequired": "المبلغ مطلوب",
+    "dateRequired": "التاريخ مطلوب",
+    "nameRequired": "الاسم مطلوب",
+    "profileRequired": "الملف التجاري مطلوب",
+    "amountInvalid": "أدخل مبلغًا مثل 1200 أو 1,200.50",
+    "amountPositive": "يجب أن يكون المبلغ أكبر من صفر",
+    "amountBelowRecorded": "تم تسجيل {amount} كمبلغ مدفوع، لذا لا يمكن أن يكون المبلغ أقل من ذلك",
+    "clientNotPicked": "اختر عميلًا من القائمة، أو اضغط Enter لإنشائه",
+    "amountCurrencyMismatch": "المبلغ بعملة {typed}، لكن هذا البند بعملة {currency}"
+  },
+  "filters": {
+    "thisMonth": "هذا الشهر",
+    "lastMonth": "الشهر الماضي",
+    "thisYear": "هذا العام",
+    "allTime": "كل الوقت",
+    "custom": "مخصص",
+    "period": "الفترة",
+    "periodFrom": "من",
+    "periodTo": "إلى",
+    "all": "الكل",
+    "type": {
+      "all": "الكل",
+      "income": "إيراد",
+      "receivable": "مستحق",
+      "expense": "مصروف"
+    },
+    "status": {
+      "all": "الكل",
+      "paid": "مدفوع",
+      "unpaid": "غير مدفوع",
+      "overdue": "متأخر"
+    }
+  },
+  "client": {
+    "createNew": "إنشاء جديد"
+  },
+  "vendor": {
+    "createNew": "إنشاء جديد"
+  },
+  "project": {
+    "createNew": "إنشاء مشروع جديد"
+  },
+  "profile": {
+    "select": "اختر الملف",
+    "selectPrompt": "لأي ملف تريد الإضافة؟",
+    "choose": "اختر الملف",
+    "change": "تغيير",
+    "badge": {
+      "viewingAll": "عرض جميع الملفات"
+    }
+  },
+  "savedFlash": {
+    "saved": "تم الحفظ",
+    "incomeSaved": "تم الحفظ لدى {client}",
+    "incomeSavedNoClient": "تم حفظ الإدخال",
+    "paymentSaved": "تم تسجيل الدفعة لدى {client}",
+    "paymentSavedNoClient": "تم تسجيل الدفعة",
+    "show": "عرض"
+  },
+  "sample": {
+    "bar": {
+      "label": "بيانات تجريبية",
+      "message": "أنت تتصفح بيانات تجريبية.",
+      "start": "ابدأ ببياناتك",
+      "confirm": {
+        "zero": "سيُحذف أيضًا ما أضفته أثناء التصفح.",
+        "one": "سيُحذف أيضًا شيء واحد أضفته أثناء التصفح.",
+        "two": "سيُحذف أيضًا شيئان أضفتهما أثناء التصفح.",
+        "few": "سيُحذف أيضًا {count} أشياء أضفتها أثناء التصفح.",
+        "many": "سيُحذف أيضًا {count} شيئًا أضفته أثناء التصفح.",
+        "other": "سيُحذف أيضًا {count} شيء أضفته أثناء التصفح."
+      },
+      "confirmYes": "ابدأ من جديد",
+      "keep": "واصل التصفح"
+    },
+    "preparing": "جارٍ تجهيز البيانات التجريبية…"
+  }
+}
