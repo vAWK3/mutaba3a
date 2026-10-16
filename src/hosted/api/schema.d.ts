@@ -370,7 +370,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description CURRENT_PASSWORD_WRONG (the current password is wrong, or the account is locked), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED */
+                /** @description CURRENT_PASSWORD_WRONG (the current password is wrong, the account is locked, or another change landed first), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -379,7 +379,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Validation failed (the new password is 12 to 128 characters) */
+                /** @description Validation failed (the new password is 12 to 128 characters; the current one at most 1024) */
                 422: {
                     headers: {
                         [name: string]: unknown;

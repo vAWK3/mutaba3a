@@ -559,6 +559,106 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     expect((await h.app.request('/v1/me', { headers: withSession(token) })).status).toBe(200);
   });
 
+  // MUT-238 review (red team): the phone sends concurrent requests on one token (resume revalidate, outbox retry, the
+  // share extension). One that read its session just before this session's own change committed, and the person just
+  // after, must not mistake the kept session for a stale one and revoke it.
+  it('a request on the changing session that read it just before the change committed is not signed out by it', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await deviceSignIn(h, p.email, p.password);
+    const other = await deviceSignIn(h, p.email, p.password);
+    minutes(h, 5);
+    const kept = (await h.store.sessions.findByDigest(sessionDigest(PEPPER, token)))!;
+    const before = (await h.store.users.getById(p.id))!;
+    const findByDigest = h.store.sessions.findByDigest;
+    vi.spyOn(h.store.sessions, 'findByDigest').mockImplementationOnce(async (digest) => {
+      const seen = await findByDigest(digest);
+      // The change commits between this request's session read and its user read.
+      await h.store.users.changePassword({
+        userId: p.id,
+        passwordHash: await realHasher.hash(NEW_PASSWORD),
+        verifiedPasswordHash: before.passwordHash!,
+        exceptSessionId: kept.id,
+        at: h.clock.now,
+        audit: [],
+      });
+      return seen;
+    });
+
+    expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(200);
+    expect((await h.store.sessions.findByDigest(kept.tokenDigest))?.revokedAt).toBeNull();
+    expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(200);
+    // A session the change really did end stays ended.
+    expect((await h.app.request('/v1/me', { headers: withDevice(other.token) })).status).toBe(401);
+  });
+
+  it('a session still stale after the change committed is signed out, even when it read itself before the change', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const changer = await signIn(h, p.email, p.password);
+    const { token } = await deviceSignIn(h, p.email, p.password);
+    minutes(h, 5);
+    const findByDigest = h.store.sessions.findByDigest;
+    vi.spyOn(h.store.sessions, 'findByDigest').mockImplementationOnce(async (digest) => {
+      const seen = await findByDigest(digest);
+      expect((await h.app.request('/v1/me/password', change(changer.token, { currentPassword: p.password, newPassword: NEW_PASSWORD }))).status).toBe(204);
+      return seen;
+    });
+    expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(401);
+    expect((await h.app.request('/v1/me', { headers: withSession(changer.token) })).status).toBe(200);
+  });
+
+  // MUT-238 review (adversarial): the phone and the portal each verify the old password before either takes the lock.
+  it('two changes racing from two sessions: the first wins, the second is refused with 403 and writes nothing', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const phone = await deviceSignIn(h, p.email, p.password);
+    const portal = await signIn(h, p.email, p.password);
+    minutes(h, 5);
+    const PORTAL_PASSWORD = 'the portal chose this passphrase';
+    const commit = h.store.users.changePassword;
+    vi.spyOn(h.store.users, 'changePassword').mockImplementationOnce(async (input) => {
+      // The portal's change commits while the phone's has verified the old password but not yet taken the lock.
+      expect((await h.app.request('/v1/me/password', change(portal.token, { currentPassword: p.password, newPassword: PORTAL_PASSWORD }))).status).toBe(204);
+      return commit(input);
+    });
+
+    const res = await h.app.request('/v1/me/password', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...withDevice(phone.token) },
+      body: JSON.stringify({ currentPassword: p.password, newPassword: NEW_PASSWORD }),
+    });
+    expect(res.status).toBe(403);
+    expect((await read(res)).error.code).toBe('CURRENT_PASSWORD_WRONG');
+
+    expect((await h.app.request('/v1/me', { headers: withSession(portal.token) })).status).toBe(200);
+    expect((await h.app.request('/v1/me', { headers: withDevice(phone.token) })).status).toBe(401);
+    expect((await signIn(h, p.email, NEW_PASSWORD)).res.status).toBe(401);
+    expect((await signIn(h, p.email, PORTAL_PASSWORD)).res.status).toBe(201);
+    // The phone knew the right password a moment ago: losing the race is not a failed attempt.
+    expect((await h.store.users.getById(p.id))?.failedSignIns).toBe(0);
+    const events = (await h.store.audit.list(f.org.id, { entityType: 'user', action: 'user.password_changed' }, { limit: 10, cursor: null })).items;
+    expect(events).toHaveLength(1);
+  });
+
+  it('refuses a current password over 1024 characters with 422 before hashing anything, as sign-in does', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+    h.hasher.verify.mockClear();
+    const huge = await h.app.request('/v1/me/password', change(token, { currentPassword: 'x'.repeat(1025), newPassword: NEW_PASSWORD }));
+    expect(huge.status).toBe(422);
+    expect(h.hasher.verify).not.toHaveBeenCalled();
+    // 1024 is still a password the route checks (and here, a wrong one).
+    const longest = await h.app.request('/v1/me/password', change(token, { currentPassword: 'x'.repeat(1024), newPassword: NEW_PASSWORD }));
+    expect(longest.status).toBe(403);
+    expect(h.hasher.verify).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses a new password outside 12-128 characters with 422, and changes nothing', async () => {
     const h = harness();
     const f = await firm(h);

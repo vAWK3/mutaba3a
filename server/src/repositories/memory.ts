@@ -372,11 +372,14 @@ export class MemoryLedgerStore implements LedgerStore {
     changePassword: async (input) => {
       const u = this.people.get(input.userId);
       if (!u) return null;
+      const kept = this.sessionsById.get(input.exceptSessionId);
+      if (u.passwordHash !== input.verifiedPasswordHash || !kept || kept.userId !== u.id || kept.revokedAt) {
+        throw new StateConflict('user', 'CREDENTIAL_CHANGED');
+      }
       Object.assign(u, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
       this.revokeSessionsOf(u.id, 'password_changed', input.at, input.exceptSessionId);
       // The kept session is verified as of the change, so the middleware's passwordChangedAt check lets it through.
-      const kept = this.sessionsById.get(input.exceptSessionId);
-      if (kept && kept.userId === u.id && !kept.revokedAt) kept.credentialsVerifiedAt = input.at;
+      kept.credentialsVerifiedAt = input.at;
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       return { ...u };
     },

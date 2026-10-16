@@ -46,6 +46,21 @@
 - Coverage went from 89.48 / 88.55 / 87.24 / 81.07 to 91.69 / 91.01 / 88.74 / 84.12 (lines / statements / functions / branches). Per-file numbers are in `.claude/designs/mut-24-todo-backlog.md` §C and TEST_PLAN.
 - Debt found on the way: TD-153 (a future-dated paid CSV row stops the import halfway and leaves a record-less paid entry), TD-154 (two date-only reads treated as UTC midnight west of UTC), TD-155 (coverage-only timeouts that get worse under host load).
 
+## [Unreleased] - 2026-10-16 — Fix: change-password races and an unbounded current password (MUT-237, MUT-238 review)
+
+**Why:** MUT-238's pre-landing red team and adversarial review found three server problems in `POST /v1/me/password`. The phone sends concurrent requests on one token, and one of them could still revoke the session that just changed the password. Two changes racing from the phone and the portal both answered 204 and signed both out. And `currentPassword` had no length cap, so any signed-in caller could make argon2 verify a multi-megabyte string.
+
+### Fixed
+- Session middleware: a session that looks verified before `passwordChangedAt` is read again before it is revoked, so a request that read it just before its own change committed keeps working (`verifiedSincePasswordChange` in `middleware.ts`).
+- `users.changePassword` takes `verifiedPasswordHash` and, under the row lock, refuses with `StateConflict('user', 'CREDENTIAL_CHANGED')` and writes nothing when the stored hash moved or the kept session is not the person's live session. The route answers 403 `CURRENT_PASSWORD_WRONG` and does not count a failed attempt. Resolves TD-151.
+- `ChangePasswordRequest.currentPassword` is at most 1024 characters (sign-in's ceiling, now a shared constant); a longer one is a 422 and never reaches the hasher.
+
+### Technical
+- API 1.31.1-mut237: OpenAPI (`maxLength: 1024`, and the 403/422 descriptions) and `src/hosted/api/schema.d.ts` regenerated (descriptions only). No status code or response shape changed, so MUT-238's client needs nothing. No migration.
+- Tests: route +4 (the interleaved session read, a still-stale session read just before a change, racing changes, the 1024 cap); store contract +3 per store, and one changed: a session that isn't the person's own is now refused, not silently skipped.
+- New debt TD-158 (the kept session's token is not rotated).
+- Files: `server/src/auth/middleware.ts`, `server/src/routes/sessions.ts`, `server/src/schemas.ts`, `server/src/app.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `server/src/__tests__/routes-sessions.test.ts`, `server/src/__tests__/routes-m{2,3,4,5,6,8}.test.ts` (pinned version), `server/src/repositories/__tests__/store-contract-change-password.ts`.
+
 ## [Unreleased] - 2026-10-16 — Fix: changing your password no longer signs out this session (MUT-237)
 
 **Why:** MUT-238's iPhone release QA found that after `POST /v1/me/password` the caller's own session got `401 SESSION_EXPIRED` on its next request, so the phone and the portal tab both signed out. The session check refused any session older than `passwordChangedAt`, and the kept session was always older. The route tests missed it because their clock never moved between sign-in and the change.

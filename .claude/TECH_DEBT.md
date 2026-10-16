@@ -56,13 +56,13 @@
 **Impact**: `GET /admin/v1/users/{id}` shows no "setup pending" or open-link expiry, so when someone says "I never got in", the operator just issues a new link. That is safe (it supersedes the old one) but blind.
 **Fix**: add `passwordSet: boolean` and the open link's `expiresAt` to the admin user detail, plus a `show` CLI command.
 
-### TD-151: A `--lock` that lands mid-change is overwritten by the new password
+### TD-158: Changing your password keeps this device's token rather than issuing a new one
 **Status**: Open
-**Ticket**: none (found 2026-10-16, MUT-237 kept-session fix)
+**Ticket**: none (found 2026-10-16, MUT-238 pre-landing adversarial review of MUT-237)
 **Added**: 2026-10-16
-**Priority**: Low (an operator lock and a self-service change within the same ~100 ms)
-**Impact**: `POST /v1/me/password` verifies the current password and hashes the new one before `users.changePassword` takes the row lock. If an operator `--lock` (or a setup-link redeem) commits in that window, the change still writes its new hash afterwards. The caller's session is already revoked by then, so it isn't re-stamped and stays signed out, but the account has a password the lock meant to clear.
-**Fix**: pass the hash the route verified into `changePassword` and refuse (`StateConflict('user', 'CREDENTIAL_CHANGED')`, mapped to 403 `CURRENT_PASSWORD_WRONG` or 401) when the locked row's hash differs, or when the kept session is no longer live, the same check sign-in's `verifiedPasswordHash` makes under `FOR SHARE`.
+**Priority**: Low (needs a stolen token, and the person to change the password from the very session that leaked)
+**Impact**: `POST /v1/me/password` keeps the caller's session and its token. If that token is what leaked (a copied Keychain item, a portal cookie lifted from a shared machine), the attacker's copy survives the change, sliding for up to 30 idle days and 180 absolute days on a device session. Every other session is revoked, so a password change still ends a stolen session that isn't the changer's own.
+**Fix**: rotate on change: create a fresh session (new token, `credentialsVerifiedAt` = the change, same `absoluteExpiresAt`) and revoke the old one in the same transaction. Return it as `Set-Cookie` for a cookie session and as `{ token }` in a 200 body for a device session. That changes the response (204 → 200 for devices), so MUT-238's Flutter client must store the new token, and the iOS share/widget extension that shares the Keychain item must pick it up. Cross-repo, so its own ticket.
 
 ### TD-156: Six Arabic `…Singular` strings are pre-plural copies
 **Status**: Open
@@ -1719,6 +1719,15 @@ empty option and list the profiles only), with a drawer test for each.
 ---
 
 ## Resolved Debt
+
+### TD-151: A `--lock` that lands mid-change is overwritten by the new password
+**Status**: Resolved (2026-10-16, MUT-237 review fixes from MUT-238's pre-landing review)
+**Ticket**: MUT-237
+**Added**: 2026-10-16
+**Priority**: Low (an operator lock and a self-service change within the same ~100 ms)
+**Impact**: `POST /v1/me/password` verifies the current password and hashes the new one before `users.changePassword` takes the row lock. If an operator `--lock` (or a setup-link redeem) commits in that window, the change still writes its new hash afterwards. The caller's session is already revoked by then, so it isn't re-stamped and stays signed out, but the account has a password the lock meant to clear.
+**Fix**: pass the hash the route verified into `changePassword` and refuse (`StateConflict('user', 'CREDENTIAL_CHANGED')`, mapped to 403 `CURRENT_PASSWORD_WRONG` or 401) when the locked row's hash differs, or when the kept session is no longer live, the same check sign-in's `verifiedPasswordHash` makes under `FOR SHARE`.
+**Resolution**: built as described. `ChangePasswordInput.verifiedPasswordHash` is required; under the `FOR NO KEY UPDATE` lock both stores refuse with `StateConflict('user', 'CREDENTIAL_CHANGED')` when the stored hash differs (a `--lock` leaves it null) or `exceptSessionId` is not the person's live session, and write nothing. The route maps it to 403 `CURRENT_PASSWORD_WRONG` without counting a failed attempt. The same check fixes the review's "two simultaneous changes both return 204" finding (ADR-037 MUT-237 review-fix note).
 
 ### TD-106: Expenses have two sources of truth — `db.expenses` and legacy `kind:'expense'` transactions
 **Status**: Resolved (2026-10-13, MUT-138)

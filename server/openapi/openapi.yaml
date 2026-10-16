@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.31.0-mut237
+  version: 1.31.1-mut237
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -371,6 +371,7 @@ components:
       properties:
         currentPassword:
           type: string
+          maxLength: 1024
         newPassword:
           $ref: "#/components/schemas/NewPassword"
       required:
@@ -5512,13 +5513,13 @@ paths:
         "204":
           description: Password changed
         "403":
-          description: CURRENT_PASSWORD_WRONG (the current password is wrong, or the account is locked), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED
+          description: CURRENT_PASSWORD_WRONG (the current password is wrong, the account is locked, or another change landed first), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: Validation failed (the new password is 12 to 128 characters)
+          description: Validation failed (the new password is 12 to 128 characters; the current one at most 1024)
           content:
             application/json:
               schema:

@@ -40,6 +40,7 @@ export function describeLedgerStoreChangePasswordContract(name: string, makeStor
 
   const input = (overrides: Partial<ChangePasswordInput> & Pick<ChangePasswordInput, 'userId' | 'exceptSessionId'>): ChangePasswordInput => ({
     passwordHash: NEW_HASH,
+    verifiedPasswordHash: HASH,
     at: at(3),
     audit: [],
     ...overrides,
@@ -87,15 +88,62 @@ export function describeLedgerStoreChangePasswordContract(name: string, makeStor
       expect((await store.sessions.findByDigest(other.tokenDigest))?.credentialsVerifiedAt.toISOString()).toBe(at(1).toISOString());
     });
 
-    it("never re-stamps another person's session named as the one to keep", async () => {
+    it("refuses another person's session named as the one to keep, and touches neither person", async () => {
       const store = await makeStore();
       const { user } = await person(store, HASH);
+      const mine = await openSession(store, user.id);
       const { user: stranger } = await person(store, HASH);
       const theirs = await openSession(store, stranger.id);
-      await store.users.changePassword(input({ userId: user.id, exceptSessionId: theirs.id }));
+      await expect(store.users.changePassword(input({ userId: user.id, exceptSessionId: theirs.id }))).rejects.toBeInstanceOf(StateConflict);
       const found = await store.sessions.findByDigest(theirs.tokenDigest);
       expect(found?.credentialsVerifiedAt.toISOString()).toBe(at(1).toISOString());
       expect(found?.revokedAt).toBeNull();
+      expect((await store.sessions.findByDigest(mine.tokenDigest))?.revokedAt).toBeNull();
+      expect((await store.users.getById(user.id))?.passwordHash).toBe(HASH);
+    });
+
+    // MUT-238 review: two changes can each verify the old password before either takes the lock. Under the lock the
+    // second sees that the hash it verified is gone (and that the first revoked its session) and writes nothing.
+    it('refuses when the stored hash is no longer the one the caller verified, and writes nothing', async () => {
+      const store = await makeStore();
+      const { user, orgIds } = await person(store, HASH);
+      const current = await openSession(store, user.id);
+      const other = await openSession(store, user.id);
+      await expect(
+        store.users.changePassword(input({ userId: user.id, exceptSessionId: current.id, verifiedPasswordHash: NEW_HASH, audit: auditFor(orgIds, user.id, 'user.password_changed') })),
+      ).rejects.toBeInstanceOf(StateConflict);
+      const unchanged = await store.users.getById(user.id);
+      expect(unchanged?.passwordHash).toBe(HASH);
+      expect(unchanged?.passwordChangedAt.toISOString()).toBe(user.passwordChangedAt.toISOString());
+      expect((await store.sessions.findByDigest(other.tokenDigest))?.revokedAt).toBeNull();
+      expect((await store.sessions.findByDigest(current.tokenDigest))?.credentialsVerifiedAt.toISOString()).toBe(at(1).toISOString());
+      for (const orgId of orgIds) {
+        expect((await store.audit.listByOrganization(orgId, 10)).map((e) => e.action)).not.toContain('user.password_changed');
+      }
+    });
+
+    it("refuses when the caller's own session was revoked meanwhile, and writes nothing", async () => {
+      const store = await makeStore();
+      const { user } = await person(store, HASH);
+      const current = await openSession(store, user.id);
+      const other = await openSession(store, user.id);
+      await store.sessions.revoke(current.id, 'password_changed', at(2));
+      await expect(store.users.changePassword(input({ userId: user.id, exceptSessionId: current.id }))).rejects.toBeInstanceOf(StateConflict);
+      expect((await store.users.getById(user.id))?.passwordHash).toBe(HASH);
+      expect((await store.sessions.findByDigest(other.tokenDigest))?.revokedAt).toBeNull();
+    });
+
+    it('a second change that verified the same old password loses to the first: the first stays, its session stays live', async () => {
+      const store = await makeStore();
+      const { user } = await person(store, HASH);
+      const phone = await openSession(store, user.id, 'device');
+      const portal = await openSession(store, user.id, 'cookie');
+      const SECOND_HASH = '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$c2Vjb25k';
+      await store.users.changePassword(input({ userId: user.id, exceptSessionId: portal.id }));
+      await expect(store.users.changePassword(input({ userId: user.id, exceptSessionId: phone.id, passwordHash: SECOND_HASH }))).rejects.toBeInstanceOf(StateConflict);
+      expect((await store.users.getById(user.id))?.passwordHash).toBe(NEW_HASH);
+      expect((await store.sessions.findByDigest(portal.tokenDigest))?.revokedAt).toBeNull();
+      expect((await store.sessions.findByDigest(phone.tokenDigest))?.revokedReason).toBe('password_changed');
     });
 
     it('writes its audit rows', async () => {
