@@ -138,8 +138,10 @@ describe('MUT-107: approve a contingency proposal', () => {
     expect(body.agreement.agreement).toMatchObject({ type: 'CONTINGENCY', contingency: override });
     expect(body.proposal.contingency).toEqual(CONTINGENCY);
 
-    const audit = await read(await h.app.request(`/v1/audit?entityType=fee_proposal&entityId=${p.id}`, { headers: f.auth }));
-    expect(audit.items[1].metadata).toMatchObject({ contingency: override });
+    // By action, not position: created and approved can share a millisecond, and ties sort on a random id.
+    const audit = await read(await h.app.request(`/v1/audit?entityType=fee_proposal&entityId=${p.id}&action=fee_proposal.approved`, { headers: f.auth }));
+    expect(audit.items).toHaveLength(1);
+    expect(audit.items[0].metadata).toMatchObject({ contingency: override });
   });
 
   it('0-upfront without a schedule: 201, no installments, agreement type CONTINGENCY', async () => {
