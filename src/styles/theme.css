@@ -92,6 +92,15 @@
   --topbar-height: 56px;
   --drawer-width: 480px;
   --table-row-height: 48px;
+  /* One component's size, read by both the size and the offset that clears it (MUT-165 D5) */
+  --demo-banner-height: 36px;
+  --checkbox-size: 18px;
+  /* The landing page's section rhythm, past the app's 64px top step on purpose (MUT-165 D6) */
+  --landing-section-pad: 112px;
+  --landing-section-pad-compact: 80px;
+  --landing-hero-pad-end: 96px;
+  --landing-page-top: 160px;
+  --landing-page-top-compact: 120px;
 }
 
 /* ============================================
