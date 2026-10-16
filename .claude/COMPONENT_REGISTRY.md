@@ -111,7 +111,7 @@ Tests: `src/components/brand/__tests__/BrandLoader.test.tsx`, `bloomLoaderData.t
 **Location**: `src/components/brand/BootSplash.tsx` (+ `bootDelay.ts`; styles in `src/styles/brand/boot-splash.css`, linked from the heads)
 **Purpose**: The boot splash in React (MUT-207, ADR-080), the Suspense fallback for the landing, download, privacy and /hosted pages. Its first render is the static splash in `index.html`/`hosted.html` element for element (a hidden `.boot-splash` > `<picture>` with the dark mark for a dark OS > 80 px `img.boot-splash-mark`), so the HTML → React hand-off changes nothing; after `bootDelayMs()` it becomes `BrandLoader size={96} delay={0}` in place (frame 0 is the same mark), with no fade or slow caption. No props. Renders inside `LandingProviders` (the loader's label needs a language).
 
-`bootDelayMs(now = performance.now())`: `max(0, LOADER_DELAY_MS - now)`, the still-mark time counted from page start; the portal's `CheckingSession` uses it too.
+`bootDelayMs(now = performance.now())`: `max(0, LOADER_DELAY_MS - now)`, the still-mark time counted from page start; the portal's `CheckingSession` uses it too. `CheckingSession({ label? })` (portal, `src/hosted/pages/auth/BootScreens.tsx`): `label` replaces "Checking your session" for another boot-time check, e.g. `/setup`'s "Checking your link" (MUT-236).
 
 **Keep in step**: change `BootSplash`, and the two heads' splash markup, together; `brand-head.test.ts` compares them.
 

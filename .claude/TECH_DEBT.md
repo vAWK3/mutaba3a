@@ -32,8 +32,16 @@
 **Impact**: `GET /admin/v1/users/{id}` shows no "setup pending" or open-link expiry, so when someone says "I never got in", the operator just issues a new link. That is safe (it supersedes the old one) but blind.
 **Fix**: add `passwordSet: boolean` and the open link's `expiresAt` to the admin user detail, plus a `show` CLI command.
 
-### TD-149: A lost redeem response reads as "link already used"
+### TD-150: The portal's boot-slow-session release-QA specs race the 4 s session stub
 **Status**: Open
+**Ticket**: none (found 2026-10-16, MUT-236 build)
+**Added**: 2026-10-16
+**Priority**: Low
+**Impact**: `qa/specs/portal/signin.spec.ts` `@portal.signin.boot-slow-session` (both tests) hold `/v1/me` 4 s and expect "Still connecting…", which the loader shows from 3 s after it blooms (~0.4 s), so the caption is up for about 0.5 s before the 401 sends the page to sign-in, whose own check puts "Checking your session" back. On a recorded preview build of the MUT-235 base they fail 4/4 (and on this branch alike); the page itself behaves as designed (probed: the caption shows at ~3.6 s).
+**Fix**: hold `/v1/me` longer (e.g. 6 s) in the spec, or answer only the first `/v1/me` slowly.
+
+### TD-149: A lost redeem response reads as "link already used"
+**Status**: Resolved 2026-10-16 (MUT-236): Save is disabled while saving, and a "used" after an attempt that got no answer signs in with the typed password first, then says the password is probably saved (ADR-088 §8, D3). The server-side idempotent-retry fix below stays available if support still sees it.
 **Ticket**: MUT-236 (portal handling)
 **Added**: 2026-10-16 (MUT-235 qa-reconcile, red team)
 **Priority**: Low

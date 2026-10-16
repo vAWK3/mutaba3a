@@ -79,6 +79,7 @@ The check query (eng review A1) sets `staleTime: Infinity`, `gcTime: 0`, `retry:
 
 - Read once, from the router's location (`useLocation().hash`, no `#`), in a lazy `useState` initializer, so StrictMode's double render reads the same value and the stripped URL can't erase it.
 - Stripped with `navigate({ to: '/setup', replace: true })` in a mount effect. The browser router implements `replace` with `history.replaceState`, so the token is in no history entry after the first frame; memory history (unit tests) behaves the same, so the strip is testable without a browser.
+- A newer link pasted into a tab already on `/setup` changes only the fragment, so the page doesn't reload: the page adopts the new token (render-time adjustment, `key={token}` remount, token in the check's query key). Found by the release-QA spec during the build.
 - The token lives only in React state. No storage (hosted-portal.md §7.1: the language is the only thing the portal stores). Consequence: a reload after the strip has no token → the `missing` message, which says to open the link from the message again. That is the price of AC 1, and it is honest.
 - It travels only in the JSON body of the two calls; it is never in a URL, query key, log or error.
 - No client-side shape check beyond "non-empty": the server's 422 for a malformed token maps to `invalid`, so the 43-char pattern lives in one place.

@@ -2370,6 +2370,14 @@ A `DATE_INVALID` raised by a range check carries `details.bound: 'past' | 'futur
 A PATCH that accepts a date compares it with the stored one first and validates only a changed value. Clients (the portal's drawers) resend every field, and a row stored before a rule existed must stay editable.
 **Instances**: `expensePatch`, the conversion and inbox PATCH routes (MUT-227).
 
+## Patterns added by MUT-236 (2026-10-16)
+
+### Pattern: A secret in the URL fragment is read once and stripped before anything else
+`SetupPage` takes the token from `useLocation().hash` into state, then `navigate({ to: <path>, replace: true })` in a mount effect (TanStack drops the hash when `dest.hash` is unset; `replace` is `history.replaceState`). The token lives only in component state and request bodies, never in storage, a query string or a log. A newer token arriving by a same-tab hash change is adopted with a render-time adjustment and a keyed remount; a reload after the strip is an honest "incomplete link".
+
+### Pattern: A one-shot check runs as a query that never refetches
+A POST that answers "what is this link" is a `useQuery` with `staleTime: Infinity`, `gcTime: 0`, `retry: false` and no refetch on focus or reconnect, keyed by the token: the answer changes once the page acts on it, so a refocus must not re-ask.
+
 ## Patterns added by MUT-235 (2026-10-16)
 
 ### Pattern: A single-use link token is an HMAC digest claimed inside the side-effect transaction
