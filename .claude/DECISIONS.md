@@ -3367,3 +3367,25 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Plain SHA-256 of the token (the ticket's wording): the session HMAC is the same cost, one helper instead of two, and stronger.
 
 **Consequences**: MUT-236 (portal `/setup` page) is served by the same server build, so both ship in one `make release server`, and no server release should go out between their merges. MUT-237/238 (change your own password) reuse `NEW_PASSWORD_POLICY`. Old token rows are never pruned (TD-146).
+
+## ADR-089: Release Notes Live in One File; "What's new" Shows What This Browser Has Not Dismissed
+
+**Status**: Active
+**Date**: 2026-10-16
+**Context**: MUT-24, from `TODO.md`: confirm an update applied. The app had no user-facing release notes. Web tags said only "Release web vX" (ADR-081), and `.claude/CHANGELOG.md` is engineering-facing, English-only and dated rather than versioned. The ticket asked that the notes not be hand-maintained in a second place. Basel chose a root `release-notes.json` (2026-10-16, D1).
+
+**Decision**:
+1. **`release-notes.json`** at the repo root maps `x.y.z` to `{ en: string[], ar: string[] }`, with the same number of non-empty lines in each language (`releaseNotesProblems`, tested). It is the only place notes are written.
+2. **Three readers**:
+   - The web app bundles it (`RELEASE_NOTES`).
+   - `make release-web` refuses a bumped version without an entry (`npm run release:notes -- <v>`, between the bump and the build).
+   - `tag-release.sh` writes the English lines into the `web-v*` tag's message, from the file as it stood in the tagged commit.
+3. **What shows.** `whats-new-seen-version` (localStorage) is the newest version this browser dismissed. The app shows every entry newer than it and no newer than the running version, newest first. `app-last-known-version` is not used for this, because `handleVersionChange` rewrites it on every start, so a tab closed without dismissing would lose the notes.
+4. **Seeding.** Seeded once at start (`seedSeenVersion`):
+   - a fresh install gets the running version, so it never sees notes;
+   - an upgrade from before this ADR gets the version it came from;
+   - unreadable storage means nothing shows.
+5. **Dismissal.** Got it, Escape or the backdrop write the running version. Settings › About reopens the newest entry the build includes. A centred modal, not a drawer: a one-time notice, not work on a record.
+6. **Notes describe the next version before the bump.** A QA build sets `MUTABA3A_APP_VERSION` to run as that version. The variable is unset in release builds.
+7. Desktop is out of scope (retired until v2). The code is build-agnostic.
+

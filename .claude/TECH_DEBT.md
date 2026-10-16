@@ -32,6 +32,22 @@
 **Impact**: `GET /admin/v1/users/{id}` shows no "setup pending" or open-link expiry, so when someone says "I never got in", the operator just issues a new link. That is safe (it supersedes the old one) but blind.
 **Fix**: add `passwordSet: boolean` and the open link's `expiresAt` to the admin user detail, plus a `show` CLI command.
 
+### TD-152: The key check cannot see a key built from an undotted variable
+**Status**: Open
+**Ticket**: none (MUT-24)
+**Added**: 2026-10-16
+**Priority**: Low
+**Impact**: `scripts/i18n-keys.ts` reads source text, not types. A key built as `` `${ns}.title` `` with `ns = 'reports'` (no dot) is invisible to it, so a used key would be reported orphaned. That fails loudly in `test:run`, so the check is the safe way round. The opposite gap: a dotted namespace literal (`'landing.hostedOffer'`) marks everything under it as reachable, so an orphan in such a namespace is missed.
+**Fix**: if either bites, track the key arguments through a TypeScript AST pass (ts-morph), or type `t()` keys from the composed dictionary.
+
+### TD-151: Six Arabic `…Singular` strings are pre-plural copies
+**Status**: Open
+**Ticket**: none (MUT-24)
+**Added**: 2026-10-16
+**Priority**: Low
+**Impact**: `settings.importBackupDoneSingular`, `orphanedRecords.assignedSingular` / `partialFailureSingular` and `integrity.orphanedRecordSingular` / `checkIssuesSingular` / `toastIssuesSingular` pick singular or plural with `count === 1 ? …Singular : …` instead of `tp()`. So Arabic dual and few/many forms fall back to one plural string. The parity check allows these Arabic singulars to drop `{count}`.
+**Fix**: turn each pair into one CLDR plural (all six Arabic forms) read with `tp()`, delete the `…Singular` keys, then drop `isArabicSingular` from `src/test/i18nParity.ts`.
+
 ### TD-150: The portal's boot-slow-session release-QA specs race the 4 s session stub
 **Status**: Open
 **Ticket**: none (found 2026-10-16, MUT-236 build)

@@ -28,6 +28,7 @@ Form data (name, email, optional phone/profession/devices/message, page language
 
 | `/hosted` link preview | Netlify rewrite `/hosted` → `hosted-offer.html` | `netlify.toml`; `vite.config.ts` `hostedOfferHtml()` emits the page copy with its own Arabic card (MUT-186) |
 | Free app's portal sign-in link | Build-time `MUTABA3A_PORTAL_URL` (default: the `mutaba3a-api` Cloud Run URL), injected as `__PORTAL_URL__` in the web build only | `vite.config.ts` `DEFAULT_PORTAL_URL` / `portalUrl()`; `scripts/bundle-origins.json` (MUT-187, ADR-076). Moving the portal (MUT-112) changes both |
+| App version a build reports | Build-time `MUTABA3A_APP_VERSION` (x.y.z, else the build fails; default `package.json`'s), injected as `__APP_VERSION__` | `vite.config.ts` `appVersion()`. Unset in release builds; QA builds set it to the version `release-notes.json` describes before the bump (MUT-24, ADR-089) |
 
 Zero cloud infrastructure; no telemetry; data stays on the device (ADR-001,
 ADR-013). See `.claude/CI_CD.md`.

@@ -2391,3 +2391,27 @@ Sign-in passes `verifiedPasswordHash` to `sessions.create`; the store re-reads t
 ### Pattern: Tests provision a person the way the person would
 A route test that needs a signed-in person calls `provisionUser(app, body)` from `server/src/__tests__/helpers/provision.ts`: admin create, then the setup link redeemed with a known password. No test reaches into the store to set a password, so the setup flow is exercised by every suite that signs in.
 **Instances**: ~20 route suites, `routes-users.test.ts`.
+
+## Patterns added by MUT-24 (2026-10-16)
+
+### Pattern: One locale file per feature, composed per language
+App strings live in `src/lib/i18n/translations/<lang>/<feature>.json`. Each file holds whole top-level namespaces, so a key path never says which file it is in. A new file is added to that language's `PARTS` in `index.ts`, in both languages. `composeDictionary` throws on a namespace defined twice, and `translations.test.ts` fails on a file left out of `PARTS` or on en/ar files holding different namespaces. Never re-create a monolithic `en.json`/`ar.json`. Tests import the barrel (`translations/en`), and `qa/support/i18n.ts` composes the files the same way.
+
+### Pattern: Every key is reachable and every asked-for key exists
+`scripts/i18n-keys.ts` (in `test:run`) fails on both:
+- **Missing**: `t`/`tp`/`has` called with a literal key that is not defined.
+- **Orphaned**: a defined key no literal or dynamic key reaches.
+
+A key held in data counts (`labelKey: 'nav.home'`). Build dynamic keys in a shape the check can see:
+- a template literal with a dot before its first `${`: `` `settings.items.${k}` ``;
+- a concatenation onto a dotted literal: `'nav.' + id`;
+- a dotted namespace constant: `const T = 'landing.hostedOffer'`.
+
+Never `t(someVar)` built from an undotted variable. Deleting a screen means deleting its keys from both languages; the check names them.
+
+### Pattern: `t()` never needs a fallback
+`t()` returns the key itself on a miss, so `t('x') || 'Default'` never shows the default. The key check guarantees the key exists, so write `t('x')` alone.
+
+### Pattern: A build-time constant has one module
+A Vite `define` is read through one tiny module (`src/lib/appVersion.ts` for `__APP_VERSION__`), so tests mock the module (a getter, for per-test values) instead of stubbing globals.
+

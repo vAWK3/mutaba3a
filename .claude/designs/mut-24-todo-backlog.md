@@ -1,6 +1,6 @@
 # MUT-24 — Clear the TODO.md backlog
 
-Status: **DRAFT, awaiting Basel's approval** (2026-10-16). Branch `feature/mut-24-todo-backlog`.
+Status: **A and B built** on `feature/mut-24-todo-backlog`. **C** is running in its own session and branch (`claude/mut-24-coverage-*`). Approved by Basel 2026-10-16 (D1–D3 below).
 
 MUT-24 collects three independent items from the old `TODO.md`:
 
@@ -45,7 +45,20 @@ Desktop is out of scope everywhere: the Tauri app is retired until v2. B's "work
   - **Orphaned**: a defined leaf no literal reaches and no declared dynamic prefix covers → error.
   - Dynamic keys (91 template-literal `t(\`…${x}\`)` calls) are covered by an explicit `DYNAMIC_KEY_PREFIXES` list in the script. Each entry names the file that builds the key, so the list cannot rot silently.
   - Orphans found on the first run are deleted in a separate commit, so the split commit stays a pure move.
-- **Lazy loading (AC 4): not doing it**, unless measurement says otherwise. The web app is one SPA and needs both languages' common strings on its first screen. I will record the gzip size of the two dictionaries in the bundle report before and after. If it is under ~25 KB gz, splitting chunks costs more round-trips than it saves.
+- **Lazy loading (AC 4): not done.**
+  - Measured gzipped dictionary sizes: en 15.4 KB, ar 18.3 KB; before the orphan cleanup they were 16.6 KB and 19.7 KB.
+  - Lazy-loading could only skip the inactive language, at most ~15–18 KB gz once. It would cost an async load on every language switch. The Arabic default needs `ar` on first paint anyway.
+  - Loading stays eager.
+
+### What the build found (2026-10-16)
+- **Two live raw-key bugs**, both fixed with tests that use the real dictionaries:
+  - Projects' search-miss state asked for three keys that never existed: `projects.emptyFiltered`, `projects.emptyFilteredCount` and `projects.clearSearch`.
+  - Expenses' uncategorized group asked for `common.noCategory`.
+  - `t()` returns the key on a miss, so each `|| 'fallback'` beside the call never ran.
+- **121 orphaned keys**, left by deleted screens, are gone from both languages, along with `bulkUpload.json`.
+- The scanner learned three dynamic shapes: a template literal with a dot before its first `${`, a concatenation onto a dotted literal, and a dotted namespace constant. Its limits are TD-152.
+- **Six Arabic `…Singular` strings drop `{count}`.** That is correct Arabic, so the parity rule allows exactly that (TD-151: make them plurals).
+- The unused hand-written `Translations` interface is deleted.
 
 ### Risk
 
@@ -63,13 +76,16 @@ This is a pure move. The safety net is a test that deep-equals the composed dict
 
 ### Design
 
-- **Detection.** `handleVersionChange` returns `{ previous: string | null, current }` instead of `void`. `main.tsx` stores the result in a tiny module (`src/lib/whatsNew/versionChange.ts`), and nothing re-reads storage.
-  - `previous === null` means a fresh install, so nothing is shown (AC 3).
-  - Storage that throws also means nothing is shown.
+- **Detection, as built.** `handleVersionChange` returns the previous version (`string | null`). `main.tsx` passes it to `seedSeenVersion(previous, APP_VERSION)`.
+  - The seed writes `whats-new-seen-version` once: the running version on a fresh install, so nothing shows (AC 3); the previous version on an upgrade.
+  - Keying on the seen version, not on `previous`, keeps the notes until they are dismissed. `handleVersionChange` rewrites `app-last-known-version` on every start, so a tab closed without dismissing would otherwise lose them.
+  - Storage that throws means nothing shows.
 - **Content: one source of release notes, used everywhere.** This is the decision for Basel; see the ledger below.
-  - Recommended: `release-notes.json` at the repo root, keyed by version, `{ "0.1.7": { "date": "…", "en": ["…"], "ar": ["…"] } }`.
+  - Chosen (D1): `release-notes.json` at the repo root, keyed by version, `{ "0.1.7": { "en": ["…"], "ar": ["…"] } }`. There is no date: the notes are written before the release day is known.
   - The app bundles it (Vite JSON import, tree-shaken to the versions it needs).
-  - `scripts/release.ts` refuses to tag a web release whose version has no entry, and writes the English notes into the tag message.
+  - **Web releases go through `make release-web`, not `scripts/release.ts`** (that is the desktop pipeline).
+    - The Makefile runs `npm run release:notes -- <v>` after the bump and before the build, and stops without an entry.
+    - `tag-release.sh` writes the English lines into the `web-v*` tag message, from the tagged commit.
   - This makes it the one place notes are written (AC 4). The parity test covers it: every entry has both languages with the same number of lines.
 - **What it shows.** Every entry newer than `previous` and up to `current`, newest first, so a user who skipped versions sees all of them.
   - If there is no entry in that range (a patch with nothing user-facing), nothing is shown and the version is marked seen.
@@ -112,11 +128,13 @@ _Filled in from `npx vitest run --coverage`; see §C.4._
 
 ## Decision ledger (for Basel)
 
-| # | Question | Recommendation |
+Resolved with Basel, 2026-10-16:
+
+| # | Question | Decision |
 |---|---|---|
-| D1 | Where release notes live (B, AC 4) | A root `release-notes.json` (en + ar per version). `release.ts` refuses a web release without an entry and uses it for the tag message. |
-| D2 | Add a web CI workflow for coverage visibility (C, AC 4) | Yes: `web-ci.yml` with lint, typecheck and `test:coverage` plus the job summary, on PRs and pushes to main. It costs only Actions minutes. |
-| D3 | Order of work | A, then B (B adds `whatsNew` keys into the split layout), then C. C can run in its own worktree and session in parallel with A+B, because it only adds tests and config. |
+| D1 | Where release notes live (B, AC 4) | A root `release-notes.json` (en + ar per version). The `make release-web` gate and the tag message both read it (ADR-089). |
+| D2 | Web CI workflow for coverage visibility (C, AC 4) | Yes: `web-ci.yml` (built in the C session). |
+| D3 | Order of work | A, then B here. C runs in parallel in its own session and worktree. |
 
 ## Impact
 
@@ -125,10 +143,16 @@ _Filled in from `npx vitest run --coverage`; see §C.4._
 - **Bundle:** B adds the notes (a few KB). A is neutral.
 - **Cost:** D2 adds Actions minutes per push.
 - ADRs:
-  - A new ADR for release notes as a single source.
-  - The parity/orphan gate goes in `PATTERNS.md`, not an ADR.
+  - ADR-089: release notes as a single source, and the seen-version rule.
+  - The locale layout and the key check are in `PATTERNS.md`.
+- New build input: `MUTABA3A_APP_VERSION` (x.y.z, or the build fails). A QA build runs as the version the notes describe before the bump. It is unset in release builds (`INFRA.md`).
 
-## QA scenarios (release-qa → `qa/features/web/whats-new.yaml`)
+## QA scenarios (release-qa → `qa/features/web/whats-new.yaml`; 3/3 passing on a `MUTABA3A_APP_VERSION=0.1.7` preview build)
+
+As built:
+- Scenarios 1 and 2 are `after-update`.
+- Scenario 3 is `fresh-install`.
+- Scenarios 4 and 5 are `reopen-arabic`. Reopening from About in Arabic covers RTL, because the auto-open path and the Arabic rendering share one component, already covered by unit tests.
 
 1. **Upgrade shows notes.**
    - Steps: start the app with `app-last-known-version` set to the previous version.
