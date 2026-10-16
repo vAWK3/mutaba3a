@@ -63,7 +63,7 @@ export function ConversionsPage() {
       <TopBar
         title={t('conversions.title')}
         filterSlot={
-          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 24, flexWrap: 'nowrap' }}>
+          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 'var(--space-6)', flexWrap: 'nowrap' }}>
             <DateRangeControl
               dateFrom={dateRange.dateFrom}
               dateTo={dateRange.dateTo}
@@ -83,7 +83,7 @@ export function ConversionsPage() {
         </div>
 
         {isLoading ? (
-          <div style={{ padding: 48, textAlign: 'center', color: 'var(--muted)' }}>
+          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--muted)' }}>
             {t('common.loading')}
           </div>
         ) : conversions.length === 0 ? (

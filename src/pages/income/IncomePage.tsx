@@ -184,7 +184,7 @@ export function IncomePage() {
               </span>
             )}
             {row.overdueDays !== undefined && (
-              <div style={{ fontSize: 'var(--text-label)', color: 'var(--error)', marginTop: '2px' }}>
+              <div style={{ fontSize: 'var(--text-label)', color: 'var(--error)', marginTop: 'var(--space-0-5)' }}>
                 {t('transactions.status.overdue', { days: row.overdueDays })}
               </div>
             )}
@@ -192,7 +192,7 @@ export function IncomePage() {
         );
       case 'amount':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 'var(--space-0-5)' }}>
             <AmountWithConversion amountMinor={row.amountMinor} currency={row.currency} type="income" />
             {row.partialReceivedMinor !== undefined && (
               <div style={{ fontSize: 'var(--text-label)', color: 'var(--muted)' }}>
@@ -219,7 +219,7 @@ export function IncomePage() {
       <TopBar
         title={t('nav.income')}
         filterSlot={
-          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 24, flexWrap: 'nowrap' }}>
+          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 'var(--space-6)', flexWrap: 'nowrap' }}>
             <DateRangeControl
               dateFrom={dateRange.dateFrom}
               dateTo={dateRange.dateTo}
@@ -291,7 +291,7 @@ export function IncomePage() {
 
         {/* Income List */}
         {isLoading ? (
-          <div style={{ padding: 48, textAlign: 'center', color: 'var(--muted)' }}>
+          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--muted)' }}>
             {t('common.loading')}
           </div>
         ) : transactions.length === 0 ? (

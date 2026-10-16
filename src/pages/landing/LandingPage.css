@@ -53,7 +53,7 @@
    bar watches it to know the page has scrolled. It needs a height for the observer. */
 .landing-top-sentinel {
   height: 1px;
-  margin-bottom: -1px;
+  margin-bottom: calc(var(--space-px) * -1);
 }
 
 .landing-header {
@@ -334,7 +334,7 @@ html:has(.landing-header) {
 
 /* Sections */
 .landing-section {
-  padding: 112px 0;
+  padding: var(--landing-section-pad) 0;
 }
 
 .landing-section-headline {
@@ -968,7 +968,7 @@ a.landing-get-it-option:focus-visible {
    ============================================ */
 @media (max-width: 900px) {
   .landing-section {
-    padding: 80px 0;
+    padding: var(--landing-section-pad-compact) 0;
   }
 
   .landing-chapter-layout {

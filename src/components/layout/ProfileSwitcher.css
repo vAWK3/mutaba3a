@@ -213,7 +213,7 @@
   display: block;
   font-size: var(--text-label);
   color: var(--muted);
-  margin-top: 1px;
+  margin-top: var(--space-px);
 }
 
 .profile-switcher-check {

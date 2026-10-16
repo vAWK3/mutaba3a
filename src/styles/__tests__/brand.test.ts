@@ -17,6 +17,7 @@ import {
   contrast,
   customPropertyDefinitions,
   fontFaces,
+  lengthCustomProperties,
   literalSourceFiles,
   loadStylesheet,
   parseCss,
@@ -315,6 +316,14 @@ describe('drift', () => {
     for (const [key, px] of Object.entries(tokensJson.radius)) expect(tokens.px(`--m-radius-${key}`), key).toBe(px);
   });
 
+  it('the spacing scale equals the JSON both ways: one --m-space-<n> of n px per step, and no other (MUT-165 D8)', () => {
+    const tokens = new Tokens(brand, LIGHT);
+    const css = tokens.names().filter((name) => name.startsWith('--m-space-'));
+    expect(Object.fromEntries(css.map((name) => [name, tokens.px(name)]))).toEqual(
+      Object.fromEntries(tokensJson.space.map((px) => [`--m-space-${px}`, px])),
+    );
+  });
+
   it('the font roles name the JSON faces first', () => {
     const tokens = new Tokens(brand, LIGHT);
     const first = (name: string) => tokens.resolve(name).split(',')[0].replace(/["']/g, '').trim();
@@ -469,6 +478,17 @@ describe('tokens', () => {
     const radii = own.filter((name) => name.startsWith('--radius-'));
     expect(radii.length).toBeGreaterThan(6);
     for (const name of radii) expect(Object.values(tokensJson.radius), name).toContain(tokens.px(name));
+  });
+
+  it('every --space-N reads the brand step of N × 4px, so a typo cannot move a step (MUT-165 D8)', () => {
+    const tokens = new Tokens(theme, LIGHT);
+    // --space-0 and --space-px stay literal: zero and a hairline are not steps.
+    const steps = own.filter((name) => /^--space-\d/.test(name) && name !== '--space-0');
+    expect(steps.length).toBeGreaterThan(12);
+    const misread = steps
+      .map((name) => ({ name, raw: tokens.raw(name), want: `var(--m-space-${Number(name.slice('--space-'.length).replace('-', '.')) * 4})` }))
+      .filter(({ raw, want }) => raw !== want);
+    expect(misread).toEqual([]);
   });
 
   it('body text is 16px and the type roles equal the JSON scale', () => {
@@ -855,9 +875,9 @@ describe('accent-text guard', () => {
 });
 
 /**
- * Literal guard (MUT-103): outside src/styles, a colour, radius or font size
- * comes from a token. Allowed: user data (category and business colours),
- * listed here with the reason.
+ * Literal guard (MUT-103, spacing since MUT-165): outside src/styles, a colour,
+ * radius, font size, padding, margin or gap comes from a token. Allowed: user
+ * data (category and business colours), listed here with the reason.
  */
 const ALLOWED_LITERAL_FILES: Record<string, string> = {
   'src/db/defaultExpenseCategories.ts': 'user data: the default expense category colours a user can recolour',
@@ -867,9 +887,11 @@ const ALLOWED_LITERAL_FILES: Record<string, string> = {
 };
 
 /**
- * Literals the sweep has not reached yet, per file (counted 2026-10-13 on main
- * a48f72d). Shrink-only: each MUT-103 surface commit lowers or deletes its
- * entries; a new file, a higher count, or a stale count fails.
+ * Literals a sweep has not reached yet, per file. MUT-103 emptied it for
+ * colours, radii and font sizes; MUT-165 froze 175 spacing literals here (124
+ * CSS declarations and 51 style-object values, counted 2026-10-16 on main
+ * 1150d40) and emptied it again. Shrink-only: a new file, a higher count, or a
+ * stale count fails, so it stays empty.
  */
 const KNOWN_LITERALS: Record<string, number> = {};
 
@@ -896,6 +918,19 @@ describe('literals', () => {
       ['a { border-radius: 4px; }', 'radius'],
       ['a { border-top-left-radius: 2px; }', 'radius'],
       ['a { border-radius: var(--radius-lg, 12px); }', 'radius'],
+      // MUT-165: spacing, px and rem (D2), negative, in a fallback or a calc()
+      ['a { padding: 12px; }', 'spacing'],
+      ['a { margin-inline-start: 8px; }', 'spacing'],
+      ['a { gap: 0.5rem; }', 'spacing'],
+      ['a { margin: -8px; }', 'spacing'],
+      ['a { padding: var(--space-2, 8px); }', 'spacing'],
+      ['a { padding-inline-start: calc(18px + var(--space-3)); }', 'spacing'],
+      ['a { row-gap: 2px; }', 'spacing'],
+      ['a { column-gap: 1rem; }', 'spacing'],
+      ['a { margin-block-end: 4px; }', 'spacing'],
+      ['a { padding: 0 24px; }', 'spacing'],
+      // D10: one var() hop to a custom property holding a raw length
+      ['a { --pad: 8px; padding: var(--pad); }', 'spacing'],
     ])('catches %s as %s', (css, kind) => {
       expect(cssLiterals(css).map((literal) => literal.kind)).toEqual([kind]);
     });
@@ -913,11 +948,36 @@ describe('literals', () => {
       'a { border-radius: 0; }',
       'a { border-radius: 50%; }',
       'a { border-radius: calc(var(--radius-lg) - 1px); }',
-      'a { padding: 12px; }',
       '@media (max-width: 768px) { a { color: var(--text); } }',
       '@media print { .table td { border: 1px solid #ccc; } }',
+      // MUT-165: spacing that stays relative or on a token
+      'a { padding: 0; }',
+      'a { margin: 0 auto; }',
+      'a { padding: 5%; }',
+      'a { gap: 0.5em; }',
+      'a { padding: var(--space-3); }',
+      'a { margin: calc(var(--space-2) * -1); }',
+      'a { padding: var(--space-2) var(--space-4); }',
+      'a { inset: 8px; }',
+      'a { --space-x: 8px; }',
+      'a { padding: var(--space-0-5); }',
+      '@media print { td { padding: 4px; } }',
+      'a { --pad: var(--space-2); padding: var(--pad); }',
+      'a { --switch-pad: 3px; inset-block-start: var(--switch-pad); }',
     ])('leaves %s alone', (css) => {
       expect(cssLiterals(css)).toEqual([]);
+    });
+
+    it('follows the var() hop across files: a length defined in one stylesheet and read for spacing in another (D10)', () => {
+      expect(cssLiterals('a { padding: var(--pad); }', new Set(['--pad'])).map((literal) => literal.kind)).toEqual(['spacing']);
+    });
+
+    it('collects the custom properties that hold a raw px or rem length, and only those', () => {
+      expect([...lengthCustomProperties('a { --pad: 8px; --gap: 0.5rem; --tint: #fff; --step: var(--space-2); --none: 0; --neg: -4px; }')]).toEqual([
+        '--pad',
+        '--gap',
+        '--neg',
+      ]);
     });
 
     it('checks screen rules beside a print block', () => {
@@ -940,8 +1000,21 @@ describe('literals', () => {
       ['style={{ borderRadius: 4 }}', 'radius'],
       ["style={{ borderTopLeftRadius: '2px' }}", 'radius'],
       ['return <style>{`.a { color: red; }`}</style>;', 'style-element'],
+      // MUT-165 D3: a number (React renders px) or a string holding a px/rem length
+      ['style={{ gap: 8 }}', 'spacing'],
+      ['style={{ marginTop: 16 }}', 'spacing'],
+      ["style={{ padding: '24px 0' }}", 'spacing'],
+      ["style={{ marginInlineStart: '8px' }}", 'spacing'],
+      ['style={{ rowGap: 4 }}', 'spacing'],
+      ['style={{ columnGap: 12 }}', 'spacing'],
+      ["style={{ paddingBlockEnd: '0.5rem' }}", 'spacing'],
+      ['style={{ marginBottom: -8 }}', 'spacing'],
     ])('catches %s as %s', (code, kind) => {
       expect(scriptLiterals(code).map((literal) => literal.kind)).toEqual([kind]);
+    });
+
+    it('counts a size key and a spacing key in one style object once each (SCRIPT_SIZE and SCRIPT_SPACING are key-disjoint)', () => {
+      expect(scriptLiterals('style={{ fontSize: 12, gap: 8 }}').map((literal) => literal.kind)).toEqual(['font-size', 'spacing']);
     });
 
     it.each([
@@ -953,6 +1026,15 @@ describe('literals', () => {
       'style={{ borderRadius: 0 }}',
       "const mode = 'whiteboard';",
       "background: 'var(--surface)'",
+      // MUT-165: spacing on a token, zero, auto or %, and gaps that are not style keys
+      "style={{ gap: 'var(--space-2)' }}",
+      'style={{ margin: 0 }}',
+      "style={{ marginInlineStart: 'auto' }}",
+      "style={{ padding: '5%' }}",
+      "style={{ padding: 'var(--space-2) var(--space-4)' }}",
+      'const gap = 8;',
+      '<Stack gap={2}>',
+      'interface Props { gap: number }',
     ])('leaves %s alone', (code) => {
       expect(scriptLiterals(code)).toEqual([]);
     });
@@ -970,8 +1052,14 @@ describe('literals', () => {
 
   describe('the repo', () => {
     const relativeFile = (file: string) => file.replace(`${repoPath('.')}/`, '');
+    // D10: a custom property any component stylesheet sets to a raw length, wherever it is read
+    const lengths = new Set(
+      literalSourceFiles()
+        .filter((file) => file.endsWith('.css'))
+        .flatMap((file) => [...lengthCustomProperties(readFileSync(file, 'utf8'))]),
+    );
     const found = literalSourceFiles().flatMap((file) =>
-      (file.endsWith('.css') ? cssLiterals(readFileSync(file, 'utf8')) : scriptLiterals(readFileSync(file, 'utf8'), file.endsWith('.tsx'))).map(
+      (file.endsWith('.css') ? cssLiterals(readFileSync(file, 'utf8'), lengths) : scriptLiterals(readFileSync(file, 'utf8'), file.endsWith('.tsx'))).map(
         (literal) => ({ ...literal, file: relativeFile(file) }),
       ),
     );

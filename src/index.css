@@ -218,8 +218,8 @@ td {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: var(--space-2-5);
+  padding: var(--space-2-5) var(--space-3);
   border-radius: var(--radius-sm);
   text-decoration: none;
   color: var(--text);
@@ -352,7 +352,7 @@ td {
 .nav-section-items {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 
 .sidebar.collapsed .nav-section-header {
@@ -948,11 +948,11 @@ td {
 .cross-profile-badge {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-0-5);
   font-size: var(--text-label);
   color: var(--muted);
   background: var(--surface-2);
-  padding: 1px var(--space-1);
+  padding: var(--space-px) var(--space-1);
   border-radius: var(--radius-sm);
   line-height: 1.4;
 }
@@ -1114,7 +1114,7 @@ td {
 
 .segment-tab-count {
   font-size: var(--text-label);
-  padding: 2px 6px;
+  padding: var(--space-0-5) var(--space-1-5);
   background: var(--bg);
   border-radius: var(--radius-pill);
 }
@@ -1670,10 +1670,10 @@ div.input-with-prefix {
 
 .income-status-tabs {
   display: flex;
-  gap: 2px;
+  gap: var(--space-0-5);
   background: var(--bg);
   border-radius: var(--radius-md);
-  padding: 2px;
+  padding: var(--space-0-5);
   margin-bottom: var(--space-4);
 }
 
@@ -1707,7 +1707,7 @@ div.input-with-prefix {
 
 .income-status-count {
   font-size: var(--text-label);
-  padding: 2px 6px;
+  padding: var(--space-0-5) var(--space-1-5);
   background: var(--bg);
   border-radius: var(--radius-pill);
 }
@@ -1892,13 +1892,13 @@ div.input-with-prefix {
 .expense-title-cell {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 
 .recurring-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
+  padding: var(--space-0-5) var(--space-1-5);
   font-size: var(--text-micro);
   font-weight: 600;
   text-transform: uppercase;
@@ -1946,7 +1946,7 @@ div.input-with-prefix {
 .client-index-lines {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 
 .amount-cell .client-index-lines {
@@ -2242,7 +2242,7 @@ div.input-with-prefix {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 2px var(--space-2);
+  padding: var(--space-0-5) var(--space-2);
   border-radius: var(--radius-sm);
   font-size: var(--text-label);
   font-weight: var(--weight-medium);
@@ -2272,7 +2272,7 @@ div.input-with-prefix {
 .type-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px var(--space-2);
+  padding: var(--space-0-5) var(--space-2);
   border-radius: var(--radius-sm);
   font-size: var(--text-label);
   font-weight: var(--weight-medium);
@@ -2423,7 +2423,7 @@ div.input-with-prefix {
 .type-selector-hint {
   font-size: var(--text-label);
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: var(--space-0-5);
 }
 
 /* Form Sections */
@@ -2552,7 +2552,7 @@ div.input-with-prefix {
   font-weight: var(--weight-medium);
   color: var(--text-secondary);
   border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  margin-bottom: calc(var(--space-px) * -1);
   transition: all var(--transition-fast);
 }
 
@@ -2579,7 +2579,7 @@ div.input-with-prefix {
   font-weight: var(--weight-medium);
   color: var(--text-secondary);
   border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  margin-bottom: calc(var(--space-px) * -1);
   background: none;
   border-radius: 0;
   transition: all var(--transition-fast);
@@ -2781,7 +2781,7 @@ a.project-tag:hover {
 .client-work-subline {
   font-size: var(--text-label);
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: var(--space-0-5);
 }
 
 /* Words in a subline stay in the body face; only the figure is Plex Mono (TD-079) */
@@ -3104,7 +3104,7 @@ a.project-tag:hover {
 .settings-section-description {
   font-size: var(--text-label);
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: var(--space-0-5);
   max-width: 50ch;
 }
 
@@ -3128,7 +3128,7 @@ a.project-tag:hover {
 .settings-description {
   font-size: var(--text-label);
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: var(--space-0-5);
 }
 
 /* A plain-text divider inside a merged card (e.g. Preferences' "Currency"
@@ -3171,7 +3171,7 @@ a.project-tag:hover {
 
 .settings-section-icon {
   flex: none;
-  margin-top: 3px;
+  margin-top: var(--space-0-5);
   color: var(--accent-text);
 }
 
@@ -3449,7 +3449,7 @@ a.project-tag:hover {
   position: relative;
   display: inline-flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .currency-summary-label {
@@ -3462,7 +3462,7 @@ a.project-tag:hover {
 .currency-summary-main {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1-5);
 }
 
 .currency-summary-amount {
@@ -3500,7 +3500,7 @@ a.project-tag:hover {
   /* Position set via inline styles when using portal */
   z-index: 9999;
   min-width: 180px;
-  padding: 12px;
+  padding: var(--space-3);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -3511,7 +3511,7 @@ a.project-tag:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 0;
+  padding: var(--space-1-5) 0;
 }
 
 .currency-breakdown-row:not(:last-child) {
@@ -3532,9 +3532,9 @@ a.project-tag:hover {
 .currency-breakdown-rate {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 8px;
-  padding-top: 8px;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
   border-top: 1px solid var(--border);
   font-size: var(--text-micro);
   color: var(--muted);

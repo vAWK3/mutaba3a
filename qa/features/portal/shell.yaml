@@ -33,6 +33,8 @@ features:
       - src/hosted/pages/views/OverviewPage.tsx
       - src/hosted/session/AuthGate.tsx
       - src/components/filters/SegmentedTabs.tsx
+      # MUT-165 D9: the shell's spacing, screenshotted in English and Arabic
+      - src/hosted/hosted.css
     steps:
       - Sign in and open the portal at /
       - Read the overview, then switch it to USD
@@ -44,6 +46,7 @@ features:
       - Each section's heading shows and its link is aria-current
       - The page turns rtl with the Arabic section names
       - Every profile call carried X-Mutaba3a-Profile for that profile
+      - A screenshot of the shell is attached in English and in Arabic, for spacing review
   - id: switch-profile
     title: The profile switcher lists each profile with its kind, closes on Escape, keeps the section when switching, and a profile not on the account says so
     tier: secondary

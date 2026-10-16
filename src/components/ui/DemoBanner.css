@@ -5,7 +5,7 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 36px;
+  height: var(--demo-banner-height);
   background: var(--accent-solid);
   color: var(--on-accent);
   display: flex;
@@ -82,12 +82,12 @@
 
 /* Adjust app shell when banner is present */
 .app-shell:has(.demo-banner) {
-  padding-top: 36px;
+  padding-top: var(--demo-banner-height);
 }
 
 /* Alternative: if :has() not supported, use body class approach */
 body.demo-mode-active .app-shell {
-  padding-top: 36px;
+  padding-top: var(--demo-banner-height);
 }
 
 /* RTL support */

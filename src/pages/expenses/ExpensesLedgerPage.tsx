@@ -180,7 +180,7 @@ export function ExpensesLedgerPage() {
   // Validate that we have a valid profile
   if (!activeProfile || !profileId) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
+      <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
         <p style={{ color: 'var(--muted)' }}>
           {t('expenses.noProfileSelected')}
         </p>
@@ -255,7 +255,7 @@ export function ExpensesLedgerPage() {
       <TopBar
         title={t('nav.expenses')}
         filterSlot={
-          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 24, flexWrap: 'nowrap' }}>
+          <div className="filters-row" style={{ marginBottom: 0, marginInlineStart: 'var(--space-6)', flexWrap: 'nowrap' }}>
             <DateRangeControl
               dateFrom={dateRange.dateFrom}
               dateTo={dateRange.dateTo}
@@ -316,11 +316,11 @@ export function ExpensesLedgerPage() {
 
         {/* Forecast Section */}
         {forecastOccurrences.length > 0 && (
-          <div className="forecast-section" style={{ marginBottom: 16 }}>
+          <div className="forecast-section" style={{ marginBottom: 'var(--space-4)' }}>
             <button
               className="recurring-rules-header"
               onClick={() => setShowForecast(!showForecast)}
-              style={{ width: '100%', textAlign: 'start', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '12px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              style={{ width: '100%', textAlign: 'start', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: 'var(--space-3) var(--space-4)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
             >
               <span style={{ fontWeight: 600 }}>
                 {t('expenses.recurring.forecast')} ({forecastOccurrences.length})
@@ -336,7 +336,7 @@ export function ExpensesLedgerPage() {
 
         {/* Content */}
         {isLoading ? (
-          <div style={{ padding: 48, textAlign: 'center', color: 'var(--muted)' }}>
+          <div style={{ padding: 'var(--space-12)', textAlign: 'center', color: 'var(--muted)' }}>
             {t('common.loading')}
           </div>
         ) : expenses.length === 0 ? (

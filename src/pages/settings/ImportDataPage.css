@@ -1,19 +1,19 @@
 .import-data-page {
   min-height: 100vh;
   background: var(--bg);
-  padding: 2rem;
+  padding: var(--space-8);
 }
 
 .import-data-page .page-header {
   max-width: 1200px;
-  margin: 0 auto 2rem;
+  margin: 0 auto var(--space-8);
 }
 
 .import-data-page .page-header h1 {
   font-size: var(--text-title);
   font-weight: 700;
   color: var(--text);
-  margin: 1rem 0 0;
+  margin: var(--space-4) 0 0;
 }
 
 .import-content {
@@ -22,20 +22,20 @@
   background: var(--surface);
   border-radius: 0.75rem;
   box-shadow: var(--shadow-1);
-  padding: 2rem;
+  padding: var(--space-8);
 }
 
 /* Step: Select */
 .import-step-select {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: var(--space-8);
 }
 
 .import-dropzone {
   border: 2px dashed var(--border-strong);
   border-radius: 0.75rem;
-  padding: 4rem 2rem;
+  padding: var(--space-16) var(--space-8);
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
@@ -48,7 +48,7 @@
 }
 
 .import-dropzone svg {
-  margin: 0 auto 1rem;
+  margin: 0 auto var(--space-4);
   color: var(--muted);
 }
 
@@ -56,7 +56,7 @@
   font-size: var(--text-headline);
   font-weight: 600;
   color: var(--text);
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--space-2);
 }
 
 .import-dropzone p {
@@ -66,7 +66,7 @@
 
 .import-actions {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-4);
   justify-content: center;
   flex-wrap: wrap;
 }
@@ -74,45 +74,45 @@
 .import-actions .btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .import-help {
   background: var(--surface-2);
   border-radius: 0.5rem;
-  padding: 1.5rem;
+  padding: var(--space-6);
 }
 
 .import-help h4 {
   font-size: var(--text-body);
   font-weight: 600;
   color: var(--text);
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-3);
 }
 
 .import-help ul {
   margin: 0;
-  padding-left: 1.5rem;
+  padding-left: var(--space-6);
   color: var(--text-secondary);
   line-height: 1.6;
 }
 
 .import-help li {
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-2);
 }
 
 /* Step: Preview */
 .import-step-preview {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 .import-file-info {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
-  padding: 1.5rem;
+  gap: var(--space-4);
+  padding: var(--space-6);
   background: var(--surface-2);
   border-radius: 0.5rem;
   border: 1px solid var(--border);
@@ -127,7 +127,7 @@
   font-size: var(--text-body);
   font-weight: 600;
   color: var(--text);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-1);
 }
 
 .import-file-info .file-meta {
@@ -136,7 +136,7 @@
 }
 
 .profile-select-section {
-  padding: 1.5rem;
+  padding: var(--space-6);
   background: var(--surface-2);
   border-radius: 0.5rem;
 }
@@ -145,12 +145,12 @@
   font-size: var(--text-body);
   font-weight: 600;
   color: var(--text);
-  margin: 0 0 1rem;
+  margin: 0 0 var(--space-4);
 }
 
 .profile-select-section .select {
   width: 100%;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-2);
 }
 
 .profile-select-section .help-text {
@@ -162,8 +162,8 @@
 .import-warning {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
   background: var(--error-subtle);
   border: 1px solid var(--error-muted);
   border-radius: 0.5rem;
@@ -182,8 +182,8 @@
 .import-info {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
   background: var(--info-subtle);
   border: 1px solid var(--info-muted);
   border-radius: 0.5rem;
@@ -203,7 +203,7 @@
 .import-step-validate {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 .import-step-validate h2 {
@@ -220,7 +220,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-4); /* the bloom loader above the heading (MUT-206 DR1) */
-  padding: 4rem 2rem;
+  padding: var(--space-16) var(--space-8);
   text-align: center;
 }
 
@@ -237,7 +237,7 @@
   font-size: var(--text-headline);
   font-weight: 600;
   color: var(--text);
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--space-2);
 }
 
 .import-step-importing p {
@@ -251,25 +251,25 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem;
+  padding: var(--space-16) var(--space-8);
   text-align: center;
 }
 
 .import-step-done .success-icon {
   color: var(--success);
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-6);
 }
 
 .import-step-done h2 {
   font-size: var(--text-headline);
   font-weight: 600;
   color: var(--text);
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-3);
 }
 
 .import-step-done p {
   color: var(--muted);
-  margin: 0 0 2rem;
+  margin: 0 0 var(--space-8);
 }
 
 /* Step: Error */
@@ -278,24 +278,24 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem;
+  padding: var(--space-16) var(--space-8);
   text-align: center;
 }
 
 .import-step-error .error-icon {
   color: var(--error);
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-6);
 }
 
 .import-step-error h2 {
   font-size: var(--text-headline);
   font-weight: 600;
   color: var(--text);
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-3);
 }
 
 .import-step-error p {
-  margin: 0 0 2rem;
+  margin: 0 0 var(--space-8);
 }
 
 /* Text utilities */
@@ -306,15 +306,15 @@
 /* Responsive */
 @media (max-width: 768px) {
   .import-data-page {
-    padding: 1rem;
+    padding: var(--space-4);
   }
 
   .import-content {
-    padding: 1.5rem;
+    padding: var(--space-6);
   }
 
   .import-dropzone {
-    padding: 3rem 1.5rem;
+    padding: var(--space-12) var(--space-6);
   }
 }
 
@@ -347,7 +347,7 @@
 }
 
 .import-mode-option input[type="radio"] {
-  margin-top: 2px;
+  margin-top: var(--space-0-5);
   accent-color: var(--accent);
 }
 

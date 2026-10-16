@@ -183,7 +183,7 @@ export function BusinessProfileDrawer() {
 
           <div className="form-group">
             <span className="form-label">Logo</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
               {logoPreview ? (
                 <img
                   src={logoPreview}
@@ -254,7 +254,7 @@ export function BusinessProfileDrawer() {
 
           <div className="form-group">
             <label className="form-label" htmlFor={`${fieldId}-color`}>Brand Color</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
               <input
                 id={`${fieldId}-color`}
                 type="color"

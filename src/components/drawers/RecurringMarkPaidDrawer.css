@@ -23,8 +23,8 @@
 }
 
 .recurring-drawer-check {
-  width: 18px;
-  height: 18px;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
   flex-shrink: 0;
   accent-color: var(--accent);
 }
@@ -56,12 +56,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Under the label, past the checkbox (18px + the row gap) */
+/* Under the label, past the checkbox (its size + the row gap) */
 .recurring-drawer-error,
 .recurring-drawer-payment-actions {
   flex-basis: 100%;
   margin: 0;
-  padding-inline-start: calc(18px + var(--space-3));
+  padding-inline-start: calc(var(--checkbox-size) + var(--space-3));
 }
 
 .recurring-drawer-payment-actions {

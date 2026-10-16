@@ -276,15 +276,38 @@ async function expectFits(page: Page, surface: string, width: number) {
 }
 
 /**
+ * A segmented control's highlight sits centred in its track (MUT-165 D11): its
+ * top and bottom inset, set apart from the track's padding, must equal it.
+ */
+async function expectSegmentedThumbCentred(track: Locator) {
+  const inset = await track.evaluate((el) => {
+    const outer = el.getBoundingClientRect();
+    const thumb = el.querySelector('.segmented-control-thumb')!.getBoundingClientRect();
+    return { above: thumb.top - outer.top, below: outer.bottom - thumb.bottom, padding: parseFloat(getComputedStyle(el).paddingTop) };
+  });
+  expect(inset.above, 'the highlight’s top inset is the track’s padding').toBeCloseTo(inset.padding, 1);
+  expect(inset.below, 'the highlight’s bottom inset is the track’s padding').toBeCloseTo(inset.padding, 1);
+}
+
+/** A release with both installers, so the landing's download button never waits on GitHub. */
+const LANDING_RELEASE = {
+  tag_name: 'v0.1.4',
+  html_url: 'https://github.com/vAWK3/mutaba3a/releases/tag/v0.1.4',
+  assets: [{ name: 'Mutaba3a_0.1.4_aarch64.dmg' }, { name: 'Mutaba3a_0.1.4_x64_en-US.msi' }],
+};
+
+/**
  * MUT-103's screen matrix (eng review D4): every core screen in both schemes,
  * both languages, at phone and desktop width. Screenshots are attached per cell
  * for the before/after review; the optional areas are switched on first.
+ * MUT-165 (D9) adds the landing and privacy pages, which read the same stored
+ * language, so the Arabic cells see them in Arabic.
  */
 for (const scheme of SCHEMES) {
   for (const viewport of VIEWPORTS) {
     for (const language of ['en', 'ar'] as const) {
       test(
-        `${scheme} mode at ${viewport.width}px in ${language === 'en' ? 'English' : 'Arabic'}: Home, Clients, Income, both drawers, Settings, Import and Expenses fit the window`,
+        `${scheme} mode at ${viewport.width}px in ${language === 'en' ? 'English' : 'Arabic'}: Home, Clients, Income, both drawers, Settings, Import, Expenses, the landing and privacy fit the window`,
         { tag: '@web.brand.layout' },
         async ({ page, step }) => {
           // Drawers settle at once, so their box is measured where it rests
@@ -342,6 +365,10 @@ for (const scheme of SCHEMES) {
             await page.goto('/app/settings');
             await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
             await expectFits(page, 'Settings', viewport.width);
+            // Language and Theme are segmented controls: each highlight stays centred (MUT-165 D11)
+            const tracks = page.getByRole('main').getByRole('radiogroup');
+            await expect(tracks).toHaveCount(2);
+            for (const track of await tracks.all()) await expectSegmentedThumbCentred(track);
             await shot('settings');
             await page.goto('/app/settings/import');
             await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
@@ -354,6 +381,19 @@ for (const scheme of SCHEMES) {
             await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
             await expectFits(page, 'Expenses', viewport.width);
             await shot('expenses');
+          });
+
+          await step('The landing page and the privacy page', async () => {
+            await page.route('https://api.github.com/**', (route) => route.fulfill({ json: LANDING_RELEASE }));
+            await page.goto('/');
+            await expect(page.locator('#hero-title')).toBeVisible();
+            await expect(page.locator('html')).toHaveAttribute('lang', language);
+            await expectFits(page, 'Landing', viewport.width);
+            await shot('landing');
+            await page.goto('/privacy');
+            await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+            await expectFits(page, 'Privacy', viewport.width);
+            await shot('privacy');
           });
         },
       );
