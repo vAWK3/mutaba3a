@@ -6,6 +6,7 @@ import { pageStartsNow } from '../../../test/pageStart';
 import { BootSplash } from '../BootSplash';
 import { __resetLoaderChainForTests, LOADER_DELAY_MS } from '../BrandLoader';
 import { bootDelayMs } from '../bootDelay';
+import { SLOW_UNDER_COVERAGE } from '../../../test/timeouts';
 
 /**
  * MUT-207: the landing's Suspense fallback is the boot splash. Its first
@@ -51,7 +52,7 @@ describe('bootDelayMs (DR9)', () => {
 });
 
 describe('BootSplash (MUT-207 D3, DR10)', () => {
-  it('starts as the hidden still mark, then blooms in place without a fade', () => {
+  it('starts as the hidden still mark, then blooms in place without a fade', SLOW_UNDER_COVERAGE, () => {
     pageStartsNow(100);
     const { container } = renderSplash();
     const splash = container.querySelector('.boot-splash')!;

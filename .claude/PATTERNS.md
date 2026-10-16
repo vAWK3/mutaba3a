@@ -2395,3 +2395,11 @@ Sign-in passes `verifiedPasswordHash` to `sessions.create`; the store re-reads t
 ### Pattern: Tests provision a person the way the person would
 A route test that needs a signed-in person calls `provisionUser(app, body)` from `server/src/__tests__/helpers/provision.ts`: admin create, then the setup link redeemed with a known password. No test reaches into the store to set a password, so the setup flow is exercised by every suite that signs in.
 **Instances**: ~20 route suites, `routes-users.test.ts`.
+
+## Patterns added by MUT-24 §C (2026-10-16)
+
+### Pattern: A Dexie upgrade is tested from the shape the version before it left on disk
+Build the old database with `createDatabaseAt(name, n - 1, rows)` from `src/test/legacyDexie.ts`. `schemaAt(n)` merges every `stores()` call up to n from `database.ts` itself, so no test copies a schema block. Seed rows the way that version stored them, open `new MiniCrmDatabase(name)` over the database, and assert the result at the current version. A new Dexie version adds its case to `migration-history.test.ts`, or to its own `migration-vN.test.ts`, with the happy path, each branch, and the log-instead-of-throw fallback when the upgrade has one.
+
+### Pattern: Coverage floors only ratchet up
+`COVERAGE_THRESHOLDS` in `vitest.config.ts` holds the global floors (the last measured run, floored to a whole percent) and per-file floors for the risk files (100 when the logic is pure, 95 otherwise). When a change raises coverage, raise the floor in the same change. A change that would drop below a floor adds tests; it never edits the number down. A test that crosses 5 s only under instrumentation takes `SLOW_UNDER_COVERAGE` as a per-test option, never a raised global timeout.

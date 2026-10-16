@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { ORG_A, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler, type StubRequest } from '../../__tests__/harness';
 import type { HostedProfile } from '../../api/client';
+import { SLOW_UNDER_COVERAGE } from '../../../test/timeouts';
 
 /**
  * MUT-183: the New profile drawer, driven through the real router. Opened from
@@ -41,7 +42,7 @@ afterEach(() => {
 });
 
 describe('New profile drawer (MUT-183)', () => {
-  it('CR1: opens over the current page through the URL, not as a page', async () => {
+  it('CR1: opens over the current page through the URL, not as a page', SLOW_UNDER_COVERAGE, async () => {
     const { user, router } = portal(`/p/${ORG_A}`);
     const dialog = await openFromSwitcher(user);
     expect(locationOf(router)).toBe(`/p/${ORG_A}?newProfile=true`);

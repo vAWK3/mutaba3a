@@ -48,77 +48,25 @@
 
 ## GitHub Actions Workflows
 
-### 1. CI Workflow (`.github/workflows/ci.yml`)
+### 1. Web CI (`.github/workflows/web-ci.yml`, since 2026-10-16, MUT-24 §C)
 
-```yaml
-name: CI
+Replaces the `ci.yml` this section used to sketch, which never existed. It runs
+on pull requests, on pushes to `main` and on manual dispatch. It skips changes
+that touch only `server/**` (Server CI covers those), docs or other markdown.
+It has one job, `verify`, on Node 22 with the npm cache:
 
-on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
+| Step | Fails when |
+|------|------------|
+| `npm ci --no-audit --no-fund` | the lockfile doesn't install |
+| `npm run lint` | any ESLint error |
+| `npm run typecheck` | `tsconfig.app.json` or `tsconfig.hosted.json` has a type error |
+| `npm run test:coverage` | any Vitest test fails, or coverage falls below `coverage.thresholds` in `vitest.config.ts` (the global floors plus the per-file risk floors) |
+| Coverage to the job summary | never fails the job. `scripts/coverage-summary.ts` turns `coverage/coverage-summary.json` into a markdown table (the four totals, then the ten files with the most uncovered lines) and appends it to `$GITHUB_STEP_SUMMARY` |
 
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run lint
-      - run: npx tsc --noEmit
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run test:coverage
-      - uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
-
-  build-web:
-    runs-on: ubuntu-latest
-    needs: [lint, test]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run build:web
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-web
-          path: dist-web/
-
-  build-desktop:
-    runs-on: ubuntu-latest
-    needs: [lint, test]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run build:desktop
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-desktop
-          path: dist-desktop/
-```
+It builds nothing for release, deploys nothing and pushes nothing. `npm run
+build` and `test:bundles` stay local gates (CLAUDE.md Phase 4). Raising the
+thresholds is a deliberate edit to `vitest.config.ts` after a coverage gain.
+Never lower them to land a change.
 
 ---
 
@@ -206,7 +154,7 @@ jobs:
 
 ### 3a. Server CI (`.github/workflows/server-ci.yml`, since 2026-10-08)
 
-The only workflow that runs on pull requests today. Scoped by `paths:` to
+Runs on pull requests beside Web CI. Scoped by `paths:` to
 `server/**`; three jobs, no deploy:
 
 | Job | What it proves |
@@ -262,7 +210,7 @@ operator-run (see "Hosted API Deployment" below and `server/DEPLOYMENT.md`).
 | **Lint** | No errors | Yes |
 | **TypeCheck** | No errors | Yes |
 | **Tests** | All passing | Yes |
-| **Coverage** | 60% minimum | No (warning) |
+| **Coverage** | `vitest.config.ts` thresholds: global floors + risk files at 95/100 (MUT-24) | Yes (Web CI) |
 | **Build** | Successful | Yes |
 | **Bundle Size** | <300KB gzipped | No (warning) |
 

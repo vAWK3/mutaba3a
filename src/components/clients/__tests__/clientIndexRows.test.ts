@@ -154,6 +154,24 @@ describe('compareClientRows', () => {
     expect([z, a2, a1].sort(compareClientRows('owed', 'desc')).map((r) => r.id)).toEqual(['a1', 'a2', 'z2']);
     expect([z, a2, a1].sort(compareClientRows('owed', 'asc')).map((r) => r.id)).toEqual(['a1', 'a2', 'z2']);
   });
+
+  it('treats the same client twice as equal, and orders same-name ids either way round', () => {
+    const a1 = row({ id: 'a1', name: 'Abe' });
+    const a2 = row({ id: 'a2', name: 'Abe' });
+    const compare = compareClientRows('name', 'asc');
+
+    expect(compare(a1, a1)).toBe(0);
+    expect(compare(a1, a2)).toBeLessThan(0);
+    expect(compare(a2, a1)).toBeGreaterThan(0);
+  });
+
+  it('reads a missing rank element as zero, so a longer rank wins on its extra amount', () => {
+    const short = { ...row({ id: 's', name: 'Short' }), owedRank: [500] };
+    const long = { ...row({ id: 'l', name: 'Long' }), owedRank: [500, 1] };
+
+    expect(order([short, long], 'owed', 'desc')).toEqual(['Long', 'Short']);
+    expect(order([long, short], 'owed', 'asc')).toEqual(['Short', 'Long']);
+  });
 });
 
 /**

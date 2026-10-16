@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { I18nProvider } from '../../../lib/i18n/core';
 import { DecimalAmount, formatDecimal, isZeroDecimal } from '../DecimalAmount';
-import { formatDay, formatInstant, formatSize, todayInZone, todayLocalISO } from '../dates';
+import { formatDay, formatInstant, formatSize, MONEY_DATE_FLOOR_DAYS, moneyDateFloor, todayInZone, todayLocalISO } from '../dates';
 
 describe('formatDecimal', () => {
   it.each([
@@ -57,6 +57,21 @@ describe('dates', () => {
   it('formats an instant in the organization zone', () => {
     expect(formatInstant('2026-10-10T22:30:00Z', 'en', 'Asia/Jerusalem')).toBe('Oct 11, 2026');
     expect(formatInstant('2026-10-10T22:30:00Z', 'en', 'UTC')).toBe('Oct 10, 2026');
+  });
+
+  // MUT-227 (ADR-086): the earliest date the server takes, shown by the re-date drawer.
+  it('puts the money-date floor 3660 calendar days before the profile today', () => {
+    expect(MONEY_DATE_FLOOR_DAYS).toBe(3660);
+    expect(moneyDateFloor('2026-10-16')).toBe('2016-10-08');
+    expect(moneyDateFloor('2026-03-01')).toBe('2016-02-22');
+    expect(moneyDateFloor('2024-02-29')).toBe('2014-02-21');
+    expect(moneyDateFloor('2036-01-01')).toBe('2025-12-24');
+  });
+
+  it('shows a dash for a missing or unreadable instant', () => {
+    expect(formatInstant(null, 'en', 'UTC')).toBe('—');
+    expect(formatInstant('', 'en', 'UTC')).toBe('—');
+    expect(formatInstant('not a date', 'en', 'UTC')).toBe('—');
   });
 
   it('formats sizes for people', () => {

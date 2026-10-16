@@ -65,3 +65,30 @@ describe('mapRedateError dates (MUT-227)', () => {
     expect(mapRedateError(v('DATE_INVALID', { field: 'occurredOn' })).fields).toEqual([{ field: 'date', key: 'hosted.income.errors.dateFuture' }]);
   });
 });
+
+describe('income error maps: the remaining routes (MUT-24 §C)', () => {
+  it('keeps a DATE_INVALID with a non-string field on the work date', () => {
+    expect(mapIncomeError(v('DATE_INVALID', { field: 7 })).fields[0].field).toBe('occurredOn');
+  });
+
+  it('toasts a validation error with no reason, or one that names no known field', () => {
+    expect(mapIncomeError(new ApiError(422, 'VALIDATION_FAILED', 'x', null)).toast).toBe('hosted.income.errors.saveFailed');
+    expect(mapIncomeError(v('NOT_A_REASON')).toast).toBe('hosted.income.errors.saveFailed');
+  });
+
+  it('settle: network, read-only, a bad amount, an outstanding the server left out, and anything unowned', () => {
+    expect(mapSettleError(new Error('offline')).toast).toBe('hosted.income.errors.network');
+    expect(mapSettleError(new ApiError(403, 'READ_ONLY_PROFILE', 'x', null)).toast).toBe('hosted.readOnly.none');
+    expect(mapSettleError(v('AMOUNT_INVALID')).fields).toEqual([{ field: 'amount', key: 'hosted.income.errors.amountInvalid' }]);
+    expect(mapSettleError(v('ALLOCATION_EXCEEDS_OUTSTANDING')).fields[0].params).toEqual({ outstanding: '' });
+    expect(mapSettleError(v('SOMETHING_ELSE'))).toEqual({ fields: [], toast: 'hosted.income.errors.saveFailed' });
+    expect(mapSettleError(new ApiError(500, 'UNKNOWN', 'x'))).toEqual({ fields: [], toast: 'hosted.income.errors.saveFailed' });
+  });
+
+  it('re-date: network, a stale version, a row that went away, and anything unowned', () => {
+    expect(mapRedateError(new ApiError(0, 'NETWORK', 'x')).toast).toBe('hosted.income.errors.network');
+    expect(mapRedateError(new ApiError(409, 'CONFLICT', 'x'))).toEqual({ fields: [], toast: 'hosted.redate.conflict', reread: true });
+    expect(mapRedateError(new ApiError(404, 'NOT_FOUND', 'x'))).toEqual({ fields: [], toast: 'hosted.redate.gone', reread: true });
+    expect(mapRedateError(v('AMOUNT_INVALID'))).toEqual({ fields: [], toast: 'hosted.income.errors.saveFailed' });
+  });
+});
