@@ -240,6 +240,20 @@ describe('a link that cannot be used', () => {
   });
 });
 
+describe('a second link pasted into the same tab', () => {
+  it('checks the new token, although only the fragment changed', async () => {
+    chooseEnglish();
+    const fresh = 'n'.repeat(43);
+    const api = stubApi(routes({ [CHECK]: ({ body }) => ((body as { token: string }).token === fresh ? valid()() : ok({ state: 'expired' })) }));
+    const { router } = renderPortal(`/setup#${TOKEN}`);
+    expect(await screen.findByRole('heading', { level: 1, name: 'This link has expired' })).toBeInTheDocument();
+    await act(() => router.navigate({ to: '/setup', hash: fresh }));
+    expect(await screen.findByLabelText('New password')).toBeInTheDocument();
+    expect(api.calls.filter((c) => `${c.method} ${c.url.pathname}` === CHECK).map((c) => (c.body as { token: string }).token)).toEqual([TOKEN, fresh]);
+    await waitFor(() => expect(locationOf(router)).toBe('/setup'));
+  });
+});
+
 describe('when the check does not get through', () => {
   it('offers Try again when the server is unreachable, and the retry shows the form', async () => {
     chooseEnglish();

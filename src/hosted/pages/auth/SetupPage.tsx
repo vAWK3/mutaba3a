@@ -33,8 +33,11 @@ const requestTimeout = () => AbortSignal.timeout(ME_TIMEOUT_MS);
 export function SetupPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  // Read once: the strip below empties the hash, and the token must outlive it.
-  const [token] = useState(() => tokenFromHash(location.hash));
+  // Kept in state: the strip below empties the hash, and the token must outlive it.
+  const incoming = tokenFromHash(location.hash);
+  const [token, setToken] = useState(incoming);
+  // A newer link pasted into this tab changes only the fragment, so the page doesn't reload: adopt it.
+  if (incoming && incoming !== token) setToken(incoming);
 
   useEffect(() => {
     // `replace` is history.replaceState: the token stays in no history entry (MUT-235 review A5).
@@ -42,7 +45,7 @@ export function SetupPage() {
   }, [location.hash, navigate]);
 
   if (!token) return <SetupNotice outcome={{ kind: 'refused', state: 'missing' }} />;
-  return <SetupLink token={token} />;
+  return <SetupLink key={token} token={token} />;
 }
 
 function SetupLink({ token }: { token: string }) {
@@ -50,7 +53,7 @@ function SetupLink({ token }: { token: string }) {
   const adoptAccountLocale = useAdoptAccountLocale();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const check = useQuery({
-    queryKey: SETUP_CHECK_KEY,
+    queryKey: [...SETUP_CHECK_KEY, token],
     queryFn: ({ signal }) => api.checkSetupLink(token, AbortSignal.any([signal, requestTimeout()])),
     // Asked once per page (eng review A1): after a redeem the same link answers "used".
     staleTime: Infinity,
