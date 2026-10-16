@@ -894,19 +894,10 @@ const ALLOWED_LITERAL_FILES: Record<string, string> = {
  * entries; a new file, a higher count, or a stale count fails.
  */
 const KNOWN_LITERALS: Record<string, number> = {
-  'src/components/drawers/BusinessProfileDrawer.tsx': 2,
-  'src/components/modals/ExportDataModal.tsx': 8,
   'src/hosted/hosted.css': 5,
-  'src/pages/conversions/ConversionsPage.tsx': 2,
-  'src/pages/expenses/ExpensesLedgerPage.tsx': 5,
-  'src/pages/income/IncomePage.tsx': 4,
-  'src/pages/insights/InsightsPage.tsx': 12,
   'src/pages/landing/LandingPage.css': 3,
   'src/pages/landing/PrivacyPolicyPage.css': 2,
   'src/pages/landing/components/HeroSection.css': 3,
-  'src/pages/projects/ProjectDetailPage.tsx': 7,
-  'src/pages/settings/AboutSection.tsx': 9,
-  'src/pages/settings/SettingsPage.tsx': 2,
 };
 
 /**

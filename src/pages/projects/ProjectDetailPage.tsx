@@ -112,7 +112,7 @@ export function ProjectDetailPage() {
       <div className="page-content content-enter">
         {/* Inline Stats - Unified with EUR support */}
         {summary && (
-          <div className="inline-stats" style={{ marginBottom: 24 }}>
+          <div className="inline-stats" style={{ marginBottom: 'var(--space-6)' }}>
             <div className="inline-stat">
               <span className="inline-stat-label">{t('projects.columns.paid')}</span>
               <CurrencySummaryPopup
@@ -172,9 +172,9 @@ export function ProjectDetailPage() {
 
         {activeTab === 'summary' && (
           <div>
-            <div className="card" style={{ marginBottom: 16 }}>
-              <h4 style={{ marginBottom: 12 }}>{t('projects.detail.projectDetails')}</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+            <div className="card" style={{ marginBottom: 'var(--space-4)' }}>
+              <h4 style={{ marginBottom: 'var(--space-3)' }}>{t('projects.detail.projectDetails')}</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-4)' }}>
                 <div>
                   <div className="text-muted text-sm">{t('projects.columns.client')}</div>
                   <div>{summary?.clientName || '-'}</div>
@@ -185,7 +185,7 @@ export function ProjectDetailPage() {
                 </div>
               </div>
               {project.notes && (
-                <div style={{ marginTop: 16 }}>
+                <div style={{ marginTop: 'var(--space-4)' }}>
                   <div className="text-muted text-sm">{t('drawer.project.notes')}</div>
                   <div>{project.notes}</div>
                 </div>
@@ -264,7 +264,7 @@ export function ProjectDetailPage() {
                           <td className="text-secondary">{tx.clientName || EMPTY_CELL}</td>
                           <td className="text-secondary">{tx.categoryName || EMPTY_CELL}</td>
                           <td className="amount-cell">
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 'var(--space-0-5)' }}>
                               <AmountWithConversion
                                 amountMinor={tx.amountMinor}
                                 currency={tx.currency}
@@ -280,7 +280,7 @@ export function ProjectDetailPage() {
                           </td>
                           <td>
                             {tx.kind === 'income' && tx.paymentStatus ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-0-5)' }}>
                                 <PaymentStatusBadge
                                   paymentStatus={tx.paymentStatus}
                                   amountMinor={tx.amountMinor}

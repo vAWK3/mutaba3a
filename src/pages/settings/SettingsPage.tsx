@@ -261,7 +261,7 @@ export function SettingsPage() {
                         <div className="business-profile-meta text-muted text-sm">
                           {profile.email}
                           {profile.isDefault && (
-                            <span className="badge badge-primary" style={{ marginInlineStart: 8 }}>
+                            <span className="badge badge-primary" style={{ marginInlineStart: 'var(--space-2)' }}>
                               {t('settings.profile.default')}
                             </span>
                           )}
@@ -322,7 +322,7 @@ export function SettingsPage() {
 
             <div className="settings-row">
               <div className="settings-label">{t('settings.currency.enabled')}</div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                 {(['USD', 'ILS'] as Currency[]).map((curr) => (
                   <button
                     key={curr}

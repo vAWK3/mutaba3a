@@ -133,11 +133,11 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
             </div>
           ) : (
             <>
-              <div style={{ marginBottom: 24 }}>
-                <label className="settings-label" style={{ marginBottom: 8, display: 'block' }}>
+              <div style={{ marginBottom: 'var(--space-6)' }}>
+                <label className="settings-label" style={{ marginBottom: 'var(--space-2)', display: 'block' }}>
                   {t('settings.data.exportFormat')}
                 </label>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                   <button
                     className={`btn btn-sm ${exportFormat === 'csv' ? 'btn-primary' : 'btn-secondary'}`}
                     onClick={() => setExportFormat('csv')}
@@ -151,19 +151,19 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
                     {t('settings.data.exportFormatJSON')}
                   </button>
                 </div>
-                <p className="text-muted text-sm" style={{ marginTop: 8 }}>
+                <p className="text-muted text-sm" style={{ marginTop: 'var(--space-2)' }}>
                   {exportFormat === 'csv'
                     ? t('settings.data.exportFormatCSVDesc')
                     : t('settings.data.exportFormatJSONDesc')}
                 </p>
               </div>
 
-              <p className="text-muted" style={{ marginBottom: 16 }}>
+              <p className="text-muted" style={{ marginBottom: 'var(--space-4)' }}>
                 {t('settings.data.selectProfileDesc')}
               </p>
 
               {profiles.length === 0 ? (
-                <div className="text-muted text-center" style={{ padding: '24px 0' }}>
+                <div className="text-muted text-center" style={{ padding: 'var(--space-6) 0' }}>
                   {t('settings.data.noProfilesFound')}
                 </div>
               ) : (
@@ -180,7 +180,7 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
               )}
 
               {exportStatus === 'error' && (
-                <div className="status-error" style={{ marginTop: 12 }}>
+                <div className="status-error" style={{ marginTop: 'var(--space-3)' }}>
                   {t('settings.data.exportFailedRetry')}
                   {exportError ? ` (${exportError})` : ''}
                 </div>
@@ -241,7 +241,7 @@ function ProfileSelectItem({ profile, selected, onSelect }: ProfileSelectItemPro
           <div className="profile-select-item__meta text-muted text-sm">
             {profile.email}
             {profile.isDefault && (
-              <span className="badge badge-primary" style={{ marginInlineStart: 8 }}>
+              <span className="badge badge-primary" style={{ marginInlineStart: 'var(--space-2)' }}>
                 Default
               </span>
             )}
