@@ -77,6 +77,10 @@ describe('STORE_ACCESS', () => {
   it('keeps provisioning to the operator (ADR-037 decision 1)', () => {
     const operator = entries.filter(([, , a]) => a === 'operator').map(([r, m]) => `${r}.${m}`).sort();
     expect(operator).toEqual([
+      // MUT-235: issued by /admin and redeemed by the two public setup routes, neither of which runs a guard.
+      'accountSetup.findByDigest',
+      'accountSetup.issue',
+      'accountSetup.redeem',
       'apiKeys.create',
       // MUT-66: the support-only per-user inbox count; the inbox itself is the person's, not the operator's.
       'inboxEntries.countByUser',

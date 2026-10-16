@@ -18,6 +18,36 @@
 
 ## Open Debt
 
+### TD-146: Setup-link rows are never pruned
+**Status**: Open
+**Added**: 2026-10-16 (MUT-235)
+**Priority**: Low — operator-issued, a handful a month
+**Impact**: `account_setup_tokens` keeps every used, cancelled and expired link forever. Harmless at today's volume, and it doubles as a record of when each link was issued and used.
+**Fix**: if the table passes ~10k rows, delete rows used, cancelled or expired more than 90 days ago (post-roll or a scheduled job).
+
+### TD-147: The operator can't see whether a person has set their password
+**Status**: Open
+**Added**: 2026-10-16 (MUT-235)
+**Priority**: Low
+**Impact**: `GET /admin/v1/users/{id}` shows no "setup pending" or open-link expiry, so when someone says "I never got in", the operator just issues a new link. That is safe (it supersedes the old one) but blind.
+**Fix**: add `passwordSet: boolean` and the open link's `expiresAt` to the admin user detail, plus a `show` CLI command.
+
+### TD-149: A lost redeem response reads as "link already used"
+**Status**: Open
+**Ticket**: MUT-236 (portal handling)
+**Added**: 2026-10-16 (MUT-235 qa-reconcile, red team)
+**Priority**: Low
+**Impact**: `POST /v1/account-setup` is not idempotent. If the response is lost after the commit (a network blip, a proxy timeout) or the person double-submits, the retry gets 410 `state: used`, although the password they typed was set.
+**Fix**: MUT-236 disables submit while in flight and treats `used` after a timeout as "try signing in". If that proves not enough, make a retry with the same password answer 200.
+
+### TD-148: A JSON content-type with an empty body is a 500 on routes with an optional body
+**Status**: Resolved 2026-10-16 (MUT-235 qa-reconcile): the app error handler maps Hono's 400 `HTTPException` (an unparseable body) to 422 `VALIDATION_FAILED`; `routes-users.test.ts` pins the empty-body case on `…/setup-link`.
+**Ticket**: none (found 2026-10-16, MUT-235 build)
+**Added**: 2026-10-16
+**Priority**: Low
+**Impact**: Hono's validator throws `HTTPException: Malformed JSON in request body`, which the app's error handler turns into 500 `INTERNAL`, not 422. It hits every route with `body.required: false` (`…/setup-link`, agreement cancel, installment trigger) when a client sends `content-type: application/json` and no body. The operator CLI and the tests send `{}`.
+**Fix**: map a malformed-JSON `HTTPException` to 422 `VALIDATION_FAILED` in the app error handler, with one test per optional-body route.
+
 ### TD-143: Dead and unreachable web code found while mapping the release-QA catalog
 **Status**: Resolved 2026-10-15 (`chore/td-143-dead-code`): the 21 imported-by-nothing files, their 7 test files and their barrel exports are deleted, with the dead `UnifiedAmount` block in `index.css`. `/theme-demo` and `ThemeDemo(.css)` are deleted rather than gated: no doc, spec or link uses them. `MacDownloadBanner(.css)`, its test, its `AppShell` slot and its `downloadBanner.*` strings are deleted too (Basel, 2026-10-15: the desktop is retired until v2). One item left this ticket: `services/oauth/**` + `services/tokenStore.ts` are kept, since ADR-053 (5) keeps the Malafat OAuth client and TD-075 owns whether to delete it with its Rust half. `release-qa lint` now lists only those, plus the two intentional `db/` files.
 **Ticket**: none (found 2026-10-15, release-QA coverage pass)

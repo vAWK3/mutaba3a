@@ -5,6 +5,7 @@ import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 import { OWED_REDATED, PAYMENT_REDATED } from '../routes/audit.js';
+import { provisionUser } from './helpers/provision.js';
 
 /**
  * MUT-223: PATCH /v1/income/{id} and PATCH /v1/payments/{id} change the date of a person's own Owed entry or
@@ -54,13 +55,13 @@ async function firms(h: Harness) {
 async function person(h: Harness, firmIds: string[]) {
   const [first, ...rest] = firmIds;
   const email = `partner${++seq}@firm.ps`;
-  const created = await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId: first, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
+  const created = await provisionUser(h.app, { email, displayName: 'Nour Haddad', organizationId: first, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
   for (const organizationId of rest) await h.app.request(`/admin/v1/users/${created.user.id}/memberships`, json({ organizationId }, admin));
-  const res = await h.app.request('/v1/sessions', json({ email, password: created.initialPassword }, SAME_ORIGIN));
+  const res = await h.app.request('/v1/sessions', json({ email, password: created.password }, SAME_ORIGIN));
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
   const as = (profile: string) => ({ cookie: `${COOKIE}=${token}`, 'x-mutaba3a-profile': profile, ...SAME_ORIGIN });
   const device = async () => {
-    const body = await read(await h.app.request('/v1/device-sessions', json({ email, password: created.initialPassword })));
+    const body = await read(await h.app.request('/v1/device-sessions', json({ email, password: created.password })));
     return (profile: string) => ({ authorization: `Bearer ${body.token as string}`, 'x-mutaba3a-profile': profile });
   };
   return { id: created.user.id as string, personal: created.personalProfile.id as string, as, device };

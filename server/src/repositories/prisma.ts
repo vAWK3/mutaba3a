@@ -8,6 +8,8 @@ import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-sugges
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import type {
+  AccountSetupRepository,
+  AccountSetupTokenRecord,
   AttachmentFilter,
   AuditEventInput,
   ExpenseCategoryInput,
@@ -203,6 +205,10 @@ export class PrismaLedgerStore implements LedgerStore {
           for (const organizationId of [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])]) {
             memberships.push(toMembership(await tx.membership.create({ data: { userId: user.id, organizationId, createdAt: input.at } })));
           }
+          // MUT-235 review fix: the first setup link commits with the user, or neither does.
+          if (input.setupLink) {
+            await tx.accountSetupToken.create({ data: { userId: user.id, ...input.setupLink, createdAt: input.at } });
+          }
           return { user: toUser(user), memberships, personalOrganization };
         }),
       ),
@@ -215,10 +221,16 @@ export class PrismaLedgerStore implements LedgerStore {
       });
       return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
     },
-    setStatus: async (id, status, at) => {
-      const { count } = await this.prisma.user.updateMany({ where: { id }, data: { status, updatedAt: at } });
-      return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
-    },
+    setStatus: async (id, status, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.user.updateMany({ where: { id }, data: { status, updatedAt: at } });
+        if (count === 0) return null;
+        // MUT-235 review fix: a disable kills open setup links, so re-enabling never revives one.
+        if (status === 'DISABLED') {
+          await tx.accountSetupToken.updateMany({ where: { userId: id, usedAt: null, cancelledAt: null }, data: { cancelledAt: at } });
+        }
+        return mapNullable(await tx.user.findUnique({ where: { id } }), toUser);
+      }),
     recordFailedSignIn: async (id, at, lockUntil) => {
       const { count } = await this.prisma.user.updateMany({
         where: { id },
@@ -241,23 +253,31 @@ export class PrismaLedgerStore implements LedgerStore {
   };
 
   readonly sessions: SessionRepository = {
-    create: async (input) =>
-      toSession(
-        await translate(() =>
-          this.prisma.session.create({
-            data: {
-              userId: input.userId,
-              tokenDigest: input.tokenDigest,
-              kind: input.kind,
-              createdAt: input.at,
-              lastSeenAt: input.at,
-              idleExpiresAt: input.idleExpiresAt,
-              absoluteExpiresAt: input.absoluteExpiresAt,
-              userAgent: input.userAgent,
-            },
-          }),
-        ),
-      ),
+    create: async (input) => {
+      const data = {
+        userId: input.userId,
+        tokenDigest: input.tokenDigest,
+        kind: input.kind,
+        createdAt: input.at,
+        lastSeenAt: input.at,
+        idleExpiresAt: input.idleExpiresAt,
+        absoluteExpiresAt: input.absoluteExpiresAt,
+        userAgent: input.userAgent,
+      };
+      const { verifiedPasswordHash } = input;
+      if (verifiedPasswordHash === undefined) return toSession(await translate(() => this.prisma.session.create({ data })));
+      // MUT-235 review: FOR SHARE conflicts with the FOR NO KEY UPDATE that a setup-link lock or redeem holds until it
+      // commits, so this waits for either and then sees its result. A credential that changed since sign-in verified it,
+      // or a person no longer ACTIVE, gets no session.
+      return translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const [owner] = await tx.$queryRaw<Array<{ passwordHash: string | null; status: string }>>`SELECT "passwordHash", status FROM users WHERE id = ${input.userId}::uuid FOR SHARE`;
+          if (!owner) throw new ForeignKeyViolation('sessions.userId');
+          if (owner.passwordHash !== verifiedPasswordHash || owner.status !== 'ACTIVE') throw new StateConflict('user', 'CREDENTIAL_CHANGED');
+          return toSession(await tx.session.create({ data }));
+        }),
+      );
+    },
     findByDigest: async (tokenDigest) => mapNullable(await this.prisma.session.findUnique({ where: { tokenDigest } }), toSession),
     touch: async (id, at, idleExpiresAt) => {
       await this.prisma.session.updateMany({ where: { id }, data: { lastSeenAt: at, idleExpiresAt } });
@@ -268,6 +288,56 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     revokeAllForUser: async (userId, reason, at) =>
       (await this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } })).count,
+  };
+
+  /**
+   * MUT-235 (ADR-088). Both writes take the person's row lock first, so issues and redeems for one person
+   * run one at a time: at most one open link, and of two redeems of one link exactly one claims it.
+   * NO KEY UPDATE, like MUT-182's owner lock, so the lock never blocks an insert that references the user.
+   */
+  readonly accountSetup: AccountSetupRepository = {
+    issue: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const [person] = await tx.$queryRaw<Array<{ status: string }>>`SELECT status FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
+          if (!person) throw new ForeignKeyViolation('account_setup_tokens.userId');
+          // Re-checked under the lock, not only in the route, so a disable that lands first can never be followed by a fresh link.
+          if (person.status !== 'ACTIVE') throw new StateConflict('user', 'USER_DISABLED');
+          if (input.lock) {
+            // Stamping passwordChangedAt makes the session check refuse a session a racing sign-in inserts after the lock.
+            await tx.user.update({ where: { id: input.userId }, data: { passwordHash: null, passwordChangedAt: input.at, updatedAt: input.at } });
+            await tx.session.updateMany({ where: { userId: input.userId, revokedAt: null }, data: { revokedAt: input.at, revokedReason: 'setup_link_lock' } });
+          }
+          await tx.accountSetupToken.updateMany({ where: { userId: input.userId, usedAt: null, cancelledAt: null }, data: { cancelledAt: input.at } });
+          const row = await tx.accountSetupToken.create({
+            data: { userId: input.userId, tokenDigest: input.tokenDigest, purpose: input.purpose, createdAt: input.at, expiresAt: input.expiresAt },
+          });
+          if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          return toSetupLink(row);
+        }),
+      ),
+    findByDigest: async (tokenDigest) => mapNullable(await this.prisma.accountSetupToken.findUnique({ where: { tokenDigest } }), toSetupLink),
+    redeem: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const link = await tx.accountSetupToken.findUnique({ where: { tokenDigest: input.tokenDigest } });
+          if (!link) return null;
+          const [person] = await tx.$queryRaw<Array<{ status: string }>>`SELECT status FROM users WHERE id = ${link.userId}::uuid FOR NO KEY UPDATE`;
+          if (person?.status !== 'ACTIVE') return null;
+          const { count } = await tx.accountSetupToken.updateMany({
+            where: { id: link.id, usedAt: null, cancelledAt: null, expiresAt: { gt: input.at } },
+            data: { usedAt: input.at },
+          });
+          if (count === 0) return null;
+          const user = await tx.user.update({
+            where: { id: link.userId },
+            data: { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at },
+          });
+          await tx.session.updateMany({ where: { userId: link.userId, revokedAt: null }, data: { revokedAt: input.at, revokedReason: 'password_set' } });
+          if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          return toUser(user);
+        }),
+      ),
   };
 
   readonly memberships: MembershipRepository = {
@@ -1691,6 +1761,19 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     malafatSuggestions: row.malafatSuggestions === null ? null : resolveMalafatSuggestions(row.malafatSuggestions),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+}
+
+function toSetupLink(row: Prisma.AccountSetupTokenGetPayload<object>): AccountSetupTokenRecord {
+  return {
+    id: row.id,
+    userId: row.userId,
+    tokenDigest: row.tokenDigest,
+    purpose: row.purpose,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+    usedAt: row.usedAt,
+    cancelledAt: row.cancelledAt,
   };
 }
 

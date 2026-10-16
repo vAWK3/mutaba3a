@@ -5,6 +5,7 @@ import { buildRouteAccessIndex, type RouteAccessIndex } from '../auth/middleware
 import { domainOfScope, matrixRow } from '../auth/writability.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { provisionUser } from './helpers/provision.js';
 
 /**
  * ADR-037 decision 5: every /v1 route declares the principals it accepts in its
@@ -101,7 +102,8 @@ const SESSION_OPERATIONS = [
 ].sort();
 /** MUT-64: the same surface, minus cookie-only sign-out, plus the device-only sign-out. A device token gets exactly a cookie session's reach. */
 const DEVICE_SESSION_OPERATIONS = [...SESSION_OPERATIONS.filter((k) => k !== 'DELETE /v1/sessions/current'), 'DELETE /v1/device-sessions/current'].sort();
-const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions'];
+/** Sign-in (MUT-38, MUT-64) and the setup-link pair (MUT-235): the only operations that take no credential. */
+const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POST /v1/account-setup/check', 'POST /v1/account-setup'];
 const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'DELETE /v1/sessions/current'];
 /** MUT-64: the device-session equivalent of IDENTITY_OPERATIONS — GET /v1/me is shared, sign-out is its own route. */
 const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'DELETE /v1/device-sessions/current'];
@@ -151,12 +153,12 @@ beforeAll(async () => {
   fullKey = await key(['integration:read']);
   scopedKeys.push(await key(['audit:read']), await key(['integration:read']));
 
-  const created = (await (await app.request('/admin/v1/users', json({ email: 'nour@firm.ps', displayName: 'Nour', organizationId: org.id }, admin))).json()) as { initialPassword: string };
-  const signIn = await app.request('/v1/sessions', json({ email: 'nour@firm.ps', password: created.initialPassword }, { origin: 'http://localhost' }));
+  const created = await provisionUser(app, { email: 'nour@firm.ps', displayName: 'Nour', organizationId: org.id });
+  const signIn = await app.request('/v1/sessions', json({ email: 'nour@firm.ps', password: created.password }, { origin: 'http://localhost' }));
   expect(signIn.status).toBe(201);
   sessionCookie = (signIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
 
-  const deviceSignIn = (await (await app.request('/v1/device-sessions', json({ email: 'nour@firm.ps', password: created.initialPassword }))).json()) as { token: string };
+  const deviceSignIn = (await (await app.request('/v1/device-sessions', json({ email: 'nour@firm.ps', password: created.password }))).json()) as { token: string };
   deviceToken = deviceSignIn.token;
 });
 

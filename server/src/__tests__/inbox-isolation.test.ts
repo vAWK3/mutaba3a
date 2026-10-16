@@ -4,6 +4,7 @@ import pino from 'pino';
 import { createApp } from '../app.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { provisionUser } from './helpers/provision.js';
 
 /**
  * MUT-66 AC 5 and the operator half of AC 6.
@@ -48,8 +49,8 @@ async function setup() {
 
   const p = (await read(await app.request('/admin/v1/organizations', json({ name: `Personal ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)))) as { id: string };
   const email = `partner${++seq}@firm.ps`;
-  const created = (await read(await app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId: p.id }, admin)))) as { user: { id: string }; initialPassword: string };
-  const signIn = await app.request('/v1/sessions', json({ email, password: created.initialPassword }, SAME_ORIGIN));
+  const created = await provisionUser(app, { email, displayName: 'Nour Haddad', organizationId: p.id });
+  const signIn = await app.request('/v1/sessions', json({ email, password: created.password }, SAME_ORIGIN));
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(signIn.headers.get('set-cookie') ?? '')?.[1] ?? '';
   const me = () => ({ cookie: `${COOKIE}=${token}`, ...SAME_ORIGIN });
   const as = (extra: Record<string, string> = {}) => ({ ...me(), 'x-mutaba3a-profile': p.id, ...extra });
@@ -126,7 +127,7 @@ describe('the operator can see how big an inbox is (AC 6)', () => {
     for (let i = 0; i < 9; i += 1) await s.capture(ENTRY);
     expect((await s.detail()).inboxEntryCount).toBe(10);
 
-    const other = (await read(await s.app.request('/admin/v1/users', json({ email: `other${++seq}@firm.ps`, displayName: 'Rami', organizationId: s.p.id }, admin)))) as { user: { id: string } };
+    const other = await provisionUser(s.app, { email: `other${++seq}@firm.ps`, displayName: 'Rami', organizationId: s.p.id });
     expect((await s.detail(other.user.id)).inboxEntryCount).toBe(0);
   });
 

@@ -28,6 +28,8 @@ export const ERROR_CODES = {
   ORGANIZATION_MISMATCH: 409,
   CONFLICT: 409,
   OPERATION_IN_PROGRESS: 409,
+  /** MUT-235: a setup link that can no longer set a password; `details.state` is expired | used | superseded | invalid. */
+  SETUP_LINK_UNUSABLE: 410,
   VALIDATION_FAILED: 422,
   IDEMPOTENCY_KEY_REUSED: 422,
   IDEMPOTENCY_KEY_REQUIRED: 422,

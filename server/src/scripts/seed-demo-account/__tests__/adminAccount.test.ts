@@ -30,8 +30,8 @@ function harness() {
 
 describe('ensureSeedAccount (MUT-136)', () => {
   it('creates the account on a first run, with a personal profile only (no organization-id)', async () => {
-    const { store, admin } = harness();
-    const creds = await ensureSeedAccount(admin, OPTIONS);
+    const { store, deps, admin } = harness();
+    const creds = await ensureSeedAccount(admin, deps, OPTIONS);
     const user = await store.users.findByEmail(OPTIONS.email);
     expect(user?.id).toBe(creds.userId);
     const memberships = await store.memberships.listByUser(creds.userId);
@@ -39,9 +39,9 @@ describe('ensureSeedAccount (MUT-136)', () => {
   });
 
   it('reuses the same account on a second run instead of creating a duplicate', async () => {
-    const { store, admin } = harness();
-    const first = await ensureSeedAccount(admin, OPTIONS);
-    const second = await ensureSeedAccount(admin, OPTIONS);
+    const { store, deps, admin } = harness();
+    const first = await ensureSeedAccount(admin, deps, OPTIONS);
+    const second = await ensureSeedAccount(admin, deps, OPTIONS);
     expect(second.userId).toBe(first.userId);
     const page = await store.organizations.list();
     const personalOrgs = page.filter((o) => o.personalOwnerUserId === first.userId);
@@ -50,8 +50,8 @@ describe('ensureSeedAccount (MUT-136)', () => {
 
   it('rotates the password every run, so only the freshest returned password still signs in', async () => {
     const { deps, admin } = harness();
-    const first = await ensureSeedAccount(admin, OPTIONS);
-    const second = await ensureSeedAccount(admin, OPTIONS);
+    const first = await ensureSeedAccount(admin, deps, OPTIONS);
+    const second = await ensureSeedAccount(admin, deps, OPTIONS);
     expect(second.password).not.toBe(first.password);
 
     await expect(signIn(deps, OPTIONS.email, second.password)).resolves.toMatchObject({});
@@ -60,10 +60,10 @@ describe('ensureSeedAccount (MUT-136)', () => {
 
   it('keeps an existing account\'s password when one is supplied, so handed-out credentials keep working', async () => {
     const { deps, admin } = harness();
-    const first = await ensureSeedAccount(admin, OPTIONS);
+    const first = await ensureSeedAccount(admin, deps, OPTIONS);
     const reviewerSession = await signIn(deps, OPTIONS.email, first.password);
 
-    const second = await ensureSeedAccount(admin, { ...OPTIONS, keepPassword: first.password });
+    const second = await ensureSeedAccount(admin, deps, { ...OPTIONS, keepPassword: first.password });
     expect(second).toMatchObject({ userId: first.userId, password: first.password, rotated: false });
     await expect(signIn(deps, OPTIONS.email, first.password)).resolves.toMatchObject({});
     // Not rotating also means not revoking: a reviewer already signed in stays signed in.
@@ -73,7 +73,7 @@ describe('ensureSeedAccount (MUT-136)', () => {
 
   it('still issues a fresh password when the account does not exist yet, since none can be chosen', async () => {
     const { deps, admin } = harness();
-    const creds = await ensureSeedAccount(admin, { ...OPTIONS, keepPassword: 'a-password-nobody-was-ever-issued' });
+    const creds = await ensureSeedAccount(admin, deps, { ...OPTIONS, keepPassword: 'a-password-nobody-was-ever-issued' });
     expect(creds.rotated).toBe(true);
     expect(creds.password).not.toBe('a-password-nobody-was-ever-issued');
     await expect(signIn(deps, OPTIONS.email, creds.password)).resolves.toMatchObject({});
@@ -82,7 +82,7 @@ describe('ensureSeedAccount (MUT-136)', () => {
   it('fails visibly on a bad admin token, rather than silently creating a duplicate account', async () => {
     const { store, deps } = harness();
     const wrongAdmin = adminClient(deps.fetch, deps.baseUrl, 'not-the-real-admin-token');
-    await expect(ensureSeedAccount(wrongAdmin, OPTIONS)).rejects.toThrow();
+    await expect(ensureSeedAccount(wrongAdmin, deps, OPTIONS)).rejects.toThrow();
     expect(await store.users.findByEmail(OPTIONS.email)).toBeNull();
   });
 });

@@ -5,6 +5,7 @@ import { GENERAL_PRESET, PERSONAL_PRESET } from '../expenses/presets.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 import { MAX_OWNED_PROFILES } from '../routes/profiles.js';
+import { provisionUser } from './helpers/provision.js';
 
 /**
  * MUT-182: a signed-in person creates and manages their own standalone
@@ -59,8 +60,8 @@ async function person(h: Harness, options: { firmId?: string; locale?: 'en' | 'a
   const body = options.firmId
     ? { email, displayName: 'Rana Saleh', organizationId: options.firmId, locale: options.locale ?? 'en' }
     : { email, displayName: 'Rana Saleh', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', locale: options.locale ?? 'en' };
-  const created = await read(await h.app.request('/admin/v1/users', json(body, admin)));
-  const res = await h.app.request('/v1/sessions', json({ email, password: created.initialPassword }, SAME_ORIGIN));
+  const created = await provisionUser(h.app, body);
+  const res = await h.app.request('/v1/sessions', json({ email, password: created.password }, SAME_ORIGIN));
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
   const me = (extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, ...SAME_ORIGIN, ...extra });
   return { me, userId: created.user.id as string, personalId: created.personalProfile.id as string };
@@ -157,8 +158,8 @@ describe('POST /v1/profiles', () => {
   it('accepts a device session, so the phone can create one too (FC1)', async () => {
     const h = harness();
     const email = `phone${++seq}@studio.ps`;
-    const created = await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Rana', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
-    const device = await read(await h.app.request('/v1/device-sessions', json({ email, password: created.initialPassword })));
+    const created = await provisionUser(h.app, { email, displayName: 'Rana', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    const device = await read(await h.app.request('/v1/device-sessions', json({ email, password: created.password })));
     const res = await h.app.request('/v1/profiles', json(STUDIO, { authorization: `Bearer ${device.token}`, ...idem() }));
     expect(res.status).toBe(201);
   });

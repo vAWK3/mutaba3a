@@ -4,6 +4,7 @@ import { createApp } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { provisionUser } from './helpers/provision.js';
 
 /**
  * MUT-66: the four plain inbox routes. What they must prove beyond ordinary
@@ -54,9 +55,9 @@ async function person(h: Harness, organizationIds?: string[]) {
   const ids = organizationIds ?? [(await organization(h, 'Firm')).id];
   const [first, ...rest] = ids;
   const email = `partner${++seq}@firm.ps`;
-  const created = (await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId: first }, admin)))) as { user: { id: string }; initialPassword: string };
+  const created = await provisionUser(h.app, { email, displayName: 'Nour Haddad', organizationId: first });
   for (const organizationId of rest) await h.app.request(`/admin/v1/users/${created.user.id}/memberships`, json({ organizationId }, admin));
-  const res = await h.app.request('/v1/sessions', json({ email, password: created.initialPassword }, SAME_ORIGIN));
+  const res = await h.app.request('/v1/sessions', json({ email, password: created.password }, SAME_ORIGIN));
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
   /** No X-Mutaba3a-Profile: these routes name no profile. */
   const me = (extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, ...SAME_ORIGIN, ...extra });

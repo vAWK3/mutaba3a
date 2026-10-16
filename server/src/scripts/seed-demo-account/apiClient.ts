@@ -84,6 +84,17 @@ export async function signIn(deps: ApiClientDeps, email: string, password: strin
   return { token: res.body.token as string, organizationId: personal.id };
 }
 
+/**
+ * MUT-235: sets a password through a setup link, the way the person would on
+ * the portal. The route is same-origin only; `Sec-Fetch-Site: same-origin` is
+ * what a browser on the portal sends, and wins over Origin, so it works whatever
+ * PORTAL_ORIGIN the server runs with.
+ */
+export async function redeemSetupLink(deps: ApiClientDeps, setupLinkUrl: string, password: string): Promise<void> {
+  const token = new URL(setupLinkUrl).hash.slice(1);
+  await request(deps, 'POST', '/v1/account-setup', { token, password }, { 'sec-fetch-site': 'same-origin' });
+}
+
 export function clientFor(deps: ApiClientDeps, session: SignInResult): SeedApiClient {
   const authed = (method: string, path: string, body: unknown, idempotencyKey: string) =>
     request(deps, method, path, body, {

@@ -5,6 +5,7 @@ import { SCOPES } from '../auth/scopes.js';
 import { CachedFxRates, JOD_PER_USD, type EcbSnapshot, type FxRateSource } from '../fx-rates.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { provisionUser } from './helpers/provision.js';
 
 /** MUT-228 (ADR-087): GET /v1/fx-rates — reference rates for display, sessions only, no profile. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,10 +54,10 @@ async function signedIn(h: ReturnType<typeof harness>) {
   const org = await read(await h.app.request('/admin/v1/organizations', json({ name: 'Haddad Law', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
   const key = await read(await h.app.request(`/admin/v1/organizations/${org.id}/api-keys`, json({ name: 'Malafat', scopes: SCOPES }, admin)));
   const email = 'nour@haddad.ps';
-  const created = await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId: org.id, locale: 'en' }, admin)));
-  const res = await h.app.request('/v1/sessions', json({ email, password: created.initialPassword }, SAME_ORIGIN));
+  const created = await provisionUser(h.app, { email, displayName: 'Nour Haddad', organizationId: org.id, locale: 'en' });
+  const res = await h.app.request('/v1/sessions', json({ email, password: created.password }, SAME_ORIGIN));
   const cookie = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
-  const device = await read(await h.app.request('/v1/device-sessions', json({ email, password: created.initialPassword })));
+  const device = await read(await h.app.request('/v1/device-sessions', json({ email, password: created.password })));
   return {
     orgId: org.id as string,
     asCookie: { cookie: `${COOKIE}=${cookie}`, ...SAME_ORIGIN },

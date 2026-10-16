@@ -1,5 +1,6 @@
 import type { Context } from 'hono';
 import { ApiError } from '../errors.js';
+import { StateConflict } from '../repositories/memory.js';
 import type { LedgerStore, SessionRecord, UserRecord } from '../repositories/ports.js';
 import type { AppEnv } from './middleware.js';
 import { generateDeviceSessionToken, generateSessionToken, sessionDigest, type SessionKind, type SignInThrottle } from './sessions.js';
@@ -81,18 +82,28 @@ export async function signIn(
   }
 
   throttle.clear(key);
-  const signedIn = (await store.users.recordSignIn(user.id, now)) ?? user;
   const token = sessionKind === 'device' ? generateDeviceSessionToken() : generateSessionToken();
   const absoluteExpiresAt = new Date(now.getTime() + lifetime.absoluteMs);
-  const session = await store.sessions.create({
-    userId: user.id,
-    tokenDigest: sessionDigest(pepper, token),
-    kind: sessionKind,
-    at: now,
-    idleExpiresAt: new Date(Math.min(now.getTime() + lifetime.idleMs, absoluteExpiresAt.getTime())),
-    absoluteExpiresAt,
-    userAgent: c.req.header('user-agent')?.slice(0, USER_AGENT_MAX) ?? null,
-  });
+  let session: SessionRecord;
+  try {
+    session = await store.sessions.create({
+      userId: user.id,
+      tokenDigest: sessionDigest(pepper, token),
+      kind: sessionKind,
+      at: now,
+      idleExpiresAt: new Date(Math.min(now.getTime() + lifetime.idleMs, absoluteExpiresAt.getTime())),
+      absoluteExpiresAt,
+      userAgent: c.req.header('user-agent')?.slice(0, USER_AGENT_MAX) ?? null,
+      // MUT-235 review: tied to the hash just verified, so an operator --lock (or a setup-link redeem, or a disable)
+      // that commits while this sign-in was verifying wins, instead of this sign-in keeping a session.
+      // Never null here (a null hash cannot verify), but the type cannot know that.
+      ...(user.passwordHash === null ? {} : { verifiedPasswordHash: user.passwordHash }),
+    });
+  } catch (err) {
+    if (err instanceof StateConflict) throw new ApiError('INVALID_CREDENTIALS', 'That email and password do not match');
+    throw err;
+  }
+  const signedIn = (await store.users.recordSignIn(user.id, now)) ?? user;
   await auditToMembers(c, store, signedIn, 'user.signed_in', sessionKind);
   return { user: signedIn, token, session };
 }

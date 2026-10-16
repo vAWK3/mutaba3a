@@ -4,6 +4,7 @@ import { createApp } from '../app.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher } from '../auth/users.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { redeemSetupLink, SETUP_TEST_PASSWORD, setupTokenOf } from './helpers/provision.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
@@ -51,7 +52,7 @@ async function createUser(h: Harness, organizationId: string, email = `partner${
     user: { id: string; email: string; status: string; passwordChangedAt: string };
     memberships: { organizationId: string }[];
     personalProfile: { id: string; name: string };
-    initialPassword: string;
+    setupLink: { url: string; expiresAt: string; purpose: string };
   }>;
 }
 
@@ -62,7 +63,7 @@ async function auditActions(h: Harness, organizationId: string): Promise<{ actio
 }
 
 describe('POST /admin/v1/users', () => {
-  it('creates a user with their personal and firm memberships and a one-time password, never the hash', async () => {
+  it('creates a user with their personal and firm memberships and a one-time setup link, never a password (MUT-235)', async () => {
     const h = harness();
     const org = await organization(h);
     const res = await h.app.request('/admin/v1/users', send('POST', { email: '  Partner@Firm.PS ', displayName: 'Nour Haddad', organizationId: org.id }));
@@ -78,10 +79,21 @@ describe('POST /admin/v1/users', () => {
       { organizationId: body.personalProfile.id, createdAt: '2026-10-11T09:00:00.000Z' },
       { organizationId: org.id, createdAt: '2026-10-11T09:00:00.000Z' },
     ]);
-    expect(body.initialPassword).toMatch(/^[A-Za-z0-9_-]{24}$/);
+    expect(body).not.toHaveProperty('initialPassword');
+    expect(body.setupLink).toEqual({ url: expect.stringMatching(/^http:\/\/localhost\/setup#[A-Za-z0-9_-]{43}$/), expiresAt: '2026-10-14T09:00:00.000Z', purpose: 'SETUP' });
 
     const stored = await h.store.users.getById(body.user.id);
-    expect(await hasher.verify(stored!.passwordHash, body.initialPassword)).toBe(true);
+    expect(stored!.passwordHash).toBeNull();
+  });
+
+  it('takes setupLinkValidHours between 1 and 720 (MUT-235)', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const make = (hours: number) => h.app.request('/admin/v1/users', send('POST', { email: `h${++seq}@firm.ps`, displayName: 'Nour', organizationId: org.id, setupLinkValidHours: hours }));
+    expect((await read(await make(1))).setupLink.expiresAt).toBe('2026-10-11T10:00:00.000Z');
+    expect((await read(await make(720))).setupLink.expiresAt).toBe('2026-11-10T09:00:00.000Z');
+    expect((await make(0)).status).toBe(422);
+    expect((await make(721)).status).toBe(422);
   });
 
   it('accepts locale en when the operator asks for it', async () => {
@@ -239,13 +251,14 @@ describe('personal profile (MUT-120)', () => {
     expect(await h.store.users.findByEmail('intruder@firm.ps')).toBeNull();
   });
 
-  it('audits as ADMIN: organization.created and user.created on the personal profile, user.created on the firm', async () => {
+  it('audits as ADMIN: organization.created, user.created and the setup link on the personal profile; the user events on the firm', async () => {
     const h = harness();
     const org = await organization(h);
     const { user, personalProfile } = await createUser(h, org.id);
     const summary = (events: { action: string; actorType: string }[]) => events.map((e) => `${e.actorType}:${e.action}`);
-    expect(summary(await auditActions(h, personalProfile.id))).toEqual(['ADMIN:organization.created', 'ADMIN:user.created']);
-    expect(summary((await auditActions(h, org.id)).filter((e) => e.entityId === user.id))).toEqual(['ADMIN:user.created']);
+    // MUT-235: creating a user also issues their first setup link.
+    expect(summary(await auditActions(h, personalProfile.id))).toEqual(['ADMIN:organization.created', 'ADMIN:user.created', 'ADMIN:user.setup_link_issued']);
+    expect(summary((await auditActions(h, org.id)).filter((e) => e.entityId === user.id))).toEqual(['ADMIN:user.created', 'ADMIN:user.setup_link_issued']);
   });
 });
 
@@ -311,21 +324,90 @@ describe('memberships', () => {
 });
 
 describe('password reset and status', () => {
-  it('issues a new one-time password; the old one stops verifying', async () => {
+  it('a reset issues a link and changes nothing else: the old password works until the link is used (MUT-235, AC 4)', async () => {
     const h = harness();
     const org = await organization(h);
-    const { user, initialPassword } = await createUser(h, org.id);
+    const { user, setupLink } = await createUser(h, org.id);
+    await redeemSetupLink(h.app, setupLink.url);
+    const signIn = (password: string) => h.app.request('/v1/sessions', send('POST', { email: user.email, password }, { origin: 'http://localhost' }));
+    const session = (await signIn(SETUP_TEST_PASSWORD)).headers.get('set-cookie')!.split(';')[0]!;
     h.clock.now = new Date('2026-10-11T10:30:00Z');
-    const res = await h.app.request(`/admin/v1/users/${user.id}/password`, send('POST'));
+    const res = await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', {}));
     expect(res.status).toBe(200);
     const body = await read(res);
-    expect(body.password).toMatch(/^[A-Za-z0-9_-]{24}$/);
-    expect(body.password).not.toBe(initialPassword);
-    expect(body.user.passwordChangedAt).toBe('2026-10-11T10:30:00.000Z');
-    const stored = await h.store.users.getById(user.id);
-    expect(await hasher.verify(stored!.passwordHash, initialPassword)).toBe(false);
-    expect(await hasher.verify(stored!.passwordHash, body.password)).toBe(true);
-    expect((await h.app.request('/admin/v1/users/00000000-0000-4000-8000-000000000000/password', send('POST'))).status).toBe(404);
+    expect(body.setupLink).toMatchObject({ purpose: 'RESET', expiresAt: '2026-10-14T10:30:00.000Z' });
+    expect(setupTokenOf(body.setupLink.url)).not.toBe(setupTokenOf(setupLink.url));
+    expect((await signIn(SETUP_TEST_PASSWORD)).status).toBe(201);
+    expect((await h.app.request('/v1/me', { headers: { cookie: session } })).status).toBe(200);
+    await redeemSetupLink(h.app, body.setupLink.url, 'the-new-password-chosen');
+    expect((await signIn(SETUP_TEST_PASSWORD)).status).toBe(401);
+    expect((await signIn('the-new-password-chosen')).status).toBe(201);
+    expect((await h.app.request('/admin/v1/users/00000000-0000-4000-8000-000000000000/setup-link', send('POST', {}))).status).toBe(404);
+  });
+
+  it('a reset before any password was set is a SETUP link, and supersedes the first one', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const { user, setupLink } = await createUser(h, org.id);
+    const body = await read(await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', { validHours: 24 })));
+    expect(body.setupLink).toMatchObject({ purpose: 'SETUP', expiresAt: '2026-10-12T09:00:00.000Z' });
+    const first = await h.app.request('/v1/account-setup/check', send('POST', { token: setupTokenOf(setupLink.url) }, { origin: 'http://localhost' }));
+    expect(await read(first)).toEqual({ state: 'superseded' });
+  });
+
+  it('with lock, the old password and every session stop working at once (MUT-235 D2)', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const { user, setupLink } = await createUser(h, org.id);
+    await redeemSetupLink(h.app, setupLink.url);
+    const signIn = (password: string) => h.app.request('/v1/sessions', send('POST', { email: user.email, password }, { origin: 'http://localhost' }));
+    const cookie = (await signIn(SETUP_TEST_PASSWORD)).headers.get('set-cookie')!.split(';')[0]!;
+    const device = (await read(await h.app.request('/v1/device-sessions', send('POST', { email: user.email, password: SETUP_TEST_PASSWORD }, {})))).token as string;
+    const res = await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', { lock: true }));
+    expect(res.status).toBe(200);
+    const body = await read(res);
+    expect(body.setupLink.purpose).toBe('RESET');
+    expect(body.lock).toBe(true);
+    // The audit row is the forensic record that the operator force-signed-out the account.
+    // Both links are issued at the same fake-clock instant, so match the rows by content, not order.
+    const issued = (await h.store.audit.list(org.id, { action: 'user.setup_link_issued' }, { limit: 10, cursor: null })).items.map((e) => e.metadata);
+    expect(issued).toHaveLength(2);
+    expect(issued).toContainEqual({ purpose: 'RESET', expiresAt: body.setupLink.expiresAt, lock: true });
+    expect(issued).toContainEqual({ purpose: 'SETUP', expiresAt: setupLink.expiresAt });
+    expect((await signIn(SETUP_TEST_PASSWORD)).status).toBe(401);
+    expect((await h.app.request('/v1/me', { headers: { cookie } })).status).toBe(401);
+    expect((await h.app.request('/v1/me', { headers: { authorization: `Bearer ${device}` } })).status).toBe(401);
+    await redeemSetupLink(h.app, body.setupLink.url, 'a-fresh-safe-password');
+    expect((await signIn('a-fresh-safe-password')).status).toBe(201);
+  });
+
+  it('refuses a link for a disabled user, and a validHours out of bounds', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const { user } = await createUser(h, org.id);
+    expect((await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', { validHours: 721 }))).status).toBe(422);
+    await h.app.request(`/admin/v1/users/${user.id}/disable`, send('POST'));
+    const res = await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', {}));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error.details).toEqual({ reason: 'USER_DISABLED' });
+  });
+
+  it('the optional body may be absent; a JSON content type with an empty body is a 422, never a 500 (TD-148)', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const { user } = await createUser(h, org.id);
+    expect((await h.app.request(`/admin/v1/users/${user.id}/setup-link`, { method: 'POST', headers: admin })).status).toBe(200);
+    const empty = await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST'));
+    expect(empty.status).toBe(422);
+    expect((await read(empty)).error.code).toBe('VALIDATION_FAILED');
+    expect((await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', {}))).status).toBe(200);
+  });
+
+  it('the old password route is gone', async () => {
+    const h = harness();
+    const org = await organization(h);
+    const { user } = await createUser(h, org.id);
+    expect((await h.app.request(`/admin/v1/users/${user.id}/password`, send('POST'))).status).toBe(404);
   });
 
   it('disables idempotently and enables again', async () => {
@@ -350,7 +432,7 @@ describe('audit', () => {
     const b = await organization(h);
     const { user } = await createUser(h, a.id);
     await h.app.request(`/admin/v1/users/${user.id}/memberships`, send('POST', { organizationId: b.id }));
-    await h.app.request(`/admin/v1/users/${user.id}/password`, send('POST'));
+    await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', {}));
     await h.app.request(`/admin/v1/users/${user.id}/disable`, send('POST'));
     await h.app.request(`/admin/v1/users/${user.id}/enable`, send('POST'));
     await h.app.request(`/admin/v1/users/${user.id}/memberships/${b.id}`, send('DELETE'));
@@ -359,13 +441,14 @@ describe('audit', () => {
       events.filter((e) => e.entityId === user.id).map((e) => `${e.actorType}:${e.action}`);
     expect(userEvents(await auditActions(h, a.id))).toEqual([
       'ADMIN:user.created',
-      'ADMIN:user.password_reset',
+      'ADMIN:user.setup_link_issued',
+      'ADMIN:user.setup_link_issued',
       'ADMIN:user.disabled',
       'ADMIN:user.enabled',
     ]);
     expect(userEvents(await auditActions(h, b.id))).toEqual([
       'ADMIN:membership.granted',
-      'ADMIN:user.password_reset',
+      'ADMIN:user.setup_link_issued',
       'ADMIN:user.disabled',
       'ADMIN:user.enabled',
       'ADMIN:membership.revoked',
@@ -390,7 +473,7 @@ describe('audit', () => {
     await h.app.request(`/admin/v1/users/${user.id}/memberships/${org.id}`, send('DELETE'));
     await h.store.memberships.revoke(user.id, personalProfile.id);
     const before = [h.store.auditCount(org.id), h.store.auditCount(personalProfile.id)];
-    expect((await h.app.request(`/admin/v1/users/${user.id}/password`, send('POST'))).status).toBe(200);
+    expect((await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', {}))).status).toBe(200);
     expect([h.store.auditCount(org.id), h.store.auditCount(personalProfile.id)]).toEqual(before);
   });
 });
@@ -402,7 +485,7 @@ describe('admin authentication', () => {
     ['GET', '/admin/v1/users/00000000-0000-4000-8000-000000000000'],
     ['POST', '/admin/v1/users/00000000-0000-4000-8000-000000000000/memberships'],
     ['DELETE', '/admin/v1/users/00000000-0000-4000-8000-000000000000/memberships/00000000-0000-4000-8000-000000000000'],
-    ['POST', '/admin/v1/users/00000000-0000-4000-8000-000000000000/password'],
+    ['POST', '/admin/v1/users/00000000-0000-4000-8000-000000000000/setup-link'],
     ['POST', '/admin/v1/users/00000000-0000-4000-8000-000000000000/disable'],
     ['POST', '/admin/v1/users/00000000-0000-4000-8000-000000000000/enable'],
   ];
@@ -418,20 +501,26 @@ describe('admin authentication', () => {
 });
 
 describe('secrets never reach the log', () => {
-  it('logs no one-time password and no argon2 hash across every account operation', async () => {
+  it('logs no setup-link token, no password and no argon2 hash across every account operation (MUT-235, AC 6)', async () => {
     const h = harness();
     const a = await organization(h);
     const b = await organization(h);
-    const { user, initialPassword } = await createUser(h, a.id);
+    const { user, setupLink } = await createUser(h, a.id);
+    const first = setupTokenOf(setupLink.url);
+    await h.app.request('/v1/account-setup/check', send('POST', { token: first }, { origin: 'http://localhost' }));
+    await redeemSetupLink(h.app, setupLink.url, 'a-password-for-the-log-test');
     await h.app.request(`/admin/v1/users/${user.id}/memberships`, send('POST', { organizationId: b.id }));
-    const reset = await read(await h.app.request(`/admin/v1/users/${user.id}/password`, send('POST')));
+    const reset = setupTokenOf((await read(await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', { lock: true })))).setupLink.url);
+    await h.app.request('/v1/account-setup', send('POST', { token: reset, password: 'short' }, { origin: 'http://localhost' }));
+    await redeemSetupLink(h.app, `http://localhost/setup#${reset}`, 'another-password-for-the-log');
+    await h.app.request('/v1/account-setup', send('POST', { token: reset, password: 'yet-another-password!' }, { origin: 'http://localhost' }));
     await h.app.request(`/admin/v1/users/${user.id}/disable`, send('POST'));
     await h.app.request(`/admin/v1/users/${user.id}/enable`, send('POST'));
 
     const text = h.logs.join('');
     expect(h.logs.length).toBeGreaterThan(0);
-    expect(text).not.toContain(initialPassword);
-    expect(text).not.toContain(reset.password);
-    expect(text).not.toContain('$argon2id$');
+    for (const secret of [first, reset, 'a-password-for-the-log-test', 'another-password-for-the-log', 'yet-another-password!', '$argon2id$']) {
+      expect(text).not.toContain(secret);
+    }
   });
 });

@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.28.0-mut228
+  version: 1.29.0-mut235
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -317,6 +317,7 @@ components:
                 - ORGANIZATION_MISMATCH
                 - CONFLICT
                 - OPERATION_IN_PROGRESS
+                - SETUP_LINK_UNUSABLE
                 - VALIDATION_FAILED
                 - IDEMPOTENCY_KEY_REUSED
                 - IDEMPOTENCY_KEY_REQUIRED
@@ -373,6 +374,76 @@ components:
               type: string
           required:
             - token
+    SetupLinkCheckResponse:
+      oneOf:
+        - type: object
+          properties:
+            state:
+              type: string
+              enum:
+                - valid
+            email:
+              type: string
+            locale:
+              $ref: "#/components/schemas/UserLocale"
+            purpose:
+              $ref: "#/components/schemas/SetupLinkPurpose"
+            expiresAt:
+              type: string
+              format: date-time
+          required:
+            - state
+            - email
+            - locale
+            - purpose
+            - expiresAt
+        - type: object
+          properties:
+            state:
+              type: string
+              enum:
+                - expired
+                - used
+                - superseded
+                - invalid
+          required:
+            - state
+    SetupLinkPurpose:
+      type: string
+      enum:
+        - SETUP
+        - RESET
+    SetupLinkCheckRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+      required:
+        - token
+    SetupLinkRedeemResponse:
+      type: object
+      properties:
+        email:
+          type: string
+      required:
+        - email
+    SetupLinkRedeemRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+        password:
+          $ref: "#/components/schemas/NewPassword"
+      required:
+        - token
+        - password
+    NewPassword:
+      type: string
+      minLength: 12
+      maxLength: 128
+      description: 12 to 128 characters; no composition rules.
     IntegrationStatusResponse:
       type: object
       properties:
@@ -5052,13 +5123,13 @@ components:
           required:
             - id
             - name
-        initialPassword:
-          type: string
+        setupLink:
+          $ref: "#/components/schemas/SetupLink"
       required:
         - user
         - memberships
         - personalProfile
-        - initialPassword
+        - setupLink
     UserSummary:
       type: object
       properties:
@@ -5107,6 +5178,21 @@ components:
       required:
         - organizationId
         - createdAt
+    SetupLink:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+        purpose:
+          $ref: "#/components/schemas/SetupLinkPurpose"
+      required:
+        - url
+        - expiresAt
+        - purpose
     CreateUserRequest:
       type: object
       properties:
@@ -5130,6 +5216,10 @@ components:
         timezone:
           type: string
           minLength: 1
+        setupLinkValidHours:
+          type: integer
+          minimum: 1
+          maximum: 720
       required:
         - email
         - displayName
@@ -5182,16 +5272,29 @@ components:
           type: boolean
       required:
         - removed
-    PasswordResetResponse:
+    IssueSetupLinkResponse:
       type: object
       properties:
         user:
           $ref: "#/components/schemas/UserSummary"
-        password:
-          type: string
+        setupLink:
+          $ref: "#/components/schemas/SetupLink"
+        lock:
+          type: boolean
       required:
         - user
-        - password
+        - setupLink
+        - lock
+    IssueSetupLinkRequest:
+      type: object
+      properties:
+        validHours:
+          type: integer
+          minimum: 1
+          maximum: 720
+        lock:
+          type: boolean
+          default: false
     UserStatusResponse:
       type: object
       properties:
@@ -5426,6 +5529,86 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/account-setup/check:
+    post:
+      tags:
+        - Sessions
+      summary: Check a setup link before asking for a password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupLinkCheckRequest"
+      responses:
+        "200":
+          description: What the link is good for; only a valid one names its account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupLinkCheckResponse"
+        "403":
+          description: CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/account-setup:
+    post:
+      tags:
+        - Sessions
+      summary: Set your password through a setup link (signs out every session; does not sign in)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupLinkRedeemRequest"
+      responses:
+        "200":
+          description: Password set; sign in with POST /v1/sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupLinkRedeemResponse"
+        "403":
+          description: CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "410":
+          description: SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed (the password is 12 to 128 characters)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
           content:
             application/json:
               schema:
@@ -11643,7 +11826,7 @@ paths:
     post:
       tags:
         - Admin
-      summary: Create a user with their personal profile and, optionally, a firm membership (one-time password returned once)
+      summary: Create a user with their personal profile and, optionally, a firm membership (one-time setup link returned once)
       security:
         - adminToken: []
       requestBody:
@@ -11845,11 +12028,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
-  /admin/v1/users/{userId}/password:
+  /admin/v1/users/{userId}/setup-link:
     post:
       tags:
         - Admin
-      summary: "Operator password reset: issue a new one-time password (returned once)"
+      summary: "Operator reset: issue a one-time setup link (returned once). The current password works until the link is used, unless `lock`"
       security:
         - adminToken: []
       parameters:
@@ -11859,13 +12042,19 @@ paths:
           required: true
           name: userId
           in: path
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueSetupLinkRequest"
       responses:
         "200":
-          description: New password issued
+          description: Setup link issued; any earlier open link is cancelled
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PasswordResetResponse"
+                $ref: "#/components/schemas/IssueSetupLinkResponse"
         "401":
           description: Missing or invalid admin token
           content:
@@ -11874,6 +12063,18 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The user is disabled (CONFLICT, details.reason USER_DISABLED); enable them first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
           content:
             application/json:
               schema:

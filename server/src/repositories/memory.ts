@@ -3,6 +3,8 @@ import { applyMalafatChange } from '../malafat-suggestions.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import type {
+  AccountSetupRepository,
+  AccountSetupTokenRecord,
   AttachmentFilter,
   AttachmentRecord,
   AttachmentRepository,
@@ -54,6 +56,7 @@ import type {
   MembershipRecord,
   MembershipRepository,
   SessionRecord,
+  SetupLinkPurpose,
   SessionRepository,
   UserRecord,
   UserRepository,
@@ -152,6 +155,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly people = new Map<string, UserRecord>();
   private readonly members = new Map<string, MembershipRecord>();
   private readonly sessionsById = new Map<string, SessionRecord>();
+  private readonly setupLinks = new Map<string, AccountSetupTokenRecord>();
   private readonly exps = new Map<string, ExpenseRecord>();
   private readonly expCats = new Map<string, ExpenseCategoryRecord>();
   private readonly expReceipts = new Map<string, ExpenseReceiptRecord>();
@@ -300,6 +304,7 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const o of this.orgs.values()) {
         if (o.slug === input.personal.slug) throw new UniqueViolation('organizations.slug');
       }
+      if (input.setupLink) this.assertSetupDigestFree(input.setupLink.tokenDigest);
       const user: UserRecord = {
         id: randomUUID(),
         email: input.email,
@@ -325,6 +330,7 @@ export class MemoryLedgerStore implements LedgerStore {
       this.people.set(user.id, user);
       this.orgs.set(personalOrganization.id, personalOrganization);
       for (const m of memberships) this.members.set(membershipKey(user.id, m.organizationId), m);
+      if (input.setupLink) this.storeSetupLink(user.id, input.setupLink, input.at);
       return { user: { ...user }, memberships: memberships.map((m) => ({ ...m })), personalOrganization: { ...personalOrganization } };
     },
     getById: async (id) => clone(this.people.get(id)),
@@ -339,6 +345,8 @@ export class MemoryLedgerStore implements LedgerStore {
       const u = this.people.get(id);
       if (!u) return null;
       Object.assign(u, { status, updatedAt: at });
+      // MUT-235 review fix: a disable kills open setup links, so re-enabling never revives one.
+      if (status === 'DISABLED') this.cancelOpenSetupLinks(id, at);
       return { ...u };
     },
     recordFailedSignIn: async (id, at, lockUntil) => {
@@ -366,7 +374,12 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const s of this.sessionsById.values()) {
         if (s.tokenDigest === input.tokenDigest) throw new UniqueViolation('sessions.tokenDigest');
       }
-      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('sessions.userId');
+      const owner = this.people.get(input.userId);
+      if (!owner) throw new ForeignKeyViolation('sessions.userId');
+      // MUT-235 review: a session for a credential that changed (or a person disabled) since sign-in checked it is refused.
+      if (input.verifiedPasswordHash !== undefined && (owner.passwordHash !== input.verifiedPasswordHash || owner.status !== 'ACTIVE')) {
+        throw new StateConflict('user', 'CREDENTIAL_CHANGED');
+      }
       const record: SessionRecord = {
         id: randomUUID(),
         userId: input.userId,
@@ -394,15 +407,67 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!s.revokedAt) Object.assign(s, { revokedAt: at, revokedReason: reason });
       return { ...s };
     },
-    revokeAllForUser: async (userId, reason, at) => {
-      let count = 0;
-      for (const s of this.sessionsById.values()) {
-        if (s.userId === userId && !s.revokedAt) {
-          Object.assign(s, { revokedAt: at, revokedReason: reason });
-          count++;
-        }
+    revokeAllForUser: async (userId, reason, at) => this.revokeSessionsOf(userId, reason, at),
+  };
+
+  private revokeSessionsOf(userId: string, reason: string, at: Date): number {
+    let count = 0;
+    for (const s of this.sessionsById.values()) {
+      if (s.userId === userId && !s.revokedAt) {
+        Object.assign(s, { revokedAt: at, revokedReason: reason });
+        count++;
       }
-      return count;
+    }
+    return count;
+  }
+
+  private cancelOpenSetupLinks(userId: string, at: Date): void {
+    for (const link of this.setupLinks.values()) {
+      if (link.userId === userId && link.usedAt === null && link.cancelledAt === null) link.cancelledAt = at;
+    }
+  }
+
+  private assertSetupDigestFree(tokenDigest: string): void {
+    for (const link of this.setupLinks.values()) {
+      if (link.tokenDigest === tokenDigest) throw new UniqueViolation('account_setup_tokens.tokenDigest');
+    }
+  }
+
+  private storeSetupLink(userId: string, input: { tokenDigest: string; purpose: SetupLinkPurpose; expiresAt: Date }, at: Date): AccountSetupTokenRecord {
+    const record: AccountSetupTokenRecord = { id: randomUUID(), userId, ...input, createdAt: at, usedAt: null, cancelledAt: null };
+    this.setupLinks.set(record.id, record);
+    return record;
+  }
+
+  // Each method runs to completion without an await, which is the in-memory stand-in for the Prisma transaction and row lock.
+  readonly accountSetup: AccountSetupRepository = {
+    issue: async (input) => {
+      const person = this.people.get(input.userId);
+      if (!person) throw new ForeignKeyViolation('account_setup_tokens.userId');
+      // Re-checked here, not only in the route, so a disable that lands first can never be followed by a fresh link.
+      if (person.status !== 'ACTIVE') throw new StateConflict('user', 'USER_DISABLED');
+      this.assertSetupDigestFree(input.tokenDigest);
+      if (input.lock) {
+        // Stamping passwordChangedAt makes the session check refuse a session a racing sign-in inserts after the lock.
+        Object.assign(person, { passwordHash: null, passwordChangedAt: input.at, updatedAt: input.at });
+        this.revokeSessionsOf(person.id, 'setup_link_lock', input.at);
+      }
+      this.cancelOpenSetupLinks(input.userId, input.at);
+      const record = this.storeSetupLink(input.userId, { tokenDigest: input.tokenDigest, purpose: input.purpose, expiresAt: input.expiresAt }, input.at);
+      for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return { ...record };
+    },
+    findByDigest: async (tokenDigest) => clone([...this.setupLinks.values()].find((l) => l.tokenDigest === tokenDigest)),
+    redeem: async (input) => {
+      const link = [...this.setupLinks.values()].find((l) => l.tokenDigest === input.tokenDigest);
+      const person = link && this.people.get(link.userId);
+      const claimable = link && person && link.usedAt === null && link.cancelledAt === null && input.at < link.expiresAt && person.status === 'ACTIVE';
+      if (!claimable) return null;
+      link.usedAt = input.at;
+      Object.assign(person, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
+      this.revokeSessionsOf(person.id, 'password_set', input.at);
+      for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return { ...person };
     },
   };
 

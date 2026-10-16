@@ -6,6 +6,7 @@ import { SCOPES } from '../auth/scopes.js';
 import { GENERAL_PRESET, LAW_FIRM_PRESET, PERSONAL_PRESET } from '../expenses/presets.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { provisionUser } from './helpers/provision.js';
 
 /** MUT-42: expenses on hosted profiles — session-only routes, receipts, categories, summary. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,13 +63,13 @@ async function firm(h: Harness, opts: { malafat: boolean }) {
 async function partner(h: Harness, organizationIds: string[], locale: 'en' | 'ar' = 'en') {
   const [first, ...rest] = organizationIds;
   const email = `partner${++seq}@firm.ps`;
-  const created = await read(await h.app.request('/admin/v1/users', json({ email, displayName: 'Nour Haddad', organizationId: first, locale }, admin)));
+  const created = await provisionUser(h.app, { email, displayName: 'Nour Haddad', organizationId: first, locale });
   for (const organizationId of rest) await h.app.request(`/admin/v1/users/${created.user.id}/memberships`, json({ organizationId }, admin));
-  const res = await h.app.request('/v1/sessions', json({ email, password: created.initialPassword }, SAME_ORIGIN));
+  const res = await h.app.request('/v1/sessions', json({ email, password: created.password }, SAME_ORIGIN));
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
   const as = (profile: string, extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, 'x-mutaba3a-profile': profile, ...SAME_ORIGIN, ...extra });
   // MUT-64: the same person's device-session bearer token, for the "a device session can write expenses too" check.
-  const deviceRes = await read(await h.app.request('/v1/device-sessions', json({ email, password: created.initialPassword })));
+  const deviceRes = await read(await h.app.request('/v1/device-sessions', json({ email, password: created.password })));
   const asDevice = (profile: string, extra: Record<string, string> = {}) => ({ authorization: `Bearer ${deviceRes.token}`, 'x-mutaba3a-profile': profile, ...extra });
   return { as, asDevice, userId: created.user.id as string, personalProfileId: created.personalProfile.id as string };
 }

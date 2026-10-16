@@ -1134,7 +1134,8 @@ export interface UserRecord {
   id: string;
   email: string;
   displayName: string;
-  passwordHash: string;
+  /** MUT-235: null until the person sets one through their setup link, and after an operator reset with `lock`. */
+  passwordHash: string | null;
   locale: UserLocale;
   status: UserStatus;
   failedSignIns: number;
@@ -1170,11 +1171,17 @@ export interface MalafatSuggestionsChange {
 export interface CreateUserInput {
   email: string;
   displayName: string;
-  passwordHash: string;
+  /** MUT-235: the operator surface always passes null; the person sets a password through their setup link. */
+  passwordHash: string | null;
   locale: UserLocale;
   /** The firm this user belongs to, if any. */
   organizationId?: string;
   personal: { name: string; slug: string; defaultCurrency: string; timezone: string };
+  /**
+   * MUT-235 (review fix): the person's first setup link, written in the same transaction as the user, so a
+   * create never leaves an account with neither a password nor a link. UniqueViolation on a duplicate digest.
+   */
+  setupLink?: { tokenDigest: string; purpose: SetupLinkPurpose; expiresAt: Date };
   at: Date;
 }
 
@@ -1245,6 +1252,12 @@ export interface CreateSessionInput {
   idleExpiresAt: Date;
   absoluteExpiresAt: Date;
   userAgent: string | null;
+  /**
+   * MUT-235 review: the hash sign-in just verified. When given, the session is created only while the person is
+   * ACTIVE and still has exactly this hash, checked under a shared lock on their row, so it waits for a concurrent
+   * lock or redeem to commit. Otherwise StateConflict('user', 'CREDENTIAL_CHANGED') and nothing is written.
+   */
+  verifiedPasswordHash?: string;
 }
 
 export interface SessionRepository {
@@ -1258,12 +1271,68 @@ export interface SessionRepository {
   revokeAllForUser(userId: string, reason: string, at: Date): Promise<number>;
 }
 
+// ---- MUT-235: one-time setup links (ADR-088) --------------------------------
+
+/** SETUP: a person's first password. RESET: an operator reset of an existing one. */
+export type SetupLinkPurpose = 'SETUP' | 'RESET';
+
+/** A setup link. Only the HMAC digest of its token is stored; at most one of `usedAt` / `cancelledAt` is ever set. */
+export interface AccountSetupTokenRecord {
+  id: string;
+  userId: string;
+  tokenDigest: string;
+  purpose: SetupLinkPurpose;
+  createdAt: Date;
+  expiresAt: Date;
+  usedAt: Date | null;
+  /** Set when a newer link for the same person replaced this one. */
+  cancelledAt: Date | null;
+}
+
+export interface IssueSetupLinkInput {
+  userId: string;
+  tokenDigest: string;
+  purpose: SetupLinkPurpose;
+  at: Date;
+  expiresAt: Date;
+  /** D2: a suspected takeover — clear the password and revoke every session in the same transaction. */
+  lock: boolean;
+  /** Written in the same transaction. */
+  audit: AuditEventInput[];
+}
+
+export interface RedeemSetupLinkInput {
+  tokenDigest: string;
+  passwordHash: string;
+  at: Date;
+  /** Written in the same transaction, only when the claim wins. */
+  audit: AuditEventInput[];
+}
+
+export interface AccountSetupRepository {
+  /**
+   * One transaction under a lock on the user's row: cancels the user's open links,
+   * then creates this one, so a person never has two open links. ForeignKeyViolation on an unknown user.
+   */
+  issue(input: IssueSetupLinkInput): Promise<AccountSetupTokenRecord>;
+  findByDigest(tokenDigest: string): Promise<AccountSetupTokenRecord | null>;
+  /**
+   * One transaction: claims the link only if it is unused, not cancelled, not expired at `at`, and its
+   * user is ACTIVE; then sets the password (clearing any lockout), revokes every session ('password_set')
+   * and appends `audit`. Null when the claim loses — nothing is written; the caller reads the link again
+   * to say why. Of two concurrent redeems of one link, exactly one wins.
+   */
+  redeem(input: RedeemSetupLinkInput): Promise<UserRecord | null>;
+}
+
 export interface LedgerStore {
   organizations: OrganizationRepository;
   apiKeys: ApiKeyRepository;
   users: UserRepository;
   memberships: MembershipRepository;
   sessions: SessionRepository;
+  /** MUT-235: one-time setup links. Operator-only below the routes; the two public setup routes run unguarded, like sign-in. */
+  accountSetup: AccountSetupRepository;
   integrations: IntegrationRepository;
   audit: AuditRepository;
   idempotency: IdempotencyRepository;

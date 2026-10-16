@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { contextStorage } from 'hono/context-storage';
+import { HTTPException } from 'hono/http-exception';
 import { serveStatic } from '@hono/node-server/serve-static';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
 import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
@@ -18,6 +19,7 @@ import { adminAuth, adminRoutes } from './routes/admin.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
 import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
+import { accountSetupRoutes } from './routes/account-setup.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { auditRoutes } from './routes/audit.js';
 import { summaryRoutes } from './routes/summaries.js';
@@ -117,7 +119,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.28.0-mut228';
+export const API_VERSION = '1.29.0-mut235';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -159,6 +161,12 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     if (err instanceof ApiError) {
       if (err.status >= 500) deps.logger.error({ requestId, err }, err.message);
       return c.json(err.toEnvelope(requestId), err.status);
+    }
+    // TD-148 (MUT-235 review): Hono's validator throws a 400 HTTPException for an unparseable body (e.g. a JSON
+    // content type with no body). That is the client's input, so it is a validation failure, never a 500.
+    if (err instanceof HTTPException && err.status === 400) {
+      const invalid = new ApiError('VALIDATION_FAILED', err.message || 'Request body could not be parsed');
+      return c.json(invalid.toEnvelope(requestId), invalid.status);
     }
     deps.logger.error({ requestId, err }, 'unhandled error');
     const internal = new ApiError('INTERNAL', 'Unexpected server error');
@@ -217,6 +225,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       ipLimiter: signInIpLimiter,
     }),
   );
+  // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
+  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle }));
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', customerRoutes(store));
   app.route('/', projectRoutes(store));
@@ -241,7 +251,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', inboxRoutes(store));
   app.route('/', profileRoutes(store));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
-  app.route('/', adminUserRoutes({ store, passwordHasher, logger: deps.logger }));
+  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions }));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
