@@ -4,6 +4,16 @@
     "empty": "لا توجد مشاريع",
     "emptySearch": "حاول تعديل البحث",
     "emptyHint": "أنشئ أول مشروع للبدء",
+    "emptyFiltered": "لا توجد مشاريع مطابقة للبحث",
+    "emptyFilteredCount": {
+      "zero": "لا مشاريع إجمالاً.",
+      "one": "مشروع واحد إجمالاً.",
+      "two": "مشروعان إجمالاً.",
+      "few": "{count} مشاريع إجمالاً.",
+      "many": "{count} مشروعًا إجمالاً.",
+      "other": "{count} مشروع إجمالاً."
+    },
+    "clearSearch": "مسح البحث",
     "addProject": "إضافة مشروع",
     "searchPlaceholder": "بحث في المشاريع...",
     "allFields": "جميع المجالات",

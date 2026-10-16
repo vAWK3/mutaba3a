@@ -4,6 +4,12 @@
     "empty": "No projects found",
     "emptySearch": "Try adjusting your search",
     "emptyHint": "Create your first project to get started",
+    "emptyFiltered": "No projects match your search",
+    "emptyFilteredCount": {
+      "one": "{count} project in total.",
+      "other": "{count} projects in total."
+    },
+    "clearSearch": "Clear search",
     "addProject": "Add Project",
     "searchPlaceholder": "Search projects...",
     "allFields": "All fields",
