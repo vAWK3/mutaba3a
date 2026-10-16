@@ -180,6 +180,11 @@ release-web: preflight-web
 	@printf '$(C_GREEN)✓ lint, typecheck, unit tests, api types$(C_OFF)\n'
 	@scripts/bump-version.sh web
 	@version=$$(node -p "require('./package.json').version"); \
+	if ! npm run --silent release:notes -- "$$version"; then \
+	  printf '\n$(C_YEL)Write what v%s changes for people in release-notes.json (en + ar), commit it, then re-run.$(C_OFF)\n' "$$version"; \
+	  printf '$(C_DIM)Undo the bump with: git checkout -- package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock$(C_OFF)\n'; \
+	  exit 1; \
+	fi; \
 	printf '\n$(C_BOLD)Building v%s$(C_OFF)\n' "$$version"; \
 	if ! npm run --silent test:bundles; then \
 	  printf '\n$(C_YEL)Build failed after the version bump. Nothing was committed.$(C_OFF)\n'; \

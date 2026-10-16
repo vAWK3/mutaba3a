@@ -23,6 +23,7 @@ import integrity from './integrity.json';
 import demo from './demo.json';
 import download from './download.json';
 import landing from './landing.json';
+import whatsNew from './whatsNew.json';
 
 export const PARTS = {
   common,
@@ -43,6 +44,7 @@ export const PARTS = {
   demo,
   download,
   landing,
+  whatsNew,
 };
 
 const en = composeDictionary(PARTS);

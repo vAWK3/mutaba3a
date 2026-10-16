@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchLatestRelease } from './useLatestRelease';
 import { isTauri } from '../lib/platform';
+import { compareVersions } from '../lib/whatsNew/releaseNotes';
 
 const CACHE_KEY = 'update-check-result';
 const CACHE_DURATION_MS = 60 * 60 * 1000; // 1 hour
@@ -16,20 +17,6 @@ interface UpdateCheckResult {
   hasUpdate: boolean;
   isLoading: boolean;
   error: string | null;
-}
-
-/**
- * Compare two semver versions.
- * Returns > 0 if latest is newer, 0 if same, < 0 if current is newer.
- */
-function compareVersions(current: string, latest: string): number {
-  const parseParts = (v: string) => v.split('.').map((p) => parseInt(p, 10) || 0);
-  const [aMajor = 0, aMinor = 0, aPatch = 0] = parseParts(current);
-  const [bMajor = 0, bMinor = 0, bPatch = 0] = parseParts(latest);
-
-  if (bMajor !== aMajor) return bMajor - aMajor;
-  if (bMinor !== aMinor) return bMinor - aMinor;
-  return bPatch - aPatch;
 }
 
 function getCachedResult(): CachedResult | null {
@@ -103,7 +90,7 @@ export function useCheckForUpdates(): UpdateCheckResult {
         const latestVersion = release.version;
         const currentVersion = getCurrentVersion();
 
-        const hasUpdate = compareVersions(currentVersion, latestVersion) > 0;
+        const hasUpdate = compareVersions(latestVersion, currentVersion) > 0;
 
         // Cache the result
         setCachedResult(latestVersion, hasUpdate);

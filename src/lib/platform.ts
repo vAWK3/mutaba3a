@@ -81,10 +81,12 @@ const UPDATE_CACHE_KEYS = [
  * If so, clear update-related caches to ensure users see the correct version
  * after installing a new DMG (macOS preserves localStorage across installs).
  *
- * Call this early in app initialization.
+ * Returns the version the last start ran (the same version when nothing
+ * changed), or null on a fresh install or when storage is unreadable; "What's
+ * new" seeds from it (MUT-24). Call this early in app initialization.
  */
-export function handleVersionChange(currentVersion: string): void {
-  if (typeof localStorage === 'undefined') return;
+export function handleVersionChange(currentVersion: string): string | null {
+  if (typeof localStorage === 'undefined') return null;
 
   try {
     const lastKnownVersion = localStorage.getItem(LAST_KNOWN_VERSION_KEY);
@@ -102,7 +104,9 @@ export function handleVersionChange(currentVersion: string): void {
 
     // Always update the stored version
     localStorage.setItem(LAST_KNOWN_VERSION_KEY, currentVersion);
+    return lastKnownVersion;
   } catch {
     // Ignore storage errors (private browsing, quota exceeded, etc.)
+    return null;
   }
 }

@@ -1,11 +1,15 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { LanguageProvider } from '../../../lib/i18n';
 import en from '../../../lib/i18n/translations/en';
 
-vi.hoisted(() => {
-  (globalThis as Record<string, unknown>).__APP_VERSION__ = '1.2.3';
-});
+const appVersion = vi.hoisted(() => ({ value: '1.2.3' }));
+vi.mock('../../../lib/appVersion', () => ({
+  get APP_VERSION() {
+    return appVersion.value;
+  },
+}));
 
 const { useCheckForUpdatesMock } = vi.hoisted(() => ({
   useCheckForUpdatesMock: vi.fn(),
@@ -16,6 +20,7 @@ vi.mock('../../../hooks/useCheckForUpdates', () => ({
 }));
 
 import { AboutSection } from '../AboutSection';
+import { RELEASE_NOTES, latestNotesUpTo, useWhatsNewStore } from '../../../lib/whatsNew';
 
 function renderSection() {
   return render(
@@ -107,5 +112,28 @@ describe('AboutSection', () => {
       'href',
       '/download',
     );
+  });
+
+  describe('What’s new (MUT-24)', () => {
+    beforeEach(() => useWhatsNewStore.getState().closeWhatsNew());
+
+    it('opens the notes for the newest version this build includes', async () => {
+      useCheckForUpdatesMock.mockReturnValue({ latestVersion: null, hasUpdate: false, isLoading: false, error: null });
+      renderSection();
+
+      await userEvent.click(screen.getByRole('button', { name: en.whatsNew.open }));
+      expect(useWhatsNewStore.getState().entries).toEqual([latestNotesUpTo(RELEASE_NOTES, '1.2.3')]);
+    });
+
+    it('offers nothing when no notes are that old', () => {
+      appVersion.value = '0.0.1';
+      try {
+        useCheckForUpdatesMock.mockReturnValue({ latestVersion: null, hasUpdate: false, isLoading: false, error: null });
+        renderSection();
+        expect(screen.queryByRole('button', { name: en.whatsNew.open })).not.toBeInTheDocument();
+      } finally {
+        appVersion.value = '1.2.3';
+      }
+    });
   });
 });

@@ -1,15 +1,13 @@
 import { useT } from '../../lib/i18n';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
+import { APP_VERSION } from '../../lib/appVersion';
+import { RELEASE_NOTES, latestNotesUpTo, useWhatsNewStore } from '../../lib/whatsNew';
 
 // Stable download URLs (redirected by Netlify to GitHub Releases latest)
 const DOWNLOAD_URLS = {
   mac: '/download/mac',
   windows: '/download/windows',
 } as const;
-
-// App version injected by Vite at build time
-declare const __APP_VERSION__: string | undefined;
-const APP_VERSION = __APP_VERSION__ || '0.0.0';
 
 /**
  * Settings › About (MUT-139): app info, update status and desktop downloads
@@ -19,6 +17,8 @@ const APP_VERSION = __APP_VERSION__ || '0.0.0';
 export function AboutSection() {
   const t = useT();
   const { latestVersion, hasUpdate, isLoading: isCheckingUpdate, error: updateError } = useCheckForUpdates();
+  const openWhatsNew = useWhatsNewStore((s) => s.openWhatsNew);
+  const notes = latestNotesUpTo(RELEASE_NOTES, APP_VERSION);
 
   return (
     <div className="settings-section settings-section-quiet">
@@ -95,6 +95,18 @@ export function AboutSection() {
               {t('settings.updates.currentVersion')}: <span style={{ fontFamily: 'var(--font-mono)' }}>{APP_VERSION}</span>
             </div>
           </div>
+        </div>
+      )}
+
+      {notes && (
+        <div className="settings-row" style={{ marginTop: 16 }}>
+          <div>
+            <div className="settings-label">{t('whatsNew.open')}</div>
+            <div className="settings-description">{t('whatsNew.openDesc')}</div>
+          </div>
+          <button type="button" className="btn btn-secondary" onClick={() => openWhatsNew([notes])}>
+            {t('whatsNew.open')}
+          </button>
         </div>
       )}
 
