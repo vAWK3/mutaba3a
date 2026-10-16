@@ -1,0 +1,43 @@
+app: web
+area: whats-new
+title: What's new after an update
+tier: secondary
+paths:
+  - release-notes.json
+  - src/lib/whatsNew/**
+  - src/lib/appVersion.ts
+  - src/components/modals/WhatsNewModal.tsx
+  - src/components/modals/WhatsNewModal.css
+  - src/lib/i18n/translations/*/whatsNew.json
+features:
+  - id: after-update
+    title: After an update, What's new shows the new version's notes once, and stays dismissed (MUT-24)
+    tier: secondary
+    paths:
+      - src/lib/platform.ts
+      - src/main.tsx
+    steps:
+      - Start the app as a browser that last ran an older version
+      - Read What's new, press Got it
+      - Reload
+    expect:
+      - What's new names the running version and lists its notes from release-notes.json
+      - After Got it it closes, and a reload does not bring it back
+  - id: fresh-install
+    title: A fresh install never shows What's new (MUT-24)
+    tier: secondary
+    steps:
+      - Start the app in a browser that never ran it
+      - Skip the welcome, then reload
+    expect:
+      - No What's new, though notes exist for this version (Settings › About offers them)
+  - id: reopen-arabic
+    title: Settings › About reopens What's new, in Arabic and right to left when Arabic is chosen (MUT-24)
+    tier: tertiary
+    paths:
+      - src/pages/settings/AboutSection.tsx
+    steps:
+      - Switch to Arabic
+      - Open Settings › About and press ما الجديد
+    expect:
+      - The dialog ما الجديد opens right to left with the version's Arabic notes, the version number left to right

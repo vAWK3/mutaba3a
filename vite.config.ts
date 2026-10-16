@@ -66,6 +66,19 @@ function assertHttpsOrigin(envVar: string, value: string): string {
   return value.replace(/\/$/, "");
 }
 
+/**
+ * The version the build reports (Settings › About, What's new). package.json's,
+ * unless MUTABA3A_APP_VERSION names another x.y.z: QA builds use it to run as
+ * the version release-notes.json describes before the release bump (MUT-24).
+ */
+export function appVersion(override: string | undefined): string {
+  if (override === undefined) return pkg.version;
+  if (!/^\d+\.\d+\.\d+$/.test(override)) {
+    throw new Error(`MUTABA3A_APP_VERSION must be x.y.z, got ${JSON.stringify(override)}`);
+  }
+  return override;
+}
+
 /** The portal origin the web build links to; a bad MUTABA3A_PORTAL_URL fails the build (MUT-187). */
 export function portalUrl(override: string | undefined): string {
   return assertHttpsOrigin("MUTABA3A_PORTAL_URL", override ?? DEFAULT_PORTAL_URL);
@@ -311,7 +324,7 @@ function hostedConfig(): UserConfig {
     base: "/",
     publicDir: "src/hosted/public",
     define: {
-      __APP_VERSION__: JSON.stringify(pkg.version),
+      __APP_VERSION__: JSON.stringify(appVersion(process.env.MUTABA3A_APP_VERSION)),
       __BUILD_MODE__: JSON.stringify("hosted"),
       // The sign-in page's "No account? Request one" link (MUT-188): the landing's /hosted page
       __HOSTED_OFFER_URL__: JSON.stringify(hostedOfferUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
@@ -353,7 +366,7 @@ export default defineConfig(({ mode }) => {
   return {
     base: isTauri ? "./" : "/",
     define: {
-      __APP_VERSION__: JSON.stringify(pkg.version),
+      __APP_VERSION__: JSON.stringify(appVersion(process.env.MUTABA3A_APP_VERSION)),
       __BUILD_MODE__: JSON.stringify(buildMode),
       // The free web app's portal sign-in link (MUT-187); desktop carries no portal address
       __PORTAL_URL__: JSON.stringify(buildMode === "web" ? portalUrl(process.env.MUTABA3A_PORTAL_URL) : ""),
