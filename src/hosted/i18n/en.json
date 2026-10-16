@@ -56,6 +56,57 @@
       "signOut": "Sign out",
       "signOutFailed": "Couldn't sign out. Check your connection and try again."
     },
+    "setup": {
+      "checking": "Checking your link",
+      "title": {
+        "setup": "Set your password",
+        "reset": "Choose a new password"
+      },
+      "lead": {
+        "setup": "You'll use it to sign in to Mutaba3a on the web and in the phone app.",
+        "reset": "Saving it signs this account out everywhere else. You'll use it on the web and in the phone app."
+      },
+      "account": "Account",
+      "password": "New password",
+      "rule": "Use {min} to {max} characters.",
+      "tooShort": "Use at least {min} characters.",
+      "tooLong": "Use {max} characters or fewer.",
+      "submit": "Save and sign in",
+      "saving": "Saving…",
+      "signingIn": "Signing in…",
+      "toSignIn": "Go to sign in",
+      "waitTitle": "Too many attempts",
+      "refused": {
+        "missing": {
+          "title": "This link is incomplete",
+          "body": "Open the link from your message again. Copy all of it, including the part after #."
+        },
+        "invalid": {
+          "title": "This link doesn't work",
+          "body": "It may have been copied wrong. Ask the person who set up your account for a new link."
+        },
+        "expired": {
+          "title": "This link has expired",
+          "body": "Setup links work for a limited time. Ask the person who set up your account for a new link."
+        },
+        "used": {
+          "title": "This link has been used",
+          "body": "Each link works once. If you set your password with it, sign in. If not, ask the person who set up your account for a new link."
+        },
+        "superseded": {
+          "title": "A newer link replaced this one",
+          "body": "Use the most recent link you were sent, or ask the person who set up your account for a new link."
+        }
+      },
+      "usedAfterRetry": {
+        "title": "Your password is probably saved",
+        "body": "Your first try most likely went through. Sign in with the password you just chose."
+      },
+      "saved": {
+        "title": "Your password is saved",
+        "body": "Sign in with it to continue."
+      }
+    },
     "shell": {
       "sections": "Sections",
       "nav": {

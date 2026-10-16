@@ -2,6 +2,7 @@
 import { Navigate, Outlet, createRootRoute, createRoute, createRouter, useNavigate, type RouterHistory } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
+import { SetupPage } from './pages/auth/SetupPage';
 import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './session/AuthGate';
 import { SessionBridge } from './session/SessionBridge';
 import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseOverview, parsePaymentsPage, parseReceivablesPage, pickShellOverlay } from './data/filters';
@@ -65,6 +66,9 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
       return <SignInPage next={next} reason={reason} />;
     },
   });
+
+  /** A setup link's page (MUT-236): public like sign-in; the token is the fragment, which `SetupPage` strips. */
+  const setupRoute = createRoute({ getParentRoute: () => rootRoute, path: '/setup', component: SetupPage });
 
   const authedRoute = createRoute({ getParentRoute: () => rootRoute, id: 'authed', component: AuthGate });
 
@@ -157,6 +161,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   const routeTree = rootRoute.addChildren([
     signInRoute,
+    setupRoute,
     authedRoute.addChildren([
       homeRoute,
       captureRoute,

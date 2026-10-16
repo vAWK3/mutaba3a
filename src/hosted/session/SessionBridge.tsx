@@ -13,6 +13,8 @@ import { ME_KEY } from './me';
  * sign-in page's own check) is left to the route that asked.
  */
 
+const SIGNED_OUT_PAGES = new Set(['/sign-in', '/setup']);
+
 export function SessionBridge() {
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -30,7 +32,8 @@ export function SessionBridge() {
     () =>
       onSignedOutElsewhere(() => {
         // On sign-in there is nothing to clear: whatever brought this tab here already ended its session.
-        if (router.state.location.pathname === '/sign-in') return;
+        // On /setup there is no session to end, and leaving would lose the link's token (MUT-236).
+        if (SIGNED_OUT_PAGES.has(router.state.location.pathname)) return;
         endSession(queryClient, router, { reason: 'signed_out' });
       }),
     [queryClient, router],

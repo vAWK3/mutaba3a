@@ -15,8 +15,9 @@ import { Wordmark } from '../../components/Brand';
  * text: before JS neither the font nor the language is known, so the splash
  * can't draw it, and the lockup would jump. "Still connecting…" from 3 s
  * (DR5); `meQuery` gives up at 15 s and BootUnreachable takes over (DR6).
+ * `label` says what else is being checked (`/setup`: the link, MUT-236).
  */
-export function CheckingSession() {
+export function CheckingSession({ label }: { label?: string } = {}) {
   const t = useT();
   const [blooming, setBlooming] = useState(() => bootDelayMs() === 0);
 
@@ -29,7 +30,7 @@ export function CheckingSession() {
   return (
     <div className="boot-splash">
       {blooming ? (
-        <BrandLoader size={96} delay={0} label={t('hosted.auth.checking')} slowCaption={t('hosted.auth.connectingSlow')} />
+        <BrandLoader size={96} delay={0} label={label ?? t('hosted.auth.checking')} slowCaption={t('hosted.auth.connectingSlow')} />
       ) : (
         <BrandMark size={80} className="boot-splash-mark" />
       )}
