@@ -1,6 +1,6 @@
 /* Privacy policy: plain prose, same chrome as the landing page. */
 .privacy-policy {
-  padding-top: 160px;
+  padding-top: var(--landing-page-top);
 }
 
 .privacy-policy-container {
@@ -65,6 +65,6 @@
 
 @media (max-width: 640px) {
   .privacy-policy {
-    padding-top: 120px;
+    padding-top: var(--landing-page-top-compact);
   }
 }

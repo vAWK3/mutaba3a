@@ -25,17 +25,17 @@ export function AboutSection() {
       <h2 className="settings-section-title">{t('settings.about.title')}</h2>
       <div className="text-muted">
         <p>{t('settings.about.name')}</p>
-        <p className="text-sm" style={{ marginTop: 8 }}>
+        <p className="text-sm" style={{ marginTop: 'var(--space-2)' }}>
           {t('settings.about.description')}
         </p>
       </div>
 
-      <div className="settings-row" style={{ marginTop: 16 }}>
+      <div className="settings-row" style={{ marginTop: 'var(--space-4)' }}>
         <div>
           <div className="settings-label">{t('settings.about.support')}</div>
           <div className="settings-description">{t('settings.about.supportDesc')}</div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           <a
             href="https://buymeacoffee.com/elmokhtbr"
             target="_blank"
@@ -56,7 +56,7 @@ export function AboutSection() {
       </div>
 
       {isCheckingUpdate ? (
-        <div className="settings-row" style={{ marginTop: 16 }}>
+        <div className="settings-row" style={{ marginTop: 'var(--space-4)' }}>
           <div>
             <div className="text-muted">{t('settings.updates.checking')}</div>
             <div className="settings-description">
@@ -65,7 +65,7 @@ export function AboutSection() {
           </div>
         </div>
       ) : updateError ? (
-        <div className="settings-row" style={{ marginTop: 16 }}>
+        <div className="settings-row" style={{ marginTop: 'var(--space-4)' }}>
           <div>
             <div className="text-muted">{t('settings.updates.checkFailed')}</div>
             <div className="settings-description">
@@ -74,7 +74,7 @@ export function AboutSection() {
           </div>
         </div>
       ) : hasUpdate ? (
-        <div className="settings-update-card" style={{ marginTop: 16 }}>
+        <div className="settings-update-card" style={{ marginTop: 'var(--space-4)' }}>
           <div className="settings-update-card-content">
             <div className="settings-update-card-title">{t('settings.updates.updateAvailable')}</div>
             <div className="settings-update-card-versions">
@@ -88,7 +88,7 @@ export function AboutSection() {
           </a>
         </div>
       ) : (
-        <div className="settings-row" style={{ marginTop: 16 }}>
+        <div className="settings-row" style={{ marginTop: 'var(--space-4)' }}>
           <div>
             <div className="settings-label">{t('settings.updates.upToDate')}</div>
             <div className="settings-description">
@@ -98,12 +98,12 @@ export function AboutSection() {
         </div>
       )}
 
-      <div className="settings-row" style={{ marginTop: 16 }}>
+      <div className="settings-row" style={{ marginTop: 'var(--space-4)' }}>
         <div>
           <div className="settings-label">{t('settings.desktopApp.download')}</div>
           <div className="settings-description">{t('settings.desktopApp.downloadDesc')}</div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           <a href={DOWNLOAD_URLS.mac} className="btn btn-secondary" rel="noopener">
             {t('settings.desktopApp.downloadMac')}
           </a>

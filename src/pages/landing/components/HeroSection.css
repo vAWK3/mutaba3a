@@ -2,7 +2,7 @@
 .landing-hero {
   /* The sticky bar now sits in the flow above the hero (MUT-77), so less top room */
   padding-top: var(--space-16);
-  padding-bottom: 96px;
+  padding-bottom: var(--landing-hero-pad-end);
   background: linear-gradient(180deg, var(--bg) 0%, var(--bg-subtle) 100%);
   overflow: hidden;
 }
@@ -97,7 +97,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 
 .hero-cta-label {
@@ -163,7 +163,7 @@
 @media (max-width: 640px) {
   .landing-hero {
     padding-top: var(--space-10);
-    padding-bottom: 64px;
+    padding-bottom: var(--space-16);
   }
 
   .hero-cta-primary {

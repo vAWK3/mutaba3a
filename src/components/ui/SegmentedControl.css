@@ -3,16 +3,16 @@
 .segmented-control {
   position: relative;
   display: inline-flex;
-  gap: 2px;
-  padding: 3px;
+  gap: var(--space-0-5);
+  padding: var(--space-0-5);
   background: var(--surface-2);
   border-radius: var(--radius-pill);
 }
 
 .segmented-control-thumb {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
+  top: var(--space-0-5);
+  bottom: var(--space-0-5);
   left: 0;
   width: 0; /* useLayoutEffect sets the real width/position before paint */
   border-radius: var(--radius-pill);

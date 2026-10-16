@@ -76,9 +76,9 @@
 .welcome-modal-info {
   background: var(--surface-hover);
   border-radius: var(--radius-md);
-  padding: var(--space-4, 16px);
+  padding: var(--space-4);
   text-align: start;
-  margin-bottom: var(--space-5, 20px);
+  margin-bottom: var(--space-5);
 }
 
 .welcome-modal-info-title {
