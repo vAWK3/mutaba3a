@@ -2691,7 +2691,7 @@ Plan: `.claude/designs/mut-165-spacing-guard.md` (Section 3 test review). Each n
 
 **What was run (Node 22, preview builds):** `npm run lint` 0 errors (4 pre-existing warnings in untouched files) · `npm run typecheck` clean · `npm run test:run` 323 files, 4,462 passed, 4 skipped · `npm run build` passed · `release-qa lint` no errors (6 pre-existing unmapped web files) · full Playwright suite (web + portal, 2 workers, no retries) 188 passed, 2 failed (the pre-existing cells below). Matrix before (T1+T2 tree, pixel-identical to main) vs after: 82 screenshots, 59 identical; every other difference also appears between two runs of the same tree (drawers captured mid-fade, two same-day Income rows swapping order, the portal's loader), plus 7 anti-aliased pixels on one Clients edge. The D4 3px → 2px snap sits below the fold in the Settings screenshot; the D11 assertion passed in every cell. `KNOWN_OVERFLOW`/`KNOWN_AXE_VIOLATIONS` unchanged.
 
-**Pre-existing, not MUT-165:** `@web.brand.layout` at 375px in Arabic fails on unchanged main 1150d40 too: Income and the income drawer measure 727px against the 726px `KNOWN_OVERFLOW` cap (TD-083).
+**Pre-existing, not MUT-165 (MUT-250):** `@web.brand.layout` at 375px in Arabic, light and dark, fails on unchanged main 1150d40 too, reproduced before any MUT-165 change: Income and the income drawer measure 727px against the 726px `KNOWN_OVERFLOW` cap (TD-083). The cap is left at 726 by decision; MUT-250 fixes or re-measures it.
 
 ## MUT-237 — change your own password (2026-10-16, ADR-037 amendment)
 
