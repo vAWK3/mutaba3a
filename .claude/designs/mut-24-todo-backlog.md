@@ -90,7 +90,41 @@ This is a pure move. The safety net is a test that deep-equals the composed dict
 
 ### Baseline (main 9866f0f, 2026-10-16, Node 22, v8)
 
-_Filled in from `npx vitest run --coverage`; see §C.4._
+Measured with `npx vitest run --coverage --coverage.reportOnFailure` over all 385 files under `src/`. 4,414 tests passed and 4 timed out under instrumentation (see §C.5).
+
+| Lines | Statements | Functions | Branches |
+|---|---|---|---|
+| **89.48** | 88.55 | 87.24 | 81.07 |
+
+The 70% target was already met: TEST_PLAN's "~65%" dated from 2026-03. The gap was where the risk sits. The files with the most uncovered lines were `src/db/database.ts` (42.6% lines, 26.9% branches: no historical `upgrade()` before v20 had ever run in a test), `migration-safety.ts` (72.9 / 61.7), `expenseRepository.ts` (74.6 / 61.5) and `csvImport.ts` (68.2 / 51.9, the third record-less paid writer of MUT-60). The portal's MUT-227 `moneyDateFloor` had no test. The pure money and date helpers (`lib/utils`, `currencyAmounts`, `dates`, `fxService`, `paymentEntry`, `incomeEntry`, `attention`) were already at 100%.
+
+### Result (branch `claude/mut-24-coverage-227bdc`, 2026-10-16)
+
+**Status: BUILT.** All risk files are at target, and the thresholds are enforced in `vitest.config.ts` and in `.github/workflows/web-ci.yml`.
+
+| | Lines | Statements | Functions | Branches |
+|---|---|---|---|---|
+| Final | **91.69** | 91.01 | 88.74 | 84.12 |
+| Enforced global floor | 91 | 91 | 88 | 84 |
+
+| Risk file | Baseline L / B | Final L / B | Floor |
+|---|---|---|---|
+| `db/database.ts` (every `upgrade()`) | 42.6 / 26.9 | 100 / 98.9 | 95 |
+| `db/migration-safety.ts` | 72.9 / 61.7 | 100 / 98.3 | 95 |
+| `db/csvImport.ts` | 68.2 / 51.9 | 100 / 98.7 | 95 |
+| `db/expenseRepository.ts` | 74.6 / 61.5 | 99.4 / 99.4 | 95 |
+| `db/repository.ts` (payment records) | 98.9 / 92.7 | 99.3 / 95.5 | 95 |
+| `db/aggregations.ts` (owed, ageing filters) | 99.4 / 92.6 | 100 / 100 | 100 |
+| `components/clients/clientIndexRows.ts` (overdue days) | 100 / 84.4 | 100 / 100 | 100 |
+| `hosted/format/dates.ts` (MUT-227 floor) | 100 / 83.3 | 100 / 100 | 100 |
+| `hosted/components/incomeApiErrors.ts` (MUT-227 bound) | 95.1 / 83.9 | 100 / 98.2 | 95 |
+| `hosted/components/conversionApiErrors.ts` | 66.7 / 68.8 | 100 / 100 | 100 |
+| `db/profileDefault.ts` | 100 / 83.3 | 100 / 100 | 100 |
+| pure money/date/FX helpers (12 files) | 100 / 100 | 100 / 100 | 100 |
+
+How the migrations are tested: `src/test/legacyDexie.ts` derives the schema at any past version from `database.ts`'s own `stores()` history. `migration-history.test.ts` creates a database at v(n−1), seeds it in that version's shape, and opens the current `MiniCrmDatabase` over it, so v(n)'s upgrade and every later one run.
+
+Found on the way and deferred: TD-151 (a future-dated paid CSV row throws after its income row is written, which leaves a record-less paid entry and a half-done import), TD-152 (the expense ledger's year/month filters and v15's day inference read a date-only string as UTC midnight, wrong west of UTC), TD-153 (more coverage-only timeouts when the host is loaded).
 
 ### Plan
 
@@ -103,10 +137,10 @@ _Filled in from `npx vitest run --coverage`; see §C.4._
    - The exact file list comes from the baseline report, ranked by (risk × uncovered lines).
 3. **Then breadth** until overall lines reach 70%. Hooks and pages are covered through their existing test harnesses (`renderWithProviders`), not by snapshot tests. Coverage must come from assertions on behaviour.
 4. **Make it visible (AC 4).**
-   - `vitest.config.ts` gets `coverage.thresholds`: global lines/statements 70 (ratchet), plus per-glob thresholds for the risk files. `json-summary` and `text-summary` reporters are added.
+   - `vitest.config.ts` gets `coverage.thresholds`: global floors at the measured run (lines 91, statements 91, functions 88, branches 84, all well over 70), plus per-file floors for the risk files. `json-summary` and `text-summary` reporters are added, and `reportOnFailure` is on.
    - `npm run test:coverage` fails below threshold.
-   - There is **no web CI workflow today** (only `server-ci.yml` and `build-windows.yml`). The decision ledger asks whether to add `.github/workflows/web-ci.yml`, which would run lint, typecheck and `test:coverage` and write the summary to the job summary.
-5. **Known issue.** Under coverage instrumentation, `ClientsPage.test.tsx` "sorts overdue by how late…" exceeds the 5 s default timeout (5.3 s). Fix it by giving that test a longer timeout or cutting its seed size, not by raising the global timeout.
+   - There was **no web CI workflow** (only `server-ci.yml` and `build-windows.yml`). D2 approved one: `.github/workflows/web-ci.yml` runs lint, typecheck and `test:coverage` on PRs and pushes to main, and appends `scripts/coverage-summary.ts`'s markdown table to the job summary.
+5. **Known issue (done).** Under coverage instrumentation, `ClientsPage.test.tsx` "sorts overdue by how late…" (5.3 s) and `ClientDetailPage.test.tsx` "renders Owed Now, Work and billing and Payments together…" (5.7 s) exceed the 5 s default. The baseline run surfaced four more: BootSplash's first test, IncomeDrawer's "picks a client whose exact name was typed", hosted views' "prefills the client on Client detail" and ProfileCreateDrawer's CR1. Each of the six takes `SLOW_UNDER_COVERAGE` (15 s, `src/test/timeouts.ts`) as a per-test option. The global timeout stays at 5 s. When the host's load average climbed to 100–700 (parallel sessions, Android Studio, Xcode), about 20 more tests crossed 5 s and passed on rerun. TD-153 tracks that: if Web CI shows one, it gets the same per-test option.
 
 ---
 
@@ -115,7 +149,7 @@ _Filled in from `npx vitest run --coverage`; see §C.4._
 | # | Question | Recommendation |
 |---|---|---|
 | D1 | Where release notes live (B, AC 4) | A root `release-notes.json` (en + ar per version). `release.ts` refuses a web release without an entry and uses it for the tag message. |
-| D2 | Add a web CI workflow for coverage visibility (C, AC 4) | Yes: `web-ci.yml` with lint, typecheck and `test:coverage` plus the job summary, on PRs and pushes to main. It costs only Actions minutes. |
+| D2 | Add a web CI workflow for coverage visibility (C, AC 4) | **Approved by Basel 2026-10-16, built.** `web-ci.yml` with lint, typecheck and `test:coverage` plus the job summary, on PRs and pushes to main (skips server-only and docs-only changes). It costs only Actions minutes. |
 | D3 | Order of work | A, then B (B adds `whatsNew` keys into the split layout), then C. C can run in its own worktree and session in parallel with A+B, because it only adds tests and config. |
 
 ## Impact

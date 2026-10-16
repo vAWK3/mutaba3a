@@ -13,6 +13,7 @@
 | PWA + landing | Netlify (`mutaba3a.netlify.app`; `mutaba3a.app` has no DNS yet, MUT-112) | `netlify.toml` |
 | macOS / Windows installers | GitHub Releases, Tauri updater | `.github/workflows/build-windows.yml`, `deploy.sh` (macOS, operator) |
 | `/hosted` request form | Netlify Forms (free tier: 100 submissions/month) | `vite.config.ts` `netlifyForms()` emits `__forms.html` (MUT-186) |
+| Web CI (lint, typecheck, tests + coverage thresholds) | GitHub Actions, one `ubuntu-latest` job per push/PR, npm cache; Actions minutes only (MUT-24 D2) | `.github/workflows/web-ci.yml` |
 
 > **Public origin (MUT-188).** `MUTABA3A_PUBLIC_ORIGIN` names where the landing is served. The **web** build puts it in the link-preview tags and the `/hosted` canonical; the **hosted** build puts it in the portal sign-in's "No account? Request one" link. Neither pipeline sets it today (Netlify's UI env for web; `server-ci.yml` / `server/scripts/deploy.sh` for hosted), so `DEFAULT_PUBLIC_ORIGIN` in `vite.config.ts` is what ships: the Netlify origin until the custom domain has DNS (MUT-112). A staging override on Netlify alone does not move the portal's link.
 

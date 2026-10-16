@@ -1,8 +1,8 @@
 # TEST_PLAN.md — Testing Strategy & Coverage
 
 > **Purpose**: Document testing approach, coverage targets, and test organization.
-> **Current Coverage**: ~65% overall (page tests completed 2026-03-14)
-> **Last Updated**: 2026-03-14
+> **Current Coverage**: web lines 91.69%, statements 91.01%, functions 88.74%, branches 84.12% (MUT-24 §C, 2026-10-16; enforced by `vitest.config.ts` thresholds in Web CI)
+> **Last Updated**: 2026-10-16
 
 ---
 
@@ -84,6 +84,38 @@ handover checklist (`.claude/designs/money-v1-handover.md`); the smoke step is
 the M1 exit criterion, the e2e scripts above are the Money v1 one.
 
 ---
+
+## Coverage thresholds and the risk files (MUT-24 §C, 2026-10-16)
+
+Measured with `npx vitest run --coverage --coverage.reportOnFailure` (v8, Node 22, TZ Asia/Jerusalem) over all 385 files under `src/`. `npm run test:coverage` fails below the floors in `vitest.config.ts`, and Web CI (`.github/workflows/web-ci.yml`) runs it on every PR and every push to main. To raise a floor, edit `COVERAGE_THRESHOLDS` after a gain. Never lower one to land a change.
+
+| | Lines | Statements | Functions | Branches |
+|---|---|---|---|---|
+| Baseline (main 9866f0f) | 89.48 | 88.55 | 87.24 | 81.07 |
+| After MUT-24 §C | 91.69 | 91.01 | 88.74 | 84.12 |
+| Enforced floor | 91 | 91 | 88 | 84 |
+
+Risk files (lines / branches, baseline → final), floors 100 = pure, 95 = risk:
+
+| File | Area | Baseline | Final | Floor |
+|---|---|---|---|---|
+| `src/db/database.ts` | every Dexie `upgrade()` | 42.6 / 26.9 | 100 / 98.9 | 95 |
+| `src/db/migration-safety.ts` | backup, validate, auto-fix | 72.9 / 61.7 | 100 / 98.3 | 95 |
+| `src/db/csvImport.ts` | CSV import (MUT-60 writer) | 68.2 / 51.9 | 100 / 98.7 | 95 |
+| `src/db/expenseRepository.ts` | expense money, recurring | 74.6 / 61.5 | 99.4 / 99.4 | 95 |
+| `src/db/repository.ts` | payment records (MUT-18/60) | 98.9 / 92.7 | 99.3 / 95.5 | 95 |
+| `src/db/aggregations.ts` | totals, owed, ageing filters | 99.4 / 92.6 | 100 / 100 | 100 |
+| `src/components/clients/clientIndexRows.ts` | overdue days, owed-now order | 100 / 84.4 | 100 / 100 | 100 |
+| `src/hosted/format/dates.ts` | MUT-227 `moneyDateFloor` | 100 / 83.3 | 100 / 100 | 100 |
+| `src/hosted/components/incomeApiErrors.ts` | MUT-227 past/future bound | 95.1 / 83.9 | 100 / 98.2 | 95 |
+| `src/hosted/components/conversionApiErrors.ts` | MUT-227 bound, conversion | 66.7 / 68.8 | 100 / 100 | 100 |
+| `src/db/profileDefault.ts` | one default business | 100 / 83.3 | 100 / 100 | 100 |
+| `src/lib/utils.ts`, `currencyAmounts.ts`, `paymentEntry.ts`, `incomeEntry.ts`, `fx/fxService.ts`, `dates.ts`, `attention.ts`, `pages/income/incomeRows.ts`, `clients/clientProfileRows.ts`, `expenses/recurringAttention.ts`, `ui/AmountWithConversion.tsx`, `hosted/format/DecimalAmount.tsx` | money, minor units, FX, overdue | 100 / 100 | 100 / 100 | 100 |
+| `src/components/ui/CurrencySummaryPopup.tsx` (not floored) | unified ILS total | 53.0 / 44.1 | 100 / 94.9 | — |
+
+New harness: `src/test/legacyDexie.ts` (`schemaAt(n)`, `createDatabaseAt(name, n, rows)`) builds a database as version n left it, so an upgrade test opens the current `MiniCrmDatabase` over it. Use it for every new Dexie version. `src/test/timeouts.ts` `SLOW_UNDER_COVERAGE` is the per-test timeout for a test that crosses 5 s only under instrumentation (TD-153).
+
+Unreachable branches left uncovered on purpose: `if (table)` in migration-safety's two loops over a hand-kept list of existing tables (TD-074), and v14's `amountMinor || 0` (v18 rewrites it).
 
 ## Current Test Coverage
 

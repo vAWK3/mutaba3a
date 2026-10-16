@@ -1,0 +1,54 @@
+# CI for the web app (MUT-24 §C, decision D2): lint, typecheck and the whole
+# Vitest suite under coverage, with the coverage thresholds in vitest.config.ts
+# enforced and the numbers written to the job summary.
+#
+# One job and the npm cache keep it cheap. It skips changes that touch only the
+# hosted API (server-ci.yml covers those) or only docs. Nothing here builds a
+# release, deploys or pushes: releases stay operator-run (scripts/release.ts).
+name: Web CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'server/**'
+      - 'docs/**'
+      - '**/*.md'
+      - '.github/workflows/server-ci.yml'
+      - '.github/workflows/build-windows.yml'
+  pull_request:
+    paths-ignore:
+      - 'server/**'
+      - 'docs/**'
+      - '**/*.md'
+      - '.github/workflows/server-ci.yml'
+      - '.github/workflows/build-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: web-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, typecheck, tests with coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Node 22, like server-ci.yml: Node 25+ breaks every localStorage test (TD-054).
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Tests with coverage (fails below the thresholds in vitest.config.ts)
+        run: npm run test:coverage
+      - name: Coverage to the job summary
+        if: ${{ !cancelled() && hashFiles('coverage/coverage-summary.json') != '' }}
+        run: npx tsx scripts/coverage-summary.ts coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY"

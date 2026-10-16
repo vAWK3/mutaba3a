@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-16 — Web test coverage, risk files first, enforced in a new Web CI (MUT-24 §C)
+
+**Why:** coverage was invisible and unenforced. No web CI existed (only `server-ci.yml` and `build-windows.yml`), and the riskiest code was the least tested: the Dexie upgrade history (42.6% lines), migration safety (72.9%), CSV import, the third payment-record writer of MUT-60 (68.2%), and the portal's MUT-227 floor helper (untested).
+
+### Added
+- `.github/workflows/web-ci.yml` (decision D2): on PRs, pushes to main and manual dispatch, skipping server-only and docs-only changes. One Node 22 job with the npm cache runs `npm ci`, lint, typecheck and `npm run test:coverage`, then appends a coverage table to the job summary.
+- `scripts/coverage-summary.ts` + `coverage-summary-format.ts` (tested): `coverage-summary.json` → markdown with the four totals and the ten files with the most uncovered lines.
+- `vitest.config.ts` `coverage.thresholds`: global floors lines 91 / statements 91 / functions 88 / branches 84, plus per-file floors. Pure money, date, overdue and ordering helpers are pinned at 100. Repository, CSV import, expense repository, database, migration safety and the income error map are at 95. Reporters `json-summary` and `text-summary` added, and `reportOnFailure` is on.
+- `src/test/legacyDexie.ts`: rebuilds the on-disk schema at any past version from `database.ts`'s own version history. `migration-history.test.ts` uses it to run the v8, v10, v11, v13, v14, v15, v17 and v18 upgrades from their previous shape for the first time, plus the v20, v22, v23 and v24 log-instead-of-throw fallbacks.
+- New tests: `migration-safety-paths`, `paymentRecordEdges`, `aggregationFilters`, `csvImportRows`, `expenseRepoPaths`, `CurrencySummaryPopup`, the `moneyDateFloor` pin, and the remaining routes of the income, settle, re-date and conversion error maps. All assert behaviour, with no snapshots.
+
+### Changed
+- Six tests that cross the 5 s default only under coverage instrumentation take `SLOW_UNDER_COVERAGE` (15 s, `src/test/timeouts.ts`) as a per-test option. The global timeout is unchanged.
+
+### Technical
+- Coverage went from 89.48 / 88.55 / 87.24 / 81.07 to 91.69 / 91.01 / 88.74 / 84.12 (lines / statements / functions / branches). Per-file numbers are in `.claude/designs/mut-24-todo-backlog.md` §C and TEST_PLAN.
+- Debt found on the way: TD-151 (a future-dated paid CSV row stops the import halfway and leaves a record-less paid entry), TD-152 (two date-only reads treated as UTC midnight west of UTC), TD-153 (coverage-only timeouts that get worse under host load).
+
 ## [Unreleased] - 2026-10-16 — Change your own password (MUT-237, ADR-037 amendment)
 
 **Why:** setting a password only ever happened through an operator-issued setup link (MUT-235/236); nobody signed in could change one they already knew, so a routine password change meant asking Basel for a fresh link.
