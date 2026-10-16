@@ -1643,6 +1643,24 @@ and gives no hosted web login. Full design, cost and test strategy:
    > race reasoning is unchanged. `createdAt`, `idleExpiresAt` and
    > `absoluteExpiresAt` are untouched, so keeping a session never extends
    > its life. Migration `20261016180000_mut237_session_credentials_verified_at`.
+   >
+   > **Review fixes (2026-10-16, MUT-238's pre-landing review).** (a) The
+   > session check reads the session and then the person in two queries, so a
+   > concurrent request on the changing session could see the old stamp and
+   > the new `passwordChangedAt` and revoke the kept session. A session that
+   > looks stale is now read once more and revoked only if it still is: the
+   > change stamps the kept session in the same transaction that moves
+   > `passwordChangedAt`, so the re-read sees the stamp. (b) Two changes could
+   > each verify the old password before either took the lock, and both
+   > answered 204 with both callers signed out. `changePassword` now takes the
+   > hash the route verified, and under the lock refuses with
+   > `StateConflict('user', 'CREDENTIAL_CHANGED')` (writing nothing) when the
+   > stored hash differs or the kept session is no longer the person's live
+   > session. The route answers 403 `CURRENT_PASSWORD_WRONG`, which is true
+   > (the old password no longer works), and does not count it toward the
+   > lockout. This also closes TD-151. (c) `currentPassword` takes sign-in's
+   > 1024-character ceiling. API 1.31.1-mut237; no status code or response
+   > shape changed. Not done: rotating the kept session's token (TD-158).
 2. **A hosted profile is `Membership × Organization`**, not a table. The
    client-side type is `ProfileSource = 'local' | 'hosted'`; the server only
    ever emits `hosted`. **Hosted profile data is a separate dataset from local

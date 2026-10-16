@@ -282,17 +282,33 @@ async function validateSessionRecord(
   }
 
   const user = await store.users.getById(session.userId);
-  if (!user || user.status !== 'ACTIVE' || user.passwordChangedAt.getTime() > session.credentialsVerifiedAt.getTime()) {
+  if (!user || user.status !== 'ACTIVE') {
     await store.sessions.revoke(session.id, 'account_changed', now);
     throw sessionExpired();
   }
+  const verified = await verifiedSincePasswordChange(store, session, digest, user, now);
 
-  await enforceRateLimit(c, rateLimiter, `${rateLimitPrefix}:${session.id}`, now, 'Too many requests for this session');
-  if (now.getTime() - session.lastSeenAt.getTime() >= TOUCH_INTERVAL_MS) {
-    const idleExpiresAt = new Date(Math.min(now.getTime() + idleMs, session.absoluteExpiresAt.getTime()));
-    await store.sessions.touch(session.id, now, idleExpiresAt);
+  await enforceRateLimit(c, rateLimiter, `${rateLimitPrefix}:${verified.id}`, now, 'Too many requests for this session');
+  if (now.getTime() - verified.lastSeenAt.getTime() >= TOUCH_INTERVAL_MS) {
+    const idleExpiresAt = new Date(Math.min(now.getTime() + idleMs, verified.absoluteExpiresAt.getTime()));
+    await store.sessions.touch(verified.id, now, idleExpiresAt);
   }
-  return { user, session };
+  return { user, session: verified };
+}
+
+/**
+ * A session verified before the person's last password change is revoked (MUT-237). But the session and the person
+ * are two reads: this session's own change may have committed between them, and it stamps the kept session in the
+ * same transaction that moves `passwordChangedAt`. So a session that looks stale is read once more, and revoked only
+ * if it still is: a concurrent request never signs out the device that just changed the password (MUT-238 review).
+ */
+async function verifiedSincePasswordChange(store: LedgerStore, session: SessionRecord, digest: string, user: UserRecord, now: Date): Promise<SessionRecord> {
+  const isStale = (s: SessionRecord) => user.passwordChangedAt.getTime() > s.credentialsVerifiedAt.getTime();
+  if (!isStale(session)) return session;
+  const fresh = await store.sessions.findByDigest(digest);
+  if (fresh && !fresh.revokedAt && !isStale(fresh)) return fresh;
+  await store.sessions.revoke(session.id, 'account_changed', now);
+  throw sessionExpired();
 }
 
 /** ADR-025 §2 as amended by ADR-037: a session names one of its memberships; anything else is indistinguishable from absent. */

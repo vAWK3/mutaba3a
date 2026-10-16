@@ -304,10 +304,16 @@ export const UserStatusResponseSchema = z.object({ user: UserSummarySchema }).op
 
 // ---- Sessions and the signed-in user (MUT-38, ADR-037) ---------------------
 
+/**
+ * The longest password any route will hand to the hasher: generous, so an old operator-set password always fits,
+ * but bounded, so no one makes argon2 chew a multi-megabyte body (MUT-238 review).
+ */
+const PRESENTED_PASSWORD_MAX_LENGTH = 1024;
+
 export const SignInRequestSchema = z
   .object({
     email: z.string().min(1).max(320),
-    password: z.string().min(1).max(1024),
+    password: z.string().min(1).max(PRESENTED_PASSWORD_MAX_LENGTH),
   })
   .openapi('SignInRequest');
 
@@ -496,12 +502,14 @@ export const SetupLinkRedeemResponseSchema = z.object({ email: z.string() }).ope
 // ---- Changing your own password (MUT-237) ----------------------------------
 
 /**
- * `currentPassword` is unconstrained: it is whatever the person's existing
+ * `currentPassword` has no floor: it is whatever the person's existing
  * password already is, which may predate the 12-char floor (an operator-set
- * password from before MUT-235) — constraining it would wrongly reject a
- * correct old password.
+ * password from before MUT-235) — a minimum would wrongly reject a correct
+ * old password. It has sign-in's ceiling, so the hasher never sees more.
  */
-export const ChangePasswordRequestSchema = z.object({ currentPassword: z.string(), newPassword: NewPasswordSchema }).openapi('ChangePasswordRequest');
+export const ChangePasswordRequestSchema = z
+  .object({ currentPassword: z.string().max(PRESENTED_PASSWORD_MAX_LENGTH), newPassword: NewPasswordSchema })
+  .openapi('ChangePasswordRequest');
 
 // ---- Milestone 2: customers, projects, import --------------------------------
 

@@ -6,6 +6,7 @@ import { clientIp, isSameOriginRequest, sessionCookieName, type SignInThrottle }
 import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
+import { StateConflict } from '../repositories/memory.js';
 import type { AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
 import { ChangePasswordRequestSchema, ErrorEnvelopeSchema, MalafatSuggestionsChangeSchema, MalafatSuggestionsSchema, MeSchema, SignInRequestSchema } from '../schemas.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
@@ -158,8 +159,10 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       responses: {
         204: { description: 'Password changed' },
         // Not 401: the session is still valid, and a 401 here would trip the portal's generic session-expired handler.
-        403: errorResponse('CURRENT_PASSWORD_WRONG (the current password is wrong, or the account is locked), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED'),
-        422: errorResponse('Validation failed (the new password is 12 to 128 characters)'),
+        403: errorResponse(
+          'CURRENT_PASSWORD_WRONG (the current password is wrong, the account is locked, or another change landed first), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED',
+        ),
+        422: errorResponse('Validation failed (the new password is 12 to 128 characters; the current one at most 1024)'),
       },
     }),
     async (c) => {
@@ -171,8 +174,9 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       const now = c.get('now')();
       // The session already proves identity; there is no "unknown email" to hide, so no dummy-hash timing defense is needed here.
       const locked = throttle.isLocked(key, now) || (user.lockedUntil ? user.lockedUntil.getTime() > now.getTime() : false);
-      const matches = !locked && user.passwordHash !== null && (await passwordHasher.verify(user.passwordHash, currentPassword));
-      if (locked || !matches) {
+      const verifiedPasswordHash = user.passwordHash;
+      const matches = !locked && verifiedPasswordHash !== null && (await passwordHasher.verify(verifiedPasswordHash, currentPassword));
+      if (locked || !matches || verifiedPasswordHash === null) {
         if (!locked) {
           const lockUntil = throttle.recordFailure(key, now);
           await store.users.recordFailedSignIn(user.id, now, lockUntil);
@@ -185,7 +189,15 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       // Hash before the transaction, same reasoning as redeem (account-setup.ts): the slow part never runs inside the lock.
       const passwordHash = await passwordHasher.hash(newPassword);
       const at = c.get('now')();
-      await store.users.changePassword({ userId: user.id, passwordHash, exceptSessionId: session.id, at, audit: await changePasswordAudit(store, c.get('requestId'), user) });
+      const audit = await changePasswordAudit(store, c.get('requestId'), user);
+      try {
+        await store.users.changePassword({ userId: user.id, passwordHash, verifiedPasswordHash, exceptSessionId: session.id, at, audit });
+      } catch (err) {
+        // Another change (or an operator lock) committed while this one was hashing: the password just verified no longer
+        // works, and this session was signed out by it. Not a failed attempt, so no lockout count (MUT-238 review).
+        if (err instanceof StateConflict) throw new ApiError('CURRENT_PASSWORD_WRONG', 'Current password is wrong');
+        throw err;
+      }
       return c.body(null, 204);
     },
   );

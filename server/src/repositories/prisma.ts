@@ -254,8 +254,12 @@ export class PrismaLedgerStore implements LedgerStore {
     // commits first (then gets revoked below, unless it is the excepted session) or sees the new hash and refuses.
     changePassword: (input) =>
       this.prisma.$transaction(async (tx) => {
-        const [person] = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
+        const [person] = await tx.$queryRaw<Array<{ passwordHash: string | null }>>`SELECT "passwordHash" FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
         if (!person) return null;
+        // MUT-238 review: two changes can each verify the old password before either holds this lock. The one that
+        // gets it second finds the hash it verified gone and its own session revoked by the first, and writes nothing.
+        const kept = await tx.session.findFirst({ where: { id: input.exceptSessionId, userId: input.userId, revokedAt: null }, select: { id: true } });
+        if (person.passwordHash !== input.verifiedPasswordHash || !kept) throw new StateConflict('user', 'CREDENTIAL_CHANGED');
         const user = await tx.user.update({
           where: { id: input.userId },
           data: { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at },

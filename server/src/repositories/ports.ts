@@ -1216,7 +1216,9 @@ export interface UserRepository {
    * MUT-237: a signed-in person changes their own password. One transaction under the same row-lock
    * discipline ADR-088 §7a added for `--lock`/redeem: sets the password (clearing any lockout), revokes
    * every other session for this user — web and device, `exceptSessionId` stays live — and appends `audit`.
-   * Null for an unknown user.
+   * Null for an unknown user. StateConflict('user', 'CREDENTIAL_CHANGED') and nothing written when, under the
+   * lock, the stored hash is no longer `verifiedPasswordHash` or `exceptSessionId` is not this person's live
+   * session: another change (or an operator lock) committed first (MUT-238 review).
    */
   changePassword(input: ChangePasswordInput): Promise<UserRecord | null>;
 }
@@ -1224,7 +1226,9 @@ export interface UserRepository {
 export interface ChangePasswordInput {
   userId: string;
   passwordHash: string;
-  /** This session keeps working; every other session for this user is revoked. */
+  /** The hash the caller's current password was verified against; the change is refused if it moved since. */
+  verifiedPasswordHash: string;
+  /** This session keeps working; every other session for this user is revoked. Must be the caller's own live session. */
   exceptSessionId: string;
   at: Date;
   /** Written in the same transaction. */
