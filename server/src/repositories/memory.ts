@@ -134,6 +134,8 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly keys = new Map<string, ApiKeyRecord>();
   private readonly ints = new Map<string, IntegrationRecord>();
   private readonly events: AuditEventRecord[] = [];
+  /** Guarantees append() order == createdAt order even when two events land in the same clock millisecond. */
+  private lastAuditAtMs = 0;
   private readonly idem = new Map<string, IdempotencyRecord>();
   private readonly userIdem = new Map<string, UserIdempotencyRecord>();
   private readonly custs = new Map<string, CustomerRecord>();
@@ -551,7 +553,8 @@ export class MemoryLedgerStore implements LedgerStore {
 
   readonly audit: AuditRepository = {
     append: async (event: AuditEventInput) => {
-      const record: AuditEventRecord = { id: randomUUID(), createdAt: new Date(), ...event };
+      this.lastAuditAtMs = Math.max(Date.now(), this.lastAuditAtMs + 1);
+      const record: AuditEventRecord = { id: randomUUID(), createdAt: new Date(this.lastAuditAtMs), ...event };
       this.events.push(record);
       return { ...record };
     },
