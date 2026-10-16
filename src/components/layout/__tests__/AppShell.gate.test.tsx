@@ -33,7 +33,13 @@ vi.mock('../SavedFlashAnnouncer', () => ({ SavedFlashAnnouncer: () => null }));
 vi.mock('../../ui/DemoBanner', () => ({ DemoBanner: () => null }));
 vi.mock('../../ui/SampleDataBar', () => ({ SampleDataBar: () => null }));
 vi.mock('../../ui/UpdateBanner', () => ({ UpdateBanner: () => null }));
-vi.mock('../../modals', () => ({ WelcomeModal: () => null, DemoSeedModal: () => null, MigrationWizard: () => null }));
+vi.mock('../../modals', () => ({
+  WelcomeModal: () => null,
+  DemoSeedModal: () => null,
+  MigrationWizard: () => null,
+  WhatsNewModal: () => null,
+  WhatsNewController: () => null,
+}));
 vi.mock('../../../demo/useVisitorSample', () => ({ useVisitorSampleEntry: () => {} }));
 vi.mock('../../../lib/features/routeGuard', () => ({ useLeaveDisabledArea: () => {} }));
 
