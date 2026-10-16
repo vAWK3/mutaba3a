@@ -3,6 +3,8 @@ import { applyMalafatChange } from '../malafat-suggestions.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import type {
+  AccountSetupRepository,
+  AccountSetupTokenRecord,
   AttachmentFilter,
   AttachmentRecord,
   AttachmentRepository,
@@ -152,6 +154,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly people = new Map<string, UserRecord>();
   private readonly members = new Map<string, MembershipRecord>();
   private readonly sessionsById = new Map<string, SessionRecord>();
+  private readonly setupLinks = new Map<string, AccountSetupTokenRecord>();
   private readonly exps = new Map<string, ExpenseRecord>();
   private readonly expCats = new Map<string, ExpenseCategoryRecord>();
   private readonly expReceipts = new Map<string, ExpenseReceiptRecord>();
@@ -394,15 +397,60 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!s.revokedAt) Object.assign(s, { revokedAt: at, revokedReason: reason });
       return { ...s };
     },
-    revokeAllForUser: async (userId, reason, at) => {
-      let count = 0;
-      for (const s of this.sessionsById.values()) {
-        if (s.userId === userId && !s.revokedAt) {
-          Object.assign(s, { revokedAt: at, revokedReason: reason });
-          count++;
-        }
+    revokeAllForUser: async (userId, reason, at) => this.revokeSessionsOf(userId, reason, at),
+  };
+
+  private revokeSessionsOf(userId: string, reason: string, at: Date): number {
+    let count = 0;
+    for (const s of this.sessionsById.values()) {
+      if (s.userId === userId && !s.revokedAt) {
+        Object.assign(s, { revokedAt: at, revokedReason: reason });
+        count++;
       }
-      return count;
+    }
+    return count;
+  }
+
+  // Each method runs to completion without an await, which is the in-memory stand-in for the Prisma transaction and row lock.
+  readonly accountSetup: AccountSetupRepository = {
+    issue: async (input) => {
+      const person = this.people.get(input.userId);
+      if (!person) throw new ForeignKeyViolation('account_setup_tokens.userId');
+      for (const link of this.setupLinks.values()) {
+        if (link.tokenDigest === input.tokenDigest) throw new UniqueViolation('account_setup_tokens.tokenDigest');
+      }
+      if (input.lock) {
+        Object.assign(person, { passwordHash: null, updatedAt: input.at });
+        this.revokeSessionsOf(person.id, 'setup_link_lock', input.at);
+      }
+      for (const link of this.setupLinks.values()) {
+        if (link.userId === input.userId && link.usedAt === null && link.cancelledAt === null) link.cancelledAt = input.at;
+      }
+      const record: AccountSetupTokenRecord = {
+        id: randomUUID(),
+        userId: input.userId,
+        tokenDigest: input.tokenDigest,
+        purpose: input.purpose,
+        createdAt: input.at,
+        expiresAt: input.expiresAt,
+        usedAt: null,
+        cancelledAt: null,
+      };
+      this.setupLinks.set(record.id, record);
+      for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return { ...record };
+    },
+    findByDigest: async (tokenDigest) => clone([...this.setupLinks.values()].find((l) => l.tokenDigest === tokenDigest)),
+    redeem: async (input) => {
+      const link = [...this.setupLinks.values()].find((l) => l.tokenDigest === input.tokenDigest);
+      const person = link && this.people.get(link.userId);
+      const claimable = link && person && link.usedAt === null && link.cancelledAt === null && input.at < link.expiresAt && person.status === 'ACTIVE';
+      if (!claimable) return null;
+      link.usedAt = input.at;
+      Object.assign(person, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
+      this.revokeSessionsOf(person.id, 'password_set', input.at);
+      for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return { ...person };
     },
   };
 

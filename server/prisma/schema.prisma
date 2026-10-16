@@ -242,7 +242,8 @@ model User {
   email             String     @unique
   displayName       String
   /// argon2id PHC string. The password itself is never stored.
-  passwordHash      String
+  /// MUT-235: NULL until the person sets one through their setup link (and after a reset with --lock).
+  passwordHash      String?
   /// 'en' | 'ar', validated by the API.
   locale            String     @db.VarChar(5)
   status            UserStatus @default(ACTIVE)
@@ -258,6 +259,8 @@ model User {
 
   memberships     Membership[]
   sessions        Session[]
+  /// MUT-235: one-time setup links; at most one open at a time.
+  setupLinks      AccountSetupToken[]
   /// MUT-120: the organization created with this user as their personal profile.
   personalProfile Organization?  @relation("PersonalProfile")
   /// MUT-182: every profile this user owns, the personal one included.
@@ -332,6 +335,30 @@ model Membership {
 enum SessionKind {
   cookie
   device
+}
+
+/// MUT-235: SETUP is a person's first password; RESET an operator reset of an existing one.
+enum SetupLinkPurpose {
+  SETUP
+  RESET
+}
+
+/// MUT-235 (ADR-088): a one-time setup link. Only the HMAC digest of its token
+/// is stored (the session digest, same pepper). At most one of usedAt /
+/// cancelledAt is ever set; a newer link for the same person cancels this one.
+model AccountSetupToken {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @db.Uuid
+  user        User             @relation(fields: [userId], references: [id])
+  tokenDigest String           @unique @db.VarChar(64)
+  purpose     SetupLinkPurpose
+  createdAt   DateTime
+  expiresAt   DateTime
+  usedAt      DateTime?
+  cancelledAt DateTime?
+
+  @@index([userId])
+  @@map("account_setup_tokens")
 }
 
 /// A server-side session (MUT-38 cookie, MUT-64 device). Only the

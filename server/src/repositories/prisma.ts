@@ -8,6 +8,8 @@ import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-sugges
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import type {
+  AccountSetupRepository,
+  AccountSetupTokenRecord,
   AttachmentFilter,
   AuditEventInput,
   ExpenseCategoryInput,
@@ -268,6 +270,51 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     revokeAllForUser: async (userId, reason, at) =>
       (await this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } })).count,
+  };
+
+  /**
+   * MUT-235 (ADR-088). Both writes take the person's row lock first, so issues and redeems for one person
+   * run one at a time: at most one open link, and of two redeems of one link exactly one claims it.
+   * NO KEY UPDATE, like MUT-182's owner lock, so the lock never blocks an insert that references the user.
+   */
+  readonly accountSetup: AccountSetupRepository = {
+    issue: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const [person] = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
+          if (!person) throw new ForeignKeyViolation('account_setup_tokens.userId');
+          if (input.lock) {
+            await tx.user.update({ where: { id: input.userId }, data: { passwordHash: null, updatedAt: input.at } });
+            await tx.session.updateMany({ where: { userId: input.userId, revokedAt: null }, data: { revokedAt: input.at, revokedReason: 'setup_link_lock' } });
+          }
+          await tx.accountSetupToken.updateMany({ where: { userId: input.userId, usedAt: null, cancelledAt: null }, data: { cancelledAt: input.at } });
+          const row = await tx.accountSetupToken.create({
+            data: { userId: input.userId, tokenDigest: input.tokenDigest, purpose: input.purpose, createdAt: input.at, expiresAt: input.expiresAt },
+          });
+          if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          return toSetupLink(row);
+        }),
+      ),
+    findByDigest: async (tokenDigest) => mapNullable(await this.prisma.accountSetupToken.findUnique({ where: { tokenDigest } }), toSetupLink),
+    redeem: (input) =>
+      this.prisma.$transaction(async (tx) => {
+        const link = await tx.accountSetupToken.findUnique({ where: { tokenDigest: input.tokenDigest } });
+        if (!link) return null;
+        const [person] = await tx.$queryRaw<Array<{ status: string }>>`SELECT status FROM users WHERE id = ${link.userId}::uuid FOR NO KEY UPDATE`;
+        if (person?.status !== 'ACTIVE') return null;
+        const { count } = await tx.accountSetupToken.updateMany({
+          where: { id: link.id, usedAt: null, cancelledAt: null, expiresAt: { gt: input.at } },
+          data: { usedAt: input.at },
+        });
+        if (count === 0) return null;
+        const user = await tx.user.update({
+          where: { id: link.userId },
+          data: { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at },
+        });
+        await tx.session.updateMany({ where: { userId: link.userId, revokedAt: null }, data: { revokedAt: input.at, revokedReason: 'password_set' } });
+        if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+        return toUser(user);
+      }),
   };
 
   readonly memberships: MembershipRepository = {
@@ -1691,6 +1738,19 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     malafatSuggestions: row.malafatSuggestions === null ? null : resolveMalafatSuggestions(row.malafatSuggestions),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+}
+
+function toSetupLink(row: Prisma.AccountSetupTokenGetPayload<object>): AccountSetupTokenRecord {
+  return {
+    id: row.id,
+    userId: row.userId,
+    tokenDigest: row.tokenDigest,
+    purpose: row.purpose,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+    usedAt: row.usedAt,
+    cancelledAt: row.cancelledAt,
   };
 }
 
