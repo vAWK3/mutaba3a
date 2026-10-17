@@ -14,6 +14,7 @@ const SECTION_KEYS = [
   'sharing',
   'security',
   'noTracking',
+  'usageAnalytics',
   'yourControl',
   'mobileDeletion',
   'children',
