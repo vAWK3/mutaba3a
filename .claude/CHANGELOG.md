@@ -78,8 +78,21 @@ The review was the core pass, 5 specialists, the red team and the adversarial pa
   - The Netlify upload token is Production-scoped and secret.
   - The suggested org slug is `mutaba3a`.
 
+### Changed by the re-review (fix cycle 2, D15–D17)
+
+- **Labelled values.** `labelledValuePattern` has a quoted-key branch (compact or spaced JSON) and a bare-key branch whose value runs to the end of the clause, and the scan continues from a harmless label's value. Compact `JSON.stringify` output, `Authorization: Bearer …`, multi-word names and comma amounts are now filtered; before, they leaked. Surfaces truncate a message to `maxMessageLength` (8,192) before scrubbing, which keeps the worst case at about 20 ms; without the cap, rescans after harmless labels go quadratic. A fixed list of leak strings must vanish, so the test no longer grades the pattern with itself.
+- **Wrong-org guard.** The settings script refuses an org holding any project that isn't `mutaba3a-…`, before writing.
+- **Request fields.** `Referer` is dropped, `fragment` is denied, and whole request fields are listed in `requestDropFields`.
+- **Mechanical fixes.**
+  - The admin token is a personal (user) token.
+  - Terraform `>= 1.9.0`.
+  - Requests refuse redirects.
+  - The region check ignores a trailing slash.
+  - The tfvars example lists daily caps and `monthly_event_quota`.
+  - Two stale descriptions are fixed.
+
 ### Technical
-- `scripts/__tests__/sentry-rules.test.ts` (62 cases) and `scripts/__tests__/sentry-org-settings.test.ts` (30 cases, including a CLI run from the Sentry module folder). The Terraform tests: 13 runs in two files (`eu_region.tftest.hcl` has its own state).
+- `scripts/__tests__/sentry-rules.test.ts` (75 cases) and `scripts/__tests__/sentry-org-settings.test.ts` (36 cases, including a CLI run from the Sentry module folder). The Terraform tests: 13 runs in two files (`eu_region.tftest.hcl` has its own state).
 
 ---
 

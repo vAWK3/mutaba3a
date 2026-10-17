@@ -3597,3 +3597,9 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Contracts CI (D12).** `contracts-ci.yml` runs the Sentry and analytics contract tests when those files change. `.gitattributes` keeps them LF.
 - **Org slug (D13).** The suggested org slug is `mutaba3a`, not the company name.
 - **Phone.** The phone starts Sentry only in release builds, with the DSN from fastlane's own `--dart-define`. Its `.env` also feeds `make run`.
+
+**Amendment 2 (MUT-147 pre-landing re-review, 2026-10-17)**: Basel's answers D15–D17. Contract 1.0.0 was re-pinned again before merge.
+- **Labelled values (D15).** `labelledValuePattern` has two branches: quoted keys (`"key":value`, compact or spaced) and bare keys (`key=`, `key = `, `key: `) whose value runs to the end of its clause. The scan continues from a harmless label's value, so it can't hide a sensitive one behind it. Surfaces truncate a message to `maxMessageLength` (8,192 characters) before scrubbing, and keys are bounded to 64 characters. Rescanning after harmless labels would otherwise go quadratic; with the cap, the worst case is about 20 ms. A fixed list of leak strings in the contract test must vanish after scrubbing, so the test no longer grades the pattern with itself.
+- **Wrong-org guard (D16).** The settings script refuses an org holding any project that isn't `mutaba3a-…`, before writing. An empty org passes, for the first run.
+- **Request fields (D17).** `Referer` joins `denyHeaders`, `fragment` joins the deny tokens, and `requestDropFields` (`data`, `cookies`, `query_string`, `fragment`, `env`) puts whole-field drops in the contract.
+- **Mechanical fixes.** The admin token is a personal (user) token. Terraform needs `>= 1.9.0` (the quota validation refers to another variable). Requests refuse redirects. The region comparison ignores a trailing slash.

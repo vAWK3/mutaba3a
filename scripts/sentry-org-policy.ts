@@ -36,6 +36,8 @@ const SWITCHES = [
 const DEFAULT_BASE_URL = 'https://de.sentry.io';
 /** Only Sentry's own API hosts ever receive the admin token (D9). */
 const SENTRY_HOST = /^https:\/\/([a-z0-9-]+\.)?sentry\.io$/;
+/** Every Terraform-managed project slug starts with this (server/infrastructure/sentry/main.tf). */
+const PROJECT_PREFIX = 'mutaba3a-';
 /** A stalled connection fails the run instead of hanging the operator's shell. */
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -87,6 +89,8 @@ async function call(fetchFn: typeof fetch, method: 'GET' | 'PUT', url: string, t
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    // The admin token goes only to the host the operator named, never to a redirect target.
+    redirect: 'error',
   });
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 200);
@@ -97,6 +101,23 @@ async function call(fetchFn: typeof fetch, method: 'GET' | 'PUT', url: string, t
 
 const readOrg = async (fetchFn: typeof fetch, url: string, token: string) =>
   (await (await call(fetchFn, 'GET', url, token)).json()) as OrgResponse;
+
+const withoutTrailingSlash = (url: string | undefined) => url?.replace(/\/+$/, '');
+
+/**
+ * ADR-091: the org is Mutaba3a-only. A personal admin token reaches every org its owner belongs
+ * to, so refuse one holding any other product's project before writing a thing (D16). An empty
+ * org passes: on the first run Terraform may not have created the projects yet.
+ */
+async function assertMutaba3aOnly(fetchFn: typeof fetch, orgUrl: string, args: OrgSettingsArgs) {
+  const projects = (await (await call(fetchFn, 'GET', `${orgUrl}projects/`, args.token)).json()) as Array<{ slug?: string }>;
+  const foreign = projects.map((project) => project.slug ?? '(no slug)').filter((slug) => !slug.startsWith(PROJECT_PREFIX));
+  if (foreign.length > 0) {
+    throw new Error(
+      `Org "${args.org}" holds projects that aren't Mutaba3a's (${foreign.join(', ')}). Stop: check SENTRY_ORG; ADR-091 needs a Mutaba3a-only org.`,
+    );
+  }
+}
 
 /** Keeps every field already on the org (added by hand) and adds the desired ones, case-insensitively. */
 function mergeFields(current: string[] = [], wanted: string[]): string[] {
@@ -116,12 +137,13 @@ export async function syncOrgSettings(
 ): Promise<Drift[]> {
   const url = `${args.baseUrl}/api/0/organizations/${encodeURIComponent(args.org)}/`;
   const before = await readOrg(fetchFn, url, args.token);
-  const actualRegion = before.links?.regionUrl;
-  if (actualRegion !== regionUrl) {
+  const actualRegion = withoutTrailingSlash(before.links?.regionUrl);
+  if (actualRegion !== withoutTrailingSlash(regionUrl)) {
     throw new Error(
       `Org "${args.org}" is in ${actualRegion ?? 'an unknown region'}, not ${regionUrl}. Stop: Mutaba3a's reports must stay in the EU (ADR-091).`,
     );
   }
+  await assertMutaba3aOnly(fetchFn, url, args);
   if (args.mode === 'check') return orgSettingsDrift(before, desired);
   // The PUT's body is never read: the GET after it is the verification.
   await call(fetchFn, 'PUT', url, args.token, { ...desired, sensitiveFields: mergeFields(before.sensitiveFields, desired.sensitiveFields) });

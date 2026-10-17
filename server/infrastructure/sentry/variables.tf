@@ -4,7 +4,7 @@ variable "organization" {
 }
 
 variable "base_url" {
-  description = "Sentry API base URL, `https://<host>/api/`. An EU-region org answers on de.sentry.io; if org-scoped calls plan cleanly through sentry.io instead, record which one in INFRA."
+  description = "Sentry API base URL, `https://<host>/api/`. The EU-region org answers on de.sentry.io. Never switch to sentry.io to get past an error: that would hide an org created in the US (D5). The sentry_key postcondition is the second guard."
   type        = string
   default     = "https://de.sentry.io/api/"
 }

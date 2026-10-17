@@ -1,6 +1,7 @@
 terraform {
-  # 1.7 is the first release whose `terraform test` supports mock_provider (tests/).
-  required_version = ">= 1.7.0"
+  # 1.9: the quota validation in variables.tf refers to another variable (1.9+), and
+  # `terraform test` needs mock_provider (1.7+). server-ci pins 1.9.8.
+  required_version = ">= 1.9.0"
 
   required_providers {
     sentry = {

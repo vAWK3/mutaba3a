@@ -24,7 +24,8 @@
     "idempotency-key",
     "x-forwarded-for",
     "x-real-ip",
-    "proxy-authorization"
+    "proxy-authorization",
+    "referer"
   ],
   "denyKeyTokens": [
     "amount",
@@ -80,11 +81,14 @@
     "credential",
     "credentials",
     "jwt",
-    "otp"
+    "otp",
+    "fragment"
   ],
+  "requestDropFields": ["data", "cookies", "query_string", "fragment", "env"],
   "urlFields": ["request.url", "breadcrumb.data.url", "breadcrumb.data.from", "breadcrumb.data.to"],
-  "labelledValuePattern": "\"?([A-Za-z_][\\w.-]*)\"?(?:=|:[ \\t]+)(\"(?:[^\"\\\\]|\\\\.)*\"|[^\\s,;{}\"]+)",
+  "labelledValuePattern": "(?:[\"']([A-Za-z_][\\w.-]{0,63})[\"'][ \\t]*:[ \\t]*(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|\\[Filtered\\]|[^,;}\\]\\s]+)|([A-Za-z_][\\w.-]{0,63})[ \\t]*(?:=|:[ \\t])[ \\t]*(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|\\[Filtered\\]|[^;}\\])\\n]+))",
   "firstLineOnlyExceptionTypes": ["^Prisma"],
+  "maxMessageLength": 8192,
   "allowedTags": ["surface", "request_id", "route", "locale", "release", "environment", "app_build"],
   "allowedUserKeys": ["id"],
   "safeContextKeys": [

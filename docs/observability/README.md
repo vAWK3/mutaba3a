@@ -61,7 +61,9 @@ exactly.
    - The server builds its Prisma client with `errorFormat: 'minimal'` (`serverPrismaErrorFormat`),
      so a validation error never prints the query input (D4).
 2. **Requests and URLs.**
-   - Never sent: request bodies or cookies.
+   - Never sent: the whole request fields in `requestDropFields` (`data`, `cookies`,
+     `query_string`, `fragment`, `env`), and the `Referer` header, which carries the previous
+     page's full URL (D17).
    - **Every URL-bearing field keeps the path only**, with no query string and no `#fragment`
      (`urlFields`: `request.url` and breadcrumb `data.url`, `data.from`, `data.to`). The portal's
      `/setup#…` link carries a one-time setup token in its fragment, and the browser SDK records
@@ -96,14 +98,39 @@ exactly.
 7. **Messages.**
    - In exception values and messages, every labelled value whose key holds a deny token is
      replaced with `[Filtered]` (quoted values keep their quotes: `"[Filtered]"`).
-   - "Labelled" means three forms: `key=value`, `key: value` and JSON `"key": value` (D4).
-   - All surfaces use the contract's own `labelledValuePattern`: group 1 is the key, group 2 the
-     value, and a value runs to the next whitespace, `,`, `;`, `{` or `}` unless it is quoted.
-   - An exception whose type matches `firstLineOnlyExceptionTypes` (`^Prisma`) keeps only its
-     first line, because the rest can echo the query input.
-   - This catches only *labelled* values. An unlabelled name in free text is not caught, so
-     surface code never interpolates user values into thrown messages. The org's server-side
-     scrubber (below) is a backstop for distinctive values such as API keys.
+   - **Forms covered (D4, D15).** `key=value`, `key = value`, `key: value`, and JSON or JS
+     `"key": value` / `'key':value`, compact (`JSON.stringify`) or spaced.
+   - **The shared pattern.** All surfaces use the contract's `labelledValuePattern` (key in group 1
+     or 3, value in group 2 or 4). It has two branches:
+     - **Quoted keys.** The value is a quoted string or runs to the next `,`, `;`, `}`, `]` or
+       whitespace.
+     - **Bare keys.** The value is a quoted string, or runs to the end of its clause (`;`, `}`,
+       `]`, `)` or a line break). So `Authorization: Bearer <token>` and `name: John Smith`
+       filter the whole value, and so does `amount=1,234.56`.
+     - **Over-redaction.** Filtering to the end of the clause also hides the text after a
+       sensitive label: `amount=5 currency=ILS` becomes `amount=[Filtered]`. Safety wins over
+       debug detail.
+     - **Rescanning.** The marker `[Filtered]` is itself a complete value, so a scrubbed message
+       rescans as clean.
+   - **The scan.** Scan from the left. After a label whose key is *not* sensitive, continue from
+     the start of its value, so in `Error: failed amount=5` the harmless `Error:` can't hide
+     `amount=`. After a sensitive one, continue after the value.
+   - **Bounded cost.** Every surface truncates an exception value or message to
+     `maxMessageLength` (8,192 characters) *before* scrubbing, and keys are bounded to 64
+     characters. Rescanning after harmless labels can otherwise go quadratic; with the cap the
+     worst case is about 20 ms, and the contract test times it. Sentry's JS SDK already
+     truncates values to 250 characters by default.
+   - **Prisma.** An exception whose type matches `firstLineOnlyExceptionTypes` (`^Prisma`) keeps
+     only its first line, because the rest can echo the query input.
+   - **Known limits.** This catches only *labelled* values. Not caught:
+     - an unlabelled name in free text (so surface code never interpolates user values into
+       thrown messages);
+     - double-encoded JSON (`\"email\":\"…\"`);
+     - keys in non-Latin scripts (an Arabic label such as المبلغ);
+     - a quoted value broken across lines.
+
+     The org's server-side scrubber (below) is the backstop for distinctive values such as API
+     keys.
 8. **Never reported.**
    - The server reports only unknown errors and `ApiError`s with status `serverReportsStatusAtLeast`
      (500) or higher.
@@ -178,9 +205,13 @@ DSNs come from `terraform output -json dsn` in `server/infrastructure/sentry`.
 - **Two different tokens, two different names** (D8).
   - **Upload token.** `SENTRY_AUTH_TOKEN`: an org auth token (`sntrys_…`) with release and
     upload scopes only. It goes wherever builds run.
-  - **Admin token.** `SENTRY_ADMIN_TOKEN`: for `terraform apply` and the settings script; it
-    needs project, team, alert and org write. It's handed to one command at a time, never
-    exported as `SENTRY_AUTH_TOKEN`, so a later build in the same shell can't pick it up.
+  - **Admin token.** `SENTRY_ADMIN_TOKEN`: a personal (user) auth token (`sntryu_…`) from the
+    2FA-enabled owner account. It's for `terraform apply` and the settings script, and needs
+    project, team, alert and org write, which an org token can't carry. It's handed to one
+    command at a time, never exported as `SENTRY_AUTH_TOKEN`, so a later build in the same shell
+    can't pick it up.
+  - **Wrong-org guard.** A personal token reaches every org its owner belongs to. So the
+    settings script refuses an org holding any project that isn't `mutaba3a-…` (D16).
   - **Where the settings script sends it.** Only to `https://sentry.io` or
     `https://<region>.sentry.io`.
 

@@ -120,19 +120,33 @@ describe('parseOrgSettingsArgs', () => {
 describe('syncOrgSettings', () => {
   const args = { org: 'mutaba3a', baseUrl: EU, token: TOKEN };
   const url = 'https://de.sentry.io/api/0/organizations/mutaba3a/';
+  const projectsUrl = 'https://de.sentry.io/api/0/organizations/mutaba3a/projects/';
+  const mutaba3aProjects = [{ slug: 'mutaba3a-api' }, { slug: 'mutaba3a-capture-app' }];
+  /** A fetch mock answering each request in order. */
+  const respond = (...responses: Response[]) => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    for (const response of responses) fetch.mockResolvedValueOnce(response);
+    return fetch;
+  };
 
-  it('--apply reads the org, writes the settings merged with fields added by hand, then reads them back (D2)', async () => {
+  it('--apply reads the org and its projects, writes the settings merged with fields added by hand, then reads them back (D2, D16)', async () => {
     const before = euOrg({ ...desired, sensitiveFields: ['custom_pii', desired.sensitiveFields[0].toUpperCase()] });
-    const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(okResponse(before))
-      .mockResolvedValueOnce(okResponse({}))
-      .mockResolvedValueOnce(okResponse(euOrg({ ...desired, sensitiveFields: ['custom_pii', ...desired.sensitiveFields] })));
+    const fetch = respond(
+      okResponse(before),
+      okResponse(mutaba3aProjects),
+      okResponse({}),
+      okResponse(euOrg({ ...desired, sensitiveFields: ['custom_pii', ...desired.sensitiveFields] })),
+    );
     const drift = await syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch);
 
     expect(drift).toEqual([]);
-    expect(fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['GET', 'PUT', 'GET']);
-    const [putUrl, put] = fetch.mock.calls[1];
-    expect(putUrl).toBe(url);
+    expect(fetch.mock.calls.map(([callUrl, init]) => [callUrl, init?.method])).toEqual([
+      [url, 'GET'],
+      [projectsUrl, 'GET'],
+      [url, 'PUT'],
+      [url, 'GET'],
+    ]);
+    const [, put] = fetch.mock.calls[2];
     const body = JSON.parse(put?.body as string) as OrgSettings;
     // Existing fields keep their casing; a desired field already present (any case) is not repeated.
     const [first, ...rest] = desired.sensitiveFields;
@@ -141,56 +155,74 @@ describe('syncOrgSettings', () => {
   });
 
   it('--check only reads, and reports drift', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(okResponse(euOrg({ ...desired, scrubIPAddresses: false })));
+    const fetch = respond(okResponse(euOrg({ ...desired, scrubIPAddresses: false })), okResponse(mutaba3aProjects));
     const drift = await syncOrgSettings({ ...args, mode: 'check' }, desired, EU, fetch);
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch.mock.calls[0][1]?.method).toBe('GET');
+    expect(fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['GET', 'GET']);
     expect(drift).toEqual([{ field: 'scrubIPAddresses', expected: 'true', actual: 'false' }]);
   });
 
   it.each(['apply', 'check'] as const)('--%s refuses an org outside the EU region before writing anything (D5)', async (mode) => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
-      okResponse({ ...desired, links: { regionUrl: 'https://us.sentry.io' } }),
-    );
+    const fetch = respond(okResponse({ ...desired, links: { regionUrl: 'https://us.sentry.io' } }));
     await expect(syncOrgSettings({ ...args, mode }, desired, EU, fetch)).rejects.toThrow('https://us.sentry.io');
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('refuses an org whose region it cannot tell, before writing (D5)', async () => {
+    const fetch = respond(okResponse({ ...desired }));
+    await expect(syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch)).rejects.toThrow('an unknown region');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts the EU region URL with a trailing slash', async () => {
+    const fetch = respond(okResponse({ ...desired, links: { regionUrl: `${EU}/` } }), okResponse([]));
+    await expect(syncOrgSettings({ ...args, mode: 'check' }, desired, EU, fetch)).resolves.toEqual([]);
+  });
+
+  it.each(['apply', 'check'] as const)('--%s refuses an org holding another product\'s project, before writing (D16)', async (mode) => {
+    const fetch = respond(okResponse(euOrg(desired)), okResponse([{ slug: 'mutaba3a-api' }, { slug: 'malafat-web' }]));
+    await expect(syncOrgSettings({ ...args, mode }, desired, EU, fetch)).rejects.toThrow('malafat-web');
+    expect(fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['GET', 'GET']);
+  });
+
+  it('accepts an empty org, for the first run before Terraform has created the projects (D16)', async () => {
+    const fetch = respond(okResponse(euOrg(desired)), okResponse([]));
+    await expect(syncOrgSettings({ ...args, mode: 'check' }, desired, EU, fetch)).resolves.toEqual([]);
+  });
+
   it('treats an empty PUT response as written, since the GET is the verification', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(okResponse(euOrg(desired)))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }))
-      .mockResolvedValueOnce(okResponse(euOrg(desired)));
+    const fetch = respond(okResponse(euOrg(desired)), okResponse([]), new Response(null, { status: 204 }), okResponse(euOrg(desired)));
     await expect(syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch)).resolves.toEqual([]);
   });
 
-  it('gives every request a timeout, so a stalled connection fails instead of hanging', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(okResponse(euOrg(desired)))
-      .mockResolvedValueOnce(okResponse({}))
-      .mockResolvedValueOnce(okResponse(euOrg(desired)));
+  it('gives every request a timeout and refuses redirects, so the token only ever goes to the named host', async () => {
+    const fetch = respond(okResponse(euOrg(desired)), okResponse([]), okResponse({}), okResponse(euOrg(desired)));
     await syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch);
-    for (const [, init] of fetch.mock.calls) expect(init?.signal).toBeInstanceOf(AbortSignal);
+    for (const [, init] of fetch.mock.calls) {
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      expect(init?.redirect).toBe('error');
+    }
   });
 
   it('reports drift when an apply did not stick', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(okResponse(euOrg(desired)))
-      .mockResolvedValueOnce(okResponse({}))
-      .mockResolvedValueOnce(okResponse(euOrg({ ...desired, dataScrubberDefaults: false })));
+    const fetch = respond(
+      okResponse(euOrg(desired)),
+      okResponse([]),
+      okResponse({}),
+      okResponse(euOrg({ ...desired, dataScrubberDefaults: false })),
+    );
     const drift = await syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch);
     expect(drift.map((entry) => entry.field)).toEqual(['dataScrubberDefaults']);
   });
 
-  it('fails on an error status with the status, never the token', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(okResponse(euOrg(desired)))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'You do not have permission' }), { status: 403 }));
-    const error = await syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch).catch((caught: Error) => caught);
+  it.each([
+    ['the first read', [new Response('nope', { status: 401 })], 'GET'],
+    ['the write', [okResponse(euOrg(desired)), okResponse([]), new Response('{"detail":"no"}', { status: 403 })], 'PUT'],
+  ] as const)('fails on an error status in %s with the method and status, never the token', async (_where, responses, method) => {
+    const error = await syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, respond(...responses)).catch((caught: Error) => caught);
     expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toContain('403');
-    expect((error as Error).message).toContain('PUT');
+    expect((error as Error).message).toContain(method);
+    expect((error as Error).message).toMatch(/40[13]/);
     expect((error as Error).message).not.toContain(TOKEN);
   });
 });

@@ -17,12 +17,12 @@ const FIXTURES_PATH = 'docs/observability/sentry-fixtures.json';
 /**
  * sha256 of both files per version. Append-only once a version has merged: changing either file
  * means bumping the version and adding a row, so the Flutter app's byte copy (MUT-151) can't
- * silently differ. (1.0.0 was re-pinned once, by the MUT-147 pre-landing review, before it merged.)
+ * silently differ. (1.0.0 was re-pinned by the MUT-147 pre-landing review cycles, before it merged.)
  */
 const PINNED_VERSIONS: Record<string, { rules: string; fixtures: string }> = {
   '1.0.0': {
-    rules: '732f82017d1cfaf6cb25fba3208f656b7b8e05c946249f65a206b97425529658',
-    fixtures: 'c9a2027a40ce93935a14a229d5e2176f43c292e12acab0718e490e3eef2ac7e4',
+    rules: 'd3ccd367dc53b61e36205ca145d9fa7df8e5ff8ea20208179294ecfe189fc44b',
+    fixtures: 'e5a113990923483c95b3c65de23190a9db42cab9cee04d59929442e2fa6b0f1b',
   },
 };
 
@@ -30,7 +30,7 @@ const SURFACES = ['api', 'portal', 'landing', 'capture-app'];
 const FORBIDDEN_SURFACES = ['web', 'desktop', 'app', 'local'];
 const RULES_KEYS = [
   'version', 'region', 'surfaces', 'sdk', 'serverReportsStatusAtLeast', 'serverPrismaErrorFormat', 'denyHeaders',
-  'denyKeyTokens', 'urlFields', 'labelledValuePattern', 'firstLineOnlyExceptionTypes', 'allowedTags', 'allowedUserKeys',
+  'denyKeyTokens', 'requestDropFields', 'urlFields', 'maxMessageLength', 'labelledValuePattern', 'firstLineOnlyExceptionTypes', 'allowedTags', 'allowedUserKeys',
   'safeContextKeys', 'alwaysDropContextKeys', 'ignoredErrors', 'orgSettings', 'orgSensitiveFields',
 ];
 /** ADR-091 rule 2 (D3): every URL-bearing field keeps the path only; no query, no fragment. */
@@ -67,7 +67,26 @@ const MIN_DENY_TOKENS = [
   'amount', 'total', 'balance', 'name', 'email', 'phone', 'note', 'description', 'memo', 'address', 'iban',
   'account', 'token', 'password', 'secret', 'key', 'pepper', 'session', 'cookie', 'authorization', 'body', 'query',
 ];
-const MIN_DENY_HEADERS = ['authorization', 'cookie', 'set-cookie', 'x-api-key', 'idempotency-key', 'x-forwarded-for'];
+const MIN_DENY_HEADERS = ['authorization', 'cookie', 'set-cookie', 'x-api-key', 'idempotency-key', 'x-forwarded-for', 'referer'];
+/** D17: request fields dropped whole, wherever an SDK puts them. */
+const REQUEST_DROP_FIELDS = ['data', 'cookies', 'query_string', 'fragment', 'env'];
+/**
+ * D15: messages a scrubber must clean, and the substrings that must be gone afterwards. Fixed
+ * here, independent of the contract's own pattern, so a pattern that misses a form fails this test.
+ */
+const LEAK_CASES: Array<[string, string[]]> = [
+  ['Request failed: {"email":"visitor@example.test","amount":12000,"status":500}', ['visitor@example.test', '12000']],
+  ['{"email": "visitor@example.test", "note": "paid late"}', ['visitor@example.test', 'paid late']],
+  ['Authorization: Bearer mut_live_synthetic', ['mut_live_synthetic', 'Bearer']],
+  ['name=Acme Legal', ['Acme', 'Legal']],
+  ['{name: John Smith, note: paid late}', ['John', 'Smith', 'paid late']],
+  ["name: 'John Smith'", ['John', 'Smith']],
+  ['amount=1,234.56 ILS', ['1,234.56', '234']],
+  ['email = visitor@example.test', ['visitor@example.test']],
+  ['Error: insert failed amount=12000 currency=ILS', ['12000']],
+];
+/** Text the scrubber must leave exactly as it is. */
+const UNTOUCHED = ['see https://de.sentry.io/x at 12:30', 'Cannot read properties of undefined (reading \'balanceMinor\')'];
 const FILTERED = '[Filtered]';
 /** ADR-091 rule 4 (R7): syntax JavaScript and Dart read differently, or only one of them reads. */
 const NON_PORTABLE_REGEX: Array<[RegExp, string]> = [
@@ -97,6 +116,7 @@ type Rules = {
   ignoredErrors?: Record<string, IgnoredError[]>;
   orgSettings?: Record<string, unknown>;
   orgSensitiveFields?: string[];
+  requestDropFields?: string[];
   urlFields?: string[];
   labelledValuePattern?: string;
   firstLineOnlyExceptionTypes?: string[];
@@ -159,11 +179,51 @@ function contextProblems(contexts: Json | undefined): string[] {
  * Labelled values in free text (`key=value`, `key: value`, `"key": value`, rule 7, D4) whose key
  * holds a deny token must read `[Filtered]`, quoted or not. The pattern is the contract's own.
  */
+type LabelledValue = { key: string; value: string; valueStart: number };
+
+/**
+ * The contract's scan (README rule 7, D15): key in group 1 or 3, value in group 2 or 4. After a
+ * label whose key is not sensitive, scanning restarts at its value, so a harmless label never
+ * swallows a sensitive one behind it; after a sensitive one, it continues past the value.
+ */
+function labelledValues(text: string): LabelledValue[] {
+  const pattern = new RegExp(rules.labelledValuePattern ?? '$^', 'g');
+  const found: LabelledValue[] = [];
+  for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
+    const key = match[1] ?? match[3];
+    const value = match[2] ?? match[4];
+    const valueStart = match.index + match[0].length - value.length;
+    found.push({ key, value, valueStart });
+    pattern.lastIndex = hasDenyToken(key) ? valueStart + value.length : Math.max(valueStart, match.index + 1);
+  }
+  return found;
+}
+
+const isFiltered = (value: string) => value === FILTERED || /^(["'])\[Filtered\]\1$/.test(value);
+
+/**
+ * Replaces each sensitive labelled value with [Filtered], keeping its quotes: the reference scrub.
+ * Like every surface, it first truncates to `maxMessageLength`, which bounds the scan (D15).
+ */
+function scrubLabelled(full: string): string {
+  const text = full.slice(0, Number(rules.maxMessageLength ?? 0));
+  let out = '';
+  let last = 0;
+  for (const { key, value, valueStart } of labelledValues(text)) {
+    if (!hasDenyToken(key) || valueStart < last) continue;
+    const quote = /^["']/.test(value) ? value[0] : '';
+    out += text.slice(last, valueStart) + quote + FILTERED + quote;
+    last = valueStart + value.length;
+  }
+  return out + text.slice(last);
+}
+
+/** Labelled values in free text whose key holds a deny token must read `[Filtered]` (rule 7, D4, D15). */
 function labelledValueProblems(where: string, text: Json | undefined): string[] {
   if (typeof text !== 'string') return [];
-  return [...text.matchAll(new RegExp(rules.labelledValuePattern ?? '$^', 'g'))]
-    .filter(([, key, value]) => hasDenyToken(key) && value !== FILTERED && value !== `"${FILTERED}"`)
-    .map(([pair]) => `${where}: "${pair}" is not filtered`);
+  return labelledValues(text)
+    .filter(({ key, value }) => hasDenyToken(key) && !isFiltered(value))
+    .map(({ key, value }) => `${where}: "${key}" keeps "${value}"`);
 }
 
 /** A URL-bearing field keeps the path only (rule 2, D3): a query string or fragment is a leak. */
@@ -174,7 +234,7 @@ const breadcrumbUrlKeys = () =>
 
 function requestProblems(request: Json | undefined): string[] {
   if (!isObject(request)) return [];
-  const problems = ['data', 'cookies', 'query_string']
+  const problems = (rules.requestDropFields ?? [])
     .filter((field) => field in request)
     .map((field) => `request.${field} is present`);
   problems.push(...urlProblem('request.url', request.url));
@@ -339,17 +399,45 @@ describe('Sentry scrub contract (ADR-091)', () => {
     }
   });
 
-  it('shares one portable labelled-value pattern, which finds all three labelled forms (D4)', () => {
+  it('shares one portable labelled-value pattern with a bounded key (D4, D15)', () => {
     const pattern = rules.labelledValuePattern ?? '';
     expect(NON_PORTABLE_REGEX.filter(([syntax]) => syntax.test(pattern)).map(([, label]) => label)).toEqual([]);
-    const found = (text: string) => [...text.matchAll(new RegExp(pattern, 'g'))].map(([, key, value]) => [key, value]);
-    expect(found('failed amount=120 ok')).toEqual([['amount', '120']]);
-    expect(found('amountMinor: 12000, done')).toEqual([['amountMinor', '12000']]);
-    expect(found('{"email": "a@b.test", "status": 500}')).toEqual([
+    expect(pattern).toContain('{0,63}');
+    const found = (text: string) => labelledValues(text).map(({ key, value }) => [key, value]);
+    expect(found('{"email":"a@b.test","status":500}')).toEqual([
       ['email', '"a@b.test"'],
       ['status', '500'],
     ]);
-    expect(found('see https://de.sentry.io/x at 12:30')).toEqual([]);
+    expect(found('Authorization: Bearer x, then')).toEqual([['Authorization', 'Bearer x, then']]);
+    expect(found('Error: insert failed amount=5')).toEqual([
+      ['Error', 'insert failed amount=5'],
+      ['amount', '5'],
+    ]);
+  });
+
+  it.each(LEAK_CASES)('scrubbing %j removes every sensitive value, whatever its form (D15)', (text, secrets) => {
+    const scrubbed = scrubLabelled(text);
+    for (const secret of secrets) expect(scrubbed, `${secret} survived`).not.toContain(secret);
+    expect(scrubbed).toContain(FILTERED);
+    expect(labelledValueProblems('text', scrubbed)).toEqual([]);
+  });
+
+  it.each(UNTOUCHED)('scrubbing leaves %j exactly as it is', (text) => {
+    expect(scrubLabelled(text)).toBe(text);
+  });
+
+  it('bounds the scan: messages are truncated first, so the worst case stays fast (D15)', () => {
+    expect(rules.maxMessageLength).toBe(8192);
+    // A wall of harmless labels makes each restart rescan to the clause end; the cap bounds it
+    // (about 20 ms on a laptop). The budget is generous so machine load can't flip the result.
+    const started = performance.now();
+    for (const text of ['a: '.repeat(50_000), `${'a: '.repeat(1_000)}${'b'.repeat(200_000)}`]) scrubLabelled(text);
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
+  it('drops whole request fields and the Referer header (D17)', () => {
+    expect(rules.requestDropFields).toEqual(REQUEST_DROP_FIELDS);
+    expect(rules.denyKeyTokens).toContain('fragment');
   });
 
   it('keeps only the first line of Prisma errors, in the portable regex subset (D4)', () => {
@@ -494,7 +582,7 @@ describe('Sentry scrub fixtures (ADR-091)', () => {
     const exceptionText = allExpected().map((event) => JSON.stringify(event.exception ?? null)).join('\n');
     expect(exceptionText).toContain(`=${FILTERED}`);
     expect(exceptionText).toContain(`: ${FILTERED}`);
-    expect(exceptionText).toContain(`\\"email\\": \\"${FILTERED}\\"`);
+    expect(exceptionText).toContain(`\\"email\\":\\"${FILTERED}\\"`);
   });
 
   it('proves a setup token in a URL fragment never leaves, even in a navigation breadcrumb (D3)', () => {

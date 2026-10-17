@@ -135,9 +135,11 @@ state, and `deploy.sh` never touches it. The rules are in
    on. Check the plan's current monthly error quota on Sentry's pricing page; if
    it isn't 5,000, set `monthly_event_quota` in `production.tfvars` to match.
 3. **Two tokens, two names** (D8).
-   - **Admin token**, `SENTRY_ADMIN_TOKEN`: an org auth token or personal token
-     with `org:write`, `project:admin`, `team:admin` and `alerts:write`. Hand it
-     to each command below. Never `export SENTRY_AUTH_TOKEN` with it: that name
+   - **Admin token**, `SENTRY_ADMIN_TOKEN`: a **personal (user) auth token**
+     (`sntryu_…`) created on your 2FA-enabled account, with `org:write`,
+     `project:admin`, `team:admin` and `alerts:write`. An org auth token
+     (`sntrys_…`) can't carry those scopes, and `require2FA` needs a user with
+     2FA. Hand it to each command below. Never `export SENTRY_AUTH_TOKEN` with it: that name
      belongs to the upload token, and build tooling reads it.
    - **Upload token**, `SENTRY_AUTH_TOKEN`: an org auth token (`sntrys_…`) with
      release and upload scopes only, for MUT-149..151 builds.
@@ -159,8 +161,10 @@ state, and `deploy.sh` never touches it. The rules are in
    settings. Never retry against `sentry.io`: that would hide an org created in
    the US (D5).
 5. **Apply the org privacy settings.** The Terraform provider can't hold them,
-   so this script sets them and reads them back. It refuses an org outside the
-   EU region before writing anything. Run it from the repo root:
+   so this script sets them and reads them back. Before writing anything it
+   refuses an org outside the EU region, and an org holding any project that
+   isn't `mutaba3a-…`, which catches a mistyped `SENTRY_ORG`. Run it from the
+   repo root:
 
    ```bash
    cd "$(git rev-parse --show-toplevel)"

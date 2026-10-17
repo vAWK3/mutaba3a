@@ -61,7 +61,7 @@
           "values": [
             {
               "type": "Error",
-              "value": "insert failed amount=[Filtered] currency=ILS",
+              "value": "insert failed amount=[Filtered]",
               "stacktrace": {
                 "frames": [
                   { "filename": "dist/income/compose.js", "function": "composeIncome", "lineno": 88, "in_app": true },
@@ -357,7 +357,7 @@
           "values": [
             {
               "type": "FormatException",
-              "value": "Invalid number amount=[Filtered] in capture keypad",
+              "value": "Invalid number amount=[Filtered]",
               "stacktrace": {
                 "frames": [
                   { "filename": "amount_keypad.dart", "function": "AmountKeypad._commit", "lineno": 133, "in_app": true }
@@ -378,7 +378,10 @@
         "environment": "production",
         "request": {
           "url": "https://portal.example.test/setup#t=st_synthetic_setup_token",
-          "headers": { "User-Agent": "Mozilla/5.0" }
+          "headers": {
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://portal.example.test/setup#t=st_synthetic_setup_token"
+          }
         },
         "user": { "id": "usr_7f3a" },
         "tags": { "surface": "portal", "locale": "en", "route": "/setup" },
@@ -510,7 +513,7 @@
           "values": [
             {
               "type": "Error",
-              "value": "Request failed: {\"email\": \"visitor@example.test\", \"status\": 500} note: late",
+              "value": "Request failed: {\"email\":\"visitor@example.test\",\"status\":500} note: late",
               "stacktrace": {
                 "frames": [
                   { "filename": "assets/HostedOffer-1b2c.js", "function": "submitRequest", "lineno": 1, "colno": 377, "in_app": true }
@@ -531,7 +534,7 @@
           "values": [
             {
               "type": "Error",
-              "value": "Request failed: {\"email\": \"[Filtered]\", \"status\": 500} note: [Filtered]",
+              "value": "Request failed: {\"email\":\"[Filtered]\",\"status\":500} note: [Filtered]",
               "stacktrace": {
                 "frames": [
                   { "filename": "assets/HostedOffer-1b2c.js", "function": "submitRequest", "lineno": 1, "colno": 377, "in_app": true }

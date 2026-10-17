@@ -2846,3 +2846,14 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
     - Rejections: wildcard landing origin, http origin, origin with a path, empty list, zero cap, and caps overrunning the monthly quota.
     - `eu_region.tftest.hcl`: a US ingest DSN fails the `sentry_key` postcondition. It's in its own file because runs in one file share state.
   - **CI.** `contracts-ci.yml` runs the Sentry and analytics contract tests on contract-only changes.
+- **Re-review additions (fix cycle 2, D15–D17):** `sentry-rules.test.ts` has 75 cases, `sentry-org-settings.test.ts` 36.
+  - **Pattern-independent leak cases.** Each of these must lose its secret substrings after the reference scrub: compact JSON, spaced JSON, Bearer, `name=Acme Legal`, a Dart map, a single-quoted value, a comma amount, `email = x` and a harmless label in front.
+  - **Untouched texts.** URLs and times, and an ordinary TypeError message, stay exactly as they were.
+  - **Other contract rows.** A linear-time check on a 65k-character worst case (under 1 s), `requestDropFields`, and `referer` in the deny headers.
+  - **Settings script.**
+    - It refuses an org holding a foreign project, before any write.
+    - An empty org passes.
+    - It refuses an org with an unknown region.
+    - A trailing slash on the region URL is accepted.
+    - Every request has `redirect: 'error'`.
+    - A failing first GET reports the method and status without the token.
