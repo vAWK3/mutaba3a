@@ -1,5 +1,6 @@
 {
   "version": "1.1.0",
+  "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
       "type": "enum",
@@ -19,7 +20,7 @@
   "events": {
     "$pageview": {
       "emitters": ["landing"],
-      "description": "A landing page was viewed. Sent by posthog-js in cookieless mode with the shared properties and PostHog's own URL, UTM and referrer properties; a referrer from the local app (/app) is dropped (ADR-090). No other properties."
+      "description": "A landing page was viewed. Sent by posthog-js in cookieless mode with the shared properties and the landing `$` allowance of docs/analytics/README.md rule 1 (URL, UTM, referrer, device type and the SDK's control properties), which every landing event shares; a referrer from the local app (/app) is dropped (ADR-090). No other properties."
     },
     "landing_cta_clicked": {
       "emitters": ["landing"],
@@ -34,7 +35,7 @@
     },
     "app_first_opened": {
       "emitters": ["ios", "android"],
-      "description": "Sent once per install, right after the first opt-in (which may come later, from Settings). Nothing is sent before a person opts in, so earlier opens are never counted."
+      "description": "Sent once per signed-in person on this phone, right after their first opt-in (which may come later, from Settings). The 'already sent' flag is cleared with the other flags on sign-out. Nothing is sent before a person opts in, so earlier opens are never counted."
     },
     "portal_opened": {
       "emitters": ["portal"],

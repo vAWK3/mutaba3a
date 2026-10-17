@@ -3465,7 +3465,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
      - banned name tokens (amount, name, email, id, …, matched by whole token);
      - error and failure events; server/web/desktop emitters;
      - unknown keys and extra shared properties.
-     - `currency` means only the app's four currencies.
+     - `currency` means one of the contract's top-level `currencies`, which the test checks against the hosted API's `SUPPORTED_CURRENCIES`.
    - **Versioned and pinned.** The file carries a version, and the test pins a sha256 per version (append-only), so content can't change under an unchanged version.
    - **Each surface's guard** (`before_send` or the Flutter equivalent, required) drops anything not in the contract, including SDK `$` properties that could carry identifiers: no URL, path, referrer or screen name on the portal or the phone.
    - **The Flutter repo** keeps a byte-identical copy with a sha256 row and a parity test, the brand-fixture pattern (D2).
@@ -3480,7 +3480,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 5. **Opt-in** is off by default, asked once per signed-in person, and the SDK isn't initialised before it. Consent belongs to the person, not the device: sign-out or account switch clears the choice, the ID and the asked flag, and sends nothing.
    - Opting out sends one final `analytics_opted_out`: capture it, flush (anything queued while opted in goes with it), opt out, reset.
    - This was D5, Basel's call against the recommendation; the policy says so.
-6. **Tracking**, in Mutaba3a's public copy, means following a person across sites, apps or devices, or for advertising. Cookieless visit counting, and an opted-in random ID that never leaves its device and resets on sign-out, are not tracking by this definition. The landing hero's and privacy band's "No tracking" claims describe the free app and stay (P4).
+6. **Tracking**, in Mutaba3a's public copy, means following a person across sites, apps or devices, or for advertising. Cookieless visit counting, and an opted-in random ID that is stored only on its device, sent only to PostHog and reset on sign-out, are not tracking by this definition. The landing hero's and privacy band's "No tracking" claims describe the free app and stay (P4).
 7. **The public privacy policy changes with each surface** (P3). `docs/analytics/README.md` holds the approved en/ar wording; MUT-154, MUT-155 and MUT-157 each publish theirs with the feature, so the policy is never ahead of what ships.
 8. **Where the data goes.** PostHog Cloud **EU** (`eu.posthog.com`), project "Mutaba3a" (id 304889) in the Barmajiyat organization, separate from Malafat's project. No firm data is sent, so ADR-024's residency rule for firm data is not engaged (the same reasoning as Sentry EU, MUT-147).
 9. **Configuration.**

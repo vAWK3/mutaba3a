@@ -2787,7 +2787,8 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 
 ## MUT-153 — analytics event contract (2026-10-17, ADR-090)
 
-- After the pre-landing review it has 113 cases. Added:
+- After the pre-landing review it has 118 cases. Added:
+  - the contract's top-level `currencies` list, checked against `server/src/money.ts` `SUPPORTED_CURRENCIES`, with malformed lists rejected;
   - a sha256 pin per contract version (append-only), and the portal emitters;
   - one row per banned token, plus integer money names (`cost`, `fee`, `amounts`, `minor_units`, `ids`, `cents`);
   - failed/failure/crashed/exceptions events, and the SDK's `$pageleave` / `$opt_in` / `$screen`;

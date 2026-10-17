@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
+import { SUPPORTED_CURRENCIES } from '../../server/src/money';
 
 /**
  * MUT-153 / ADR-090: `docs/analytics/events.json` is the only list of what the landing page,
@@ -17,19 +18,19 @@ const CONTRACT_PATH = 'docs/analytics/events.json';
  * differ from what this repo calls that version.
  */
 const PINNED_VERSIONS: Record<string, string> = {
-  '1.1.0': 'c5067ed01c8e47ba289f86eb88099c39d59aba2b2e32220e6d69a03ca138f665',
+  '1.1.0': '9210dc24dec5cb886f9172d244a127bbddb8ee7c403f7dccf5eb2e75bfc55107',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
 const FORBIDDEN_EMITTERS = ['server', 'web', 'desktop'];
+/** `currency` means one of the contract's top-level `currencies`, which mirror the hosted API's list. */
 const PROPERTY_TYPES = ['enum', 'boolean', 'integer', 'currency', 'semver'];
-/** The currencies the app and the hosted API accept (src/types Currency, server SUPPORTED_CURRENCIES). */
-const CURRENCIES = ['EUR', 'ILS', 'JOD', 'USD'];
+const CURRENCY_CODE = /^[A-Z]{3}$/;
 const POSTHOG_BUILT_INS = ['$pageview'];
 const SHARED_PROPERTIES = ['surface', 'app_version', 'locale'];
 /** `semver` is a version number, never a way to smuggle digits: only the build version may use it. */
 const SEMVER_PROPERTIES = ['app_version'];
-const CONTRACT_KEYS = ['version', 'sharedProperties', 'events'];
+const CONTRACT_KEYS = ['version', 'currencies', 'sharedProperties', 'events'];
 const EVENT_KEYS = ['emitters', 'description', 'properties'];
 const PROPERTY_KEYS = ['type', 'values', 'description'];
 /** Whole snake_case tokens a property name may never contain, so `paid` passes and `client_id` fails. */
@@ -46,6 +47,7 @@ type Property = { type?: unknown; values?: unknown; description?: unknown; [key:
 type EventDefinition = { emitters?: unknown; properties?: Record<string, Property>; description?: unknown; [key: string]: unknown };
 type Contract = {
   version?: unknown;
+  currencies?: unknown;
   sharedProperties?: Record<string, Property>;
   events?: Record<string, EventDefinition>;
   [key: string]: unknown;
@@ -131,6 +133,11 @@ function contractProblems(contract: Contract): string[] {
   const problems: string[] = [];
   if (typeof contract.version !== 'string' || !SEMVER.test(contract.version)) problems.push('version must be x.y.z');
   for (const key of unknownKeys(contract, CONTRACT_KEYS)) problems.push(`unknown top-level key "${key}"`);
+  const currencies = contract.currencies;
+  const validCurrencies = Array.isArray(currencies) && currencies.length > 0 && currencies.every((c) => typeof c === 'string' && CURRENCY_CODE.test(c));
+  if (!validCurrencies || new Set(currencies as string[]).size !== (currencies as string[]).length) {
+    problems.push('currencies must be unique three-letter codes');
+  }
   const shared = contract.sharedProperties ?? {};
   problems.push(...sharedProblems(shared));
   const events = contract.events ?? {};
@@ -151,6 +158,7 @@ const contract = JSON.parse(raw) as Contract;
 function validContract(): Contract {
   return {
     version: '1.0.0',
+    currencies: ['USD', 'ILS'],
     sharedProperties: {
       surface: { type: 'enum', values: [...SURFACES] },
       app_version: { type: 'semver' },
@@ -203,8 +211,8 @@ describe('docs/analytics/events.json (ADR-090)', () => {
     expect(new Set(Object.values(PINNED_VERSIONS)).size).toBe(Object.keys(PINNED_VERSIONS).length);
   });
 
-  it('the currency type means exactly the currencies the app records', () => {
-    expect(CURRENCIES).toEqual(['EUR', 'ILS', 'JOD', 'USD']);
+  it('lists exactly the currencies the hosted API accepts, so every guard reads them from the contract', () => {
+    expect([...(contract.currencies as string[])].sort()).toEqual([...SUPPORTED_CURRENCIES].sort());
   });
 });
 
@@ -215,6 +223,10 @@ describe('contract rules', () => {
 
   it.each(['1.0', 'v1.0.0', '', undefined])('rejects version %j', (version) => {
     expect(contractProblems({ ...validContract(), version })).toContain('version must be x.y.z');
+  });
+
+  it.each([[[]], [undefined], [['usd']], [['USD', 'USD']], [['DOLLAR']]])('rejects the currencies list %j', (currencies) => {
+    expect(contractProblems({ ...validContract(), currencies })).toContain('currencies must be unique three-letter codes');
   });
 
   it('rejects an unknown top-level key', () => {

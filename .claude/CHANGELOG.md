@@ -41,7 +41,7 @@
   - who sends, and the rules: a required guard against anything outside the contract, SDK `$` URL properties dropped on the portal and phone, no cookies on the portal, no SDK before consent, the opt-out order, reset on sign-out, no location, no joining, production-only keys, and where the landing SDK may start;
   - suggested opt-in copy, and how to change the contract (and its Flutter copy);
   - the approved en/ar privacy-policy and store-disclosure wording each surface publishes when it ships.
-- `scripts/__tests__/analytics-taxonomy.test.ts`: 113 cases.
+- `scripts/__tests__/analytics-taxonomy.test.ts`: 118 cases. The currency codes live in the contract and are checked against the server's `SUPPORTED_CURRENCIES`.
   - It enforces the contract and pins a sha256 per version.
   - It refuses banned name tokens (whole-token, each with its own row, so `paid` passes and `client_id` fails), error and failure events, and server/web/desktop emitters.
   - It also refuses unknown keys, extra shared properties, and `semver` outside app_version.

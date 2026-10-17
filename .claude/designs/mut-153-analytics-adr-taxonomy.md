@@ -414,7 +414,17 @@ The shipped `events.json` (1.1.0) supersedes §6 above:
 | C1 | Opt-in and ID carried across sign-out on shared devices (red-team) | Reset on sign-out or account switch; nothing sent |
 | G1 | The GeoIP transformation was on by default and would add city and coordinates (adversarial, verified via MCP) | Disabled in project 304889; ADR says no location |
 | A1 | Malafat org members could read the project (adversarial) | Restrict it. The MCP can't, so it's an operator step for Basel (INFRA §1) |
-| T1–T5 | Test holes: single-token rows, integer money names, failure events, loose types, no version pin (testing specialist) | All five applied (113 cases) |
+| T1–T5 | Test holes: single-token rows, integer money names, failure events, loose types, no version pin (testing specialist) | All five applied (118 cases after the second pass) |
+
+**Second pass (re-review on the fixed tree)** found 8 contradictions the fixes had introduced, all auto-fixed:
+- The portal and phone policy sentences now list exactly what the guard keeps: browser type (portal), OS and version, device type.
+- Rule 1 names the SDK control properties every guard keeps (`$geoip_disable`, `$process_person_profile`, `$lib*`, the cookieless markers).
+- The landing `$` allowance applies to every landing event (`$pageview` description).
+- The policy mentions the turn-on note on both surfaces.
+- ADR "never leaves its device" corrected.
+- The currency codes moved into the contract and are checked against the server's list.
+- The portal toggle lives in the account menu (no Settings page exists).
+- `app_first_opened` is once per signed-in person, and its flag is cleared on sign-out.
 
 **Auto-fixed** (mechanical, or follows an approved decision): the rest of the docs findings. The list:
 - **Rules (`docs/analytics/README.md`):**
