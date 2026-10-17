@@ -128,12 +128,12 @@
     },
     "privacyPolicy": {
       "title": "Privacy Policy",
-      "updated": "Last updated October 14, 2026",
-      "intro": "This policy covers Mutaba3a's apps for Mac, Windows, the browser, iPhone, and Android. They handle your data in two different ways, so we explain each one. It does not cover any other product.",
+      "updated": "Last updated October 17, 2026",
+      "intro": "This policy covers Mutaba3a's apps for Mac, Windows, the browser, iPhone, and Android, and the hosted portal you sign in to in a browser. They handle your data in different ways, so we explain each one. It does not cover any other product.",
       "backLink": "Back to the homepage",
       "scope": {
         "title": "The short version",
-        "body": "On Mac, Windows, and in the browser, Mutaba3a keeps your business data on your own device. There's no account, and nothing you enter in the app is sent to us. The one thing our website can send us is the hosted-account request form, and only if you fill it in and press Send. The iPhone and Android apps work differently: you sign in with an account, and what you enter is saved to Mutaba3a's servers. None of our apps use analytics, ads, or tracking, and we never sell your data."
+        "body": "On Mac, Windows, and in the browser, Mutaba3a keeps your business data on your own device. There's no account, and nothing you enter in the app is sent to us. Our website sends us what you type in the hosted-account request form, only if you fill it in and press Send, and it counts visits anonymously, as described under \"Anonymous usage counts\". The iPhone and Android apps work differently: you sign in with an account, and what you enter is saved to Mutaba3a's servers. None of our apps use ads or tracking. The free apps on Mac, Windows, and in the browser, which need no account, never send usage data, and we never sell your data."
       },
       "dataStorage": {
         "title": "Mac, Windows, and the browser: your data stays on your device",
@@ -149,19 +149,23 @@
       },
       "network": {
         "title": "What reaches the network",
-        "body": "On Mac, Windows, and in the browser, the app makes two kinds of outbound requests, and neither includes anything you've entered: it asks a public exchange-rate service (Frankfurter) for currency conversion rates, and the download page checks GitHub for the latest release version. Separately, the website's hosted-account request form sends what you type in it to Netlify when you press Send. The mobile apps connect only to Mutaba3a's servers and to the private storage that holds your receipts, always over encrypted connections."
+        "body": "On Mac, Windows, and in the browser, the app makes two kinds of outbound requests, and neither includes anything you've entered: it asks a public exchange-rate service (Frankfurter) for currency conversion rates, and the download page checks GitHub for the latest release version. Separately, the website's hosted-account request form sends what you type in it to Netlify when you press Send. The website also sends the anonymous visit counts described under \"Anonymous usage counts\" to PostHog. The hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog. The mobile apps connect only to Mutaba3a's servers and to the private storage that holds your receipts, always over encrypted connections."
       },
       "sharing": {
         "title": "Who else handles your data",
-        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Our website runs on Netlify, which receives the hosted-account request form and checks each request for spam with Akismet (made by Automattic). If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
+        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Our website runs on Netlify, which receives the hosted-account request form and checks each request for spam with Akismet (made by Automattic). PostHog, hosted in the EU, processes the anonymous usage counts described under \"Anonymous usage counts\" for us. If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
       },
       "security": {
         "title": "Keeping the mobile apps secure",
         "body": "Your password is stored on our servers only as a secure hash, and never on your phone. Your sign-in session is kept in the iPhone Keychain or in Android's encrypted storage. You can turn on App Lock so opening the app needs Face ID, Touch ID, your fingerprint, or your device passcode. That check happens on your device, and Mutaba3a never receives your biometric data. The mobile apps don't use your camera, contacts, or location, and they only see a photo or file when you choose to share it into the app."
       },
       "noTracking": {
-        "title": "No analytics, no ads, no tracking",
-        "body": "None of Mutaba3a's apps use analytics, advertising, crash reporting, or tracking of any kind. The Mac, Windows, and browser apps have no sign-up or login at all. Our servers keep standard technical logs (such as when a request arrived, its IP address, and whether it succeeded) so we can run the service. We don't use them to profile you."
+        "title": "No ads, no tracking",
+        "body": "None of Mutaba3a's apps use advertising, crash reporting, or tracking that follows you across sites or apps, and the free apps on Mac, Windows, and in the browser use no analytics at all. The anonymous usage counts we do keep are described under \"Anonymous usage counts\". The Mac, Windows, and browser apps have no sign-up or login at all. Our servers keep standard technical logs (such as when a request arrived, its IP address, and whether it succeeded) so we can run the service. We don't use them to profile you."
+      },
+      "usageAnalytics": {
+        "title": "Anonymous usage counts",
+        "body": "The free apps on Mac, Windows, and in the browser never send usage data. Where we do count usage, we use PostHog, hosted in the EU. We never send amounts, names, notes, contact details, your location, or anything you type, and nothing we send is linked to your account. Our website counts page visits and which buttons are pressed, without cookies and without storing anything on your device. To tell visits apart for a single day, PostHog combines your IP address and browser details into a code that changes every day and keeps neither, so a visit can't be linked to you or to visits on other days. The hosted portal asks you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, it sends a short note when you turn it on (saying whether you did so from the prompt or the account menu), each time you open the portal, and each time you save an income, an expense, or a payment. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the portal's version and its analytics library's version, its language, your browser's type, your device's operating system and its version, and whether it's a computer, tablet, or phone. Notes are sent under a random ID kept only in your browser, not linked to your account, and replaced when you sign out. If you turn it off from the account menu, we send one last note saying you turned it off, then stop and delete the random ID. These counts are used only to understand which parts of Mutaba3a people use. They're never used for advertising, and no one but PostHog, which processes them for us, receives them."
       },
       "yourControl": {
         "title": "Mac, Windows, and the browser: exporting and deleting your data",

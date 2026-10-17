@@ -33,3 +33,13 @@ features:
       - Open Change password, enter the correct current password and an 11-character new one, and Save
     expect:
       - The field says "Use at least 12 characters."; nothing reaches the server
+  - id: get-the-app
+    title: The account menu ends with Get the app; the iPhone link names the portal as its source, Android says coming soon
+    tier: tertiary
+    paths:
+      - src/hosted/components/AppDownloadMenuItems.tsx
+      - src/content/download-config.ts
+    steps:
+      - Open the account menu
+    expect:
+      - '"Get the iPhone app" links to the App Store in a new tab with ct=mutaba3a-portal (MUT-155), and "Android — coming soon" is the last, non-interactive row'

@@ -13,7 +13,7 @@ type Platform = (typeof PLATFORMS)[number];
 function PlatformItem({ platform, link }: { platform: Platform; link: MobileAppLink }) {
   const { t } = useLanguage();
   const name = t(`hosted.appDownload.platform.${platform}`);
-  const url = storeLinkUrl(link);
+  const url = storeLinkUrl(link, 'mutaba3a-portal');
 
   if (url) {
     return (

@@ -69,6 +69,43 @@ describe('PrivacyPolicyPage', () => {
     expect(body(/What reaches the network/)).toMatch(/request form/);
   });
 
+  it('explains the anonymous usage counts right after "No ads, no tracking" (MUT-154, ADR-090)', () => {
+    renderPage('en');
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings.indexOf('Anonymous usage counts')).toBe(headings.indexOf('No ads, no tracking') + 1);
+    const body = (name: RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
+    const usage = body(/Anonymous usage counts/);
+    expect(usage).toMatch(/free apps on Mac, Windows, and in the browser never send usage data/);
+    expect(usage).toMatch(/PostHog, hosted in the EU/);
+    expect(usage).toMatch(/without cookies/);
+    expect(usage).toMatch(/your location/);
+    expect(body(/Who else handles your data/)).toContain('PostHog');
+    expect(body(/What reaches the network/)).toMatch(/visit counts .* to PostHog/);
+    expect(body(/The short version/)).not.toMatch(/The one thing our website can send us/);
+    // The crash-reporting promise stays until Sentry ships (MUT-146 owns those words)
+    expect(body(/No ads, no tracking/)).toMatch(/crash reporting/);
+  });
+
+  it('says what the portal counts, where it is turned off, and that it reaches PostHog only if turned on (MUT-155)', () => {
+    renderPage('en');
+    const body = (name: RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
+    const usage = body(/Anonymous usage counts/);
+    expect(usage).toMatch(/The hosted portal asks you once/);
+    expect(usage).toMatch(/turn it off from the account menu/);
+    // The portal sentence sits before the closing paragraph
+    expect(usage.indexOf('The hosted portal asks you once')).toBeLessThan(usage.indexOf('These counts are used only'));
+    expect(body(/What reaches the network/)).toMatch(/hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog/);
+  });
+
+  it('says the same in Arabic', () => {
+    renderPage('ar');
+    expect(screen.getByRole('heading', { level: 2, name: 'إحصاءات استخدام مجهولة' }).parentElement?.textContent).toContain('تسألك البوابة المستضافة مرة واحدة');
+    const usage = screen.getByRole('heading', { level: 2, name: 'إحصاءات استخدام مجهولة' }).parentElement?.textContent ?? '';
+    expect(usage).toContain('PostHog');
+    expect(usage).toContain('دون ملفات تعريف ارتباط');
+    expect(screen.getByRole('heading', { level: 2, name: 'لا إعلانات، لا تتبّع' })).toBeInTheDocument();
+  });
+
   it('gives a contact address', () => {
     renderPage('en');
     expect(document.querySelector('main')?.textContent).toContain('info@malafat.app');

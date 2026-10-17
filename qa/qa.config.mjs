@@ -7,6 +7,9 @@
  * no personas — each spec dismisses the first-run "Welcome" dialog itself
  * (support/app.ts openFreshApp), same as the e2e/ suite this catalog replaces.
  */
+/** Valid in shape, never a real project key: QA builds run the analytics code, and qa/support/posthog.ts answers it. */
+export const QA_POSTHOG_KEY = 'phc_releaseQaDummyKeyNeverSent000000';
+
 export default {
   name: 'mini-crm',
   title: 'Mutaba3a — mini-crm',
@@ -36,7 +39,9 @@ export default {
       attachURL: 'http://localhost:5173',
       // Plain `vite` (no --mode): __BUILD_MODE__ resolves to "web", which mounts the
       // app under /app — every spec below navigates to /app/... to match.
-      start: { cmd: 'npm run dev -- --port 5173 --strictPort' },
+      // A dummy PostHog key (MUT-154): the landing's analytics runs, and qa/support/posthog.ts
+      // answers every PostHog request locally, so nothing is ever sent.
+      start: { cmd: 'npm run dev -- --port 5173 --strictPort', env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY } },
       ready: 'http://localhost:5173',
       personas: {}, // no auth — local-first, single-user
     },
@@ -52,7 +57,7 @@ export default {
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
       attachURL: 'http://127.0.0.1:5175',
-      start: { cmd: 'npm run dev:hosted' },
+      start: { cmd: 'npm run dev:hosted', env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY } },
       ready: 'http://127.0.0.1:5175',
       personas: {},
     },

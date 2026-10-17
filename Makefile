@@ -47,6 +47,8 @@ TF_STATE_BUCKET ?= $(shell sed -n 's/.*"bucket"[[:space:]]*:[[:space:]]*"\([^"]*
 export RELEASE_BRANCH ENVIRONMENT NODE_MAJOR_REQUIRED
 export GCP_PROJECT_ID TF_STATE_BUCKET GCP_REGION ARTIFACT_REPO
 export IMAGE_TAG PROXY_PORT AUTO_APPROVE
+# MUT-155: the portal's PostHog key reaches `npm run build:hosted` inside deploy.sh
+export MUTABA3A_POSTHOG_KEY
 
 C_BOLD  := \033[1m
 C_DIM   := \033[2m

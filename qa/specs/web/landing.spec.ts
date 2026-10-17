@@ -4,7 +4,7 @@ import { attachScreenshot, expectNoHorizontalOverflow } from '../../support/bran
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { ar, chooseLanguageScript, en, LANGUAGE_KEYS } from '../../support/i18n';
 import { contrast, parseColor } from '../../../src/test/css/brandCss';
-import { MOBILE_APP_LINKS } from '../../../src/content/download-config';
+import { MOBILE_APP_LINKS, storeLinkUrl } from '../../../src/content/download-config';
 import { malafatUrl } from '../../../src/content/malafatLinks';
 
 /**
@@ -482,7 +482,8 @@ for (const language of ['en', 'ar'] as const) {
           const link = MOBILE_APP_LINKS[platform];
           if (link.url) {
             const store = stores.getByRole('link', { name: copy.store[platform] });
-            await expect(store).toHaveAttribute('href', link.url);
+            // The landing's campaign rides along for store-console attribution (MUT-154)
+            await expect(store).toHaveAttribute('href', storeLinkUrl(link, 'mutaba3a-landing')!);
             await expect(store).toHaveAttribute('target', '_blank');
             expect((await store.boundingBox())!.height).toBeGreaterThanOrEqual(44);
             await expectPressed(page, store, 'scale', PRESSED, `${platform} store link`);

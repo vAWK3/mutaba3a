@@ -3,6 +3,7 @@ import './LandingPage.css';
 import { useT } from '../../lib/i18n';
 import { useInView } from '../../hooks/useInView';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useLandingAnalytics } from './analytics/landingAnalytics';
 import {
   LandingHeader,
   HeroSection,
@@ -32,6 +33,7 @@ export function LandingPage() {
   // Unknown (no report yet, or no IntersectionObserver) reads as "on screen": the hero's button is the way in.
   const heroCtaGone = useInView(heroCtaRef, { rootMargin: HERO_CTA_ROOT_MARGIN }) === false;
   useDocumentTitle(t('landing.meta.title'));
+  useLandingAnalytics();
 
   return (
     <div className="landing-page">

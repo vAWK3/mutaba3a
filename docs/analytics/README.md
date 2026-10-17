@@ -20,13 +20,15 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
 
 1. **Only what `events.json` lists, enforced in code.** Each surface runs a guard that drops any
    event or property the contract doesn't list, and has tests proving it: posthog-js
-   `before_send`, and the Flutter SDK's equivalent hook. The guard is **required**.
+   `before_send`, and on the phone `guardEvent()`, which builds every note itself (the phone posts
+   PostHog's capture API with its own small client, no SDK: ADR-091). The guard is **required**.
    - The SDK's own `$` properties are limited too. Every surface keeps:
      - the SDK's **routing and identity fields**: `token`, `distinct_id`, `$device_id`, the
        event's uuid or `$insert_id`, and its timestamp;
      - its **control properties**: `$geoip_disable`, `$process_person_profile`, `$lib`,
-       `$lib_version`, and on the landing page the cookieless-mode markers posthog-js adds
-       (MUT-154 names those markers).
+       `$lib_version`, and on the landing page the cookieless-mode markers posthog-js adds,
+       which PostHog's server reads to make the daily code: `$cookieless_mode`,
+       `$raw_user_agent` and `$host` (MUT-154). The landing keeps no `$os` or `$browser`.
 
      `$session_id` and `$window_id` are dropped. Each surface tests that what it keeps survives
      the guard.
@@ -54,7 +56,7 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
      cookie: the portal shares its origin with the API, so a cookie would travel with every
      signed-in request.
    - Opting out, signing out and switching account reset it completely, so `$device_id` rotates
-     too: posthog-js `reset(true)`, and the Flutter SDK's full reset. Opting in again starts a
+     too: posthog-js `reset(true)`, and on the phone deleting the install ID. Opting in again starts a
      fresh ID that can't be linked to the old one.
    - The only other stored values are the opt-in choice, the "already asked" flag and the
      phone's "first open already sent" flag. All three are cleared on sign-out or account
@@ -85,10 +87,15 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
    - screen-view observers and app-lifecycle events on the phone
 8. **Production only, and a kill switch.**
    - Keys come from configuration, never source:
-     - Landing and portal builds: `VITE_POSTHOG_KEY` and `VITE_POSTHOG_HOST` (`https://eu.i.posthog.com`).
-     - Phone: `--dart-define=POSTHOG_KEY=…` and `POSTHOG_HOST`.
+     - One name everywhere: `MUTABA3A_POSTHOG_KEY` (a `phc_` project key; the web build refuses
+       anything else, so a personal `phx_` key can't ship).
+     - Landing (web build) and portal (hosted build): an environment variable at build time,
+       which `vite.config.ts` bakes in as `__POSTHOG_KEY__`.
+     - Phone: a line in the Flutter app's `.env`, read with `--dart-define-from-file`.
+     - The host is fixed in code to `https://eu.i.posthog.com` (EU; the portal's CSP names it).
    - On Netlify the key is set for the **production** context only, never for deploy previews
-     or branch deploys. QA and preview builds have no key.
+     or branch deploys. Deploy previews have no key. Release-QA builds carry a dummy `phc_`
+       key that `qa/support/posthog.ts` answers locally, so nothing a QA run does reaches PostHog.
    - A build or app with no key sends nothing and throws nothing.
    - The `phc_` key is a public ingest key, but it still lives in env.
 9. **The landing page is cookieless.**
@@ -210,7 +217,7 @@ the opening paragraph, then each live surface's sentence, then the closing parag
 
 **`usageAnalytics` sentence.**
 
-- EN: "The hosted portal asks you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, it sends a short note when you turn it on (saying whether you did so from the prompt or the account menu), each time you open the portal, and each time you save an income, an expense, or a payment. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the portal's version and its analytics library's version, its language, your browser's type, your device's operating system and its version, and whether it's a computer, tablet, or phone. Notes are sent under a random ID kept only in your browser, not linked to your account, and replaced when you sign out. If you turn it off from the account menu, we send one last note saying you turned it off, then stop and delete the random ID."
+- EN: "The hosted portal asks you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, it sends a short note when you turn it on (saying whether you did so from the prompt or the account menu), each time you open the portal, and each time you save an income or an expense. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the portal's version and its analytics library's version, its language, your browser's type, your device's operating system and its version, and whether it's a computer, tablet, or phone. Notes are sent under a random ID kept only in your browser, not linked to your account, and replaced when you sign out. If you turn it off from the account menu, we send one last note saying you turned it off, then stop and delete the random ID."
 - AR: «تسألك البوابة المستضافة مرة واحدة إن كنت تريد مشاركة استخدام مجهول، وتبقى المشاركة متوقفة ما لم تفعّلها. إن فعّلتها، ترسل البوابة ملاحظة قصيرة عند تفعيلها (وتذكر إن كان ذلك من الرسالة أو من قائمة الحساب)، وكلما فتحتها، وكلما حفظت دخلًا أو مصروفًا أو دفعة. لا تذكر الملاحظة إلا نوع ما حُفظ وعملته، وفي حالة الدخل إن كان مدفوعًا بالفعل، إضافة إلى إصدار البوابة وإصدار مكتبة الإحصاءات فيها ولغتها ونوع متصفحك ونظام تشغيل جهازك وإصداره، وإن كان حاسوبًا أو جهازًا لوحيًا أو هاتفًا. وتُرسَل الملاحظات تحت معرّف عشوائي محفوظ في متصفحك فقط، غير مرتبط بحسابك، ويُستبدل عند تسجيل خروجك. وإن أوقفتها من قائمة الحساب، نرسل ملاحظة أخيرة تفيد بأنك أوقفتها، ثم نتوقف ونحذف المعرّف العشوائي.»
 
 **`network.body`.** Add a portal sentence.
@@ -222,8 +229,8 @@ the opening paragraph, then each live surface's sentence, then the closing parag
 
 **`usageAnalytics` sentence.**
 
-- EN: "The iPhone and Android apps ask you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, they send a short note each time you turn it on (saying whether you did so from the prompt or Settings), once more the first time after you sign in, and each time you add a client or save an income, an expense, or a payment. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the app's version and its analytics library's version, its language, your phone's operating system and its version, and whether it's a phone or a tablet. Notes are sent under a random ID kept only on your phone, not linked to your account, and replaced when you sign out. If you turn it off in Settings, we send one last note saying you turned it off, then stop and delete the random ID."
-- AR: «يسألك تطبيقا iPhone وAndroid مرة واحدة إن كنت تريد مشاركة استخدام مجهول، وتبقى المشاركة متوقفة ما لم تفعّلها. إن فعّلتها، يرسل التطبيق ملاحظة قصيرة كلما فعّلتها (وتذكر إن كان ذلك من الرسالة أو من الإعدادات)، وملاحظة أخرى أول مرة بعد تسجيل دخولك، وكلما أضفت عميلًا أو حفظت دخلًا أو مصروفًا أو دفعة. لا تذكر الملاحظة إلا نوع ما حُفظ وعملته، وفي حالة الدخل إن كان مدفوعًا بالفعل، إضافة إلى إصدار التطبيق وإصدار مكتبة الإحصاءات فيه ولغته ونظام تشغيل هاتفك وإصداره، وإن كان هاتفًا أو جهازًا لوحيًا. وتُرسَل الملاحظات تحت معرّف عشوائي محفوظ على هاتفك فقط، غير مرتبط بحسابك، ويُستبدل عند تسجيل خروجك. وإن أوقفتها من الإعدادات، نرسل ملاحظة أخيرة تفيد بأنك أوقفتها، ثم نتوقف ونحذف المعرّف العشوائي.»
+- EN: "The iPhone and Android apps ask you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, they send a short note each time you turn it on (saying whether you did so from the prompt or Settings), once more the first time you turn it on after signing in, and each time you add a client or save an income or an expense. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the app's version and its analytics library's version, its language, your phone's operating system and its version, and whether it's a phone or a tablet. Notes are sent under a random ID kept only on your phone, not linked to your account, and replaced when you sign out. If you turn it off in Settings, we send one last note saying you turned it off, then stop and delete the random ID."
+- AR: «يسألك تطبيقا iPhone وAndroid مرة واحدة إن كنت تريد مشاركة استخدام مجهول، وتبقى المشاركة متوقفة ما لم تفعّلها. إن فعّلتها، يرسل التطبيق ملاحظة قصيرة كلما فعّلتها (وتذكر إن كان ذلك من الرسالة أو من الإعدادات)، وملاحظة أخرى أول مرة تفعّلها بعد تسجيل دخولك، وكلما أضفت عميلًا أو حفظت دخلًا أو مصروفًا. لا تذكر الملاحظة إلا نوع ما حُفظ وعملته، وفي حالة الدخل إن كان مدفوعًا بالفعل، إضافة إلى إصدار التطبيق وإصدار مكتبة الإحصاءات فيه ولغته ونظام تشغيل هاتفك وإصداره، وإن كان هاتفًا أو جهازًا لوحيًا. وتُرسَل الملاحظات تحت معرّف عشوائي محفوظ على هاتفك فقط، غير مرتبط بحسابك، ويُستبدل عند تسجيل خروجك. وإن أوقفتها من الإعدادات، نرسل ملاحظة أخيرة تفيد بأنك أوقفتها، ثم نتوقف ونحذف المعرّف العشوائي.»
 
 **`network.body`.** Replace the mobile sentence. Keep any Sentry sentence already there.
 

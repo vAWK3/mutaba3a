@@ -63,11 +63,33 @@ export const MOBILE_APP_LINKS: Record<'ios' | 'android', MobileAppLink> = {
  * https URL (MUT-173). A placeholder string, or a URL on an app that is not yet
  * available, never becomes a link, so / can't contradict /hosted or ship a dead one.
  */
-export function storeLinkUrl(link: MobileAppLink): string | null {
+export function storeLinkUrl(link: MobileAppLink, campaign?: StoreCampaign): string | null {
   if (!link.available || !link.url) return null;
+  let url: URL;
   try {
-    return new URL(link.url).protocol === 'https:' ? link.url : null;
+    url = new URL(link.url);
   } catch {
     return null;
   }
+  if (url.protocol !== 'https:') return null;
+  if (!campaign) return link.url;
+  if (url.hostname === 'apps.apple.com') {
+    url.searchParams.set('ct', campaign);
+    if (APP_STORE_PROVIDER_TOKEN) url.searchParams.set('pt', APP_STORE_PROVIDER_TOKEN);
+  } else if (url.hostname === 'play.google.com') {
+    url.searchParams.set('referrer', `utm_source=mutaba3a&utm_medium=web&utm_campaign=${campaign}`);
+  } else {
+    return link.url;
+  }
+  return url.toString();
 }
+
+/** Where a store link was clicked, so the store consoles can attribute the install (MUT-154). */
+export type StoreCampaign = 'mutaba3a-landing' | 'mutaba3a-portal';
+
+/**
+ * App Store Connect's provider token (Analytics › Campaigns), which Apple
+ * needs beside `ct` to report a campaign. Not known yet: set it here when
+ * Basel copies it from App Store Connect (MUT-154, A6).
+ */
+export const APP_STORE_PROVIDER_TOKEN: string | null = null;

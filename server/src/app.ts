@@ -102,9 +102,11 @@ function isPortalExcludedPath(path: string): boolean {
 
 // connect-src includes the GCS signed-URL host: receipt uploads (MUT-44) PUT
 // bytes directly to it via fetch(), which connect-src governs. Downloads are
-// top-level navigations instead, so they need no entry here.
+// top-level navigations instead, so they need no entry here. It also names
+// PostHog's EU ingestion host for the portal's opt-in usage counts (MUT-155,
+// ADR-090): the SDK loads from the portal's own bundle, so script-src stays 'self'.
 const PORTAL_CSP =
-  "default-src 'self'; connect-src 'self' https://storage.googleapis.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
+  "default-src 'self'; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
 
 function defaultSessionSettings(): SessionSettings {
   return {

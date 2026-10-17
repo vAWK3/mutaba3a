@@ -1,0 +1,50 @@
+app: web
+area: landing-analytics
+title: Landing page visit counts (PostHog, cookieless)
+tier: secondary
+paths:
+  - src/lib/analytics/**
+  - src/pages/landing/analytics/**
+  - docs/analytics/events.json
+features:
+  - id: pageview-cookieless
+    title: Opening the landing page sends one anonymous pageview and stores nothing on the device (MUT-154)
+    tier: secondary
+    paths:
+      - src/pages/landing/LandingPage.tsx
+    steps:
+      - Open the landing page
+    expect:
+      - A $pageview goes to PostHog EU with surface landing, the language, the app version and $geoip_disable
+      - No PostHog cookie and nothing PostHog-named in localStorage or sessionStorage
+      - No $set, no session id, no ad-click id
+  - id: cta
+    title: Pressing a counted call to action sends landing_cta_clicked (MUT-154)
+    tier: secondary
+    paths:
+      - src/pages/landing/components/GetItSection.tsx
+      - src/pages/landing/components/PhoneSection.tsx
+      - src/content/download-config.ts
+    steps:
+      - On the landing page, press "See hosted accounts" in Get it
+    expect:
+      - A landing_cta_clicked with cta hosted_offer goes to PostHog before /hosted opens
+  - id: local-app-referrer
+    title: Arriving from the local app never reveals its address (MUT-154)
+    tier: tertiary
+    paths:
+      - src/pages/download/DownloadPage.tsx
+    steps:
+      - Open the download page coming from a Settings page of the local app
+    expect:
+      - The pageview carries no referrer
+  - id: local-app-silent
+    title: The local web app never contacts PostHog (ADR-024, ADR-090)
+    tier: core
+    paths:
+      - src/main.tsx
+      - src/pages/landing/LandingProviders.tsx
+    steps:
+      - Open the local web app on a sample business and use it for a few seconds
+    expect:
+      - Not a single request goes to PostHog

@@ -8,6 +8,9 @@ import { profile, type StubRequest } from '../../__tests__/harness';
 import { ToastProvider } from '../Toast';
 import { IncomeCaptureDrawer } from '../IncomeCaptureDrawer';
 
+const { trackPortal } = vi.hoisted(() => ({ trackPortal: vi.fn(async () => {}) }));
+vi.mock('../../analytics/portalAnalytics', () => ({ trackPortal }));
+
 const C1 = 'c1111111-1111-4111-8111-111111111111';
 const PERSONAL = profile({
   writerOfRecord: null,
@@ -80,6 +83,37 @@ afterEach(() => {
 });
 
 const created = (body: unknown) => json({ id: 'i1', ...(body as object), status: 'OPEN', title: null, notes: null, dueDate: null, projectId: null }, 201);
+
+describe('IncomeCaptureDrawer counts a confirmed save (MUT-155, ADR-090)', () => {
+  beforeEach(() => trackPortal.mockClear());
+
+  it('sends income_recorded with only the currency and whether it was paid, after the server confirms', async () => {
+    stub((r) => created(r.body));
+    const { user, onClose } = renderDrawer({ initialKind: 'received' });
+    await user.type(screen.getByLabelText('Amount'), '500');
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(trackPortal).toHaveBeenCalledExactlyOnceWith('income_recorded', { currency: 'ILS', paid: true });
+  });
+
+  it('marks owed income as not paid', async () => {
+    stub((r) => created(r.body));
+    const { user, onClose } = renderDrawer({ defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '100');
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(trackPortal).toHaveBeenCalledExactlyOnceWith('income_recorded', { currency: 'ILS', paid: false });
+  });
+
+  it('counts nothing when the save fails', async () => {
+    stub(() => fail(422, 'VALIDATION_FAILED', { reason: 'DATE_INVALID', field: 'occurredOn' }));
+    const { user } = renderDrawer({ defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '100');
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    expect(await screen.findByText("The date can't be later than today")).toBeInTheDocument();
+    expect(trackPortal).not.toHaveBeenCalled();
+  });
+});
 
 describe('IncomeCaptureDrawer (MUT-133)', () => {
   it('records Owed for a prefilled client with the profile header, an Idempotency-Key and a canonical amount, then says so politely', async () => {

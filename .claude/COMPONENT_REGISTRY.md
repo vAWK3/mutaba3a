@@ -1797,6 +1797,9 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | Unit | Purpose |
 |---|---|
 | `shell/AccountDrawers.tsx` | Mounts account-level drawers (`?changePassword=`), a sibling of `ProfileDrawers` so account concerns don't grow that one's unrelated scope; same `go()`/URL-merge pattern, same `ProfileDrawerSearch` key registry (one shared overlay-key set every page's `useReplaceSearch` already carries forward). |
+| `analytics/portalAnalytics.ts` (MUT-155) | `usePortalUsage` (zustand: `choice` `on`/`off`/`null`/`unavailable`, `owner`), `syncPortalUsage(userId)`, `choosePortalUsage(choice, prompt)`, `endPortalUsage()`, `trackPortal(event, props)`. The only portal module that loads posthog-js (lint-enforced); it loads the SDK and `lib/analytics/posthogConfig` together, lazily, after a yes. |
+| `components/UsagePrompt.tsx` (MUT-155) | The one-time "Share anonymous usage?" notice at the top of `<main>` (`hp-banner hp-banner-info`, a named `<section>`), two secondary buttons of equal weight. Renders only while the signed-in person hasn't chosen. |
+| `components/UsageMenuItem.tsx` (MUT-155) | "Share anonymous usage" `menuitemcheckbox` in `UserMenu`; absent on a build with no key. |
 | `components/ChangePasswordDrawer.tsx` | Current + new password, reusing `setupLink.ts`'s `passwordProblem`/`NEW_PASSWORD_POLICY` and field shape (visible rule hint, inline refusal before any request). A wrong current password is a banner (account doesn't recognise it), not a field error. |
 
 ## Hosted API modules (`server/src`) — reusable across milestones

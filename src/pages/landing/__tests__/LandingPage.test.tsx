@@ -247,12 +247,13 @@ describe('LandingPage phone and portal (MUT-173)', () => {
     };
     renderLanding('en');
     const ios = within(stores()).getByRole('link', { name: 'iPhone, on the App Store' });
-    expect(ios).toHaveAttribute('href', 'https://apps.apple.com/app/id1');
+    // The landing's campaign rides along, so the store consoles can attribute installs (MUT-154)
+    expect(ios).toHaveAttribute('href', 'https://apps.apple.com/app/id1?ct=mutaba3a-landing');
     expect(ios).toHaveAttribute('target', '_blank');
     expect(ios.getAttribute('rel')).toContain('noopener');
     expect(within(stores()).getByRole('link', { name: 'Android, on Google Play' })).toHaveAttribute(
       'href',
-      'https://play.google.com/store/apps/details?id=com.barmajiyat.mutaba3a',
+      'https://play.google.com/store/apps/details?id=com.barmajiyat.mutaba3a&referrer=utm_source%3Dmutaba3a%26utm_medium%3Dweb%26utm_campaign%3Dmutaba3a-landing',
     );
     expect(within(stores()).getAllByRole('link')).toHaveLength(2);
     expect(stores().textContent).not.toMatch(/coming soon/);

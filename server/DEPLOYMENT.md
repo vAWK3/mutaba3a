@@ -332,8 +332,8 @@ cookies or CORS beyond what MUT-38 already built:
   since there is no custom domain (see the note at the end of §5). Setting
   `PORTAL_ORIGIN` only becomes necessary if a reverse proxy or load balancer is
   ever put in front of the service with a different public hostname.
-- **CSP**: `default-src 'self'; connect-src 'self' https://storage.googleapis.com;
-  img-src 'self' data:; frame-ancestors 'none'; form-action 'self'` on every
+- **CSP**: `default-src 'self'; connect-src 'self' https://storage.googleapis.com
+  https://eu.i.posthog.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'` on every
   response. `'self'` everywhere else is possible precisely because the portal
   and the API share an origin; `frame-ancestors 'none'` blocks the portal from
   being framed anywhere; `form-action 'self'` and no `script-src` relaxations
@@ -344,7 +344,12 @@ cookies or CORS beyond what MUT-38 already built:
   is the library's default, path-styled host (`@google-cloud/storage`'s
   `PATH_STYLED_HOST`, `virtualHostedStyle` not set) — and `connect-src` governs
   that call. Receipt *downloads* need no entry here: `downloadNavigator.open()`
-  is a top-level navigation, which `connect-src` does not restrict.
+  is a top-level navigation, which `connect-src` does not restrict. The second
+  addition is `https://eu.i.posthog.com` (MUT-155, ADR-090): the portal's
+  opt-in anonymous usage counts post to PostHog's EU host, and only after the
+  signed-in person turns sharing on. The SDK ships in the portal's own bundle,
+  so `script-src` needs nothing. The counts also need `dist-hosted` built
+  with `MUTABA3A_POSTHOG_KEY`; without it the portal never asks and never sends.
 
 ### 4d. App association files (MUT-111) — what is set and why
 

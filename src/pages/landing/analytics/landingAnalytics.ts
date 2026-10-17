@@ -1,0 +1,130 @@
+import { useEffect } from 'react';
+import type { PostHogConfig } from 'posthog-js';
+import { APP_VERSION } from '../../../lib/appVersion';
+import { POSTHOG_KEY } from '../../../lib/analytics/posthogKey';
+import { HOSTED_OFFER_URL } from '../../../content/download-config';
+
+/**
+ * The landing pages' cookieless visit counts (MUT-154, ADR-090, D1). Only the
+ * lazily loaded landing page chunks call `useLandingAnalytics`; nothing in
+ * `main.tsx` or `LandingProviders` may, because the local app shares them and
+ * must never carry the SDK (ADR-024). posthog-js and the contract guard are
+ * loaded with dynamic imports into their own chunks, after the page has loaded
+ * and gone idle, and only when the build has a key, so a landing visit's first
+ * paint carries none of it. Every event leaves through the guard (README rule 1).
+ */
+
+export type LandingCta = 'app_store' | 'play_store' | 'open_web_app' | 'hosted_offer' | 'malafat';
+
+/** The slice of posthog-js the landing uses, so tests can hand in a fake. */
+export interface PostHogLike {
+  init: (key: string, options: Partial<PostHogConfig>) => unknown;
+  capture: (event: string, properties?: Record<string, unknown>, options?: { send_instantly?: boolean }) => unknown;
+}
+
+interface StartDeps {
+  key: string;
+  load: () => Promise<PostHogLike>;
+  /** The contract guard and the init options, loaded with the SDK rather than with the page. */
+  loadConfig?: () => Promise<typeof import('../../../lib/analytics/posthogConfig')>;
+}
+
+const loadPosthogConfig = () => import('../../../lib/analytics/posthogConfig');
+
+const DEFAULT_DEPS = (): StartDeps => ({
+  key: POSTHOG_KEY,
+  load: () => import('posthog-js').then((module) => module.default as unknown as PostHogLike),
+  loadConfig: loadPosthogConfig,
+});
+
+const isPath = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
+
+/** Which counted call to action `href` is, or null for anything else (desktop downloads, sign-in, anchors). */
+export function ctaForHref(href: string, origin: string): LandingCta | null {
+  let url: URL;
+  try {
+    url = new URL(href, origin);
+  } catch {
+    return null;
+  }
+  if (url.origin === origin) {
+    if (isPath(url.pathname, '/app')) return 'open_web_app';
+    if (isPath(url.pathname, HOSTED_OFFER_URL)) return 'hosted_offer';
+    return null;
+  }
+  if (url.protocol !== 'https:') return null;
+  if (url.hostname === 'apps.apple.com') return 'app_store';
+  if (url.hostname === 'play.google.com') return 'play_store';
+  if (url.hostname === 'malafat.app' || url.hostname.endsWith('.malafat.app')) return 'malafat';
+  return null;
+}
+
+let started: Promise<PostHogLike | null> | null = null;
+let clickListener: ((event: MouseEvent) => void) | null = null;
+
+function listenForCtas(posthog: PostHogLike) {
+  clickListener = (event) => {
+    const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
+    const cta = anchor ? ctaForHref(anchor.getAttribute('href') ?? '', window.location.origin) : null;
+    if (cta) posthog.capture('landing_cta_clicked', { cta }, { send_instantly: true });
+  };
+  document.addEventListener('click', clickListener, { capture: true });
+}
+
+async function start(deps: StartDeps): Promise<PostHogLike | null> {
+  if (!deps.key) return null;
+  try {
+    const [posthog, { documentLocale, posthogInitOptions }] = await Promise.all([deps.load(), (deps.loadConfig ?? loadPosthogConfig)()]);
+    posthog.init(
+      deps.key,
+      posthogInitOptions(() => ({ surface: 'landing', appVersion: APP_VERSION, locale: documentLocale(), origin: window.location.origin })),
+    );
+    listenForCtas(posthog);
+    return posthog;
+  } catch {
+    // An ad blocker or a network failure must never break the page
+    return null;
+  }
+}
+
+/** Starts the landing's counting once per page load; a no-op without a key. */
+export function startLandingAnalytics(deps: StartDeps = DEFAULT_DEPS()): Promise<PostHogLike | null> {
+  started ??= start(deps);
+  return started;
+}
+
+export function resetLandingAnalyticsForTests() {
+  if (clickListener) document.removeEventListener('click', clickListener, { capture: true });
+  clickListener = null;
+  started = null;
+}
+
+/** Waits for the page to finish loading (fonts and the hero first), then for idle, then starts counting. */
+const FALLBACK_IDLE_MS = 1500;
+
+/** Runs `run` once the browser is idle; returns the cancel. */
+function whenIdle(run: () => void): () => void {
+  if (typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(run, { timeout: FALLBACK_IDLE_MS });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(run, FALLBACK_IDLE_MS);
+  return () => window.clearTimeout(id);
+}
+
+export function useLandingAnalytics() {
+  useEffect(() => {
+    if (!POSTHOG_KEY) return;
+    const run = () => void startLandingAnalytics();
+    if (document.readyState === 'complete') return whenIdle(run);
+    let cancelIdle: (() => void) | null = null;
+    const onLoad = () => {
+      cancelIdle = whenIdle(run);
+    };
+    window.addEventListener('load', onLoad, { once: true });
+    return () => {
+      window.removeEventListener('load', onLoad);
+      cancelIdle?.();
+    };
+  }, []);
+}

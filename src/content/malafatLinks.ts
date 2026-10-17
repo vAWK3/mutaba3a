@@ -1,7 +1,8 @@
 /**
  * Every link from Mutaba3a to Malafat (MUT-174, epic MUT-189). Attribution travels
- * in the link and is counted on malafat.app (MAL-1153), so Mutaba3a itself measures
- * nothing (ADR-024). The two unions are MUT-189's CTA contract, plus the landing
+ * in the link and is counted on malafat.app (MAL-1153); the apps measure nothing
+ * (ADR-024), and only the landing page counts the click itself, anonymously
+ * (`landing_cta_clicked`, ADR-090). The two unions are MUT-189's CTA contract, plus the landing
  * band's own `landing` / `landing-section` (recorded on MUT-189).
  */
 

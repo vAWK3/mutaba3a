@@ -2806,3 +2806,150 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
     - free-form types;
     - bad or duplicate enum values, values on a non-enum, and an event property that repeats a shared one.
 - Release-QA: not applicable (docs and contract only; no user-visible flow). MUT-154, MUT-155 and MUT-157 carry the QA scenarios and the "what we send is a subset of the contract" tests. The Flutter parity test against a vendored copy is MUT-157's.
+
+## MUT-154 — landing visit counts (2026-10-17, ADR-090)
+
+- **`src/lib/analytics/__tests__/guard.test.ts`** (14 cases):
+  - unknown events and wrong emitters dropped;
+  - enum, currency and boolean values validated; undeclared properties dropped;
+  - shared properties stamped over the caller's;
+  - routing and control fields kept;
+  - `$set` / `$set_once` / `$unset` stripped;
+  - session, window, screen, timezone, language and ad-click fields dropped everywhere;
+  - the landing allowance kept (URL, UTM, referrer, cookieless hash inputs);
+  - an `/app` referrer dropped;
+  - the portal allowance (no URL, path, host or referrer).
+- **`posthogConfig.test.ts`** (6 cases):
+  - EU host;
+  - every feature off on both surfaces;
+  - landing cookieless;
+  - portal `localStorage`, unbatched;
+  - `before_send` reads the live context.
+- **`src/pages/landing/analytics/__tests__/landingAnalytics.test.ts`** (25 cases):
+  - the `ctaForHref` table;
+  - no key → no SDK and no listener;
+  - one init with the cookieless config;
+  - the visible language stamped;
+  - a CTA click sends `landing_cta_clicked` at once;
+  - SDK load failure swallowed;
+  - the hook waits for idle (key mocked through `posthogKey.ts`).
+- **`scripts/__tests__/vite-config.test.ts`**: `posthogKey()` takes unset or a `phc_` key and
+  refuses `phx_`, short or malformed values; web and hosted get the key, desktop `""`.
+- **`scripts/__tests__/analytics-lint.test.ts`**: posthog-js is forbidden in `main.tsx`,
+  `LandingProviders`, the landing pages, app code and the portal shell; allowed in the two
+  analytics modules; type-only allowed in `src/lib/analytics`.
+- **`scripts/__tests__/check-bundles.test.ts`**: static-import parsing (minified, spaced, never
+  `import()`); the entry graph from the module script plus modulepreloads; PostHog in a reachable
+  chunk fails; marker table.
+- **`download-config.test.ts`**: the campaign on App Store (`ct`, `pt` once set) and Play
+  (UTM referrer) links.
+- **`PrivacyPolicyPage.test.tsx`**: the "Anonymous usage counts" section right after "No ads,
+  no tracking", in en and ar; PostHog named in sharing and network; the crash-reporting clause
+  kept.
+- **Release-QA `qa/specs/web/landing-analytics.spec.ts`** (4 features). On a preview build with
+  the dummy key:
+  - `pageview-cookieless` (no `ph_*` cookie or storage);
+  - `cta` (`hosted_offer`);
+  - `local-app-referrer`;
+  - `local-app-silent` (core: zero PostHog requests from `/app`).
+- **`landing.spec.ts` phone test** now expects the campaign on store links.
+- **Review fixes (qa-reconcile F1–F8):**
+  - `check-bundles.test.ts`: `precachedUrls` reads both quoting styles; `posthogPrecached` names
+    every precached file that mentions PostHog.
+  - `vite-config.test.ts`: the SDK and `posthogConfig-*` chunks are in `globIgnores`;
+    `vendor-posthog` is named in the web build only.
+  - `analytics-lint.test.ts` (20 cases): `lib/analytics` may not load the SDK but keeps the storage
+    seam; local-app pages may not import `landing/analytics`; nothing outside the analytics modules
+    imports the guard; landing and download pages may call the counter.
+  - `guard.test.ts`: the landing drops `$os` and `$browser`.
+  - `landingAnalytics.test.ts` (27): waits for `load` before scheduling; leaving first cancels.
+  - The landing QA spec asserts only event posts leave and catches `__ph_*` keys. The spy answers
+    every `*.posthog.com` host.
+
+## MUT-155 — portal opt-in usage counts (2026-10-17, ADR-090)
+
+- **`src/hosted/analytics/__tests__/portalAnalytics.test.ts`** (14 cases):
+  - no key → `unavailable`, nothing loaded;
+  - no SDK before a choice;
+  - on → init with the portal config, then `analytics_opted_in`;
+  - off → `analytics_opted_out`, `reset(true)`, `opt_out_capturing`, `ph_*` keys removed;
+  - sign-out → nothing sent, the record cleared;
+  - another account → reset and asked again;
+  - `trackPortal` is a no-op unless on;
+  - `portal_opened` once per page load;
+  - on again after off → `opt_in_capturing` with no `$opt_in`.
+- **`src/hosted/shell/__tests__/UsageConsent.test.tsx`** (8, through the real shell):
+  - the prompt with two equal buttons and no SDK;
+  - on from the prompt (`first_run`);
+  - "Not now" not asked again;
+  - no key → no prompt and no switch;
+  - Arabic copy;
+  - the menu switch reflects and turns off (one last note) and on (`settings`);
+  - sign-out forgets the choice and the `ph_*` keys, sending nothing.
+- **The drawer tests:**
+  - `IncomeCaptureDrawer`: `{currency, paid}` after a confirmed save, nothing on a failed one;
+  - `RecordPaymentDrawer`: `{currency}`, nothing on a 409;
+  - `ExpenseDrawer`: `{currency}` on create; nothing on edit or a 422; once across a retried save.
+- **Other unit tests:**
+  - `endSession.test.ts`: `endPortalUsage` on `signed_out`, not on `expired`;
+  - `AppDownloadMenuItems.test.tsx`: `ct=mutaba3a-portal`;
+  - `PrivacyPolicyPage.test.tsx`: the portal sentence before the closing, the network sentence, Arabic.
+- **Server:** `portal.test.ts` pins the CSP with `https://eu.i.posthog.com`.
+- **Release-QA `qa/specs/portal/usage-analytics.spec.ts`** (5). On a keyed preview build, PostHog answered locally:
+  - `prompt-silent-until-chosen` (core: zero requests before an answer);
+  - `opt-in-counts` (no URL, path, host, referrer or profile ID; no cookie; event posts only);
+  - `save-income-counts` (ILS, paid, no amount or client);
+  - `opt-out-last-note`;
+  - `sign-out-resets`.
+- **`@portal.account.get-the-app`**: the iPhone link carries `ct=mutaba3a-portal`; Android is the last, inert row.
+- **Review fixes (F1–F6):**
+  - `portalAnalytics.test.ts` (23):
+    - opt-out order capture → opt out → reset, sweeping both storages;
+    - opting out or signing out while the SDK loads sends nothing;
+    - a save right after a reload waits for the SDK;
+    - another tab's opt-out (a `storage` event, or a record re-read at save time) silences this tab and clears its sessionStorage.
+  - `portalAnalytics.sdk.test.ts` (4, real posthog-js):
+    - opted out and nothing stored before a yes;
+    - after opt-out, no `ph_` key in either storage, and a stale capture neither sends nor writes;
+    - a fresh `$device_id` on re-opt-in;
+    - a new page after an opt-out starts opted out.
+  - `posthogConfig.test.ts`: the portal's `opt_out_*_by_default`.
+  - QA `other-tab-silenced`: a save in a second tab after an opt-out in the first sends nothing, and its switch reads off.
+- **Known:** on preview builds, `portal.signin.boot-slow-session` (2 tests) still fails, as listed above. The other 72 portal and landing specs pass.
+
+## MUT-157 — phone opt-in usage counts (2026-10-17, ADR-090, ADR-091; Flutter repo)
+
+- **`test/domain/services/analytics/analytics_contract_test.dart`** (5): the fixture's sha256 and README row; the phone event set equals the contract's ios+android emitters; property types and values; shared properties; currencies equal `Currency.values`.
+- **`analytics_guard_test.dart`** (6):
+  - the exact property set;
+  - undeclared and invalid values dropped, including `$screen_name`, `$set`, `$set_once`, `$initial_*`, `$timezone`;
+  - shared properties can't be overwritten;
+  - `$geoip_disable` on every event;
+  - non-semver, locale and surface refusals;
+  - prompt values.
+- **`product_analytics_test.dart`** (17):
+  - nothing and no ID before a yes;
+  - unavailable without a transport;
+  - opted_in + first open once per person;
+  - every note guarded, with uuid and timestamp;
+  - `trackEntrySaved` mapping, conversions not counted;
+  - opt-out order with the last note under the old ID, offline-queued then delivered, and ID rotation;
+  - declining sends nothing;
+  - sign-out and account switch forget everything and send nothing;
+  - expiry keeps the choice;
+  - queue cap and serialised flush;
+  - a throwing transport never escapes.
+- **Widget tests:**
+  - `usage_prompt_test.dart` (6): equal buttons, on/decline, waits for the App Lock nudge, never without a key, Arabic RTL;
+  - `settings_usage_test.dart` (4): Privacy row off then on (settings) then off (last note), absent without a key, sign-out forgets and sends nothing.
+- **Hooks:**
+  - `capture_usage_test.dart` (4): received → paid true, expense, blocked Save, sharing off;
+  - `target_picker_sheet_test.dart` (+2): client_created on the server's ok only, no name;
+  - `widget_capture_inbox_test.dart` (+1): new widget/Siri entries reported once.
+- **Release-QA `qa/features/ios/analytics.yaml`** (5 flows, recorder transport):
+  - `prompt-silent-until-chosen` (core);
+  - `opt-in-counts`;
+  - `save-income-counts`;
+  - `opt-out-last-note`;
+  - `sign-out-resets`.
+- **Known, already on main:** `test/core/capture_amount_contract_test.dart` "1000 EUR → 1000.00" fails the same way on main (849b3243): number grouping.

@@ -36,6 +36,7 @@ exports[`vite.config > leaves the desktop build exactly as it was 1`] = `
     "__APP_VERSION__": "<package.json version>",
     "__BUILD_MODE__": ""desktop"",
     "__PORTAL_URL__": """",
+    "__POSTHOG_KEY__": """",
   },
   "plugins": [
     "vite:react-babel",
@@ -92,6 +93,9 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
             "react-hook-form",
             "zod",
           ],
+          "vendor-posthog": [
+            "posthog-js",
+          ],
           "vendor-query": [
             "@tanstack/react-query",
           ],
@@ -113,6 +117,7 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
     "__APP_VERSION__": "<package.json version>",
     "__BUILD_MODE__": ""web"",
     "__PORTAL_URL__": ""https://mutaba3a-api-t5bzsudmja-zf.a.run.app"",
+    "__POSTHOG_KEY__": """",
   },
   "plugins": [
     "vite:react-babel",

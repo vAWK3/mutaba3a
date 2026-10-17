@@ -24,7 +24,7 @@ function StoreEntry({ platform }: { platform: Platform }) {
   const link = MOBILE_APP_LINKS[platform];
   const Icon = ICONS[platform];
   const name = t(`landing.hostedOffer.platform.${platform}`);
-  const url = storeLinkUrl(link);
+  const url = storeLinkUrl(link, 'mutaba3a-landing');
 
   if (url) {
     return (

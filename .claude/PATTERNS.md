@@ -2426,3 +2426,31 @@ Never `t(someVar)` built from an undotted variable. Deleting a screen means dele
 
 ### Pattern: A build-time constant has one module
 A Vite `define` is read through one tiny module (`src/lib/appVersion.ts` for `__APP_VERSION__`), so tests mock the module (a getter, for per-test values) instead of stubbing globals.
+
+## Patterns added by MUT-154 (2026-10-17, ADR-090)
+
+### Pattern: Every analytics event leaves through the contract guard
+- **One guard.** No surface sends to PostHog except through `src/lib/analytics/guard.ts`
+  (`guardEvent`), wired as posthog-js `before_send` by `posthogInitOptions()`.
+- **What the guard does.**
+  - It drops any event the contract (`docs/analytics/events.json`) doesn't list for the surface.
+  - It keeps only valid contract properties plus the surface's `$` allowance.
+  - It stamps `surface`, `app_version`, `locale` and `$geoip_disable`.
+- **Calling code never pre-filters.** Call `capture(name, props)` with what you mean, and let the
+  guard enforce it.
+- **A new event or property is a contract change**: bump `events.json` and add its sha256 pin.
+
+### Pattern: A third-party SDK the local app must not carry loads in a lazy chunk, behind a lint rule and a bundle check
+- **Load it lazily.** posthog-js is `import()`ed from a module only lazy page chunks use (the
+  landing pages), after idle, and only with a key.
+- **Lint rule.** ESLint `no-restricted-imports` names the only files allowed to import it.
+- **Bundle check.** `check-bundles.ts` proves the SDK isn't statically reachable from the web
+  entry (`posthogInEntryGraph`) and is absent from desktop.
+- **Reuse it.** Follow the same three steps for any SDK the free app must never ship (ADR-024).
+
+### Pattern: Release-QA answers third-party traffic locally
+- **The fixture.** `qa/support/qa.ts` gives every spec an `analytics` fixture
+  (`qa/support/posthog.ts`) that answers PostHog requests and records what would have been sent.
+  QA builds carry a dummy `phc_` key.
+- **Bot filter.** Specs that read events call `actAsPerson(page)`, because posthog-js drops events
+  from automated browsers.

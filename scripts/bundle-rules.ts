@@ -208,3 +208,67 @@ export function bootSplashProblems({ htmlPath, html, dist, exists, read }: BootS
   if (sheets.length > 0 && !styled) problems.push('no linked stylesheet carries the .boot-splash rules');
   return problems;
 }
+
+/**
+ * Text that only PostHog's SDK or our PostHog wiring carries: an ingest or app
+ * host, the SDK's persistence class, its cookieless sentinel, or its package
+ * name (ADR-090). Matching `posthog.com` hosts, not the bare word, keeps
+ * ordinary prose out.
+ */
+export const POSTHOG_MARKER = /\b(?:[a-z0-9-]+\.)*posthog\.com\b|PostHogPersistence|\$posthog_cookieless|posthog-js/i;
+
+/** A static `import … from "x"`, `import "x"` or `export … from "x"`; `import(` (lazy) is never matched. */
+const STATIC_IMPORT = /(?:^|[^\w$.])(?:import|export)\s*(?:[\w$*{}\s,]*?\bfrom\s*)?["']([^"']+)["']/g;
+
+/** The module specifiers `js` imports statically, in source order. */
+export function staticImports(js: string): string[] {
+  return [...js.matchAll(STATIC_IMPORT)].map((m) => m[1]);
+}
+
+const ENTRY_SCRIPT = /<script\b[^>]*\btype=["']?module["']?[^>]*\bsrc=["']?\/?([^"'\s>]+)/gi;
+const MODULE_PRELOAD = /<link\b[^>]*\brel=["']?modulepreload["']?[^>]*\bhref=["']?\/?([^"'\s>]+)/gi;
+
+/**
+ * Every JS file the entry HTML loads before any lazy import runs: its module
+ * script, its modulepreloads, and everything they import statically, as paths
+ * relative to the dist root. Lazy `import()` chunks are what the landing's
+ * analytics hides in, so they are not followed.
+ */
+export function staticGraph(html: string, read: (path: string) => string): string[] {
+  const roots = [...html.matchAll(ENTRY_SCRIPT), ...html.matchAll(MODULE_PRELOAD)].map((m) => m[1]);
+  const seen: string[] = [];
+  const queue = [...roots];
+  while (queue.length > 0) {
+    const path = queue.shift()!;
+    if (seen.includes(path)) continue;
+    seen.push(path);
+    const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '';
+    for (const specifier of staticImports(read(path))) {
+      if (specifier.startsWith('./') || specifier.startsWith('../')) queue.push(new URL(specifier, `https://dist/${dir}`).pathname.slice(1));
+    }
+  }
+  return seen;
+}
+
+/**
+ * The statically loaded files of the web entry that mention PostHog: the
+ * local app at /app shares that entry, so any hit means the SDK (or its host)
+ * ships inside the local app (ADR-024, ADR-090). Empty when it is clean.
+ */
+export function posthogInEntryGraph(html: string, read: (path: string) => string): string[] {
+  return staticGraph(html, read).filter((path) => POSTHOG_MARKER.test(read(path)));
+}
+
+/** The files a Workbox `sw.js` precaches, from its `{url:"…"}` entries (minified or JSON-quoted). */
+export function precachedUrls(sw: string): string[] {
+  return [...sw.matchAll(/\{\s*"?url"?\s*:\s*"([^"]+)"/g)].map((match) => match[1]);
+}
+
+/**
+ * The precached files that mention PostHog: the service worker installs for
+ * everyone who opens the local app, so a hit means the SDK would be stored on
+ * their device even though it never runs there (MUT-154 review F1). Empty when clean.
+ */
+export function posthogPrecached(sw: string, read: (path: string) => string): string[] {
+  return precachedUrls(sw).filter((path) => POSTHOG_MARKER.test(read(path)));
+}
