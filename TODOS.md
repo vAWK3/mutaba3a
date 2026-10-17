@@ -142,3 +142,17 @@
 **Context:** MUT-182 eng review R-4 left a "last opened" override to MUT-183 as an option. MUT-183's eng review (2026-10-14, D9) kept it out of scope. Start at `FirstProfileRedirect`; the stored id must be checked against `me.profiles`.
 
 **Depends on / blocked by:** MUT-183.
+
+## 15. The PostHog project's settings live in INFRA.md, not in Terraform
+
+**What:** The "Mutaba3a" PostHog project (ADR-090) is created through the PostHog MCP, and its settings are recorded in `.claude/INFRA.md` §1. Move the project settings to the PostHog Terraform provider (`PostHog/posthog`), and the acquisition and activation dashboards too once they exist.
+
+**Why:** CLAUDE.md says every piece of infrastructure is declared in code. A setting changed by hand in the PostHog UI would go unnoticed. For example, turning cookieless server hash mode off silently drops every landing event, and nothing would show the drift.
+
+**Pros of fixing:** Settings and dashboards get reviewed like code, and drift shows up in `terraform plan`.
+
+**Cons / cost / risk:** A new provider, plus a personal API key in Secret Manager. On 2026-10-17, PostHog's docs only showed dashboards and insights in the provider, so check whether it can manage project settings before starting.
+
+**Context:** In the MUT-153 eng review (2026-10-17, D3), Basel chose MCP + INFRA for now, following the Netlify Forms precedent (INFRA §1). Terraform for GCP lives in `server/infrastructure` (ADR-026).
+
+**Depends on / blocked by:** MUT-153 T6 (the project exists). The dashboards come from MUT-154 and MUT-157.

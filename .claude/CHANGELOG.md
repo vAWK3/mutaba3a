@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-17 — Analytics decision and event contract (MUT-153, ADR-090)
+
+**Why:** epic MUT-152 adds opt-in, anonymous PostHog analytics to the landing page, the portal and the phone app. Every doc said "no analytics of any kind", and the three surfaces needed one list of what they may send. No SDK ships here.
+
+### Added
+- `docs/analytics/events.json`: the versioned (1.0.0) event contract. It lists 10 events with their emitters, the shared properties (surface, app_version, locale) and the typed properties (enum, boolean, integer, iso4217, semver; no free text).
+- `docs/analytics/README.md`: who sends what, the anonymity and opt-in rules, suggested opt-in copy, how to change the contract (and the Flutter copy), and the approved en/ar privacy-policy and store-disclosure wording that each surface publishes when it ships.
+- `scripts/__tests__/analytics-taxonomy.test.ts`: 53 cases. It enforces the contract and refuses banned name tokens (whole-token, so `paid` passes and `client_id` fails), error events, and server/web/desktop emitters.
+- ADR-090. TODOS #15 (move the PostHog config to Terraform).
+
+### Changed
+- README: the "No tracking" promise and the "never add analytics SDKs" line now say "the app on your device".
+- SYSTEM_OVERVIEW, INFRA §1 (a PostHog row; the project is not created yet) and the CI_CD monitoring table are scoped the same way.
+- The public privacy policy and landing copy are deliberately unchanged: each surface publishes its own paragraph (P3).
+
+### Technical
+- Files: `docs/analytics/events.json`, `docs/analytics/README.md`, `scripts/__tests__/analytics-taxonomy.test.ts`, `.claude/DECISIONS.md`, `.claude/designs/mut-153-analytics-adr-taxonomy.md`, `README.md`, `.claude/SYSTEM_OVERVIEW.md`, `.claude/INFRA.md`, `.claude/CI_CD.md`, `TODOS.md`, `.claude/TEST_PLAN.md`.
+
 ## [Unreleased] - 2026-10-16 — Web test coverage, risk files first, enforced in a new Web CI (MUT-24 §C)
 
 **Why:** coverage was invisible and unenforced. No web CI existed (only `server-ci.yml` and `build-windows.yml`), and the riskiest code was the least tested: the Dexie upgrade history (42.6% lines), migration safety (72.9%), CSV import, the third payment-record writer of MUT-60 (68.2%), and the portal's MUT-227 floor helper (untested).

@@ -31,8 +31,18 @@ Form data (name, email, optional phone/profession/devices/message, page language
 | Free app's portal sign-in link | Build-time `MUTABA3A_PORTAL_URL` (default: the `mutaba3a-api` Cloud Run URL), injected as `__PORTAL_URL__` in the web build only | `vite.config.ts` `DEFAULT_PORTAL_URL` / `portalUrl()`; `scripts/bundle-origins.json` (MUT-187, ADR-076). Moving the portal (MUT-112) changes both |
 | App version a build reports | Build-time `MUTABA3A_APP_VERSION` (x.y.z, else the build fails; default `package.json`'s), injected as `__APP_VERSION__` | `vite.config.ts` `appVersion()`. Unset in release builds; QA builds set it to the version `release-notes.json` describes before the bump (MUT-24, ADR-151) |
 
-Zero cloud infrastructure; no telemetry; data stays on the device (ADR-001,
-ADR-013). See `.claude/CI_CD.md`.
+**Product analytics (ADR-090, MUT-152).**
+
+| Item | State |
+|------|-------|
+| Host | PostHog Cloud **EU** (`eu.posthog.com`), project "Mutaba3a" in the Barmajiyat org. Separate from Malafat's project 125127. |
+| Status | **Not created yet.** MUT-153 T6 waits on Basel's go. |
+| Required settings | Discard client IP (`anonymize_ips`) on. Cookieless server hash mode **on**: without it, every landing event is silently dropped. Autocapture, exception autocapture, web vitals, heatmaps, dead clicks, session recording, console-log capture and surveys off. The test-account filter excludes localhost. |
+| Keys | Netlify env `VITE_POSTHOG_KEY` / `VITE_POSTHOG_HOST` for the web build (used by the landing chunk only); the hosted build env for the portal; `--dart-define` for Flutter. |
+| Defined in | Operator-defined SaaS, created through the PostHog MCP (D3). TODOS #15 tracks moving it to the PostHog Terraform provider. The event contract is `docs/analytics/events.json`. |
+
+The local app: zero cloud infrastructure; no telemetry; data stays on the device (ADR-001,
+ADR-013, ADR-090). See `.claude/CI_CD.md`.
 
 ## 2. Hosted API (`server/`) — Money v1
 
