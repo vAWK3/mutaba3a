@@ -6,6 +6,7 @@ import { DOWNLOAD_URLS, PLATFORM_CONFIG } from '../../content/download-config';
 import { currentDevice } from '../../lib/platform';
 import { useT } from '../../lib/i18n';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useLandingAnalytics } from '../landing/analytics/landingAnalytics';
 import { LandingHeader } from '../landing/components/LandingHeader';
 import { LandingFooter } from '../landing/components/LandingFooter';
 import '../landing/LandingPage.css';
@@ -133,6 +134,7 @@ export function DownloadPage() {
   const { release, isLoading } = useLatestRelease();
   const t = useT();
   useDocumentTitle(t('common.pageTitle', { page: t('download.title') }));
+  useLandingAnalytics();
 
   const handleToastClose = useCallback(() => {
     setToastVisible(false);

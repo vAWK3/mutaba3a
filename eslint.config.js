@@ -92,6 +92,37 @@ export default defineConfig([
     },
   },
   {
+    // ADR-090 (MUT-154): the PostHog SDK lives only in the landing's analytics
+    // module and the shared, types-only src/lib/analytics. The local app and
+    // the desktop build never carry it (ADR-024). The base rule is used here
+    // because the TypeScript variant above already guards this tree.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/hosted/**', 'src/pages/landing/analytics/**', 'src/lib/analytics/**', 'src/**/__tests__/**', 'src/test/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { paths: [{ name: 'posthog-js', message: 'Only src/pages/landing/analytics and src/hosted/analytics may load PostHog (ADR-090).' }] },
+      ],
+    },
+  },
+  {
+    // The portal's half of the same guard (MUT-155): only src/hosted/analytics
+    // loads the SDK. The TypeScript variant, because the base rule below holds
+    // the portal's own import guards.
+    files: ['src/hosted/**/*.{ts,tsx}'],
+    ignores: ['src/hosted/analytics/**', 'src/hosted/**/__tests__/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'posthog-js', allowTypeImports: true, message: 'Only src/hosted/analytics may load PostHog in the portal (ADR-090).' },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // The hosted portal (MUT-43, hosted-portal.md §8). It shows server figures
     // only: nothing from the local data layer, sync, local hooks, shell,
     // drawers or stores, and not the app's i18n provider (it carries the app's

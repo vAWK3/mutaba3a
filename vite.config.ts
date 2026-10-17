@@ -79,6 +79,20 @@ export function appVersion(override: string | undefined): string {
   return override;
 }
 
+/**
+ * The PostHog project ingest key (ADR-090, MUT-154/155): "" when
+ * MUTABA3A_POSTHOG_KEY is unset, which keeps every analytics call a no-op. Only
+ * a `phc_` project key is accepted, so a personal API key (`phx_`) can never be
+ * baked into a public bundle. Set it for production builds only.
+ */
+export function posthogKey(override: string | undefined): string {
+  if (override === undefined || override === "") return "";
+  if (!/^phc_[A-Za-z0-9]{20,}$/.test(override)) {
+    throw new Error("MUTABA3A_POSTHOG_KEY must be a PostHog project key (phc_ followed by at least 20 letters or digits)");
+  }
+  return override;
+}
+
 /** The portal origin the web build links to; a bad MUTABA3A_PORTAL_URL fails the build (MUT-187). */
 export function portalUrl(override: string | undefined): string {
   return assertHttpsOrigin("MUTABA3A_PORTAL_URL", override ?? DEFAULT_PORTAL_URL);
@@ -328,6 +342,8 @@ function hostedConfig(): UserConfig {
       __BUILD_MODE__: JSON.stringify("hosted"),
       // The sign-in page's "No account? Request one" link (MUT-188): the landing's /hosted page
       __HOSTED_OFFER_URL__: JSON.stringify(hostedOfferUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
+      // Opt-in, anonymous usage counts (MUT-155, ADR-090); "" turns analytics off
+      __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
     },
     plugins: [react(), emitHostedEntryAsIndex()],
     clearScreen: false,
@@ -370,6 +386,8 @@ export default defineConfig(({ mode }) => {
       __BUILD_MODE__: JSON.stringify(buildMode),
       // The free web app's portal sign-in link (MUT-187); desktop carries no portal address
       __PORTAL_URL__: JSON.stringify(buildMode === "web" ? portalUrl(process.env.MUTABA3A_PORTAL_URL) : ""),
+      // The landing's cookieless visit counts (MUT-154, ADR-090); the local app and desktop never use it
+      __POSTHOG_KEY__: JSON.stringify(buildMode === "web" ? posthogKey(process.env.MUTABA3A_POSTHOG_KEY) : ""),
     },
   plugins: [
     react(),

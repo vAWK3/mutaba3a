@@ -15,6 +15,7 @@ import configFn, {
   appVersion,
   netlifyFormsHtml,
   portalUrl,
+  posthogKey,
   socialMetaTags,
   withPageMeta,
 } from '../../vite.config';
@@ -246,6 +247,37 @@ describe('vite.config', () => {
         expect(() => hostedOfferUrl(value)).toThrow(/MUTABA3A_PUBLIC_ORIGIN/);
       },
     );
+  });
+
+  describe('PostHog key (MUT-154, ADR-090)', () => {
+    const KEY = 'phc_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
+
+    it('is empty when MUTABA3A_POSTHOG_KEY is unset, so the SDK never starts', () => {
+      expect(posthogKey(undefined)).toBe('');
+      expect(posthogKey('')).toBe('');
+    });
+
+    it('takes a project ingest key', () => {
+      expect(posthogKey(KEY)).toBe(KEY);
+    });
+
+    it.each(['phx_personal_api_key_0123456789abcdef', 'phc_short', 'phc_has spaces in it 0123456789', 'AbCdEfGhIjKlMnOpQrStUvWxYz'])(
+      'refuses %j, failing the build (a personal API key must never ship)',
+      (value) => {
+        expect(() => posthogKey(value)).toThrow(/MUTABA3A_POSTHOG_KEY/);
+      },
+    );
+
+    it('gives the web and hosted builds the key and the desktop build none', () => {
+      vi.stubEnv('MUTABA3A_POSTHOG_KEY', KEY);
+      try {
+        expect(resolve('web').define?.__POSTHOG_KEY__).toBe(JSON.stringify(KEY));
+        expect(resolve('hosted').define?.__POSTHOG_KEY__).toBe(JSON.stringify(KEY));
+        expect(resolve('desktop').define?.__POSTHOG_KEY__).toBe(JSON.stringify(''));
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
   });
 
   describe('Netlify form twin (MUT-186)', () => {

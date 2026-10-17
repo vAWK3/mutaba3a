@@ -2,6 +2,7 @@ import './LandingPage.css';
 import './PrivacyPolicyPage.css';
 import { useT } from '../../lib/i18n';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useLandingAnalytics } from './analytics/landingAnalytics';
 import { LandingHeader, LandingFooter } from './components';
 
 const SECTION_KEYS = [
@@ -28,6 +29,7 @@ const SECTION_KEYS = [
 export function PrivacyPolicyPage() {
   const t = useT();
   useDocumentTitle(t('common.pageTitle', { page: t('landing.privacyPolicy.title') }));
+  useLandingAnalytics();
 
   return (
     <div className="landing-page">

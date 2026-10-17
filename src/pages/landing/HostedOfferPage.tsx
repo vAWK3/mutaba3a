@@ -3,6 +3,7 @@ import './HostedOfferPage.css';
 import '../../components/ui/Button.css';
 import { useT } from '../../lib/i18n';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useLandingAnalytics } from './analytics/landingAnalytics';
 import { MOBILE_APP_LINKS } from '../../content/download-config';
 import { LandingHeader, LandingFooter } from './components';
 import { HostedRequestForm } from './components/HostedRequestForm';
@@ -96,6 +97,7 @@ function Comparison() {
 export function HostedOfferPage() {
   const t = useT();
   useDocumentTitle(t('common.pageTitle', { page: t(`${T}.meta.title`) }));
+  useLandingAnalytics();
 
   return (
     <div className="landing-page">

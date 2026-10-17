@@ -1,6 +1,20 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { HOSTED_RULES, LOCAL_RULES, bootSplashProblems, cssUrls, extractOrigins, findForbidden, fontProblems, newOrigins, unresolvedUrls } from '../bundle-rules';
+import {
+  HOSTED_RULES,
+  LOCAL_RULES,
+  POSTHOG_MARKER,
+  bootSplashProblems,
+  cssUrls,
+  extractOrigins,
+  findForbidden,
+  fontProblems,
+  newOrigins,
+  posthogInEntryGraph,
+  staticGraph,
+  staticImports,
+  unresolvedUrls,
+} from '../bundle-rules';
 
 /** hosted-portal.md §8: the checks that keep the local builds and the portal apart. */
 
@@ -185,5 +199,55 @@ describe('boot splash', () => {
     files['/d/assets/other.css'] = 'body{margin:0}';
     expect(check(page({ css: '<link rel="stylesheet" href="/assets/other.css">' }))).toEqual(['no linked stylesheet carries the .boot-splash rules']);
     expect(check(page({ css: '' }))).toEqual(['the entry links no stylesheet, so the splash paints unstyled']);
+  });
+});
+
+describe('PostHog stays out of the local app (ADR-090, MUT-154)', () => {
+  const files: Record<string, string> = {
+    'index.html':
+      '<script type="module" crossorigin src="/assets/index-a1.js"></script><link rel="modulepreload" crossorigin href="/assets/vendor-react-b2.js">',
+    'assets/index-a1.js':
+      'import{j as r}from"./vendor-react-b2.js";import"./app-shell-c3.js";export*from"./util-d4.js";const L=()=>__vitePreload(()=>import("./LandingPage-e5.js"),__vite__mapDeps([0]));',
+    'assets/vendor-react-b2.js': 'export const j=1;',
+    'assets/app-shell-c3.js': 'import {x} from "./vendor-react-b2.js"; export const y = x;',
+    'assets/util-d4.js': 'export const z = 1;',
+    'assets/LandingPage-e5.js': 'const p=()=>import("./module-f6.js");const h="https://eu.i.posthog.com";',
+    'assets/module-f6.js': 'class PostHogPersistence{} const d="$posthog_cookieless";',
+  };
+  const reader = (all: Record<string, string>) => (path: string) => all[path] ?? '';
+
+  it('finds static imports in minified and spaced forms, and skips dynamic import()', () => {
+    expect(staticImports(files['assets/index-a1.js'])).toEqual(['./vendor-react-b2.js', './app-shell-c3.js', './util-d4.js']);
+    expect(staticImports(files['assets/app-shell-c3.js'])).toEqual(['./vendor-react-b2.js']);
+    expect(staticImports(files['assets/LandingPage-e5.js'])).toEqual([]);
+  });
+
+  it('walks the entry script, its modulepreloads and their static imports, never a lazy chunk', () => {
+    expect(staticGraph(files['index.html'], reader(files))).toEqual([
+      'assets/index-a1.js',
+      'assets/vendor-react-b2.js',
+      'assets/app-shell-c3.js',
+      'assets/util-d4.js',
+    ]);
+  });
+
+  it('passes when PostHog lives only in lazily loaded chunks', () => {
+    expect(posthogInEntryGraph(files['index.html'], reader(files))).toEqual([]);
+  });
+
+  it('fails when a statically reachable chunk mentions PostHog', () => {
+    const leaky = { ...files, 'assets/util-d4.js': 'const h="https://eu.i.posthog.com";' };
+    expect(posthogInEntryGraph(leaky['index.html'], reader(leaky))).toEqual(['assets/util-d4.js']);
+  });
+
+  it.each(['https://eu.i.posthog.com', 'https://us.i.posthog.com/e/', 'PostHogPersistence', '$posthog_cookieless', 'posthog-js'])(
+    'treats %s as a PostHog marker',
+    (marker) => {
+      expect(POSTHOG_MARKER.test(`x ${marker} y`)).toBe(true);
+    },
+  );
+
+  it('does not mistake ordinary text for PostHog', () => {
+    expect(POSTHOG_MARKER.test('the post hog went to market; postal code; $pageview')).toBe(false);
   });
 });
