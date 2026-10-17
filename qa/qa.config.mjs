@@ -7,6 +7,12 @@
  * no personas — each spec dismisses the first-run "Welcome" dialog itself
  * (support/app.ts openFreshApp), same as the e2e/ suite this catalog replaces.
  */
+// Heap cap for the QA dev servers. Node's default lets each one grow to ~4 GB, and a long recorded run
+// alongside Playwright and an iOS Simulator can push a laptop into swap until the disk fills (it happened
+// to the Malafat QA env on 2026-10-17). Vite stays far below this; the cap only bounds a leak.
+const SERVER_HEAP_MB = 2048;
+const HEAP_CAPPED = `NODE_OPTIONS="\${NODE_OPTIONS:-} --max-old-space-size=${SERVER_HEAP_MB}"`;
+
 export default {
   name: 'mini-crm',
   title: 'Mutaba3a — mini-crm',
@@ -36,7 +42,7 @@ export default {
       attachURL: 'http://localhost:5173',
       // Plain `vite` (no --mode): __BUILD_MODE__ resolves to "web", which mounts the
       // app under /app — every spec below navigates to /app/... to match.
-      start: { cmd: 'npm run dev -- --port 5173 --strictPort' },
+      start: { cmd: `${HEAP_CAPPED} npm run dev -- --port 5173 --strictPort` },
       ready: 'http://localhost:5173',
       personas: {}, // no auth — local-first, single-user
     },
@@ -52,7 +58,7 @@ export default {
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
       attachURL: 'http://127.0.0.1:5175',
-      start: { cmd: 'npm run dev:hosted' },
+      start: { cmd: `${HEAP_CAPPED} npm run dev:hosted` },
       ready: 'http://127.0.0.1:5175',
       personas: {},
     },

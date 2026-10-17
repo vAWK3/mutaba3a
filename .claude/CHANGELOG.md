@@ -28,6 +28,14 @@
 
 ---
 
+## [Unreleased] - 2026-10-18 — Release QA caps its dev servers' heap
+
+### Changed
+- `qa/qa.config.mjs` starts both QA dev servers (web on 5173, hosted portal on 5175) with `--max-old-space-size=2048` (`HEAP_CAPPED`). Node's default lets each grow to about 4 GB. A long recorded run alongside Playwright and an iOS Simulator can then push the laptop into swap until the disk fills, which is what took down the Malafat QA env on 2026-10-17.
+- Vite normally stays far below the cap. It only bounds a leak.
+- This is the part of the Malafat fix that applies here. Malafat's root cause was `next dev` giving its server half the machine's RAM as heap; this repo has no Next.js.
+- Files: `qa/qa.config.mjs`.
+
 ## [Unreleased] - 2026-10-17 — Analytics decision and event contract (MUT-153, ADR-090)
 
 **Why:** epic MUT-152 adds opt-in, anonymous PostHog analytics to the landing page, the portal and the phone app. Every doc said "no analytics of any kind", and the three surfaces needed one list of what they may send. No SDK ships here.
