@@ -3440,3 +3440,53 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 5. **Dismissal.** Got it, Escape or the backdrop write the running version. Settings › About reopens the newest entry the build includes. A centred modal, not a drawer: a one-time notice, not work on a record.
 6. **Notes describe the next version before the bump.** A QA build sets `MUTABA3A_APP_VERSION` to run as that version. The variable is unset in release builds.
 7. Desktop is out of scope (retired until v2). The code is build-agnostic.
+
+## ADR-090: Opt-In, Anonymous Product Analytics on the Landing Page, the Portal and the Phone App; the Local App Stays at Zero Telemetry
+
+**Status**: Active (overrides the "no analytics of any kind" wording below; reaffirms ADR-024)
+**Date**: 2026-10-17
+**Context**: Epic MUT-152, MUT-153. Mutaba3a has users but no revenue, and every roadmap call is a guess without funnel numbers: where landing visitors go, and where phone users drop off between installing and recording their first payment. The privacy promise is the product's differentiator, so Basel asked for analytics that are "opt-in and anonymous". The plan, the decision ledger (P1–P5, D1–D6) and the eng review are in `.claude/designs/mut-153-analytics-adr-taxonomy.md`.
+
+**Decision**:
+1. **Who may send.**
+   - Landing pages: cookieless, no banner (D1).
+   - Hosted portal: opt-in.
+   - Phone app (iOS, Android): opt-in.
+   - **Never:** the local web app (`/app`) and desktop. ADR-024's "sends no telemetry" holds for them unchanged.
+   - **Never:** the hosted API server. Activation events come from the phone, the only place clients, income and payments are created; the portal is read-only for money (P2, MUT-156 closed).
+2. **Errors are Sentry's** (epic MUT-146), never PostHog's: no `$exception`, no exception autocapture (P1).
+3. **One contract.** `docs/analytics/events.json` (versioned) is the only list of events, properties, types and emitters.
+   - `scripts/__tests__/analytics-taxonomy.test.ts` refuses free-text types; banned name tokens (amount, name, email, id, …, matched by whole token); error events; and server/web/desktop emitters.
+   - Each surface proves that what it sends is a subset of the contract.
+   - The Flutter repo keeps a byte-identical copy with a sha256 row and a parity test, the brand-fixture pattern (D2).
+4. **Anonymous** means:
+   - never `identify()`, no person profiles;
+   - a random install ID created on opt-in, kept only on the device, deleted on opt-out, and new on every opt-in;
+   - no amounts, names, free text, account, client or Malafat identifiers; a currency code is allowed;
+   - no replay, autocapture, heatmaps or surveys;
+   - IPs discarded at ingestion (`anonymize_ips`).
+5. **Opt-in** is off by default and asked once. Opting out sends one final `analytics_opted_out`, then stops and deletes the ID (D5, Basel's call against the recommendation; the policy says so).
+6. **Tracking**, in Mutaba3a's public copy, means following a person: a persistent identifier, cookies, or linking across sites, apps or devices. Cookieless, aggregate visit counting is not tracking. The landing hero's and privacy band's "No tracking" claims describe the free app and stay (P4).
+7. **The public privacy policy changes with each surface** (P3). `docs/analytics/README.md` holds the approved en/ar wording; MUT-154, MUT-155 and MUT-157 each publish theirs with the feature, so the policy is never ahead of what ships.
+8. **Where the data goes.** PostHog Cloud **EU** (`eu.posthog.com`), project "Mutaba3a" in the Barmajiyat organization, separate from Malafat's project. No firm data is sent, so ADR-024's residency rule for firm data is not engaged (the same reasoning as Sentry EU, MUT-147).
+9. **Configuration.**
+   - Keys come from env (`VITE_POSTHOG_KEY`/`VITE_POSTHOG_HOST`, Flutter `--dart-define`); no key means no sends and no errors.
+   - The project is created through the PostHog MCP and its settings are recorded in INFRA §1, like Netlify Forms. TODOS tracks moving them to the PostHog Terraform provider (D3).
+10. **Known limitation.** While PostHog issue #48660 is open, cookieless events carry no GeoIP country (the IP is stripped before transformations). MUT-154 decides whether to live with it.
+
+**Override log**:
+- **What it overrides.** The blanket "no telemetry, analytics, or tracking of any kind" wording in `.claude/SYSTEM_OVERVIEW.md` (principles and constraints), "Analytics: Intentionally none" in `.claude/CI_CD.md`, the README's "No tracking: no analytics" principle and its "will never add trackers or analytics SDKs" line, and the privacy policy's "None of our apps use analytics" sentences.
+- **What replaces it.** The README now scopes those promises to the local app. The policy sentences are replaced surface by surface, using the wording in `docs/analytics/README.md`.
+- **Not overridden.** ADR-024's guarantee for the desktop/PWA app (no telemetry, nothing leaves the device) and ADR-037's portal/app separation. The local bundles must never contain the SDK (enforced by `test:bundles` in MUT-154).
+- **Why.** Funnel numbers are needed for product decisions (MUT-152), and opt-in, anonymous counting keeps the promise people care about: what they enter never leaves without their choice. **Date:** 2026-10-17.
+
+**Alternatives considered**:
+- Analytics in the local app too, opt-in: rejected. The free app's "nothing leaves your device" is the brand.
+- PostHog for errors too: rejected for Sentry (better symbolication, and crash reports aren't limited to opted-in users).
+- Server-side activation events keyed by a header: rejected. The portal creates nothing, and a header contract plus de-duplication on idempotent replays was cost without benefit.
+- A consent banner on the landing page: rejected. Cookieless counting needs none, and a banner would lose most of the acquisition data.
+
+**Consequences**:
+- Any new event or property is a contract change: bump the version and update the Flutter copy.
+- The four surfaces each own a privacy-policy paragraph.
+- Opt-in rates can only be estimated against store-console installs, because nothing is sent before consent.
