@@ -133,8 +133,22 @@ if [[ ! "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
+# `npm version` only rewrites the root package's own "version" field (that's
+# why it's used over sed — see the comment below), so the dependency tree
+# node_modules holds is still exactly what it was. But it does touch
+# package-lock.json's mtime, and preflight.sh treats a lockfile newer than
+# node_modules/.package-lock.json as stale deps. Without this, every release
+# permanently "stales" node_modules for the next run, forcing a needless
+# `npm ci` before preflight will even look at anything else.
+refresh_install_stamp() {
+  local dir="$1"
+  [[ -d "$dir/node_modules" && -f "$dir/package-lock.json" ]] || return 0
+  cp "$dir/package-lock.json" "$dir/node_modules/.package-lock.json"
+}
+
 if [[ "$MODE" == "server" ]]; then
   ( cd server && npm version "$NEW" --no-git-tag-version --allow-same-version --ignore-scripts >/dev/null )
+  refresh_install_stamp server
   printf '%s✓%s server/package.json + server/package-lock.json → %s%s%s\n' "$C_GREEN" "$C_NC" "$C_GREEN" "$NEW" "$C_NC"
   exit 0
 fi
@@ -144,6 +158,7 @@ fi
 # shellcheck disable=SC1091
 source ./deploy.sh
 update_version "$NEW"
+refresh_install_stamp .
 
 # deploy.sh's update_version rewrites Cargo.toml but leaves Cargo.lock to the
 # next cargo build. The web release never builds Rust, so refresh the lock's
