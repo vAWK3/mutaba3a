@@ -21,10 +21,15 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
 1. **Only what `events.json` lists, enforced in code.** Each surface runs a guard that drops any
    event or property the contract doesn't list, and has tests proving it: posthog-js
    `before_send`, and the Flutter SDK's equivalent hook. The guard is **required**.
-   - The SDK's own `$` properties are limited too. Every surface keeps the SDK's **control
-     properties**: `$geoip_disable`, `$process_person_profile`, `$lib`, `$lib_version`, and on
-     the landing page the cookieless-mode markers posthog-js adds. MUT-154 names those markers;
-     each surface tests that its control properties survive the guard.
+   - The SDK's own `$` properties are limited too. Every surface keeps:
+     - the SDK's **routing and identity fields**: `token`, `distinct_id`, `$device_id`, the
+       event's uuid or `$insert_id`, and its timestamp;
+     - its **control properties**: `$geoip_disable`, `$process_person_profile`, `$lib`,
+       `$lib_version`, and on the landing page the cookieless-mode markers posthog-js adds
+       (MUT-154 names those markers).
+
+     `$session_id` and `$window_id` are dropped. Each surface tests that what it keeps survives
+     the guard.
      - **Landing (every landing event):** may keep PostHog's URL, UTM, referrer and device-type
        properties. Drop `$referrer` and `$referring_domain` when the referrer is this site's
        local app (`/app…`), so nothing about the local app reaches PostHog.
@@ -52,7 +57,8 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
      too: posthog-js `reset(true)`, and the Flutter SDK's full reset. Opting in again starts a
      fresh ID that can't be linked to the old one.
    - The only other stored values are the opt-in choice, the "already asked" flag and the
-     phone's "first open already sent" flag. All three are cleared on sign-out.
+     phone's "first open already sent" flag. All three are cleared on sign-out or account
+     switch.
 4. **Off by default, and the SDK doesn't start before consent.** On the portal and the phone,
    the SDK isn't initialised until the person opts in, so not even feature-flag or
    remote-config requests are made. Feature flags and remote config stay off afterwards too.
@@ -66,8 +72,8 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
    On a phone that is offline, the queue waits for the next connection, and nothing new is
    captured meanwhile. Tests prove this order (MUT-155, MUT-157).
 6. **Consent belongs to the signed-in person, not the device.** Signing out or switching account
-   clears the opt-in, the random ID and the "already asked" flag, and sends nothing. The next
-   person is asked fresh.
+   clears the opt-in, the random ID, the "already asked" flag and the phone's "first open already
+   sent" flag, and sends nothing. The next person is asked fresh.
 7. **SDK features off:**
    - autocapture, including exception autocapture
    - session replay, heatmaps and surveys
@@ -112,8 +118,8 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
 | | English | Arabic |
 |---|---|---|
 | Title | Share anonymous usage? | مشاركة بيانات استخدام مجهولة؟ |
-| Body | Help us see which parts of Mutaba3a people use. We never send amounts, names or anything you type, and it isn't linked to your account. You can turn it off any time in Settings. | ساعدنا على معرفة أجزاء متابعة التي يستخدمها الناس. لا نرسل أبدًا أي مبالغ أو أسماء أو أي شيء تكتبه، ولا ترتبط هذه البيانات بحسابك. يمكنك إيقافها في أي وقت من الإعدادات. |
-| Turn on (and the Settings toggle) | Share anonymous usage | مشاركة الاستخدام المجهول |
+| Body | Help us see which parts of Mutaba3a people use. We never send amounts, names or anything you type, and it isn't linked to your account. You can turn it off any time. | ساعدنا على معرفة أجزاء متابعة التي يستخدمها الناس. لا نرسل أبدًا أي مبالغ أو أسماء أو أي شيء تكتبه، ولا ترتبط هذه البيانات بحسابك. يمكنك إيقافها في أي وقت. |
+| Turn on (and the toggle) | Share anonymous usage | مشاركة الاستخدام المجهول |
 | Decline | Not now | ليس الآن |
 
 ## Changing the contract
@@ -204,8 +210,8 @@ the opening paragraph, then each live surface's sentence, then the closing parag
 
 **`usageAnalytics` sentence.**
 
-- EN: "The hosted portal asks you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, it sends a short note when you turn it on (saying whether you did so from the prompt or the account menu), each time you open the portal, and each time you save an income, an expense, or a payment. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the portal's version, its language, your browser's type, your device's operating system and its version, and whether it's a computer, tablet, or phone. Notes are sent under a random ID kept only in your browser, not linked to your account, and replaced when you sign out. If you turn it off from the account menu, we send one last note saying you turned it off, then stop and delete the random ID."
-- AR: «تسألك البوابة المستضافة مرة واحدة إن كنت تريد مشاركة استخدام مجهول، وتبقى المشاركة متوقفة ما لم تفعّلها. إن فعّلتها، ترسل البوابة ملاحظة قصيرة عند تفعيلها (وتذكر إن كان ذلك من الرسالة أو من قائمة الحساب)، وكلما فتحتها، وكلما حفظت دخلًا أو مصروفًا أو دفعة. لا تذكر الملاحظة إلا نوع ما حُفظ وعملته، وفي حالة الدخل إن كان مدفوعًا بالفعل، إضافة إلى إصدار البوابة ولغتها ونوع متصفحك ونظام تشغيل جهازك وإصداره، وإن كان حاسوبًا أو جهازًا لوحيًا أو هاتفًا. وتُرسَل الملاحظات تحت معرّف عشوائي محفوظ في متصفحك فقط، غير مرتبط بحسابك، ويُستبدل عند تسجيل خروجك. وإن أوقفتها من قائمة الحساب، نرسل ملاحظة أخيرة تفيد بأنك أوقفتها، ثم نتوقف ونحذف المعرّف العشوائي.»
+- EN: "The hosted portal asks you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, it sends a short note when you turn it on (saying whether you did so from the prompt or the account menu), each time you open the portal, and each time you save an income, an expense, or a payment. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the portal's version and its analytics library's version, its language, your browser's type, your device's operating system and its version, and whether it's a computer, tablet, or phone. Notes are sent under a random ID kept only in your browser, not linked to your account, and replaced when you sign out. If you turn it off from the account menu, we send one last note saying you turned it off, then stop and delete the random ID."
+- AR: «تسألك البوابة المستضافة مرة واحدة إن كنت تريد مشاركة استخدام مجهول، وتبقى المشاركة متوقفة ما لم تفعّلها. إن فعّلتها، ترسل البوابة ملاحظة قصيرة عند تفعيلها (وتذكر إن كان ذلك من الرسالة أو من قائمة الحساب)، وكلما فتحتها، وكلما حفظت دخلًا أو مصروفًا أو دفعة. لا تذكر الملاحظة إلا نوع ما حُفظ وعملته، وفي حالة الدخل إن كان مدفوعًا بالفعل، إضافة إلى إصدار البوابة وإصدار مكتبة الإحصاءات فيها ولغتها ونوع متصفحك ونظام تشغيل جهازك وإصداره، وإن كان حاسوبًا أو جهازًا لوحيًا أو هاتفًا. وتُرسَل الملاحظات تحت معرّف عشوائي محفوظ في متصفحك فقط، غير مرتبط بحسابك، ويُستبدل عند تسجيل خروجك. وإن أوقفتها من قائمة الحساب، نرسل ملاحظة أخيرة تفيد بأنك أوقفتها، ثم نتوقف ونحذف المعرّف العشوائي.»
 
 **`network.body`.** Add a portal sentence.
 
@@ -216,8 +222,8 @@ the opening paragraph, then each live surface's sentence, then the closing parag
 
 **`usageAnalytics` sentence.**
 
-- EN: "The iPhone and Android apps ask you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, they send a short note each time you turn it on (saying whether you did so from the prompt or Settings), once more the first time after you sign in, and each time you add a client or save an income, an expense, or a payment. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the app's version, its language, your phone's operating system and its version, and whether it's a phone or a tablet. Notes are sent under a random ID kept only on your phone, not linked to your account, and replaced when you sign out. If you turn it off in Settings, we send one last note saying you turned it off, then stop and delete the random ID."
-- AR: «يسألك تطبيقا iPhone وAndroid مرة واحدة إن كنت تريد مشاركة استخدام مجهول، وتبقى المشاركة متوقفة ما لم تفعّلها. إن فعّلتها، يرسل التطبيق ملاحظة قصيرة كلما فعّلتها (وتذكر إن كان ذلك من الرسالة أو من الإعدادات)، وملاحظة أخرى أول مرة بعد تسجيل دخولك، وكلما أضفت عميلًا أو حفظت دخلًا أو مصروفًا أو دفعة. لا تذكر الملاحظة إلا نوع ما حُفظ وعملته، وفي حالة الدخل إن كان مدفوعًا بالفعل، إضافة إلى إصدار التطبيق ولغته ونظام تشغيل هاتفك وإصداره، وإن كان هاتفًا أو جهازًا لوحيًا. وتُرسَل الملاحظات تحت معرّف عشوائي محفوظ على هاتفك فقط، غير مرتبط بحسابك، ويُستبدل عند تسجيل خروجك. وإن أوقفتها من الإعدادات، نرسل ملاحظة أخيرة تفيد بأنك أوقفتها، ثم نتوقف ونحذف المعرّف العشوائي.»
+- EN: "The iPhone and Android apps ask you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, they send a short note each time you turn it on (saying whether you did so from the prompt or Settings), once more the first time after you sign in, and each time you add a client or save an income, an expense, or a payment. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the app's version and its analytics library's version, its language, your phone's operating system and its version, and whether it's a phone or a tablet. Notes are sent under a random ID kept only on your phone, not linked to your account, and replaced when you sign out. If you turn it off in Settings, we send one last note saying you turned it off, then stop and delete the random ID."
+- AR: «يسألك تطبيقا iPhone وAndroid مرة واحدة إن كنت تريد مشاركة استخدام مجهول، وتبقى المشاركة متوقفة ما لم تفعّلها. إن فعّلتها، يرسل التطبيق ملاحظة قصيرة كلما فعّلتها (وتذكر إن كان ذلك من الرسالة أو من الإعدادات)، وملاحظة أخرى أول مرة بعد تسجيل دخولك، وكلما أضفت عميلًا أو حفظت دخلًا أو مصروفًا أو دفعة. لا تذكر الملاحظة إلا نوع ما حُفظ وعملته، وفي حالة الدخل إن كان مدفوعًا بالفعل، إضافة إلى إصدار التطبيق وإصدار مكتبة الإحصاءات فيه ولغته ونظام تشغيل هاتفك وإصداره، وإن كان هاتفًا أو جهازًا لوحيًا. وتُرسَل الملاحظات تحت معرّف عشوائي محفوظ على هاتفك فقط، غير مرتبط بحسابك، ويُستبدل عند تسجيل خروجك. وإن أوقفتها من الإعدادات، نرسل ملاحظة أخيرة تفيد بأنك أوقفتها، ثم نتوقف ونحذف المعرّف العشوائي.»
 
 **`network.body`.** Replace the mobile sentence. Keep any Sentry sentence already there.
 

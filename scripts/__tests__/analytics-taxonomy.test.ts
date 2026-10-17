@@ -18,7 +18,7 @@ const CONTRACT_PATH = 'docs/analytics/events.json';
  * differ from what this repo calls that version.
  */
 const PINNED_VERSIONS: Record<string, string> = {
-  '1.1.0': '9210dc24dec5cb886f9172d244a127bbddb8ee7c403f7dccf5eb2e75bfc55107',
+  '1.1.0': '2654fb1f1dde9896c359d58356c478181c0f8b8f7fa43a1b56f1d6b6986ad099',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;

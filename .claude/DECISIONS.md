@@ -3477,7 +3477,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
    - **no location**: the project's GeoIP transformation is off (2026-10-17), and events send `$geoip_disable`;
    - no replay, autocapture, heatmaps, surveys, feature flags or remote config; IPs discarded at ingestion (`anonymize_ips`);
    - **no joining** PostHog data with the hosted database, server logs or Malafat data, and no person-level exports, because exact timestamps could otherwise link an ID to an account.
-5. **Opt-in** is off by default, asked once per signed-in person, and the SDK isn't initialised before it. Consent belongs to the person, not the device: sign-out or account switch clears the choice, the ID and the asked flag, and sends nothing.
+5. **Opt-in** is off by default, asked once per signed-in person, and the SDK isn't initialised before it. Consent belongs to the person, not the device: sign-out or account switch clears the choice, the ID, the asked flag and the phone's "first open already sent" flag, and sends nothing.
    - Opting out sends one final `analytics_opted_out`: capture it, flush (anything queued while opted in goes with it), opt out, reset.
    - This was D5, Basel's call against the recommendation; the policy says so.
 6. **Tracking**, in Mutaba3a's public copy, means following a person across sites, apps or devices, or for advertising. Cookieless visit counting, and an opted-in random ID that is stored only on its device, sent only to PostHog and reset on sign-out, are not tracking by this definition. The landing hero's and privacy band's "No tracking" claims describe the free app and stay (P4).

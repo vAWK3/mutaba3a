@@ -426,6 +426,14 @@ The shipped `events.json` (1.1.0) supersedes §6 above:
 - The portal toggle lives in the account menu (no Settings page exists).
 - `app_first_opened` is once per signed-in person, and its flag is cleared on sign-out.
 
+**Third pass** (the last cycle allowed) found 4 more; all fixed:
+- The opt-in copy table no longer says "Settings": the body is neutral, and the row is labelled "Turn on (and the toggle)".
+- The `prompt: settings` description covers the portal's account menu.
+- Rule 1 names the routing and identity fields every guard keeps and drops `$session_id`/`$window_id`. The policy lists the analytics library's version.
+- Rule 6, rule 3, ADR §5 and events.json all list the same flags, cleared on sign-out or account switch.
+
+The review stops at its 3-cycle limit without a clean fourth pass, so it is recorded as not converged.
+
 **Auto-fixed** (mechanical, or follows an approved decision): the rest of the docs findings. The list:
 - **Rules (`docs/analytics/README.md`):**
   - SDK `$` URL, path, referrer and screen props dropped on portal and phone (security);

@@ -35,7 +35,7 @@
     },
     "app_first_opened": {
       "emitters": ["ios", "android"],
-      "description": "Sent once per signed-in person on this phone, right after their first opt-in (which may come later, from Settings). The 'already sent' flag is cleared with the other flags on sign-out. Nothing is sent before a person opts in, so earlier opens are never counted."
+      "description": "Sent once per signed-in person on this phone, right after their first opt-in (which may come later, from Settings). The 'already sent' flag is cleared with the other flags on sign-out or account switch. Nothing is sent before a person opts in, so earlier opens are never counted."
     },
     "portal_opened": {
       "emitters": ["portal"],
@@ -48,7 +48,7 @@
         "prompt": {
           "type": "enum",
           "values": ["first_run", "settings"],
-          "description": "Turned on from the one-time prompt or from Settings."
+          "description": "Turned on from the one-time prompt (first_run) or from the toggle (settings): Settings on the phone, the account menu on the portal."
         }
       }
     },
