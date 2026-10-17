@@ -1,4 +1,14 @@
 {
+  "0.1.8": {
+    "en": [
+      "Changing your password now keeps you signed in on this device.",
+      "The account menu has a new \"Get the app\" link for downloading the iPhone app."
+    ],
+    "ar": [
+      "لم يعد تغيير كلمة المرور يسجّل خروجك من هذا الجهاز.",
+      "أُضيف رابط «الحصول على التطبيق» إلى قائمة الحساب لتحميل تطبيق آيفون."
+    ]
+  },
   "0.1.7": {
     "en": [
       "A \"What's new\" note like this one now opens once after each update. Open it again any time from Settings › About.",
