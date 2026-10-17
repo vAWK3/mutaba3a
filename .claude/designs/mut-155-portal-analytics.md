@@ -35,9 +35,15 @@ server/src/app.ts    → PORTAL_CSP connect-src += https://eu.i.posthog.com
   - again in the same page: `opt_in_capturing({ captureEventName: false })` after the earlier
     reset, so no `$opt_in` event (rule 7).
   - Either way, `analytics_opted_in { prompt }` follows.
-- **Turning it off:** capture `analytics_opted_out` (sent immediately), then `reset(true)`, then
-  `opt_out_capturing()` (as built: `reset()` clears posthog-js's consent, so opting out after it is
-  what keeps the SDK silent), then remove every `ph_*` / `__ph_*` key. The record becomes `off`.
+- **Turning it off:**
+  - capture `analytics_opted_out` (sent immediately), then `opt_out_capturing()`, then
+    `reset(true)`, then remove every `ph_*` / `__ph_*` key from localStorage and sessionStorage. The
+    record becomes `off`.
+  - As built after review F1: the SDK is initialised with `opt_out_capturing_by_default` and
+    `opt_out_persistence_by_default` and opted in only while the choice is on, so a deleted consent
+    record means "off" in every tab.
+  - Other tabs follow through a `storage` listener, and `trackPortal` re-reads the record before
+    sending.
 - **Sign-out or another account** (rule 6):
   - **Sign-out** (this tab or another): reset without sending anything, and clear the record and
     the keys.

@@ -9,6 +9,12 @@ import { APP_VERSION } from '../../lib/appVersion';
  * belongs to that person on this browser, so signing out or another account
  * signing in resets it (README rule 6). Every event leaves through the
  * contract guard (rule 1). This is the only portal file that imports posthog-js.
+ *
+ * The SDK starts opted out (`opt_out_capturing_by_default`) and is opted in
+ * only while the choice is on, so deleting its consent record silences every
+ * open tab, not just this one (review F1). Each step that waits for the SDK
+ * to load checks the choice again afterwards, so an opt-out or sign-out made
+ * meanwhile wins (review F2).
  */
 
 /** Where this browser keeps the signed-in person's choice: `{ owner: <user id>, choice }`. Never sent. */
@@ -32,28 +38,35 @@ interface PostHogLike {
   capture: (event: string, properties?: Record<string, unknown>) => unknown;
   opt_out_capturing: () => void;
   opt_in_capturing: (options?: { captureEventName?: false | null }) => void;
+  has_opted_out_capturing: () => boolean;
   reset: (resetDeviceId?: boolean) => void;
 }
 
 let sdk: PostHogLike | null = null;
+let loading: Promise<PostHogLike | null> | null = null;
 let openedCounted = false;
+/** True once this page has opted out: turning it on again starts a fresh ID. */
+let silencedInThisPage = false;
+let listening = false;
 
-async function loadSdk(): Promise<PostHogLike | null> {
-  if (sdk) return sdk;
-  try {
-    // The SDK, the contract and its guard load together, only once sharing is on
-    const [sdkModule, { documentLocale, posthogInitOptions }] = await Promise.all([import('posthog-js'), import('../../lib/analytics/posthogConfig')]);
-    const posthog = sdkModule.default as unknown as PostHogLike;
-    posthog.init(
-      POSTHOG_KEY,
-      posthogInitOptions(() => ({ surface: 'portal', appVersion: APP_VERSION, locale: documentLocale() })),
-    );
-    sdk = posthog;
-    return sdk;
-  } catch {
-    // An ad blocker or a network failure must never break the portal
-    return null;
-  }
+/** Loads the SDK, the contract and its guard together, once per page, and initialises it opted out. */
+function loadSdk(): Promise<PostHogLike | null> {
+  loading ??= (async () => {
+    try {
+      const [sdkModule, { documentLocale, posthogInitOptions }] = await Promise.all([import('posthog-js'), import('../../lib/analytics/posthogConfig')]);
+      const posthog = sdkModule.default as unknown as PostHogLike;
+      posthog.init(
+        POSTHOG_KEY,
+        posthogInitOptions(() => ({ surface: 'portal', appVersion: APP_VERSION, locale: documentLocale() })),
+      );
+      sdk = posthog;
+      return posthog;
+    } catch {
+      // An ad blocker or a network failure must never break the portal
+      return null;
+    }
+  })();
+  return loading;
 }
 
 function readRecord(): { owner: string; choice: UsageChoice } | null {
@@ -77,20 +90,35 @@ function writeRecord(owner: string, choice: UsageChoice) {
   }
 }
 
-/** Deletes PostHog's own keys (the random ID and its consent flag) from this browser. */
+/** The choice this browser holds for `owner`, as any tab last wrote it. */
+function storedChoiceFor(owner: string): UsageChoice | null {
+  const record = readRecord();
+  return record && record.owner === owner ? record.choice : null;
+}
+
+/** Still on for the same person, in this tab and in storage (another tab may have turned it off). */
+function stillOn(owner: string): boolean {
+  const state = usePortalUsage.getState();
+  return state.choice === 'on' && state.owner === owner && storedChoiceFor(owner) === 'on';
+}
+
+/** Deletes PostHog's own keys (the random ID, its consent record, the window and session marks) from this browser. */
 function forgetPosthogStorage() {
-  try {
-    for (const key of Object.keys(localStorage)) if (/^(__)?ph_/.test(key)) localStorage.removeItem(key);
-  } catch {
-    // Nothing stored, or storage refused: nothing to delete
+  for (const store of [globalThis.localStorage, globalThis.sessionStorage]) {
+    try {
+      for (const key of Object.keys(store)) if (/^(__)?ph_/.test(key)) store.removeItem(key);
+    } catch {
+      // Nothing stored, or storage refused: nothing to delete
+    }
   }
 }
 
-/** Resets the SDK's identity and silences it, without sending anything (order matters: reset clears consent). */
+/** Opts the SDK out, then resets its identity, without sending anything (ticket order; the SDK stays opted out). */
 function silenceSdk() {
   if (!sdk) return;
-  sdk.reset(true);
   sdk.opt_out_capturing();
+  sdk.reset(true);
+  silencedInThisPage = true;
 }
 
 function clearEverything() {
@@ -103,6 +131,37 @@ function clearEverything() {
   }
 }
 
+/** Opts a loaded SDK in for this person; a fresh random ID if this page opted out before. */
+function optIn(posthog: PostHogLike) {
+  if (!posthog.has_opted_out_capturing()) return;
+  if (silencedInThisPage) posthog.reset(true);
+  posthog.opt_in_capturing({ captureEventName: false });
+  silencedInThisPage = false;
+}
+
+/** Another tab changed the choice: follow it here, sending nothing. */
+function followOtherTab() {
+  const { owner, choice } = usePortalUsage.getState();
+  if (!owner || choice === 'unavailable') return;
+  const stored = storedChoiceFor(owner);
+  if (stored === choice) return;
+  usePortalUsage.setState({ choice: stored });
+  if (stored === 'on') return;
+  silenceSdk();
+  // sessionStorage is per tab: the tab that turned it off can't reach this one's
+  forgetPosthogStorage();
+}
+
+function listenToOtherTabs() {
+  if (listening || typeof window === 'undefined') return;
+  listening = true;
+  window.addEventListener('storage', onStorage);
+}
+
+function onStorage(event: StorageEvent) {
+  if (event.key === USAGE_RECORD_KEY || event.key === null) followOtherTab();
+}
+
 /**
  * Called once the signed-in person is known. Another account's choice is
  * reset; a stored "on" starts the SDK and counts this opening of the portal.
@@ -112,6 +171,7 @@ export async function syncPortalUsage(userId: string): Promise<void> {
     usePortalUsage.setState({ choice: 'unavailable', owner: userId });
     return;
   }
+  listenToOtherTabs();
   let record = readRecord();
   if (record && record.owner !== userId) {
     clearEverything();
@@ -121,7 +181,9 @@ export async function syncPortalUsage(userId: string): Promise<void> {
   if (record?.choice !== 'on' || openedCounted) return;
   openedCounted = true;
   const posthog = await loadSdk();
-  posthog?.capture('portal_opened');
+  if (!posthog || !stillOn(userId)) return;
+  optIn(posthog);
+  posthog.capture('portal_opened');
 }
 
 /** The person's answer, from the prompt or the account menu. */
@@ -132,23 +194,19 @@ export async function choosePortalUsage(choice: UsageChoice, prompt: UsagePrompt
   usePortalUsage.setState({ choice });
   if (choice === 'on') {
     if (current === 'on') return;
-    const reopening = sdk !== null;
     const posthog = await loadSdk();
-    if (!posthog) return;
-    if (reopening) {
-      // A fresh ID after an earlier opt-out in this page: reset first, then opt in (reset clears consent)
-      posthog.reset(true);
-      posthog.opt_in_capturing({ captureEventName: false });
-    }
+    // Turned off or signed out while the SDK loaded: that answer wins
+    if (!posthog || !stillOn(owner)) return;
+    optIn(posthog);
     openedCounted = true;
     posthog.capture('analytics_opted_in', { prompt });
     return;
   }
-  if (current === 'on' && sdk) {
+  if (current === 'on' && sdk && !sdk.has_opted_out_capturing()) {
     // The one last note (D5), sent at once (request_batching is off), then the ID goes
     sdk.capture('analytics_opted_out');
-    silenceSdk();
   }
+  silenceSdk();
   forgetPosthogStorage();
 }
 
@@ -159,11 +217,23 @@ export function endPortalUsage(): void {
   usePortalUsage.setState({ choice: null, owner: null });
 }
 
-/** Counts a confirmed save; does nothing unless the signed-in person turned sharing on. */
+/**
+ * Counts a confirmed save; does nothing unless the signed-in person turned
+ * sharing on. Right after a reload the SDK may still be loading: the save
+ * waits for it rather than being lost (review F3).
+ */
 export async function trackPortal(event: PortalEvent, properties: Record<string, unknown>): Promise<void> {
-  if (usePortalUsage.getState().choice !== 'on' || !sdk) return;
+  const { owner, choice } = usePortalUsage.getState();
+  if (choice !== 'on' || !owner) return;
+  if (!stillOn(owner)) {
+    followOtherTab();
+    return;
+  }
+  const posthog = sdk ?? (await loading);
+  if (!posthog || !stillOn(owner)) return;
   try {
-    sdk.capture(event, properties);
+    optIn(posthog);
+    posthog.capture(event, properties);
   } catch {
     // Counting must never break a save
   }
@@ -171,6 +241,10 @@ export async function trackPortal(event: PortalEvent, properties: Record<string,
 
 export function resetPortalUsageForTests() {
   sdk = null;
+  loading = null;
   openedCounted = false;
+  silencedInThisPage = false;
+  if (listening) window.removeEventListener('storage', onStorage);
+  listening = false;
   usePortalUsage.setState({ choice: null, owner: null });
 }

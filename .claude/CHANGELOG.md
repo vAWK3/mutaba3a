@@ -58,6 +58,19 @@
   - fails if PostHog is statically reachable from the portal's entry (it loads only after consent);
   - the hosted origin allowlist gains PostHog's library strings.
 
+### Fixed (qa-reconcile review)
+- **F1: opting out in one tab now silences every tab.**
+  - The portal SDK starts with `opt_out_capturing_by_default` and `opt_out_persistence_by_default`, and is opted in only while the choice is on. Deleting its consent record leaves it opted out everywhere, writing nothing back.
+  - Opt-out order is the ticket's: capture the last note, opt out, then `reset(true)`.
+  - A `storage` listener makes another tab follow the change. That tab forgets its own sessionStorage keys, sending nothing.
+  - `trackPortal` re-reads the record before sending.
+- **F2.** An opt-out or sign-out made while the SDK is still loading wins. The load is memoized, and every step re-checks the choice after awaiting it.
+- **F3.** A save made right after a reload waits for the SDK instead of being lost.
+- **F4.** The opt-out and sign-out sweep covers sessionStorage too.
+- **F5.** `portalAnalytics.sdk.test.ts` runs the flow against the real posthog-js.
+- **F6.** The prompt's title is a labelled paragraph, not an `h2` above the page's `h1`.
+- QA adds `other-tab-silenced`.
+
 ### Technical
 - Files:
   - `src/hosted/analytics/*`, `src/hosted/components/{UsagePrompt,UsageMenuItem,IncomeCaptureDrawer,RecordPaymentDrawer,ExpenseDrawer,AppDownloadMenuItems}.tsx`;

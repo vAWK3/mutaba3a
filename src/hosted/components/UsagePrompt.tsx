@@ -21,9 +21,10 @@ export function UsagePrompt() {
     <section className="hp-banner hp-banner-info hp-usage-prompt" aria-labelledby={titleId}>
       <InfoIcon />
       <div className="hp-usage-prompt-body">
-        <h2 id={titleId} className="hp-usage-prompt-title">
+        {/* A labelled paragraph, not a heading: it sits above the page's h1 (review F6) */}
+        <p id={titleId} className="hp-usage-prompt-title">
           {t('hosted.usage.title')}
-        </h2>
+        </p>
         <p>{t('hosted.usage.body')}</p>
         <div className="hp-usage-prompt-actions">
           <Button type="button" variant="secondary" onClick={() => void choosePortalUsage('on', 'first_run')}>

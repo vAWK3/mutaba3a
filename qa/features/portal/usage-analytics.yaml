@@ -63,3 +63,12 @@ features:
     expect:
       - Nothing is sent at sign-out and no PostHog key is left in storage
       - After signing in again the notice asks again, and nothing is sent until it is answered
+  - id: other-tab-silenced
+    title: Turning sharing off in one tab silences another open tab (MUT-155 review F1)
+    steps:
+      - Turn sharing on, then open Payments in a second tab
+      - In the first tab, turn off "Share anonymous usage" in the account menu
+      - In the second tab, add a received income
+    expect:
+      - Nothing is sent from the second tab and no PostHog key comes back in its storage
+      - The second tab's switch reads off too

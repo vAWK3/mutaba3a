@@ -46,6 +46,11 @@ describe('posthogInitOptions', () => {
     expect(posthogInitOptions(ctx('portal'))).not.toHaveProperty('cookieless_mode');
   });
 
+  it('makes a missing consent record mean "off" on the portal, so an opt-out in one tab silences every tab (MUT-155 review F1)', () => {
+    expect(posthogInitOptions(ctx('portal'))).toMatchObject({ opt_out_capturing_by_default: true, opt_out_persistence_by_default: true });
+    expect(posthogInitOptions(ctx('landing'))).not.toHaveProperty('opt_out_capturing_by_default');
+  });
+
   it('routes every event through the contract guard with the live context', () => {
     let locale: 'ar' | 'en' = 'ar';
     const options = posthogInitOptions(() => ({ surface: 'portal', appVersion: '1.2.3', locale }));

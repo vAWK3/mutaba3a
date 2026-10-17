@@ -35,10 +35,23 @@ const FEATURES_OFF: Partial<PostHogConfig> = {
   person_profiles: 'never',
 };
 
-/** Per-surface options: the landing counts cookieless, the portal keeps its random ID in localStorage only. */
+/**
+ * Per-surface options: the landing counts cookieless, the portal keeps its
+ * random ID in localStorage only. On the portal the SDK is opted out unless
+ * its consent record says otherwise (review F1): posthog-js reads consent from
+ * storage on every check, so once the opt-out deletes that record, every open
+ * tab is silent and writes nothing back.
+ */
 const SURFACE_OPTIONS: Record<'landing' | 'portal', Partial<PostHogConfig>> = {
   landing: { cookieless_mode: 'always', capture_pageview: true, save_referrer: true },
-  portal: { persistence: 'localStorage', capture_pageview: false, save_referrer: false, request_batching: false },
+  portal: {
+    persistence: 'localStorage',
+    capture_pageview: false,
+    save_referrer: false,
+    request_batching: false,
+    opt_out_capturing_by_default: true,
+    opt_out_persistence_by_default: true,
+  },
 };
 
 /**

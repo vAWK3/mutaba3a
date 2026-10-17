@@ -87,7 +87,7 @@
 
 /* MUT-155: the one-time usage question, inline at the top of the page */
 .hp-usage-prompt-body { display: grid; gap: var(--space-2); min-width: 0; }
-.hp-usage-prompt-title { margin: 0; font-size: var(--text-body); font-weight: 600; }
+.hp-usage-prompt-body .hp-usage-prompt-title { margin: 0; font-size: var(--text-body); font-weight: 600; color: var(--text); }
 .hp-usage-prompt-body p { margin: 0; color: var(--muted); }
 .hp-usage-prompt-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 

@@ -9,16 +9,26 @@ import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
  * toggle, and sign-out forgetting the choice. PostHog itself is a spy.
  */
 
-const { build, sdk } = vi.hoisted(() => ({
-  build: { key: 'phc_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789' },
-  sdk: {
-    init: vi.fn(),
-    capture: vi.fn(),
-    opt_out_capturing: vi.fn(),
-    opt_in_capturing: vi.fn(),
-    reset: vi.fn(),
-  },
-}));
+const { build, sdk, consent } = vi.hoisted(() => {
+  // Like the real SDK with opt_out_capturing_by_default: opted out until opted in
+  const consent = { out: true };
+  return {
+    build: { key: 'phc_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789' },
+    consent,
+    sdk: {
+      init: vi.fn(),
+      capture: vi.fn(),
+      opt_out_capturing: vi.fn(() => {
+        consent.out = true;
+      }),
+      opt_in_capturing: vi.fn(() => {
+        consent.out = false;
+      }),
+      has_opted_out_capturing: vi.fn(() => consent.out),
+      reset: vi.fn(),
+    },
+  };
+});
 vi.mock('../../../lib/analytics/posthogKey', () => ({
   get POSTHOG_KEY() {
     return build.key;
@@ -40,6 +50,7 @@ beforeEach(() => {
   localStorage.clear();
   localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
   Object.values(sdk).forEach((fn) => fn.mockClear());
+  consent.out = true;
   build.key = 'phc_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
   stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()), 'DELETE /v1/sessions/current': () => new Response(null, { status: 204 }) });
 });

@@ -34,7 +34,8 @@ async function turnOnFromPrompt(page: Page, analytics: AnalyticsSpy) {
   await nextEvent(analytics, 'analytics_opted_in');
 }
 
-const posthogKeys = (page: Page) => page.evaluate(() => Object.keys(localStorage).filter((key) => /ph_|posthog/i.test(key)));
+const posthogKeys = (page: Page) =>
+  page.evaluate(() => [...Object.keys(localStorage), ...Object.keys(sessionStorage)].filter((key) => /ph_|posthog/i.test(key)));
 
 test('the portal asks once and sends nothing before an answer', { tag: '@portal.usage-analytics.prompt-silent-until-chosen' }, async ({ page, step, analytics }) => {
   await step('Sign in and open Payments', async () => {
@@ -162,5 +163,40 @@ test('signing out forgets the choice and the ID without sending anything', { tag
     await expect(page.getByRole('region', { name: PROMPT })).toBeVisible();
     await page.waitForTimeout(2_000);
     expect(analytics.requestCount()).toBe(before);
+  });
+});
+
+test('turning sharing off in one tab silences another open tab', { tag: '@portal.usage-analytics.other-tab-silenced' }, async ({ page, step, analytics, context }) => {
+  const api = seed();
+  const other = await context.newPage();
+  const drawer = other.getByRole('dialog', { name: 'New income' });
+
+  await step('Turn sharing on, then open Payments in a second tab', async () => {
+    await openPortal(page, api);
+    await turnOnFromPrompt(page, analytics);
+    await openPortal(other, api);
+    await expect.poll(() => analytics.events().filter((e) => e.event === 'portal_opened').length).toBe(1);
+  });
+
+  await step('In the first tab, turn off "Share anonymous usage" in the account menu', async () => {
+    await page.getByRole('button', { name: /^Account/ }).click();
+    await page.getByRole('menuitemcheckbox', { name: TURN_ON }).click();
+    await nextEvent(analytics, 'analytics_opted_out');
+  });
+
+  await step('In the second tab, add a received income: nothing is sent and no PostHog key comes back', async () => {
+    const before = analytics.requestCount();
+    await other.locator('[data-income-add]').click();
+    await drawer.getByLabel('Amount').fill('300');
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer).toHaveCount(0);
+    await other.waitForTimeout(2_000);
+    expect(analytics.requestCount()).toBe(before);
+    expect(await posthogKeys(other)).toEqual([]);
+  });
+
+  await step("The second tab's switch reads off too", async () => {
+    await other.getByRole('button', { name: /^Account/ }).click();
+    await expect(other.getByRole('menuitemcheckbox', { name: TURN_ON })).toHaveAttribute('aria-checked', 'false');
   });
 });

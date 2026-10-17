@@ -2902,4 +2902,17 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
   - `opt-out-last-note`;
   - `sign-out-resets`.
 - **`@portal.account.get-the-app`**: the iPhone link carries `ct=mutaba3a-portal`; Android is the last, inert row.
+- **Review fixes (F1–F6):**
+  - `portalAnalytics.test.ts` (23):
+    - opt-out order capture → opt out → reset, sweeping both storages;
+    - opting out or signing out while the SDK loads sends nothing;
+    - a save right after a reload waits for the SDK;
+    - another tab's opt-out (a `storage` event, or a record re-read at save time) silences this tab and clears its sessionStorage.
+  - `portalAnalytics.sdk.test.ts` (4, real posthog-js):
+    - opted out and nothing stored before a yes;
+    - after opt-out, no `ph_` key in either storage, and a stale capture neither sends nor writes;
+    - a fresh `$device_id` on re-opt-in;
+    - a new page after an opt-out starts opted out.
+  - `posthogConfig.test.ts`: the portal's `opt_out_*_by_default`.
+  - QA `other-tab-silenced`: a save in a second tab after an opt-out in the first sends nothing, and its switch reads off.
 - **Known:** on preview builds, `portal.signin.boot-slow-session` (2 tests) still fails, as listed above. The other 72 portal and landing specs pass.
