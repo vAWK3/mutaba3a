@@ -309,6 +309,8 @@
   cursor: pointer;
 }
 .hp-menu-item:hover, .hp-menu-item:focus-visible { background: var(--surface-2); outline: none; }
+/* Android "coming soon" (MUT-261): named, not actionable — no hover/focus highlight. */
+.hp-menu-item--soon, .hp-menu-item--soon:hover, .hp-menu-item--soon:focus-visible { color: var(--muted); cursor: default; background: transparent; }
 
 /* ---------- Pages ---------- */
 

@@ -54,7 +54,7 @@ export interface MobileAppLink {
  * installing first would end at a sign-in screen they cannot pass (MUT-186, 9A).
  */
 export const MOBILE_APP_LINKS: Record<'ios' | 'android', MobileAppLink> = {
-  ios: { available: true, url: null },
+  ios: { available: true, url: 'https://apps.apple.com/us/app/متابعة-مالية/id6821813829' },
   android: { available: false, url: null },
 };
 
