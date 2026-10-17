@@ -3453,26 +3453,44 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
    - Hosted portal: opt-in.
    - Phone app (iOS, Android): opt-in.
    - **Never:** the local web app (`/app`) and desktop. ADR-024's "sends no telemetry" holds for them unchanged.
-   - **Never:** the hosted API server. Activation events come from the phone, the only place clients, income and payments are created; the portal is read-only for money (P2, MUT-156 closed).
+   - **Never:** the hosted API server (MUT-156 closed). Activation events come from the clients:
+     - **The phone** creates clients and saves income, expenses and payments.
+     - **The portal** saves income and payments (personal profile only, MUT-133) and expenses.
+
+     It never creates clients. *Correction, 2026-10-17 (MUT-153 `/review`):* the plan first said the portal was read-only for money. That was wrong, so Basel re-decided P2: portal and phone both emit.
 2. **Errors are Sentry's** (epic MUT-146), never PostHog's: no `$exception`, no exception autocapture (P1).
-3. **One contract.** `docs/analytics/events.json` (versioned) is the only list of events, properties, types and emitters.
-   - `scripts/__tests__/analytics-taxonomy.test.ts` refuses free-text types; banned name tokens (amount, name, email, id, …, matched by whole token); error events; and server/web/desktop emitters.
-   - Each surface proves that what it sends is a subset of the contract.
-   - The Flutter repo keeps a byte-identical copy with a sha256 row and a parity test, the brand-fixture pattern (D2).
+3. **One contract.** `docs/analytics/events.json` is the only list of events, properties, types and emitters.
+   - **The test** (`scripts/__tests__/analytics-taxonomy.test.ts`) refuses:
+     - free-text types; `semver` anywhere but `app_version`;
+     - banned name tokens (amount, name, email, id, …, matched by whole token);
+     - error and failure events; server/web/desktop emitters;
+     - unknown keys and extra shared properties.
+     - `currency` means only the app's four currencies.
+   - **Versioned and pinned.** The file carries a version, and the test pins a sha256 per version (append-only), so content can't change under an unchanged version.
+   - **Each surface's guard** (`before_send` or the Flutter equivalent, required) drops anything not in the contract, including SDK `$` properties that could carry identifiers: no URL, path, referrer or screen name on the portal or the phone.
+   - **The Flutter repo** keeps a byte-identical copy with a sha256 row and a parity test, the brand-fixture pattern (D2).
 4. **Anonymous** means:
-   - never `identify()`, no person profiles;
-   - a random install ID created on opt-in, kept only on the device, deleted on opt-out, and new on every opt-in;
+   - never `identify()`, `alias()` or `group()`; no person profiles; no super properties beyond the shared three;
+   - a random install ID created on opt-in and kept only on the device (on the portal in `localStorage`, never a cookie, because the portal shares its origin with the API);
+   - a full reset, `$device_id` included, on opt-out, sign-out or account switch;
    - no amounts, names, free text, account, client or Malafat identifiers; a currency code is allowed;
-   - no replay, autocapture, heatmaps or surveys;
-   - IPs discarded at ingestion (`anonymize_ips`).
-5. **Opt-in** is off by default and asked once. Opting out sends one final `analytics_opted_out`, then stops and deletes the ID (D5, Basel's call against the recommendation; the policy says so).
-6. **Tracking**, in Mutaba3a's public copy, means following a person: a persistent identifier, cookies, or linking across sites, apps or devices. Cookieless, aggregate visit counting is not tracking. The landing hero's and privacy band's "No tracking" claims describe the free app and stay (P4).
+   - **no location**: the project's GeoIP transformation is off (2026-10-17), and events send `$geoip_disable`;
+   - no replay, autocapture, heatmaps, surveys, feature flags or remote config; IPs discarded at ingestion (`anonymize_ips`);
+   - **no joining** PostHog data with the hosted database, server logs or Malafat data, and no person-level exports, because exact timestamps could otherwise link an ID to an account.
+5. **Opt-in** is off by default, asked once per signed-in person, and the SDK isn't initialised before it. Consent belongs to the person, not the device: sign-out or account switch clears the choice, the ID and the asked flag, and sends nothing.
+   - Opting out sends one final `analytics_opted_out`: capture it, flush (anything queued while opted in goes with it), opt out, reset.
+   - This was D5, Basel's call against the recommendation; the policy says so.
+6. **Tracking**, in Mutaba3a's public copy, means following a person across sites, apps or devices, or for advertising. Cookieless visit counting, and an opted-in random ID that never leaves its device and resets on sign-out, are not tracking by this definition. The landing hero's and privacy band's "No tracking" claims describe the free app and stay (P4).
 7. **The public privacy policy changes with each surface** (P3). `docs/analytics/README.md` holds the approved en/ar wording; MUT-154, MUT-155 and MUT-157 each publish theirs with the feature, so the policy is never ahead of what ships.
 8. **Where the data goes.** PostHog Cloud **EU** (`eu.posthog.com`), project "Mutaba3a" (id 304889) in the Barmajiyat organization, separate from Malafat's project. No firm data is sent, so ADR-024's residency rule for firm data is not engaged (the same reasoning as Sentry EU, MUT-147).
 9. **Configuration.**
-   - Keys come from env (`VITE_POSTHOG_KEY`/`VITE_POSTHOG_HOST`, Flutter `--dart-define`); no key means no sends and no errors.
-   - The project is created through the PostHog MCP and its settings are recorded in INFRA §1, like Netlify Forms. TODOS tracks moving them to the PostHog Terraform provider (D3).
-10. **Known limitation.** While PostHog issue #48660 is open, cookieless events carry no GeoIP country (the IP is stripped before transformations). MUT-154 decides whether to live with it.
+   - Keys come from env (`VITE_POSTHOG_KEY`/`VITE_POSTHOG_HOST`, Flutter `--dart-define`), and only for production: Netlify's production context, never deploy previews or QA builds. No key means no sends and no errors.
+   - The project is configured through the PostHog MCP, and its settings are recorded in INFRA §1, like Netlify Forms. TODOS #15 tracks moving them to the PostHog Terraform provider (D3).
+   - **Access** to the project is limited to people Basel grants: an operator step in the PostHog UI.
+10. **Landing specifics.**
+    - **No country.** Cookieless events carry no country: GeoIP is off, and PostHog #48660 would strip the IP anyway. MUT-154 may propose a coarse country as a contract change.
+    - **Where the SDK starts.** Only inside the lazily loaded landing page chunks, never `LandingProviders` or `src/main.tsx`, which `/app` shares.
+    - **No referrer from the local app.** A referrer from `/app` is dropped.
 
 **Override log**:
 - **What it overrides.** The blanket "no telemetry, analytics, or tracking of any kind" wording in `.claude/SYSTEM_OVERVIEW.md` (principles and constraints), "Analytics: Intentionally none" in `.claude/CI_CD.md`, the README's "No tracking: no analytics" principle and its "will never add trackers or analytics SDKs" line, and the privacy policy's "None of our apps use analytics" sentences.
@@ -3483,7 +3501,10 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 **Alternatives considered**:
 - Analytics in the local app too, opt-in: rejected. The free app's "nothing leaves your device" is the brand.
 - PostHog for errors too: rejected for Sentry (better symbolication, and crash reports aren't limited to opted-in users).
-- Server-side activation events keyed by a header: rejected. The portal creates nothing, and a header contract plus de-duplication on idempotent replays was cost without benefit.
+- **Server-side activation events keyed by a header: rejected** (P2, re-decided 2026-10-17).
+  - The portal and the phone can each emit on a confirmed save.
+  - A header contract plus de-duplication on idempotent replays was cost without benefit.
+- **Portal activation left unmeasured: rejected** (P2 re-decision). Portal-only users would never appear in the activation funnel.
 - A consent banner on the landing page: rejected. Cookieless counting needs none, and a banner would lose most of the acquisition data.
 
 **Consequences**:

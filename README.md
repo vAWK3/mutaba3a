@@ -21,7 +21,7 @@ Mutaba3a takes the opposite stance.
 
 - **Offline-first by design**: the app works fully without an internet connection.
 - **Local-only by default**: your database is stored on your device.
-- **No tracking**: the app on your device has no analytics, no crash reporting, no session replay and no third-party trackers.
+- **No tracking**: the free app on Mac, Windows and in the browser, which needs no account, has no analytics, no crash reporting, no session replay and no third-party trackers.
 - **No silent sync**: nothing leaves your device unless you explicitly choose it.
 - **User-initiated sharing only**: exports/backups are triggered by you, not the app.
 
@@ -218,7 +218,7 @@ Key rule: account separation is strict (no shared tables unless explicitly desig
 
     •	Require an account to function
     •	Upload your client/project data by default
-    •	Add trackers or third-party analytics SDKs to the app on your device
+    •	Add trackers or third-party analytics SDKs to the free app on Mac, Windows or in the browser
     •	Make your business depend on a server you don’t control
 
 ⸻

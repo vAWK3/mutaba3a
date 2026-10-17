@@ -396,6 +396,59 @@ Sequential implementation, no parallelization opportunity (one docs module, one 
 - Parallelization: 1 lane, 0 parallel / 1 sequential
 - Lake Score: 2/3 (D2 picked the higher score, D6 a tie; D3 picked 8/10 over 9/10)
 
+## Pre-landing review (/qa-reconcile + /review, 2026-10-17)
+
+The shipped `events.json` (1.1.0) supersedes §6 above:
+- `locale` is {ar, en}: no Hebrew UI exists.
+- `currency` (the app's four codes) replaces `iso4217`.
+- `semver` is allowed only on `app_version`.
+- Country is unavailable (GeoIP is off).
+- Portal emits income, expense and payment events.
+- `client_created` fires on the server-confirmed create.
+
+**Re-decided with Basel (the original answers came from a false premise or a gap):**
+
+| ID | Finding (reviewer) | Answer |
+|----|--------------------|--------|
+| P2' | The portal records income and payments (MUT-133) and saves expenses; the plan said it was read-only for money. My statement was wrong: it came from stale memory plus a grep that silently failed on a zsh glob (red-team, verified) | Phone + portal emit activation; the server still sends nothing (MUT-156 stays closed) |
+| C1 | Opt-in and ID carried across sign-out on shared devices (red-team) | Reset on sign-out or account switch; nothing sent |
+| G1 | The GeoIP transformation was on by default and would add city and coordinates (adversarial, verified via MCP) | Disabled in project 304889; ADR says no location |
+| A1 | Malafat org members could read the project (adversarial) | Restrict it. The MCP can't, so it's an operator step for Basel (INFRA §1) |
+| T1–T5 | Test holes: single-token rows, integer money names, failure events, loose types, no version pin (testing specialist) | All five applied (113 cases) |
+
+**Auto-fixed** (mechanical, or follows an approved decision): the rest of the docs findings. The list:
+- **Rules (`docs/analytics/README.md`):**
+  - SDK `$` URL, path, referrer and screen props dropped on portal and phone (security);
+  - portal `persistence: 'localStorage'` (security);
+  - the guard is required, not just recommended;
+  - no SDK init before consent;
+  - the opt-out order;
+  - `reset(true)` / `$device_id` rotation;
+  - SDK auto-events off (`$pageleave`, `$opt_in`, `$screen`, lifecycle, flags, remote config);
+  - no `alias`/`group`/super properties;
+  - no joining with account data;
+  - production-only keys (Netlify production context);
+  - the landing SDK starts only in lazy chunks, never `LandingProviders`/`main.tsx`;
+  - the `/app` referrer is dropped (red-team, adversarial).
+- **Wording (en + ar):**
+  - "free apps on Mac, Windows and in the browser, which need no account" replaces the ambiguous "browser apps";
+  - the portal is added to the policy intro;
+  - `scope.body`'s "one thing our website can send" is replaced (MUT-154);
+  - the crash-reporting clause is kept in the `noTracking` replacement;
+  - "never send what you enter" is narrowed to amounts, names, notes, contact details, location and typed text;
+  - the landing claim becomes "different days can't be linked";
+  - the phone note lists the shared properties and says "when you first turn it on";
+  - the portal and phone sentences add sign-out reset;
+  - Sentry coordination notes for `network` and `sharing`;
+  - one Arabic label for the toggle and the turn-on button;
+  - "no one but PostHog, which processes them for us";
+  - the repo README says the free app instead of "the app on your device";
+  - the "Who sends" table no longer names events (D6).
+- **Store disclosures:** Apple Identifiers › Device ID and Play Device or other IDs added.
+- **Contract:** shared properties apply to every event, `$pageview` included, and the landing's `app_version` is the web build version.
+
+**Open for Basel:** retention period; whether Apple "Other Financial Info" is declared; project access control in the UI.
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |

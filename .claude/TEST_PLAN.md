@@ -2787,7 +2787,12 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 
 ## MUT-153 — analytics event contract (2026-10-17, ADR-090)
 
-- `scripts/__tests__/analytics-taxonomy.test.ts` (53 cases, node environment):
+- After the pre-landing review it has 113 cases. Added:
+  - a sha256 pin per contract version (append-only), and the portal emitters;
+  - one row per banned token, plus integer money names (`cost`, `fee`, `amounts`, `minor_units`, `ids`, `cents`);
+  - failed/failure/crashed/exceptions events, and the SDK's `$pageleave` / `$opt_in` / `$screen`;
+  - unknown keys, a fourth shared property, `semver` outside app_version, and `iso4217` (replaced by `currency`, the app's four codes).
+- `scripts/__tests__/analytics-taxonomy.test.ts` (first version: 53 cases, node environment):
   - The real `docs/analytics/events.json` passes every rule.
   - Its events and emitters match the MUT-152 funnels exactly.
   - Table-driven bad fixtures prove each rule rejects:
