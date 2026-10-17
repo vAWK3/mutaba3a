@@ -41,8 +41,8 @@ run "four_projects_each_with_one_capped_key" {
   }
 
   assert {
-    condition     = alltrue([for key in sentry_key.this : key.rate_limit_window == 3600 && key.rate_limit_count > 0])
-    error_message = "Every key is rate limited per hour."
+    condition     = alltrue([for key in sentry_key.this : key.rate_limit_window == 86400 && key.rate_limit_count > 0])
+    error_message = "Every key is capped per day (D6)."
   }
 }
 
@@ -124,12 +124,73 @@ run "rejects_a_wildcard_browser_origin" {
   expect_failures = [var.portal_origins]
 }
 
+run "rejects_a_wildcard_landing_origin" {
+  command = plan
+
+  variables {
+    landing_origins = ["*"]
+  }
+
+  expect_failures = [var.landing_origins]
+}
+
+run "rejects_a_plain_http_origin" {
+  command = plan
+
+  variables {
+    portal_origins = ["http://portal.example.test"]
+  }
+
+  expect_failures = [var.portal_origins]
+}
+
+run "rejects_an_origin_with_a_path" {
+  command = plan
+
+  variables {
+    landing_origins = ["https://landing.example.test/path"]
+  }
+
+  expect_failures = [var.landing_origins]
+}
+
+run "rejects_an_empty_origin_list" {
+  command = plan
+
+  variables {
+    portal_origins = []
+  }
+
+  expect_failures = [var.portal_origins]
+}
+
+run "rejects_a_zero_rate_limit" {
+  command = plan
+
+  variables {
+    key_rate_limit_per_day = { api = 0, portal = 20, landing = 20, "capture-app" = 60 }
+  }
+
+  expect_failures = [var.key_rate_limit_per_day]
+}
+
 run "rejects_a_rate_limit_map_missing_a_surface" {
   command = plan
 
   variables {
-    key_rate_limit_per_hour = { api = 120 }
+    key_rate_limit_per_day = { api = 60 }
   }
 
-  expect_failures = [var.key_rate_limit_per_hour]
+  expect_failures = [var.key_rate_limit_per_day]
+}
+
+run "rejects_daily_caps_that_overrun_the_monthly_quota" {
+  command = plan
+
+  # D6: 200 a day x 31 days is more than the 5,000-event monthly quota.
+  variables {
+    key_rate_limit_per_day = { api = 100, portal = 20, landing = 20, "capture-app" = 60 }
+  }
+
+  expect_failures = [var.key_rate_limit_per_day]
 }

@@ -2434,3 +2434,6 @@ A setting that protects cost, privacy or abuse (a rate limit, an origin allow-li
 
 ### Pattern: A cross-surface contract splits runtime rules from test-only fixtures
 When several surfaces (TypeScript, Dart, the server image) must apply the same rules, the rules live in one JSON that a web bundle may import, and the dirty-in/clean-out fixtures live in a second JSON that only tests read. Both are sha-pinned per version, and the fixtures carry a marker string that `check-bundles` refuses. Surfaces that can't read the repo at runtime (the server image, Flutter) embed the lists and assert equality with the JSON in a test. First instance: `docs/observability/sentry-rules.json` + `sentry-fixtures.json` (ADR-091), after the single-file `docs/analytics/events.json` (ADR-090).
+
+### Pattern: A terraform test that overrides a resource's values runs in its own test file
+Runs in one `.tftest.hcl` share state. Once an earlier `command = apply` run has created a resource, a later run's `override_resource` no longer reaches it, because nothing is re-created. So an expected-failure run that depends on an override (for example a postcondition fed a wrong value) goes in its own file with its own `mock_provider` block. First instance: `server/infrastructure/sentry/tests/eu_region.tftest.hcl` (MUT-147 review).

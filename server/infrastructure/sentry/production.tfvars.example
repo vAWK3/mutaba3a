@@ -1,9 +1,11 @@
 # Copy to production.tfvars (git-ignored). Nothing secret goes in this file: the
-# Sentry token comes from SENTRY_AUTH_TOKEN in your shell. See server/DEPLOYMENT.md §1.5.
-organization = "barmajiyat"
+# admin token is passed to each command as SENTRY_AUTH_TOKEN="$SENTRY_ADMIN_TOKEN". See server/DEPLOYMENT.md §1.5.
+organization = "mutaba3a"
 
 # Origins each browser DSN accepts events from (R2). When the custom domain ships
-# (MUT-112), add it here and re-apply, or its errors are silently dropped.
+# (MUT-112), add it here and re-apply, or its errors are silently dropped. Cloud Run
+# also serves the service at https://mutaba3a-api-<project-number>.me-west1.run.app;
+# add that origin too if anyone reaches the portal through it.
 portal_origins  = ["https://mutaba3a-api-t5bzsudmja-zf.a.run.app"]
 landing_origins = ["https://mutaba3a.netlify.app"]
 

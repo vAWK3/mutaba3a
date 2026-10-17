@@ -1,24 +1,28 @@
 /**
  * MUT-147 (ADR-091, R9): set or check the Sentry org's privacy settings, which Terraform can't
- * hold: Require Data Scrubber, default scrubbers, Prevent storing IP addresses, and the org's
- * sensitive fields (the scrub contract's deny tokens).
+ * hold: Require Data Scrubber, default scrubbers, Prevent storing IP addresses, Enhanced Privacy,
+ * no shared issues, required 2FA, no safe fields, and the curated sensitive fields.
  *
- *   SENTRY_AUTH_TOKEN=<admin token> SENTRY_ORG=barmajiyat npx tsx scripts/sentry-org-settings.ts --apply
- *   SENTRY_AUTH_TOKEN=<admin token> SENTRY_ORG=barmajiyat npx tsx scripts/sentry-org-settings.ts --check
+ *   SENTRY_ADMIN_TOKEN=<admin token> SENTRY_ORG=mutaba3a npx tsx scripts/sentry-org-settings.ts --apply
+ *   SENTRY_ADMIN_TOKEN=<admin token> SENTRY_ORG=mutaba3a npx tsx scripts/sentry-org-settings.ts --check
  *
- * Exits 1 on drift or any API error. See server/DEPLOYMENT.md §1.5.
+ * Exits 1 on drift, an org outside the EU region, or any API error. See server/DEPLOYMENT.md §1.5.
  */
 import { readFileSync } from 'node:fs';
-import { desiredOrgSettings, parseOrgSettingsArgs, syncOrgSettings } from './sentry-org-policy';
+import { fileURLToPath } from 'node:url';
+import { desiredOrgSettings, expectedRegionUrl, parseOrgSettingsArgs, syncOrgSettings } from './sentry-org-policy';
 
-const RULES_PATH = 'docs/observability/sentry-rules.json';
+const RULES_DISPLAY = 'docs/observability/sentry-rules.json';
+/** Resolved from this file, so the script works from any directory (QA 2026-10-17). */
+const RULES_URL = new URL('../docs/observability/sentry-rules.json', import.meta.url);
 
 try {
+  const rules = JSON.parse(readFileSync(fileURLToPath(RULES_URL), 'utf8'));
   const args = parseOrgSettingsArgs(process.argv.slice(2), process.env);
-  const desired = desiredOrgSettings(JSON.parse(readFileSync(RULES_PATH, 'utf8')));
-  const drift = await syncOrgSettings(args, desired, fetch);
+  console.log(`Target: Sentry org "${args.org}" at ${args.baseUrl} (${args.mode}).`);
+  const drift = await syncOrgSettings(args, desiredOrgSettings(rules), expectedRegionUrl(rules), fetch);
   if (drift.length > 0) {
-    console.error(`Sentry org "${args.org}" does not match ${RULES_PATH}:`);
+    console.error(`Sentry org "${args.org}" does not match ${RULES_DISPLAY}:`);
     for (const entry of drift) console.error(`  ${entry.field}: expected ${entry.expected}, found ${entry.actual}`);
     process.exit(1);
   }

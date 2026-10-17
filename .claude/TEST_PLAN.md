@@ -2832,3 +2832,17 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
   - a wildcard browser origin and an incomplete rate-limit map are both rejected.
   - **Mutation check (manual, 2026-10-17).** `default_key = true` plus a wildcard portal origin fails two runs.
 - Release-QA: not applicable (no user-visible flow). MUT-148..151 carry the QA scenarios, for example "landing sends zero Sentry requests on `/app`".
+- **Pre-landing review additions (2026-10-17, D1–D13):**
+  - `sentry-rules.test.ts` is now 62 cases.
+    - **Fixtures.** Allowed content survives in every fixture. Three new fixtures: the portal `/setup#token` navigation, an api Prisma validation error with frame vars and compound keys, and a landing JSON plus `key: value` message.
+    - **Contract rows.** Curated `orgSensitiveFields`, never a substring of kept text. Exact `urlFields`. Compound deny tokens. The shared `labelledValuePattern`, finding all three forms and not URLs or times. Prisma first-line-only. `includeLocalVariables: false`. The six org switches.
+  - `sentry-org-settings.test.ts` is now 30 cases.
+    - **Org settings.** The six switches, `safeFields` drift and the region refusal before any write.
+    - **Apply.** The merge keeps hand-added fields. An empty PUT body passes. Every request has a timeout signal.
+    - **Arguments and tokens.** Only `--apply`/`--check`. `SENTRY_ADMIN_TOKEN` is read, never `SENTRY_AUTH_TOKEN`. The `sentry.io` host allowlist, with four rejected and three accepted hosts.
+    - **CLI.** A run from `server/infrastructure/sentry` doesn't hit ENOENT. It was red first, on the old code.
+  - **Terraform.** 13 runs.
+    - Daily caps (`rate_limit_window` 86400).
+    - Rejections: wildcard landing origin, http origin, origin with a path, empty list, zero cap, and caps overrunning the monthly quota.
+    - `eu_region.tftest.hcl`: a US ingest DSN fails the `sentry_key` postcondition. It's in its own file because runs in one file share state.
+  - **CI.** `contracts-ci.yml` runs the Sentry and analytics contract tests on contract-only changes.

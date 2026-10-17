@@ -55,8 +55,31 @@
 - INFRA §1 gains an "Error reporting" table. The CI_CD monitoring row now reads "defined, not wired". The env examples list the Sentry variables.
 - The Flutter `.env.example` line and its upload-token warning are left to MUT-151 (decision D3); the README documents them.
 
+### Changed by the pre-landing review (`/qa-reconcile` + `/review`, 2026-10-17)
+
+The review was the core pass, 5 specialists, the red team and the adversarial pass. Basel decided D1–D13; contract 1.0.0 was re-pinned before merge. The full list is the ADR-091 amendment.
+
+- **Fixed.** The settings script failed from the folder the runbook leaves you in (QA probes 002–004 reproduced it). It now finds its rules file from its own location.
+- **Server-side sensitive fields.** They are a curated `orgSensitiveFields` list, because Sentry wipes any value containing an entry. `--apply` merges with hand-added fields.
+- **Fragments.** URL fragments and queries are stripped from every URL field, including navigation breadcrumbs, because the portal's `/setup#token` was the leak.
+- **Labelled values.** `key: value` and JSON `"key": value` are caught too, through one shared `labelledValuePattern`. Prisma errors keep their first line only, and the server uses `errorFormat: 'minimal'`.
+- **EU region.** It is verified by a Terraform DSN postcondition and by the script's region check. The runbook's `sentry.io` fallback is gone.
+- **Daily caps.** Keys are capped per day, and the sum must fit the monthly quota.
+- **Org switches.** The script also sets Enhanced Privacy on, shared issues off, 2FA required and no safe fields.
+- **Tokens and script.**
+  - The admin token is `SENTRY_ADMIN_TOKEN`.
+  - The script takes only `--apply`/`--check`, with the org from `SENTRY_ORG`, and sends the token only to `sentry.io` hosts.
+  - Requests time out, and an empty PUT body counts as written.
+- **Contract rules.** Frame `vars` are dropped and `includeLocalVariables: false`. Lowercase compound keys are denied.
+- **CI and checkouts.** New `.github/workflows/contracts-ci.yml`. New `.gitattributes`, so the contract JSON is LF on every checkout.
+- **Docs.**
+  - The README no longer claims a `check-bundles` guard that doesn't exist (MUT-149/150 add it, TD-084).
+  - The phone starts Sentry only in release builds.
+  - The Netlify upload token is Production-scoped and secret.
+  - The suggested org slug is `mutaba3a`.
+
 ### Technical
-- `scripts/__tests__/sentry-rules.test.ts` (37 cases) and `scripts/__tests__/sentry-org-settings.test.ts` (15 cases). The Terraform tests: 6 runs.
+- `scripts/__tests__/sentry-rules.test.ts` (62 cases) and `scripts/__tests__/sentry-org-settings.test.ts` (30 cases, including a CLI run from the Sentry module folder). The Terraform tests: 13 runs in two files (`eu_region.tftest.hcl` has its own state).
 
 ---
 

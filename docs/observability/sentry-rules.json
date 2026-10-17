@@ -11,9 +11,11 @@
     "replaysOnErrorSampleRate": 0,
     "attachScreenshot": false,
     "attachViewHierarchy": false,
-    "consoleBreadcrumbs": false
+    "consoleBreadcrumbs": false,
+    "includeLocalVariables": false
   },
   "serverReportsStatusAtLeast": 500,
+  "serverPrismaErrorFormat": "minimal",
   "denyHeaders": [
     "authorization",
     "cookie",
@@ -62,8 +64,27 @@
     "query",
     "params",
     "args",
-    "meta"
+    "meta",
+    "username",
+    "firstname",
+    "lastname",
+    "fullname",
+    "apikey",
+    "accesstoken",
+    "refreshtoken",
+    "sessionid",
+    "phonenumber",
+    "emailaddress",
+    "passwd",
+    "pwd",
+    "credential",
+    "credentials",
+    "jwt",
+    "otp"
   ],
+  "urlFields": ["request.url", "breadcrumb.data.url", "breadcrumb.data.from", "breadcrumb.data.to"],
+  "labelledValuePattern": "\"?([A-Za-z_][\\w.-]*)\"?(?:=|:[ \\t]+)(\"(?:[^\"\\\\]|\\\\.)*\"|[^\\s,;{}\"]+)",
+  "firstLineOnlyExceptionTypes": ["^Prisma"],
   "allowedTags": ["surface", "request_id", "route", "locale", "release", "environment", "app_build"],
   "allowedUserKeys": ["id"],
   "safeContextKeys": [
@@ -118,6 +139,27 @@
   "orgSettings": {
     "dataScrubber": true,
     "dataScrubberDefaults": true,
-    "scrubIPAddresses": true
-  }
+    "scrubIPAddresses": true,
+    "enhancedPrivacy": true,
+    "allowSharedIssues": false,
+    "require2FA": true
+  },
+  "orgSensitiveFields": [
+    "iban",
+    "password",
+    "passwd",
+    "pepper",
+    "authorization",
+    "mut_live_",
+    "mut_test_",
+    "mutaba3a_session",
+    "amountminor",
+    "client_name",
+    "clientname",
+    "phonenumber",
+    "emailaddress",
+    "accesstoken",
+    "refreshtoken",
+    "apikey"
+  ]
 }

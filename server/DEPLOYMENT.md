@@ -124,18 +124,23 @@ state, and `deploy.sh` never touches it. The rules are in
 `docs/observability/README.md`.
 
 1. **Org.** Sign in to Sentry and create a **new organization in the EU
-   (Frankfurt) region**, e.g. slug `barmajiyat`. The region can't be changed
-   later. Don't reuse another product's org.
+   (Frankfurt) region**, slug `mutaba3a` (the product, so no other product is
+   added to it by habit). The region can't be changed later. Don't reuse another
+   product's org. Turn on **two-factor authentication on your own account first**:
+   step 5 makes the org require it, and Sentry refuses that setting from an
+   account without 2FA.
 2. **Plan and budget.** Stay on the **Developer (free)** plan. Under
    Settings › Subscription, set the **pay-as-you-go budget to $0**, so overage
-   is dropped and never billed. Check the plan's current limits on Sentry's
-   pricing page.
-3. **Two tokens.**
-   - **Admin token.** An org auth token or personal token with `org:write`,
-     `project:admin`, `team:admin` and `alerts:write`. Keep it in your shell
-     only.
-   - **Upload token.** An org auth token (`sntrys_…`) with release and upload
-     scopes only, for MUT-149..151 builds.
+   is dropped and never billed, and keep Sentry's **quota notification emails**
+   on. Check the plan's current monthly error quota on Sentry's pricing page; if
+   it isn't 5,000, set `monthly_event_quota` in `production.tfvars` to match.
+3. **Two tokens, two names** (D8).
+   - **Admin token**, `SENTRY_ADMIN_TOKEN`: an org auth token or personal token
+     with `org:write`, `project:admin`, `team:admin` and `alerts:write`. Hand it
+     to each command below. Never `export SENTRY_AUTH_TOKEN` with it: that name
+     belongs to the upload token, and build tooling reads it.
+   - **Upload token**, `SENTRY_AUTH_TOKEN`: an org auth token (`sntrys_…`) with
+     release and upload scopes only, for MUT-149..151 builds.
 
    Store neither in the repo, a tfvars file or the Flutter `.env`.
 4. **Apply the projects, keys, alerts and spike protection:**
@@ -143,31 +148,38 @@ state, and `deploy.sh` never touches it. The rules are in
    ```bash
    cd server/infrastructure/sentry
    cp production.tfvars.example production.tfvars    # set organization and the origins
-   export SENTRY_AUTH_TOKEN=<admin token>
+   read -rs SENTRY_ADMIN_TOKEN                       # paste the admin token; it isn't echoed or exported
    terraform init -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-sentry/production"
-   terraform plan -var-file=production.tfvars        # if de.sentry.io errors, retry with -var base_url=https://sentry.io/api/
-   terraform apply -var-file=production.tfvars
+   SENTRY_AUTH_TOKEN="$SENTRY_ADMIN_TOKEN" terraform plan -var-file=production.tfvars
+   SENTRY_AUTH_TOKEN="$SENTRY_ADMIN_TOKEN" terraform apply -var-file=production.tfvars
    ```
 
-   Record in `.claude/INFRA.md` which `base_url` planned cleanly.
+   If the plan errors on `de.sentry.io`, or the apply stops on the "not in the
+   EU region" postcondition, **stop and check the org's data region** in its
+   settings. Never retry against `sentry.io`: that would hide an org created in
+   the US (D5).
 5. **Apply the org privacy settings.** The Terraform provider can't hold them,
-   so this script sets and reads them back:
+   so this script sets them and reads them back. It refuses an org outside the
+   EU region before writing anything. Run it from the repo root:
 
    ```bash
-   SENTRY_ORG=barmajiyat npx tsx scripts/sentry-org-settings.ts --apply
+   cd "$(git rev-parse --show-toplevel)"
+   SENTRY_ADMIN_TOKEN="$SENTRY_ADMIN_TOKEN" SENTRY_ORG=mutaba3a npx tsx scripts/sentry-org-settings.ts --apply
    ```
 
-   It exits 1 and lists any setting that didn't stick. Re-run with `--check`
-   whenever you want to confirm nobody changed them in the UI.
+   It prints the target org and host, then exits 1 and lists any setting that
+   didn't stick. Re-run with `--check` whenever you want to confirm nobody
+   changed them in the UI. Sensitive fields you add by hand are kept.
 6. **Copy each DSN to its home** (the table in `docs/observability/README.md`):
 
    ```bash
-   terraform output -json dsn
+   terraform -chdir=server/infrastructure/sentry output -json dsn
    ```
 
-   Nothing reads the DSNs until MUT-148..151 wire the SDKs.
+   Nothing reads the DSNs until MUT-148..151 wire the SDKs. Then
+   `unset SENTRY_ADMIN_TOKEN`.
 7. **Read back.** In Sentry, confirm:
-   - four projects, each with one key;
+   - four projects, each with one key, capped per day;
    - spike protection on;
    - three alerts per project;
    - the portal and landing projects' Allowed Domains.

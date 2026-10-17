@@ -33,18 +33,28 @@ variable "landing_origins" {
   }
 }
 
-variable "key_rate_limit_per_hour" {
-  description = "Events per hour each project's DSN accepts. The free plan's monthly quota is the real cap; this stops one surface from using it all in an hour."
+variable "monthly_event_quota" {
+  description = "Error events the org's plan includes per month (Developer plan: about 5,000; check at signup). With a $0 pay-as-you-go budget, events past it are dropped for every surface."
+  type        = number
+  default     = 5000
+}
+
+variable "key_rate_limit_per_day" {
+  description = "Events per day each project's DSN accepts (D6). The caps add up to no more than the monthly quota over 31 days, so a public DSN (landing, portal, the phone's) abused or stuck in a crash loop can't use up the shared quota and blind the API for the month. A surface that hits its cap drops the rest of that day's events."
   type        = map(number)
   default = {
-    api           = 120
-    portal        = 60
-    landing       = 60
-    "capture-app" = 120
+    api           = 60
+    portal        = 20
+    landing       = 20
+    "capture-app" = 60
   }
   validation {
-    condition     = toset(keys(var.key_rate_limit_per_hour)) == toset(["api", "portal", "landing", "capture-app"]) && alltrue([for limit in values(var.key_rate_limit_per_hour) : limit > 0])
-    error_message = "key_rate_limit_per_hour needs a positive limit for exactly api, portal, landing and capture-app."
+    condition     = toset(keys(var.key_rate_limit_per_day)) == toset(["api", "portal", "landing", "capture-app"]) && alltrue([for limit in values(var.key_rate_limit_per_day) : limit > 0])
+    error_message = "key_rate_limit_per_day needs a positive limit for exactly api, portal, landing and capture-app."
+  }
+  validation {
+    condition     = sum(values(var.key_rate_limit_per_day)) * 31 <= var.monthly_event_quota
+    error_message = "The daily caps over 31 days must fit within monthly_event_quota, or one surface can exhaust the quota for all."
   }
 }
 

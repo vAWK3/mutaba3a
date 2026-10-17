@@ -152,6 +152,18 @@ jobs:
 
 ---
 
+### 3b. Contracts CI (`.github/workflows/contracts-ci.yml`, since 2026-10-17, MUT-147)
+
+Web CI skips `docs/**` and Server CI watches only `server/**`. This one job runs
+the Sentry scrub-contract tests and the analytics event-contract tests when
+any of these change:
+
+- `docs/observability/**` or `docs/analytics/**`;
+- those tests themselves;
+- `scripts/sentry-org-*.ts` or `.gitattributes`.
+
+Node 22, `npm ci`, then `npx vitest run` on the three test files. It never deploys and never contacts Sentry or PostHog.
+
 ### 3a. Server CI (`.github/workflows/server-ci.yml`, since 2026-10-08)
 
 Runs on pull requests beside Web CI. Scoped by `paths:` to

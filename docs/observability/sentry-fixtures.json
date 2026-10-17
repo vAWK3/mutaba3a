@@ -367,6 +367,180 @@
           ]
         }
       }
+    },
+    {
+      "name": "portal-setup-token-in-url-fragment",
+      "surface": "portal",
+      "input": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "portal@0.3.9+abc1234",
+        "environment": "production",
+        "request": {
+          "url": "https://portal.example.test/setup#t=st_synthetic_setup_token",
+          "headers": { "User-Agent": "Mozilla/5.0" }
+        },
+        "user": { "id": "usr_7f3a" },
+        "tags": { "surface": "portal", "locale": "en", "route": "/setup" },
+        "breadcrumbs": {
+          "values": [
+            { "category": "navigation", "data": { "from": "/setup#t=st_synthetic_setup_token", "to": "/setup" } },
+            { "category": "navigation", "data": { "from": "/setup", "to": "/clients?sort=owed#top" } },
+            {
+              "category": "fetch",
+              "type": "http",
+              "data": { "method": "GET", "url": "/v1/me#debug", "status_code": 200 }
+            }
+          ]
+        },
+        "exception": {
+          "values": [
+            {
+              "type": "TypeError",
+              "value": "Cannot read properties of null (reading 'focus')",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "assets/SetupPage-77ab.js", "function": "SetupPage", "lineno": 1, "colno": 902, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "portal@0.3.9+abc1234",
+        "environment": "production",
+        "request": {
+          "url": "https://portal.example.test/setup",
+          "headers": { "User-Agent": "Mozilla/5.0" }
+        },
+        "user": { "id": "usr_7f3a" },
+        "tags": { "surface": "portal", "locale": "en", "route": "/setup" },
+        "breadcrumbs": {
+          "values": [
+            { "category": "navigation", "data": { "from": "/setup", "to": "/setup" } },
+            { "category": "navigation", "data": { "from": "/setup", "to": "/clients" } },
+            {
+              "category": "fetch",
+              "type": "http",
+              "data": { "method": "GET", "url": "/v1/me", "status_code": 200 }
+            }
+          ]
+        },
+        "exception": {
+          "values": [
+            {
+              "type": "TypeError",
+              "value": "Cannot read properties of null (reading 'focus')",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "assets/SetupPage-77ab.js", "function": "SetupPage", "lineno": 1, "colno": 902, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "api-prisma-validation-error-frame-vars-compound-keys",
+      "surface": "api",
+      "input": {
+        "level": "error",
+        "platform": "node",
+        "release": "mutaba3a-api@0.3.9+abc1234",
+        "environment": "production",
+        "tags": { "surface": "api", "request_id": "req_b77e", "route": "/v1/income" },
+        "extra": { "apikey": "mut_live_example", "phonenumber": "+970599000000", "attempt": 1 },
+        "exception": {
+          "values": [
+            {
+              "type": "PrismaClientValidationError",
+              "value": "Invalid `prisma.income.create()` invocation:\n\n{\n  data: {\n    amountMinor: 12000,\n    note: \"Late invoice\"\n  }\n}\n\nArgument `currency` is missing.",
+              "stacktrace": {
+                "frames": [
+                  {
+                    "filename": "dist/income/compose.js",
+                    "function": "composeIncome",
+                    "lineno": 91,
+                    "in_app": true,
+                    "vars": { "amountMinor": 12000, "note": "Late invoice", "clientName": "Acme Legal" }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "node",
+        "release": "mutaba3a-api@0.3.9+abc1234",
+        "environment": "production",
+        "tags": { "surface": "api", "request_id": "req_b77e", "route": "/v1/income" },
+        "extra": { "attempt": 1 },
+        "exception": {
+          "values": [
+            {
+              "type": "PrismaClientValidationError",
+              "value": "Invalid `prisma.income.create()` invocation:",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "dist/income/compose.js", "function": "composeIncome", "lineno": 91, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "landing-json-and-colon-labelled-message",
+      "surface": "landing",
+      "input": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "landing@0.1.12+4e51681",
+        "environment": "production",
+        "request": { "url": "https://mutaba3a.netlify.app/hosted", "headers": { "User-Agent": "Mozilla/5.0" } },
+        "tags": { "surface": "landing", "locale": "ar" },
+        "exception": {
+          "values": [
+            {
+              "type": "Error",
+              "value": "Request failed: {\"email\": \"visitor@example.test\", \"status\": 500} note: late",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "assets/HostedOffer-1b2c.js", "function": "submitRequest", "lineno": 1, "colno": 377, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "landing@0.1.12+4e51681",
+        "environment": "production",
+        "request": { "url": "https://mutaba3a.netlify.app/hosted", "headers": { "User-Agent": "Mozilla/5.0" } },
+        "tags": { "surface": "landing", "locale": "ar" },
+        "exception": {
+          "values": [
+            {
+              "type": "Error",
+              "value": "Request failed: {\"email\": \"[Filtered]\", \"status\": 500} note: [Filtered]",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "assets/HostedOffer-1b2c.js", "function": "submitRequest", "lineno": 1, "colno": 377, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      }
     }
   ]
 }

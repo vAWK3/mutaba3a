@@ -3579,3 +3579,21 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Any change to either contract file is a version bump, a new pinned row and a new Flutter copy.
 - A new portal or landing origin (MUT-112's custom domain) must be added to the Terraform origin variables, or its errors are dropped silently.
 - `sentry_issue_alert` is deprecated in favour of `sentry_alert`; TECH_DEBT tracks the move.
+
+**Amendment (MUT-147 pre-landing review, 2026-10-17)** — Basel's answers D1–D13 in `.claude/designs/mut-147-sentry-foundation.md`; contract 1.0.0 was re-pinned before it merged. These supersede the matching sentences above:
+- **Server-side sensitive fields are a curated list (D2).** Sentry's scrubber removes any value *containing* a sensitive field, so `orgSensitiveFields` holds only long, distinctive entries. A test proves none occurs in kept fixture text. It replaces "sensitive fields = `denyKeyTokens`". `--apply` merges with hand-added fields.
+- **Every URL-bearing field keeps the path only (D3)**: `request.url` and breadcrumb `url`/`from`/`to`, with no query and no fragment. The portal's `/setup#token` link is the reason.
+- **Labelled values cover three forms (D4).** `key=value`, `key: value` and `"key": value` are all caught, through one shared `labelledValuePattern`. `^Prisma` exception values keep their first line only, and the server uses Prisma `errorFormat: 'minimal'`.
+- **EU residency is verified, not assumed (D5).**
+  - A `sentry_key` postcondition requires `.ingest.de.sentry.io` DSNs.
+  - The settings script refuses an org whose `links.regionUrl` isn't `https://de.sentry.io`, before writing.
+  - The runbook never falls back to `sentry.io`.
+- **Keys are capped per day, not per hour (D6).** api 60, capture-app 60, portal 20, landing 20. The sum over 31 days must fit `monthly_event_quota` (Terraform validates it), so no public DSN can exhaust the shared quota and blind the API.
+- **More org switches (D7).** `enhancedPrivacy` on, `allowSharedIssues` off, `require2FA` on, `safeFields` empty. All are applied and drift-checked.
+- **Separate token names (D8).** The admin token is `SENTRY_ADMIN_TOKEN`, handed to one command at a time; `SENTRY_AUTH_TOKEN` only ever means the upload token.
+- **Stricter settings script (D9).** The script takes only `--apply`/`--check`, with the org from `SENTRY_ORG`. It sends the admin token only to `sentry.io` hosts and prints its target before writing.
+- **Frame locals (D10).** `includeLocalVariables: false`; scrubbers drop frame `vars` and leave the rest of the frame untouched.
+- **Lowercase compounds (D11).** Compounds such as `username`, `apikey` and `phonenumber` are deny tokens in their own right.
+- **Contracts CI (D12).** `contracts-ci.yml` runs the Sentry and analytics contract tests when those files change. `.gitattributes` keeps them LF.
+- **Org slug (D13).** The suggested org slug is `mutaba3a`, not the company name.
+- **Phone.** The phone starts Sentry only in release builds, with the DSN from fastlane's own `--dart-define`. Its `.env` also feeds `make run`.

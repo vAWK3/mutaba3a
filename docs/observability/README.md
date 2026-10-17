@@ -23,14 +23,21 @@ Crash reports are **not** opt-in, unlike analytics. They contain no content, and
 policy says they're sent. Data goes to Sentry's EU region (`de.sentry.io`, Frankfurt), in a
 Mutaba3a-only org.
 
-Only production builds get a DSN, so dev, QA and preview builds send nothing.
+Only production builds may send.
+
+- **Web.** Only production builds get a DSN, so dev, QA and preview builds send nothing.
+- **Phone.** The phone is the exception: its `.env` also feeds `make run` (the Flutter
+  Makefile passes `--dart-define-from-file=.env`), so a DSN placed there reaches debug
+  sessions too. Therefore the phone starts Sentry only in release builds (`kReleaseMode`),
+  and fastlane passes the DSN with its own `--dart-define` rather than the shared `.env`
+  (MUT-151).
 
 ## The two files
 
 | File | What it holds | Who reads it at runtime |
 |---|---|---|
 | `sentry-rules.json` | deny lists, allowed tags and user keys, safe and always-dropped context keys, ignored errors, required SDK options, org settings | the portal and landing may import it; the server and phone **embed** its lists in code, and a test asserts they are equal |
-| `sentry-fixtures.json` | "dirty event in, clean event out" cases, one or more per surface | **tests only**: never import it into an app. It carries the marker `MUT147-SENTRY-FIXTURE-DO-NOT-BUNDLE`, and `check-bundles` fails if that marker appears in a bundle |
+| `sentry-fixtures.json` | "dirty event in, clean event out" cases, one or more per surface | **tests only**: never import it into an app. It carries the marker `MUT147-SENTRY-FIXTURE-DO-NOT-BUNDLE`. MUT-149/150 add a `check-bundles` rule that fails on it (and on `sntrys_`/`sntryu_`); it doesn't exist yet. `check-bundles` doesn't run on any ship path until TD-084 is fixed, so those tickets need TD-084 too |
 
 `scripts/__tests__/sentry-rules.test.ts` checks the contract itself:
 
@@ -48,10 +55,17 @@ exactly.
    - `sendDefaultPii: false`.
    - Errors only: `tracesSampleRate`, `profilesSampleRate` and both replay rates are `0`.
    - No console breadcrumbs.
+   - `includeLocalVariables: false`: frames never carry local variable values (D10).
    - The phone sets `attachScreenshot: false` and `attachViewHierarchy: false`, because the view
      hierarchy holds on-screen text: amounts and names.
-2. **Requests.**
-   - Never sent: request bodies, cookies or query strings. `request.url` keeps the path only.
+   - The server builds its Prisma client with `errorFormat: 'minimal'` (`serverPrismaErrorFormat`),
+     so a validation error never prints the query input (D4).
+2. **Requests and URLs.**
+   - Never sent: request bodies or cookies.
+   - **Every URL-bearing field keeps the path only**, with no query string and no `#fragment`
+     (`urlFields`: `request.url` and breadcrumb `data.url`, `data.from`, `data.to`). The portal's
+     `/setup#…` link carries a one-time setup token in its fragment, and the browser SDK records
+     that URL in a navigation breadcrumb (D3).
    - Headers in `denyHeaders` are removed: `authorization`, `cookie`, `set-cookie`, `x-api-key`,
      `idempotency-key`, `x-forwarded-for`, …
 3. **Keys are matched as whole tokens.**
@@ -59,7 +73,11 @@ exactly.
      `clientName` becomes `client` + `name`, and `filename` stays `filename`.
    - A key is dropped when any token is in `denyKeyTokens`. This applies in `extra`, `contexts`,
      breadcrumb `data`, tags and user, at any depth.
-   - Never touched: stack frames, `sdk`, `release` and `environment`.
+   - Lowercase compounds that splitting can't break apart are tokens in their own right:
+     `username`, `apikey`, `accesstoken`, `sessionid`, `phonenumber`, `emailaddress`, `passwd`,
+     `jwt`, `otp`, … (D11).
+   - Never touched: stack frames (except their `vars`, which are always dropped), `sdk`,
+     `release` and `environment`.
 4. **Contexts.**
    - `safeContextKeys` are kept even though they hold a deny token. These are the SDK's
      `os.name`, `browser.name`, `runtime.name` and `app.app_name`, with their versions.
@@ -73,13 +91,19 @@ exactly.
 6. **Breadcrumbs.**
    - No `console` breadcrumbs.
    - HTTP breadcrumbs (fetch, xhr, Dio) keep `method`, path-only `url` and `status_code`.
+   - Navigation breadcrumbs keep path-only `from` and `to`.
    - UI clicks keep the selector, never the text.
 7. **Messages.**
-   - In exception values and messages, a `key=value` pair whose key holds a deny token becomes
-     `key=[Filtered]`.
+   - In exception values and messages, every labelled value whose key holds a deny token is
+     replaced with `[Filtered]` (quoted values keep their quotes: `"[Filtered]"`).
+   - "Labelled" means three forms: `key=value`, `key: value` and JSON `"key": value` (D4).
+   - All surfaces use the contract's own `labelledValuePattern`: group 1 is the key, group 2 the
+     value, and a value runs to the next whitespace, `,`, `;`, `{` or `}` unless it is quoted.
+   - An exception whose type matches `firstLineOnlyExceptionTypes` (`^Prisma`) keeps only its
+     first line, because the rest can echo the query input.
    - This catches only *labelled* values. An unlabelled name in free text is not caught, so
      surface code never interpolates user values into thrown messages. The org's server-side
-     scrubber (below) is the backstop for emails and card numbers.
+     scrubber (below) is a backstop for distinctive values such as API keys.
 8. **Never reported.**
    - The server reports only unknown errors and `ApiError`s with status `serverReportsStatusAtLeast`
      (500) or higher.
@@ -92,18 +116,45 @@ exactly.
 10. **Source maps and debug symbols** are uploaded at build time and deleted from the output.
     They're never served.
 
-The org also runs Sentry's own server-side scrubber, as a second layer. That means Require Data
-Scrubber, the default scrubbers, Prevent storing IP addresses, and sensitive fields equal to
-`denyKeyTokens`. `scripts/sentry-org-settings.ts` applies and checks them, because Terraform can't.
+The org also runs Sentry's own server-side scrubber, as a second layer, plus settings that decide
+who can see an event. `scripts/sentry-org-settings.ts` applies and checks them (Terraform can't),
+and refuses an org outside the EU region before writing anything (D5).
+
+- **`orgSettings`.** Require Data Scrubber, the default scrubbers, Prevent storing IP addresses,
+  Enhanced Privacy on (alert emails carry no event content), shared issues off (no public event
+  links) and 2FA required (D7).
+- **Safe fields.** Always none: a safe field switches the scrubber off for that key.
+- **Sensitive fields.** `orgSensitiveFields`, a **curated** list, never `denyKeyTokens`.
+  - **Why curated.** Sentry's server-side scrubber removes any value that merely *contains* a
+    sensitive field, so a short token like `ip` or `name` would wipe ordinary error text
+    ("description", "filename").
+  - **What's on it.** Only long, distinctive entries (`password`, `pepper`, `mut_live_`,
+    `mutaba3a_session`, `amountminor`, …). The contract test proves none of them occurs in any
+    text the fixtures keep (D2).
+  - **Hand-added fields.** `--apply` keeps sensitive fields added by hand.
+
+**Quota (D6).**
+
+- **The shared quota.** The plan's monthly error quota is shared by all four projects, and three
+  of the DSNs are public (the landing and portal JavaScript, and the phone binary). The origin
+  allow-list doesn't stop a script.
+- **Daily caps.** So each key is capped **per day**: api 60, capture-app 60, portal 20 and
+  landing 20. Together that's 160 a day, under the 5,000 a month over 31 days.
+- **What that buys.** One abused or crash-looping surface loses the rest of its own day, but can
+  never use up the month and blind the API.
+- **Guard.** Terraform refuses caps whose sum would overrun `monthly_event_quota`.
 
 ## Changing the contract
 
 1. Edit the file or files.
 2. Bump `version` in both files.
 3. Add a row to `PINNED_VERSIONS` in `scripts/__tests__/sentry-rules.test.ts` with both sha256s.
-   Never edit an existing row.
+   Never edit a row once its version has merged.
 4. Copy both files byte-for-byte into the Flutter app, and update its parity row there (MUT-151).
-5. Run `scripts/sentry-org-settings.ts --apply` if `denyKeyTokens` or `orgSettings` changed.
+5. Run `scripts/sentry-org-settings.ts --apply` if `orgSensitiveFields` or `orgSettings` changed.
+
+`contracts-ci.yml` runs the contract tests whenever these files change, because web-ci skips
+`docs/**`. `.gitattributes` keeps them LF on every checkout, so the pinned hashes hold everywhere.
 
 ## Where each DSN and token lives
 
@@ -111,24 +162,27 @@ Scrubber, the default scrubbers, Prevent storing IP addresses, and sensitive fie
 |---|---|---|
 | api | Secret Manager → Cloud Run env `SENTRY_DSN`. MUT-148 reads it from this module's state with `terraform_remote_state`, so deploys need no Sentry token | none needed (source ships in the image) |
 | portal | `VITE_SENTRY_DSN` in the **hosted** build env (`server/scripts/deploy.sh` step 1) | `SENTRY_AUTH_TOKEN` in the operator shell for `make release server` (`deploy.env` holds no secrets, and `release.env` is the desktop signing file; MUT-149 decides whether deploy.sh reads a git-ignored file) |
-| landing | `VITE_SENTRY_DSN` in Netlify's **production context only** | `SENTRY_AUTH_TOKEN` in Netlify's build env |
-| capture-app | `SENTRY_DSN` in the Flutter `.env` (a DSN is public by design) | `SENTRY_AUTH_TOKEN` in the **fastlane shell env** |
+| landing | `VITE_SENTRY_DSN` in Netlify's **production context only** | `SENTRY_AUTH_TOKEN` in Netlify's build env, **scoped to the Production deploy context and marked "Contains secret values"**, so deploy-preview and branch builds (which run PR code) can never read it |
+| capture-app | `SENTRY_DSN` passed by the fastlane release lanes with their own `--dart-define` (not the shared `.env`, which `make run` reads too); the SDK starts only under `kReleaseMode` | `SENTRY_AUTH_TOKEN` in the **fastlane shell env** |
 
 DSNs come from `terraform output -json dsn` in `server/infrastructure/sentry`.
 
 **Landmines.**
 
 - **Never `VITE_` a token.** Vite inlines every `VITE_`-prefixed variable into the browser
-  bundle. Only DSNs may be `VITE_`. `check-bundles` fails on any `sntrys_` or `sntryu_` string
-  (MUT-149/150).
+  bundle. Only DSNs may be `VITE_`. MUT-149/150 add a `check-bundles` rule failing on any `sntrys_` or `sntryu_` string,
+  run on the ship paths once TD-084 is fixed.
 - **The Flutter `.env` is compiled into the app.** fastlane and the Makefile pass it with
   `--dart-define-from-file`, so every value in it ships inside the binary. A
   `SENTRY_AUTH_TOKEN` placed there ships to every phone. Keep it in the shell env (MUT-151).
-- **Two different tokens.**
-  - **Upload token.** An org auth token (`sntrys_…`) with release and upload scopes only. It goes
-    wherever builds run.
-  - **Admin token.** For `terraform apply` and the settings script; it needs project, team,
-    alert and org write. It stays in the operator's shell and is never stored.
+- **Two different tokens, two different names** (D8).
+  - **Upload token.** `SENTRY_AUTH_TOKEN`: an org auth token (`sntrys_…`) with release and
+    upload scopes only. It goes wherever builds run.
+  - **Admin token.** `SENTRY_ADMIN_TOKEN`: for `terraform apply` and the settings script; it
+    needs project, team, alert and org write. It's handed to one command at a time, never
+    exported as `SENTRY_AUTH_TOKEN`, so a later build in the same shell can't pick it up.
+  - **Where the settings script sends it.** Only to `https://sentry.io` or
+    `https://<region>.sentry.io`.
 
 ## Privacy policy wording (publish with each surface)
 

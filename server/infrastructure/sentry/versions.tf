@@ -15,7 +15,8 @@ terraform {
   backend "gcs" {}
 }
 
-# The token comes from SENTRY_AUTH_TOKEN in the operator's shell, never a tfvar.
+# The provider reads SENTRY_AUTH_TOKEN, which the runbook sets for each command from the
+# operator's SENTRY_ADMIN_TOKEN (never exported, never a tfvar). See server/DEPLOYMENT.md §1.5.
 provider "sentry" {
   base_url = var.base_url
 }

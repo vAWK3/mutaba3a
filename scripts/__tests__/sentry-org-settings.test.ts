@@ -1,7 +1,16 @@
 // @vitest-environment node
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
-import { desiredOrgSettings, orgSettingsDrift, parseOrgSettingsArgs, syncOrgSettings, type OrgSettings } from '../sentry-org-policy';
+import {
+  desiredOrgSettings,
+  expectedRegionUrl,
+  orgSettingsDrift,
+  parseOrgSettingsArgs,
+  syncOrgSettings,
+  type OrgSettings,
+} from '../sentry-org-policy';
 
 /**
  * MUT-147 (ADR-091, R9): the Sentry org's privacy settings can't live in Terraform, so
@@ -9,126 +18,206 @@ import { desiredOrgSettings, orgSettingsDrift, parseOrgSettingsArgs, syncOrgSett
  */
 
 const rules = JSON.parse(readFileSync('docs/observability/sentry-rules.json', 'utf8')) as {
-  denyKeyTokens: string[];
+  region: string;
+  orgSensitiveFields: string[];
   orgSettings: Record<string, boolean>;
 };
 const TOKEN = 'sntryu_secret-admin-token';
-const ENV = { SENTRY_AUTH_TOKEN: TOKEN, SENTRY_ORG: 'barmajiyat' };
+const ENV = { SENTRY_ADMIN_TOKEN: TOKEN, SENTRY_ORG: 'mutaba3a' };
+const EU = 'https://de.sentry.io';
 const desired = desiredOrgSettings(rules);
+const euOrg = (settings: Partial<OrgSettings>) => ({ ...settings, links: { regionUrl: EU } });
 
 function okResponse(body: unknown) {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
 }
 
 describe('desiredOrgSettings', () => {
-  it('turns on every org privacy setting and uses the deny tokens as sensitive fields', () => {
+  it('turns on every privacy switch, empties safe fields and pushes only the curated sensitive fields (D2, D7)', () => {
     expect(desired).toEqual({
       dataScrubber: true,
       dataScrubberDefaults: true,
       scrubIPAddresses: true,
-      sensitiveFields: rules.denyKeyTokens,
+      enhancedPrivacy: true,
+      allowSharedIssues: false,
+      require2FA: true,
+      safeFields: [],
+      sensitiveFields: rules.orgSensitiveFields,
     });
+  });
+
+  it('expects the org in the contract region', () => {
+    expect(expectedRegionUrl(rules)).toBe(EU);
   });
 });
 
 describe('orgSettingsDrift', () => {
   it('finds no drift when the org matches', () => {
-    expect(orgSettingsDrift({ ...desired, name: 'Barmajiyat' }, desired)).toEqual([]);
+    expect(orgSettingsDrift({ ...desired, name: 'Mutaba3a' } as Partial<OrgSettings>, desired)).toEqual([]);
   });
 
-  it('flags a privacy switch that is off or missing', () => {
-    const current: Partial<OrgSettings> = { ...desired, scrubIPAddresses: false };
+  it('flags a privacy switch that is off, on when it should be off, or missing', () => {
+    const current: Partial<OrgSettings> = { ...desired, scrubIPAddresses: false, allowSharedIssues: true };
     delete current.dataScrubber;
-    expect(orgSettingsDrift(current, desired).map((drift) => drift.field)).toEqual(['dataScrubber', 'scrubIPAddresses']);
+    expect(orgSettingsDrift(current, desired).map((drift) => drift.field)).toEqual([
+      'dataScrubber',
+      'scrubIPAddresses',
+      'allowSharedIssues',
+    ]);
+  });
+
+  it('flags any safe field, because it switches the scrubber off for that key (D7)', () => {
+    expect(orgSettingsDrift({ ...desired, safeFields: ['email'] }, desired)).toEqual([
+      { field: 'safeFields', expected: 'none', actual: 'email' },
+    ]);
   });
 
   it('flags missing sensitive fields, ignoring case and extra fields someone added', () => {
-    const current = { ...desired, sensitiveFields: ['AMOUNT', 'extra_field', ...desired.sensitiveFields.slice(2)] };
-    const drift = orgSettingsDrift(current, desired);
-    expect(drift).toEqual([
-      { field: 'sensitiveFields', expected: desired.sensitiveFields.slice(1, 2).join(', '), actual: 'missing' },
-    ]);
+    const want: OrgSettings = { ...desired, sensitiveFields: ['amountminor', 'password', 'pepper'] };
+    const current = { ...want, sensitiveFields: ['AMOUNTMINOR', 'extra_field', 'pepper'] };
+    expect(orgSettingsDrift(current, want)).toEqual([{ field: 'sensitiveFields', expected: 'password', actual: 'missing' }]);
   });
 });
 
 describe('parseOrgSettingsArgs', () => {
-  it('reads the mode, org and token, defaulting to the EU API host', () => {
-    expect(parseOrgSettingsArgs(['--check'], ENV)).toEqual({
-      mode: 'check',
-      org: 'barmajiyat',
-      baseUrl: 'https://de.sentry.io',
-      token: TOKEN,
+  it('reads the mode, SENTRY_ORG and SENTRY_ADMIN_TOKEN, defaulting to the EU API host', () => {
+    expect(parseOrgSettingsArgs(['--check'], ENV)).toEqual({ mode: 'check', org: 'mutaba3a', baseUrl: EU, token: TOKEN });
+  });
+
+  it('strips a trailing slash and /api/ from SENTRY_BASE_URL', () => {
+    expect(parseOrgSettingsArgs(['--apply'], { ...ENV, SENTRY_BASE_URL: 'https://sentry.io/api/' })).toMatchObject({
+      mode: 'apply',
+      baseUrl: 'https://sentry.io',
     });
   });
 
-  it('takes --org over SENTRY_ORG and strips a trailing slash and /api/ from SENTRY_BASE_URL', () => {
-    const args = parseOrgSettingsArgs(['--apply', '--org', 'other'], { ...ENV, SENTRY_BASE_URL: 'https://sentry.io/api/' });
-    expect(args).toMatchObject({ mode: 'apply', org: 'other', baseUrl: 'https://sentry.io' });
+  it.each([[[]], [['--apply', '--check']], [['--check', '--org', 'other']], [['--org=other', '--apply']], [['--apply', 'extra']]])(
+    'rejects %j: exactly one of --apply or --check, nothing else (D9)',
+    (argv) => {
+      expect(() => parseOrgSettingsArgs(argv, ENV)).toThrow('exactly one of --apply or --check');
+    },
+  );
+
+  it('reads only the admin token, never the build upload token (D8)', () => {
+    expect(() => parseOrgSettingsArgs(['--check'], { SENTRY_ORG: 'mutaba3a', SENTRY_AUTH_TOKEN: 'sntrys_upload' })).toThrow(
+      'SENTRY_ADMIN_TOKEN',
+    );
+    expect(() => parseOrgSettingsArgs(['--check'], { SENTRY_ADMIN_TOKEN: TOKEN })).toThrow('SENTRY_ORG');
   });
 
-  it.each([
-    [[], 'exactly one of --apply or --check'],
-    [['--apply', '--check'], 'exactly one of --apply or --check'],
-    [['--check', '--org'], '--org needs a value'],
-  ])('rejects %j', (argv, message) => {
-    expect(() => parseOrgSettingsArgs(argv, ENV)).toThrow(message);
-  });
+  it.each(['http://de.sentry.io', 'https://de.sentry.io.invalid', 'https://sentry.io.example.com', 'https://evil.example'])(
+    'refuses to send the admin token to %s (D9)',
+    (baseUrl) => {
+      expect(() => parseOrgSettingsArgs(['--check'], { ...ENV, SENTRY_BASE_URL: baseUrl })).toThrow('SENTRY_BASE_URL');
+    },
+  );
 
-  it('refuses to run without a token or an org, without echoing anything secret', () => {
-    expect(() => parseOrgSettingsArgs(['--check'], { SENTRY_ORG: 'barmajiyat' })).toThrow('SENTRY_AUTH_TOKEN');
-    expect(() => parseOrgSettingsArgs(['--check'], { SENTRY_AUTH_TOKEN: TOKEN })).toThrow('SENTRY_ORG');
-  });
-
-  it('refuses a plain-http API host', () => {
-    expect(() => parseOrgSettingsArgs(['--check'], { ...ENV, SENTRY_BASE_URL: 'http://de.sentry.io' })).toThrow('https');
+  it.each(['https://sentry.io', 'https://de.sentry.io', 'https://us.sentry.io/'])('accepts the Sentry host %s', (baseUrl) => {
+    expect(() => parseOrgSettingsArgs(['--check'], { ...ENV, SENTRY_BASE_URL: baseUrl })).not.toThrow();
   });
 });
 
 describe('syncOrgSettings', () => {
-  const args = { org: 'barmajiyat', baseUrl: 'https://de.sentry.io', token: TOKEN };
-  const url = 'https://de.sentry.io/api/0/organizations/barmajiyat/';
+  const args = { org: 'mutaba3a', baseUrl: EU, token: TOKEN };
+  const url = 'https://de.sentry.io/api/0/organizations/mutaba3a/';
 
-  it('--apply writes the settings, then reads them back', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(okResponse(desired)).mockResolvedValueOnce(okResponse(desired));
-    const drift = await syncOrgSettings({ ...args, mode: 'apply' }, desired, fetch);
+  it('--apply reads the org, writes the settings merged with fields added by hand, then reads them back (D2)', async () => {
+    const before = euOrg({ ...desired, sensitiveFields: ['custom_pii', desired.sensitiveFields[0].toUpperCase()] });
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(okResponse(before))
+      .mockResolvedValueOnce(okResponse({}))
+      .mockResolvedValueOnce(okResponse(euOrg({ ...desired, sensitiveFields: ['custom_pii', ...desired.sensitiveFields] })));
+    const drift = await syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch);
 
     expect(drift).toEqual([]);
-    expect(fetch).toHaveBeenCalledTimes(2);
-    const [putUrl, put] = fetch.mock.calls[0];
+    expect(fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['GET', 'PUT', 'GET']);
+    const [putUrl, put] = fetch.mock.calls[1];
     expect(putUrl).toBe(url);
-    expect(put?.method).toBe('PUT');
-    expect(JSON.parse(put?.body as string)).toEqual(desired);
+    const body = JSON.parse(put?.body as string) as OrgSettings;
+    // Existing fields keep their casing; a desired field already present (any case) is not repeated.
+    const [first, ...rest] = desired.sensitiveFields;
+    expect(body).toEqual({ ...desired, sensitiveFields: ['custom_pii', first.toUpperCase(), ...rest] });
     expect(new Headers(put?.headers).get('authorization')).toBe(`Bearer ${TOKEN}`);
-    const [getUrl, get] = fetch.mock.calls[1];
-    expect(getUrl).toBe(url);
-    expect(get?.method).toBe('GET');
   });
 
   it('--check only reads, and reports drift', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(okResponse({ ...desired, scrubIPAddresses: false }));
-    const drift = await syncOrgSettings({ ...args, mode: 'check' }, desired, fetch);
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(okResponse(euOrg({ ...desired, scrubIPAddresses: false })));
+    const drift = await syncOrgSettings({ ...args, mode: 'check' }, desired, EU, fetch);
 
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch.mock.calls[0][1]?.method).toBe('GET');
     expect(drift).toEqual([{ field: 'scrubIPAddresses', expected: 'true', actual: 'false' }]);
   });
 
+  it.each(['apply', 'check'] as const)('--%s refuses an org outside the EU region before writing anything (D5)', async (mode) => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
+      okResponse({ ...desired, links: { regionUrl: 'https://us.sentry.io' } }),
+    );
+    await expect(syncOrgSettings({ ...args, mode }, desired, EU, fetch)).rejects.toThrow('https://us.sentry.io');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats an empty PUT response as written, since the GET is the verification', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(okResponse(euOrg(desired)))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(okResponse(euOrg(desired)));
+    await expect(syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch)).resolves.toEqual([]);
+  });
+
+  it('gives every request a timeout, so a stalled connection fails instead of hanging', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(okResponse(euOrg(desired)))
+      .mockResolvedValueOnce(okResponse({}))
+      .mockResolvedValueOnce(okResponse(euOrg(desired)));
+    await syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch);
+    for (const [, init] of fetch.mock.calls) expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it('reports drift when an apply did not stick', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(okResponse(desired))
-      .mockResolvedValueOnce(okResponse({ ...desired, dataScrubberDefaults: false }));
-    const drift = await syncOrgSettings({ ...args, mode: 'apply' }, desired, fetch);
+      .mockResolvedValueOnce(okResponse(euOrg(desired)))
+      .mockResolvedValueOnce(okResponse({}))
+      .mockResolvedValueOnce(okResponse(euOrg({ ...desired, dataScrubberDefaults: false })));
+    const drift = await syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch);
     expect(drift.map((entry) => entry.field)).toEqual(['dataScrubberDefaults']);
   });
 
   it('fails on an error status with the status, never the token', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
-      new Response(JSON.stringify({ detail: 'You do not have permission' }), { status: 403 }),
-    );
-    const error = await syncOrgSettings({ ...args, mode: 'apply' }, desired, fetch).catch((caught: Error) => caught);
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(okResponse(euOrg(desired)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'You do not have permission' }), { status: 403 }));
+    const error = await syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch).catch((caught: Error) => caught);
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain('403');
     expect((error as Error).message).toContain('PUT');
     expect((error as Error).message).not.toContain(TOKEN);
   });
+});
+
+describe('sentry-org-settings CLI', () => {
+  // DEPLOYMENT §1.5 runs Terraform from server/infrastructure/sentry; the script must still find
+  // its rules file from there (QA probes 002–004 on 2026-10-17 failed with ENOENT).
+  it('loads the rules from its own location, whatever the working directory', () => {
+    const repoRoot = resolve(__dirname, '../..');
+    const result = spawnSync(
+      process.execPath,
+      ['--import', 'tsx', resolve(repoRoot, 'scripts/sentry-org-settings.ts'), '--check'],
+      {
+        cwd: resolve(repoRoot, 'server/infrastructure/sentry'),
+        // Synthetic values; the host is never contacted (`.invalid` is refused before any request).
+        env: {
+          PATH: process.env.PATH,
+          SENTRY_ORG: 'mutaba3a',
+          SENTRY_ADMIN_TOKEN: 'synthetic',
+          SENTRY_AUTH_TOKEN: 'synthetic',
+          SENTRY_BASE_URL: 'https://de.sentry.io.invalid',
+        },
+        encoding: 'utf8',
+      },
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).not.toContain('ENOENT');
+    expect(result.stderr).toContain('SENTRY_BASE_URL');
+  }, 30_000);
 });

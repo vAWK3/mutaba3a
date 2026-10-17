@@ -7,6 +7,11 @@
 # The local web app and desktop never report (ADR-024, ADR-090): they have no
 # project here.
 
+# The keys below are stable identifiers: renaming or removing one destroys that
+# project's issue history and rotates its DSN. The capture-app DSN is compiled into
+# store binaries, so rotating it silences every shipped phone version until users
+# update; ship a phone release with the new DSN first. (No prevent_destroy: the
+# offline `terraform test` creates and destroys mocked resources.)
 locals {
   surfaces = {
     api           = { platform = "node", allowed_domains = ["*"], browser = false }
@@ -55,8 +60,17 @@ resource "sentry_key" "this" {
   organization      = var.organization
   project           = sentry_project.this[each.key].id
   name              = "mutaba3a-${each.key}"
-  rate_limit_window = 3600
-  rate_limit_count  = var.key_rate_limit_per_hour[each.key]
+  rate_limit_window = 86400
+  rate_limit_count  = var.key_rate_limit_per_day[each.key]
+
+  lifecycle {
+    # D5: reports must land in Sentry's EU region (ADR-091). A US-region org hands out
+    # ingest.us DSNs, so an org created in the wrong region stops here.
+    postcondition {
+      condition     = strcontains(nonsensitive(self.dsn["public"]), ".ingest.de.sentry.io/")
+      error_message = "The DSN does not point at Sentry's EU ingest host (.ingest.de.sentry.io): the org is not in the EU region. Stop and check the org's data region."
+    }
+  }
 }
 
 resource "sentry_project_inbound_data_filter" "this" {
