@@ -1,0 +1,86 @@
+{
+  "version": "1.1.0",
+  "currencies": ["EUR", "ILS", "JOD", "USD"],
+  "sharedProperties": {
+    "surface": {
+      "type": "enum",
+      "values": ["landing", "portal", "ios", "android"],
+      "description": "Where the event came from. Sent on every event, $pageview included. The local web app, desktop and the server never send events (ADR-024, ADR-090)."
+    },
+    "app_version": {
+      "type": "semver",
+      "description": "The x.y.z version of the build that sent the event: the web build's version on the landing page and the portal, the app version on the phone. Sent on every event."
+    },
+    "locale": {
+      "type": "enum",
+      "values": ["ar", "en"],
+      "description": "The interface language when the event was sent. Sent on every event."
+    }
+  },
+  "events": {
+    "$pageview": {
+      "emitters": ["landing"],
+      "description": "A landing page was viewed. Sent by posthog-js in cookieless mode with the shared properties and the landing `$` allowance of docs/analytics/README.md rule 1 (URL, UTM, referrer, device type and the SDK's control properties), which every landing event shares; a referrer from the local app (/app) is dropped (ADR-090). No other properties."
+    },
+    "landing_cta_clicked": {
+      "emitters": ["landing"],
+      "description": "A call to action on the landing page was clicked.",
+      "properties": {
+        "cta": {
+          "type": "enum",
+          "values": ["app_store", "play_store", "open_web_app", "hosted_offer", "malafat"],
+          "description": "Which call to action."
+        }
+      }
+    },
+    "app_first_opened": {
+      "emitters": ["ios", "android"],
+      "description": "Sent once per signed-in person on this phone, right after their first opt-in (which may come later, from Settings). The 'already sent' flag is cleared with the other flags on sign-out or account switch. Nothing is sent before a person opts in, so earlier opens are never counted."
+    },
+    "portal_opened": {
+      "emitters": ["portal"],
+      "description": "The hosted portal was opened by a signed-in person who has turned on anonymous usage."
+    },
+    "analytics_opted_in": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "A person turned on anonymous usage. A new random ID is created first, so this is the first event under it.",
+      "properties": {
+        "prompt": {
+          "type": "enum",
+          "values": ["first_run", "settings"],
+          "description": "Turned on from the one-time prompt (first_run) or from the toggle (settings): Settings on the phone, the account menu on the portal."
+        }
+      }
+    },
+    "analytics_opted_out": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "A person turned anonymous usage off. The last event under the random ID: captured, flushed with anything already queued, then sending stops and the ID is reset (MUT-153 D5). Signing out resets without sending it."
+    },
+    "client_created": {
+      "emitters": ["ios", "android"],
+      "description": "A client was created on the phone. Clients are created online only, so this fires when the server confirms the create, never on a failed attempt. The portal does not create clients."
+    },
+    "income_recorded": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "An income entry was saved. Phone: on the local save, so offline entries count when they are made. Portal: when the server confirms the save (personal profile only, MUT-133).",
+      "properties": {
+        "currency": { "type": "currency", "description": "The entry's currency code. Never the amount." },
+        "paid": { "type": "boolean", "description": "Whether it was saved as already paid." }
+      }
+    },
+    "expense_recorded": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "An expense was saved. Phone: on the local save. Portal: when the server confirms the save.",
+      "properties": {
+        "currency": { "type": "currency", "description": "The expense's currency code. Never the amount." }
+      }
+    },
+    "payment_recorded": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "A payment received was saved. Phone: on the local save. Portal: when the server confirms Record payment.",
+      "properties": {
+        "currency": { "type": "currency", "description": "The payment's currency code. Never the amount." }
+      }
+    }
+  }
+}

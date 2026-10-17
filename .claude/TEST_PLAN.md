@@ -2784,3 +2784,25 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 - Release-QA: `web.whats-new.after-update`, `.fresh-install`, `.reopen-arabic`, 3/3 on a `MUTABA3A_APP_VERSION=0.1.7` web preview build (throwaway config, `serviceWorkers: 'block'`).
 - **Coverage (MUT-24 C)**: this item runs on its own branch (`claude/mut-24-coverage-*`); its baseline and final numbers land with it.
 
+
+## MUT-153 — analytics event contract (2026-10-17, ADR-090)
+
+- After the pre-landing review it has 118 cases. Added:
+  - the contract's top-level `currencies` list, checked against `server/src/money.ts` `SUPPORTED_CURRENCIES`, with malformed lists rejected;
+  - a sha256 pin per contract version (append-only), and the portal emitters;
+  - one row per banned token, plus integer money names (`cost`, `fee`, `amounts`, `minor_units`, `ids`, `cents`);
+  - failed/failure/crashed/exceptions events, and the SDK's `$pageleave` / `$opt_in` / `$screen`;
+  - unknown keys, a fourth shared property, `semver` outside app_version, and `iso4217` (replaced by `currency`, the app's four codes).
+- `scripts/__tests__/analytics-taxonomy.test.ts` (first version: 53 cases, node environment):
+  - The real `docs/analytics/events.json` passes every rule.
+  - Its events and emitters match the MUT-152 funnels exactly.
+  - Table-driven bad fixtures prove each rule rejects:
+    - a bad version, and a missing shared property;
+    - a `surface` enum other than the four surfaces;
+    - non-snake_case and non-allowlisted `$` event names, and error/exception/crash events (Sentry owns them);
+    - missing, unknown, duplicate and server/web/desktop emitters;
+    - missing descriptions;
+    - banned property tokens matched whole (`client_id`, `amount_minor`, `user_id`, `page_url`), while `paid`, `currency`, `prompt` and `cta` pass;
+    - free-form types;
+    - bad or duplicate enum values, values on a non-enum, and an event property that repeats a shared one.
+- Release-QA: not applicable (docs and contract only; no user-visible flow). MUT-154, MUT-155 and MUT-157 carry the QA scenarios and the "what we send is a subset of the contract" tests. The Flutter parity test against a vendored copy is MUT-157's.

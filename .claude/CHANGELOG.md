@@ -28,6 +28,38 @@
 
 ---
 
+## [Unreleased] - 2026-10-17 — Analytics decision and event contract (MUT-153, ADR-090)
+
+**Why:** epic MUT-152 adds opt-in, anonymous PostHog analytics to the landing page, the portal and the phone app. Every doc said "no analytics of any kind", and the three surfaces needed one list of what they may send. No SDK ships here.
+
+### Added
+- `docs/analytics/events.json`: the versioned (1.1.0) event contract.
+  - 10 events, with their emitters. Portal and phone both emit income, expense and payment events, because the portal records them since MUT-133.
+  - The shared properties: surface, app_version, locale.
+  - Typed properties: enum, boolean, integer, currency (the app's four), and semver (app_version only). No free text.
+- `docs/analytics/README.md`:
+  - who sends, and the rules: a required guard against anything outside the contract, SDK `$` URL properties dropped on the portal and phone, no cookies on the portal, no SDK before consent, the opt-out order, reset on sign-out, no location, no joining, production-only keys, and where the landing SDK may start;
+  - suggested opt-in copy, and how to change the contract (and its Flutter copy);
+  - the approved en/ar privacy-policy and store-disclosure wording each surface publishes when it ships.
+- `scripts/__tests__/analytics-taxonomy.test.ts`: 118 cases. The currency codes live in the contract and are checked against the server's `SUPPORTED_CURRENCIES`.
+  - It enforces the contract and pins a sha256 per version.
+  - It refuses banned name tokens (whole-token, each with its own row, so `paid` passes and `client_id` fails), error and failure events, and server/web/desktop emitters.
+  - It also refuses unknown keys, extra shared properties, and `semver` outside app_version.
+- ADR-090. TODOS #15 (move the PostHog config to Terraform).
+
+### Changed
+- README: the "No tracking" promise and the "never add analytics SDKs" line now name the free app on Mac, Windows and in the browser.
+- SYSTEM_OVERVIEW, INFRA §1 and the CI_CD monitoring table are scoped the same way.
+- INFRA §1 gains a PostHog row: project 304889 (EU), which already existed empty.
+  - The ADR-090 settings were applied through the PostHog MCP and read back.
+  - The default GeoIP transformation was disabled.
+  - Restricting project access is listed as Basel's operator step.
+- Pre-landing review (`/qa-reconcile` + `/review`, 2026-10-17): the specialists, Red Team and the adversarial pass found that the portal records money (P2 re-decided: portal emits too), that GeoIP was on, plus 30 more wording, rule and test gaps. All were folded in; see the brief's "Pre-landing review" section.
+- The public privacy policy and landing copy are deliberately unchanged: each surface publishes its own paragraph (P3).
+
+### Technical
+- Files: `docs/analytics/events.json`, `docs/analytics/README.md`, `scripts/__tests__/analytics-taxonomy.test.ts`, `.claude/DECISIONS.md`, `.claude/designs/mut-153-analytics-adr-taxonomy.md`, `README.md`, `.claude/SYSTEM_OVERVIEW.md`, `.claude/INFRA.md`, `.claude/CI_CD.md`, `TODOS.md`, `.claude/TEST_PLAN.md`.
+
 ## [Unreleased] - 2026-10-16 — Web test coverage, risk files first, enforced in a new Web CI (MUT-24 §C)
 
 **Why:** coverage was invisible and unenforced. No web CI existed (only `server-ci.yml` and `build-windows.yml`), and the riskiest code was the least tested: the Dexie upgrade history (42.6% lines), migration safety (72.9%), CSV import, the third payment-record writer of MUT-60 (68.2%), and the portal's MUT-227 floor helper (untested).

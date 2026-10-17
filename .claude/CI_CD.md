@@ -321,12 +321,12 @@ Production only for now. Full runbook: `server/DEPLOYMENT.md`. Infra:
 |--------|------|--------|
 | Build status | GitHub Actions | Active |
 | Deploy status | Netlify | Active |
-| Error tracking | None | Planned |
-| Analytics | None | Intentionally none (privacy) |
+| Error tracking | None | Planned: Sentry EU on the server, portal, landing and phone (MUT-146); never the local app |
+| Analytics | PostHog EU (planned, MUT-152) | Landing cookieless; portal and phone opt-in and anonymous; the local app sends nothing (ADR-090) |
 
 ### Future Considerations
 
-- **Error tracking**: Consider Sentry with privacy-focused config
+- **Error tracking**: Sentry with a privacy-focused config (epic MUT-146); errors never go to PostHog (ADR-090)
 - **Performance**: Lighthouse CI for web vitals
 - **Uptime**: Not needed (static site + CDN)
 

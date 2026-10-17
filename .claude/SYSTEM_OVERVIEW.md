@@ -11,7 +11,7 @@
 **Mutaba3a** (متابعة, Arabic for "follow-up") is a **privacy-first, offline-only** mini CRM and finance tracker designed for freelancers, consultants, and small service businesses operating in multi-currency environments (USD/ILS/EUR, plus JOD for income/expense entry).
 
 ### Core Philosophy
-- **Privacy by Design**: Zero telemetry, no cloud dependency, data never leaves the device
+- **Privacy by Design**: the local app has zero telemetry, no cloud dependency, and data never leaves the device. Only the landing page (cookieless) and, after opt-in, the portal and the phone app send anonymous usage counts (ADR-090)
 - **Offline-First**: Full functionality without internet; moving data to another device is an explicit JSON backup and restore
 - **Desktop-First UX**: Feels like a tool/cockpit, not a website; drawer-first interactions
 - **Multi-Currency Native**: Track income/expenses in original currencies; FX conversions explicit
@@ -321,7 +321,7 @@ npm run tauri build      # macOS/Windows bundles
 ### Data Residency
 - **All data stored locally** in browser IndexedDB or Tauri app storage
 - **No server-side database** — user owns their data completely
-- **No telemetry, analytics, or tracking** of any kind
+- **No telemetry, analytics, or tracking** in the local app (web and desktop). The landing page counts visits without cookies; the portal and the phone app send anonymous usage counts only after opt-in. The contract is `docs/analytics/events.json` (ADR-090, MUT-152)
 
 ### No Device Sync
 - **No LAN listener and no mDNS advertisement**: the desktop's sync server was deleted (MUT-73, ADR-053). The only listener left is the one-shot OAuth callback on 127.0.0.1, which nothing in the app opens yet (TD-075)
