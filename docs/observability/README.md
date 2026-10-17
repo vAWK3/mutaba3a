@@ -78,6 +78,10 @@ exactly.
    - Lowercase compounds that splitting can't break apart are tokens in their own right:
      `username`, `apikey`, `accesstoken`, `sessionid`, `phonenumber`, `emailaddress`, `passwd`,
      `jwt`, `otp`, … (D11).
+   - The product's own labels are deny tokens too: `client(s)`, `vendor(s)`, `mobile`, `tel`,
+     `mail` (so `E-mail` goes), `title` and `reason` (so `withdrawnReason` goes) (D18).
+     - **The cost.** Opaque ID keys such as `extra.clientId` are dropped too.
+     - **Deliberately not a token: `user`.** It would also strip the `User-Agent` header.
    - Never touched: stack frames (except their `vars`, which are always dropped), `sdk`,
      `release` and `environment`.
 4. **Contexts.**
@@ -102,24 +106,42 @@ exactly.
      `"key": value` / `'key':value`, compact (`JSON.stringify`) or spaced.
    - **The shared pattern.** All surfaces use the contract's `labelledValuePattern` (key in group 1
      or 3, value in group 2 or 4). It has two branches:
-     - **Quoted keys.** The value is a quoted string or runs to the next `,`, `;`, `}`, `]` or
-       whitespace.
+     - **Quoted keys.** The value is either:
+       - a quoted string;
+       - a nested object or array (`{…`, `[…`), which runs to the end of the line, so everything
+         under a sensitive container key goes (`{"emails":["a@b","c@d"]}`);
+       - a quoted string cut off by truncation, which runs to the end of the line;
+       - otherwise, text up to the next `,`, `;`, `}`, `]` or whitespace.
      - **Bare keys.** The value is a quoted string, or runs to the end of its clause (`;`, `}`,
-       `]`, `)` or a line break). So `Authorization: Bearer <token>` and `name: John Smith`
-       filter the whole value, and so does `amount=1,234.56`.
+       `]`, `)` or a line break). A parenthetical inside it, as in `Acme (Pty) Ltd`, doesn't end
+       it. So `Authorization: Bearer <token>`, `name: John Smith` and `amount=1,234.56` filter
+       the whole value.
      - **Over-redaction.** Filtering to the end of the clause also hides the text after a
        sensitive label: `amount=5 currency=ILS` becomes `amount=[Filtered]`. Safety wins over
        debug detail.
      - **Rescanning.** The marker `[Filtered]` is itself a complete value, so a scrubbed message
        rescans as clean.
+   - **Order.** For each exception value, message and breadcrumb message:
+     1. truncate to `maxMessageLength`;
+     2. keep the first line for `firstLineOnlyExceptionTypes`;
+     3. cut the query and fragment off every http(s) URL in the text (`urlInTextPattern`,
+        replace with group 1; D19);
+     4. scan for labelled values.
+
+     The contract test's reference scrub follows this order and must reproduce every fixture's
+     expected exception text.
    - **The scan.** Scan from the left. After a label whose key is *not* sensitive, continue from
      the start of its value, so in `Error: failed amount=5` the harmless `Error:` can't hide
      `amount=`. After a sensitive one, continue after the value.
-   - **Bounded cost.** Every surface truncates an exception value or message to
-     `maxMessageLength` (8,192 characters) *before* scrubbing, and keys are bounded to 64
-     characters. Rescanning after harmless labels can otherwise go quadratic; with the cap the
-     worst case is about 20 ms, and the contract test times it. Sentry's JS SDK already
-     truncates values to 250 characters by default.
+   - **Bounded cost.**
+     - **The cap.** Every surface truncates an exception value or message to
+       `maxMessageLength` (8,192 characters) *before* scrubbing, and keys are bounded to 64
+       characters. Rescanning after harmless labels is quadratic, so the cap is what bounds it.
+     - **Measured worst case.** About 20–35 ms in Node; the contract test times it with a
+       generous budget. In Dart (`dart run` on a Mac) the same worst case took 150–300 ms, so
+       MUT-151 measures it on a low-end Android phone and lowers the phone's cap if
+       `beforeSend` gets slow.
+     - **SDK default.** Sentry's JS SDK already truncates values to 250 characters by default.
    - **Prisma.** An exception whose type matches `firstLineOnlyExceptionTypes` (`^Prisma`) keeps
      only its first line, because the rest can echo the query input.
    - **Known limits.** This catches only *labelled* values. Not caught:
@@ -127,6 +149,9 @@ exactly.
        thrown messages);
      - double-encoded JSON (`\"email\":\"…\"`);
      - keys in non-Latin scripts (an Arabic label such as المبلغ);
+     - keys longer than 64 characters;
+     - a bare `key:value` with no space after the colon (the space is required so URLs and times
+       like `12:30` are left alone);
      - a quoted value broken across lines.
 
      The org's server-side scrubber (below) is the backstop for distinctive values such as API

@@ -100,7 +100,7 @@ describe('parseOrgSettingsArgs', () => {
 
   it('reads only the admin token, never the build upload token (D8)', () => {
     expect(() => parseOrgSettingsArgs(['--check'], { SENTRY_ORG: 'mutaba3a', SENTRY_AUTH_TOKEN: 'sntrys_upload' })).toThrow(
-      'SENTRY_ADMIN_TOKEN',
+      /SENTRY_ADMIN_TOKEN.*personal/,
     );
     expect(() => parseOrgSettingsArgs(['--check'], { SENTRY_ADMIN_TOKEN: TOKEN })).toThrow('SENTRY_ORG');
   });
@@ -183,6 +183,16 @@ describe('syncOrgSettings', () => {
     const fetch = respond(okResponse(euOrg(desired)), okResponse([{ slug: 'mutaba3a-api' }, { slug: 'malafat-web' }]));
     await expect(syncOrgSettings({ ...args, mode }, desired, EU, fetch)).rejects.toThrow('malafat-web');
     expect(fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['GET', 'GET']);
+  });
+
+  it('refuses when the project list runs past one page, since it can\'t see every project (cycle-3 review)', async () => {
+    const paged = new Response(JSON.stringify(mutaba3aProjects), {
+      status: 200,
+      headers: { link: '<https://de.sentry.io/api/0/organizations/mutaba3a/projects/?cursor=1:1:0>; rel="next"; results="true"; cursor="1:1:0"' },
+    });
+    const fetch = respond(okResponse(euOrg(desired)), paged);
+    await expect(syncOrgSettings({ ...args, mode: 'apply' }, desired, EU, fetch)).rejects.toThrow('more than one page');
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('accepts an empty org, for the first run before Terraform has created the projects (D16)', async () => {

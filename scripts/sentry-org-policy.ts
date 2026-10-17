@@ -75,7 +75,11 @@ export function parseOrgSettingsArgs(argv: string[], env: Record<string, string 
   if (!org) throw new Error('Set SENTRY_ORG to the Mutaba3a Sentry org slug.');
   // Never SENTRY_AUTH_TOKEN: that name belongs to the upload-only build token (D8).
   const token = env.SENTRY_ADMIN_TOKEN;
-  if (!token) throw new Error('Set SENTRY_ADMIN_TOKEN to an org admin token (org:write) for this command only.');
+  if (!token) {
+    throw new Error(
+      'Set SENTRY_ADMIN_TOKEN to a personal (user) auth token (sntryu_…) with org:write, for this command only. An org token (sntrys_…) cannot carry the admin scopes.',
+    );
+  }
   const baseUrl = (env.SENTRY_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, '').replace(/\/api(\/0)?$/, '');
   if (!SENTRY_HOST.test(baseUrl)) {
     throw new Error('SENTRY_BASE_URL must be https://sentry.io or a regional https://<region>.sentry.io host.');
@@ -110,7 +114,12 @@ const withoutTrailingSlash = (url: string | undefined) => url?.replace(/\/+$/, '
  * org passes: on the first run Terraform may not have created the projects yet.
  */
 async function assertMutaba3aOnly(fetchFn: typeof fetch, orgUrl: string, args: OrgSettingsArgs) {
-  const projects = (await (await call(fetchFn, 'GET', `${orgUrl}projects/`, args.token)).json()) as Array<{ slug?: string }>;
+  const response = await call(fetchFn, 'GET', `${orgUrl}projects/`, args.token);
+  // Sentry pages this list (Link header); a project past page one would go unseen, so fail closed.
+  if (/rel="next"; results="true"/.test(response.headers.get('link') ?? '')) {
+    throw new Error(`Org "${args.org}" has more than one page of projects, so it can't be Mutaba3a-only. Stop: check SENTRY_ORG.`);
+  }
+  const projects = (await response.json()) as Array<{ slug?: string }>;
   const foreign = projects.map((project) => project.slug ?? '(no slug)').filter((slug) => !slug.startsWith(PROJECT_PREFIX));
   if (foreign.length > 0) {
     throw new Error(

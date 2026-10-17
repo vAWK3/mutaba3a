@@ -3603,3 +3603,14 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Wrong-org guard (D16).** The settings script refuses an org holding any project that isn't `mutaba3a-…`, before writing. An empty org passes, for the first run.
 - **Request fields (D17).** `Referer` joins `denyHeaders`, `fragment` joins the deny tokens, and `requestDropFields` (`data`, `cookies`, `query_string`, `fragment`, `env`) puts whole-field drops in the contract.
 - **Mechanical fixes.** The admin token is a personal (user) token. Terraform needs `>= 1.9.0` (the quota validation refers to another variable). Requests refuse redirects. The region comparison ignores a trailing slash.
+
+**Amendment 3 (MUT-147 final re-review, cycle 3, 2026-10-18)**: Basel's answers D18–D19, plus regression fixes to D15. Contract 1.0.0 was re-pinned before merge.
+- **Nested and cut-off values (D15 fix).**
+  - Under a quoted key, a nested `{…`/`[…` value runs to the end of the line, so everything under a sensitive container key is filtered.
+  - A quoted string cut off by truncation runs to the end of the line.
+  - Under a bare key, a parenthetical doesn't end the value.
+- **Domain PII labels (D18).** `client(s)`, `vendor(s)`, `mobile`, `tel`, `mail`, `title` and `reason` are deny tokens. `user` is deliberately not, because it would strip `User-Agent`.
+- **URLs in free text (D19).** `urlInTextPattern` cuts the query and fragment off every http(s) URL in exception text, messages and breadcrumb messages before the labelled-value scan.
+- **Order of operations.** Truncate, first-line-only, URL strip, labelled values. The contract test's reference scrub must reproduce every fixture.
+- **Paginated project lists.** The settings script refuses a paginated project list, because it can't then prove the org is Mutaba3a-only.
+- **Not converged.** The review stopped at its three-cycle limit. These cycle-3 changes passed the gate and QA but no fourth review pass.

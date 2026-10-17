@@ -2835,7 +2835,7 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 - **Pre-landing review additions (2026-10-17, D1–D13):**
   - `sentry-rules.test.ts` is now 62 cases.
     - **Fixtures.** Allowed content survives in every fixture. Three new fixtures: the portal `/setup#token` navigation, an api Prisma validation error with frame vars and compound keys, and a landing JSON plus `key: value` message.
-    - **Contract rows.** Curated `orgSensitiveFields`, never a substring of kept text. Exact `urlFields`. Compound deny tokens. The shared `labelledValuePattern`, finding all three forms and not URLs or times. Prisma first-line-only. `includeLocalVariables: false`. The six org switches.
+    - **Contract rows.** Curated `orgSensitiveFields`, never a substring of kept text. Exact `urlFields`. Compound deny tokens. The shared `labelledValuePattern`, finding all three forms and not URLs or times (superseded by D15, then the cycle-3 changes). Prisma first-line-only. `includeLocalVariables: false`. The six org switches.
   - `sentry-org-settings.test.ts` is now 30 cases.
     - **Org settings.** The six switches, `safeFields` drift and the region refusal before any write.
     - **Apply.** The merge keeps hand-added fields. An empty PUT body passes. Every request has a timeout signal.
@@ -2849,7 +2849,7 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 - **Re-review additions (fix cycle 2, D15–D17):** `sentry-rules.test.ts` has 75 cases, `sentry-org-settings.test.ts` 36.
   - **Pattern-independent leak cases.** Each of these must lose its secret substrings after the reference scrub: compact JSON, spaced JSON, Bearer, `name=Acme Legal`, a Dart map, a single-quoted value, a comma amount, `email = x` and a harmless label in front.
   - **Untouched texts.** URLs and times, and an ordinary TypeError message, stay exactly as they were.
-  - **Other contract rows.** A linear-time check on a 65k-character worst case (under 1 s), `requestDropFields`, and `referer` in the deny headers.
+  - **Other contract rows.** A bounded-cost check: 150k- and 200k-character worst cases, truncated to `maxMessageLength`, scrub within a 2 s budget (the scan itself is quadratic; the cap bounds it), `requestDropFields`, and `referer` in the deny headers.
   - **Settings script.**
     - It refuses an org holding a foreign project, before any write.
     - An empty org passes.
@@ -2857,3 +2857,10 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
     - A trailing slash on the region URL is accepted.
     - Every request has `redirect: 'error'`.
     - A failing first GET reports the method and status without the token.
+- **Final re-review additions (fix cycle 3, D18–D19):** `sentry-rules.test.ts` has 99 cases, `sentry-org-settings.test.ts` 37.
+  - **Leak cases.** Nested objects and arrays, compact and spaced, including an array of objects. A cut-off quoted value. Parentheses inside a bare value. The domain labels: `client`, `vendor`, `title`, `E-mail` and `withdrawnReason`. URLs inside text with a fragment or a query.
+  - **Untouched texts.** The Prisma unique-constraint message is left alone.
+  - **Reproduction.** For every fixture, the contract's reference scrub must reproduce each expected exception value exactly, so a fixture can't drift from the algorithm.
+  - **Fixtures.** The portal fixture now carries `request.fragment`, `request.env` and a URL with a token inside its exception text.
+  - **Pattern.** `urlInTextPattern` is in the portable subset.
+  - **Script.** It refuses a paginated project list (Link `rel="next"; results="true"`). The admin-token error names a personal token.

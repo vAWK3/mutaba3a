@@ -149,12 +149,16 @@ state, and `deploy.sh` never touches it. The rules are in
 
    ```bash
    cd server/infrastructure/sentry
-   cp production.tfvars.example production.tfvars    # set organization and the origins
+   cp production.tfvars.example production.tfvars    # set organization (= the SENTRY_ORG in step 5) and the origins
    read -rs SENTRY_ADMIN_TOKEN                       # paste the admin token; it isn't echoed or exported
    terraform init -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-sentry/production"
    SENTRY_AUTH_TOKEN="$SENTRY_ADMIN_TOKEN" terraform plan -var-file=production.tfvars
    SENTRY_AUTH_TOKEN="$SENTRY_ADMIN_TOKEN" terraform apply -var-file=production.tfvars
    ```
+
+   The personal token reaches every org you belong to, and the step 5 guard runs
+   after this apply. So before applying, read the org slug in the plan: every
+   resource should show `organization = "mutaba3a"`.
 
    If the plan errors on `de.sentry.io`, or the apply stops on the "not in the
    EU region" postcondition, **stop and check the org's data region** in its

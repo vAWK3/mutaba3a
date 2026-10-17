@@ -378,6 +378,8 @@
         "environment": "production",
         "request": {
           "url": "https://portal.example.test/setup#t=st_synthetic_setup_token",
+          "fragment": "t=st_synthetic_setup_token",
+          "env": { "REMOTE_ADDR": "203.0.113.9" },
           "headers": {
             "User-Agent": "Mozilla/5.0",
             "Referer": "https://portal.example.test/setup#t=st_synthetic_setup_token"
@@ -400,7 +402,7 @@
           "values": [
             {
               "type": "TypeError",
-              "value": "Cannot read properties of null (reading 'focus')",
+              "value": "Cannot read properties of null (reading 'focus') on https://portal.example.test/setup#t=st_synthetic_setup_token",
               "stacktrace": {
                 "frames": [
                   { "filename": "assets/SetupPage-77ab.js", "function": "SetupPage", "lineno": 1, "colno": 902, "in_app": true }
@@ -436,7 +438,7 @@
           "values": [
             {
               "type": "TypeError",
-              "value": "Cannot read properties of null (reading 'focus')",
+              "value": "Cannot read properties of null (reading 'focus') on https://portal.example.test/setup",
               "stacktrace": {
                 "frames": [
                   { "filename": "assets/SetupPage-77ab.js", "function": "SetupPage", "lineno": 1, "colno": 902, "in_app": true }

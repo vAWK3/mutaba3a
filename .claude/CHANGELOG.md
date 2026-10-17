@@ -91,8 +91,19 @@ The review was the core pass, 5 specialists, the red team and the adversarial pa
   - The tfvars example lists daily caps and `monthly_event_quota`.
   - Two stale descriptions are fixed.
 
+### Changed by the final re-review (fix cycle 3, D18–D19)
+
+The review stopped at its three-cycle limit: these changes passed the full gate and QA, but no fourth review pass.
+
+- **Nested and cut-off values.** Under a sensitive quoted key, a nested object or array is filtered to the end of the line, and so is a quoted value cut off by truncation. Before, `{"emails":["a@b","c@d"]}` leaked `c@d`. Under a bare key, a parenthetical no longer ends the value.
+- **Domain labels (D18).** `client(s)`, `vendor(s)`, `mobile`, `tel`, `mail`, `title` and `reason` are deny tokens.
+- **URLs in text (D19).** `urlInTextPattern` strips query and fragment from URLs inside error text.
+- **Fixtures and tests.** The reference scrub must reproduce every fixture. The portal fixture gains `request.fragment`, `request.env` and a URL with a token in its message.
+- **Settings script.** It refuses a paginated project list, and its admin-token error names a personal token.
+- **Docs.** The runbook checks the org slug in the plan before apply. The README documents the order of operations, the Dart timing and two more limits (keys over 64 characters, `key:value` with no space). TEST_PLAN corrections.
+
 ### Technical
-- `scripts/__tests__/sentry-rules.test.ts` (75 cases) and `scripts/__tests__/sentry-org-settings.test.ts` (36 cases, including a CLI run from the Sentry module folder). The Terraform tests: 13 runs in two files (`eu_region.tftest.hcl` has its own state).
+- `scripts/__tests__/sentry-rules.test.ts` (99 cases) and `scripts/__tests__/sentry-org-settings.test.ts` (37 cases, including a CLI run from the Sentry module folder). The Terraform tests: 13 runs in two files (`eu_region.tftest.hcl` has its own state).
 
 ---
 

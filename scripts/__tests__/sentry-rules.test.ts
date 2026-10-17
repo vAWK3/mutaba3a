@@ -21,8 +21,8 @@ const FIXTURES_PATH = 'docs/observability/sentry-fixtures.json';
  */
 const PINNED_VERSIONS: Record<string, { rules: string; fixtures: string }> = {
   '1.0.0': {
-    rules: 'd3ccd367dc53b61e36205ca145d9fa7df8e5ff8ea20208179294ecfe189fc44b',
-    fixtures: 'e5a113990923483c95b3c65de23190a9db42cab9cee04d59929442e2fa6b0f1b',
+    rules: '526ba6aa37a7bafffa0b8d87b2417192f523d26631d519a0489d4fc056404c04',
+    fixtures: '99db5709d8f447fa48faa4ef0ad5d37be3a733ccb0ab0adb7e7ab0c9c8fe3ee5',
   },
 };
 
@@ -30,7 +30,7 @@ const SURFACES = ['api', 'portal', 'landing', 'capture-app'];
 const FORBIDDEN_SURFACES = ['web', 'desktop', 'app', 'local'];
 const RULES_KEYS = [
   'version', 'region', 'surfaces', 'sdk', 'serverReportsStatusAtLeast', 'serverPrismaErrorFormat', 'denyHeaders',
-  'denyKeyTokens', 'requestDropFields', 'urlFields', 'maxMessageLength', 'labelledValuePattern', 'firstLineOnlyExceptionTypes', 'allowedTags', 'allowedUserKeys',
+  'denyKeyTokens', 'requestDropFields', 'urlFields', 'maxMessageLength', 'urlInTextPattern', 'labelledValuePattern', 'firstLineOnlyExceptionTypes', 'allowedTags', 'allowedUserKeys',
   'safeContextKeys', 'alwaysDropContextKeys', 'ignoredErrors', 'orgSettings', 'orgSensitiveFields',
 ];
 /** ADR-091 rule 2 (D3): every URL-bearing field keeps the path only; no query, no fragment. */
@@ -47,6 +47,8 @@ const REQUIRED_ORG_SETTINGS = {
 const COMPOUND_DENY_TOKENS = [
   'username', 'firstname', 'lastname', 'fullname', 'apikey', 'accesstoken', 'refreshtoken', 'sessionid',
   'phonenumber', 'emailaddress', 'passwd', 'pwd', 'credential', 'credentials', 'jwt', 'otp',
+  // D18: the product's own PII labels (clients, receipt vendors, titles, *Reason fields, E-mail → e + mail).
+  'client', 'clients', 'vendor', 'vendors', 'mobile', 'tel', 'mail', 'title', 'reason',
 ];
 const FIXTURES_KEYS = ['version', 'marker', 'fixtures'];
 const FIXTURE_KEYS = ['name', 'surface', 'input', 'expected'];
@@ -84,9 +86,28 @@ const LEAK_CASES: Array<[string, string[]]> = [
   ['amount=1,234.56 ILS', ['1,234.56', '234']],
   ['email = visitor@example.test', ['visitor@example.test']],
   ['Error: insert failed amount=12000 currency=ILS', ['12000']],
+  // Cycle-3 review: nested values, cut-off strings, parentheses, the domain's own labels, URLs in text.
+  ['{"email": {"address": "visitor@example.test"}}', ['visitor@example.test']],
+  ['{"body":{"note":"pay rent","x":1}}', ['pay rent', 'rent']],
+  ['{"emails":["a@b.test","c@d.test"]}', ['a@b.test', 'c@d.test']],
+  ['{"emails":[{"a":"x@y.test"},{"b":"z@w.test"}]}', ['x@y.test', 'z@w.test']],
+  ['{"note": ["paid late", "second"]}', ['paid late', 'second']],
+  ['{"id":"1","name":"Mohammed Abdullah Al-Ahmad Servi', ['Mohammed', 'Abdullah']],
+  ['note: pay (rent) to landlord John', ['rent', 'landlord', 'John']],
+  ['name: Acme (Pty) Ltd', ['Acme', 'Ltd']],
+  ['client: Acme Legal', ['Acme', 'Legal']],
+  ['{"vendor":"Taxi Co","title":"Website for John Smith"}', ['Taxi Co', 'John Smith']],
+  ['E-mail: visitor@example.test', ['visitor@example.test']],
+  ['withdrawnReason=client moved abroad', ['moved abroad']],
+  ['failed at https://portal.example.test/setup#t=st_synthetic_token', ['st_synthetic_token', '#']],
+  ['GET https://api.example.test/v1/clients?q=acme+legal failed', ['acme', '?q=']],
 ];
 /** Text the scrubber must leave exactly as it is. */
-const UNTOUCHED = ['see https://de.sentry.io/x at 12:30', 'Cannot read properties of undefined (reading \'balanceMinor\')'];
+const UNTOUCHED = [
+  'see https://de.sentry.io/x at 12:30',
+  "Cannot read properties of undefined (reading 'balanceMinor')",
+  'Unique constraint failed on the fields: (`organization_id`,`external_ref`)',
+];
 const FILTERED = '[Filtered]';
 /** ADR-091 rule 4 (R7): syntax JavaScript and Dart read differently, or only one of them reads. */
 const NON_PORTABLE_REGEX: Array<[RegExp, string]> = [
@@ -118,6 +139,7 @@ type Rules = {
   orgSensitiveFields?: string[];
   requestDropFields?: string[];
   urlFields?: string[];
+  urlInTextPattern?: string;
   labelledValuePattern?: string;
   firstLineOnlyExceptionTypes?: string[];
   [key: string]: unknown;
@@ -175,10 +197,6 @@ function contextProblems(contexts: Json | undefined): string[] {
   });
 }
 
-/**
- * Labelled values in free text (`key=value`, `key: value`, `"key": value`, rule 7, D4) whose key
- * holds a deny token must read `[Filtered]`, quoted or not. The pattern is the contract's own.
- */
 type LabelledValue = { key: string; value: string; valueStart: number };
 
 /**
@@ -201,12 +219,16 @@ function labelledValues(text: string): LabelledValue[] {
 
 const isFiltered = (value: string) => value === FILTERED || /^(["'])\[Filtered\]\1$/.test(value);
 
+/** D19: an http(s) URL inside free text keeps scheme, host and path; its query and fragment go. */
+const stripUrlsInText = (text: string) => text.replace(new RegExp(rules.urlInTextPattern ?? '$^', 'g'), '$1');
+
 /**
- * Replaces each sensitive labelled value with [Filtered], keeping its quotes: the reference scrub.
- * Like every surface, it first truncates to `maxMessageLength`, which bounds the scan (D15).
+ * The reference scrub of free text, in the contract's order (README rule 7): truncate to
+ * `maxMessageLength` (D15), strip URL queries and fragments (D19), then replace each sensitive
+ * labelled value with [Filtered], keeping its quotes.
  */
 function scrubLabelled(full: string): string {
-  const text = full.slice(0, Number(rules.maxMessageLength ?? 0));
+  const text = stripUrlsInText(full.slice(0, Number(rules.maxMessageLength ?? 0)));
   let out = '';
   let last = 0;
   for (const { key, value, valueStart } of labelledValues(text)) {
@@ -268,6 +290,9 @@ function exceptionProblems(exception: Json | undefined): string[] {
     if (!isObject(value)) return [];
     const where = `exception.values[${index}]`;
     const problems = labelledValueProblems(`${where}.value`, value.value);
+    if (typeof value.value === 'string' && stripUrlsInText(value.value) !== value.value) {
+      problems.push(`${where}.value keeps a URL query or fragment (D19)`);
+    }
     if (firstLineOnly(value.type) && typeof value.value === 'string' && value.value.includes('\n')) {
       problems.push(`${where}.value keeps more than its first line (${String(value.type)})`);
     }
@@ -418,8 +443,16 @@ describe('Sentry scrub contract (ADR-091)', () => {
   it.each(LEAK_CASES)('scrubbing %j removes every sensitive value, whatever its form (D15)', (text, secrets) => {
     const scrubbed = scrubLabelled(text);
     for (const secret of secrets) expect(scrubbed, `${secret} survived`).not.toContain(secret);
-    expect(scrubbed).toContain(FILTERED);
+    expect(scrubbed).not.toBe(text);
     expect(labelledValueProblems('text', scrubbed)).toEqual([]);
+  });
+
+  it('shares one portable pattern for URLs inside text (D19)', () => {
+    const pattern = rules.urlInTextPattern ?? '';
+    expect(NON_PORTABLE_REGEX.filter(([syntax]) => syntax.test(pattern))).toEqual([]);
+    expect(stripUrlsInText('see https://a.example/p?q=1#f and http://b.example/x#y.')).toBe(
+      'see https://a.example/p and http://b.example/x',
+    );
   });
 
   it.each(UNTOUCHED)('scrubbing leaves %j exactly as it is', (text) => {
@@ -577,6 +610,20 @@ describe('Sentry scrub fixtures (ADR-091)', () => {
       expect(allExpected().every((event) => !extraKeys(event).includes(key))).toBe(true);
     }
   });
+
+  it.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
+    '%s: the contract\'s own scrub reproduces every expected exception value (cycle-3 review)',
+    (_name, fixture) => {
+      const values = (event: JsonObject) =>
+        isObject(event.exception) && Array.isArray(event.exception.values) ? event.exception.values : [];
+      values(fixture.input).forEach((value, index) => {
+        if (!isObject(value) || typeof value.value !== 'string') return;
+        const text = firstLineOnly(value.type) ? value.value.split('\n')[0] : value.value;
+        const expected = values(fixture.expected)[index];
+        expect(isObject(expected) && expected.value, `exception.values[${index}]`).toBe(scrubLabelled(text));
+      });
+    },
+  );
 
   it('proves labelled values in all three forms are filtered, not dropped (D4)', () => {
     const exceptionText = allExpected().map((event) => JSON.stringify(event.exception ?? null)).join('\n');
