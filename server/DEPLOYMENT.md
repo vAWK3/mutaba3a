@@ -150,8 +150,9 @@ state, and `deploy.sh` never touches it. The rules are in
    ```bash
    cd server/infrastructure/sentry
    cp production.tfvars.example production.tfvars    # set organization (= the SENTRY_ORG in step 5) and the origins
+   cp backend.hcl.example backend.production.hcl     # set bucket to the GCP state bucket, <PROJECT_ID>-terraform-state (§2)
    read -rs SENTRY_ADMIN_TOKEN                       # paste the admin token; it isn't echoed or exported
-   terraform init -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-sentry/production"
+   terraform init -backend-config=backend.production.hcl
    SENTRY_AUTH_TOKEN="$SENTRY_ADMIN_TOKEN" terraform plan -var-file=production.tfvars
    SENTRY_AUTH_TOKEN="$SENTRY_ADMIN_TOKEN" terraform apply -var-file=production.tfvars
    ```

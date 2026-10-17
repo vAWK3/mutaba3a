@@ -3615,6 +3615,13 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Paginated project lists.** The settings script refuses a paginated project list, because it can't then prove the org is Mutaba3a-only.
 - **Not converged.** The review stopped at its three-cycle limit. These cycle-3 changes passed the gate and QA but no fourth review pass.
 
+**Amendment 4 (MUT-147 convergence review, 2026-10-18)**: Contract 1.1.0. 1.0.0 was already merged, so it stays pinned beside the new row (append-only).
+- **Money and free-text keys.** `minor`, `reference`, `label` and `metadata` are deny tokens, so `grossMinor` and `netMinor` go. Plurals are listed beside their singulars. Keys also split at letter–digit boundaries, so `email2` and `address2Line` match.
+- **Multi-line values.** A container value under a sensitive key runs on through the indented lines below it, so pretty-printed JSON and `util.inspect` output are covered.
+- **Messages.** The event message (string, `message.formatted`, `logentry.formatted`) and breadcrumb messages get the same scrub as exception values, and `messageDropFields` (`params`) is dropped from structured messages. `^FormatException` keeps its first line only.
+- **Spike alert.** The threshold defaults to 10 an hour, and Terraform rejects one at or above the smallest daily key cap, which the alert could never reach.
+- **Runbook.** The Sentry module's `terraform init` reads `backend.production.hcl` instead of a `TF_STATE_BUCKET` the runbook never sets.
+
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
 **Status**: Accepted (2026-10-17, MUT-157; auto-decided on the recommended option at Basel's request, C1)

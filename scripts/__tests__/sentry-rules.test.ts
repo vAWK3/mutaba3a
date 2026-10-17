@@ -24,13 +24,18 @@ const PINNED_VERSIONS: Record<string, { rules: string; fixtures: string }> = {
     rules: '526ba6aa37a7bafffa0b8d87b2417192f523d26631d519a0489d4fc056404c04',
     fixtures: '99db5709d8f447fa48faa4ef0ad5d37be3a733ccb0ab0adb7e7ab0c9c8fe3ee5',
   },
+  // Convergence review (2026-10-18): money and free-text keys, multi-line containers, messages.
+  '1.1.0': {
+    rules: '6d444aac1d33ba3149924c1b8ae3e1f58f4adadf167bb0ee5acfefadce2d44fc',
+    fixtures: '3b0dfac37ee2a25a37169ad4c71966e5b703fadd92bdec4e6ae90adf91332995',
+  },
 };
 
 const SURFACES = ['api', 'portal', 'landing', 'capture-app'];
 const FORBIDDEN_SURFACES = ['web', 'desktop', 'app', 'local'];
 const RULES_KEYS = [
   'version', 'region', 'surfaces', 'sdk', 'serverReportsStatusAtLeast', 'serverPrismaErrorFormat', 'denyHeaders',
-  'denyKeyTokens', 'requestDropFields', 'urlFields', 'maxMessageLength', 'urlInTextPattern', 'labelledValuePattern', 'firstLineOnlyExceptionTypes', 'allowedTags', 'allowedUserKeys',
+  'denyKeyTokens', 'requestDropFields', 'messageDropFields', 'urlFields', 'maxMessageLength', 'urlInTextPattern', 'labelledValuePattern', 'firstLineOnlyExceptionTypes', 'allowedTags', 'allowedUserKeys',
   'safeContextKeys', 'alwaysDropContextKeys', 'ignoredErrors', 'orgSettings', 'orgSensitiveFields',
 ];
 /** ADR-091 rule 2 (D3): every URL-bearing field keeps the path only; no query, no fragment. */
@@ -101,6 +106,18 @@ const LEAK_CASES: Array<[string, string[]]> = [
   ['withdrawnReason=client moved abroad', ['moved abroad']],
   ['failed at https://portal.example.test/setup#t=st_synthetic_token', ['st_synthetic_token', '#']],
   ['GET https://api.example.test/v1/clients?q=acme+legal failed', ['acme', '?q=']],
+  // Convergence review: the product's money fields (*Minor), free-text fields, multi-line output, digits, plurals.
+  ['Request failed: {"grossMinor":12000,"vatMinor":1800,"netMinor":10200,"paidMinor":5000}', ['12000', '1800', '10200', '5000']],
+  ['outstandingMinor=45000 overdueMinor=12000', ['45000', '12000']],
+  ['{ creditedMinor: 3000, allocatedMinor: 2000, commissionMinor: 900 }', ['3000', '2000', '900']],
+  ['{"reference":"Transfer J. Smith","label":"Deposit from John Smith","metadata":{"by":"Acme"}}', ['J. Smith', 'John Smith', 'Acme']],
+  [
+    JSON.stringify({ id: 'c1', emails: ['visitor@example.test', 'second.person@example.test'], note: 'x' }, null, 2),
+    ['visitor@example.test', 'second.person@example.test'],
+  ],
+  ["{\n  id: 'c1',\n  emails: [\n    'visitor@example.test',\n    'second.person@example.test'\n  ]\n}", ['visitor@example.test', 'second.person']],
+  ['address2=12 Herzl St; phone2=+972501234567; email2=visitor@example.test', ['Herzl', '972501234567', 'visitor@example.test']],
+  ['{"phones":["+972501234567"],"addresses":["1 Main St"],"descriptions":["Website for John Smith"]}', ['972501234567', 'Main St', 'John Smith']],
 ];
 /** Text the scrubber must leave exactly as it is. */
 const UNTOUCHED = [
@@ -138,6 +155,7 @@ type Rules = {
   orgSettings?: Record<string, unknown>;
   orgSensitiveFields?: string[];
   requestDropFields?: string[];
+  messageDropFields?: string[];
   urlFields?: string[];
   urlInTextPattern?: string;
   labelledValuePattern?: string;
@@ -158,11 +176,16 @@ const unknownKeys = (value: object, allowed: string[]) => Object.keys(value).fil
 const isObject = (value: unknown): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** ADR-091 rule 3 (R6): split a key on `_`, `-`, `.`, spaces and camelCase humps, lowercased. */
+/**
+ * ADR-091 rule 3 (R6): split a key on `_`, `-`, `.`, spaces, camelCase humps and letter–digit
+ * boundaries (so `email2` holds `email`), lowercased.
+ */
 function keyTokens(key: string): string[] {
   return key
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/([A-Za-z])([0-9])/g, '$1 $2')
+    .replace(/([0-9])([A-Za-z])/g, '$1 $2')
     .split(/[\s_.-]+/)
     .filter(Boolean)
     .map((token) => token.toLowerCase());
@@ -277,9 +300,24 @@ function breadcrumbProblems(breadcrumbs: Json | undefined): string[] {
     const problems = crumb.category === 'console' ? [`${where} is a console breadcrumb`] : [];
     const data = isObject(crumb.data) ? crumb.data : {};
     for (const key of breadcrumbUrlKeys()) problems.push(...urlProblem(`${where}.data.${key}`, data[key]));
-    return [...problems, ...deniedKeyPaths(data, `${where}.data`), ...labelledValueProblems(where, crumb.message)];
+    return [...problems, ...deniedKeyPaths(data, `${where}.data`), ...freeTextProblems(`${where}.message`, crumb.message)];
   });
 }
+
+/** Free text (exception values, messages, breadcrumb messages) gets every text rule (rule 7, D19). */
+function freeTextProblems(where: string, text: Json | undefined): string[] {
+  if (typeof text !== 'string') return [];
+  const problems = labelledValueProblems(where, text);
+  if (stripUrlsInText(text) !== text) problems.push(`${where} keeps a URL query or fragment (D19)`);
+  return problems;
+}
+
+/** An event's top-level message as text: a string (JS), `message.formatted` (Dart) or `logentry.formatted`. */
+const messageText = (event: JsonObject): Json | undefined => {
+  if (typeof event.message === 'string') return event.message;
+  if (isObject(event.message)) return event.message.formatted;
+  return isObject(event.logentry) ? event.logentry.formatted : undefined;
+};
 
 const firstLineOnly = (type: Json | undefined) =>
   typeof type === 'string' && (rules.firstLineOnlyExceptionTypes ?? []).some((pattern) => new RegExp(pattern).test(type));
@@ -289,10 +327,7 @@ function exceptionProblems(exception: Json | undefined): string[] {
   return values.flatMap((value, index) => {
     if (!isObject(value)) return [];
     const where = `exception.values[${index}]`;
-    const problems = labelledValueProblems(`${where}.value`, value.value);
-    if (typeof value.value === 'string' && stripUrlsInText(value.value) !== value.value) {
-      problems.push(`${where}.value keeps a URL query or fragment (D19)`);
-    }
+    const problems = freeTextProblems(`${where}.value`, value.value);
     if (firstLineOnly(value.type) && typeof value.value === 'string' && value.value.includes('\n')) {
       problems.push(`${where}.value keeps more than its first line (${String(value.type)})`);
     }
@@ -316,7 +351,13 @@ function forbiddenIn(event: JsonObject): string[] {
     ...contextProblems(event.contexts),
     ...breadcrumbProblems(event.breadcrumbs),
     ...exceptionProblems(event.exception),
-    ...labelledValueProblems('message', event.message),
+    ...freeTextProblems('message', messageText(event)),
+    // A structured message's `params` are the raw substituted values (Dart SentryMessage, JS logentry).
+    ...(['message', 'logentry'] as const).flatMap((field) => {
+      const structured = event[field];
+      if (!isObject(structured)) return [];
+      return (rules.messageDropFields ?? []).filter((key) => key in structured).map((key) => `${field}.${key} is present`);
+    }),
   ];
 }
 
@@ -354,6 +395,9 @@ describe('keyTokens', () => {
     ['HTTPStatus', ['http', 'status']],
     ['filename', ['filename']],
     ['keyboard', ['keyboard']],
+    ['email2', ['email', '2']],
+    ['address2Line', ['address', '2', 'line']],
+    ['grossMinor', ['gross', 'minor']],
   ])('splits %s into whole tokens', (key, expected) => {
     expect(keyTokens(key)).toEqual(expected);
   });
@@ -470,6 +514,7 @@ describe('Sentry scrub contract (ADR-091)', () => {
 
   it('drops whole request fields and the Referer header (D17)', () => {
     expect(rules.requestDropFields).toEqual(REQUEST_DROP_FIELDS);
+    expect(rules.messageDropFields).toEqual(['params']);
     expect(rules.denyKeyTokens).toContain('fragment');
   });
 
@@ -481,6 +526,17 @@ describe('Sentry scrub contract (ADR-091)', () => {
     }
     expect(firstLineOnly('PrismaClientValidationError')).toBe(true);
     expect(firstLineOnly('TypeError')).toBe(false);
+    // Dart's FormatException repeats its input on the second line (convergence review).
+    expect(firstLineOnly('FormatException')).toBe(true);
+  });
+
+  it('denies the money and free-text field names the schema uses, and their plurals (convergence review)', () => {
+    for (const key of ['grossMinor', 'vatMinor', 'paidMinor', 'outstandingMinor', 'reference', 'label', 'metadata']) {
+      expect(hasDenyToken(key), key).toBe(true);
+    }
+    for (const plural of ['phones', 'addresses', 'descriptions', 'titles', 'reasons', 'accounts', 'cards', 'secrets', 'passwords', 'sessions', 'balances', 'prices', 'memos']) {
+      expect(hasDenyToken(plural), plural).toBe(true);
+    }
   });
 
   it('holds at least the ADR minimum deny lists, lowercase and without duplicates', () => {
@@ -624,6 +680,36 @@ describe('Sentry scrub fixtures (ADR-091)', () => {
       });
     },
   );
+
+  it.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
+    '%s: the contract\'s own scrub reproduces every expected message and breadcrumb message (convergence review)',
+    (_name, fixture) => {
+      const inputMessage = messageText(fixture.input);
+      if (typeof inputMessage === 'string') expect(messageText(fixture.expected)).toBe(scrubLabelled(inputMessage));
+      // Console breadcrumbs are dropped whole, so compare the kept ones in order.
+      const crumbs = (event: JsonObject) =>
+        (isObject(event.breadcrumbs) && Array.isArray(event.breadcrumbs.values) ? event.breadcrumbs.values : []).filter(
+          (crumb) => isObject(crumb) && crumb.category !== 'console',
+        );
+      const expectedCrumbs = crumbs(fixture.expected);
+      crumbs(fixture.input).forEach((crumb, index) => {
+        if (!isObject(crumb) || typeof crumb.message !== 'string') return;
+        const expected = expectedCrumbs[index];
+        expect(isObject(expected) && expected.message, `breadcrumb ${index}`).toBe(scrubLabelled(crumb.message));
+      });
+    },
+  );
+
+  it('covers top-level messages in both shapes and a dirty breadcrumb message (convergence review)', () => {
+    expect(allInputs().some((event) => typeof event.message === 'string')).toBe(true);
+    expect(allInputs().some((event) => isObject(event.message) && typeof event.message.formatted === 'string')).toBe(true);
+    const dirtyCrumb = allInputs().some((event) =>
+      (isObject(event.breadcrumbs) && Array.isArray(event.breadcrumbs.values) ? event.breadcrumbs.values : []).some(
+        (crumb) => isObject(crumb) && crumb.category !== 'console' && freeTextProblems('crumb', crumb.message).length > 0,
+      ),
+    );
+    expect(dirtyCrumb).toBe(true);
+  });
 
   it('proves labelled values in all three forms are filtered, not dropped (D4)', () => {
     const exceptionText = allExpected().map((event) => JSON.stringify(event.exception ?? null)).join('\n');

@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-18 — Sentry contract 1.1.0: money keys, multi-line values and messages (MUT-147 convergence review, ADR-091 amendment 4)
+
+**Why:** the fresh review after the merge found values the 1.0.0 rules still let through: money fields such as `grossMinor`, pretty-printed JSON, and the event message and breadcrumb messages, which were never scrubbed. 1.0.0 is merged, so the fixes ship as 1.1.0 and the 1.0.0 pin stays.
+
+### Changed
+- `docs/observability/sentry-rules.json` 1.1.0:
+  - new deny tokens `minor`, `reference`, `label`, `metadata`, and plurals beside their singulars;
+  - keys split at letter–digit boundaries (`email2`, `address2Line`);
+  - a container value under a sensitive key runs on through the indented lines below it;
+  - `messageDropFields` (`params`), and `^FormatException` keeps its first line only.
+- `sentry-fixtures.json` 1.1.0: a pretty-printed JSON message (api), and a structured message with a dirty breadcrumb message (capture-app).
+- `server/infrastructure/sentry`: the spike alert defaults to 10 an hour, and Terraform rejects a threshold at or above the smallest daily key cap, which could never fire. `backend.hcl.example` names the real bucket shape.
+- `server/DEPLOYMENT.md` §1.5 step 4: `terraform init -backend-config=backend.production.hcl`, instead of a `TF_STATE_BUCKET` that step never sets.
+- `docs/observability/README.md` rules 3 and 7, ADR-091 amendment 4, INFRA alert row.
+
+### Technical
+- `sentry-rules.test.ts`: new leak cases (money keys, pretty JSON, `util.inspect`, digit keys, plurals); messages and breadcrumb messages go through the same checks and reproduction as exception values. `sentry-org-settings.test.ts`: a realistic single-page `Link` header passes.
+
 ## [Unreleased] - 2026-10-17 — The phone app asks first, then sends anonymous activation events (MUT-157, ADR-090, ADR-092)
 
 **Why:** epic MUT-152's activation funnel on iOS and Android. Built in the Flutter repo on `feature/mut-157-phone-analytics` (its brief: `.claude/designs/mut-157-phone-analytics.md` there).

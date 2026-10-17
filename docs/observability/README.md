@@ -71,8 +71,9 @@ exactly.
    - Headers in `denyHeaders` are removed: `authorization`, `cookie`, `set-cookie`, `x-api-key`,
      `idempotency-key`, `x-forwarded-for`, …
 3. **Keys are matched as whole tokens.**
-   - A key is split on `_`, `-`, `.`, spaces and camelCase humps, then lowercased. So
-     `clientName` becomes `client` + `name`, and `filename` stays `filename`.
+   - A key is split on `_`, `-`, `.`, spaces, camelCase humps and letter–digit boundaries, then
+     lowercased. So `clientName` becomes `client` + `name`, `address2Line` becomes `address` +
+     `2` + `line`, and `filename` stays `filename`.
    - A key is dropped when any token is in `denyKeyTokens`. This applies in `extra`, `contexts`,
      breadcrumb `data`, tags and user, at any depth.
    - Lowercase compounds that splitting can't break apart are tokens in their own right:
@@ -82,6 +83,10 @@ exactly.
      `mail` (so `E-mail` goes), `title` and `reason` (so `withdrawnReason` goes) (D18).
      - **The cost.** Opaque ID keys such as `extra.clientId` are dropped too.
      - **Deliberately not a token: `user`.** It would also strip the `User-Agent` header.
+   - Money and free-text fields are deny tokens: `minor` (so `grossMinor`, `netMinor` and
+     `amountMinor` go), `reference`, `label` and `metadata` (1.1.0).
+   - Plurals are listed beside their singulars (`phones`, `addresses`, `titles`, `secrets`, …),
+     because whole-token matching doesn't strip an `s`.
    - Never touched: stack frames (except their `vars`, which are always dropped), `sdk`,
      `release` and `environment`.
 4. **Contexts.**
@@ -100,19 +105,26 @@ exactly.
    - Navigation breadcrumbs keep path-only `from` and `to`.
    - UI clicks keep the selector, never the text.
 7. **Messages.**
-   - In exception values and messages, every labelled value whose key holds a deny token is
-     replaced with `[Filtered]` (quoted values keep their quotes: `"[Filtered]"`).
+   - **Where.** Exception values, the event message (a plain string, `message.formatted` or
+     `logentry.formatted`) and breadcrumb messages. In each, every labelled value whose key holds
+     a deny token is replaced with `[Filtered]` (quoted values keep their quotes: `"[Filtered]"`).
+   - **Structured messages.** The fields in `messageDropFields` (`params`) are dropped from
+     `message` and `logentry`: they hold the raw values a template was filled with. The template
+     itself is kept, because it holds only placeholders.
    - **Forms covered (D4, D15).** `key=value`, `key = value`, `key: value`, and JSON or JS
      `"key": value` / `'key':value`, compact (`JSON.stringify`) or spaced.
    - **The shared pattern.** All surfaces use the contract's `labelledValuePattern` (key in group 1
      or 3, value in group 2 or 4). It has two branches:
      - **Quoted keys.** The value is either:
        - a quoted string;
-       - a nested object or array (`{…`, `[…`), which runs to the end of the line, so everything
-         under a sensitive container key goes (`{"emails":["a@b","c@d"]}`);
+       - a nested object or array (`{…`, `[…`), which runs to the end of the line and on through
+         every following indented line, so everything under a sensitive container key goes,
+         compact (`{"emails":["a@b","c@d"]}`) or pretty-printed (`JSON.stringify(x, null, 2)`,
+         `util.inspect`);
        - a quoted string cut off by truncation, which runs to the end of the line;
        - otherwise, text up to the next `,`, `;`, `}`, `]` or whitespace.
-     - **Bare keys.** The value is a quoted string, or runs to the end of its clause (`;`, `}`,
+     - **Bare keys.** The value is a quoted string; an opening `{` or `[` at the end of a line,
+       which runs through the indented lines below it; or runs to the end of its clause (`;`, `}`,
        `]`, `)` or a line break). A parenthetical inside it, as in `Acme (Pty) Ltd`, doesn't end
        it. So `Authorization: Bearer <token>`, `name: John Smith` and `amount=1,234.56` filter
        the whole value.
@@ -142,8 +154,9 @@ exactly.
        MUT-151 measures it on a low-end Android phone and lowers the phone's cap if
        `beforeSend` gets slow.
      - **SDK default.** Sentry's JS SDK already truncates values to 250 characters by default.
-   - **Prisma.** An exception whose type matches `firstLineOnlyExceptionTypes` (`^Prisma`) keeps
-     only its first line, because the rest can echo the query input.
+   - **First line only.** An exception whose type matches `firstLineOnlyExceptionTypes` keeps
+     only its first line: `^Prisma`, because the rest can echo the query input, and
+     `^FormatException`, because Dart prints the unparsable source text below the message.
    - **Known limits.** This catches only *labelled* values. Not caught:
      - an unlabelled name in free text (so surface code never interpolates user values into
        thrown messages);

@@ -11,7 +11,7 @@ landing_origins = ["https://mutaba3a.netlify.app"]
 
 # Optional overrides (defaults in variables.tf).
 # base_url                 = "https://de.sentry.io/api/"
-# spike_threshold_per_hour = 50
+# spike_threshold_per_hour = 10  # must stay below the smallest daily cap, or the alert never fires
 # Daily caps (D6). Their sum x 31 must stay within monthly_event_quota, or the plan fails.
 # key_rate_limit_per_day   = { api = 60, portal = 20, landing = 20, "capture-app" = 60 }
 # monthly_event_quota      = 5000   # the plan's monthly error quota; check it at signup

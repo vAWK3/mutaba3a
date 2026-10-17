@@ -59,7 +59,11 @@ variable "key_rate_limit_per_day" {
 }
 
 variable "spike_threshold_per_hour" {
-  description = "The spike alert fires when one issue gets more than this many events in an hour."
+  description = "The spike alert fires when one issue gets more than this many events in an hour. It must sit below the smallest daily key cap: a key drops everything past its cap, so a higher threshold could never be reached and the alert would never fire."
   type        = number
-  default     = 50
+  default     = 10
+  validation {
+    condition     = var.spike_threshold_per_hour > 0 && var.spike_threshold_per_hour < min(values(var.key_rate_limit_per_day)...)
+    error_message = "spike_threshold_per_hour must be positive and below the smallest key_rate_limit_per_day, or the spike alert can never fire."
+  }
 }
