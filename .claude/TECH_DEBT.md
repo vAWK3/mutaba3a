@@ -74,7 +74,7 @@
 
 ### TD-158: Changing your password keeps this device's token rather than issuing a new one
 **Status**: Open
-**Ticket**: none (found 2026-10-16, MUT-238 pre-landing adversarial review of MUT-237)
+**Ticket**: MUT-262 (found 2026-10-16, MUT-238 pre-landing adversarial review of MUT-237)
 **Added**: 2026-10-16
 **Priority**: Low (needs a stolen token, and the person to change the password from the very session that leaked)
 **Impact**: `POST /v1/me/password` keeps the caller's session and its token. If that token is what leaked (a copied Keychain item, a portal cookie lifted from a shared machine), the attacker's copy survives the change, sliding for up to 30 idle days and 180 absolute days on a device session. Every other session is revoked, so a password change still ends a stolen session that isn't the changer's own.
