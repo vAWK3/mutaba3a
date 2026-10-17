@@ -2917,7 +2917,7 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
   - QA `other-tab-silenced`: a save in a second tab after an opt-out in the first sends nothing, and its switch reads off.
 - **Known:** on preview builds, `portal.signin.boot-slow-session` (2 tests) still fails, as listed above. The other 72 portal and landing specs pass.
 
-## MUT-157 — phone opt-in usage counts (2026-10-17, ADR-090, ADR-091; Flutter repo)
+## MUT-157 — phone opt-in usage counts (2026-10-17, ADR-090, ADR-092; Flutter repo)
 
 - **`test/domain/services/analytics/analytics_contract_test.dart`** (5): the fixture's sha256 and README row; the phone event set equals the contract's ios+android emitters; property types and values; shared properties; currencies equal `Currency.values`.
 - **`analytics_guard_test.dart`** (6):
@@ -2953,3 +2953,62 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
   - `opt-out-last-note`;
   - `sign-out-resets`.
 - **Known, already on main:** `test/core/capture_amount_contract_test.dart` "1000 EUR → 1000.00" fails the same way on main (849b3243): number grouping.
+
+## MUT-147 — Sentry foundation (2026-10-17, ADR-091)
+
+- `scripts/__tests__/sentry-rules.test.ts` (37 cases, node environment). Contract-level, with no scrubber code (the surfaces own theirs). It checks:
+  - **Tokenizer.** Whole-token splitting (snake, kebab, dot, camelCase, acronyms).
+  - **Shape.** Known keys only; the same semver version in both files; the sha256 of both files pinned per version; the fixture marker only in the fixtures file.
+  - **Surfaces and options.** Surfaces are exactly api, portal, landing and capture-app. The SDK options are exact, the server status floor is 500, and every org privacy switch is on.
+  - **Lists.** The deny lists hold the ADR minimum, lowercase, with no duplicates. Allowed tags and user keys hold no deny token. Safe and always-dropped context keys are disjoint, with `device.name` dropped.
+  - **Ignored errors.** Every surface has some, each compiles, each is in the portable regex subset, and the portability check itself rejects five non-portable forms.
+  - **Fixtures, per fixture.** The expected event has nothing forbidden; the input has something to strip; frames, release and environment pass through.
+  - **Fixtures, across the set.** A frame `filename`, `os.name` and `browser.name` survive; `device.name`, `client_name` and `clientName` are dropped; and a labelled message value becomes `[Filtered]`.
+  - **Mutation check (manual, 2026-10-17).** Putting `device.name` and `clientName` back into two expected events fails 4 cases.
+- `scripts/__tests__/sentry-org-settings.test.ts` (15 cases), with `fetch` mocked at the boundary. It checks:
+  - **Desired settings.** Derived from the rules.
+  - **Drift.** None when the org matches. A switch that is off or missing is flagged. Missing sensitive fields are flagged, ignoring case and extra fields.
+  - **Arguments.** The mode, org and token, the default EU host, and normalising `/api/` and a trailing slash. Missing or double modes, a missing `--org` value, a missing token or org, and a plain-http host are rejected.
+  - **Apply and check.** `--apply` PUTs then GETs with a Bearer token. `--check` only GETs and reports drift. An apply that didn't stick is reported. An error status shows the method and status, never the token.
+- `server/infrastructure/sentry/tests/sentry.tftest.hcl` (6 runs, mocked provider, server-ci):
+  - four projects with `default_key = false` and `default_rules = false`, and one key each, rate-limited per hour;
+  - `allowed_domains` exact on portal and landing, and `*` on api and capture-app;
+  - browser inbound filters on portal and landing only;
+  - spike protection enabled across all four;
+  - three email alerts per project, to issue owners falling through to all members, with the spike alert at 50 per hour;
+  - a wildcard browser origin and an incomplete rate-limit map are both rejected.
+  - **Mutation check (manual, 2026-10-17).** `default_key = true` plus a wildcard portal origin fails two runs.
+- Release-QA: not applicable (no user-visible flow). MUT-148..151 carry the QA scenarios, for example "landing sends zero Sentry requests on `/app`".
+- **Pre-landing review additions (2026-10-17, D1–D13):**
+  - `sentry-rules.test.ts` is now 62 cases.
+    - **Fixtures.** Allowed content survives in every fixture. Three new fixtures: the portal `/setup#token` navigation, an api Prisma validation error with frame vars and compound keys, and a landing JSON plus `key: value` message.
+    - **Contract rows.** Curated `orgSensitiveFields`, never a substring of kept text. Exact `urlFields`. Compound deny tokens. The shared `labelledValuePattern`, finding all three forms and not URLs or times (superseded by D15, then the cycle-3 changes). Prisma first-line-only. `includeLocalVariables: false`. The six org switches.
+  - `sentry-org-settings.test.ts` is now 30 cases.
+    - **Org settings.** The six switches, `safeFields` drift and the region refusal before any write.
+    - **Apply.** The merge keeps hand-added fields. An empty PUT body passes. Every request has a timeout signal.
+    - **Arguments and tokens.** Only `--apply`/`--check`. `SENTRY_ADMIN_TOKEN` is read, never `SENTRY_AUTH_TOKEN`. The `sentry.io` host allowlist, with four rejected and three accepted hosts.
+    - **CLI.** A run from `server/infrastructure/sentry` doesn't hit ENOENT. It was red first, on the old code.
+  - **Terraform.** 13 runs.
+    - Daily caps (`rate_limit_window` 86400).
+    - Rejections: wildcard landing origin, http origin, origin with a path, empty list, zero cap, and caps overrunning the monthly quota.
+    - `eu_region.tftest.hcl`: a US ingest DSN fails the `sentry_key` postcondition. It's in its own file because runs in one file share state.
+  - **CI.** `contracts-ci.yml` runs the Sentry and analytics contract tests on contract-only changes.
+- **Re-review additions (fix cycle 2, D15–D17):** `sentry-rules.test.ts` has 75 cases, `sentry-org-settings.test.ts` 36.
+  - **Pattern-independent leak cases.** Each of these must lose its secret substrings after the reference scrub: compact JSON, spaced JSON, Bearer, `name=Acme Legal`, a Dart map, a single-quoted value, a comma amount, `email = x` and a harmless label in front.
+  - **Untouched texts.** URLs and times, and an ordinary TypeError message, stay exactly as they were.
+  - **Other contract rows.** A bounded-cost check: 150k- and 200k-character worst cases, truncated to `maxMessageLength`, scrub within a 2 s budget (the scan itself is quadratic; the cap bounds it), `requestDropFields`, and `referer` in the deny headers.
+  - **Settings script.**
+    - It refuses an org holding a foreign project, before any write.
+    - An empty org passes.
+    - It refuses an org with an unknown region.
+    - A trailing slash on the region URL is accepted.
+    - Every request has `redirect: 'error'`.
+    - A failing first GET reports the method and status without the token.
+- **Final re-review additions (fix cycle 3, D18–D19):** `sentry-rules.test.ts` has 99 cases, `sentry-org-settings.test.ts` 37.
+  - **Leak cases.** Nested objects and arrays, compact and spaced, including an array of objects. A cut-off quoted value. Parentheses inside a bare value. The domain labels: `client`, `vendor`, `title`, `E-mail` and `withdrawnReason`. URLs inside text with a fragment or a query.
+  - **Untouched texts.** The Prisma unique-constraint message is left alone.
+  - **Reproduction.** For every fixture, the contract's reference scrub must reproduce each expected exception value exactly, so a fixture can't drift from the algorithm.
+  - **Fixtures.** The portal fixture now carries `request.fragment`, `request.env` and a URL with a token inside its exception text.
+  - **Pattern.** `urlInTextPattern` is in the portable subset.
+  - **Script.** It refuses a paginated project list (Link `rel="next"; results="true"`). The admin-token error names a personal token.
+

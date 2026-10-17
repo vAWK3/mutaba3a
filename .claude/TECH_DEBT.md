@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-159: The Sentry alerts use the deprecated `sentry_issue_alert` resource
+**Status**: Open
+**Ticket**: none (MUT-147, 2026-10-17)
+**Added**: 2026-10-17
+**Priority**: Low. The resource works in provider 0.15.8 and only prints a deprecation warning.
+**Impact**: `server/infrastructure/sentry/main.tf` declares the new-issue, regression and spike alerts with `sentry_issue_alert`. The provider replaces it with `sentry_alert`, which needs workflow monitor ids per project (from the `sentry_project_error_monitor` / `sentry_project_issue_stream_monitor` data sources). A future provider major may remove the old resource. `terraform validate` would then fail in server-ci.
+**Fix**: move the three alert resources to `sentry_alert` with `first_seen_event`, `regression_event` and `event_frequency_count` triggers and an `email` action (`issue_owners`, fallthrough `AllMembers`). Import or recreate the existing rules. Update `tests/sentry.tftest.hcl`.
+
+### TD-160: Nothing reruns the Sentry org privacy check on its own
+**Status**: Open
+**Ticket**: none (MUT-147, 2026-10-17)
+**Added**: 2026-10-17
+**Priority**: Low. Only an org admin can change these settings, and the org has one seat.
+**Impact**: `scripts/sentry-org-settings.ts --check` catches anyone switching off the data scrubber or IP scrubbing in Sentry's UI, but only when someone runs it. Between runs, a switched-off setting goes unnoticed.
+**Fix**: run `--check` on a schedule with the admin token in a CI secret (a weekly workflow), or wait for the Terraform provider to support the org settings and move them there.
+
 ### TD-153: A future-dated paid CSV row stops the import halfway and leaves a record-less paid entry
 **Status**: Open
 **Ticket**: none (found 2026-10-16, MUT-24 §C coverage pass)

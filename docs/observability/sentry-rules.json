@@ -1,0 +1,179 @@
+{
+  "version": "1.0.0",
+  "region": "de.sentry.io",
+  "surfaces": ["api", "portal", "landing", "capture-app"],
+  "sdk": {
+    "sendDefaultPii": false,
+    "sampleRate": 1,
+    "tracesSampleRate": 0,
+    "profilesSampleRate": 0,
+    "replaysSessionSampleRate": 0,
+    "replaysOnErrorSampleRate": 0,
+    "attachScreenshot": false,
+    "attachViewHierarchy": false,
+    "consoleBreadcrumbs": false,
+    "includeLocalVariables": false
+  },
+  "serverReportsStatusAtLeast": 500,
+  "serverPrismaErrorFormat": "minimal",
+  "denyHeaders": [
+    "authorization",
+    "cookie",
+    "set-cookie",
+    "x-api-key",
+    "idempotency-key",
+    "x-forwarded-for",
+    "x-real-ip",
+    "proxy-authorization",
+    "referer"
+  ],
+  "denyKeyTokens": [
+    "amount",
+    "amounts",
+    "total",
+    "totals",
+    "balance",
+    "price",
+    "name",
+    "names",
+    "email",
+    "emails",
+    "phone",
+    "note",
+    "notes",
+    "description",
+    "memo",
+    "address",
+    "iban",
+    "account",
+    "card",
+    "token",
+    "tokens",
+    "password",
+    "secret",
+    "key",
+    "keys",
+    "pepper",
+    "session",
+    "cookie",
+    "cookies",
+    "authorization",
+    "auth",
+    "ip",
+    "body",
+    "payload",
+    "query",
+    "params",
+    "args",
+    "meta",
+    "username",
+    "firstname",
+    "lastname",
+    "fullname",
+    "apikey",
+    "accesstoken",
+    "refreshtoken",
+    "sessionid",
+    "phonenumber",
+    "emailaddress",
+    "passwd",
+    "pwd",
+    "credential",
+    "credentials",
+    "jwt",
+    "otp",
+    "fragment",
+    "client",
+    "clients",
+    "vendor",
+    "vendors",
+    "mobile",
+    "tel",
+    "mail",
+    "title",
+    "reason"
+  ],
+  "requestDropFields": ["data", "cookies", "query_string", "fragment", "env"],
+  "urlFields": ["request.url", "breadcrumb.data.url", "breadcrumb.data.from", "breadcrumb.data.to"],
+  "labelledValuePattern": "(?:[\"']([A-Za-z_][\\w.-]{0,63})[\"'][ \\t]*:[ \\t]*(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|\\[Filtered\\]|[\\[{][^\\n]*|[\"'][^\\n]*|[^,;}\\]\\s]+)|([A-Za-z_][\\w.-]{0,63})[ \\t]*(?:=|:[ \\t])[ \\t]*(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|\\[Filtered\\]|(?:[^;}\\])(\\n]|\\([^()\\n]*\\)?)+))",
+  "urlInTextPattern": "(https?://[^\\s?#\"'<>]*)[?#][^\\s\"'<>]*",
+  "firstLineOnlyExceptionTypes": ["^Prisma"],
+  "maxMessageLength": 8192,
+  "allowedTags": ["surface", "request_id", "route", "locale", "release", "environment", "app_build"],
+  "allowedUserKeys": ["id"],
+  "safeContextKeys": [
+    "os.name",
+    "os.version",
+    "browser.name",
+    "browser.version",
+    "runtime.name",
+    "runtime.version",
+    "device.family",
+    "device.model",
+    "app.app_name",
+    "app.app_version",
+    "app.app_build"
+  ],
+  "alwaysDropContextKeys": ["device.name"],
+  "ignoredErrors": {
+    "api": [
+      { "pattern": "^AbortError", "reason": "The client closed the request; nothing failed on the server." }
+    ],
+    "portal": [
+      {
+        "pattern": "^TypeError: (Failed to fetch|NetworkError when attempting to fetch resource\\.|Load failed)$",
+        "reason": "The browser is offline or the request never reached the server."
+      },
+      { "pattern": "^AbortError", "reason": "A request was cancelled on purpose, for example by leaving the page." },
+      {
+        "pattern": "ResizeObserver loop (limit exceeded|completed with undelivered notifications)",
+        "reason": "A harmless browser layout warning."
+      }
+    ],
+    "landing": [
+      {
+        "pattern": "^TypeError: (Failed to fetch|NetworkError when attempting to fetch resource\\.|Load failed)$",
+        "reason": "The browser is offline or the request never reached the server."
+      },
+      { "pattern": "^AbortError", "reason": "A request was cancelled on purpose, for example by leaving the page." },
+      {
+        "pattern": "ResizeObserver loop (limit exceeded|completed with undelivered notifications)",
+        "reason": "A harmless browser layout warning."
+      }
+    ],
+    "capture-app": [
+      {
+        "pattern": "DioException \\[(connection error|connection timeout|receive timeout|send timeout|request cancelled)\\]",
+        "ignoreCase": true,
+        "reason": "The phone is offline, the network is too slow, or the user cancelled the request."
+      },
+      { "pattern": "^SocketException", "reason": "The phone has no network connection." }
+    ]
+  },
+  "orgSettings": {
+    "dataScrubber": true,
+    "dataScrubberDefaults": true,
+    "scrubIPAddresses": true,
+    "enhancedPrivacy": true,
+    "allowSharedIssues": false,
+    "require2FA": true
+  },
+  "orgSensitiveFields": [
+    "iban",
+    "password",
+    "passwd",
+    "pepper",
+    "authorization",
+    "mut_live_",
+    "mut_test_",
+    "mutaba3a_session",
+    "amountminor",
+    "client_name",
+    "clientname",
+    "phonenumber",
+    "emailaddress",
+    "accesstoken",
+    "refreshtoken",
+    "apikey"
+  ]
+}

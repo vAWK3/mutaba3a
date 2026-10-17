@@ -28,12 +28,12 @@
 
 ---
 
-## [Unreleased] - 2026-10-17 — The phone app asks first, then sends anonymous activation events (MUT-157, ADR-090, ADR-091)
+## [Unreleased] - 2026-10-17 — The phone app asks first, then sends anonymous activation events (MUT-157, ADR-090, ADR-092)
 
 **Why:** epic MUT-152's activation funnel on iOS and Android. Built in the Flutter repo on `feature/mut-157-phone-analytics` (its brief: `.claude/designs/mut-157-phone-analytics.md` there).
 
 ### Added (Flutter repo)
-- **`lib/domain/services/analytics/`**, the app's own PostHog client (ADR-091), no SDK:
+- **`lib/domain/services/analytics/`**, the app's own PostHog client (ADR-092), no SDK:
   - `analytics_contract.dart`, the phone's slice of `events.json`;
   - `analytics_guard.dart`, which builds every note's properties;
   - `analytics_store.dart`, the Keychain record of owner, choice, first-open flag, install ID and queue;
@@ -53,7 +53,7 @@
 
 ### Changed
 - **Opt-out order:** capture, flush (offline it waits), opt out, delete the install ID. Signing out from Settings forgets the choice, the ID, the first-open flag and any undelivered notes, sending nothing. An expired session keeps them.
-- **Docs.** `docs/analytics/README.md` rules 1 and 6 describe the phone's own client; ADR-091 is recorded.
+- **Docs.** `docs/analytics/README.md` rules 1 and 6 describe the phone's own client; ADR-092 is recorded.
 - **Privacy policy.** The phone paragraph and network sentence are on mini-crm branch `feature/mut-157-phone-privacy`, to merge with the phone release.
 
 ## [Unreleased] - 2026-10-17 — The portal asks to share anonymous usage, then counts opens and saved money (MUT-155, ADR-090)
@@ -152,6 +152,96 @@
 
 ### Technical
 - Files: `src/lib/analytics/*`, `src/pages/landing/analytics/*`, the four landing pages, `PhoneSection.tsx`, `download-config.ts`, `malafatLinks.ts` (comment), `vite.config.ts`, `src/vite-env.d.ts`, `eslint.config.js`, `scripts/bundle-rules.ts`, `scripts/check-bundles.ts`, `scripts/bundle-origins.json`, `package.json`, the en/ar `landing.json`, `PrivacyPolicyPage.tsx`, `qa/**`, the docs above.
+
+## [Unreleased] - 2026-10-18 — Release QA caps its dev servers' heap
+
+### Changed
+- `qa/qa.config.mjs` starts both QA dev servers (web on 5173, hosted portal on 5175) with `--max-old-space-size=2048` (`HEAP_CAPPED`). Node's default lets each grow to about 4 GB. A long recorded run alongside Playwright and an iOS Simulator can then push the laptop into swap until the disk fills, which is what took down the Malafat QA env on 2026-10-17.
+- Vite normally stays far below the cap. It only bounds a leak.
+- This is the part of the Malafat fix that applies here. Malafat's root cause was `next dev` giving its server half the machine's RAM as heap; this repo has no Next.js.
+- Files: `qa/qa.config.mjs`.
+
+---
+
+## [Unreleased] - 2026-10-17 — Sentry foundation: EU org, projects, alerts and error-data rules (MUT-147, ADR-091)
+
+**Why:** epic MUT-146. Production failures were found only when users complained. The four live surfaces (server, portal, landing, phone) need one Sentry setup and one rulebook for what an error report may contain, before any SDK is wired (MUT-148..151). The local app still sends nothing.
+
+### Added
+- `docs/observability/sentry-rules.json` and `sentry-fixtures.json` (contract 1.0.0, both sha-pinned).
+  - Deny headers and deny key tokens, matched as whole tokens.
+  - Allowed tags, user `{ id }` only, safe context keys and `device.name` always dropped.
+  - Required SDK options, and the server's status floor of 500.
+  - Per-surface ignored errors, in a regex subset JavaScript and Dart read the same way.
+  - The org privacy settings, and five dirty-in/clean-out fixtures covering all four surfaces.
+- `docs/observability/README.md`:
+  - who sends, the rules, how to change the contract, and where each DSN and token lives (with the `VITE_` and Flutter `.env` landmines);
+  - the draft en/ar privacy-policy sentences per surface, and the store disclosures.
+- `server/infrastructure/sentry/`, a new Terraform root module (own state prefix):
+  - team and four projects, `default_key = false`, one rate-limited key each;
+  - `allowed_domains` on portal and landing, browser inbound filters, spike protection on all four;
+  - new-issue, regression and spike email alerts, and DSN outputs;
+  - `tests/sentry.tftest.hcl` runs against a mocked provider.
+- `scripts/sentry-org-settings.ts --apply|--check` (logic in `scripts/sentry-org-policy.ts`): sets and verifies the org privacy settings that the provider can't hold.
+- ADR-091. `server/DEPLOYMENT.md` §1.5 (one-time Sentry setup). TD-159 (deprecated alert resource), TD-160 (no scheduled privacy check).
+
+### Changed
+- `.github/workflows/server-ci.yml`: the Terraform job is a matrix over both modules and runs `terraform test` for the Sentry one.
+- INFRA §1 gains an "Error reporting" table. The CI_CD monitoring row now reads "defined, not wired". The env examples list the Sentry variables.
+- The Flutter `.env.example` line and its upload-token warning are left to MUT-151 (decision D3); the README documents them.
+
+### Changed by the pre-landing review (`/qa-reconcile` + `/review`, 2026-10-17)
+
+The review was the core pass, 5 specialists, the red team and the adversarial pass. Basel decided D1–D13; contract 1.0.0 was re-pinned before merge. The full list is the ADR-091 amendment.
+
+- **Fixed.** The settings script failed from the folder the runbook leaves you in (QA probes 002–004 reproduced it). It now finds its rules file from its own location.
+- **Server-side sensitive fields.** They are a curated `orgSensitiveFields` list, because Sentry wipes any value containing an entry. `--apply` merges with hand-added fields.
+- **Fragments.** URL fragments and queries are stripped from every URL field, including navigation breadcrumbs, because the portal's `/setup#token` was the leak.
+- **Labelled values.** `key: value` and JSON `"key": value` are caught too, through one shared `labelledValuePattern`. Prisma errors keep their first line only, and the server uses `errorFormat: 'minimal'`.
+- **EU region.** It is verified by a Terraform DSN postcondition and by the script's region check. The runbook's `sentry.io` fallback is gone.
+- **Daily caps.** Keys are capped per day, and the sum must fit the monthly quota.
+- **Org switches.** The script also sets Enhanced Privacy on, shared issues off, 2FA required and no safe fields.
+- **Tokens and script.**
+  - The admin token is `SENTRY_ADMIN_TOKEN`.
+  - The script takes only `--apply`/`--check`, with the org from `SENTRY_ORG`, and sends the token only to `sentry.io` hosts.
+  - Requests time out, and an empty PUT body counts as written.
+- **Contract rules.** Frame `vars` are dropped and `includeLocalVariables: false`. Lowercase compound keys are denied.
+- **CI and checkouts.** New `.github/workflows/contracts-ci.yml`. New `.gitattributes`, so the contract JSON is LF on every checkout.
+- **Docs.**
+  - The README no longer claims a `check-bundles` guard that doesn't exist (MUT-149/150 add it, TD-084).
+  - The phone starts Sentry only in release builds.
+  - The Netlify upload token is Production-scoped and secret.
+  - The suggested org slug is `mutaba3a`.
+
+### Changed by the re-review (fix cycle 2, D15–D17)
+
+- **Labelled values.** `labelledValuePattern` has a quoted-key branch (compact or spaced JSON) and a bare-key branch whose value runs to the end of the clause, and the scan continues from a harmless label's value. Compact `JSON.stringify` output, `Authorization: Bearer …`, multi-word names and comma amounts are now filtered; before, they leaked. Surfaces truncate a message to `maxMessageLength` (8,192) before scrubbing, which keeps the worst case at about 20 ms; without the cap, rescans after harmless labels go quadratic. A fixed list of leak strings must vanish, so the test no longer grades the pattern with itself.
+- **Wrong-org guard.** The settings script refuses an org holding any project that isn't `mutaba3a-…`, before writing.
+- **Request fields.** `Referer` is dropped, `fragment` is denied, and whole request fields are listed in `requestDropFields`.
+- **Mechanical fixes.**
+  - The admin token is a personal (user) token.
+  - Terraform `>= 1.9.0`.
+  - Requests refuse redirects.
+  - The region check ignores a trailing slash.
+  - The tfvars example lists daily caps and `monthly_event_quota`.
+  - Two stale descriptions are fixed.
+
+### Changed by the final re-review (fix cycle 3, D18–D19)
+
+The review stopped at its three-cycle limit: these changes passed the full gate and QA, but no fourth review pass.
+
+- **Nested and cut-off values.** Under a sensitive quoted key, a nested object or array is filtered to the end of the line, and so is a quoted value cut off by truncation. Before, `{"emails":["a@b","c@d"]}` leaked `c@d`. Under a bare key, a parenthetical no longer ends the value.
+- **Domain labels (D18).** `client(s)`, `vendor(s)`, `mobile`, `tel`, `mail`, `title` and `reason` are deny tokens.
+- **URLs in text (D19).** `urlInTextPattern` strips query and fragment from URLs inside error text.
+- **Fixtures and tests.** The reference scrub must reproduce every fixture. The portal fixture gains `request.fragment`, `request.env` and a URL with a token in its message.
+- **Settings script.** It refuses a paginated project list, and its admin-token error names a personal token.
+- **Docs.** The runbook checks the org slug in the plan before apply. The README documents the order of operations, the Dart timing and two more limits (keys over 64 characters, `key:value` with no space). TEST_PLAN corrections.
+
+### Technical
+- `scripts/__tests__/sentry-rules.test.ts` (99 cases) and `scripts/__tests__/sentry-org-settings.test.ts` (37 cases, including a CLI run from the Sentry module folder). The Terraform tests: 13 runs in two files (`eu_region.tftest.hcl` has its own state).
+
+---
+
 
 ## [Unreleased] - 2026-10-17 — Analytics decision and event contract (MUT-153, ADR-090)
 

@@ -10,6 +10,12 @@
 /** Valid in shape, never a real project key: QA builds run the analytics code, and qa/support/posthog.ts answers it. */
 export const QA_POSTHOG_KEY = 'phc_releaseQaDummyKeyNeverSent000000';
 
+// Heap cap for the QA dev servers. Node's default lets each one grow to ~4 GB, and a long recorded run
+// alongside Playwright and an iOS Simulator can push a laptop into swap until the disk fills (it happened
+// to the Malafat QA env on 2026-10-17). Vite stays far below this; the cap only bounds a leak.
+const SERVER_HEAP_MB = 2048;
+const HEAP_CAPPED = `NODE_OPTIONS="\${NODE_OPTIONS:-} --max-old-space-size=${SERVER_HEAP_MB}"`;
+
 export default {
   name: 'mini-crm',
   title: 'Mutaba3a — mini-crm',
@@ -41,7 +47,7 @@ export default {
       // app under /app — every spec below navigates to /app/... to match.
       // A dummy PostHog key (MUT-154): the landing's analytics runs, and qa/support/posthog.ts
       // answers every PostHog request locally, so nothing is ever sent.
-      start: { cmd: 'npm run dev -- --port 5173 --strictPort', env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY } },
+      start: { cmd: `${HEAP_CAPPED} npm run dev -- --port 5173 --strictPort`, env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY } },
       ready: 'http://localhost:5173',
       personas: {}, // no auth — local-first, single-user
     },
@@ -57,7 +63,7 @@ export default {
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
       attachURL: 'http://127.0.0.1:5175',
-      start: { cmd: 'npm run dev:hosted', env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY } },
+      start: { cmd: `${HEAP_CAPPED} npm run dev:hosted`, env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY } },
       ready: 'http://127.0.0.1:5175',
       personas: {},
     },

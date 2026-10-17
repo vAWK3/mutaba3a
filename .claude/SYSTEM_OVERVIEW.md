@@ -11,7 +11,7 @@
 **Mutaba3a** (متابعة, Arabic for "follow-up") is a **privacy-first, offline-only** mini CRM and finance tracker designed for freelancers, consultants, and small service businesses operating in multi-currency environments (USD/ILS/EUR, plus JOD for income/expense entry).
 
 ### Core Philosophy
-- **Privacy by Design**: the local app has zero telemetry, no cloud dependency, and data never leaves the device. Only the landing page (cookieless) and, after opt-in, the portal and the phone app send anonymous usage counts (ADR-090)
+- **Privacy by Design**: the local app has zero telemetry, no cloud dependency, and data never leaves the device. Only the landing page (cookieless) and, after opt-in, the portal and the phone app send anonymous usage counts (ADR-090). The server, portal, landing and phone send content-free error reports to Sentry EU (ADR-091)
 - **Offline-First**: Full functionality without internet; moving data to another device is an explicit JSON backup and restore
 - **Desktop-First UX**: Feels like a tool/cockpit, not a website; drawer-first interactions
 - **Multi-Currency Native**: Track income/expenses in original currencies; FX conversions explicit

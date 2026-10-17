@@ -21,7 +21,7 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
 1. **Only what `events.json` lists, enforced in code.** Each surface runs a guard that drops any
    event or property the contract doesn't list, and has tests proving it: posthog-js
    `before_send`, and on the phone `guardEvent()`, which builds every note itself (the phone posts
-   PostHog's capture API with its own small client, no SDK: ADR-091). The guard is **required**.
+   PostHog's capture API with its own small client, no SDK: ADR-092). The guard is **required**.
    - The SDK's own `$` properties are limited too. Every surface keeps:
      - the SDK's **routing and identity fields**: `token`, `distinct_id`, `$device_id`, the
        event's uuid or `$insert_id`, and its timestamp;
