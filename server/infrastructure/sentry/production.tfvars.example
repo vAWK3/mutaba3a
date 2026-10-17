@@ -1,0 +1,13 @@
+# Copy to production.tfvars (git-ignored). Nothing secret goes in this file: the
+# Sentry token comes from SENTRY_AUTH_TOKEN in your shell. See server/DEPLOYMENT.md §1.5.
+organization = "barmajiyat"
+
+# Origins each browser DSN accepts events from (R2). When the custom domain ships
+# (MUT-112), add it here and re-apply, or its errors are silently dropped.
+portal_origins  = ["https://mutaba3a-api-t5bzsudmja-zf.a.run.app"]
+landing_origins = ["https://mutaba3a.netlify.app"]
+
+# Optional overrides (defaults in variables.tf).
+# base_url                 = "https://de.sentry.io/api/"
+# spike_threshold_per_hour = 50
+# key_rate_limit_per_hour  = { api = 120, portal = 60, landing = 60, "capture-app" = 120 }
