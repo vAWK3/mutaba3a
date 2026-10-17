@@ -1,0 +1,85 @@
+{
+  "version": "1.0.0",
+  "sharedProperties": {
+    "surface": {
+      "type": "enum",
+      "values": ["landing", "portal", "ios", "android"],
+      "description": "Where the event came from. The local web app, desktop and the server never send events (ADR-024, ADR-090)."
+    },
+    "app_version": {
+      "type": "semver",
+      "description": "The x.y.z version of the build that sent the event."
+    },
+    "locale": {
+      "type": "enum",
+      "values": ["ar", "en"],
+      "description": "The interface language when the event was sent."
+    }
+  },
+  "events": {
+    "$pageview": {
+      "emitters": ["landing"],
+      "description": "A landing page was viewed. Sent by posthog-js in cookieless mode; UTM tags and referrer are PostHog's own $ properties. No custom properties."
+    },
+    "landing_cta_clicked": {
+      "emitters": ["landing"],
+      "description": "A call to action on the landing page was clicked.",
+      "properties": {
+        "cta": {
+          "type": "enum",
+          "values": ["app_store", "play_store", "open_web_app", "hosted_offer", "malafat"],
+          "description": "Which call to action."
+        }
+      }
+    },
+    "app_first_opened": {
+      "emitters": ["ios", "android"],
+      "description": "Sent once per install, right after the first opt-in. Nothing is sent before a person opts in, so earlier opens are never counted."
+    },
+    "portal_opened": {
+      "emitters": ["portal"],
+      "description": "The hosted portal was opened by a signed-in person who has turned on anonymous usage."
+    },
+    "analytics_opted_in": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "A person turned on anonymous usage. A new random ID is created first, so this is the first event under it.",
+      "properties": {
+        "prompt": {
+          "type": "enum",
+          "values": ["first_run", "settings"],
+          "description": "Turned on from the one-time prompt or from Settings."
+        }
+      }
+    },
+    "analytics_opted_out": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "A person turned anonymous usage off. This is the last event under the random ID: it is sent once, then sending stops and the ID is deleted (MUT-153 D5)."
+    },
+    "client_created": {
+      "emitters": ["ios", "android"],
+      "description": "A client was saved on the phone. Fires on the local save, so offline entries count when they are made."
+    },
+    "income_recorded": {
+      "emitters": ["ios", "android"],
+      "description": "An income entry was saved on the phone. Fires on the local save.",
+      "properties": {
+        "currency": { "type": "iso4217", "description": "The entry's currency code. Never the amount." },
+        "paid": { "type": "boolean", "description": "Whether it was saved as already paid." }
+      }
+    },
+    "expense_recorded": {
+      "emitters": ["ios", "android"],
+      "description": "An expense was saved on the phone. Fires on the local save.",
+      "properties": {
+        "currency": { "type": "iso4217", "description": "The expense's currency code. Never the amount." }
+      }
+    },
+    "payment_recorded": {
+      "emitters": ["ios", "android"],
+      "description": "A payment received was saved on the phone. Fires on the local save.",
+      "properties": {
+        "currency": { "type": "iso4217", "description": "The payment's currency code. Never the amount." }
+      }
+    }
+  }
+}
