@@ -3468,7 +3468,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 5. **Opt-in** is off by default and asked once. Opting out sends one final `analytics_opted_out`, then stops and deletes the ID (D5, Basel's call against the recommendation; the policy says so).
 6. **Tracking**, in Mutaba3a's public copy, means following a person: a persistent identifier, cookies, or linking across sites, apps or devices. Cookieless, aggregate visit counting is not tracking. The landing hero's and privacy band's "No tracking" claims describe the free app and stay (P4).
 7. **The public privacy policy changes with each surface** (P3). `docs/analytics/README.md` holds the approved en/ar wording; MUT-154, MUT-155 and MUT-157 each publish theirs with the feature, so the policy is never ahead of what ships.
-8. **Where the data goes.** PostHog Cloud **EU** (`eu.posthog.com`), project "Mutaba3a" in the Barmajiyat organization, separate from Malafat's project. No firm data is sent, so ADR-024's residency rule for firm data is not engaged (the same reasoning as Sentry EU, MUT-147).
+8. **Where the data goes.** PostHog Cloud **EU** (`eu.posthog.com`), project "Mutaba3a" (id 304889) in the Barmajiyat organization, separate from Malafat's project. No firm data is sent, so ADR-024's residency rule for firm data is not engaged (the same reasoning as Sentry EU, MUT-147).
 9. **Configuration.**
    - Keys come from env (`VITE_POSTHOG_KEY`/`VITE_POSTHOG_HOST`, Flutter `--dart-define`); no key means no sends and no errors.
    - The project is created through the PostHog MCP and its settings are recorded in INFRA §1, like Netlify Forms. TODOS tracks moving them to the PostHog Terraform provider (D3).

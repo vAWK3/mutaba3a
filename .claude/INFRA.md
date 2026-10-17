@@ -36,9 +36,9 @@ Form data (name, email, optional phone/profession/devices/message, page language
 | Item | State |
 |------|-------|
 | Host | PostHog Cloud **EU** (`eu.posthog.com`), project "Mutaba3a" in the Barmajiyat org. Separate from Malafat's project 125127. |
-| Status | **Not created yet.** MUT-153 T6 waits on Basel's go. |
-| Required settings | Discard client IP (`anonymize_ips`) on. Cookieless server hash mode **on**: without it, every landing event is silently dropped. Autocapture, exception autocapture, web vitals, heatmaps, dead clicks, session recording, console-log capture and surveys off. The test-account filter excludes localhost. |
-| Keys | Netlify env `VITE_POSTHOG_KEY` / `VITE_POSTHOG_HOST` for the web build (used by the landing chunk only); the hosted build env for the portal; `--dart-define` for Flutter. |
+| Status | **Project id 304889.** It already existed, empty, when MUT-153 ran: created 2026-10-13 and no events ingested. MUT-153 applied the settings below on 2026-10-17 (Basel's go) and read them back. No surface sends to it yet. |
+| Required settings | Discard client IP (`anonymize_ips`) on. Cookieless tracking **on** (`cookieless_server_hash_mode: 2`, stateful): without it, every landing event is silently dropped; MUT-154 confirms with `system.ingestion_warnings`. Autocapture, exception autocapture, web vitals, performance capture, heatmaps, dead clicks, session recording, console-log capture and surveys off. The test-account filter excludes localhost and the internal cohort. |
+| Keys | Netlify env `VITE_POSTHOG_KEY` / `VITE_POSTHOG_HOST` for the web build (used by the landing chunk only); the hosted build env for the portal; `--dart-define` for Flutter. The `phc_` ingest token comes from `project-get 304889` (PostHog MCP) or the project settings; it is never committed. Host: `https://eu.i.posthog.com`. |
 | Defined in | Operator-defined SaaS, created through the PostHog MCP (D3). TODOS #15 tracks moving it to the PostHog Terraform provider. The event contract is `docs/analytics/events.json`. |
 
 The local app: zero cloud infrastructure; no telemetry; data stays on the device (ADR-001,

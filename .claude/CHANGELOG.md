@@ -40,7 +40,7 @@
 
 ### Changed
 - README: the "No tracking" promise and the "never add analytics SDKs" line now say "the app on your device".
-- SYSTEM_OVERVIEW, INFRA §1 (a PostHog row; the project is not created yet) and the CI_CD monitoring table are scoped the same way.
+- SYSTEM_OVERVIEW, INFRA §1 and the CI_CD monitoring table are scoped the same way. INFRA §1 gains a PostHog row: project 304889 (EU), which already existed empty; the ADR-090 settings were applied through the PostHog MCP and read back.
 - The public privacy policy and landing copy are deliberately unchanged: each surface publishes its own paragraph (P3).
 
 ### Technical
