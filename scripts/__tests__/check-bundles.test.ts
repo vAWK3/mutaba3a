@@ -11,6 +11,8 @@ import {
   fontProblems,
   newOrigins,
   posthogInEntryGraph,
+  posthogPrecached,
+  precachedUrls,
   staticGraph,
   staticImports,
   unresolvedUrls,
@@ -249,5 +251,22 @@ describe('PostHog stays out of the local app (ADR-090, MUT-154)', () => {
 
   it('does not mistake ordinary text for PostHog', () => {
     expect(POSTHOG_MARKER.test('the post hog went to market; postal code; $pageview')).toBe(false);
+  });
+
+  describe('the service worker never stores PostHog on a local-app device (MUT-154 review F1)', () => {
+    const sw = 'define(["./workbox-1"],function(s){s.precacheAndRoute([{url:"index.html",revision:"1"},{url:"assets/index-a1.js",revision:null},{"url":"assets/LandingPage-e5.js","revision":null}],{})});';
+
+    it('reads the precache list in both quoting styles', () => {
+      expect(precachedUrls(sw)).toEqual(['index.html', 'assets/index-a1.js', 'assets/LandingPage-e5.js']);
+    });
+
+    it('passes when no precached file mentions PostHog', () => {
+      const clean = { ...files, 'assets/LandingPage-e5.js': 'const p=()=>import("./vendor-posthog-f6.js");' };
+      expect(posthogPrecached(sw, reader(clean))).toEqual([]);
+    });
+
+    it('names each precached file that carries PostHog', () => {
+      expect(posthogPrecached(sw, reader(files))).toEqual(['assets/LandingPage-e5.js']);
+    });
   });
 });

@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { chooseLanguageScript, LANGUAGE_KEYS } from '../../support/i18n';
 import { openFreshApp } from '../../support/app';
-import { actAsPerson, type AnalyticsSpy, type SentEvent } from '../../support/posthog';
+import { EVENT_PATH, actAsPerson, type AnalyticsSpy, type SentEvent } from '../../support/posthog';
 
 /**
  * The landing's cookieless visit counts (MUT-154, ADR-090). QA builds carry a
@@ -40,9 +40,15 @@ test('opening the landing sends one anonymous pageview and stores nothing', { ta
   });
 
   await step('Nothing PostHog-named is stored on the device', async () => {
-    expect((await context.cookies()).filter((c) => /^ph_|posthog/i.test(c.name))).toEqual([]);
+    // Unanchored, so posthog-js's own `__ph_opt_in_out_*` consent keys are caught too
+    expect((await context.cookies()).filter((c) => /ph_|posthog/i.test(c.name))).toEqual([]);
     const stored = await page.evaluate(() => [...Object.keys(localStorage), ...Object.keys(sessionStorage)]);
-    expect(stored.filter((key) => /^ph_|posthog/i.test(key))).toEqual([]);
+    expect(stored.filter((key) => /ph_|posthog/i.test(key))).toEqual([]);
+  });
+
+  await step('Only event posts went out: no flags, no remote config, no script', async () => {
+    expect(analytics.requestPaths().length).toBeGreaterThan(0);
+    for (const path of analytics.requestPaths()) expect(path).toMatch(EVENT_PATH);
   });
 });
 

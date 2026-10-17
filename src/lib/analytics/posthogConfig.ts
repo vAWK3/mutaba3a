@@ -1,5 +1,6 @@
 import type { PostHogConfig } from 'posthog-js';
 import { guardEvent, type AnalyticsCapture, type GuardContext } from './guard';
+import type { AnalyticsLocale } from './contract';
 
 /**
  * PostHog Cloud EU, project "Mutaba3a" (ADR-090). Fixed rather than
@@ -7,6 +8,11 @@ import { guardEvent, type AnalyticsCapture, type GuardContext } from './guard';
  * data must stay in the EU.
  */
 export const POSTHOG_HOST = 'https://eu.i.posthog.com';
+
+/** The interface language as the page shows it (`<html lang>`, set by the language providers). */
+export function documentLocale(): AnalyticsLocale {
+  return typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ar';
+}
 
 /** Everything README rule 7 turns off, the same on every surface. */
 const FEATURES_OFF: Partial<PostHogConfig> = {

@@ -1,7 +1,5 @@
 import { useEffect } from 'react';
 import type { PostHogConfig } from 'posthog-js';
-import { posthogInitOptions } from '../../../lib/analytics/posthogConfig';
-import type { AnalyticsLocale } from '../../../lib/analytics/contract';
 import { APP_VERSION } from '../../../lib/appVersion';
 import { POSTHOG_KEY } from '../../../lib/analytics/posthogKey';
 import { HOSTED_OFFER_URL } from '../../../content/download-config';
@@ -10,9 +8,10 @@ import { HOSTED_OFFER_URL } from '../../../content/download-config';
  * The landing pages' cookieless visit counts (MUT-154, ADR-090, D1). Only the
  * lazily loaded landing page chunks call `useLandingAnalytics`; nothing in
  * `main.tsx` or `LandingProviders` may, because the local app shares them and
- * must never carry the SDK (ADR-024). posthog-js is loaded with a dynamic
- * import into its own chunk, after the page is idle, and only when the build
- * has a key. Every event leaves through the contract guard (README rule 1).
+ * must never carry the SDK (ADR-024). posthog-js and the contract guard are
+ * loaded with dynamic imports into their own chunks, after the page has loaded
+ * and gone idle, and only when the build has a key, so a landing visit's first
+ * paint carries none of it. Every event leaves through the guard (README rule 1).
  */
 
 export type LandingCta = 'app_store' | 'play_store' | 'open_web_app' | 'hosted_offer' | 'malafat';
@@ -26,11 +25,16 @@ export interface PostHogLike {
 interface StartDeps {
   key: string;
   load: () => Promise<PostHogLike>;
+  /** The contract guard and the init options, loaded with the SDK rather than with the page. */
+  loadConfig?: () => Promise<typeof import('../../../lib/analytics/posthogConfig')>;
 }
+
+const loadPosthogConfig = () => import('../../../lib/analytics/posthogConfig');
 
 const DEFAULT_DEPS = (): StartDeps => ({
   key: POSTHOG_KEY,
   load: () => import('posthog-js').then((module) => module.default as unknown as PostHogLike),
+  loadConfig: loadPosthogConfig,
 });
 
 const isPath = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
@@ -55,8 +59,6 @@ export function ctaForHref(href: string, origin: string): LandingCta | null {
   return null;
 }
 
-const visibleLocale = (): AnalyticsLocale => (document.documentElement.lang === 'en' ? 'en' : 'ar');
-
 let started: Promise<PostHogLike | null> | null = null;
 let clickListener: ((event: MouseEvent) => void) | null = null;
 
@@ -72,10 +74,10 @@ function listenForCtas(posthog: PostHogLike) {
 async function start(deps: StartDeps): Promise<PostHogLike | null> {
   if (!deps.key) return null;
   try {
-    const posthog = await deps.load();
+    const [posthog, { documentLocale, posthogInitOptions }] = await Promise.all([deps.load(), (deps.loadConfig ?? loadPosthogConfig)()]);
     posthog.init(
       deps.key,
-      posthogInitOptions(() => ({ surface: 'landing', appVersion: APP_VERSION, locale: visibleLocale(), origin: window.location.origin })),
+      posthogInitOptions(() => ({ surface: 'landing', appVersion: APP_VERSION, locale: documentLocale(), origin: window.location.origin })),
     );
     listenForCtas(posthog);
     return posthog;
@@ -97,18 +99,32 @@ export function resetLandingAnalyticsForTests() {
   started = null;
 }
 
-/** Waits for the page to go idle (so the hero paints first), then starts counting. */
+/** Waits for the page to finish loading (fonts and the hero first), then for idle, then starts counting. */
 const FALLBACK_IDLE_MS = 1500;
+
+/** Runs `run` once the browser is idle; returns the cancel. */
+function whenIdle(run: () => void): () => void {
+  if (typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(run, { timeout: FALLBACK_IDLE_MS });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(run, FALLBACK_IDLE_MS);
+  return () => window.clearTimeout(id);
+}
 
 export function useLandingAnalytics() {
   useEffect(() => {
     if (!POSTHOG_KEY) return;
     const run = () => void startLandingAnalytics();
-    if (typeof window.requestIdleCallback === 'function') {
-      const id = window.requestIdleCallback(run, { timeout: FALLBACK_IDLE_MS });
-      return () => window.cancelIdleCallback(id);
-    }
-    const id = window.setTimeout(run, FALLBACK_IDLE_MS);
-    return () => window.clearTimeout(id);
+    if (document.readyState === 'complete') return whenIdle(run);
+    let cancelIdle: (() => void) | null = null;
+    const onLoad = () => {
+      cancelIdle = whenIdle(run);
+    };
+    window.addEventListener('load', onLoad, { once: true });
+    return () => {
+      window.removeEventListener('load', onLoad);
+      cancelIdle?.();
+    };
   }, []);
 }

@@ -27,6 +27,7 @@ import {
   fontProblems,
   newOrigins,
   posthogInEntryGraph,
+  posthogPrecached,
   unresolvedUrls,
   type Rule,
 } from './bundle-rules';
@@ -90,14 +91,25 @@ function checkBootSplash(dir: string): string[] {
  * file the entry loads statically may mention it (the local app shares that
  * entry); dist-desktop must not mention it at all.
  */
+/** Why PostHog must stay out of each build's entry graph: the local app never counts; the portal loads it only after consent. */
+const POSTHOG_LAZY_ONLY: Record<string, string> = {
+  'dist-web': 'so it would ship inside the local app (ADR-090)',
+  'dist-hosted': 'so the portal would load it before anyone turns sharing on (MUT-155, README rule 4)',
+};
+
 function checkPosthog(): string[] {
   const problems: string[] = [];
-  if (existsSync('dist-web')) {
+  for (const [dir, why] of Object.entries(POSTHOG_LAZY_ONLY)) {
+    if (!existsSync(dir)) continue;
+    const read = (path: string) => (existsSync(join(dir, path)) ? readFileSync(join(dir, path), 'utf8') : '');
+    for (const name of ENTRY_HTML[dir]) {
+      for (const path of posthogInEntryGraph(read(name), read)) problems.push(`${dir}/${path}: PostHog is statically reachable from ${name}, ${why}`);
+    }
+  }
+  if (existsSync('dist-web/sw.js')) {
     const read = (path: string) => (existsSync(join('dist-web', path)) ? readFileSync(join('dist-web', path), 'utf8') : '');
-    for (const name of ENTRY_HTML['dist-web']) {
-      for (const path of posthogInEntryGraph(read(name), read)) {
-        problems.push(`dist-web/${path}: PostHog is statically reachable from ${name}, so it would ship inside the local app (ADR-090)`);
-      }
+    for (const path of posthogPrecached(read('sw.js'), read)) {
+      problems.push(`dist-web/${path}: the service worker precaches PostHog, so it would be stored on every local-app device (add it to PWA_WORKBOX.globIgnores)`);
     }
   }
   if (existsSync('dist-desktop')) {
@@ -135,5 +147,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  'Bundle check passed: dist-web and dist-desktop carry no portal code; PostHog is unreachable from the local app (lazy landing chunks only) and absent from desktop; dist-hosted carries no local storage and no self-service account door; every dist ships Thmanyah unmodified, preloads no font, resolves every CSS url(), and opens on a boot splash whose assets resolve.',
+  'Bundle check passed: dist-web and dist-desktop carry no portal code; PostHog is unreachable from the local app (lazy landing chunks only, never precached), lazy in the portal, and absent from desktop; dist-hosted carries no local storage and no self-service account door; every dist ships Thmanyah unmodified, preloads no font, resolves every CSS url(), and opens on a boot splash whose assets resolve.',
 );

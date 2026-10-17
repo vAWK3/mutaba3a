@@ -25,8 +25,9 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
      - the SDK's **routing and identity fields**: `token`, `distinct_id`, `$device_id`, the
        event's uuid or `$insert_id`, and its timestamp;
      - its **control properties**: `$geoip_disable`, `$process_person_profile`, `$lib`,
-       `$lib_version`, and on the landing page the cookieless-mode markers posthog-js adds
-       (MUT-154 names those markers).
+       `$lib_version`, and on the landing page the cookieless-mode markers posthog-js adds,
+       which PostHog's server reads to make the daily code: `$cookieless_mode`,
+       `$raw_user_agent` and `$host` (MUT-154). The landing keeps no `$os` or `$browser`.
 
      `$session_id` and `$window_id` are dropped. Each surface tests that what it keeps survives
      the guard.
@@ -92,7 +93,8 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
      - Phone: a line in the Flutter app's `.env`, read with `--dart-define-from-file`.
      - The host is fixed in code to `https://eu.i.posthog.com` (EU; the portal's CSP names it).
    - On Netlify the key is set for the **production** context only, never for deploy previews
-     or branch deploys. QA and preview builds have no key.
+     or branch deploys. Deploy previews have no key. Release-QA builds carry a dummy `phc_`
+       key that `qa/support/posthog.ts` answers locally, so nothing a QA run does reaches PostHog.
    - A build or app with no key sends nothing and throws nothing.
    - The `phc_` key is a public ingest key, but it still lives in env.
 9. **The landing page is cookieless.**

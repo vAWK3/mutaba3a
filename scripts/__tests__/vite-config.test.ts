@@ -12,6 +12,8 @@ import configFn, {
   PWA_INCLUDE_ASSETS,
   PWA_MANIFEST,
   PWA_WORKBOX,
+  POSTHOG_CHUNK,
+  POSTHOG_PRECACHE_IGNORES,
   appVersion,
   netlifyFormsHtml,
   portalUrl,
@@ -267,6 +269,20 @@ describe('vite.config', () => {
         expect(() => posthogKey(value)).toThrow(/MUTABA3A_POSTHOG_KEY/);
       },
     );
+
+    it('keeps the SDK and the guard out of the service worker precache, so the local app never stores them (review F1)', () => {
+      expect(PWA_WORKBOX?.globIgnores).toEqual(expect.arrayContaining(POSTHOG_PRECACHE_IGNORES));
+      expect(POSTHOG_PRECACHE_IGNORES).toEqual([`assets/${POSTHOG_CHUNK}-*.js`, 'assets/posthogConfig-*.js']);
+    });
+
+    it('names the SDK chunk in the web build only; desktop never imports it', () => {
+      const chunks = (mode: string) => {
+        const output = resolve(mode).build?.rollupOptions?.output;
+        return (Array.isArray(output) ? output[0] : output)?.manualChunks as Record<string, string[]>;
+      };
+      expect(chunks('web')[POSTHOG_CHUNK]).toEqual(['posthog-js']);
+      expect(chunks('desktop')).not.toHaveProperty(POSTHOG_CHUNK);
+    });
 
     it('gives the web and hosted builds the key and the desktop build none', () => {
       vi.stubEnv('MUTABA3A_POSTHOG_KEY', KEY);

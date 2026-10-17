@@ -258,3 +258,17 @@ export function staticGraph(html: string, read: (path: string) => string): strin
 export function posthogInEntryGraph(html: string, read: (path: string) => string): string[] {
   return staticGraph(html, read).filter((path) => POSTHOG_MARKER.test(read(path)));
 }
+
+/** The files a Workbox `sw.js` precaches, from its `{url:"…"}` entries (minified or JSON-quoted). */
+export function precachedUrls(sw: string): string[] {
+  return [...sw.matchAll(/\{\s*"?url"?\s*:\s*"([^"]+)"/g)].map((match) => match[1]);
+}
+
+/**
+ * The precached files that mention PostHog: the service worker installs for
+ * everyone who opens the local app, so a hit means the SDK would be stored on
+ * their device even though it never runs there (MUT-154 review F1). Empty when clean.
+ */
+export function posthogPrecached(sw: string, read: (path: string) => string): string[] {
+  return precachedUrls(sw).filter((path) => POSTHOG_MARKER.test(read(path)));
+}

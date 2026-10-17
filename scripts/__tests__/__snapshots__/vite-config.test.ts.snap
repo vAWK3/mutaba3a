@@ -93,6 +93,9 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
             "react-hook-form",
             "zod",
           ],
+          "vendor-posthog": [
+            "posthog-js",
+          ],
           "vendor-query": [
             "@tanstack/react-query",
           ],

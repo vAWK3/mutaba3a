@@ -48,9 +48,8 @@ const SURFACE_FIELDS: Record<AnalyticsSurface, string[]> = {
     'utm_campaign',
     'utm_content',
     'utm_term',
+    // Device type only: the published wording says PostHog keeps no browser details (review F3)
     '$device_type',
-    '$os',
-    '$browser',
   ],
   portal: ['$browser', '$os', '$os_version', '$device_type'],
   ios: ['$os', '$os_version', '$device_type'],

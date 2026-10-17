@@ -142,10 +142,14 @@ describe('guardEvent: the landing allowance', () => {
       $cookieless_mode: true,
       $raw_user_agent: 'Mozilla/5.0',
       $host: 'portal.example',
-      $os: 'Mac OS X',
-      $browser: 'Chrome',
       $device_type: 'Desktop',
     });
+  });
+
+  it('drops the OS and browser on the landing: the contract allows only URL, UTM, referrer and device type (review F3)', () => {
+    const out = guardEvent(capture('$pageview', {}), LANDING)!;
+    expect(out.properties).not.toHaveProperty('$os');
+    expect(out.properties).not.toHaveProperty('$browser');
   });
 
   it('drops the referrer when it is this site\'s local app (/app)', () => {

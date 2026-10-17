@@ -8,7 +8,6 @@ import type { BrowserContext, Page, Request } from '@playwright/test';
  * read what would have been sent through `analytics.events()`.
  */
 
-export const POSTHOG_ORIGIN = 'https://eu.i.posthog.com';
 
 export interface SentEvent {
   event: string;
@@ -35,9 +34,17 @@ export function decodePosthogBody(request: Request): SentEvent[] {
 export interface AnalyticsSpy {
   /** Every event the pages tried to send, in order. */
   events(): SentEvent[];
-  /** How many requests went to PostHog at all (events or not). */
+  /** How many requests went to any PostHog host at all (events or not). */
   requestCount(): number;
+  /** Every PostHog request as `<host><path>`, so a spec can prove only event posts left (no flags, no remote config, no script). */
+  requestPaths(): string[];
 }
+
+/** Any PostHog host: EU or US ingestion, the asset CDN, the app. A QA run reaches none of them. */
+const ANY_POSTHOG_HOST = /^https?:\/\/([a-z0-9-]+\.)*posthog\.com\//;
+
+/** Event posts: posthog-js sends events to `/e/` (or `/i/v0/e/`), nothing else. */
+export const EVENT_PATH = /^eu\.i\.posthog\.com\/(i\/v0\/)?e\/?$/;
 
 /**
  * posthog-js drops every event from an automated browser (`navigator.webdriver`,
@@ -55,9 +62,10 @@ export async function actAsPerson(page: Page): Promise<void> {
 /** Answers every PostHog request in `context` and records its events. */
 export async function interceptPosthog(context: BrowserContext): Promise<AnalyticsSpy> {
   const events: SentEvent[] = [];
-  let requests = 0;
-  await context.route(`${POSTHOG_ORIGIN}/**`, async (route) => {
-    requests += 1;
+  const paths: string[] = [];
+  await context.route(ANY_POSTHOG_HOST, async (route) => {
+    const url = new URL(route.request().url());
+    paths.push(`${url.host}${url.pathname}`);
     try {
       events.push(...decodePosthogBody(route.request()));
     } catch {
@@ -65,5 +73,5 @@ export async function interceptPosthog(context: BrowserContext): Promise<Analyti
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":1}' });
   });
-  return { events: () => [...events], requestCount: () => requests };
+  return { events: () => [...events], requestCount: () => paths.length, requestPaths: () => [...paths] };
 }

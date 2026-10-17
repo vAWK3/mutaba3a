@@ -115,6 +115,34 @@ describe('useLandingAnalytics', () => {
     unmount();
   });
 
+  it('waits for the page to finish loading (fonts, hero) before even scheduling, so LCP is untouched', async () => {
+    build.key = KEY;
+    vi.useFakeTimers();
+    vi.stubGlobal('requestIdleCallback', undefined);
+    const readyState = vi.spyOn(document, 'readyState', 'get').mockReturnValue('interactive');
+    renderHook(() => useLandingAnalytics());
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sdk.init).not.toHaveBeenCalled();
+    readyState.mockReturnValue('complete');
+    window.dispatchEvent(new Event('load'));
+    await vi.advanceTimersByTimeAsync(1500);
+    await vi.waitFor(() => expect(sdk.init).toHaveBeenCalledTimes(1));
+    readyState.mockRestore();
+  });
+
+  it('stops waiting for load when the page is left first', async () => {
+    build.key = KEY;
+    vi.useFakeTimers();
+    vi.stubGlobal('requestIdleCallback', undefined);
+    const readyState = vi.spyOn(document, 'readyState', 'get').mockReturnValue('interactive');
+    const { unmount } = renderHook(() => useLandingAnalytics());
+    unmount();
+    window.dispatchEvent(new Event('load'));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sdk.init).not.toHaveBeenCalled();
+    readyState.mockRestore();
+  });
+
   it('starts only once the page has gone idle, not during first paint', async () => {
     build.key = KEY;
     vi.useFakeTimers();

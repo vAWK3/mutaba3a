@@ -274,6 +274,17 @@ function netlifyForms(): Plugin {
  * every install (MUT-102, PD10). No font is preloaded either: a preload
  * competed with the app code and delayed first paint by ~700 ms (ADR-058).
  */
+/** The web build's chunk for posthog-js (MUT-154): named, so the service worker can leave it out. */
+export const POSTHOG_CHUNK = "vendor-posthog";
+
+/**
+ * The landing's counting code is never precached (MUT-154 review F1): the
+ * service worker installs for everyone who opens the local app, which must
+ * never store PostHog. `posthogConfig-*` is the lazy chunk holding the
+ * contract guard. check-bundles fails if any precached file mentions PostHog.
+ */
+export const POSTHOG_PRECACHE_IGNORES = [`assets/${POSTHOG_CHUNK}-*.js`, "assets/posthogConfig-*.js"];
+
 export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
   navigateFallback: "/index.html",
   // Only serve SPA shell for /app/* routes
@@ -287,7 +298,8 @@ export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
   // Share cards are for crawlers, never shown in the app (MUT-104)
   // The Netlify form twin is a bare form for the deploy bot, never opened in the app (MUT-186, D2)
   // /hosted's page copy is served by Netlify, never from the cache (MUT-186, F7)
-  globIgnores: ["og-*.png", NETLIFY_FORMS_FILE, HOSTED_OFFER_FILE],
+  // The landing's PostHog chunks are fetched only on the landing, never stored for the local app (MUT-154)
+  globIgnores: ["og-*.png", NETLIFY_FORMS_FILE, HOSTED_OFFER_FILE, ...POSTHOG_PRECACHE_IGNORES],
   runtimeCaching: [
     {
       urlPattern: ({ request }) => request.destination === "font",
@@ -447,6 +459,8 @@ export default defineConfig(({ mode }) => {
           "vendor-query": ["@tanstack/react-query"],
           "vendor-forms": ["react-hook-form", "zod"],
           "vendor-db": ["dexie"],
+          // Desktop never imports posthog-js; naming it there would emit the chunk anyway
+          ...(isTauri ? {} : { [POSTHOG_CHUNK]: ["posthog-js"] }),
         },
       },
     },
