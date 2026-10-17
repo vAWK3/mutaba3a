@@ -20,7 +20,8 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
 
 1. **Only what `events.json` lists, enforced in code.** Each surface runs a guard that drops any
    event or property the contract doesn't list, and has tests proving it: posthog-js
-   `before_send`, and the Flutter SDK's equivalent hook. The guard is **required**.
+   `before_send`, and on the phone `guardEvent()`, which builds every note itself (the phone posts
+   PostHog's capture API with its own small client, no SDK: ADR-091). The guard is **required**.
    - The SDK's own `$` properties are limited too. Every surface keeps:
      - the SDK's **routing and identity fields**: `token`, `distinct_id`, `$device_id`, the
        event's uuid or `$insert_id`, and its timestamp;
@@ -55,7 +56,7 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
      cookie: the portal shares its origin with the API, so a cookie would travel with every
      signed-in request.
    - Opting out, signing out and switching account reset it completely, so `$device_id` rotates
-     too: posthog-js `reset(true)`, and the Flutter SDK's full reset. Opting in again starts a
+     too: posthog-js `reset(true)`, and on the phone deleting the install ID. Opting in again starts a
      fresh ID that can't be linked to the old one.
    - The only other stored values are the opt-in choice, the "already asked" flag and the
      phone's "first open already sent" flag. All three are cleared on sign-out or account

@@ -28,6 +28,34 @@
 
 ---
 
+## [Unreleased] - 2026-10-17 — The phone app asks first, then sends anonymous activation events (MUT-157, ADR-090, ADR-091)
+
+**Why:** epic MUT-152's activation funnel on iOS and Android. Built in the Flutter repo on `feature/mut-157-phone-analytics` (its brief: `.claude/designs/mut-157-phone-analytics.md` there).
+
+### Added (Flutter repo)
+- **`lib/domain/services/analytics/`**, the app's own PostHog client (ADR-091), no SDK:
+  - `analytics_contract.dart`, the phone's slice of `events.json`;
+  - `analytics_guard.dart`, which builds every note's properties;
+  - `analytics_store.dart`, the Keychain record of owner, choice, first-open flag, install ID and queue;
+  - `analytics_transport.dart`, `POST {EU}/batch/`;
+  - `product_analytics.dart`, with sync / choose / track / trackEntrySaved / endSession / away / flush, serialised.
+- **Events:**
+  - `analytics_opted_in {prompt}` + `app_first_opened` (once per person);
+  - `client_created` on the server's ok;
+  - `income_recorded {currency, paid}` / `expense_recorded {currency}` on the keypad's local save and on widget/Siri ingest;
+  - one `analytics_opted_out`.
+- **Prompt.** A one-time bottom sheet after the App Lock nudge, with two equal buttons. Settings › Privacy has "Share anonymous usage".
+- **The key.** `Env.posthogKey` (`MUTABA3A_POSTHOG_KEY`), used only by release builds with a `phc_` key.
+- **Tests:**
+  - `test/fixtures/analytics/events.json` (1.1.0, sha256 pinned) and the parity test;
+  - guard, service, prompt, Settings and hook tests;
+  - release-QA `qa/features/ios/analytics.yaml` with 5 flows.
+
+### Changed
+- **Opt-out order:** capture, flush (offline it waits), opt out, delete the install ID. Signing out from Settings forgets the choice, the ID, the first-open flag and any undelivered notes, sending nothing. An expired session keeps them.
+- **Docs.** `docs/analytics/README.md` rules 1 and 6 describe the phone's own client; ADR-091 is recorded.
+- **Privacy policy.** The phone paragraph and network sentence are on mini-crm branch `feature/mut-157-phone-privacy`, to merge with the phone release.
+
 ## [Unreleased] - 2026-10-17 — The portal asks to share anonymous usage, then counts opens and saved money (MUT-155, ADR-090)
 
 **Why:** epic MUT-152's activation funnel. A signed-in portal person can turn on anonymous usage counts; until they do, the portal loads nothing and sends nothing.

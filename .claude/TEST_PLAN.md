@@ -2916,3 +2916,40 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
   - `posthogConfig.test.ts`: the portal's `opt_out_*_by_default`.
   - QA `other-tab-silenced`: a save in a second tab after an opt-out in the first sends nothing, and its switch reads off.
 - **Known:** on preview builds, `portal.signin.boot-slow-session` (2 tests) still fails, as listed above. The other 72 portal and landing specs pass.
+
+## MUT-157 — phone opt-in usage counts (2026-10-17, ADR-090, ADR-091; Flutter repo)
+
+- **`test/domain/services/analytics/analytics_contract_test.dart`** (5): the fixture's sha256 and README row; the phone event set equals the contract's ios+android emitters; property types and values; shared properties; currencies equal `Currency.values`.
+- **`analytics_guard_test.dart`** (6):
+  - the exact property set;
+  - undeclared and invalid values dropped, including `$screen_name`, `$set`, `$set_once`, `$initial_*`, `$timezone`;
+  - shared properties can't be overwritten;
+  - `$geoip_disable` on every event;
+  - non-semver, locale and surface refusals;
+  - prompt values.
+- **`product_analytics_test.dart`** (17):
+  - nothing and no ID before a yes;
+  - unavailable without a transport;
+  - opted_in + first open once per person;
+  - every note guarded, with uuid and timestamp;
+  - `trackEntrySaved` mapping, conversions not counted;
+  - opt-out order with the last note under the old ID, offline-queued then delivered, and ID rotation;
+  - declining sends nothing;
+  - sign-out and account switch forget everything and send nothing;
+  - expiry keeps the choice;
+  - queue cap and serialised flush;
+  - a throwing transport never escapes.
+- **Widget tests:**
+  - `usage_prompt_test.dart` (6): equal buttons, on/decline, waits for the App Lock nudge, never without a key, Arabic RTL;
+  - `settings_usage_test.dart` (4): Privacy row off then on (settings) then off (last note), absent without a key, sign-out forgets and sends nothing.
+- **Hooks:**
+  - `capture_usage_test.dart` (4): received → paid true, expense, blocked Save, sharing off;
+  - `target_picker_sheet_test.dart` (+2): client_created on the server's ok only, no name;
+  - `widget_capture_inbox_test.dart` (+1): new widget/Siri entries reported once.
+- **Release-QA `qa/features/ios/analytics.yaml`** (5 flows, recorder transport):
+  - `prompt-silent-until-chosen` (core);
+  - `opt-in-counts`;
+  - `save-income-counts`;
+  - `opt-out-last-note`;
+  - `sign-out-resets`.
+- **Known, already on main:** `test/core/capture_amount_contract_test.dart` "1000 EUR → 1000.00" fails the same way on main (849b3243): number grouping.

@@ -3511,3 +3511,40 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Any new event or property is a contract change: bump the version and update the Flutter copy.
 - The four surfaces each own a privacy-policy paragraph.
 - Opt-in rates can only be estimated against store-console installs, because nothing is sent before consent.
+
+---
+
+## ADR-091: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
+
+**Status**: Accepted (2026-10-17, MUT-157; auto-decided on the recommended option at Basel's request, C1)
+
+**Context**: ADR-090 item 3 requires every surface's guard to drop anything outside the contract, SDK `$` properties included. The phone's published sentence (`docs/analytics/README.md`, Phone app) promises that a note says only the event, its currency and paid flag, the app and library versions, the language, the OS and its version, and phone or tablet. The MUT-157 ticket named posthog_flutter. Reading posthog_flutter 5.55.0 showed:
+- Its Dart `beforeSend` runs before the event reaches the native iOS and Android SDKs.
+- The native SDKs then add their own properties: device model and manufacturer, timezone, screen size, network carrier, app build and more. No Flutter-side hook can remove them.
+- The plugin's pure-Dart engine is an internal API that labels every event "Linux / Desktop".
+
+**Decision**:
+1. **The client.** The phone posts PostHog's documented capture API itself: `POST https://eu.i.posthog.com/batch/` through Dio. The code is `lib/domain/services/analytics/` in the Flutter repo.
+2. **The guard builds every note.** `guardEvent()` is the only code that makes a note's properties, so the guard isn't a filter on someone else's payload. It emits only:
+   - the contract properties;
+   - `surface`, `app_version`, `locale`;
+   - the random install ID as `distinct_id` and `$device_id`;
+   - `$os`, `$os_version`, `$device_type`, `$lib`, `$lib_version`;
+   - `$process_person_profile: false` and `$geoip_disable: true`.
+3. **Nothing native.** No PostHog SDK, no Info.plist or manifest keys, and nothing initialised before or after opt-in beyond a Keychain record. The install ID exists only between a yes and the next opt-out or sign-out.
+4. **Delivery.** A Keychain queue (capped at 200) delivers at once, on connectivity regained and at sign-in. That is what makes the ticket's opt-out order (capture, flush, opt out, reset) hold offline.
+5. **Release only.** The key is used only by release builds with a `phc_` key (`kReleaseMode`). Debug and QA builds can't send. Tests and release-QA flows inject a recording transport.
+
+**Override log**:
+- **What it overrides.** The MUT-157 ticket's "posthog_flutter" scope line. It does not change ADR-090: the decision is the faithful way to meet its item 3.
+- **Date:** 2026-10-17.
+
+**Alternatives considered**:
+- **posthog_flutter, plus a PostHog ingestion transformation that drops the extra properties.** Rejected: the data would still leave the phone, and the policy says a note carries only those fields.
+- **posthog_flutter's Dart engine forced onto mobile.** Rejected: internal API, and it mislabels the OS.
+- **Fewer promises in the policy.** Rejected: the narrow promise is the product's point.
+
+**Consequences**:
+- About 300 lines of Dart in place of a dependency. PostHog's capture API is stable and documented.
+- No session or feature-flag machinery, which ADR-090 turns off anyway.
+- Apple's privacy label lists only what this client sends.
