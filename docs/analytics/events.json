@@ -1,25 +1,25 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "sharedProperties": {
     "surface": {
       "type": "enum",
       "values": ["landing", "portal", "ios", "android"],
-      "description": "Where the event came from. The local web app, desktop and the server never send events (ADR-024, ADR-090)."
+      "description": "Where the event came from. Sent on every event, $pageview included. The local web app, desktop and the server never send events (ADR-024, ADR-090)."
     },
     "app_version": {
       "type": "semver",
-      "description": "The x.y.z version of the build that sent the event."
+      "description": "The x.y.z version of the build that sent the event: the web build's version on the landing page and the portal, the app version on the phone. Sent on every event."
     },
     "locale": {
       "type": "enum",
       "values": ["ar", "en"],
-      "description": "The interface language when the event was sent."
+      "description": "The interface language when the event was sent. Sent on every event."
     }
   },
   "events": {
     "$pageview": {
       "emitters": ["landing"],
-      "description": "A landing page was viewed. Sent by posthog-js in cookieless mode; UTM tags and referrer are PostHog's own $ properties. No custom properties."
+      "description": "A landing page was viewed. Sent by posthog-js in cookieless mode with the shared properties and PostHog's own URL, UTM and referrer properties; a referrer from the local app (/app) is dropped (ADR-090). No other properties."
     },
     "landing_cta_clicked": {
       "emitters": ["landing"],
@@ -34,7 +34,7 @@
     },
     "app_first_opened": {
       "emitters": ["ios", "android"],
-      "description": "Sent once per install, right after the first opt-in. Nothing is sent before a person opts in, so earlier opens are never counted."
+      "description": "Sent once per install, right after the first opt-in (which may come later, from Settings). Nothing is sent before a person opts in, so earlier opens are never counted."
     },
     "portal_opened": {
       "emitters": ["portal"],
@@ -53,32 +53,32 @@
     },
     "analytics_opted_out": {
       "emitters": ["portal", "ios", "android"],
-      "description": "A person turned anonymous usage off. This is the last event under the random ID: it is sent once, then sending stops and the ID is deleted (MUT-153 D5)."
+      "description": "A person turned anonymous usage off. The last event under the random ID: captured, flushed with anything already queued, then sending stops and the ID is reset (MUT-153 D5). Signing out resets without sending it."
     },
     "client_created": {
       "emitters": ["ios", "android"],
-      "description": "A client was saved on the phone. Fires on the local save, so offline entries count when they are made."
+      "description": "A client was created on the phone. Clients are created online only, so this fires when the server confirms the create, never on a failed attempt. The portal does not create clients."
     },
     "income_recorded": {
-      "emitters": ["ios", "android"],
-      "description": "An income entry was saved on the phone. Fires on the local save.",
+      "emitters": ["portal", "ios", "android"],
+      "description": "An income entry was saved. Phone: on the local save, so offline entries count when they are made. Portal: when the server confirms the save (personal profile only, MUT-133).",
       "properties": {
-        "currency": { "type": "iso4217", "description": "The entry's currency code. Never the amount." },
+        "currency": { "type": "currency", "description": "The entry's currency code. Never the amount." },
         "paid": { "type": "boolean", "description": "Whether it was saved as already paid." }
       }
     },
     "expense_recorded": {
-      "emitters": ["ios", "android"],
-      "description": "An expense was saved on the phone. Fires on the local save.",
+      "emitters": ["portal", "ios", "android"],
+      "description": "An expense was saved. Phone: on the local save. Portal: when the server confirms the save.",
       "properties": {
-        "currency": { "type": "iso4217", "description": "The expense's currency code. Never the amount." }
+        "currency": { "type": "currency", "description": "The expense's currency code. Never the amount." }
       }
     },
     "payment_recorded": {
-      "emitters": ["ios", "android"],
-      "description": "A payment received was saved on the phone. Fires on the local save.",
+      "emitters": ["portal", "ios", "android"],
+      "description": "A payment received was saved. Phone: on the local save. Portal: when the server confirms Record payment.",
       "properties": {
-        "currency": { "type": "iso4217", "description": "The payment's currency code. Never the amount." }
+        "currency": { "type": "currency", "description": "The payment's currency code. Never the amount." }
       }
     }
   }

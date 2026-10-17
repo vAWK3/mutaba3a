@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 
@@ -9,29 +10,60 @@ import { describe, it, expect } from 'vitest';
  * them, MUT-146) and nothing from the local app, desktop or server (ADR-024).
  */
 
+const CONTRACT_PATH = 'docs/analytics/events.json';
+/**
+ * sha256 of events.json per version. Append-only: changing the contract means bumping its
+ * version and adding a row, so a copy pinned by version (the Flutter app's) can't silently
+ * differ from what this repo calls that version.
+ */
+const PINNED_VERSIONS: Record<string, string> = {
+  '1.1.0': 'c5067ed01c8e47ba289f86eb88099c39d59aba2b2e32220e6d69a03ca138f665',
+};
+
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
 const FORBIDDEN_EMITTERS = ['server', 'web', 'desktop'];
-const PROPERTY_TYPES = ['enum', 'boolean', 'integer', 'iso4217', 'semver'];
+const PROPERTY_TYPES = ['enum', 'boolean', 'integer', 'currency', 'semver'];
+/** The currencies the app and the hosted API accept (src/types Currency, server SUPPORTED_CURRENCIES). */
+const CURRENCIES = ['EUR', 'ILS', 'JOD', 'USD'];
 const POSTHOG_BUILT_INS = ['$pageview'];
 const SHARED_PROPERTIES = ['surface', 'app_version', 'locale'];
+/** `semver` is a version number, never a way to smuggle digits: only the build version may use it. */
+const SEMVER_PROPERTIES = ['app_version'];
+const CONTRACT_KEYS = ['version', 'sharedProperties', 'events'];
+const EVENT_KEYS = ['emitters', 'description', 'properties'];
+const PROPERTY_KEYS = ['type', 'values', 'description'];
 /** Whole snake_case tokens a property name may never contain, so `paid` passes and `client_id` fails. */
 const BANNED_PROPERTY_TOKENS = [
-  'amount', 'price', 'total', 'sum', 'balance', 'name', 'email', 'phone', 'address', 'iban', 'account',
-  'note', 'notes', 'description', 'title', 'text', 'message', 'comment', 'client', 'customer', 'vendor',
-  'user', 'id', 'ip', 'url',
+  'amount', 'amounts', 'price', 'total', 'sum', 'balance', 'cost', 'costs', 'fee', 'fees', 'value', 'cents', 'minor',
+  'name', 'email', 'phone', 'address', 'iban', 'account', 'note', 'notes', 'description', 'title', 'text', 'message',
+  'comment', 'client', 'customer', 'vendor', 'user', 'id', 'ids', 'uuid', 'ip', 'url', 'token',
 ];
-const ERROR_TOKENS = ['error', 'errors', 'exception', 'crash'];
+const ERROR_TOKENS = ['error', 'errors', 'exception', 'exceptions', 'crash', 'crashed', 'crashes', 'failed', 'failure'];
 const SNAKE_CASE = /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/;
 const SEMVER = /^\d+\.\d+\.\d+$/;
 
-type Property = { type?: unknown; values?: unknown; description?: unknown };
+type Property = { type?: unknown; values?: unknown; description?: unknown; [key: string]: unknown };
+type EventDefinition = { emitters?: unknown; properties?: Record<string, Property>; description?: unknown; [key: string]: unknown };
 type Contract = {
   version?: unknown;
   sharedProperties?: Record<string, Property>;
-  events?: Record<string, { emitters?: unknown; properties?: Record<string, Property>; description?: unknown }>;
+  events?: Record<string, EventDefinition>;
+  [key: string]: unknown;
 };
 
 const tokens = (name: string) => name.split('_');
+const unknownKeys = (value: object, allowed: string[]) => Object.keys(value).filter((key) => !allowed.includes(key));
+
+function valueProblems(where: string, name: string, property: Property): string[] {
+  if (property.type === 'enum') {
+    const values = property.values;
+    const valid = Array.isArray(values) && values.length > 0 && values.every((v) => typeof v === 'string' && SNAKE_CASE.test(v));
+    return valid && new Set(values as string[]).size === (values as string[]).length
+      ? []
+      : [`${where}: enum "${name}" needs unique snake_case values`];
+  }
+  return property.values === undefined ? [] : [`${where}: only an enum may list values ("${name}")`];
+}
 
 function propertyProblems(where: string, name: string, property: Property): string[] {
   const problems: string[] = [];
@@ -41,23 +73,18 @@ function propertyProblems(where: string, name: string, property: Property): stri
   if (!PROPERTY_TYPES.includes(property.type as string)) {
     problems.push(`${where}: property "${name}" has type "${String(property.type)}"; allowed: ${PROPERTY_TYPES.join(', ')}`);
   }
-  if (property.type === 'enum') {
-    const values = property.values;
-    const valid = Array.isArray(values) && values.length > 0 && values.every((v) => typeof v === 'string' && SNAKE_CASE.test(v));
-    if (!valid || new Set(values as string[]).size !== (values as string[]).length) {
-      problems.push(`${where}: enum "${name}" needs unique snake_case values`);
-    }
-  } else if (property.values !== undefined) {
-    problems.push(`${where}: only an enum may list values ("${name}")`);
+  if (property.type === 'semver' && !SEMVER_PROPERTIES.includes(name)) {
+    problems.push(`${where}: only ${SEMVER_PROPERTIES.join(', ')} may be semver ("${name}")`);
   }
-  return problems;
+  for (const key of unknownKeys(property, PROPERTY_KEYS)) problems.push(`${where}: property "${name}" has unknown key "${key}"`);
+  return [...problems, ...valueProblems(where, name, property)];
 }
 
 function emitterProblems(event: string, emitters: unknown): string[] {
   if (!Array.isArray(emitters) || emitters.length === 0) return [`${event}: needs at least one emitter`];
   const problems: string[] = [];
   for (const emitter of emitters) {
-    if (FORBIDDEN_EMITTERS.includes(emitter)) problems.push(`${event}: "${emitter}" may never emit (ADR-024, MUT-153 P2)`);
+    if (FORBIDDEN_EMITTERS.includes(emitter)) problems.push(`${event}: "${emitter}" may never emit (ADR-024, ADR-090)`);
     else if (!SURFACES.includes(emitter)) problems.push(`${event}: unknown emitter "${String(emitter)}"`);
   }
   if (new Set(emitters).size !== emitters.length) problems.push(`${event}: duplicate emitter`);
@@ -75,35 +102,50 @@ function eventNameProblems(event: string): string[] {
   return problems;
 }
 
-/** Every way `contract` breaks ADR-090's rules; empty when it is valid. */
-function contractProblems(contract: Contract): string[] {
-  const problems: string[] = [];
-  if (typeof contract.version !== 'string' || !SEMVER.test(contract.version)) problems.push('version must be x.y.z');
-
-  const shared = contract.sharedProperties ?? {};
-  for (const name of SHARED_PROPERTIES) if (!(name in shared)) problems.push(`shared property "${name}" is missing`);
-  for (const [name, property] of Object.entries(shared)) problems.push(...propertyProblems('shared', name, property));
-  const surface = shared.surface;
-  if (surface && JSON.stringify(surface.values) !== JSON.stringify(SURFACES)) {
-    problems.push(`shared "surface" must be exactly ${SURFACES.join(', ')}`);
+function eventProblems(event: string, definition: EventDefinition, shared: Record<string, Property>): string[] {
+  const problems = [...eventNameProblems(event), ...emitterProblems(event, definition.emitters)];
+  if (typeof definition.description !== 'string' || definition.description.trim() === '') {
+    problems.push(`${event}: needs a description`);
   }
-
-  const events = contract.events ?? {};
-  if (Object.keys(events).length === 0) problems.push('no events');
-  for (const [event, definition] of Object.entries(events)) {
-    problems.push(...eventNameProblems(event), ...emitterProblems(event, definition.emitters));
-    if (typeof definition.description !== 'string' || definition.description.trim() === '') {
-      problems.push(`${event}: needs a description`);
-    }
-    for (const [name, property] of Object.entries(definition.properties ?? {})) {
-      if (name in shared) problems.push(`${event}: "${name}" repeats a shared property`);
-      problems.push(...propertyProblems(event, name, property));
-    }
+  for (const key of unknownKeys(definition, EVENT_KEYS)) problems.push(`${event}: unknown key "${key}"`);
+  for (const [name, property] of Object.entries(definition.properties ?? {})) {
+    if (name in shared) problems.push(`${event}: "${name}" repeats a shared property`);
+    problems.push(...propertyProblems(event, name, property));
   }
   return problems;
 }
 
-const contract = JSON.parse(readFileSync('docs/analytics/events.json', 'utf8')) as Contract;
+function sharedProblems(shared: Record<string, Property>): string[] {
+  const problems: string[] = [];
+  for (const name of SHARED_PROPERTIES) if (!(name in shared)) problems.push(`shared property "${name}" is missing`);
+  for (const name of unknownKeys(shared, SHARED_PROPERTIES)) problems.push(`shared property "${name}" is not allowed`);
+  for (const [name, property] of Object.entries(shared)) problems.push(...propertyProblems('shared', name, property));
+  if (shared.surface && JSON.stringify(shared.surface.values) !== JSON.stringify(SURFACES)) {
+    problems.push(`shared "surface" must be exactly ${SURFACES.join(', ')}`);
+  }
+  return problems;
+}
+
+/** Every way `contract` breaks ADR-090's rules; empty when it is valid. */
+function contractProblems(contract: Contract): string[] {
+  const problems: string[] = [];
+  if (typeof contract.version !== 'string' || !SEMVER.test(contract.version)) problems.push('version must be x.y.z');
+  for (const key of unknownKeys(contract, CONTRACT_KEYS)) problems.push(`unknown top-level key "${key}"`);
+  const shared = contract.sharedProperties ?? {};
+  problems.push(...sharedProblems(shared));
+  const events = contract.events ?? {};
+  if (Object.keys(events).length === 0) problems.push('no events');
+  for (const [event, definition] of Object.entries(events)) problems.push(...eventProblems(event, definition, shared));
+  return problems;
+}
+
+const compareVersions = (a: string, b: string) => {
+  const [x, y] = [a, b].map((v) => v.split('.').map(Number));
+  return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+};
+
+const raw = readFileSync(CONTRACT_PATH, 'utf8');
+const contract = JSON.parse(raw) as Contract;
 
 /** A valid contract to break one rule at a time. */
 function validContract(): Contract {
@@ -116,15 +158,15 @@ function validContract(): Contract {
     },
     events: {
       income_recorded: {
-        emitters: ['ios', 'android'],
-        description: 'An income entry was saved on the phone.',
-        properties: { currency: { type: 'iso4217' }, paid: { type: 'boolean' } },
+        emitters: ['portal', 'ios', 'android'],
+        description: 'An income entry was saved.',
+        properties: { currency: { type: 'currency' }, paid: { type: 'boolean' } },
       },
     },
   };
 }
 
-function withEvent(event: string, definition: NonNullable<Contract['events']>[string]): Contract {
+function withEvent(event: string, definition: EventDefinition): Contract {
   const base = validContract();
   return { ...base, events: { ...base.events, [event]: definition } };
 }
@@ -148,10 +190,21 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       analytics_opted_in: ['portal', 'ios', 'android'],
       analytics_opted_out: ['portal', 'ios', 'android'],
       client_created: ['ios', 'android'],
-      income_recorded: ['ios', 'android'],
-      expense_recorded: ['ios', 'android'],
-      payment_recorded: ['ios', 'android'],
+      income_recorded: ['portal', 'ios', 'android'],
+      expense_recorded: ['portal', 'ios', 'android'],
+      payment_recorded: ['portal', 'ios', 'android'],
     });
+  });
+
+  it('is pinned under its version, so a content change needs a version bump (R2)', () => {
+    const version = contract.version as string;
+    expect(PINNED_VERSIONS[version]).toBe(createHash('sha256').update(raw).digest('hex'));
+    expect([...Object.keys(PINNED_VERSIONS)].sort(compareVersions).at(-1)).toBe(version);
+    expect(new Set(Object.values(PINNED_VERSIONS)).size).toBe(Object.keys(PINNED_VERSIONS).length);
+  });
+
+  it('the currency type means exactly the currencies the app records', () => {
+    expect(CURRENCIES).toEqual(['EUR', 'ILS', 'JOD', 'USD']);
   });
 });
 
@@ -164,11 +217,21 @@ describe('contract rules', () => {
     expect(contractProblems({ ...validContract(), version })).toContain('version must be x.y.z');
   });
 
+  it('rejects an unknown top-level key', () => {
+    expect(contractProblems({ ...validContract(), notes: 'x' })).toContain('unknown top-level key "notes"');
+  });
+
   it.each(SHARED_PROPERTIES)('requires the shared property %s', (name) => {
     const base = validContract();
     const shared = { ...base.sharedProperties };
     delete shared[name];
     expect(contractProblems({ ...base, sharedProperties: shared })).toContain(`shared property "${name}" is missing`);
+  });
+
+  it('refuses a fourth shared property', () => {
+    const base = validContract();
+    const sharedProperties = { ...base.sharedProperties, theme: { type: 'enum', values: ['dark'] } };
+    expect(contractProblems({ ...base, sharedProperties })).toContain('shared property "theme" is not allowed');
   });
 
   it('requires surface to be exactly the four tracked surfaces', () => {
@@ -177,13 +240,19 @@ describe('contract rules', () => {
     expect(contractProblems({ ...base, sharedProperties })).toContain('shared "surface" must be exactly landing, portal, ios, android');
   });
 
-  it.each(['IncomeRecorded', 'income-recorded', '$autocapture', '$identify'])('rejects the event name %s', (event) => {
-    expect(contractProblems(withEvent(event, { emitters: ['ios'], description: 'x' })).join('\n')).toMatch(/event names are snake_case/);
-  });
+  it.each(['IncomeRecorded', 'income-recorded', '$autocapture', '$identify', '$pageleave', '$opt_in', '$screen'])(
+    'rejects the event name %s',
+    (event) => {
+      expect(contractProblems(withEvent(event, { emitters: ['ios'], description: 'x' })).join('\n')).toMatch(/event names are snake_case/);
+    },
+  );
 
-  it.each(['$exception', 'sync_error', 'app_crash', 'upload_exception'])('rejects the error event %s', (event) => {
-    expect(contractProblems(withEvent(event, { emitters: ['ios'], description: 'x' })).join('\n')).toMatch(/errors go to Sentry/);
-  });
+  it.each(['$exception', 'sync_error', 'sync_errors', 'app_crash', 'app_crashed', 'app_crashes', 'upload_exception', 'exceptions_seen', 'upload_failed', 'sync_failure'])(
+    'rejects the error event %s',
+    (event) => {
+      expect(contractProblems(withEvent(event, { emitters: ['ios'], description: 'x' })).join('\n')).toMatch(/errors go to Sentry/);
+    },
+  );
 
   it.each([[[]], [undefined], ['ios']])('requires an emitter list (%j)', (emitters) => {
     expect(contractProblems(withEvent('portal_opened', { emitters, description: 'x' }))).toContain('portal_opened: needs at least one emitter');
@@ -202,6 +271,12 @@ describe('contract rules', () => {
     expect(contractProblems(withEvent('portal_opened', { emitters: ['portal'], description }))).toContain('portal_opened: needs a description');
   });
 
+  it('refuses an unknown key on an event', () => {
+    expect(contractProblems(withEvent('portal_opened', { emitters: ['portal'], description: 'x', sampling: 0.5 }))).toContain(
+      'portal_opened: unknown key "sampling"',
+    );
+  });
+
   it.each(['amount_minor', 'client_id', 'customer_name', 'email', 'note', 'vendor', 'total', 'user_id', 'page_url'])(
     'bans the property %s by whole token',
     (name) => {
@@ -209,12 +284,29 @@ describe('contract rules', () => {
     },
   );
 
-  it.each(['paid', 'currency', 'prompt', 'cta', 'is_first'])('allows the property %s', (name) => {
+  it.each(BANNED_PROPERTY_TOKENS.map((token) => [`is_${token}`, token]))('bans %s on its single banned token %s', (name, token) => {
+    expect(contractProblems(withProperty(name, { type: 'boolean' }))).toContain(`client_created: property "${name}" uses banned token "${token}"`);
+  });
+
+  it.each(['amounts', 'minor_units', 'cost', 'fee', 'value', 'ids', 'cents'])('refuses the integer property %s that could carry money or an id', (name) => {
+    expect(contractProblems(withProperty(name, { type: 'integer' })).join('\n')).toMatch(/uses banned token/);
+  });
+
+  it.each(['paid', 'prompt', 'cta', 'is_first'])('allows the property %s', (name) => {
     expect(contractProblems(withProperty(name, { type: 'boolean' }))).toEqual([]);
   });
 
-  it.each(['string', 'text', 'object', undefined])('refuses the free-form type %j', (type) => {
+  it('allows a count-like integer and a currency', () => {
+    expect(contractProblems(withProperty('entry_count', { type: 'integer' }))).toEqual([]);
+    expect(contractProblems(withProperty('currency', { type: 'currency' }))).toEqual([]);
+  });
+
+  it.each(['string', 'text', 'object', 'iso4217', undefined])('refuses the type %j', (type) => {
     expect(contractProblems(withProperty('prompt', { type })).join('\n')).toMatch(/has type/);
+  });
+
+  it('allows semver only on app_version', () => {
+    expect(contractProblems(withProperty('build', { type: 'semver' }))).toContain('client_created: only app_version may be semver ("build")');
   });
 
   it.each([[[]], [undefined], [['first_run', 'first_run']], [['First Run']]])('needs unique snake_case enum values (%j)', (values) => {
@@ -223,6 +315,11 @@ describe('contract rules', () => {
 
   it('allows values only on an enum', () => {
     expect(contractProblems(withProperty('paid', { type: 'boolean', values: ['yes'] })).join('\n')).toMatch(/only an enum may list values/);
+    expect(contractProblems(withProperty('currency', { type: 'currency', values: ['GBP'] })).join('\n')).toMatch(/only an enum may list values/);
+  });
+
+  it('refuses an unknown key on a property', () => {
+    expect(contractProblems(withProperty('paid', { type: 'boolean', pii: false }))).toContain('client_created: property "paid" has unknown key "pii"');
   });
 
   it('refuses an event property that repeats a shared one', () => {
