@@ -1,0 +1,551 @@
+{
+  "version": "1.0.0",
+  "marker": "MUT147-SENTRY-FIXTURE-DO-NOT-BUNDLE",
+  "fixtures": [
+    {
+      "name": "api-request-headers-user-extra-message",
+      "surface": "api",
+      "input": {
+        "level": "error",
+        "platform": "node",
+        "release": "mutaba3a-api@0.3.9+abc1234",
+        "environment": "production",
+        "request": {
+          "method": "POST",
+          "url": "https://api.example.test/v1/income?clientId=cl_123&note=late",
+          "query_string": "clientId=cl_123&note=late",
+          "data": { "amountMinor": 12000, "currency": "ILS", "note": "Late invoice" },
+          "cookies": { "mutaba3a_session": "s3cr3t" },
+          "headers": {
+            "Authorization": "Bearer mut_live_example",
+            "Cookie": "mutaba3a_session=s3cr3t",
+            "X-Api-Key": "mut_live_example",
+            "Idempotency-Key": "k-1",
+            "X-Forwarded-For": "203.0.113.9",
+            "Content-Type": "application/json",
+            "User-Agent": "Malafat/2.2.4"
+          }
+        },
+        "user": { "id": "usr_7f3a", "email": "owner@example.test", "ip_address": "203.0.113.9", "username": "owner" },
+        "tags": { "surface": "api", "request_id": "req_91c2", "route": "/v1/income", "user_email": "owner@example.test" },
+        "extra": { "amountMinor": 12000, "client_name": "Acme Legal", "attempt": 2 },
+        "exception": {
+          "values": [
+            {
+              "type": "Error",
+              "value": "insert failed amount=12000 currency=ILS",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "dist/income/compose.js", "function": "composeIncome", "lineno": 88, "in_app": true },
+                  { "filename": "dist/routes/income.js", "function": "createIncome", "lineno": 41, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "node",
+        "release": "mutaba3a-api@0.3.9+abc1234",
+        "environment": "production",
+        "request": {
+          "method": "POST",
+          "url": "https://api.example.test/v1/income",
+          "headers": { "Content-Type": "application/json", "User-Agent": "Malafat/2.2.4" }
+        },
+        "user": { "id": "usr_7f3a" },
+        "tags": { "surface": "api", "request_id": "req_91c2", "route": "/v1/income" },
+        "extra": { "attempt": 2 },
+        "exception": {
+          "values": [
+            {
+              "type": "Error",
+              "value": "insert failed amount=[Filtered]",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "dist/income/compose.js", "function": "composeIncome", "lineno": 88, "in_app": true },
+                  { "filename": "dist/routes/income.js", "function": "createIncome", "lineno": 41, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "api-prisma-meta-and-query",
+      "surface": "api",
+      "input": {
+        "level": "error",
+        "platform": "node",
+        "release": "mutaba3a-api@0.3.9+abc1234",
+        "environment": "production",
+        "tags": { "surface": "api", "request_id": "req_a01f", "route": "/v1/clients" },
+        "extra": {
+          "meta": { "target": ["organization_id", "external_ref"] },
+          "query": "INSERT INTO clients (name) VALUES ($1)",
+          "prismaCode": "P2002"
+        },
+        "exception": {
+          "values": [
+            {
+              "type": "PrismaClientKnownRequestError",
+              "value": "Unique constraint failed on the fields: (`organization_id`,`external_ref`)",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "dist/repositories/clients.js", "function": "createClient", "lineno": 57, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "node",
+        "release": "mutaba3a-api@0.3.9+abc1234",
+        "environment": "production",
+        "tags": { "surface": "api", "request_id": "req_a01f", "route": "/v1/clients" },
+        "extra": { "prismaCode": "P2002" },
+        "exception": {
+          "values": [
+            {
+              "type": "PrismaClientKnownRequestError",
+              "value": "Unique constraint failed on the fields: (`organization_id`,`external_ref`)",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "dist/repositories/clients.js", "function": "createClient", "lineno": 57, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "portal-breadcrumbs-contexts-camelcase",
+      "surface": "portal",
+      "input": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "portal@0.3.9+abc1234",
+        "environment": "production",
+        "user": { "id": "usr_7f3a", "email": "owner@example.test" },
+        "tags": { "surface": "portal", "locale": "ar", "route": "/clients/$clientId" },
+        "contexts": {
+          "browser": { "name": "Chrome", "version": "130.0" },
+          "os": { "name": "macOS", "version": "15.1" }
+        },
+        "extra": { "clientName": "Acme Legal", "drawer": "payment" },
+        "breadcrumbs": {
+          "values": [
+            {
+              "category": "fetch",
+              "type": "http",
+              "data": { "method": "GET", "url": "/v1/clients/cl_1/summary?currency=USD&q=acme", "status_code": 500 }
+            },
+            { "category": "console", "level": "log", "message": "saving income for Acme Legal" },
+            { "category": "ui.click", "message": "button.drawer-save > span" },
+            {
+              "category": "xhr",
+              "type": "http",
+              "data": { "method": "POST", "url": "/v1/payments", "status_code": 409, "request_body": "{\"amount\":100}" }
+            }
+          ]
+        },
+        "exception": {
+          "values": [
+            {
+              "type": "TypeError",
+              "value": "Cannot read properties of undefined (reading 'balanceMinor')",
+              "stacktrace": {
+                "frames": [
+                  {
+                    "filename": "assets/ClientPage-3f2a.js",
+                    "abs_path": "https://portal.example.test/assets/ClientPage-3f2a.js",
+                    "function": "OwedNowSummary",
+                    "lineno": 1,
+                    "colno": 4211,
+                    "in_app": true
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "portal@0.3.9+abc1234",
+        "environment": "production",
+        "user": { "id": "usr_7f3a" },
+        "tags": { "surface": "portal", "locale": "ar", "route": "/clients/$clientId" },
+        "contexts": {
+          "browser": { "name": "Chrome", "version": "130.0" },
+          "os": { "name": "macOS", "version": "15.1" }
+        },
+        "extra": { "drawer": "payment" },
+        "breadcrumbs": {
+          "values": [
+            {
+              "category": "fetch",
+              "type": "http",
+              "data": { "method": "GET", "url": "/v1/clients/cl_1/summary", "status_code": 500 }
+            },
+            { "category": "ui.click", "message": "button.drawer-save > span" },
+            {
+              "category": "xhr",
+              "type": "http",
+              "data": { "method": "POST", "url": "/v1/payments", "status_code": 409 }
+            }
+          ]
+        },
+        "exception": {
+          "values": [
+            {
+              "type": "TypeError",
+              "value": "Cannot read properties of undefined (reading 'balanceMinor')",
+              "stacktrace": {
+                "frames": [
+                  {
+                    "filename": "assets/ClientPage-3f2a.js",
+                    "abs_path": "https://portal.example.test/assets/ClientPage-3f2a.js",
+                    "function": "OwedNowSummary",
+                    "lineno": 1,
+                    "colno": 4211,
+                    "in_app": true
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "landing-query-string-and-camelcase-extras",
+      "surface": "landing",
+      "input": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "landing@0.1.12+4e51681",
+        "environment": "production",
+        "request": {
+          "url": "https://mutaba3a.netlify.app/?utm_source=newsletter&email=visitor@example.test",
+          "headers": { "User-Agent": "Mozilla/5.0" }
+        },
+        "tags": { "surface": "landing", "locale": "ar" },
+        "contexts": {
+          "browser": { "name": "Safari", "version": "18.1" },
+          "os": { "name": "iOS", "version": "18.1" }
+        },
+        "extra": { "clientName": "Visitor", "paymentTotal": 120, "component": "HeroSection" },
+        "exception": {
+          "values": [
+            {
+              "type": "TypeError",
+              "value": "Failed to fetch dynamically imported module",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "assets/LandingPage-9c1d.js", "function": "loadSection", "lineno": 1, "colno": 812, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "landing@0.1.12+4e51681",
+        "environment": "production",
+        "request": {
+          "url": "https://mutaba3a.netlify.app/",
+          "headers": { "User-Agent": "Mozilla/5.0" }
+        },
+        "tags": { "surface": "landing", "locale": "ar" },
+        "contexts": {
+          "browser": { "name": "Safari", "version": "18.1" },
+          "os": { "name": "iOS", "version": "18.1" }
+        },
+        "extra": { "component": "HeroSection" },
+        "exception": {
+          "values": [
+            {
+              "type": "TypeError",
+              "value": "Failed to fetch dynamically imported module",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "assets/LandingPage-9c1d.js", "function": "loadSection", "lineno": 1, "colno": 812, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "capture-app-device-name-dio-breadcrumb",
+      "surface": "capture-app",
+      "input": {
+        "level": "fatal",
+        "platform": "other",
+        "release": "capture-app@1.4.0+57",
+        "environment": "production",
+        "user": { "id": "usr_42", "username": "basel" },
+        "tags": { "surface": "capture-app", "app_build": "57", "locale": "ar" },
+        "contexts": {
+          "device": { "name": "Basel's iPhone", "family": "iPhone", "model": "iPhone16,1" },
+          "os": { "name": "iOS", "version": "18.1" },
+          "app": { "app_name": "Mutaba3a", "app_version": "1.4.0", "app_build": "57" }
+        },
+        "breadcrumbs": {
+          "values": [
+            {
+              "category": "http",
+              "type": "http",
+              "data": {
+                "method": "POST",
+                "url": "https://api.example.test/v1/expenses?draft=1",
+                "status_code": 422,
+                "request_body": "{\"amountMinor\":1200,\"note\":\"Taxi\"}",
+                "response_body": "{\"error\":\"DATE_INVALID\"}"
+              }
+            },
+            { "category": "navigation", "data": { "from": "/capture", "to": "/recent" } }
+          ]
+        },
+        "exception": {
+          "values": [
+            {
+              "type": "FormatException",
+              "value": "Invalid number amount=12,00 in capture keypad",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "amount_keypad.dart", "function": "AmountKeypad._commit", "lineno": 133, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "level": "fatal",
+        "platform": "other",
+        "release": "capture-app@1.4.0+57",
+        "environment": "production",
+        "user": { "id": "usr_42" },
+        "tags": { "surface": "capture-app", "app_build": "57", "locale": "ar" },
+        "contexts": {
+          "device": { "family": "iPhone", "model": "iPhone16,1" },
+          "os": { "name": "iOS", "version": "18.1" },
+          "app": { "app_name": "Mutaba3a", "app_version": "1.4.0", "app_build": "57" }
+        },
+        "breadcrumbs": {
+          "values": [
+            {
+              "category": "http",
+              "type": "http",
+              "data": { "method": "POST", "url": "https://api.example.test/v1/expenses", "status_code": 422 }
+            },
+            { "category": "navigation", "data": { "from": "/capture", "to": "/recent" } }
+          ]
+        },
+        "exception": {
+          "values": [
+            {
+              "type": "FormatException",
+              "value": "Invalid number amount=[Filtered]",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "amount_keypad.dart", "function": "AmountKeypad._commit", "lineno": 133, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "portal-setup-token-in-url-fragment",
+      "surface": "portal",
+      "input": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "portal@0.3.9+abc1234",
+        "environment": "production",
+        "request": {
+          "url": "https://portal.example.test/setup#t=st_synthetic_setup_token",
+          "fragment": "t=st_synthetic_setup_token",
+          "env": { "REMOTE_ADDR": "203.0.113.9" },
+          "headers": {
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://portal.example.test/setup#t=st_synthetic_setup_token"
+          }
+        },
+        "user": { "id": "usr_7f3a" },
+        "tags": { "surface": "portal", "locale": "en", "route": "/setup" },
+        "breadcrumbs": {
+          "values": [
+            { "category": "navigation", "data": { "from": "/setup#t=st_synthetic_setup_token", "to": "/setup" } },
+            { "category": "navigation", "data": { "from": "/setup", "to": "/clients?sort=owed#top" } },
+            {
+              "category": "fetch",
+              "type": "http",
+              "data": { "method": "GET", "url": "/v1/me#debug", "status_code": 200 }
+            }
+          ]
+        },
+        "exception": {
+          "values": [
+            {
+              "type": "TypeError",
+              "value": "Cannot read properties of null (reading 'focus') on https://portal.example.test/setup#t=st_synthetic_setup_token",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "assets/SetupPage-77ab.js", "function": "SetupPage", "lineno": 1, "colno": 902, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "portal@0.3.9+abc1234",
+        "environment": "production",
+        "request": {
+          "url": "https://portal.example.test/setup",
+          "headers": { "User-Agent": "Mozilla/5.0" }
+        },
+        "user": { "id": "usr_7f3a" },
+        "tags": { "surface": "portal", "locale": "en", "route": "/setup" },
+        "breadcrumbs": {
+          "values": [
+            { "category": "navigation", "data": { "from": "/setup", "to": "/setup" } },
+            { "category": "navigation", "data": { "from": "/setup", "to": "/clients" } },
+            {
+              "category": "fetch",
+              "type": "http",
+              "data": { "method": "GET", "url": "/v1/me", "status_code": 200 }
+            }
+          ]
+        },
+        "exception": {
+          "values": [
+            {
+              "type": "TypeError",
+              "value": "Cannot read properties of null (reading 'focus') on https://portal.example.test/setup",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "assets/SetupPage-77ab.js", "function": "SetupPage", "lineno": 1, "colno": 902, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "api-prisma-validation-error-frame-vars-compound-keys",
+      "surface": "api",
+      "input": {
+        "level": "error",
+        "platform": "node",
+        "release": "mutaba3a-api@0.3.9+abc1234",
+        "environment": "production",
+        "tags": { "surface": "api", "request_id": "req_b77e", "route": "/v1/income" },
+        "extra": { "apikey": "mut_live_example", "phonenumber": "+970599000000", "attempt": 1 },
+        "exception": {
+          "values": [
+            {
+              "type": "PrismaClientValidationError",
+              "value": "Invalid `prisma.income.create()` invocation:\n\n{\n  data: {\n    amountMinor: 12000,\n    note: \"Late invoice\"\n  }\n}\n\nArgument `currency` is missing.",
+              "stacktrace": {
+                "frames": [
+                  {
+                    "filename": "dist/income/compose.js",
+                    "function": "composeIncome",
+                    "lineno": 91,
+                    "in_app": true,
+                    "vars": { "amountMinor": 12000, "note": "Late invoice", "clientName": "Acme Legal" }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "node",
+        "release": "mutaba3a-api@0.3.9+abc1234",
+        "environment": "production",
+        "tags": { "surface": "api", "request_id": "req_b77e", "route": "/v1/income" },
+        "extra": { "attempt": 1 },
+        "exception": {
+          "values": [
+            {
+              "type": "PrismaClientValidationError",
+              "value": "Invalid `prisma.income.create()` invocation:",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "dist/income/compose.js", "function": "composeIncome", "lineno": 91, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "landing-json-and-colon-labelled-message",
+      "surface": "landing",
+      "input": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "landing@0.1.12+4e51681",
+        "environment": "production",
+        "request": { "url": "https://mutaba3a.netlify.app/hosted", "headers": { "User-Agent": "Mozilla/5.0" } },
+        "tags": { "surface": "landing", "locale": "ar" },
+        "exception": {
+          "values": [
+            {
+              "type": "Error",
+              "value": "Request failed: {\"email\":\"visitor@example.test\",\"status\":500} note: late",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "assets/HostedOffer-1b2c.js", "function": "submitRequest", "lineno": 1, "colno": 377, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "landing@0.1.12+4e51681",
+        "environment": "production",
+        "request": { "url": "https://mutaba3a.netlify.app/hosted", "headers": { "User-Agent": "Mozilla/5.0" } },
+        "tags": { "surface": "landing", "locale": "ar" },
+        "exception": {
+          "values": [
+            {
+              "type": "Error",
+              "value": "Request failed: {\"email\":\"[Filtered]\",\"status\":500} note: [Filtered]",
+              "stacktrace": {
+                "frames": [
+                  { "filename": "assets/HostedOffer-1b2c.js", "function": "submitRequest", "lineno": 1, "colno": 377, "in_app": true }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+# The contract files are sha256-pinned by their tests and copied byte-for-byte into the
+# Flutter app, so a CRLF checkout must never change their bytes (ADR-090, ADR-091).
+docs/analytics/*.json text eol=lf
+docs/observability/*.json text eol=lf

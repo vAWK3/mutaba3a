@@ -102,12 +102,17 @@ jobs:
           echo "service never answered /health"; docker logs api; exit 1
 
   terraform:
-    name: Terraform format and validate
+    name: Terraform format and validate (${{ matrix.module }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # terraform = GCP (ADR-026); sentry = error reporting (ADR-091, MUT-147).
+        module: [terraform, sentry]
     defaults:
       run:
-        working-directory: server/infrastructure/terraform
+        working-directory: server/infrastructure/${{ matrix.module }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -116,3 +121,6 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false
       - run: terraform validate
+      # Offline: the Sentry provider is mocked, so no token or account is needed.
+      - if: matrix.module == 'sentry'
+        run: terraform test

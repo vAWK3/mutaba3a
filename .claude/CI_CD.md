@@ -152,6 +152,18 @@ jobs:
 
 ---
 
+### 3b. Contracts CI (`.github/workflows/contracts-ci.yml`, since 2026-10-17, MUT-147)
+
+Web CI skips `docs/**` and Server CI watches only `server/**`. This one job runs
+the Sentry scrub-contract tests and the analytics event-contract tests when
+any of these change:
+
+- `docs/observability/**` or `docs/analytics/**`;
+- those tests themselves;
+- `scripts/sentry-org-*.ts` or `.gitattributes`.
+
+Node 22, `npm ci`, then `npx vitest run` on the three test files. It never deploys and never contacts Sentry or PostHog.
+
 ### 3a. Server CI (`.github/workflows/server-ci.yml`, since 2026-10-08)
 
 Runs on pull requests beside Web CI. Scoped by `paths:` to
@@ -321,7 +333,7 @@ Production only for now. Full runbook: `server/DEPLOYMENT.md`. Infra:
 |--------|------|--------|
 | Build status | GitHub Actions | Active |
 | Deploy status | Netlify | Active |
-| Error tracking | None | Planned: Sentry EU on the server, portal, landing and phone (MUT-146); never the local app |
+| Error tracking | Defined, not wired (MUT-147): Sentry EU org, projects and alerts in `server/infrastructure/sentry`, rules in `docs/observability` (ADR-091) | MUT-148..151 wire the server, portal, landing and phone; never the local app |
 | Analytics | PostHog EU (planned, MUT-152) | Landing cookieless; portal and phone opt-in and anonymous; the local app sends nothing (ADR-090) |
 
 ### Future Considerations

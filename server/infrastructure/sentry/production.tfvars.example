@@ -1,0 +1,17 @@
+# Copy to production.tfvars (git-ignored). Nothing secret goes in this file: the
+# admin token is passed to each command as SENTRY_AUTH_TOKEN="$SENTRY_ADMIN_TOKEN". See server/DEPLOYMENT.md §1.5.
+organization = "mutaba3a"
+
+# Origins each browser DSN accepts events from (R2). When the custom domain ships
+# (MUT-112), add it here and re-apply, or its errors are silently dropped. Cloud Run
+# also serves the service at https://mutaba3a-api-<project-number>.me-west1.run.app;
+# add that origin too if anyone reaches the portal through it.
+portal_origins  = ["https://mutaba3a-api-t5bzsudmja-zf.a.run.app"]
+landing_origins = ["https://mutaba3a.netlify.app"]
+
+# Optional overrides (defaults in variables.tf).
+# base_url                 = "https://de.sentry.io/api/"
+# spike_threshold_per_hour = 50
+# Daily caps (D6). Their sum x 31 must stay within monthly_event_quota, or the plan fails.
+# key_rate_limit_per_day   = { api = 60, portal = 20, landing = 20, "capture-app" = 60 }
+# monthly_event_quota      = 5000   # the plan's monthly error quota; check it at signup

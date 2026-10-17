@@ -1,0 +1,6 @@
+# Copy to backend.production.hcl (git-ignored) for
+# `terraform init -backend-config=backend.production.hcl`. Same bucket as the GCP
+# module (server/infrastructure/terraform), its own prefix. The state holds the
+# four DSNs, so the bucket stays readable only by operators.
+bucket = "mutaba3a-terraform-state"
+prefix = "mutaba3a-sentry/production"

@@ -1,0 +1,58 @@
+# CI for the cross-surface contracts (MUT-147 review, D12): the Sentry scrub contract
+# (docs/observability, ADR-091) and the analytics event contract (docs/analytics, ADR-090).
+#
+# web-ci.yml skips docs/** and server-ci.yml only watches server/**, so without this
+# workflow a pull request that edits only a contract file (drops a deny token, or changes
+# bytes without bumping the pinned version) would run no checks at all. Read-only: it never
+# deploys, pushes or contacts Sentry or PostHog.
+name: Contracts CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/observability/**'
+      - 'docs/analytics/**'
+      - 'scripts/__tests__/sentry-rules.test.ts'
+      - 'scripts/__tests__/sentry-org-settings.test.ts'
+      - 'scripts/__tests__/analytics-taxonomy.test.ts'
+      - 'scripts/sentry-org-*.ts'
+      - '.gitattributes'
+      - '.github/workflows/contracts-ci.yml'
+  pull_request:
+    paths:
+      - 'docs/observability/**'
+      - 'docs/analytics/**'
+      - 'scripts/__tests__/sentry-rules.test.ts'
+      - 'scripts/__tests__/sentry-org-settings.test.ts'
+      - 'scripts/__tests__/analytics-taxonomy.test.ts'
+      - 'scripts/sentry-org-*.ts'
+      - '.gitattributes'
+      - '.github/workflows/contracts-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: contracts-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Node 22, like web-ci.yml and server-ci.yml (TD-054).
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: >-
+          npx vitest run
+          scripts/__tests__/sentry-rules.test.ts
+          scripts/__tests__/sentry-org-settings.test.ts
+          scripts/__tests__/analytics-taxonomy.test.ts
