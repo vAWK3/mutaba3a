@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { SearchInput, type SearchInputRef } from '../SearchInput';
-import * as i18n from '../../../lib/i18n';
+import * as i18n from '../../../lib/i18n/core';
 import React from 'react';
 
 // Mock i18n
-vi.mock('../../../lib/i18n', () => ({
+vi.mock('../../../lib/i18n/core', () => ({
   useT: vi.fn(),
 }));
 

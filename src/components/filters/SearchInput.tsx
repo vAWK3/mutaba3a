@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { useT } from '../../lib/i18n';
+import { useT } from '../../lib/i18n/core';
 
 interface SearchInputProps {
   value: string;

@@ -61,6 +61,14 @@ vi.mock('../../../lib/i18n', () => ({
   getLocale: () => 'en-US',
 }));
 
+// SearchInput imports useT from core directly (MUT-43: the hosted bundle must
+// never carry the app's full translation dictionary), so it isn't covered by
+// the barrel mock above.
+vi.mock('../../../lib/i18n/core', () => ({
+  useT: () => (key: string) => key,
+  useOptionalT: () => (key: string) => key,
+}));
+
 // Mock drawer store
 const mockOpenIncomeDrawer = vi.fn();
 const mockOpenExpenseDrawer = vi.fn();

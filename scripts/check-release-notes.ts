@@ -1,11 +1,10 @@
 /**
  * `npm run release:notes -- <version>` (MUT-24): `make release-web` runs it
  * right after the bump. If release-notes.json has no well-formed entry for
- * the version yet, and a terminal is attached, it asks for the English and
- * Arabic lines right here and writes them in — mirroring bump-version.sh's
- * own interactive prompt — rather than just failing. The same notes become
- * the app's "What's new" and the web tag's message, so this is the one place
- * they are written.
+ * the version yet, and a terminal is attached, it asks for one English line
+ * and one Arabic line summarizing the whole release and writes them in —
+ * rather than just failing. The same notes become the app's "What's new"
+ * and the web tag's message, so this is the one place they are written.
  */
 import { createReadStream, openSync, readFileSync, writeFileSync } from 'node:fs';
 import * as readline from 'node:readline/promises';
@@ -71,28 +70,20 @@ async function promptForEntry(forVersion: string): Promise<VersionNotes | null> 
   const rl = readline.createInterface({ input, output: process.stderr });
 
   console.error(`\nNo release notes for v${forVersion} yet — let's write them now.`);
-  console.error('One line per change, in plain language for users. Blank line to finish.\n');
+  console.error('One note summarizing all the changes in this release, in plain language for users.\n');
 
-  const en: string[] = [];
-  const ar: string[] = [];
-  for (;;) {
-    const line = (await rl.question(`  en #${en.length + 1}: `)).trim();
-    if (!line) break;
-    const translated = (await rl.question(`  ar #${en.length + 1}: `)).trim();
-    if (!translated) {
-      console.error('  Arabic line can\'t be blank — skipping this entry, try again.');
-      continue;
-    }
-    en.push(line);
-    ar.push(translated);
-  }
+  const line = (await rl.question('  en: ')).trim();
+  const translated = line ? (await rl.question('  ar: ')).trim() : '';
   rl.close();
   if (input !== process.stdin) input.destroy();
 
-  if (en.length === 0) {
-    console.error(`${RELEASE_NOTES_PATH}: no lines entered, nothing written.`);
+  if (!line || !translated) {
+    console.error(`${RELEASE_NOTES_PATH}: no note entered, nothing written.`);
     return null;
   }
+
+  const en = [line];
+  const ar = [translated];
 
   const entry: VersionNotes = { en, ar };
   const problems = releaseNotesProblems({ [forVersion]: entry });
