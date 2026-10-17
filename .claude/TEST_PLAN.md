@@ -3011,11 +3011,18 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
   - **Fixtures.** The portal fixture now carries `request.fragment`, `request.env` and a URL with a token inside its exception text.
   - **Pattern.** `urlInTextPattern` is in the portable subset.
   - **Script.** It refuses a paginated project list (Link `rel="next"; results="true"`). The admin-token error names a personal token.
-- **Convergence review additions (contract 1.1.0, 2026-10-18):** `sentry-rules.test.ts` has 132 cases, `sentry-org-settings.test.ts` 38, Terraform 14 runs.
+- **Convergence review additions (contract 1.1.0, 2026-10-18):** `sentry-rules.test.ts` has 148 cases, `sentry-org-settings.test.ts` 38, Terraform 14 runs.
   - **Pins.** 1.0.0 stays pinned; 1.1.0 is a new row.
   - **Leak cases.** `grossMinor`/`netMinor`, `reference`, `label`, `metadata`; pretty-printed JSON (`JSON.stringify(x, null, 2)`) and `util.inspect` output; `email2`, `phone2`, `address2Line`; plural keys.
   - **Messages.** The top-level message (string, `message.formatted`, `logentry.formatted`) and breadcrumb messages get the labelled-value and URL checks, and the reference scrub must reproduce them in every fixture. `params` in `message`/`logentry` is forbidden in expected output.
   - **Rows.** `firstLineOnly('FormatException')`, `messageDropFields` equals `['params']`, the tokenizer splits at digits.
   - **Script.** A single page with Sentry's always-present `rel="next"; results="false"` link passes.
   - **Terraform.** The spike alert is 10 an hour; a threshold of 50 (above the 20-a-day portal and landing caps) is rejected.
+  - **Second pass.**
+    - Leak cases: one-line nesting under a bare key (Dart `Map.toString`, `util.inspect`), and `Set(n) {`, `Map(n) {`, `Client {` and `[Object: null prototype] {` containers.
+    - Untouched: Flutter and JS assertion text with `==` / `===`.
+    - `firstLineOnly` matches an obfuscated type by its value; a Prisma message without the prefix doesn't.
+    - `flutter_error_details.context` and `.information` are always dropped.
+    - Every message shape (`message`, `message.formatted`, `logentry.formatted`) and `params` under both `message` and `logentry` appear in the fixtures.
+    - Mutation evidence: the new leak cases leak under the previous pattern (scratch probe, 7 of 7), and a 4,000-object fuzz of Dart and `util.inspect` output finds 0 leaks under the new one.
 

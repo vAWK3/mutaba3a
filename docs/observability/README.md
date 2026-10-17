@@ -85,15 +85,19 @@ exactly.
      - **Deliberately not a token: `user`.** It would also strip the `User-Agent` header.
    - Money and free-text fields are deny tokens: `minor` (so `grossMinor`, `netMinor` and
      `amountMinor` go), `reference`, `label` and `metadata` (1.1.0).
-   - Plurals are listed beside their singulars (`phones`, `addresses`, `titles`, `secrets`, …),
-     because whole-token matching doesn't strip an `s`.
+   - Plurals of the field-name tokens are listed too (`phones`, `addresses`, `labels`,
+     `references`, `usernames`, …), because whole-token matching doesn't strip an `s`. Short
+     forms such as `tel`, `otp` and `jwt` have none.
    - Never touched: stack frames (except their `vars`, which are always dropped), `sdk`,
      `release` and `environment`.
 4. **Contexts.**
    - `safeContextKeys` are kept even though they hold a deny token. These are the SDK's
      `os.name`, `browser.name`, `runtime.name` and `app.app_name`, with their versions.
-   - `alwaysDropContextKeys` are always dropped: `device.name`, which is often a person's name,
-     as in "Basel's iPhone".
+   - `alwaysDropContextKeys` are always dropped:
+     - `device.name`, which is often a person's name, as in "Basel's iPhone";
+     - `flutter_error_details.context` and `.information`, where sentry_flutter puts the
+       FlutterError's free text (widget descriptions with their field values). No deny token is
+       in those keys, and context values are not text-scanned.
 5. **User and tags.**
    - User context is `{ id }` only, an internal opaque UUID. Never an email address, username or
      IP address.
@@ -120,12 +124,19 @@ exactly.
        - a nested object or array (`{…`, `[…`), which runs to the end of the line and on through
          every following indented line, so everything under a sensitive container key goes,
          compact (`{"emails":["a@b","c@d"]}`) or pretty-printed (`JSON.stringify(x, null, 2)`,
-         `util.inspect`);
+         `util.inspect`). Every later indented line goes with it, harmless siblings included: in
+         pretty-printed JSON, `"status": "draft"` after a sensitive `"emails": [` is filtered too;
        - a quoted string cut off by truncation, which runs to the end of the line;
        - otherwise, text up to the next `,`, `;`, `}`, `]` or whitespace.
-     - **Bare keys.** The value is a quoted string; an opening `{` or `[` at the end of a line,
-       which runs through the indented lines below it; or runs to the end of its clause (`;`, `}`,
-       `]`, `)` or a line break). A parenthetical inside it, as in `Acme (Pty) Ltd`, doesn't end
+     - **Bare keys.** The key is followed by `=`, `:` and a space, or ` = `; never `==` or
+       `===`, so assertion text such as `'key == null'` is left alone. The value is:
+       - a quoted string;
+       - a container: `{` or `[`, optionally after a `util.inspect` prefix (`Set(2) {`,
+         `Map(1) {`, a class name as in `Client {`, or `[Object: null prototype] {`). It runs to
+         the end of the line and on through the indented lines below it, so one-line nesting
+         (Dart's `Map.toString`, `{client: {id: c1, display: John Smith}}`) and multi-line
+         `util.inspect` output are both covered;
+       - otherwise, text to the end of its clause (`;`, `}`, `]`, `)` or a line break). A parenthetical inside it, as in `Acme (Pty) Ltd`, doesn't end
        it. So `Authorization: Bearer <token>`, `name: John Smith` and `amount=1,234.56` filter
        the whole value.
      - **Over-redaction.** Filtering to the end of the clause also hides the text after a
@@ -154,9 +165,12 @@ exactly.
        MUT-151 measures it on a low-end Android phone and lowers the phone's cap if
        `beforeSend` gets slow.
      - **SDK default.** Sentry's JS SDK already truncates values to 250 characters by default.
-   - **First line only.** An exception whose type matches `firstLineOnlyExceptionTypes` keeps
-     only its first line: `^Prisma`, because the rest can echo the query input, and
-     `^FormatException`, because Dart prints the unparsable source text below the message.
+   - **First line only.** An exception keeps only its first line when a
+     `firstLineOnlyExceptionTypes` pattern matches its type **or the start of its value**:
+     `^Prisma`, because the rest can echo the query input, and `^FormatException`, because Dart
+     prints the unparsable source text below the message. The value check matters on the phone:
+     an obfuscated release build renames the type, but the value still starts with
+     `FormatException:`.
    - **Known limits.** This catches only *labelled* values. Not caught:
      - an unlabelled name in free text (so surface code never interpolates user values into
        thrown messages);
@@ -165,7 +179,9 @@ exactly.
      - keys longer than 64 characters;
      - a bare `key:value` with no space after the colon (the space is required so URLs and times
        like `12:30` are left alone);
-     - a quoted value broken across lines.
+     - a quoted value broken across lines;
+     - a `;` inside an unquoted value, which ends it: Dart prints map values unquoted, so
+       `{note: Paid half; rest from Ahmad Saleh}` keeps `rest from Ahmad Saleh`.
 
      The org's server-side scrubber (below) is the backstop for distinctive values such as API
      keys.

@@ -43,6 +43,16 @@
 - `server/DEPLOYMENT.md` §1.5 step 4: `terraform init -backend-config=backend.production.hcl`, instead of a `TF_STATE_BUCKET` that step never sets.
 - `docs/observability/README.md` rules 3 and 7, ADR-091 amendment 4, INFRA alert row.
 
+### Changed by the second review pass (still 1.1.0, re-pinned before merge)
+- **Bare-key containers.** One-line nesting under a bare key (Dart's `Map.toString`, single-line `util.inspect`) stopped at the first `}` and leaked later siblings, and `util.inspect` containers with a prefix (`Set(2) {`, `Client {`, `[Object: null prototype] {`) weren't seen as containers. Both now run to the end of the line and through the indented lines below. A 4,000-object fuzz went from about 700 leaks to none.
+- **`==` is not a label**, so Flutter and JS assertion text is left alone.
+- **First line only** also matches the start of the value: an obfuscated Flutter build renames `FormatException`.
+- **Contexts.** `flutter_error_details.context` and `.information` are always dropped.
+- **Plurals** `references`, `labels`, `ibans`, `mobiles`, `usernames`.
+- **Fixtures.** A portal `logentry` with `params`; the capture-app fixture gains an obfuscated `FormatException` and `flutter_error_details`.
+- **Tests.** Every message shape on an event is checked, not just the first; a `breadcrumbList` helper replaces four copies.
+- **Docs.** README rules 3, 4 and 7 (including a new known limit: `;` inside an unquoted Dart map value), and DEPLOYMENT's tools list now says Terraform `>= 1.9`.
+
 ### Technical
 - `sentry-rules.test.ts`: new leak cases (money keys, pretty JSON, `util.inspect`, digit keys, plurals); messages and breadcrumb messages go through the same checks and reproduction as exception values. `sentry-org-settings.test.ts`: a realistic single-page `Link` header passes.
 

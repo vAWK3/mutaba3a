@@ -26,8 +26,8 @@ const PINNED_VERSIONS: Record<string, { rules: string; fixtures: string }> = {
   },
   // Convergence review (2026-10-18): money and free-text keys, multi-line containers, messages.
   '1.1.0': {
-    rules: '6d444aac1d33ba3149924c1b8ae3e1f58f4adadf167bb0ee5acfefadce2d44fc',
-    fixtures: '3b0dfac37ee2a25a37169ad4c71966e5b703fadd92bdec4e6ae90adf91332995',
+    rules: '0ce011d7319361196d0cc11162b52270b12e299d3d65a22aedbed603b58eb3ed',
+    fixtures: '0c23493b3e5cb6845932ca8f313263875c30f6cc9e0872db6fca0ef74057edb9',
   },
 };
 
@@ -118,12 +118,25 @@ const LEAK_CASES: Array<[string, string[]]> = [
   ["{\n  id: 'c1',\n  emails: [\n    'visitor@example.test',\n    'second.person@example.test'\n  ]\n}", ['visitor@example.test', 'second.person']],
   ['address2=12 Herzl St; phone2=+972501234567; email2=visitor@example.test', ['Herzl', '972501234567', 'visitor@example.test']],
   ['{"phones":["+972501234567"],"addresses":["1 Main St"],"descriptions":["Website for John Smith"]}', ['972501234567', 'Main St', 'John Smith']],
+  // Convergence review, pass 2: one-line nesting under a bare key (Dart Map.toString, util.inspect), and
+  // util.inspect containers with a prefix (Set(n), Map(n), a class name, a null prototype).
+  ['{client: {id: c1, contact: {city: Haifa}, display: John Smith, taxFile: 514392001}}', ['John Smith', '514392001', 'Haifa']],
+  ["{ client: { id: { v: 1 }, display: 'John Smith' } }", ['John Smith']],
+  ['{emails: [[visitor@example.test], second.person@example.test]}', ['visitor@example.test', 'second.person']],
+  ["{\n  id: 'r1',\n  emails: Set(2) {\n    'visitor@example.test',\n    'second.person@example.test'\n  }\n}", ['visitor', 'second.person']],
+  ["{\n  id: 'r1',\n  clients: Map(1) {\n    'a' => 'John Smith'\n  }\n}", ['John Smith']],
+  ["{\n  id: 'r1',\n  client: Client {\n    id: 'c1',\n    display: 'John Smith'\n  }\n}", ['John Smith']],
+  ["{\n  client: [Object: null prototype] {\n    display: 'John Smith',\n    city: 'Haifa'\n  }\n}", ['John Smith', 'Haifa']],
+  ['{"labels":["Deposit from John Smith"],"references":["J. Smith transfer"]}', ['John Smith', 'J. Smith']],
 ];
 /** Text the scrubber must leave exactly as it is. */
 const UNTOUCHED = [
   'see https://de.sentry.io/x at 12:30',
   "Cannot read properties of undefined (reading 'balanceMinor')",
   'Unique constraint failed on the fields: (`organization_id`,`external_ref`)',
+  // `==` and `===` are comparisons, not labels (Flutter and JS assertion text).
+  "Failed assertion: line 120 pos 12: 'key == null || key is GlobalKey': is not true.",
+  "Failed assertion: line 9 pos 7: 'label === undefined': is not true.",
 ];
 const FILTERED = '[Filtered]';
 /** ADR-091 rule 4 (R7): syntax JavaScript and Dart read differently, or only one of them reads. */
@@ -292,9 +305,12 @@ function requestProblems(request: Json | undefined): string[] {
   return problems;
 }
 
-function breadcrumbProblems(breadcrumbs: Json | undefined): string[] {
-  const list = isObject(breadcrumbs) && Array.isArray(breadcrumbs.values) ? breadcrumbs.values : [];
-  return list.flatMap((crumb, index) => {
+/** An event's breadcrumbs as a list (Sentry nests them under `breadcrumbs.values`). */
+const breadcrumbList = (event: JsonObject): Json[] =>
+  isObject(event.breadcrumbs) && Array.isArray(event.breadcrumbs.values) ? event.breadcrumbs.values : [];
+
+function breadcrumbProblems(event: JsonObject): string[] {
+  return breadcrumbList(event).flatMap((crumb, index) => {
     if (!isObject(crumb)) return [];
     const where = `breadcrumbs[${index}]`;
     const problems = crumb.category === 'console' ? [`${where} is a console breadcrumb`] : [];
@@ -312,15 +328,27 @@ function freeTextProblems(where: string, text: Json | undefined): string[] {
   return problems;
 }
 
-/** An event's top-level message as text: a string (JS), `message.formatted` (Dart) or `logentry.formatted`. */
-const messageText = (event: JsonObject): Json | undefined => {
-  if (typeof event.message === 'string') return event.message;
-  if (isObject(event.message)) return event.message.formatted;
-  return isObject(event.logentry) ? event.logentry.formatted : undefined;
-};
+/**
+ * Every top-level message text an event carries, by path: a string `message` (JS), `message.formatted`
+ * (Dart) and `logentry.formatted`. An event can carry more than one, so each is checked.
+ */
+function messageTexts(event: JsonObject): Array<[string, string]> {
+  const texts: Array<[string, Json | undefined]> = [
+    ['message', typeof event.message === 'string' ? event.message : undefined],
+    ['message.formatted', isObject(event.message) ? event.message.formatted : undefined],
+    ['logentry.formatted', isObject(event.logentry) ? event.logentry.formatted : undefined],
+  ];
+  return texts.filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+}
 
-const firstLineOnly = (type: Json | undefined) =>
-  typeof type === 'string' && (rules.firstLineOnlyExceptionTypes ?? []).some((pattern) => new RegExp(pattern).test(type));
+/**
+ * Rule 7: a pattern matches the exception type, or the start of its value. An obfuscated Flutter build
+ * renames the type, but Dart's `toString` still starts the value with `FormatException:`.
+ */
+const firstLineOnly = (type: Json | undefined, value?: Json) =>
+  (rules.firstLineOnlyExceptionTypes ?? []).some((pattern) =>
+    [type, value].some((text) => typeof text === 'string' && new RegExp(pattern).test(text)),
+  );
 
 function exceptionProblems(exception: Json | undefined): string[] {
   const values = isObject(exception) && Array.isArray(exception.values) ? exception.values : [];
@@ -328,7 +356,7 @@ function exceptionProblems(exception: Json | undefined): string[] {
     if (!isObject(value)) return [];
     const where = `exception.values[${index}]`;
     const problems = freeTextProblems(`${where}.value`, value.value);
-    if (firstLineOnly(value.type) && typeof value.value === 'string' && value.value.includes('\n')) {
+    if (firstLineOnly(value.type, value.value) && typeof value.value === 'string' && value.value.includes('\n')) {
       problems.push(`${where}.value keeps more than its first line (${String(value.type)})`);
     }
     const stackFrames = isObject(value.stacktrace) && Array.isArray(value.stacktrace.frames) ? value.stacktrace.frames : [];
@@ -349,9 +377,9 @@ function forbiddenIn(event: JsonObject): string[] {
     ...tags.filter((key) => !(rules.allowedTags ?? []).includes(key)).map((key) => `tags.${key} is not allowed`),
     ...deniedKeyPaths(event.extra, 'extra'),
     ...contextProblems(event.contexts),
-    ...breadcrumbProblems(event.breadcrumbs),
+    ...breadcrumbProblems(event),
     ...exceptionProblems(event.exception),
-    ...freeTextProblems('message', messageText(event)),
+    ...messageTexts(event).flatMap(([where, text]) => freeTextProblems(where, text)),
     // A structured message's `params` are the raw substituted values (Dart SentryMessage, JS logentry).
     ...(['message', 'logentry'] as const).flatMap((field) => {
       const structured = event[field];
@@ -528,10 +556,13 @@ describe('Sentry scrub contract (ADR-091)', () => {
     expect(firstLineOnly('TypeError')).toBe(false);
     // Dart's FormatException repeats its input on the second line (convergence review).
     expect(firstLineOnly('FormatException')).toBe(true);
+    // An obfuscated build renames the type; the value still starts with the class name (pass 2).
+    expect(firstLineOnly('Ab', 'FormatException: Invalid radix-10 number (at character 1)\nJohn Smith\n^')).toBe(true);
+    expect(firstLineOnly('Ab', 'Invalid `prisma.client.create()` invocation')).toBe(false);
   });
 
   it('denies the money and free-text field names the schema uses, and their plurals (convergence review)', () => {
-    for (const key of ['grossMinor', 'vatMinor', 'paidMinor', 'outstandingMinor', 'reference', 'label', 'metadata']) {
+    for (const key of ['grossMinor', 'vatMinor', 'paidMinor', 'outstandingMinor', 'reference', 'references', 'label', 'labels', 'metadata', 'ibans', 'mobiles', 'usernames']) {
       expect(hasDenyToken(key), key).toBe(true);
     }
     for (const plural of ['phones', 'addresses', 'descriptions', 'titles', 'reasons', 'accounts', 'cards', 'secrets', 'passwords', 'sessions', 'balances', 'prices', 'memos']) {
@@ -562,6 +593,8 @@ describe('Sentry scrub contract (ADR-091)', () => {
     const dropped = rules.alwaysDropContextKeys ?? [];
     expect(safe.filter((key) => dropped.includes(key))).toEqual([]);
     expect(dropped).toContain('device.name');
+    // sentry_flutter puts FlutterError free text here, under keys that hold no deny token (pass 2).
+    expect(dropped).toEqual(expect.arrayContaining(['flutter_error_details.context', 'flutter_error_details.information']));
     expect(safe).toEqual(expect.arrayContaining(['os.name', 'browser.name', 'runtime.name']));
     for (const key of [...safe, ...dropped]) expect(key).toMatch(/^[a-z_]+\.[a-z_]+$/);
   });
@@ -674,7 +707,7 @@ describe('Sentry scrub fixtures (ADR-091)', () => {
         isObject(event.exception) && Array.isArray(event.exception.values) ? event.exception.values : [];
       values(fixture.input).forEach((value, index) => {
         if (!isObject(value) || typeof value.value !== 'string') return;
-        const text = firstLineOnly(value.type) ? value.value.split('\n')[0] : value.value;
+        const text = firstLineOnly(value.type, value.value) ? value.value.split('\n')[0] : value.value;
         const expected = values(fixture.expected)[index];
         expect(isObject(expected) && expected.value, `exception.values[${index}]`).toBe(scrubLabelled(text));
       });
@@ -684,13 +717,13 @@ describe('Sentry scrub fixtures (ADR-091)', () => {
   it.each(fixtures.map((fixture) => [fixture.name, fixture] as const))(
     '%s: the contract\'s own scrub reproduces every expected message and breadcrumb message (convergence review)',
     (_name, fixture) => {
-      const inputMessage = messageText(fixture.input);
-      if (typeof inputMessage === 'string') expect(messageText(fixture.expected)).toBe(scrubLabelled(inputMessage));
+      const expectedMessages = new Map(messageTexts(fixture.expected));
+      for (const [where, text] of messageTexts(fixture.input)) {
+        expect(expectedMessages.get(where), where).toBe(scrubLabelled(text));
+      }
       // Console breadcrumbs are dropped whole, so compare the kept ones in order.
       const crumbs = (event: JsonObject) =>
-        (isObject(event.breadcrumbs) && Array.isArray(event.breadcrumbs.values) ? event.breadcrumbs.values : []).filter(
-          (crumb) => isObject(crumb) && crumb.category !== 'console',
-        );
+        breadcrumbList(event).filter((crumb) => isObject(crumb) && crumb.category !== 'console');
       const expectedCrumbs = crumbs(fixture.expected);
       crumbs(fixture.input).forEach((crumb, index) => {
         if (!isObject(crumb) || typeof crumb.message !== 'string') return;
@@ -700,11 +733,18 @@ describe('Sentry scrub fixtures (ADR-091)', () => {
     },
   );
 
-  it('covers top-level messages in both shapes and a dirty breadcrumb message (convergence review)', () => {
-    expect(allInputs().some((event) => typeof event.message === 'string')).toBe(true);
-    expect(allInputs().some((event) => isObject(event.message) && typeof event.message.formatted === 'string')).toBe(true);
+  it('covers every message shape, structured params and a dirty breadcrumb message (convergence review)', () => {
+    const shapes = new Set(allInputs().flatMap((event) => messageTexts(event).map(([where]) => where)));
+    expect([...shapes].sort()).toEqual(['logentry.formatted', 'message', 'message.formatted']);
+    for (const field of ['message', 'logentry'] as const) {
+      const withParams = allInputs().some((event) => {
+        const structured = event[field];
+        return isObject(structured) && 'params' in structured;
+      });
+      expect(withParams, `${field}.params`).toBe(true);
+    }
     const dirtyCrumb = allInputs().some((event) =>
-      (isObject(event.breadcrumbs) && Array.isArray(event.breadcrumbs.values) ? event.breadcrumbs.values : []).some(
+      breadcrumbList(event).some(
         (crumb) => isObject(crumb) && crumb.category !== 'console' && freeTextProblems('crumb', crumb.message).length > 0,
       ),
     );
@@ -720,9 +760,7 @@ describe('Sentry scrub fixtures (ADR-091)', () => {
 
   it('proves a setup token in a URL fragment never leaves, even in a navigation breadcrumb (D3)', () => {
     const navigation = (event: JsonObject) =>
-      (isObject(event.breadcrumbs) && Array.isArray(event.breadcrumbs.values) ? event.breadcrumbs.values : []).filter(
-        (crumb) => isObject(crumb) && crumb.category === 'navigation',
-      );
+      breadcrumbList(event).filter((crumb) => isObject(crumb) && crumb.category === 'navigation');
     expect(allInputs().some((event) => JSON.stringify(navigation(event)).includes('/setup#'))).toBe(true);
     expect(allExpected().every((event) => !JSON.stringify(event).includes('#'))).toBe(true);
   });

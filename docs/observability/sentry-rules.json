@@ -108,12 +108,17 @@
     "sessions",
     "balances",
     "prices",
-    "memos"
+    "memos",
+    "references",
+    "labels",
+    "ibans",
+    "mobiles",
+    "usernames"
   ],
   "requestDropFields": ["data", "cookies", "query_string", "fragment", "env"],
   "messageDropFields": ["params"],
   "urlFields": ["request.url", "breadcrumb.data.url", "breadcrumb.data.from", "breadcrumb.data.to"],
-  "labelledValuePattern": "(?:[\"']([A-Za-z_][\\w.-]{0,63})[\"'][ \\t]*:[ \\t]*(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|\\[Filtered\\]|[\\[{](?:[^\\n]|\\n[ \\t])*|[\"'][^\\n]*|[^,;}\\]\\s]+)|([A-Za-z_][\\w.-]{0,63})[ \\t]*(?:=|:[ \\t])[ \\t]*(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|\\[Filtered\\]|[\\[{][ \\t]*(?:\\n[ \\t][^\\n]*)+|(?:[^;}\\])(\\n]|\\([^()\\n]*\\)?)+))",
+  "labelledValuePattern": "(?:[\"']([A-Za-z_][\\w.-]{0,63})[\"'][ \\t]*:[ \\t]*(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|\\[Filtered\\]|[\\[{](?:[^\\n]|\\n[ \\t])*|[\"'][^\\n]*|[^,;}\\]\\s]+)|([A-Za-z_][\\w.-]{0,63})[ \\t]*(?:=(?!=)|:[ \\t])[ \\t]*(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|\\[Filtered\\]|(?:[A-Z][\\w$]*(?:\\(\\d+\\))?[ \\t]|\\[Object: null prototype\\][ \\t])?[\\[{](?:[^\\n]|\\n[ \\t])*|(?:[^;}\\])(\\n]|\\([^()\\n]*\\)?)+))",
   "urlInTextPattern": "(https?://[^\\s?#\"'<>]*)[?#][^\\s\"'<>]*",
   "firstLineOnlyExceptionTypes": ["^Prisma", "^FormatException"],
   "maxMessageLength": 8192,
@@ -132,7 +137,7 @@
     "app.app_version",
     "app.app_build"
   ],
-  "alwaysDropContextKeys": ["device.name"],
+  "alwaysDropContextKeys": ["device.name", "flutter_error_details.context", "flutter_error_details.information"],
   "ignoredErrors": {
     "api": [
       { "pattern": "^AbortError", "reason": "The client closed the request; nothing failed on the server." }
