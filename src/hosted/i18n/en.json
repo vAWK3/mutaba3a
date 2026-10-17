@@ -613,6 +613,14 @@
       "menuSwitch": "Show Malafat suggestions",
       "saveFailed": "Couldn't save. Try again."
     },
+    "appDownload": {
+      "platform": {
+        "ios": "iPhone",
+        "android": "Android"
+      },
+      "get": "Get the {platform} app",
+      "comingSoon": "{platform} — coming soon"
+    },
     "redate": {
       "owedTitle": "Change the date",
       "paymentTitle": "Change the received date",

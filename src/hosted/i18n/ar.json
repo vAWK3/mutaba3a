@@ -633,6 +633,14 @@
       "menuSwitch": "إظهار اقتراحات Malafat",
       "saveFailed": "تعذّر الحفظ. حاول مرة أخرى."
     },
+    "appDownload": {
+      "platform": {
+        "ios": "iPhone",
+        "android": "Android"
+      },
+      "get": "نزّل تطبيق {platform}",
+      "comingSoon": "{platform} قريبًا"
+    },
     "redate": {
       "owedTitle": "تغيير التاريخ",
       "paymentTitle": "تغيير تاريخ الاستلام",
