@@ -85,8 +85,12 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
    - screen-view observers and app-lifecycle events on the phone
 8. **Production only, and a kill switch.**
    - Keys come from configuration, never source:
-     - Landing and portal builds: `VITE_POSTHOG_KEY` and `VITE_POSTHOG_HOST` (`https://eu.i.posthog.com`).
-     - Phone: `--dart-define=POSTHOG_KEY=…` and `POSTHOG_HOST`.
+     - One name everywhere: `MUTABA3A_POSTHOG_KEY` (a `phc_` project key; the web build refuses
+       anything else, so a personal `phx_` key can't ship).
+     - Landing (web build) and portal (hosted build): an environment variable at build time,
+       which `vite.config.ts` bakes in as `__POSTHOG_KEY__`.
+     - Phone: a line in the Flutter app's `.env`, read with `--dart-define-from-file`.
+     - The host is fixed in code to `https://eu.i.posthog.com` (EU; the portal's CSP names it).
    - On Netlify the key is set for the **production** context only, never for deploy previews
      or branch deploys. QA and preview builds have no key.
    - A build or app with no key sends nothing and throws nothing.

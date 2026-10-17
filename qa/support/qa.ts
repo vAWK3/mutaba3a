@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
+import { interceptPosthog, type AnalyticsSpy } from './posthog';
 
 export interface Persona {
   email: string;
@@ -157,8 +158,16 @@ function clientIpFor(testId: string, retry: number): string {
   return `10.${(h >>> 16) & 255}.${(h >>> 8) & 255}.${(h & 253) + 1}`;
 }
 
-export const test = base.extend<{ persona: string | null; step: Step }>({
+export const test = base.extend<{ persona: string | null; step: Step; analytics: AnalyticsSpy }>({
   persona: [null, { option: true }],
+
+  // Every spec: PostHog is answered locally, so no QA run ever sends to it (ADR-090, MUT-154)
+  analytics: [
+    async ({ context }, use) => {
+      await use(await interceptPosthog(context));
+    },
+    { auto: true },
+  ],
 
   storageState: async ({ persona, storageState }, use, testInfo) => {
     const app = testInfo.project.name.replace(/-setup$/, '');

@@ -110,7 +110,15 @@ On a preview build with a test key, with requests to `eu.i.posthog.com` intercep
 2. `cta`: click "Open in your browser" on `/`. A `landing_cta_clicked` with `cta: open_web_app`
    goes out.
 3. `local-app-silent`: open `/app`. No request to PostHog in 5 s.
-4. `no-key-silent` (a build with no key): open `/`. No request to PostHog.
+4. `local-app-referrer`: open `/download` with a `/app/settings?tx=…` referrer. The pageview has
+   no `$referrer`.
+
+*As built:*
+- `no-key-silent` became the unit test "does nothing without a key", because a release-QA run has
+  one build.
+- QA builds carry a dummy key, and `qa/support/posthog.ts` answers PostHog for every spec.
+- `actAsPerson()` hides the automation markers that posthog-js's bot filter drops (correct in
+  production, for crawlers).
 
 ## 5. Out of scope
 

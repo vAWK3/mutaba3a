@@ -28,6 +28,39 @@
 
 ---
 
+## [Unreleased] - 2026-10-17 — Landing page counts visits and CTA clicks, cookieless (MUT-154, ADR-090)
+
+**Why:** epic MUT-152's acquisition funnel. The landing pages now count visits and calls to action in PostHog EU, with no cookie and nothing stored on the device. The free local app and desktop still send nothing.
+
+### Added
+- **`src/lib/analytics/`**, shared with the portal (MUT-155):
+  - `contract.ts`, a typed view of `events.json`;
+  - `guard.ts`, the required `before_send` guard;
+  - `posthogConfig.ts`, the EU host and every SDK feature off;
+  - `posthogKey.ts`.
+- **`src/pages/landing/analytics/landingAnalytics.ts`.** `useLandingAnalytics()` in the four landing pages starts posthog-js (a dynamic chunk) after idle, cookieless. One delegated click listener plus `ctaForHref()` sends `landing_cta_clicked`.
+- **The key.** `MUTABA3A_POSTHOG_KEY` (a `phc_` key only, validated) becomes `__POSTHOG_KEY__` for the web and hosted builds; desktop gets `""`. `posthog-js` is pinned to 1.435.5.
+- **Guards:**
+  - ESLint keeps posthog-js in the analytics modules;
+  - `check-bundles.ts` fails if PostHog is statically reachable from the web entry or present in desktop;
+  - PostHog's library origins are allowlisted.
+- **Store links name their campaign** (`storeLinkUrl(link, campaign)`): Apple `ct` (and `pt` once known), Play UTM referrer.
+- **Release-QA:**
+  - `qa/features/web/landing-analytics.yaml` and its spec;
+  - `qa/support/posthog.ts`, which answers PostHog locally in every spec;
+  - QA builds use a dummy key.
+
+### Changed
+- **Privacy policy (en + ar):**
+  - the intro names the hosted portal;
+  - "No analytics" is narrowed to the free apps in scope, noTracking (now "No ads, no tracking"), sharing and network;
+  - a new "Anonymous usage counts" section;
+  - "Last updated" is 17 October 2026.
+- **Docs:** `docs/analytics/README.md` and ADR-090 name `MUTABA3A_POSTHOG_KEY` and the fixed EU host; INFRA says where the key is set on each surface.
+
+### Technical
+- Files: `src/lib/analytics/*`, `src/pages/landing/analytics/*`, the four landing pages, `PhoneSection.tsx`, `download-config.ts`, `malafatLinks.ts` (comment), `vite.config.ts`, `src/vite-env.d.ts`, `eslint.config.js`, `scripts/bundle-rules.ts`, `scripts/check-bundles.ts`, `scripts/bundle-origins.json`, `package.json`, the en/ar `landing.json`, `PrivacyPolicyPage.tsx`, `qa/**`, the docs above.
+
 ## [Unreleased] - 2026-10-17 — Analytics decision and event contract (MUT-153, ADR-090)
 
 **Why:** epic MUT-152 adds opt-in, anonymous PostHog analytics to the landing page, the portal and the phone app. Every doc said "no analytics of any kind", and the three surfaces needed one list of what they may send. No SDK ships here.

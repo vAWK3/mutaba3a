@@ -3,6 +3,7 @@ import type { PostHogConfig } from 'posthog-js';
 import { posthogInitOptions } from '../../../lib/analytics/posthogConfig';
 import type { AnalyticsLocale } from '../../../lib/analytics/contract';
 import { APP_VERSION } from '../../../lib/appVersion';
+import { POSTHOG_KEY } from '../../../lib/analytics/posthogKey';
 import { HOSTED_OFFER_URL } from '../../../content/download-config';
 
 /**
@@ -27,13 +28,8 @@ interface StartDeps {
   load: () => Promise<PostHogLike>;
 }
 
-/** The build's key; Vitest has no build-time globals. */
-export function landingPosthogKey(): string {
-  return typeof __POSTHOG_KEY__ !== 'undefined' ? __POSTHOG_KEY__ : '';
-}
-
 const DEFAULT_DEPS = (): StartDeps => ({
-  key: landingPosthogKey(),
+  key: POSTHOG_KEY,
   load: () => import('posthog-js').then((module) => module.default as unknown as PostHogLike),
 });
 
@@ -106,7 +102,7 @@ const FALLBACK_IDLE_MS = 1500;
 
 export function useLandingAnalytics() {
   useEffect(() => {
-    if (!landingPosthogKey()) return;
+    if (!POSTHOG_KEY) return;
     const run = () => void startLandingAnalytics();
     if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(run, { timeout: FALLBACK_IDLE_MS });

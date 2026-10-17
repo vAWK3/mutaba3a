@@ -3484,7 +3484,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 7. **The public privacy policy changes with each surface** (P3). `docs/analytics/README.md` holds the approved en/ar wording; MUT-154, MUT-155 and MUT-157 each publish theirs with the feature, so the policy is never ahead of what ships.
 8. **Where the data goes.** PostHog Cloud **EU** (`eu.posthog.com`), project "Mutaba3a" (id 304889) in the Barmajiyat organization, separate from Malafat's project. No firm data is sent, so ADR-024's residency rule for firm data is not engaged (the same reasoning as Sentry EU, MUT-147).
 9. **Configuration.**
-   - Keys come from env (`VITE_POSTHOG_KEY`/`VITE_POSTHOG_HOST`, Flutter `--dart-define`), and only for production: Netlify's production context, never deploy previews or QA builds. No key means no sends and no errors.
+   - The key comes from `MUTABA3A_POSTHOG_KEY` on every surface (the web and hosted builds' environment; the Flutter `.env`), and only for production: Netlify's production context, never deploy previews or QA builds. Only a `phc_` key is accepted. No key means no sends and no errors. The host is fixed to `https://eu.i.posthog.com` (MUT-154 A1/A2).
    - The project is configured through the PostHog MCP, and its settings are recorded in INFRA §1, like Netlify Forms. TODOS #15 tracks moving them to the PostHog Terraform provider (D3).
    - **Access** to the project is limited to people Basel grants: an operator step in the PostHog UI.
 10. **Landing specifics.**

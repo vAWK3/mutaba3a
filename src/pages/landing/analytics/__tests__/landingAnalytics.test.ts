@@ -2,12 +2,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import {
   ctaForHref,
-  landingPosthogKey,
   resetLandingAnalyticsForTests,
   startLandingAnalytics,
   useLandingAnalytics,
   type PostHogLike,
 } from '../landingAnalytics';
+
+/** The build's key (one module per build-time constant, PATTERNS) and the SDK, both under test control. */
+const { build, sdk } = vi.hoisted(() => ({ build: { key: '' }, sdk: { init: vi.fn(), capture: vi.fn() } }));
+vi.mock('../../../../lib/analytics/posthogKey', () => ({
+  get POSTHOG_KEY() {
+    return build.key;
+  },
+}));
+vi.mock('posthog-js', () => ({ default: sdk }));
 
 const ORIGIN = 'https://mutaba3a.netlify.app';
 const KEY = 'phc_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
@@ -88,31 +96,32 @@ describe('startLandingAnalytics', () => {
 });
 
 describe('useLandingAnalytics', () => {
-  beforeEach(() => resetLandingAnalyticsForTests());
+  beforeEach(() => {
+    resetLandingAnalyticsForTests();
+    build.key = '';
+    sdk.init.mockClear();
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
     resetLandingAnalyticsForTests();
   });
 
-  it('does not touch the SDK without a key', () => {
+  it('does not touch the SDK without a key', async () => {
     vi.useFakeTimers();
     const { unmount } = renderHook(() => useLandingAnalytics());
-    vi.advanceTimersByTime(10_000);
-    expect(landingPosthogKey()).toBe('');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sdk.init).not.toHaveBeenCalled();
     unmount();
   });
 
   it('starts only once the page has gone idle, not during first paint', async () => {
-    vi.stubGlobal('__POSTHOG_KEY__', KEY);
+    build.key = KEY;
     vi.useFakeTimers();
     vi.stubGlobal('requestIdleCallback', undefined);
-    const ph = fakePostHog();
-    vi.doMock('posthog-js', () => ({ default: ph }));
     renderHook(() => useLandingAnalytics());
-    expect(ph.init).not.toHaveBeenCalled();
+    expect(sdk.init).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1500);
-    await vi.waitFor(() => expect(ph.init).toHaveBeenCalledTimes(1));
-    vi.doUnmock('posthog-js');
+    await vi.waitFor(() => expect(sdk.init).toHaveBeenCalledTimes(1));
   });
 });

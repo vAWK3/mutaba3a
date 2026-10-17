@@ -2806,3 +2806,50 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
     - free-form types;
     - bad or duplicate enum values, values on a non-enum, and an event property that repeats a shared one.
 - Release-QA: not applicable (docs and contract only; no user-visible flow). MUT-154, MUT-155 and MUT-157 carry the QA scenarios and the "what we send is a subset of the contract" tests. The Flutter parity test against a vendored copy is MUT-157's.
+
+## MUT-154 — landing visit counts (2026-10-17, ADR-090)
+
+- **`src/lib/analytics/__tests__/guard.test.ts`** (14 cases):
+  - unknown events and wrong emitters dropped;
+  - enum, currency and boolean values validated; undeclared properties dropped;
+  - shared properties stamped over the caller's;
+  - routing and control fields kept;
+  - `$set` / `$set_once` / `$unset` stripped;
+  - session, window, screen, timezone, language and ad-click fields dropped everywhere;
+  - the landing allowance kept (URL, UTM, referrer, cookieless hash inputs);
+  - an `/app` referrer dropped;
+  - the portal allowance (no URL, path, host or referrer).
+- **`posthogConfig.test.ts`** (6 cases):
+  - EU host;
+  - every feature off on both surfaces;
+  - landing cookieless;
+  - portal `localStorage`, unbatched;
+  - `before_send` reads the live context.
+- **`src/pages/landing/analytics/__tests__/landingAnalytics.test.ts`** (25 cases):
+  - the `ctaForHref` table;
+  - no key → no SDK and no listener;
+  - one init with the cookieless config;
+  - the visible language stamped;
+  - a CTA click sends `landing_cta_clicked` at once;
+  - SDK load failure swallowed;
+  - the hook waits for idle (key mocked through `posthogKey.ts`).
+- **`scripts/__tests__/vite-config.test.ts`**: `posthogKey()` takes unset or a `phc_` key and
+  refuses `phx_`, short or malformed values; web and hosted get the key, desktop `""`.
+- **`scripts/__tests__/analytics-lint.test.ts`**: posthog-js is forbidden in `main.tsx`,
+  `LandingProviders`, the landing pages, app code and the portal shell; allowed in the two
+  analytics modules; type-only allowed in `src/lib/analytics`.
+- **`scripts/__tests__/check-bundles.test.ts`**: static-import parsing (minified, spaced, never
+  `import()`); the entry graph from the module script plus modulepreloads; PostHog in a reachable
+  chunk fails; marker table.
+- **`download-config.test.ts`**: the campaign on App Store (`ct`, `pt` once set) and Play
+  (UTM referrer) links.
+- **`PrivacyPolicyPage.test.tsx`**: the "Anonymous usage counts" section right after "No ads,
+  no tracking", in en and ar; PostHog named in sharing and network; the crash-reporting clause
+  kept.
+- **Release-QA `qa/specs/web/landing-analytics.spec.ts`** (4 features). On a preview build with
+  the dummy key:
+  - `pageview-cookieless` (no `ph_*` cookie or storage);
+  - `cta` (`hosted_offer`);
+  - `local-app-referrer`;
+  - `local-app-silent` (core: zero PostHog requests from `/app`).
+- **`landing.spec.ts` phone test** now expects the campaign on store links.
