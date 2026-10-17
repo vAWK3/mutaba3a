@@ -6,6 +6,7 @@ import { usePopover } from './usePopover';
 import { useAccountDrawers } from './AccountDrawers';
 import { MalafatMenuItems } from '../components/MalafatPortal';
 import { AppDownloadMenuItems } from '../components/AppDownloadMenuItems';
+import { UsageMenuItem } from '../components/UsageMenuItem';
 import type { HostedProfile } from '../api/client';
 
 const INITIALS = 2;
@@ -67,6 +68,8 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
           </button>
           {/* After Sign out, so Sign out stays the menu's first item (focus on open) */}
           <MalafatMenuItems profile={profile} />
+          {/* MUT-155: the anonymous-usage switch */}
+          <UsageMenuItem />
           {/* Last item (MUT-261) */}
           <AppDownloadMenuItems />
         </div>

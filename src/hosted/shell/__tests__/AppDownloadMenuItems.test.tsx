@@ -19,7 +19,10 @@ describe('Account menu, app download (MUT-261)', () => {
 
     const iosLink = within(menu).getByRole('menuitem', { name: /Get the iPhone app/ });
     expect(iosLink.tagName).toBe('A');
-    expect(iosLink).toHaveAttribute('href', 'https://apps.apple.com/us/app/متابعة-مالية/id6821813829');
+    // MUT-155: the portal's store links name their source, as the landing's do (A6)
+    const href = new URL(iosLink.getAttribute('href')!);
+    expect(decodeURI(`${href.origin}${href.pathname}`)).toBe('https://apps.apple.com/us/app/متابعة-مالية/id6821813829');
+    expect(href.searchParams.get('ct')).toBe('mutaba3a-portal');
     expect(iosLink).toHaveAttribute('target', '_blank');
     expect(iosLink.getAttribute('rel')).toContain('noopener');
 

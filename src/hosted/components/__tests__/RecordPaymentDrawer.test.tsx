@@ -9,6 +9,9 @@ import { CUSTOMERS, PROJECTS, receivable } from '../../pages/__tests__/fixtures'
 import { ToastProvider } from '../Toast';
 import { RecordPaymentDrawer } from '../RecordPaymentDrawer';
 
+const { trackPortal } = vi.hoisted(() => ({ trackPortal: vi.fn(async () => {}) }));
+vi.mock('../../analytics/portalAnalytics', () => ({ trackPortal }));
+
 const R = 'b1111111-1111-4111-8111-111111111111';
 const C1 = CUSTOMERS[0].id;
 const P1 = PROJECTS[0].id;
@@ -84,6 +87,30 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe('RecordPaymentDrawer counts a confirmed payment (MUT-155, ADR-090)', () => {
+  beforeEach(() => trackPortal.mockClear());
+
+  it('sends payment_recorded with only the currency, after the server confirms', async () => {
+    stub();
+    const { onSettled, user } = renderDrawer();
+    await screen.findByLabelText('Amount (ILS)');
+    await user.click(save());
+    await waitFor(() => expect(onSettled).toHaveBeenCalled());
+    expect(trackPortal).toHaveBeenCalledExactlyOnceWith('payment_recorded', { currency: 'ILS' });
+  });
+
+  it('counts nothing when the settle fails', async () => {
+    const api = stub({ settle: () => fail(409, 'CONFLICT') });
+    const { onSettled, user } = renderDrawer();
+    await screen.findByLabelText('Amount (ILS)');
+    await user.click(save());
+    await waitFor(() => expect(api.calls.some((c) => c.method === 'POST')).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(onSettled).not.toHaveBeenCalled();
+    expect(trackPortal).not.toHaveBeenCalled();
+  });
 });
 
 describe('RecordPaymentDrawer (MUT-133)', () => {

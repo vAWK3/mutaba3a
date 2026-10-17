@@ -15,6 +15,7 @@ import { Drawer } from './Drawer';
 import { Empty, QueryView, Skeleton } from './QueryView';
 import { useToast } from './Toast';
 import { mapSettleError } from './incomeApiErrors';
+import { trackPortal } from '../analytics/portalAnalytics';
 import { PAYMENT_METHODS, amountError, parseIncomeAmount, settleLine } from './incomeForm';
 
 /**
@@ -148,6 +149,8 @@ function SettleForm({ profile, receivable, amount, onAmountChange, onSettled, re
     try {
       const result = await settle.mutateAsync({ receivableId: receivable.id, body, idempotencyKey: attempt.keyFor(body) });
       attempt.succeeded();
+      // Opt-in usage counts (MUT-155): the currency only, never the amount or client
+      void trackPortal('payment_recorded', { currency });
       const shown = money(parsed.canonical);
       showToast(client ? t('hosted.settle.saved', { amount: shown, client: isolate(client) }) : t('hosted.settle.savedNoClient', { amount: shown }), { tone: 'info' });
       onSettled(result);

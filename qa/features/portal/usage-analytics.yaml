@@ -1,0 +1,65 @@
+app: portal
+area: usage-analytics
+title: Portal opt-in anonymous usage counts
+tier: secondary
+# MUT-155, ADR-090, docs/analytics/README.md: off until the signed-in person turns it on,
+# every event through the contract guard, reset on sign-out. QA builds carry a dummy key
+# (qa.config.mjs) and qa/support/posthog.ts answers PostHog locally, so nothing leaves.
+paths:
+  - src/hosted/analytics/portalAnalytics.ts
+  - src/hosted/components/UsagePrompt.tsx
+  - src/hosted/components/UsageMenuItem.tsx
+  - src/lib/analytics/guard.ts
+  - src/lib/analytics/posthogConfig.ts
+  - src/lib/analytics/contract.ts
+features:
+  - id: prompt-silent-until-chosen
+    title: The portal asks once and sends nothing before an answer
+    tier: core # if the portal sent before consent, every signed-in person would be counted without asking
+    paths:
+      - src/hosted/shell/HostedShell.tsx
+    steps:
+      - Sign in and open Payments
+      - Wait a few seconds without answering
+    expect:
+      - The "Share anonymous usage?" notice shows with two buttons, "Share anonymous usage" and "Not now"
+      - Not a single request goes to PostHog
+  - id: opt-in-counts
+    title: Turning sharing on from the prompt counts it, then counts each opening, with no address and nothing in a cookie
+    steps:
+      - Sign in and press "Share anonymous usage" in the notice
+      - Reload the page
+    expect:
+      - analytics_opted_in with prompt first_run is sent, and the notice goes away
+      - portal_opened is sent on reload; no event carries a URL, path, referrer or profile ID
+      - No PostHog cookie is set; only event posts go out
+  - id: save-income-counts
+    title: With sharing on, a saved income is counted by its currency and whether it was paid
+    paths:
+      - src/hosted/components/IncomeCaptureDrawer.tsx
+      - src/hosted/components/RecordPaymentDrawer.tsx
+      - src/hosted/components/ExpenseDrawer.tsx
+    steps:
+      - Turn sharing on, then add a received income of 1,200 for Client 1
+    expect:
+      - income_recorded is sent with currency ILS and paid true, and nothing about the amount or the client
+  - id: opt-out-last-note
+    title: Turning sharing off in the account menu sends one last note, then nothing, and forgets the random ID
+    paths:
+      - src/hosted/shell/UserMenu.tsx
+    steps:
+      - With sharing on, open the account menu and turn off "Share anonymous usage"
+      - Reload the page
+    expect:
+      - One analytics_opted_out is sent and the switch reads off
+      - Nothing more is sent after the reload, the notice does not come back, and no PostHog key is left in storage
+  - id: sign-out-resets
+    title: Signing out forgets the choice and the random ID without sending anything
+    paths:
+      - src/hosted/session/endSession.ts
+    steps:
+      - With sharing on, sign out from the account menu
+      - Sign in again
+    expect:
+      - Nothing is sent at sign-out and no PostHog key is left in storage
+      - After signing in again the notice asks again, and nothing is sent until it is answered

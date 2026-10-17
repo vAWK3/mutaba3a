@@ -63,3 +63,29 @@ test('A new password under 12 characters is refused inline, before anything is s
   await expect(dialog.getByText('Use at least 12 characters.')).toBeVisible();
   expect(api.log.filter((c) => c.method === 'POST' && c.path === '/v1/me/password')).toHaveLength(0);
 });
+
+test('The account menu ends with Get the app: the iPhone link names the portal, Android is coming soon', { tag: '@portal.account.get-the-app' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });
+  const menu = page.getByRole('menu', { name: 'Account' });
+
+  await step('Open the account menu', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients`);
+    await page.getByRole('button', { name: /^Account/ }).click();
+    await expect(menu).toBeVisible();
+  });
+
+  await step('"Get the iPhone app" opens the App Store in a new tab, saying it came from the portal', async () => {
+    const ios = menu.getByRole('menuitem', { name: /Get the iPhone app/ });
+    const href = new URL((await ios.getAttribute('href'))!);
+    expect(href.hostname).toBe('apps.apple.com');
+    expect(href.searchParams.get('ct')).toBe('mutaba3a-portal');
+    await expect(ios).toHaveAttribute('target', '_blank');
+  });
+
+  await step('"Android — coming soon" is the last row, and not a link', async () => {
+    const android = menu.getByText('Android — coming soon');
+    await expect(android).toHaveAttribute('aria-disabled', 'true');
+    await expect(android).not.toHaveAttribute('href');
+    await expect(menu.locator('[role^="menuitem"], [aria-disabled="true"]').last()).toHaveText('Android — coming soon');
+  });
+});

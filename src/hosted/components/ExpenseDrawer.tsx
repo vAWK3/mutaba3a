@@ -21,6 +21,7 @@ import { useAttemptKey } from '../data/attemptKey';
 import { ApiError, type CreateExpenseRequest, type Expense, type UpdateExpenseRequest } from '../api/client';
 import { HOSTED_CURRENCIES } from '../format/currencies';
 import { BrandLoader } from '../../components/brand/BrandLoader';
+import { trackPortal } from '../analytics/portalAnalytics';
 
 /**
  * The hosted portal's expense capture (MUT-44). Builds on
@@ -176,6 +177,8 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
         };
         const created = await createMutation.mutateAsync({ body, idempotencyKey: attempt.keyFor(body) });
         attempt.succeeded();
+        // Opt-in usage counts (MUT-155): a new expense only, its currency and nothing else
+        void trackPortal('expense_recorded', { currency: values.currency });
         markSaved(created.id);
       }
       onClose();

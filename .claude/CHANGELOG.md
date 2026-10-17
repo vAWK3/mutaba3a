@@ -28,6 +28,43 @@
 
 ---
 
+## [Unreleased] - 2026-10-17 — The portal asks to share anonymous usage, then counts opens and saved money (MUT-155, ADR-090)
+
+**Why:** epic MUT-152's activation funnel. A signed-in portal person can turn on anonymous usage counts; until they do, the portal loads nothing and sends nothing.
+
+### Added
+- **`src/hosted/analytics/portalAnalytics.ts`**, the only portal file that loads posthog-js:
+  - `syncPortalUsage(userId)`: another account's choice is reset; a stored "on" counts `portal_opened` once per page load;
+  - `choosePortalUsage(choice, prompt)`: on sends `analytics_opted_in {prompt}`; off sends one `analytics_opted_out`, then resets the ID and deletes every `ph_*` / `__ph_*` key;
+  - `endPortalUsage()` (sign-out) and `trackPortal(event, props)`.
+  - The choice is kept as `{owner, choice}` in `localStorage` (`mutaba3a-portal-usage`), never sent.
+  - The SDK, the contract and the guard load together, lazily, only after a yes. A build without a key drops the SDK entirely (dead code after the key check).
+- **`UsagePrompt`**: a one-time inline notice at the top of the page, two buttons of equal weight (B1, B2).
+- **`UsageMenuItem`**: "Share anonymous usage" as a `menuitemcheckbox` in the account menu (B3). Neither shows on a build with no key.
+- **Counted saves** (after the server confirms): `income_recorded {currency, paid}`, `payment_recorded {currency}`, `expense_recorded {currency}` (create only, B6).
+- **Release-QA:**
+  - `qa/features/portal/usage-analytics.yaml` and its spec (5 scenarios);
+  - `@portal.account.get-the-app`.
+
+### Changed
+- **Sign-out** (this tab or another) forgets the choice and the random ID, sending nothing. Session expiry keeps them (B4).
+- **The account menu's store links** carry `ct=mutaba3a-portal`.
+- **Privacy policy (en + ar):** the portal sentence in "Anonymous usage counts" and in "What reaches the network".
+- **Server:** `PORTAL_CSP` `connect-src` adds `https://eu.i.posthog.com`. This needs a server release; `DEPLOYMENT.md` says why.
+- **The portal's key reaches the build:**
+  - `Makefile` exports `MUTABA3A_POSTHOG_KEY` to `deploy.sh`'s `npm run build:hosted`;
+  - `deploy.env.example` documents it.
+- **`check-bundles`:**
+  - fails if PostHog is statically reachable from the portal's entry (it loads only after consent);
+  - the hosted origin allowlist gains PostHog's library strings.
+
+### Technical
+- Files:
+  - `src/hosted/analytics/*`, `src/hosted/components/{UsagePrompt,UsageMenuItem,IncomeCaptureDrawer,RecordPaymentDrawer,ExpenseDrawer,AppDownloadMenuItems}.tsx`;
+  - `src/hosted/shell/{HostedShell,UserMenu}.tsx`, `src/hosted/session/endSession.ts`, `src/hosted/hosted.css`, `src/hosted/i18n/{en,ar}.json`;
+  - the en/ar `landing.json`, `server/src/app.ts`, `server/DEPLOYMENT.md`, `Makefile`, `deploy.env.example`;
+  - `scripts/check-bundles.ts`, `scripts/bundle-origins.json`, `qa/**`.
+
 ## [Unreleased] - 2026-10-17 — Landing page counts visits and CTA clicks, cookieless (MUT-154, ADR-090)
 
 **Why:** epic MUT-152's acquisition funnel. The landing pages now count visits and calls to action in PostHog EU, with no cookie and nothing stored on the device. The free local app and desktop still send nothing.
@@ -57,6 +94,20 @@
   - a new "Anonymous usage counts" section;
   - "Last updated" is 17 October 2026.
 - **Docs:** `docs/analytics/README.md` and ADR-090 name `MUTABA3A_POSTHOG_KEY` and the fixed EU host; INFRA says where the key is set on each surface.
+
+### Fixed (qa-reconcile review)
+- **F1.** The service worker no longer precaches the SDK or the guard:
+  - posthog-js is the named chunk `vendor-posthog` (web build only);
+  - it and `posthogConfig-*` are in `globIgnores`;
+  - `check-bundles` fails if any precached file mentions PostHog.
+- **F2.** ESLint forbids importing `landing/analytics` outside the landing and download pages, and `lib/analytics/{posthogConfig,guard}` outside the analytics modules.
+- **F3.** The landing guard drops `$os` and `$browser`. The contract allows URL, UTM, referrer and device type, and the policy says PostHog keeps no browser details. The README names the cookieless markers.
+- **F4.** The contract, guard and init options load lazily with the SDK. Counting waits for the `load` event, then idle, so first paint carries none of it.
+- **F5, F6:**
+  - the QA spy answers every `*.posthog.com` host and records paths;
+  - the landing spec proves only event posts leave, and catches `__ph_*` keys.
+- **F7.** `src/lib/analytics` may import posthog-js types only. The storage-seam patterns are shared as `STORAGE_SEAM_PATTERNS`, so the block that adds this rule keeps them.
+- **F8.** The README says release-QA builds carry a dummy key.
 
 ### Technical
 - Files: `src/lib/analytics/*`, `src/pages/landing/analytics/*`, the four landing pages, `PhoneSection.tsx`, `download-config.ts`, `malafatLinks.ts` (comment), `vite.config.ts`, `src/vite-env.d.ts`, `eslint.config.js`, `scripts/bundle-rules.ts`, `scripts/check-bundles.ts`, `scripts/bundle-origins.json`, `package.json`, the en/ar `landing.json`, `PrivacyPolicyPage.tsx`, `qa/**`, the docs above.

@@ -602,6 +602,13 @@
         "generic": "Something went wrong. Nothing was saved."
       }
     },
+    "usage": {
+      "title": "Share anonymous usage?",
+      "body": "Help us see which parts of Mutaba3a people use. We never send amounts, names or anything you type, and it isn't linked to your account. You can turn it off any time.",
+      "turnOn": "Share anonymous usage",
+      "decline": "Not now",
+      "toggle": "Share anonymous usage"
+    },
     "malafat": {
       "label": "A suggestion for law firms and accounting offices",
       "businessCreated": "Is this business a law firm or an accounting office? Malafat manages its clients, documents and fee agreements, and connects to your Mutaba3a account.",

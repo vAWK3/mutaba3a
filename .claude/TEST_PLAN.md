@@ -2853,3 +2853,53 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
   - `local-app-referrer`;
   - `local-app-silent` (core: zero PostHog requests from `/app`).
 - **`landing.spec.ts` phone test** now expects the campaign on store links.
+- **Review fixes (qa-reconcile F1–F8):**
+  - `check-bundles.test.ts`: `precachedUrls` reads both quoting styles; `posthogPrecached` names
+    every precached file that mentions PostHog.
+  - `vite-config.test.ts`: the SDK and `posthogConfig-*` chunks are in `globIgnores`;
+    `vendor-posthog` is named in the web build only.
+  - `analytics-lint.test.ts` (20 cases): `lib/analytics` may not load the SDK but keeps the storage
+    seam; local-app pages may not import `landing/analytics`; nothing outside the analytics modules
+    imports the guard; landing and download pages may call the counter.
+  - `guard.test.ts`: the landing drops `$os` and `$browser`.
+  - `landingAnalytics.test.ts` (27): waits for `load` before scheduling; leaving first cancels.
+  - The landing QA spec asserts only event posts leave and catches `__ph_*` keys. The spy answers
+    every `*.posthog.com` host.
+
+## MUT-155 — portal opt-in usage counts (2026-10-17, ADR-090)
+
+- **`src/hosted/analytics/__tests__/portalAnalytics.test.ts`** (14 cases):
+  - no key → `unavailable`, nothing loaded;
+  - no SDK before a choice;
+  - on → init with the portal config, then `analytics_opted_in`;
+  - off → `analytics_opted_out`, `reset(true)`, `opt_out_capturing`, `ph_*` keys removed;
+  - sign-out → nothing sent, the record cleared;
+  - another account → reset and asked again;
+  - `trackPortal` is a no-op unless on;
+  - `portal_opened` once per page load;
+  - on again after off → `opt_in_capturing` with no `$opt_in`.
+- **`src/hosted/shell/__tests__/UsageConsent.test.tsx`** (8, through the real shell):
+  - the prompt with two equal buttons and no SDK;
+  - on from the prompt (`first_run`);
+  - "Not now" not asked again;
+  - no key → no prompt and no switch;
+  - Arabic copy;
+  - the menu switch reflects and turns off (one last note) and on (`settings`);
+  - sign-out forgets the choice and the `ph_*` keys, sending nothing.
+- **The drawer tests:**
+  - `IncomeCaptureDrawer`: `{currency, paid}` after a confirmed save, nothing on a failed one;
+  - `RecordPaymentDrawer`: `{currency}`, nothing on a 409;
+  - `ExpenseDrawer`: `{currency}` on create; nothing on edit or a 422; once across a retried save.
+- **Other unit tests:**
+  - `endSession.test.ts`: `endPortalUsage` on `signed_out`, not on `expired`;
+  - `AppDownloadMenuItems.test.tsx`: `ct=mutaba3a-portal`;
+  - `PrivacyPolicyPage.test.tsx`: the portal sentence before the closing, the network sentence, Arabic.
+- **Server:** `portal.test.ts` pins the CSP with `https://eu.i.posthog.com`.
+- **Release-QA `qa/specs/portal/usage-analytics.spec.ts`** (5). On a keyed preview build, PostHog answered locally:
+  - `prompt-silent-until-chosen` (core: zero requests before an answer);
+  - `opt-in-counts` (no URL, path, host, referrer or profile ID; no cookie; event posts only);
+  - `save-income-counts` (ILS, paid, no amount or client);
+  - `opt-out-last-note`;
+  - `sign-out-resets`.
+- **`@portal.account.get-the-app`**: the iPhone link carries `ct=mutaba3a-portal`; Android is the last, inert row.
+- **Known:** on preview builds, `portal.signin.boot-slow-session` (2 tests) still fails, as listed above. The other 72 portal and landing specs pass.

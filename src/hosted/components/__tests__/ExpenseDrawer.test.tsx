@@ -8,6 +8,9 @@ import { ToastProvider } from '../Toast';
 import { ExpenseDrawer } from '../ExpenseDrawer';
 import en from '../../i18n/en.json';
 
+const { trackPortal } = vi.hoisted(() => ({ trackPortal: vi.fn(async () => {}) }));
+vi.mock('../../analytics/portalAnalytics', () => ({ trackPortal }));
+
 // The portal opens in Arabic until a person chooses (MUT-209); these cases speak English, so choose it as a person would
 beforeEach(() => localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en'));
 
@@ -52,6 +55,7 @@ function renderDrawer(props: Partial<ComponentProps<typeof ExpenseDrawer>> = {})
 }
 
 beforeEach(() => {
+  trackPortal.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   fetchMock.mockReset();
   route({
@@ -103,6 +107,8 @@ describe('ExpenseDrawer (hosted)', () => {
     expect(createCall).not.toBeNull();
     expect(createCall!.headers.get('idempotency-key')).toBeTruthy();
     expect(createCall!.body).toMatchObject({ amount: '12.50', currency: 'USD', categoryId: 'cat-1' });
+    // Opt-in usage counts (MUT-155): one count per confirmed create, the currency only
+    expect(trackPortal).toHaveBeenCalledExactlyOnceWith('expense_recorded', { currency: 'USD' });
   });
 
   it('resends the same Idempotency-Key when Save is retried after a network failure (MUT-133 D5)', async () => {
@@ -128,6 +134,7 @@ describe('ExpenseDrawer (hosted)', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(keys[1]).toBe(keys[0]);
+    expect(trackPortal).toHaveBeenCalledOnce();
   });
 
   it('defaults the date to today in the profile\'s zone when the list passes it (MUT-133 D5)', async () => {
@@ -266,6 +273,8 @@ describe('ExpenseDrawer (hosted)', () => {
     expect(patchBody).not.toHaveProperty('currency');
     expect((patchBody as Record<string, unknown>).vendor).toBeNull();
     expect((patchBody as Record<string, unknown>).title).toBe('Hosting');
+    // An edit is not a new expense (MUT-155)
+    expect(trackPortal).not.toHaveBeenCalled();
   });
 
   it('shows a field-level error for an archived category and does not close the drawer', async () => {
@@ -288,6 +297,7 @@ describe('ExpenseDrawer (hosted)', () => {
 
     expect(await screen.findByText('This category is no longer available — pick another')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
+    expect(trackPortal).not.toHaveBeenCalled();
   });
 
   it('closes on Escape', async () => {

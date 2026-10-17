@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n/core';
+import { syncPortalUsage } from '../analytics/portalAnalytics';
 import type { HostedProfile } from '../api/client';
 import { Wordmark } from '../components/Brand';
+import { UsagePrompt } from '../components/UsagePrompt';
 import { useMe } from '../session/me';
 import { AccountDrawers } from './AccountDrawers';
 import { ProfileDrawers } from './ProfileDrawers';
@@ -31,6 +33,11 @@ const SECTIONS = [
 export function HostedShell({ profile, children }: { profile: HostedProfile | null; children: ReactNode }) {
   const t = useT();
   const me = useMe();
+  const userId = me.user.id;
+  // MUT-155: another account's choice is reset; a stored "on" starts counting this visit
+  useEffect(() => {
+    void syncPortalUsage(userId);
+  }, [userId]);
 
   return (
     <div className="hp-shell">
@@ -54,7 +61,10 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
         <div className="hp-spacer" />
         <UserMenu profile={profile} />
       </aside>
-      <main className="hp-page">{children}</main>
+      <main className="hp-page">
+        <UsagePrompt />
+        {children}
+      </main>
       {/* MUT-183: New profile / Manage profiles, opened by URL from the switcher or the empty state. */}
       <ProfileDrawers active={profile} />
       {/* MUT-237: Change password, opened by URL from the account menu. */}

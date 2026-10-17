@@ -5,6 +5,9 @@ import { endSession } from '../endSession';
 import { useSavedFlashStore } from '../../../lib/savedFlashStore';
 import { useMalafatPortalMoments } from '../malafatMoments';
 
+const { endPortalUsage } = vi.hoisted(() => ({ endPortalUsage: vi.fn() }));
+vi.mock('../../analytics/portalAnalytics', () => ({ endPortalUsage }));
+
 /** E1–E3: ending a session drops every cached figure; MUT-91 adds the after-save store to that set. */
 describe('endSession', () => {
   it('clears the query cache and any pending after-save, then goes to sign-in', () => {
@@ -23,5 +26,13 @@ describe('endSession', () => {
     useMalafatPortalMoments.getState().markClientsRetired();
     endSession(new QueryClient(), { navigate: vi.fn() } as unknown as AnyRouter, { reason: 'expired' });
     expect(useMalafatPortalMoments.getState()).toMatchObject({ businessCreatedId: null, clientsRetiredThisVisit: false });
+  });
+
+  it('MUT-155: sign-out forgets the usage choice and its ID; an expired session keeps them (same person)', () => {
+    endPortalUsage.mockClear();
+    endSession(new QueryClient(), { navigate: vi.fn() } as unknown as AnyRouter, { reason: 'expired' });
+    expect(endPortalUsage).not.toHaveBeenCalled();
+    endSession(new QueryClient(), { navigate: vi.fn() } as unknown as AnyRouter, { reason: 'signed_out' });
+    expect(endPortalUsage).toHaveBeenCalledOnce();
   });
 });

@@ -101,7 +101,7 @@ describe('portal serving — app association enabled', () => {
       expect(ready.status).toBe(200);
 
       const expectedCsp =
-        "default-src 'self'; connect-src 'self' https://storage.googleapis.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
+        "default-src 'self'; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
       expect(aasa.headers.get('content-security-policy')).toBe(expectedCsp);
     } finally {
       await rm(distDir, { recursive: true, force: true });
@@ -198,7 +198,7 @@ describe('portal serving — enabled', () => {
     // PUT bytes directly to it via fetch(), which connect-src governs — unlike
     // downloads, which are top-level navigations and need no entry here.
     const expected =
-      "default-src 'self'; connect-src 'self' https://storage.googleapis.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
+      "default-src 'self'; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
     expect(api.headers.get('content-security-policy')).toBe(expected);
     expect(portalPage.headers.get('content-security-policy')).toBe(expected);
   });

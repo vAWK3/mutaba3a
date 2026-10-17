@@ -18,6 +18,7 @@ import { Drawer } from './Drawer';
 import { ProjectPicker } from './ProjectPicker';
 import { useToast } from './Toast';
 import { mapIncomeError } from './incomeApiErrors';
+import { trackPortal } from '../analytics/portalAnalytics';
 import {
   DETAIL_FIELDS,
   INCOME_CURRENCIES,
@@ -129,6 +130,8 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
     try {
       await create.mutateAsync({ body, idempotencyKey: attempt.keyFor(body) });
       attempt.succeeded();
+      // Opt-in usage counts (MUT-155): the kind and currency only, never the amount or client
+      void trackPortal('income_recorded', { currency: values.currency, paid: values.kind === 'received' });
       showToast(savedMessage(values, body.amount), { tone: 'info' });
       onSaved?.();
       onClose();
