@@ -97,8 +97,21 @@ describe('PrivacyPolicyPage', () => {
     expect(body(/What reaches the network/)).toMatch(/hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog/);
   });
 
+  it('says what the phone apps count, where they are turned off, and that they reach PostHog only if turned on (MUT-157)', () => {
+    renderPage('en');
+    const body = (name: RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
+    const usage = body(/Anonymous usage counts/);
+    expect(usage).toMatch(/The iPhone and Android apps ask you once/);
+    expect(usage).toMatch(/If you turn it off in Settings/);
+    expect(usage.indexOf('The iPhone and Android apps ask you once')).toBeLessThan(usage.indexOf('These counts are used only'));
+    const network = body(/What reaches the network/);
+    expect(network).toMatch(/The mobile apps connect to Mutaba3a's servers, to the private storage that holds your receipts, and, if you turned on anonymous usage, to PostHog/);
+    expect(network).not.toMatch(/The mobile apps connect only to/);
+  });
+
   it('says the same in Arabic', () => {
     renderPage('ar');
+    expect(screen.getByRole('heading', { level: 2, name: 'إحصاءات استخدام مجهولة' }).parentElement?.textContent).toContain('يسألك تطبيقا iPhone وAndroid مرة واحدة');
     expect(screen.getByRole('heading', { level: 2, name: 'إحصاءات استخدام مجهولة' }).parentElement?.textContent).toContain('تسألك البوابة المستضافة مرة واحدة');
     const usage = screen.getByRole('heading', { level: 2, name: 'إحصاءات استخدام مجهولة' }).parentElement?.textContent ?? '';
     expect(usage).toContain('PostHog');
