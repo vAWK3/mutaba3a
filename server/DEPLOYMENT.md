@@ -117,6 +117,67 @@ cp production.tfvars.example production.tfvars    # set project_id; add alert ch
 Nothing secret goes in this file; Terraform generates the DB password and
 the admin token itself.
 
+### 1.5 Sentry error reporting (one-time, ADR-091, MUT-147)
+
+Separate from the GCP rollout: `server/infrastructure/sentry/` has its own
+state, and `deploy.sh` never touches it. The rules are in
+`docs/observability/README.md`.
+
+1. **Org.** Sign in to Sentry and create a **new organization in the EU
+   (Frankfurt) region**, e.g. slug `barmajiyat`. The region can't be changed
+   later. Don't reuse another product's org.
+2. **Plan and budget.** Stay on the **Developer (free)** plan. Under
+   Settings › Subscription, set the **pay-as-you-go budget to $0**, so overage
+   is dropped and never billed. Check the plan's current limits on Sentry's
+   pricing page.
+3. **Two tokens.**
+   - **Admin token.** An org auth token or personal token with `org:write`,
+     `project:admin`, `team:admin` and `alerts:write`. Keep it in your shell
+     only.
+   - **Upload token.** An org auth token (`sntrys_…`) with release and upload
+     scopes only, for MUT-149..151 builds.
+
+   Store neither in the repo, a tfvars file or the Flutter `.env`.
+4. **Apply the projects, keys, alerts and spike protection:**
+
+   ```bash
+   cd server/infrastructure/sentry
+   cp production.tfvars.example production.tfvars    # set organization and the origins
+   export SENTRY_AUTH_TOKEN=<admin token>
+   terraform init -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-sentry/production"
+   terraform plan -var-file=production.tfvars        # if de.sentry.io errors, retry with -var base_url=https://sentry.io/api/
+   terraform apply -var-file=production.tfvars
+   ```
+
+   Record in `.claude/INFRA.md` which `base_url` planned cleanly.
+5. **Apply the org privacy settings.** The Terraform provider can't hold them,
+   so this script sets and reads them back:
+
+   ```bash
+   SENTRY_ORG=barmajiyat npx tsx scripts/sentry-org-settings.ts --apply
+   ```
+
+   It exits 1 and lists any setting that didn't stick. Re-run with `--check`
+   whenever you want to confirm nobody changed them in the UI.
+6. **Copy each DSN to its home** (the table in `docs/observability/README.md`):
+
+   ```bash
+   terraform output -json dsn
+   ```
+
+   Nothing reads the DSNs until MUT-148..151 wire the SDKs.
+7. **Read back.** In Sentry, confirm:
+   - four projects, each with one key;
+   - spike protection on;
+   - three alerts per project;
+   - the portal and landing projects' Allowed Domains.
+
+   Then update INFRA's "Error reporting" Status row with the date.
+
+A new portal or landing origin (the custom domain, MUT-112) goes into
+`portal_origins` / `landing_origins` followed by `terraform apply`. Until
+then, that origin's errors are dropped.
+
 ## 2. Deploy
 
 From a clean checkout of `main` (the script refuses uncommitted changes in

@@ -2806,3 +2806,29 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
     - free-form types;
     - bad or duplicate enum values, values on a non-enum, and an event property that repeats a shared one.
 - Release-QA: not applicable (docs and contract only; no user-visible flow). MUT-154, MUT-155 and MUT-157 carry the QA scenarios and the "what we send is a subset of the contract" tests. The Flutter parity test against a vendored copy is MUT-157's.
+
+## MUT-147 — Sentry foundation (2026-10-17, ADR-091)
+
+- `scripts/__tests__/sentry-rules.test.ts` (37 cases, node environment). Contract-level, with no scrubber code (the surfaces own theirs). It checks:
+  - **Tokenizer.** Whole-token splitting (snake, kebab, dot, camelCase, acronyms).
+  - **Shape.** Known keys only; the same semver version in both files; the sha256 of both files pinned per version; the fixture marker only in the fixtures file.
+  - **Surfaces and options.** Surfaces are exactly api, portal, landing and capture-app. The SDK options are exact, the server status floor is 500, and every org privacy switch is on.
+  - **Lists.** The deny lists hold the ADR minimum, lowercase, with no duplicates. Allowed tags and user keys hold no deny token. Safe and always-dropped context keys are disjoint, with `device.name` dropped.
+  - **Ignored errors.** Every surface has some, each compiles, each is in the portable regex subset, and the portability check itself rejects five non-portable forms.
+  - **Fixtures, per fixture.** The expected event has nothing forbidden; the input has something to strip; frames, release and environment pass through.
+  - **Fixtures, across the set.** A frame `filename`, `os.name` and `browser.name` survive; `device.name`, `client_name` and `clientName` are dropped; and a labelled message value becomes `[Filtered]`.
+  - **Mutation check (manual, 2026-10-17).** Putting `device.name` and `clientName` back into two expected events fails 4 cases.
+- `scripts/__tests__/sentry-org-settings.test.ts` (15 cases), with `fetch` mocked at the boundary. It checks:
+  - **Desired settings.** Derived from the rules.
+  - **Drift.** None when the org matches. A switch that is off or missing is flagged. Missing sensitive fields are flagged, ignoring case and extra fields.
+  - **Arguments.** The mode, org and token, the default EU host, and normalising `/api/` and a trailing slash. Missing or double modes, a missing `--org` value, a missing token or org, and a plain-http host are rejected.
+  - **Apply and check.** `--apply` PUTs then GETs with a Bearer token. `--check` only GETs and reports drift. An apply that didn't stick is reported. An error status shows the method and status, never the token.
+- `server/infrastructure/sentry/tests/sentry.tftest.hcl` (6 runs, mocked provider, server-ci):
+  - four projects with `default_key = false` and `default_rules = false`, and one key each, rate-limited per hour;
+  - `allowed_domains` exact on portal and landing, and `*` on api and capture-app;
+  - browser inbound filters on portal and landing only;
+  - spike protection enabled across all four;
+  - three email alerts per project, to issue owners falling through to all members, with the spike alert at 50 per hour;
+  - a wildcard browser origin and an incomplete rate-limit map are both rejected.
+  - **Mutation check (manual, 2026-10-17).** `default_key = true` plus a wildcard portal origin fails two runs.
+- Release-QA: not applicable (no user-visible flow). MUT-148..151 carry the QA scenarios, for example "landing sends zero Sentry requests on `/app`".

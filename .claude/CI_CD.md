@@ -321,7 +321,7 @@ Production only for now. Full runbook: `server/DEPLOYMENT.md`. Infra:
 |--------|------|--------|
 | Build status | GitHub Actions | Active |
 | Deploy status | Netlify | Active |
-| Error tracking | None | Planned: Sentry EU on the server, portal, landing and phone (MUT-146); never the local app |
+| Error tracking | Defined, not wired (MUT-147): Sentry EU org, projects and alerts in `server/infrastructure/sentry`, rules in `docs/observability` (ADR-091) | MUT-148..151 wire the server, portal, landing and phone; never the local app |
 | Analytics | PostHog EU (planned, MUT-152) | Landing cookieless; portal and phone opt-in and anonymous; the local app sends nothing (ADR-090) |
 
 ### Future Considerations

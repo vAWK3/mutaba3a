@@ -28,6 +28,38 @@
 
 ---
 
+## [Unreleased] - 2026-10-17 — Sentry foundation: EU org, projects, alerts and error-data rules (MUT-147, ADR-091)
+
+**Why:** epic MUT-146. Production failures were found only when users complained. The four live surfaces (server, portal, landing, phone) need one Sentry setup and one rulebook for what an error report may contain, before any SDK is wired (MUT-148..151). The local app still sends nothing.
+
+### Added
+- `docs/observability/sentry-rules.json` and `sentry-fixtures.json` (contract 1.0.0, both sha-pinned).
+  - Deny headers and deny key tokens, matched as whole tokens.
+  - Allowed tags, user `{ id }` only, safe context keys and `device.name` always dropped.
+  - Required SDK options, and the server's status floor of 500.
+  - Per-surface ignored errors, in a regex subset JavaScript and Dart read the same way.
+  - The org privacy settings, and five dirty-in/clean-out fixtures covering all four surfaces.
+- `docs/observability/README.md`:
+  - who sends, the rules, how to change the contract, and where each DSN and token lives (with the `VITE_` and Flutter `.env` landmines);
+  - the draft en/ar privacy-policy sentences per surface, and the store disclosures.
+- `server/infrastructure/sentry/`, a new Terraform root module (own state prefix):
+  - team and four projects, `default_key = false`, one rate-limited key each;
+  - `allowed_domains` on portal and landing, browser inbound filters, spike protection on all four;
+  - new-issue, regression and spike email alerts, and DSN outputs;
+  - `tests/sentry.tftest.hcl` runs against a mocked provider.
+- `scripts/sentry-org-settings.ts --apply|--check` (logic in `scripts/sentry-org-policy.ts`): sets and verifies the org privacy settings that the provider can't hold.
+- ADR-091. `server/DEPLOYMENT.md` §1.5 (one-time Sentry setup). TD-159 (deprecated alert resource), TD-160 (no scheduled privacy check).
+
+### Changed
+- `.github/workflows/server-ci.yml`: the Terraform job is a matrix over both modules and runs `terraform test` for the Sentry one.
+- INFRA §1 gains an "Error reporting" table. The CI_CD monitoring row now reads "defined, not wired". The env examples list the Sentry variables.
+- The Flutter `.env.example` line and its upload-token warning are left to MUT-151 (decision D3); the README documents them.
+
+### Technical
+- `scripts/__tests__/sentry-rules.test.ts` (37 cases) and `scripts/__tests__/sentry-org-settings.test.ts` (15 cases). The Terraform tests: 6 runs.
+
+---
+
 ## [Unreleased] - 2026-10-17 — Analytics decision and event contract (MUT-153, ADR-090)
 
 **Why:** epic MUT-152 adds opt-in, anonymous PostHog analytics to the landing page, the portal and the phone app. Every doc said "no analytics of any kind", and the three surfaces needed one list of what they may send. No SDK ships here.

@@ -3511,3 +3511,71 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Any new event or property is a contract change: bump the version and update the Flutter copy.
 - The four surfaces each own a privacy-policy paragraph.
 - Opt-in rates can only be estimated against store-console installs, because nothing is sent before consent.
+
+---
+
+## ADR-091: Error Reports Go to a Mutaba3a-Only Sentry EU Org From the Server, Portal, Landing and Phone; Never From the Local App
+
+**Status**: Active (reaffirms ADR-024 and ADR-090; closes ADR-090 rule 2's open half)
+**Date**: 2026-10-17
+**Context**: Epic MUT-146, MUT-147. Production failures were only found when a user complained: the API logged to pino and nothing else, and the portal, landing pages and Capture app reported nothing. ADR-090 had already decided that errors belong in Sentry, never PostHog. The plan, its decision ledger (R1–R9, D1–D13) and the eng review are in `.claude/designs/mut-147-sentry-foundation.md`.
+
+**Decision**:
+1. **Who sends.** One Sentry project per surface:
+   - `mutaba3a-api`: the Hono server.
+   - `mutaba3a-portal`: the hosted build.
+   - `mutaba3a-landing`: `/`, `/download` and `/privacy`, started only inside the lazily loaded landing chunks, never `src/main.tsx` or `LandingProviders`.
+   - `mutaba3a-capture-app`: Flutter, iOS + Android.
+   - **Never:** the local web app (`/app`) or desktop. ADR-024's "sends no telemetry" holds unchanged.
+   - Crash reports are not opt-in (unlike analytics): they carry no content, and the policy discloses them.
+2. **Where.** A new, dedicated org in Sentry's **EU region** (`de.sentry.io`, Frankfurt), separate from any other product's org, so region and quota belong to Mutaba3a (R3).
+   - **Why this squares with ADR-024's me-west1 rule.** That rule covers *firm data*, and these events are built to carry none (rules 3–5), so it isn't engaged. This is the same reasoning as ADR-090 §8.
+   - When a rule fails, the fix is to scrub harder, never to accept the data.
+3. **One contract, two files.** `docs/observability/sentry-rules.json` holds the lists. `sentry-fixtures.json` holds dirty-in/clean-out events (R5).
+   - **Both are sha-pinned per version** by `scripts/__tests__/sentry-rules.test.ts`.
+   - **Who reads what.** The portal and landing may import the rules file. The server and phone embed its lists and test equality. No app ever imports the fixtures: their marker string fails `check-bundles`.
+   - **Flutter** keeps byte copies under the brand-fixture pattern (MUT-151).
+4. **Scrubbing** (enforced in each surface's `beforeSend` / `beforeBreadcrumb` or the Dart equivalent, and proven by the fixtures):
+   - `sendDefaultPii: false`.
+   - No request bodies, cookies or query strings. `denyHeaders` are removed.
+   - **Keys are matched as whole tokens.** A key is split on snake, kebab, dot and camelCase, and dropped when any token is a deny token. This covers `extra`, `contexts`, breadcrumb `data`, tags and user (R6).
+   - **Never touched:** stack frames, `sdk`, `release` and `environment`.
+   - **Context exceptions.** `safeContextKeys` (`os.name`, `browser.name`, …) are kept. `device.name` is always dropped.
+   - **User and tags.** User is `{ id }` only. Tags are allow-listed.
+   - **Breadcrumbs.** No console breadcrumbs. HTTP breadcrumbs keep only the method, the path-only URL and the status.
+   - **Messages.** Labelled `key=value` pairs with a deny-token key become `key=[Filtered]`. Unlabelled free text is not caught, so surface code never interpolates user values into thrown messages.
+   - **Off everywhere:** tracing, profiling, replay, screenshots and view hierarchy.
+5. **Never reported.**
+   - Server `ApiError`s below 500.
+   - Each surface's `ignoredErrors`: offline, cancellation and browser noise, matched against `<type>: <value>` of the top exception. They use a regex subset that JavaScript and Dart read the same way, with an `ignoreCase` field instead of inline flags (R7).
+   - Chunk-load errors are reported.
+6. **Infrastructure as code.** `server/infrastructure/sentry/` is its own root module with its own state prefix, so server releases never need the Sentry token (D4).
+   - **Keys.** `default_key = false` with one rate-limited key per project (R1).
+   - **Origins.** `client_security.allowed_domains` on the portal and landing projects (R2).
+   - **Noise and cost.** Browser inbound filters, plus spike protection on all four projects.
+   - **Alerts.** New-issue, regression and spike email alerts.
+   - **Tests.** `tests/sentry.tftest.hcl` asserts these settings against a mocked provider, in server-ci (R8).
+   - **Not in the provider.** The org's own privacy settings (Require Data Scrubber, default scrubbers, Prevent storing IP addresses, sensitive fields = `denyKeyTokens`). `scripts/sentry-org-settings.ts --apply|--check` sets and verifies them (R9).
+7. **Cost.** The free Developer plan, with the pay-as-you-go budget at **$0**: overage is dropped, never billed (R4). Move to Team when a second person needs access, or when the quota runs out two months running.
+8. **Configuration.** DSNs only in production builds:
+   - the Netlify production context;
+   - the hosted build in `deploy.sh`;
+   - Cloud Run via `terraform_remote_state`;
+   - the fastlane release lanes.
+
+   **Two tokens.** An upload-only token goes wherever builds run, never `VITE_`-prefixed and never in the Flutter `.env`, which is compiled into the app. An admin token for `terraform apply` and the settings script stays in the operator's shell.
+9. **Disclosure.** Each surface publishes its own privacy-policy sentence and store labels together with the feature (ADR-090 P3). The en/ar draft is in `docs/observability/README.md`.
+
+**Override log**: None. ADR-024 and ADR-090 are reaffirmed. The privacy policy's "none of our apps use … crash reporting" sentence is replaced by the surface stories as each one ships, never ahead of them.
+
+**Alternatives considered**:
+- **PostHog for errors**: rejected in ADR-090. Sentry has better symbolication, and crash reports aren't limited to opted-in users.
+- **Reusing the existing Sentry org from another project**: rejected (R3). Its region may not be EU, and its quota and alerts would be shared.
+- **Sentry config in the GCP Terraform module**: rejected (D4). Every server release would then need the Sentry admin token, and a Sentry outage would block deploys.
+- **Substring key matching**: rejected (R6). It strips `filename`, `os.name` and `browser.name`, so reports lose their debug value.
+- **Self-hosted Sentry in me-west1**: rejected. It would be a second stateful service to run, for data the rules keep content-free.
+
+**Consequences**:
+- Any change to either contract file is a version bump, a new pinned row and a new Flutter copy.
+- A new portal or landing origin (MUT-112's custom domain) must be added to the Terraform origin variables, or its errors are dropped silently.
+- `sentry_issue_alert` is deprecated in favour of `sentry_alert`; TECH_DEBT tracks the move.

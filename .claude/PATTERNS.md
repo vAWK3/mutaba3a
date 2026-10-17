@@ -2426,3 +2426,11 @@ Never `t(someVar)` built from an undotted variable. Deleting a screen means dele
 
 ### Pattern: A build-time constant has one module
 A Vite `define` is read through one tiny module (`src/lib/appVersion.ts` for `__APP_VERSION__`), so tests mock the module (a getter, for per-test values) instead of stubbing globals.
+
+## Patterns added by MUT-147 (2026-10-17)
+
+### Pattern: Terraform guards are tested offline with a mocked provider
+A setting that protects cost, privacy or abuse (a rate limit, an origin allow-list, `default_key = false`, spike protection) gets an assertion in `<module>/tests/*.tftest.hcl` that runs against `mock_provider` with `command = apply`, so CI needs no token, account or network. Give a mocked map or object attribute that outputs read a value in `mock_resource … defaults`. Variable validations get an `expect_failures` run. server-ci runs `terraform test` beside `fmt` and `validate`. First instance: `server/infrastructure/sentry/tests/sentry.tftest.hcl`.
+
+### Pattern: A cross-surface contract splits runtime rules from test-only fixtures
+When several surfaces (TypeScript, Dart, the server image) must apply the same rules, the rules live in one JSON that a web bundle may import, and the dirty-in/clean-out fixtures live in a second JSON that only tests read. Both are sha-pinned per version, and the fixtures carry a marker string that `check-bundles` refuses. Surfaces that can't read the repo at runtime (the server image, Flutter) embed the lists and assert equality with the JSON in a test. First instance: `docs/observability/sentry-rules.json` + `sentry-fixtures.json` (ADR-091), after the single-file `docs/analytics/events.json` (ADR-090).
