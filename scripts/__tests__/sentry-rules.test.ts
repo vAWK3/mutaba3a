@@ -26,8 +26,8 @@ const PINNED_VERSIONS: Record<string, { rules: string; fixtures: string }> = {
   },
   // Convergence review (2026-10-18): money and free-text keys, multi-line containers, messages.
   '1.1.0': {
-    rules: '0ce011d7319361196d0cc11162b52270b12e299d3d65a22aedbed603b58eb3ed',
-    fixtures: '0c23493b3e5cb6845932ca8f313263875c30f6cc9e0872db6fca0ef74057edb9',
+    rules: 'b9bac2c54eb724756f3f0adbfa324a7baa2518e405b9e049ae93a30abc97da3f',
+    fixtures: '14ead75e5e9fdf91d2627edbad24f4a8b42f70036b634cadc102109de9b9c9e9',
   },
 };
 
@@ -128,6 +128,15 @@ const LEAK_CASES: Array<[string, string[]]> = [
   ["{\n  id: 'r1',\n  client: Client {\n    id: 'c1',\n    display: 'John Smith'\n  }\n}", ['John Smith']],
   ["{\n  client: [Object: null prototype] {\n    display: 'John Smith',\n    city: 'Haifa'\n  }\n}", ['John Smith', 'Haifa']],
   ['{"labels":["Deposit from John Smith"],"references":["J. Smith transfer"]}', ['John Smith', 'J. Smith']],
+  // Pass 3: util.inspect quotes keys that aren't identifiers, and writes Map and URLSearchParams entries
+  // with `=>`; Dart's ArgumentError and RangeError label a value as `(name): value`; compound plurals.
+  ["{\n  'client-names': Set(2) {\n    'John Smith',\n    'Jane Doe'\n  }\n}", ['John Smith', 'Jane Doe']],
+  ["Map(2) { 'email' => 'a@b.com', 'clientName' => 'John' }", ['a@b.com', 'John']],
+  ["URLSearchParams { 'email' => 'a@b.com', 'name' => 'John' }", ['a@b.com', 'John']],
+  ['Invalid argument (amountMinor): Must be positive: -1200', ['1200']],
+  ['Invalid argument (clientName): "John Smith"', ['John Smith']],
+  ['RangeError (amountMinor): Invalid value: Not in inclusive range 0..100000: 250000', ['250000']],
+  ['{"phonenumbers":["+972501234567"],"apikeys":["mut_live_x"],"emailaddresses":["v@example.test"]}', ['972501234567', 'mut_live_x', 'v@example.test']],
 ];
 /** Text the scrubber must leave exactly as it is. */
 const UNTOUCHED = [
@@ -137,6 +146,8 @@ const UNTOUCHED = [
   // `==` and `===` are comparisons, not labels (Flutter and JS assertion text).
   "Failed assertion: line 120 pos 12: 'key == null || key is GlobalKey': is not true.",
   "Failed assertion: line 9 pos 7: 'label === undefined': is not true.",
+  // Dart's unnamed ArgumentError: `(s)` is not a sensitive label.
+  'Invalid argument(s): Unknown currency XYZ',
 ];
 const FILTERED = '[Filtered]';
 /** ADR-091 rule 4 (R7): syntax JavaScript and Dart read differently, or only one of them reads. */
@@ -562,7 +573,10 @@ describe('Sentry scrub contract (ADR-091)', () => {
   });
 
   it('denies the money and free-text field names the schema uses, and their plurals (convergence review)', () => {
-    for (const key of ['grossMinor', 'vatMinor', 'paidMinor', 'outstandingMinor', 'reference', 'references', 'label', 'labels', 'metadata', 'ibans', 'mobiles', 'usernames']) {
+    for (const key of [
+      'grossMinor', 'vatMinor', 'paidMinor', 'outstandingMinor', 'reference', 'references', 'label', 'labels', 'metadata',
+      'ibans', 'mobiles', 'usernames', 'phonenumbers', 'emailaddresses', 'apikeys', 'accesstokens', 'firstnames', 'payloads',
+    ]) {
       expect(hasDenyToken(key), key).toBe(true);
     }
     for (const plural of ['phones', 'addresses', 'descriptions', 'titles', 'reasons', 'accounts', 'cards', 'secrets', 'passwords', 'sessions', 'balances', 'prices', 'memos']) {

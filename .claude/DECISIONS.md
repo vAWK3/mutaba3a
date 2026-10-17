@@ -3620,13 +3620,18 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Multi-line values.** A container value under a sensitive key runs on through the indented lines below it, so pretty-printed JSON and `util.inspect` output are covered.
 - **Messages.** The event message (string, `message.formatted`, `logentry.formatted`) and breadcrumb messages get the same scrub as exception values, and `messageDropFields` (`params`) is dropped from structured messages. `^FormatException` keeps its first line only.
 - **Spike alert.** The threshold defaults to 10 an hour, and Terraform rejects one at or above the smallest daily key cap, which the alert could never reach.
-- **Runbook.** The Sentry module's `terraform init` reads `backend.production.hcl` instead of a `TF_STATE_BUCKET` the runbook never sets. The tools list says Terraform `>= 1.9`, which both modules require.
+- **Runbook.** The Sentry module's `terraform init` reads `backend.production.hcl` instead of a `TF_STATE_BUCKET` the runbook never sets. The tools list says Terraform `>= 1.9`, which the Sentry module requires (the GCP module needs only 1.5).
 - **Second review pass (still 1.1.0, re-pinned before merge).**
   - Under a bare key, a `{`/`[` container runs to the end of the line and through the indented lines below it, also after a `util.inspect` prefix (`Set(n) {`, `Map(n) {`, `Client {`, `[Object: null prototype] {`). Before, one-line nesting such as Dart's `{client: {id: c1, display: John Smith}}` stopped at the first `}` and leaked its later siblings.
   - `==` and `===` are not labels, so assertion text is left alone.
   - `firstLineOnlyExceptionTypes` also matches the start of the value, because an obfuscated Flutter build renames `FormatException`.
   - `flutter_error_details.context` and `.information` are always-dropped context keys.
   - Plurals `references`, `labels`, `ibans`, `mobiles`, `usernames`.
+- **Third review pass (still 1.1.0, re-pinned before merge; the last fix cycle the review allows).**
+  - Quoted keys take `=>` as well as `:` (`util.inspect` Map and URLSearchParams entries) and the same container prefixes as bare keys.
+  - A bare key may be followed by `)`, for Dart's `Invalid argument (key): value` and `RangeError (key): value`.
+  - Plurals of the lowercase compounds: `phonenumbers`, `emailaddresses`, `apikeys`, `accesstokens`, `refreshtokens`, `sessionids`, `firstnames`, `lastnames`, `fullnames`, `payloads`.
+  - Bracketed form keys (`client[name]=…`) are a documented limit.
 
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 

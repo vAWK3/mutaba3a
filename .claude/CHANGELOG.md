@@ -53,6 +53,11 @@
 - **Tests.** Every message shape on an event is checked, not just the first; a `breadcrumbList` helper replaces four copies.
 - **Docs.** README rules 3, 4 and 7 (including a new known limit: `;` inside an unquoted Dart map value), and DEPLOYMENT's tools list now says Terraform `>= 1.9`.
 
+### Changed by the third review pass (still 1.1.0; the last fix cycle)
+- **Pattern.** Quoted keys accept `=>` (`util.inspect` Map and URLSearchParams) and the `util.inspect` container prefixes; a bare key may be followed by `)`, for Dart's `Invalid argument (amountMinor): …` and `RangeError (amountMinor): …`. Before, all of these passed unchanged.
+- **Deny tokens.** Plurals of the lowercase compounds (`phonenumbers`, `apikeys`, `emailaddresses`, …); before, `{"apikeys":["mut_live_x"]}` passed unchanged.
+- **Docs.** README forms covered, both branches, the plurals sentence and a new known limit (bracketed form keys). ADR wording on the Terraform version. The capture-app fixture's `flutter_error_details.context` starts with `thrown`, as sentry_flutter writes it.
+
 ### Technical
 - `sentry-rules.test.ts`: new leak cases (money keys, pretty JSON, `util.inspect`, digit keys, plurals); messages and breadcrumb messages go through the same checks and reproduction as exception values. `sentry-org-settings.test.ts`: a realistic single-page `Link` header passes.
 

@@ -589,7 +589,7 @@
         "contexts": {
           "flutter_error_details": {
             "library": "widgets library",
-            "context": "building ClientTile(name: John Smith)",
+            "context": "thrown building ClientTile(name: John Smith)",
             "information": "The relevant error-causing widget was: ClientTile(note: owes 1,200 for the Haifa job)"
           }
         },

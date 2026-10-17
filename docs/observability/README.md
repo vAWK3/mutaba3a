@@ -85,8 +85,9 @@ exactly.
      - **Deliberately not a token: `user`.** It would also strip the `User-Agent` header.
    - Money and free-text fields are deny tokens: `minor` (so `grossMinor`, `netMinor` and
      `amountMinor` go), `reference`, `label` and `metadata` (1.1.0).
-   - Plurals of the field-name tokens are listed too (`phones`, `addresses`, `labels`,
-     `references`, `usernames`, …), because whole-token matching doesn't strip an `s`. Short
+   - Plurals are listed too, because whole-token matching doesn't strip an `s`: the field
+     names (`phones`, `addresses`, `labels`, `references`, …) and the lowercase compounds
+     (`phonenumbers`, `emailaddresses`, `apikeys`, `accesstokens`, `firstnames`, …). Short
      forms such as `tel`, `otp` and `jwt` have none.
    - Never touched: stack frames (except their `vars`, which are always dropped), `sdk`,
      `release` and `environment`.
@@ -115,30 +116,36 @@ exactly.
    - **Structured messages.** The fields in `messageDropFields` (`params`) are dropped from
      `message` and `logentry`: they hold the raw values a template was filled with. The template
      itself is kept, because it holds only placeholders.
-   - **Forms covered (D4, D15).** `key=value`, `key = value`, `key: value`, and JSON or JS
-     `"key": value` / `'key':value`, compact (`JSON.stringify`) or spaced.
+   - **Forms covered (D4, D15).** `key=value`, `key = value`, `key: value`, JSON or JS
+     `"key": value` / `'key':value`, compact (`JSON.stringify`) or spaced, `util.inspect`'s
+     `'key' => value` (Map, URLSearchParams), and Dart's `Invalid argument (key): value` /
+     `RangeError (key): value`.
    - **The shared pattern.** All surfaces use the contract's `labelledValuePattern` (key in group 1
      or 3, value in group 2 or 4). It has two branches:
-     - **Quoted keys.** The value is either:
+     - **Quoted keys.** The key is followed by `:` or `=>`. The value is either:
        - a quoted string;
-       - a nested object or array (`{…`, `[…`), which runs to the end of the line and on through
-         every following indented line, so everything under a sensitive container key goes,
+       - a nested object or array (`{…`, `[…`, also after the `util.inspect` prefixes listed
+         under bare keys, as in `'client-names': Set(2) {`), which runs to the end of the line
+         and on through every following indented line, so everything under a sensitive container
+         key goes,
          compact (`{"emails":["a@b","c@d"]}`) or pretty-printed (`JSON.stringify(x, null, 2)`,
          `util.inspect`). Every later indented line goes with it, harmless siblings included: in
          pretty-printed JSON, `"status": "draft"` after a sensitive `"emails": [` is filtered too;
        - a quoted string cut off by truncation, which runs to the end of the line;
        - otherwise, text up to the next `,`, `;`, `}`, `]` or whitespace.
      - **Bare keys.** The key is followed by `=`, `:` and a space, or ` = `; never `==` or
-       `===`, so assertion text such as `'key == null'` is left alone. The value is:
+       `===`, so assertion text such as `'key == null'` is left alone. A `)` may sit between the
+       key and the separator, for Dart's `Invalid argument (amountMinor): -1200`. The value is:
        - a quoted string;
        - a container: `{` or `[`, optionally after a `util.inspect` prefix (`Set(2) {`,
          `Map(1) {`, a class name as in `Client {`, or `[Object: null prototype] {`). It runs to
          the end of the line and on through the indented lines below it, so one-line nesting
          (Dart's `Map.toString`, `{client: {id: c1, display: John Smith}}`) and multi-line
          `util.inspect` output are both covered;
-       - otherwise, text to the end of its clause (`;`, `}`, `]`, `)` or a line break). A parenthetical inside it, as in `Acme (Pty) Ltd`, doesn't end
-       it. So `Authorization: Bearer <token>`, `name: John Smith` and `amount=1,234.56` filter
-       the whole value.
+       - otherwise, text to the end of its clause (`;`, `}`, `]`, `)` or a line break). A
+         parenthetical inside it, as in `Acme (Pty) Ltd`, doesn't end it. So
+         `Authorization: Bearer <token>`, `name: John Smith` and `amount=1,234.56` filter the
+         whole value.
      - **Over-redaction.** Filtering to the end of the clause also hides the text after a
        sensitive label: `amount=5 currency=ILS` becomes `amount=[Filtered]`. Safety wins over
        debug detail.
@@ -181,7 +188,9 @@ exactly.
        like `12:30` are left alone);
      - a quoted value broken across lines;
      - a `;` inside an unquoted value, which ends it: Dart prints map values unquoted, so
-       `{note: Paid half; rest from Ahmad Saleh}` keeps `rest from Ahmad Saleh`.
+       `{note: Paid half; rest from Ahmad Saleh}` keeps `rest from Ahmad Saleh`;
+     - bracketed keys in form-encoded text, as in `client[name]=John` (nothing in the server or
+       portal encodes bodies this way today).
 
      The org's server-side scrubber (below) is the backstop for distinctive values such as API
      keys.
