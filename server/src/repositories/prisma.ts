@@ -84,6 +84,10 @@ import type {
   ExpenseCategoryRepository,
   ExpenseCursor,
   ExpenseFilter,
+  ExpenseGroupFilter,
+  ExpenseGroupOverrideMode,
+  ExpenseGroupOverrideRecord,
+  ExpenseGroupRepository,
   ExpenseReceiptRepository,
   ExpenseRecord,
   ExpenseRepository,
@@ -1232,7 +1236,8 @@ export class PrismaLedgerStore implements LedgerStore {
     getById: (organizationId, id) => this.prisma.expense.findFirst({ where: { id, organizationId, deletedAt: null } }),
     list: async (organizationId, filter, page) => {
       const rows: ExpenseRecord[] = await this.prisma.expense.findMany({
-        where: { organizationId, deletedAt: null, ...expenseWhere(filter), ...expenseCursorWhere(page.cursor) },
+        // One AND array (MUT-267 Q1): the group clause and the cursor each need their own OR, and spread keys would overwrite each other.
+        where: { organizationId, deletedAt: null, AND: [expenseWhere(filter), expenseCursorWhere(page.cursor)] },
         orderBy: [{ occurredOn: 'desc' }, { id: 'desc' }],
         take: page.limit + 1,
       });
@@ -1253,6 +1258,54 @@ export class PrismaLedgerStore implements LedgerStore {
       const record = await this.prisma.expense.findFirst({ where: { id, organizationId } });
       return record ? { record, changed: count === 1 } : null;
     },
+    totalsByCurrency: async (organizationId, filter) => {
+      const rows = await this.prisma.expense.groupBy({
+        by: ['currency'],
+        where: { organizationId, deletedAt: null, AND: [expenseWhere(filter)] },
+        _sum: { amountMinor: true },
+        _count: { _all: true },
+        orderBy: { currency: 'asc' },
+      });
+      return rows.map((r) => ({ currency: r.currency, totalMinor: r._sum.amountMinor ?? 0n, count: r._count._all }));
+    },
+  };
+
+  // ---- MUT-267: expense groups (ADR-094) ------------------------------------
+
+  readonly expenseGroups: ExpenseGroupRepository = {
+    create: (input, at) => translate(() => this.prisma.expenseGroup.create({ data: { ...input, createdAt: at, updatedAt: at } })),
+    getById: (organizationId, id) => this.prisma.expenseGroup.findFirst({ where: { id, organizationId, deletedAt: null } }),
+    list: (organizationId) =>
+      this.prisma.expenseGroup.findMany({ where: { organizationId, deletedAt: null }, orderBy: [{ startOn: 'desc' }, { id: 'desc' }] }),
+    update: async (organizationId, id, expectedVersion, patch, at) => {
+      const data: Prisma.ExpenseGroupUncheckedUpdateManyInput = { version: { increment: 1 }, updatedAt: at };
+      for (const [k, v] of Object.entries(patch)) if (v !== undefined) (data as Record<string, unknown>)[k] = v;
+      const { count } = await translate(() => this.prisma.expenseGroup.updateMany({ where: { id, organizationId, deletedAt: null, version: expectedVersion }, data }));
+      const record = await this.prisma.expenseGroup.findFirst({ where: { id, organizationId, deletedAt: null } });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
+    softDelete: async (organizationId, id, at) => {
+      const { count } = await this.prisma.expenseGroup.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
+      const record = await this.prisma.expenseGroup.findFirst({ where: { id, organizationId } });
+      return record ? { record, changed: count === 1 } : null;
+    },
+    setOverride: async (organizationId, groupId, expenseId, mode, at) =>
+      toGroupOverride(
+        await translate(() =>
+          this.prisma.expenseGroupOverride.upsert({
+            where: { groupId_expenseId: { groupId, expenseId } },
+            create: { groupId, expenseId, organizationId, mode, createdAt: at, updatedAt: at },
+            update: { mode, updatedAt: at },
+          }),
+        ),
+      ),
+    clearOverride: async (organizationId, groupId, expenseId) => {
+      const { count } = await this.prisma.expenseGroupOverride.deleteMany({ where: { groupId, expenseId, organizationId } });
+      return count === 1;
+    },
+    overridesForExpense: async (organizationId, expenseId) =>
+      (await this.prisma.expenseGroupOverride.findMany({ where: { expenseId, organizationId } })).map(toGroupOverride),
   };
 
   // ---- MUT-161: conversions; MUT-194: versioned update and soft delete ------
@@ -1524,7 +1577,24 @@ function expenseWhere(f: ExpenseFilter): Prisma.ExpenseWhereInput {
     ...(f.customerId ? { customerId: f.customerId } : {}),
     ...(f.projectId ? { projectId: f.projectId } : {}),
     ...(f.unlinked ? { customerId: null } : {}),
+    ...(f.group ? { AND: [expenseGroupWhere(f.group)] } : {}),
   };
+}
+
+/**
+ * MUT-267 D4 in SQL, kept equal to groups.ts `isGroupMember` by the shared
+ * store contract: in the window and not left out, or kept. `excluded` lists
+ * left-out expenses dated inside the window only (design review 22A).
+ */
+function expenseGroupWhere(g: ExpenseGroupFilter): Prisma.ExpenseWhereInput {
+  const inWindow = { occurredOn: { gte: g.startOn, lte: g.windowEnd } };
+  const marked = (mode: ExpenseGroupOverrideMode) => ({ groupId: g.groupId, mode });
+  if (g.membership === 'excluded') return { ...inWindow, groupOverrides: { some: marked('excluded') } };
+  return { OR: [{ ...inWindow, groupOverrides: { none: marked('excluded') } }, { groupOverrides: { some: marked('included') } }] };
+}
+
+function toGroupOverride(row: { groupId: string; expenseId: string; organizationId: string; mode: string; createdAt: Date; updatedAt: Date }): ExpenseGroupOverrideRecord {
+  return { ...row, mode: row.mode as ExpenseGroupOverrideMode };
 }
 
 /** Newest first: rows before the cursor in (occurredOn, id) descending order; an inclusive cursor keeps its own row (MUT-91 anchor). */

@@ -164,6 +164,18 @@ export const STORE_ACCESS: StoreAccess = {
     list: { read: 'expenses' },
     update: { write: 'expenses' },
     softDelete: { write: 'expenses' },
+    totalsByCurrency: { read: 'expenses' },
+  },
+  // MUT-267 (ADR-094): groups are part of the expenses domain — same session-only scopes, nothing an API key may read.
+  expenseGroups: {
+    create: { write: 'expenses' },
+    getById: { read: 'expenses' },
+    list: { read: 'expenses' },
+    update: { write: 'expenses' },
+    softDelete: { write: 'expenses' },
+    setOverride: { write: 'expenses' },
+    clearOverride: { write: 'expenses' },
+    overridesForExpense: { read: 'expenses' },
   },
   expenseCategories: {
     create: { write: 'expenses' },
