@@ -3720,6 +3720,28 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - The list makes one small aggregate per group.
 - API 1.33.0-mut267.
 
+## ADR-095: The Portal Derives Group Figures and Mark Verbs Itself; Changes Show at Once and Yield to the Next Load
+
+**Status**: Active
+**Date**: 2026-10-18
+**Context**: MUT-268 (epic MUT-266) builds the portal on MUT-267's API (ADR-094). The design review (1A–23A) fixed the screens; the API returns per-currency buckets, member pages and marks, but not per-day averages, weekly bars, the action a row offers, or a converted total.
+
+**Decision**:
+1. **Derived figures live in one pure module**, `src/hosted/data/expenseGroups.ts`: status, day counts, the in-window test (from the API's `windowEnd`, never re-derived), per day, daily/weekly bars, other-currency days, category rows (Uncategorized last), the picker window, and the ≈ conversion (`rate` = units per 1 base, so divide; minor units rescaled between exponents; rounded half away from zero).
+2. **The action → request table is code**, `verbFor` + `VERB_MARK` + `INVERSE_VERB`: Leave out = PUT excluded (in window), Remove = DELETE (kept, outside), Bring back = DELETE, Add = PUT included; Undo runs the inverse verb. Member rows carry no mark, so Undo of a Leave out on an in-window *kept* expense clears to no mark (TD-166).
+3. **Changes show at once and yield to the next load.** A pending mark overlays the summary, members and Left out until each read *loads again after the mark settled* — TanStack's `dataUpdateCount`, not a clock, so it never counts twice or flickers back. Marks for one expense are chained so they reach the server in order (the API is last-write-wins). A batch moves every row at once, saves one at a time and refetches once.
+4. **One query-key root** (`['p', id, 'expense-groups', …]`) is the whole 8A refetch set; expense writes invalidate it too. FX rates sit outside it.
+5. **The ≈ line** appears only when it adds something (two or more currencies, or one that is not the profile's), is hidden while loading or on 503, and says "rate from <date>" when stale (ADR-087 #4 kept: display only, today's rate).
+
+**Alternatives considered**:
+- **A batch mark endpoint.** Rejected for v1 by design (12A/13A); revisit if bulk leave-out feels slow.
+- **Time-based overlay expiry** (`dataUpdatedAt`). Rejected after the first build: equal timestamps (a fast fake API or a frozen test clock) drop or double a mark.
+- **A chart library.** Rejected (18A): two small hand-built components, no dependency.
+
+**Consequences**:
+- `SectionTabs`, `DayBars`, `CategoryBars`, `GroupMembers`, `GroupDrawer`, `AddToGroupDrawer`, `InGroupsLine`, `playRowEnter` registered; `Toast` gains an action.
+- No API change.
+
 ## ADR-096: An Expense's Currency Changes Only Together With Its Amount (the ADR-075 Pair Rule on Expenses)
 
 **Status**: Active

@@ -16,6 +16,8 @@ import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { useProfile } from '../../session/me';
 import { NoMatch, PageHeader, ShowMore } from './shared';
+import { SectionTabs } from '../../components/SectionTabs';
+import { useExpensesTabs } from './ExpenseGroupsList';
 
 /**
  * Expenses (MUT-44): the portal's only write. List is read-only presentation
@@ -61,6 +63,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   const list = useExpenses(profile.id, filters);
   const categoriesQuery = useExpenseCategories(profile.id);
   const customers = useCustomerDirectory(profile.id);
+  const tabs = useExpensesTabs();
 
   const categoriesById = useMemo(
     () => new Map((categoriesQuery.data ?? []).map((c) => [c.id, c])),
@@ -115,6 +118,8 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   return (
     <>
       <PageHeader title={t('hosted.expenses.title')}>{recordButton}</PageHeader>
+      {/* MUT-268 (1A): Expenses · Groups under the one Expenses heading */}
+      <SectionTabs {...tabs} />
       <FilterBar>
         <ClientFilter value={filters.customerId} options={customers.data} onChange={(customerId) => patch({ customerId })} />
         <CategoryFilter value={filters.categoryId} options={categoriesById} onChange={(categoryId) => patch({ categoryId })} />

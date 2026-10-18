@@ -96,6 +96,30 @@
 **Impact**: `idempotency.ts` stores every response below 500, so a 422 `GROUP_LIMIT` becomes that key's outcome. If a client reuses one key across retries of the same form, the user deletes a group, presses Save again, and still gets the cached 422.
 **Fix**: either the portal and phone mint a fresh key per submit (the portal already uses one key per save attempt, MUT-133), or state-dependent 422s are left out of the cache.
 
+### TD-167: "Leave out all" rows leave together, not staggered
+**Status**: Open
+**Ticket**: none (MUT-268 craft spec 2, qa-reconcile)
+**Added**: 2026-10-18
+**Priority**: Low (motion polish; the result is correct and has one Undo)
+**Impact**: the craft spec staggers bulk exits by `--stagger-step` (50 ms, first eight). `captureRowExit` measures followers when it captures and glides them at once, so delaying a copy's play would make the rows below jump and then glide.
+**Fix**: give `captureRowExit` a `delay` that holds the followers' offset until the copy starts, then stagger in `GroupMembers`.
+
+### TD-168: The portal FakeApi answers a few edge cases differently from the API
+**Status**: Open
+**Ticket**: none (MUT-268 pre-landing review)
+**Added**: 2026-10-18
+**Priority**: Low (no spec depends on them)
+**Impact**: `qa/support/portalApi.ts` answers 404 where the API answers 204 (DELETE of a mark for an unknown expense, DELETE of an already-deleted group). It also answers `[]` where the API answers 404 (`?expenseId=` of an unknown expense), and leaves `byCategory` unsorted.
+**Fix**: match the API in each case when a spec first needs them.
+
+### TD-166: Undo of a Leave out on an in-window kept expense drops the keep mark
+**Status**: Open
+**Ticket**: none (MUT-268 eng plan E4)
+**Added**: 2026-10-18
+**Priority**: Low (the mark only matters if that expense's date later moves outside the group)
+**Impact**: member rows from `GET /v1/expenses?groupId=` carry no mark, so the portal can't tell an unmarked in-window member from a kept one. Undo of Leave out sends DELETE, which restores membership but loses a keep mark that would have held the expense in the group after a date change.
+**Fix**: the member listing returns each row's mark (an additive field), and Undo restores it exactly.
+
 ### TD-164: Deleted expense groups stay in the list index
 **Status**: Open
 **Ticket**: none

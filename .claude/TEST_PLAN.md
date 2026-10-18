@@ -3031,6 +3031,16 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
   - **Pattern.** `urlInTextPattern` is in the portable subset.
   - **Script.** It refuses a paginated project list (Link `rel="next"; results="true"`). The admin-token error names a personal token.
 
+## MUT-268 — Portal expense groups (2026-10-18)
+
+| Area | Tests | Covers |
+|---|---|---|
+| Rules | `src/hosted/data/__tests__/expenseGroups.test.ts` (34) | calendar helpers, status/nudges/reached a year, window + action table + inverses, default currency, per day rounding, daily/weekly bars (locale week start, sum = total), other-currency days, category order, picker window, ≈ conversion (exponents, derived, missing rate, stale), optimistic marks (summary + rows, net zero), member filter, day grouping, sequential saves |
+| Queries | `src/hosted/data/__tests__/expenseGroupQueries.test.tsx` | every-page loop at 200 sorted oldest first; per-expense mark order incl. failure; overlay never double-counts when the summary reloads first; refused mark goes back; batch moves at once, saves in order, refetches once; expense edits invalidate groups; FX key outside the root |
+| URL | `filters.test.ts` | `?newGroup`, `?currency`, `?category=uuid|none`, `?editGroup`, `?addToGroup` |
+| Components | `DayBars.test.tsx`, `CategoryBars.test.tsx`, `Toast.test.tsx`, `src/lib/motion/__tests__/rowEnter.test.ts` | keyboard + RTL arrows, tab stop, dot/zero classes; toggles; toast action in both tones; row return LTR/RTL/reduced/no layout |
+| Pages | `src/hosted/pages/__tests__/ExpenseGroups.test.tsx` (23) | tabs aria-current, list order/totals/+N/nudges/error, create defaults + validation + POST/key + landing, GROUP_LIMIT fresh key, headline/≈/tab/chart/per day, members by day + Kept + verbs, optimistic leave out + Undo, category leave-out-all, Uncategorized, every 8A detail state, Arabic default, edit If-Match + delete confirm, picker pool/partial, In groups line |
+| Release-QA | `qa/specs/portal/expense-groups.spec.ts` (9, tagged `@portal.expense-groups.*`) | create, leave-out-undo, add-from-outside, currencies-converted, category-prune, states, in-groups-line, edit-delete, arabic-375 (no sideways scroll) |
 
 ### MUT-272 — expense currency edit (server half, 2026-10-18)
 

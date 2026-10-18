@@ -5,7 +5,7 @@ import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
 import { SetupPage } from './pages/auth/SetupPage';
 import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './session/AuthGate';
 import { SessionBridge } from './session/SessionBridge';
-import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseOverview, parsePaymentsPage, parseReceivablesPage, pickShellOverlay } from './data/filters';
+import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceivablesPage, pickShellOverlay } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
 import { ClientsPage } from './pages/views/ClientsPage';
 import { ClientDetailPage } from './pages/views/ClientDetailPage';
@@ -14,6 +14,8 @@ import { PaymentsPage } from './pages/views/PaymentsList';
 import { DocumentsPage } from './pages/views/DocumentsList';
 import { ExpensesPage } from './pages/views/ExpensesList';
 import { ConversionsPage } from './pages/views/ConversionsList';
+import { ExpenseGroupsPage } from './pages/views/ExpenseGroupsList';
+import { ExpenseGroupDetail } from './pages/views/ExpenseGroupDetail';
 
 /**
  * The portal's routes (hosted-portal.md §7.1, code-based like `src/router.tsx`).
@@ -150,6 +152,27 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     },
   });
 
+  /** Expenses › Groups (MUT-268, 1A): a tab inside Expenses, so the sidebar's Expenses stays lit. */
+  const groupsRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    path: '/expenses/groups',
+    validateSearch: parseGroupsPage,
+    component: function Groups() {
+      return <ExpenseGroupsPage search={omitShellOverlay(groupsRoute.useSearch())} setSearch={useReplaceSearch()} />;
+    },
+  });
+
+  const groupRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    path: '/expenses/groups/$groupId',
+    validateSearch: parseGroupDetail,
+    component: function Group() {
+      const { groupId } = groupRoute.useParams();
+      // Keyed: a different group starts with fresh marks, currency and filter (eng R9)
+      return <ExpenseGroupDetail key={groupId} groupId={groupId} search={omitShellOverlay(groupRoute.useSearch())} setSearch={useReplaceSearch()} />;
+    },
+  });
+
   const conversionsRoute = createRoute({
     getParentRoute: () => profileRoute,
     path: '/conversions',
@@ -165,7 +188,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     authedRoute.addChildren([
       homeRoute,
       captureRoute,
-      profileRoute.addChildren([overviewRoute, clientsRoute, clientRoute, receivablesRoute, paymentsRoute, documentsRoute, expensesRoute, conversionsRoute]),
+      profileRoute.addChildren([overviewRoute, clientsRoute, clientRoute, receivablesRoute, paymentsRoute, documentsRoute, expensesRoute, groupsRoute, groupRoute, conversionsRoute]),
     ]),
   ]);
 

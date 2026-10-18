@@ -2477,3 +2477,14 @@ A list that promises "no full scan" gets a test:db test that captures the SQL Pr
 ### Pattern: The GCP Terraform module's guards are tested with mocked Google and random providers
 Same as the Sentry module's pattern above, now for `server/infrastructure/terraform/tests/`. A mocked string is random, so give IAM-checked attributes (a service account's `name` and `email`) well-formed `mock_resource` defaults. First instance: `tests/database_pool.tftest.hcl`.
 
+## Patterns added by MUT-268 (2026-10-18, ADR-095)
+
+### Pattern: An optimistic change yields to the next load, counted, not timed
+Show a write at once as a pending overlay on the cached reads; record each read's `dataUpdateCount` when the request settles; keep applying the overlay to a read only while its count has not moved past that. Never compare `dataUpdatedAt` with `Date.now()`: equal milliseconds (fast fakes, frozen clocks) drop or double the change. Overlays that are idempotent (row moves) may apply to several reads at once; arithmetic ones (totals) are tied to their own read. First instance: `useGroupMarks` (`src/hosted/data/expenseGroupQueries.ts`).
+
+### Pattern: Per-entity write chains for last-write-wins endpoints
+When an endpoint has no If-Match and the last arrival wins, chain each entity's writes (`sendMark`'s per-`groupId:expenseId` promise queue) so an action and its Undo can't race; a failure doesn't block the next one.
+
+### Pattern: Batches save one at a time and refetch once
+`runSequential(items, save)` returns `{ done, failed }`; the UI moves every item at once, suppresses per-save invalidation while the batch runs, refetches at the end, and offers Retry for `failed` only.
+

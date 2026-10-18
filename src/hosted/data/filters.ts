@@ -145,6 +145,32 @@ export const parseConversionDrawer = (raw: Raw): ConversionDrawerSearch =>
 export type ConversionsPageSearch = ConversionFilters & ConversionDrawerSearch;
 export const parseConversionsPage = (raw: Raw): ConversionsPageSearch => ({ ...parseConversions(raw), ...parseConversionDrawer(raw) });
 
+/** Expenses › Groups (MUT-268, 1A): `?newGroup=1` opens New group. */
+export interface GroupsPageSearch {
+  newGroup?: true;
+}
+// TanStack parses `?newGroup=1` to the number 1
+const one = (value: unknown): true | undefined => (value === '1' || value === 1 || value === true ? true : undefined);
+export const parseGroupsPage = (raw: Raw): GroupsPageSearch => compact({ newGroup: one(raw.newGroup) });
+
+/**
+ * One group's page: the currency tab (5A), the category filter (13A; `none` is
+ * Uncategorized, 23A) and its drawers, `?editGroup=1` and `?addToGroup=1`.
+ */
+export interface GroupDetailSearch {
+  currency?: Currency;
+  category?: string;
+  editGroup?: true;
+  addToGroup?: true;
+}
+export const parseGroupDetail = (raw: Raw): GroupDetailSearch =>
+  compact({
+    currency: oneOf(raw.currency, CURRENCIES),
+    category: raw.category === 'none' ? 'none' : id(raw.category),
+    editGroup: one(raw.editGroup),
+    addToGroup: one(raw.addToGroup),
+  });
+
 export const INCOME_KINDS = ['received', 'owed'] as const;
 
 /**
