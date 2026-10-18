@@ -7,9 +7,9 @@ export type AppPlatform = 'ios' | 'android';
 
 export interface PlatformBuildConfig {
   /** Hard floor. Undefined = this platform is never gated. */
-  min?: number;
+  min?: number | undefined;
   /** Soft "update available" ceiling. Undefined = no nudge, only the hard floor (if any). */
-  recommended?: number;
+  recommended?: number | undefined;
 }
 
 export interface MinimumBuildConfig {
