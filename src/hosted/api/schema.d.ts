@@ -10666,6 +10666,21 @@ export interface components {
             };
             profiles: components["schemas"]["HostedProfile"][];
             limits: components["schemas"]["ProfileLimits"];
+            /**
+             * @description Every currency code this server accepts, in its supported order. Clients offer only the codes they also know and ignore the rest. Servers older than MUT-280 omit the field.
+             * @example [
+             *       "ILS",
+             *       "USD",
+             *       "EUR",
+             *       "JOD",
+             *       "AED",
+             *       "SAR",
+             *       "QAR",
+             *       "BHD",
+             *       "OMR"
+             *     ]
+             */
+            currencies: string[];
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
@@ -10696,7 +10711,7 @@ export interface components {
             version: number;
         };
         /** @enum {string} */
-        Currency: "ILS" | "USD" | "EUR" | "JOD";
+        Currency: "ILS" | "USD" | "EUR" | "JOD" | "AED" | "SAR" | "QAR" | "BHD" | "OMR";
         IncomeCaptureRules: {
             received: boolean;
             owed: boolean;
@@ -12491,7 +12506,7 @@ export interface components {
              * @example 0.322356
              */
             rate: number;
-            /** @description True when exactly one side of the pair is JOD: the ECB publishes no JOD rate, so it comes from the USD peg (1 USD = 0.709 JOD) */
+            /** @description True when either side of the pair is pegged to the US dollar (never base→base): the ECB publishes no rate for it, so the rate comes from its USD peg (1 USD = 0.709 JOD, 3.6725 AED, 3.75 SAR, 3.64 QAR, 0.376 BHD, 0.3845 OMR) */
             derived: boolean;
         };
         InboxEntryPage: {
