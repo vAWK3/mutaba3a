@@ -41,6 +41,8 @@ export const ERROR_CODES = {
   ATTACHMENTS_NOT_CONFIGURED: 503,
   /** MUT-228: no reference rates to serve (provider down or unusable, and nothing servable cached on this instance; or not configured). */
   FX_RATES_UNAVAILABLE: 503,
+  /** MUT-293: the calling phone build is below the configured floor for its platform; details carry { platform, minimumBuild }. */
+  APP_UPDATE_REQUIRED: 426,
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;
