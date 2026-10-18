@@ -1384,6 +1384,8 @@ export interface LedgerStore {
   userIdempotency: UserIdempotencyRepository;
   /** MUT-161: conversions on hosted profiles; session-only, invisible to API keys (store guard `conversions`). MUT-194: optimistic update and soft delete, like expenses. */
   conversions: ConversionRepository;
+  /** MUT-267: expense groups (trips); same domain and guard as expenses. */
+  expenseGroups: ExpenseGroupRepository;
   /** MUT-270: one newest-first feed across a person's profiles; session-only (store guard `sessionOnly`). */
   entries: EntriesRepository;
 }
@@ -1528,6 +1530,28 @@ export interface ExpenseFilter {
   projectId?: string;
   /** Only expenses linked to no customer (the firm's own or personal spending). */
   unlinked?: boolean;
+  /** MUT-267: a group's members, or its left-out expenses dated inside its window. */
+  group?: ExpenseGroupFilter;
+}
+
+/**
+ * MUT-267: membership as a ledger filter. The caller resolves the group and its
+ * window (groups.ts `windowEnd`); the store applies D4 — in the window and not
+ * left out, or kept — or, for `excluded`, left out and in the window (22A).
+ */
+export interface ExpenseGroupFilter {
+  groupId: string;
+  startOn: IsoDate;
+  /** Inclusive: endOn, or startOn + 365 days for a group still going (R6). */
+  windowEnd: IsoDate;
+  membership: 'member' | 'excluded';
+}
+
+/** MUT-267 (re-review D1): per-currency sum and count of the expenses a filter matches. */
+export interface ExpenseCurrencyTotal {
+  currency: string;
+  totalMinor: bigint;
+  count: number;
 }
 
 /** Expenses page newest first: (occurredOn, id) descending. */
@@ -1551,6 +1575,68 @@ export interface ExpenseRepository {
   update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpensePatch, at: Date): Promise<UpdateResult<ExpenseRecord>>;
   /** Null for an id the organization never had; `changed: false` when it was already deleted. */
   softDelete(organizationId: string, id: string, at: Date): Promise<{ record: ExpenseRecord; changed: boolean } | null>;
+  /** MUT-267: live expenses matching `filter`, summed per currency (sorted by code). One aggregate query, no rows returned. */
+  totalsByCurrency(organizationId: string, filter: ExpenseFilter): Promise<ExpenseCurrencyTotal[]>;
+}
+
+// ---- MUT-267: expense groups (ADR-094) --------------------------------------
+
+/** A named date range on one profile; membership is computed when read (D4). */
+export interface ExpenseGroupRecord {
+  id: string;
+  organizationId: string;
+  name: string;
+  startOn: IsoDate;
+  /** Null = still going: the window then ends a year after startOn (R6). */
+  endOn: IsoDate | null;
+  notes: string | null;
+  createdByUserId: string;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+}
+
+export interface CreateExpenseGroupInput {
+  organizationId: string;
+  name: string;
+  startOn: IsoDate;
+  endOn: IsoDate | null;
+  notes: string | null;
+  createdByUserId: string;
+}
+
+/** Absent key = unchanged; null clears endOn (still going) or notes. */
+export type UpdateExpenseGroupPatch = Partial<Pick<CreateExpenseGroupInput, 'name' | 'startOn' | 'endOn' | 'notes'>>;
+
+export type ExpenseGroupOverrideMode = 'excluded' | 'included';
+
+/** One keep/leave-out mark per (group, expense); last write wins (eng review D6). */
+export interface ExpenseGroupOverrideRecord {
+  groupId: string;
+  expenseId: string;
+  organizationId: string;
+  mode: ExpenseGroupOverrideMode;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ExpenseGroupRepository {
+  /** With `maxLive`, throws InsufficientCapacity when the organization already holds that many live groups; counted and inserted atomically (review: GROUP_LIMIT race). */
+  create(input: CreateExpenseGroupInput, at: Date, maxLive?: number): Promise<ExpenseGroupRecord>;
+  /** Live groups only; a deleted one reads null. */
+  getById(organizationId: string, id: string): Promise<ExpenseGroupRecord | null>;
+  /** Live groups, newest startOn first (ties by id descending). Unpaged: the create route caps a profile at MAX_GROUPS_PER_PROFILE (expenses/groups.ts). */
+  list(organizationId: string): Promise<ExpenseGroupRecord[]>;
+  update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpenseGroupPatch, at: Date): Promise<UpdateResult<ExpenseGroupRecord>>;
+  /** Null for an id the organization never had; `changed: false` when already deleted. Its expenses are untouched. */
+  softDelete(organizationId: string, id: string, at: Date): Promise<{ record: ExpenseGroupRecord; changed: boolean } | null>;
+  /** Upsert the mark (the caller has checked the group and expense are this organization's). `changed` is false when the same mark was already there. */
+  setOverride(organizationId: string, groupId: string, expenseId: string, mode: ExpenseGroupOverrideMode, at: Date): Promise<{ record: ExpenseGroupOverrideRecord; changed: boolean }>;
+  /** True when a mark was removed. */
+  clearOverride(organizationId: string, groupId: string, expenseId: string): Promise<boolean>;
+  /** Every mark on one expense, across this organization's groups (GET /v1/expense-groups?expenseId=). */
+  overridesForExpense(organizationId: string, expenseId: string): Promise<ExpenseGroupOverrideRecord[]>;
 }
 
 /** MUT-161: a logged currency conversion. MUT-194 (ADR-075): versioned and soft-deleted, like Expense. */

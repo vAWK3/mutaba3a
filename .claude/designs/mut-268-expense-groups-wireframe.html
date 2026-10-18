@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MUT-268 Expense Groups Wireframe</title>
+<style>
+/* Brand v2 primitives copied from src/styles/brand/mutaba3a-theme.css (MUT-102), same block as mut-183-portal-profiles-wireframe.html. */
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Regular.otf");font-weight:400;font-display:swap}
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Medium.otf");font-weight:500;font-display:swap}
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Bold.otf");font-weight:700;font-display:swap}
+@font-face{font-family:"Thmanyah Serif Display";src:url("../../src/assets/fonts/thmanyah-serif-display-bold.otf");font-weight:700;font-display:swap}
+:root{
+  --m-canvas:oklch(0.975 0.014 80);--m-surface:oklch(0.993 0.008 80);--m-line:oklch(0.92 0.015 300);--m-field-bg:oklch(0.965 0.012 300);
+  --m-ink:oklch(0.33 0.05 300);--m-ink2:oklch(0.442 0.043 298.7);--m-primary:oklch(0.55 0.14 295);--m-primary-hover:oklch(0.46 0.142 293.8);
+  --m-on-primary:oklch(0.98 0.012 80);--m-focus:oklch(0.6 0.13 295);--m-lavender:oklch(0.9 0.06 295);--m-lavender-ink:oklch(0.401 0.114 294.5);
+  --m-mint:oklch(0.9 0.06 165);--m-mint-ink:oklch(0.387 0.076 170.2);--m-rose:oklch(0.9 0.06 10);--m-rose-ink:oklch(0.398 0.103 14.8);
+  --m-peach:oklch(0.9 0.06 55);--m-peach-ink:oklch(0.4 0.104 50.8);--m-butter:oklch(0.93 0.07 95);--m-butter-ink:oklch(0.419 0.083 74.8);
+  --m-shadow-tint:oklch(0.45 0.08 300);
+  --font-body:"Thmanyah Sans",system-ui,sans-serif;--font-display:"Thmanyah Serif Display",serif;--font-num:"IBM Plex Mono","Thmanyah Sans",ui-monospace,monospace;
+  --text-micro:.6875rem;--text-label:.8125rem;--text-body:1rem;--text-headline:1.25rem;--text-title:2rem;
+  --space-1:.25rem;--space-2:.5rem;--space-3:.75rem;--space-4:1rem;--space-5:1.25rem;--space-6:1.5rem;--space-8:2rem;
+  --radius-xs:4px;--radius-sm:12px;--radius-md:14px;--radius-lg:18px;--radius-pill:999px;
+  --bg:var(--m-canvas);--surface:var(--m-surface);--surface-2:var(--m-field-bg);--text:var(--m-ink);--muted:var(--m-ink2);--border:var(--m-line);
+  --btn-fill:var(--m-primary-hover);
+  --shadow-drawer:0 1px 2px color-mix(in oklch,var(--m-shadow-tint) 6%,transparent),0 12px 40px color-mix(in oklch,var(--m-shadow-tint) 12%,transparent);
+}
+[data-theme="dark"]{
+  --m-canvas:oklch(0.24 0.035 300);--m-surface:oklch(0.29 0.04 300);--m-line:oklch(0.4 0.04 300);--m-field-bg:oklch(0.34 0.045 300);
+  --m-ink:oklch(0.95 0.015 80);--m-ink2:oklch(0.78 0.03 300);--m-primary:oklch(0.78 0.11 295);--m-primary-hover:oklch(0.82 0.1 295);
+  --m-on-primary:oklch(0.27 0.06 300);--m-focus:oklch(0.75 0.12 295);--m-lavender:oklch(0.38 0.07 295);--m-lavender-ink:oklch(0.88 0.08 295);
+  --m-mint:oklch(0.38 0.07 165);--m-mint-ink:oklch(0.88 0.08 165);--m-rose:oklch(0.38 0.07 10);--m-rose-ink:oklch(0.88 0.08 10);
+  --m-peach:oklch(0.38 0.07 55);--m-peach-ink:oklch(0.88 0.08 55);--m-butter:oklch(0.4 0.06 85);--m-butter-ink:oklch(0.9 0.09 95);
+  --m-shadow-tint:oklch(0.15 0.03 300);
+}
+*{box-sizing:border-box}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:var(--text-body);line-height:1.5}
+.wrap{max-width:1240px;margin:0 auto;padding:var(--space-6) var(--space-4) var(--space-8)}
+.toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;padding:var(--space-3) var(--space-4);background:var(--surface);border-bottom:1px solid var(--border)}
+.toolbar strong{margin-inline-end:auto;font-size:var(--text-label)}
+.toolbar button{font:inherit;font-size:var(--text-label);padding:var(--space-1) var(--space-3);border:1px solid var(--border);border-radius:var(--radius-pill);background:var(--surface-2);color:var(--text);cursor:pointer}
+.toolbar button[aria-pressed="true"]{background:var(--m-lavender);color:var(--m-lavender-ink)}
+h1.doc{font-family:var(--font-display);font-size:var(--text-title);font-weight:700;margin:var(--space-4) 0 var(--space-1)}
+.lede{color:var(--muted);max-width:72ch;margin:0 0 var(--space-6)}
+h2.sec{font-family:var(--font-display);font-size:var(--text-headline);font-weight:700;margin:var(--space-8) 0 var(--space-2)}
+.note{color:var(--muted);font-size:var(--text-label);max-width:80ch;margin:0 0 var(--space-3)}
+.tag{display:inline-block;font-size:var(--text-micro);font-weight:500;padding:0 var(--space-2);border-radius:var(--radius-pill);vertical-align:middle;margin-inline-start:var(--space-2);font-family:var(--font-body)}
+.tag-gap{background:var(--m-butter);color:var(--m-butter-ink)}
+.tag-prop{background:var(--m-lavender);color:var(--m-lavender-ink)}
+.tag-api{background:var(--m-peach);color:var(--m-peach-ink)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-5);align-items:flex-start}
+.col{flex:1 1 360px;min-width:0;max-width:440px}
+.cap{font-size:var(--text-label);color:var(--muted);margin:0 0 var(--space-2)}
+/* Portal frame */
+.frame{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;min-height:560px}
+.side{width:200px;flex:none;background:var(--surface);border-inline-end:1px solid var(--border);padding:var(--space-4) var(--space-3);font-size:var(--text-label)}
+.side .wm{font-family:var(--font-display);font-weight:700;font-size:var(--text-headline);margin-bottom:var(--space-4)}
+.side a{display:block;padding:var(--space-2) var(--space-3);border-radius:var(--radius-sm);color:var(--text);text-decoration:none}
+.side a.on{background:var(--surface-2);font-weight:500}
+.page{flex:1;min-width:0;padding:var(--space-5) var(--space-6)}
+.ph{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)}
+.ph h3{font-family:var(--font-display);font-size:var(--text-title);font-weight:700;margin:0;margin-inline-end:auto}
+.sub{display:flex;gap:var(--space-1);border-bottom:1px solid var(--border);margin-bottom:var(--space-4)}
+.sub a{padding:var(--space-2) var(--space-3);font-size:var(--text-label);font-weight:500;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+.sub a.on{color:var(--text);border-bottom-color:var(--m-primary-hover)}
+.crumb{font-size:var(--text-label);color:var(--muted);margin-bottom:var(--space-1)}
+.crumb a{color:var(--m-primary-hover);text-decoration:none}
+.meta{font-size:var(--text-label);color:var(--muted);margin:0 0 var(--space-4)}
+.btn{font:inherit;font-size:var(--text-label);font-weight:500;border-radius:var(--radius-sm);padding:var(--space-2) var(--space-4);border:1px solid transparent;min-height:36px;cursor:pointer}
+.btn-primary{background:var(--btn-fill);color:var(--m-on-primary)}
+.btn-secondary{background:var(--surface);color:var(--text);border-color:var(--border)}
+.link{font:inherit;font-size:var(--text-label);font-weight:500;color:var(--m-primary-hover);background:none;border:0;padding:0;cursor:pointer}
+/* Group list */
+.glist{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);overflow:hidden}
+.gitem{display:grid;grid-template-columns:1fr auto;gap:var(--space-1) var(--space-4);padding:var(--space-3) var(--space-4);border-top:1px solid var(--border)}
+.gitem:first-child{border-top:0}
+.gname{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.gdates{font-size:var(--text-label);color:var(--muted)}
+.gtot{text-align:end;font-family:var(--font-num);font-size:var(--text-label);direction:ltr;unicode-bidi:isolate}
+.chip{display:inline-block;font-size:var(--text-micro);font-weight:500;padding:0 var(--space-2);border-radius:var(--radius-pill);margin-inline-start:var(--space-2)}
+.c-now{background:var(--m-mint);color:var(--m-mint-ink)}
+.c-soon{background:var(--m-lavender);color:var(--m-lavender-ink)}
+.c-past{background:var(--surface-2);color:var(--muted)}
+/* Stats */
+.striprow{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);margin-bottom:var(--space-1)}
+.strip{display:flex;gap:var(--space-6);padding:var(--space-3) var(--space-4);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md)}
+.stat{display:flex;flex-direction:column}
+.stat .l{font-size:var(--text-label);color:var(--muted)}
+.stat .v{font-family:var(--font-num);font-size:var(--text-headline);font-weight:500;direction:ltr;unicode-bidi:isolate}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius-pill);padding:2px;background:var(--surface)}
+.seg span{font-size:var(--text-label);padding:var(--space-1) var(--space-3);border-radius:var(--radius-pill)}
+.seg span.on{background:var(--m-lavender);color:var(--m-lavender-ink);font-weight:500}
+.asof{font-size:var(--text-label);color:var(--muted);margin:0 0 var(--space-5)}
+/* Panels */
+.grid2{display:grid;grid-template-columns:3fr 2fr;gap:var(--space-4);margin-bottom:var(--space-5)}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-4)}
+.panel h4{font-size:var(--text-body);font-weight:700;margin:0 0 var(--space-3)}
+.bars{display:flex;align-items:flex-end;gap:6px;height:140px;border-bottom:1px solid var(--border);padding-bottom:2px}
+.bar{flex:1;background:var(--m-primary);border-radius:4px 4px 0 0;min-height:2px;position:relative}
+.bar.zero{background:var(--border)}
+.bar.out{background:var(--m-lavender)}
+.bar.other::after{content:"";position:absolute;inset-inline-start:50%;bottom:-10px;width:5px;height:5px;margin-inline-start:-2.5px;border-radius:50%;background:var(--m-ink2)}
+.gaplab{flex:0 0 auto;align-self:flex-end;font-size:var(--text-micro);color:var(--muted);writing-mode:horizontal-tb;padding:0 2px}
+.sect{min-width:0}
+.sect h4{font-size:var(--text-body);font-weight:700;margin:0 0 var(--space-3)}
+.grid2.plain{gap:var(--space-6)}
+.grid2.plain > .sect + .sect{border-inline-start:1px solid var(--border);padding-inline-start:var(--space-6)}
+.headline{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-5);align-items:baseline;margin:0 0 var(--space-1)}
+.headline .cur{font-family:var(--font-num);font-size:var(--text-headline);font-weight:500;direction:ltr;unicode-bidi:isolate}
+.headline .cnt{font-size:var(--text-label);color:var(--muted);margin-inline-start:var(--space-1)}
+.conv{font-size:var(--text-body);margin:0 0 var(--space-4)}
+.conv small{color:var(--muted);font-size:var(--text-label)}
+.cat.btnrow{border:0;background:none;padding:0;text-align:start;font:inherit;color:inherit;cursor:pointer;width:100%}
+.cat.btnrow.on span:first-child{font-weight:700}
+.filterbar{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;font-size:var(--text-label);margin:0 0 var(--space-2)}
+.pillx{background:var(--m-lavender);color:var(--m-lavender-ink);border-radius:var(--radius-pill);padding:0 var(--space-2)}
+.btn-danger-text{color:var(--m-rose-ink);background:none;border:0;font:inherit;font-size:var(--text-label);font-weight:500;cursor:pointer;padding:0}
+.confirm{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-drawer);padding:var(--space-4) var(--space-5);max-width:360px}
+.confirm p{margin:0 0 var(--space-3)}
+.menu{display:inline-flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-drawer);padding:var(--space-1);font-size:var(--text-label);min-width:200px}
+.menu span{padding:var(--space-2) var(--space-3);border-radius:var(--radius-xs)}
+.menu span.on{background:var(--surface-2)}
+.decided{display:inline-block;font-size:var(--text-micro);font-weight:500;padding:0 var(--space-2);border-radius:var(--radius-pill);background:var(--m-mint);color:var(--m-mint-ink);margin-inline-start:var(--space-2)}
+.bar.sel{outline:2px solid var(--m-focus);outline-offset:2px}
+.xlab{display:flex;gap:6px;font-size:var(--text-micro);color:var(--muted);margin-top:var(--space-1)}
+.xlab span{flex:1;text-align:center}
+.gapmark{flex:0 0 14px;align-self:center;color:var(--muted);font-size:var(--text-micro);text-align:center}
+.cats{display:flex;flex-direction:column;gap:var(--space-2)}
+.cat{display:grid;grid-template-columns:1fr auto;gap:2px var(--space-2);font-size:var(--text-label)}
+.cat .track{grid-column:1/-1;height:8px;background:var(--surface-2);border-radius:var(--radius-pill);overflow:hidden}
+.cat .fill{height:100%;background:var(--m-primary)}
+.cat .amt{font-family:var(--font-num);direction:ltr;unicode-bidi:isolate}
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:var(--text-label);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden}
+th,td{text-align:start;padding:var(--space-2) var(--space-3);border-top:1px solid var(--border)}
+th{color:var(--muted);font-weight:500;border-top:0;background:var(--surface)}
+td.num,th.num{text-align:end;font-family:var(--font-num)}
+td.num{direction:ltr;unicode-bidi:isolate}
+tr.dayhead td{background:var(--surface-2);font-weight:500}
+tr.excl td{color:var(--muted)}
+tr.excl td.t{text-decoration:line-through}
+.rowact{font:inherit;font-size:var(--text-label);color:var(--m-primary-hover);background:none;border:1px solid var(--border);border-radius:var(--radius-pill);padding:2px var(--space-3);cursor:pointer;white-space:nowrap}
+.keep{font-size:var(--text-micro);padding:0 var(--space-2);border-radius:var(--radius-pill);background:var(--m-peach);color:var(--m-peach-ink);margin-inline-start:var(--space-2)}
+details.excl-sec{margin-top:var(--space-4)}
+details.excl-sec summary{cursor:pointer;font-weight:500;font-size:var(--text-label);padding:var(--space-2) 0}
+.toast{display:inline-flex;gap:var(--space-3);align-items:center;background:var(--m-ink);color:var(--m-canvas);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-4);font-size:var(--text-label)}
+.toast .link{color:var(--m-lavender)}
+/* Drawer */
+.drawer{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-drawer);display:flex;flex-direction:column;min-height:460px}
+.dh{display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-5);border-bottom:1px solid var(--border)}
+.dh h4{font-family:var(--font-display);font-size:var(--text-headline);font-weight:700;margin:0}
+.db{padding:var(--space-4) var(--space-5);flex:1;display:flex;flex-direction:column;gap:var(--space-4)}
+.df{padding:var(--space-3) var(--space-5);border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:var(--space-2)}
+.fg label,.fg .lbl{display:block;font-size:var(--text-label);font-weight:500;margin-bottom:var(--space-1)}
+.input{width:100%;font:inherit;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);min-height:44px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)}
+.hint{font-size:var(--text-label);color:var(--muted);margin-top:var(--space-1)}
+.err{font-size:var(--text-label);color:var(--m-rose-ink);margin-top:var(--space-1)}
+.check{display:flex;gap:var(--space-2);align-items:center;font-size:var(--text-label)}
+.pick{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-sm)}
+.pick label{display:grid;grid-template-columns:auto 1fr auto;gap:var(--space-2);align-items:center;padding:var(--space-2) var(--space-3);border-top:1px solid var(--border);font-size:var(--text-label)}
+.pick label:first-child{border-top:0}
+.empty{text-align:center;padding:var(--space-8) var(--space-4);background:var(--surface);border:1px dashed var(--border);border-radius:var(--radius-md)}
+.empty h5{font-family:var(--font-display);font-size:var(--text-headline);margin:0 0 var(--space-1)}
+.empty p{color:var(--muted);margin:0 0 var(--space-3);font-size:var(--text-label)}
+.skel{background:var(--surface-2);border-radius:var(--radius-sm);height:14px;margin:var(--space-2) 0}
+/* Mobile frame */
+.phone{width:375px;max-width:100%;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg)}
+.phone .page{padding:var(--space-4)}
+.phone .ph h3{font-size:var(--text-headline)}
+.phone .strip{flex-wrap:wrap;gap:var(--space-3)}
+.phone .grid2{grid-template-columns:1fr}
+.phone .hide-sm{display:none}
+@media (max-width:760px){.side{display:none}.grid2{grid-template-columns:1fr}.page{padding:var(--space-4)}}
+@media (prefers-reduced-motion:no-preference){.bar{transition:height .2s ease-out}}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <strong>MUT-268 · Expense groups · wireframe</strong>
+  <button type="button" id="t-theme" aria-pressed="false">Dark</button>
+  <button type="button" id="t-dir" aria-pressed="false">RTL</button>
+</div>
+<div class="wrap">
+<h1 class="doc">Expense groups — portal</h1>
+<p class="lede">As decided in /plan-design-review on 2026-10-18 (decisions 1A–23A in the MUT-268 plan). Real Brand v2 tokens. <span class="decided">nA</span> marks where each decision lands; <span class="tag tag-api">API</span> marks what MUT-267 now returns for it. The "RTL" toggle flips layout only (English copy kept for readability); Arabic is the default in the product.</p>
+
+<!-- 1. Groups list -->
+<h2 class="sec">1 · Groups list <span class="decided">1A tab inside Expenses</span> <span class="decided">3A totals</span> <span class="tag tag-api">list currencies + memberCount</span></h2>
+<p class="note">Route <code>/p/:id/expenses/groups</code>. SectionTabs (17A) are underlined links, distinct from the currency pill. Ongoing first, then upcoming, then past. Open groups older than 11 months nudge for an end date (10A).</p>
+<div class="frame">
+  <aside class="side hide-sm"><div class="wm">متابعة</div><a>Overview</a><a>Clients</a><a>Receivables</a><a>Payments</a><a>Documents</a><a class="on">Expenses</a><a>Conversions</a></aside>
+  <div class="page">
+    <div class="ph"><h3>Expenses</h3><button class="btn btn-primary">New group</button></div>
+    <nav class="sub" aria-label="Expenses sections"><a>Expenses</a><a class="on" aria-current="page">Groups</a></nav>
+    <div class="glist">
+      <div class="gitem"><span class="gname">Jordan trip<span class="chip c-now">Ongoing</span></span><span class="gtot">JOD 412.500 · USD 230.00 · +1</span><span class="gdates">3 Oct – today · 16 days · 23 expenses</span><span></span></div>
+      <div class="gitem"><span class="gname">Amman conference<span class="chip c-past">Past</span></span><span class="gtot">JOD 188.000</span><span class="gdates">5 – 7 Oct 2026 · 3 days · 9 expenses</span><span></span></div>
+      <div class="gitem"><span class="gname">Istanbul<span class="chip c-soon">Upcoming</span></span><span class="gtot">—</span><span class="gdates">12 – 18 Nov 2026 · 7 days · nothing yet</span><span></span></div>
+      <div class="gitem"><span class="gname">Office renovation<span class="chip c-now">Ongoing</span></span><span class="gtot">ILS 18,400.00</span><span class="gdates">20 Nov 2025 – today · 333 days · <button class="link">Still going? Add an end date</button></span><span></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 2. Create / edit -->
+<h2 class="sec">2 · New group, edit, delete <span class="decided">14A</span> <span class="decided">9A</span> <span class="decided">10A</span></h2>
+<div class="row">
+  <div class="col">
+    <p class="cap">New (<code>?newGroup=1</code>): end required unless "Still going"</p>
+    <div class="drawer">
+      <div class="dh"><h4>New group</h4><span aria-hidden="true">×</span></div>
+      <div class="db">
+        <div class="fg"><label>Name</label><input class="input" value="Jordan trip"></div>
+        <div class="two">
+          <div class="fg"><label>From</label><input class="input" value="18 Oct 2026"></div>
+          <div class="fg"><label>To</label><input class="input" value=""><p class="hint">Up to 17 Oct 2027</p></div>
+        </div>
+        <label class="check"><input type="checkbox"> Still going (no end date yet)</label>
+        <p class="hint">Expenses dated in these days join automatically, including ones you log later. You can leave any out.</p>
+        <div class="fg"><label>Notes <span class="hint">(optional)</span></label><input class="input"></div>
+      </div>
+      <div class="df"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary">Create group</button></div>
+    </div>
+    <p class="note" style="margin-top:var(--space-2)">After Create → the group page + toast "Jordan trip created".</p>
+  </div>
+  <div class="col">
+    <p class="cap">Edit (<code>?editGroup=1</code>) with delete inside</p>
+    <div class="drawer">
+      <div class="dh"><h4>Edit group</h4><span aria-hidden="true">×</span></div>
+      <div class="db">
+        <div class="fg"><label>Name</label><input class="input" value="Jordan trip"></div>
+        <div class="two">
+          <div class="fg"><label>From</label><input class="input" value="3 Oct 2026"></div>
+          <div class="fg"><label>To</label><input class="input" value="" disabled><p class="hint">Up to 2 Oct 2027</p></div>
+        </div>
+        <label class="check"><input type="checkbox" checked> Still going</label>
+        <p class="hint">Changing dates re-checks which expenses belong; kept and left-out choices stay.</p>
+        <button class="btn-danger-text" style="align-self:flex-start">Delete group</button>
+      </div>
+      <div class="df"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary">Save</button></div>
+    </div>
+    <div class="confirm" style="margin-top:var(--space-3)"><p><strong>Delete Jordan trip?</strong><br>Its 23 expenses stay in Expenses.</p><div style="display:flex;gap:var(--space-2);justify-content:flex-end"><button class="btn btn-secondary">Keep</button><button class="btn btn-danger" style="background:var(--m-rose-ink);color:var(--m-on-primary)">Delete group</button></div></div>
+  </div>
+</div>
+
+<!-- 3. Detail -->
+<h2 class="sec">3 · Group detail <span class="decided">2A headline</span> <span class="decided">5A default tab</span> <span class="decided">7A per day</span> <span class="decided">16A plain sections</span></h2>
+<p class="note">Route <code>/p/:id/expenses/groups/:groupId?currency=JOD</code>. The headline answers the trip cost; the currency tab (hidden for one currency) scopes the per-day figure, the chart and the categories only.</p>
+<div class="frame">
+  <aside class="side hide-sm"><div class="wm">متابعة</div><a>Overview</a><a>Clients</a><a>Receivables</a><a>Payments</a><a>Documents</a><a class="on">Expenses</a><a>Conversions</a></aside>
+  <div class="page">
+    <div class="crumb"><a>Expenses</a> › <a>Groups</a></div>
+    <div class="ph"><h3>Jordan trip</h3><button class="btn btn-secondary">Add from outside these dates</button><button class="btn btn-secondary">Edit</button></div>
+    <p class="meta">3 Oct – today (18 Oct) · 16 days · ongoing</p>
+    <div class="headline" role="group" aria-label="Total spent">
+      <span><span class="cur">JOD 412.500</span><span class="cnt">17</span></span>
+      <span><span class="cur">USD 230.00</span><span class="cnt">5</span></span>
+      <span><span class="cur">ILS 85.00</span><span class="cnt">1</span></span>
+    </div>
+    <p class="conv">≈ <strong>ILS 4,601.20</strong> <small>at today's ECB rate (17 Oct) · 1 JOD = 5.23 ILS (USD peg) · 1 USD = 3.71 ILS</small></p>
+    <div class="striprow">
+      <span class="seg" role="tablist" aria-label="Currency for chart and categories"><span class="on" role="tab" aria-selected="true">JOD</span><span role="tab">USD</span><span role="tab">ILS</span></span>
+      <span class="meta" style="margin:0">Per day <strong style="font-family:var(--font-num)">JOD 18.281</strong> <span title="Excludes expenses kept from outside the dates">ⓘ</span></span>
+    </div>
+    <div class="grid2 plain" style="margin-top:var(--space-4)">
+      <section class="sect">
+        <h4>Day by day <span class="decided">6A</span> <span class="decided">15A</span> <span class="decided">20A</span></h4>
+        <div class="bars" role="group" aria-label="JOD per day. Arrow keys move between days.">
+          <div class="bar out" style="height:70%" role="button" tabindex="-1" aria-label="Fri 12 Sep, JOD 120.000, 1 expense, before the trip"></div>
+          <span class="gaplab">⋯ before</span>
+          <div class="bar" style="height:40%" role="button" tabindex="0" aria-label="Fri 3 Oct, JOD 48.000, 2 expenses"></div><div class="bar" style="height:22%"></div><div class="bar sel" style="height:100%"></div><div class="bar" style="height:30%"></div><div class="bar zero other" aria-label="Tue 7 Oct, no JOD, + USD spent"></div><div class="bar" style="height:18%"></div><div class="bar" style="height:25%"></div><div class="bar zero"></div><div class="bar" style="height:12%"></div><div class="bar" style="height:35%"></div><div class="bar zero"></div><div class="bar" style="height:20%"></div><div class="bar" style="height:28%"></div><div class="bar zero"></div><div class="bar" style="height:15%"></div><div class="bar" style="height:10%"></div>
+          <span class="gaplab">⋯ upcoming</span>
+          <div class="bar out" style="height:45%" aria-label="Thu 23 Oct, JOD 80.000, 1 expense, upcoming"></div>
+        </div>
+        <div class="xlab"><span>12 Sep</span><span class="gaplab"></span><span>3</span><span></span><span>5</span><span></span><span>7</span><span></span><span></span><span>10</span><span></span><span></span><span></span><span></span><span>15</span><span></span><span></span><span>18</span><span class="gaplab"></span><span>23</span></div>
+        <p class="note" style="margin:var(--space-3) 0 0">Every member has a bar, so bars sum to JOD 412.500. A dot marks a day with spending only in another currency. More than 31 days → weekly bars (19A).</p>
+      </section>
+      <section class="sect">
+        <h4>By category <span class="decided">13A</span> <span class="decided">23A</span></h4>
+        <div class="cats">
+          <button class="cat btnrow"><span>Travel &amp; Transport</span><span class="amt">JOD 180.000 · 44%</span><span class="track"><span class="fill" style="display:block;width:44%"></span></span></button>
+          <button class="cat btnrow on"><span>Rent</span><span class="amt">JOD 121.500 · 29%</span><span class="track"><span class="fill" style="display:block;width:29%"></span></span></button>
+          <button class="cat btnrow"><span>Leisure</span><span class="amt">JOD 66.000 · 16%</span><span class="track"><span class="fill" style="display:block;width:16%"></span></span></button>
+          <button class="cat btnrow"><span>Uncategorized</span><span class="amt">JOD 45.000 · 11%</span><span class="track"><span class="fill" style="display:block;width:11%;background:var(--muted)"></span></span></button>
+        </div>
+      </section>
+    </div>
+
+    <h4 style="font-size:var(--text-headline);font-family:var(--font-display);margin:var(--space-6) 0 var(--space-2)">Expenses in this group <span class="decided">4A oldest first</span></h4>
+    <div class="filterbar"><span class="pillx">Rent ×</span><span>2 expenses</span><button class="rowact">Leave out all 2 Rent</button></div>
+    <table>
+      <thead><tr><th>Title</th><th class="hide-sm">Category</th><th class="num">Amount</th><th><span class="sr">Action</span></th></tr></thead>
+      <tbody>
+        <tr class="dayhead"><td colspan="2">Fri 12 Sep · before the trip</td><td class="num">JOD 120.000</td><td></td></tr>
+        <tr><td class="t">Flight TLV → AMM<span class="keep">Kept</span></td><td class="hide-sm">Travel &amp; Transport</td><td class="num">JOD 120.000</td><td><button class="rowact">Remove</button></td></tr>
+        <tr class="dayhead"><td colspan="2">Fri 3 Oct</td><td class="num">JOD 48.000</td><td></td></tr>
+        <tr><td class="t">Airport taxi</td><td class="hide-sm">Travel &amp; Transport</td><td class="num">JOD 18.000</td><td><button class="rowact">Leave out</button></td></tr>
+        <tr><td class="t">Rent — October</td><td class="hide-sm">Rent</td><td class="num">JOD 30.000</td><td><button class="rowact">Leave out</button></td></tr>
+        <tr class="dayhead"><td colspan="2">Sun 5 Oct</td><td class="num">JOD 96.000 · USD 40.00</td><td></td></tr>
+        <tr><td class="t">Dead Sea day pass</td><td class="hide-sm">Leisure</td><td class="num">JOD 66.000</td><td><button class="rowact">Leave out</button></td></tr>
+        <tr><td class="t">eSIM top-up</td><td class="hide-sm">Communications</td><td class="num">USD 40.00</td><td><button class="rowact">Leave out</button></td></tr>
+      </tbody>
+    </table>
+    <p class="note" style="margin-top:var(--space-2)">Day subtotals come from the summary, not from loaded rows. Leave out acts at once with Undo.</p>
+    <div class="toast">"Dead Sea day pass" left out of Jordan trip <button class="link">Undo</button></div>
+    <details class="excl-sec" open>
+      <summary>Left out (1) <span class="decided">22A in-range only</span></summary>
+      <table><tbody>
+        <tr class="excl"><td class="t">Netflix</td><td class="hide-sm">Subscriptions</td><td class="num">USD 15.99</td><td><button class="rowact">Bring back</button></td></tr>
+      </tbody></table>
+    </details>
+  </div>
+</div>
+
+<!-- 4. Picker -->
+<h2 class="sec">4 · Add from outside these dates <span class="decided">12A</span></h2>
+<div class="row">
+  <div class="col">
+    <div class="drawer" style="min-height:0">
+      <div class="dh"><h4>Add to Jordan trip</h4><span aria-hidden="true">×</span></div>
+      <div class="db">
+        <div class="seg"><span class="on">30 days before</span></div>
+        <div class="pick">
+          <label><input type="checkbox" checked><span>Travel insurance · 20 Sep</span><span class="gtot">USD 38.00</span></label>
+          <label><input type="checkbox" checked><span>Hotel deposit · 25 Sep</span><span class="gtot">JOD 80.000</span></label>
+          <label><input type="checkbox"><span>Visa fee · 28 Sep</span><span class="gtot">JOD 40.000</span></label>
+        </div>
+        <p class="hint">3 Sep – 2 Oct, not already in this group. "30 days after" appears once the group has an end date.</p>
+        <p class="err">Added 1 of 2 · Hotel deposit failed <button class="link">Retry</button></p>
+      </div>
+      <div class="df"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary">Add 2</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- 5. Expense drawer -->
+<h2 class="sec">5 · "In groups" on an expense <span class="decided">11A</span></h2>
+<div class="row"><div class="col">
+  <div class="drawer" style="min-height:0"><div class="db">
+    <div class="fg"><span class="lbl">In groups</span><span><a class="link">Jordan trip</a> <button class="link" style="color:var(--muted)">Remove</button> · <button class="link">Add to group…</button></span></div>
+    <div class="menu"><span class="on">Amman conference</span><span>Istanbul</span></div>
+  </div></div>
+  <p class="note" style="margin-top:var(--space-2)">Omitted while loading or on error (8A). Menu lists the profile's groups that don't contain this expense.</p>
+</div></div>
+
+<!-- 6. States -->
+<h2 class="sec">6 · States <span class="decided">8A</span></h2>
+<div class="row">
+  <div class="col"><p class="cap">No groups yet</p><div class="empty"><h5>Group a trip's spending</h5><p>Pick the dates and every expense in them lands here. See what the trip cost, day by day.</p><button class="btn btn-primary">New group</button></div></div>
+  <div class="col"><p class="cap">Upcoming, nothing yet</p><div class="empty"><h5>Istanbul starts 12 Nov</h5><p>Expenses you log from then on join this group. Booked something already?</p><button class="btn btn-secondary">Add from outside these dates</button></div></div>
+  <div class="col"><p class="cap">Past or ongoing, nothing dated in it</p><div class="empty"><h5>Nothing dated in these days yet</h5><p>Log an expense in these dates, or pull one in from before.</p><button class="btn btn-secondary">Add from outside these dates</button></div></div>
+  <div class="col"><p class="cap">Everything left out</p><div class="empty"><h5>Everything here is left out</h5><p>Bring back what belongs to this trip from the list below.</p></div></div>
+  <div class="col"><p class="cap">Loading</p><div class="panel"><div class="skel" style="width:40%"></div><div class="skel" style="width:70%;height:40px"></div><div class="skel"></div><div class="skel" style="width:85%"></div></div></div>
+  <div class="col"><p class="cap">Deleted (404) / FX states</p><div class="empty"><h5>This group was deleted</h5><p>Its expenses are still in Expenses.</p><button class="btn btn-secondary">Back to Groups</button></div><p class="note" style="margin-top:var(--space-2)">FX loading or 503: the ≈ line is hidden. Stale: "rate from 14 Oct".</p></div>
+</div>
+
+<!-- 7. 375 -->
+<h2 class="sec">7 · 375 px <span class="decided">21A</span></h2>
+<div class="phone">
+  <div class="page">
+    <div class="crumb"><a>Groups</a></div>
+    <div class="ph"><h3>Jordan trip</h3><button class="btn btn-secondary" aria-label="More">⋯</button></div>
+    <p class="meta">3 Oct – today · 16 days</p>
+    <div class="headline" style="flex-direction:column;gap:0"><span><span class="cur">JOD 412.500</span><span class="cnt">17</span></span><span><span class="cur">USD 230.00</span><span class="cnt">5</span></span><span><span class="cur">ILS 85.00</span><span class="cnt">1</span></span></div>
+    <p class="conv"><small>≈ ILS 4,601.20 at today's rate (17 Oct)</small></p>
+    <span class="seg"><span class="on">JOD</span><span>USD</span><span>ILS</span></span>
+    <section class="sect" style="margin-top:var(--space-3)"><h4>Day by day</h4><div class="bars" style="height:90px"><div class="bar" style="height:40%"></div><div class="bar" style="height:22%"></div><div class="bar" style="height:100%"></div><div class="bar" style="height:30%"></div><div class="bar zero"></div><div class="bar" style="height:18%"></div><div class="bar" style="height:25%"></div><div class="bar zero"></div><div class="bar" style="height:12%"></div><div class="bar" style="height:35%"></div></div></section>
+    <table style="margin-top:var(--space-3)"><tbody><tr class="dayhead"><td>Sun 5 Oct</td><td class="num">JOD 96.000</td><td></td></tr><tr><td class="t">Dead Sea day pass<br><span class="hint" style="margin:0">Leisure</span></td><td class="num">JOD 66.000</td><td><button class="rowact" style="min-height:44px">Leave out</button></td></tr></tbody></table>
+  </div>
+</div>
+</div>
+<script>
+const root=document.documentElement;
+document.getElementById('t-theme').onclick=e=>{const d=root.dataset.theme==='dark';root.dataset.theme=d?'light':'dark';e.target.setAttribute('aria-pressed',String(!d));};
+document.getElementById('t-dir').onclick=e=>{const r=root.dir==='rtl';root.dir=r?'ltr':'rtl';e.target.setAttribute('aria-pressed',String(!r));};
+</script>
+</body>
+</html>

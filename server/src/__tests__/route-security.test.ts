@@ -35,6 +35,15 @@ const EXPENSE_OPERATIONS = [
   'POST /v1/expenses',
   'POST /v1/expenses/{expenseId}/receipts',
   'POST /v1/expenses/{expenseId}/receipts/{receiptId}/complete',
+  // MUT-267 (ADR-094): expense groups belong to the expenses domain.
+  'GET /v1/expense-groups',
+  'POST /v1/expense-groups',
+  'GET /v1/expense-groups/{groupId}',
+  'PATCH /v1/expense-groups/{groupId}',
+  'DELETE /v1/expense-groups/{groupId}',
+  'PUT /v1/expense-groups/{groupId}/expenses/{expenseId}',
+  'DELETE /v1/expense-groups/{groupId}/expenses/{expenseId}',
+  'GET /v1/expense-groups/{groupId}/summary',
 ];
 
 /** MUT-65: personal-profile income capture — session-only (Malafat has its own richer payment/allocation routes). */
