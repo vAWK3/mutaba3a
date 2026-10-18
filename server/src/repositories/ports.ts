@@ -1516,8 +1516,8 @@ export interface CreateExpenseInput {
   createdByUserId: string;
 }
 
-/** Absent key = unchanged; null = cleared. The currency never changes after create. */
-export type UpdateExpensePatch = Partial<Pick<CreateExpenseInput, 'occurredOn' | 'amountMinor' | 'title' | 'vendor' | 'categoryId' | 'customerId' | 'projectId' | 'notes'>>;
+/** Absent key = unchanged; null = cleared. MUT-272: `currency` only ever arrives with `amountMinor` (`expensePatch`'s pair rule, ADR-096). */
+export type UpdateExpensePatch = Partial<Pick<CreateExpenseInput, 'occurredOn' | 'amountMinor' | 'currency' | 'title' | 'vendor' | 'categoryId' | 'customerId' | 'projectId' | 'notes'>>;
 
 export interface ExpenseFilter {
   /** Inclusive. */

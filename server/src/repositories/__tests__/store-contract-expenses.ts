@@ -125,6 +125,15 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       expect(await store.expenses.update(w.b.id, e.id, 2, { amountMinor: 1n }, at(2))).toEqual({ kind: 'not_found' });
     });
 
+    it('MUT-272: moves an expense to another currency together with its amount', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const e = await store.expenses.create(w.expense(), at(0));
+      const moved = await store.expenses.update(w.a.id, e.id, 1, { amountMinor: 1234n, currency: 'JOD' }, at(1));
+      expect(moved).toMatchObject({ kind: 'updated', record: { amountMinor: 1234n, currency: 'JOD', version: 2 } });
+      expect(await store.expenses.getById(w.a.id, e.id)).toMatchObject({ amountMinor: 1234n, currency: 'JOD' });
+    });
+
     it('soft-deletes: hidden from get, list and update; a second delete reports unchanged; unknown is null', async () => {
       const store = await makeStore();
       const w = await world(store);
