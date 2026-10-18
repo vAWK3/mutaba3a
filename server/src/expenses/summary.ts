@@ -1,3 +1,4 @@
+import { addDays, compareIsoDates, type IsoDate } from '../dates.js';
 import { formatMoney, type Currency } from '../money.js';
 import type { ExpenseRecord } from '../repositories/ports.js';
 
@@ -47,5 +48,47 @@ function breakdown(rows: readonly Summarized[], key: (e: Summarized) => string |
     const diff = sum(b) - sum(a);
     if (diff !== 0n) return diff > 0n ? 1 : -1;
     return ka < kb ? -1 : 1;
+  });
+}
+
+/**
+ * A group's summary (MUT-267): the expense summary per currency plus one
+ * bucket per day. Every series day is zero-filled; every member dated outside
+ * the series gets a sparse bucket marked before or after it (design review 6A),
+ * so a currency's buckets always sum to its total.
+ */
+export type DayPosition = 'before' | 'in' | 'after';
+
+export interface DayBucket extends ExpenseBucket {
+  date: IsoDate;
+  position: DayPosition;
+}
+
+export interface GroupSummaryBlock extends ExpenseSummaryBlock {
+  byDay: DayBucket[];
+}
+
+type GroupSummarized = Summarized & Pick<ExpenseRecord, 'occurredOn'>;
+
+export function summarizeGroup(members: readonly GroupSummarized[], series: { from: IsoDate; to: IsoDate }): GroupSummaryBlock[] {
+  return summarizeExpenses(members).map((block) => ({
+    ...block,
+    byDay: dayBuckets(
+      members.filter((e) => e.currency === block.currency),
+      series,
+      block.currency,
+    ),
+  }));
+}
+
+function dayBuckets(rows: readonly GroupSummarized[], series: { from: IsoDate; to: IsoDate }, currency: Currency): DayBucket[] {
+  const byDate = new Map<IsoDate, GroupSummarized[]>();
+  for (const e of rows) byDate.set(e.occurredOn, [...(byDate.get(e.occurredOn) ?? []), e]);
+  const dates = new Set(byDate.keys());
+  for (let d = series.from; compareIsoDates(d, series.to) <= 0; d = addDays(d, 1)) dates.add(d);
+  return [...dates].sort().map((date) => {
+    const group = byDate.get(date) ?? [];
+    const position: DayPosition = compareIsoDates(date, series.from) < 0 ? 'before' : compareIsoDates(date, series.to) > 0 ? 'after' : 'in';
+    return { date, total: formatMoney({ minor: sum(group), currency }), count: group.length, position };
   });
 }
