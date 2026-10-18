@@ -43,6 +43,14 @@ describe('parseIncomeAmount — lenient in, canonical out (MUT-133 R5)', () => {
     expect(minorToDecimal(1250, 'JOD')).toBe('1.250');
     expect(minorToDecimal(120000, 'ILS')).toBe('1200.00');
   });
+
+  it('accepts Gulf currencies at their own precision (MUT-281)', () => {
+    expect(parseIncomeAmount('1.25', 'BHD')).toMatchObject({ kind: 'ok', canonical: '1.250' });
+    expect(parseIncomeAmount('1.25', 'OMR')).toMatchObject({ kind: 'ok', canonical: '1.250' });
+    expect(parseIncomeAmount('1.255', 'AED')).toEqual({ kind: 'invalid' });
+    expect(minorToDecimal(1250, 'BHD')).toBe('1.250');
+    expect(minorToDecimal(10050, 'AED')).toBe('100.50');
+  });
 });
 
 describe('incomeFormSchema', () => {

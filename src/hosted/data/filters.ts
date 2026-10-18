@@ -1,4 +1,5 @@
 import type { Currency } from '../api/client';
+import { HOSTED_CURRENCIES } from '../format/currencies';
 
 /**
  * One filters object per list view, kept in the URL's search params and updated
@@ -9,8 +10,8 @@ import type { Currency } from '../api/client';
 
 type Raw = Record<string, unknown>;
 
-/** The wire currencies a list can filter by. JOD since MUT-194 (TD-117): the server accepts it on every money field. */
-const CURRENCIES = ['ILS', 'USD', 'EUR', 'JOD'] as const;
+/** The wire currencies a list can filter by -- derives from HOSTED_CURRENCIES (MUT-281) instead of its own copy. */
+const CURRENCIES = HOSTED_CURRENCIES;
 const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

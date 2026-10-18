@@ -60,6 +60,12 @@ describe('conversions page URL state (MUT-194)', () => {
     expect(parseConversionsPage({ currency: 'GBP' })).toEqual({});
   });
 
+  it('keeps each Gulf currency filter (MUT-281)', () => {
+    for (const currency of ['AED', 'SAR', 'QAR', 'BHD', 'OMR']) {
+      expect(parseConversionsPage({ currency })).toEqual({ currency });
+    }
+  });
+
 });
 
 describe('shell overlay keys (MUT-183 R1)', () => {

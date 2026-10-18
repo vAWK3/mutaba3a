@@ -194,6 +194,75 @@ describe('ExpenseDrawer (hosted)', () => {
     expect(createExpense).not.toHaveBeenCalled();
   });
 
+  it('creates a BHD expense with a 3-decimal amount (MUT-281: Gulf dinars are 3-decimal, like JOD)', async () => {
+    const user = userEvent.setup();
+    let createCall: { body: unknown } | null = null;
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'POST /v1/expenses': (req) => {
+        createCall = { body: req.body };
+        return ok({ id: 'e1' }, 201);
+      },
+    });
+
+    const { onClose } = renderDrawer();
+    await user.selectOptions(await screen.findByLabelText('Currency *'), 'BHD');
+    await user.type(await screen.findByPlaceholderText('0.00'), '12.345');
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(createCall!.body).toMatchObject({ amount: '12.345', currency: 'BHD' });
+  });
+
+  it('rejects a BHD amount with a 4th decimal place', async () => {
+    const user = userEvent.setup();
+    const createExpense = vi.fn();
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'POST /v1/expenses': (req) => {
+        createExpense(req.body);
+        return ok({ id: 'e1' }, 201);
+      },
+    });
+
+    renderDrawer();
+    await user.selectOptions(await screen.findByLabelText('Currency *'), 'BHD');
+    await user.type(await screen.findByPlaceholderText('0.00'), '12.3456');
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Enter a valid amount')).toBeInTheDocument();
+    expect(createExpense).not.toHaveBeenCalled();
+  });
+
+  it('creates an AED expense at its own 2-decimal precision (MUT-281)', async () => {
+    const user = userEvent.setup();
+    let createCall: { body: unknown } | null = null;
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'POST /v1/expenses': (req) => {
+        createCall = { body: req.body };
+        return ok({ id: 'e1' }, 201);
+      },
+    });
+
+    const { onClose } = renderDrawer();
+    await user.selectOptions(await screen.findByLabelText('Currency *'), 'AED');
+    await user.type(await screen.findByPlaceholderText('0.00'), '100.50');
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(createCall!.body).toMatchObject({ amount: '100.50', currency: 'AED' });
+  });
+
   it('blocks the drawer body behind a spinner in edit mode until the expense loads', async () => {
     let resolveExpense: (r: Response) => void = () => {};
     route({
