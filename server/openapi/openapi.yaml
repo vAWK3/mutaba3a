@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.34.0-mut272
+  version: 1.35.0-mut280
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -171,10 +171,27 @@ components:
             $ref: "#/components/schemas/HostedProfile"
         limits:
           $ref: "#/components/schemas/ProfileLimits"
+        currencies:
+          type: array
+          items:
+            type: string
+            pattern: ^[A-Z]{3}$
+          description: Every currency code this server accepts, in its supported order. Clients offer only the codes they also know and ignore the rest. Servers older than MUT-280 omit the field.
+          example:
+            - ILS
+            - USD
+            - EUR
+            - JOD
+            - AED
+            - SAR
+            - QAR
+            - BHD
+            - OMR
       required:
         - user
         - profiles
         - limits
+        - currencies
     UserLocale:
       type: string
       enum:
@@ -264,6 +281,11 @@ components:
         - USD
         - EUR
         - JOD
+        - AED
+        - SAR
+        - QAR
+        - BHD
+        - OMR
     IncomeCaptureRules:
       type: object
       properties:
@@ -5056,7 +5078,7 @@ components:
           example: 0.322356
         derived:
           type: boolean
-          description: "True when exactly one side of the pair is JOD: the ECB publishes no JOD rate, so it comes from the USD peg (1 USD = 0.709 JOD)"
+          description: "True when either side of the pair is pegged to the US dollar (never base→base): the ECB publishes no rate for it, so the rate comes from its USD peg (1 USD = 0.709 JOD, 3.6725 AED, 3.75 SAR, 3.64 QAR, 0.376 BHD, 0.3845 OMR)"
       required:
         - currency
         - rate

@@ -398,6 +398,17 @@ export const MeSchema = z
     profiles: z.array(HostedProfileSchema),
     /** MUT-182: how many profiles the caller owns (the personal one included) and how many they may. */
     limits: z.object({ ownedProfiles: z.number().int().min(0), maxOwnedProfiles: z.number().int().min(1) }).openapi('ProfileLimits'),
+    /**
+     * MUT-280 (ADR-097): plain three-letter strings, not the Currency enum, so a client built against this spec
+     * never rejects a code a newer server adds.
+     */
+    currencies: z
+      .array(z.string().regex(/^[A-Z]{3}$/))
+      .openapi({
+        description:
+          'Every currency code this server accepts, in its supported order. Clients offer only the codes they also know and ignore the rest. Servers older than MUT-280 omit the field.',
+        example: [...SUPPORTED_CURRENCIES],
+      }),
   })
   .openapi('Me');
 

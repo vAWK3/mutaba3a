@@ -6,7 +6,9 @@ import { SIGN_IN_POLICY, sessionDigest } from '../auth/sessions.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from '../auth/users.js';
 import { sessionAccess } from '../auth/writability.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
+import { SUPPORTED_CURRENCIES } from '../money.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { MeSchema } from '../schemas.js';
 import { provisionUser } from './helpers/provision.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -213,6 +215,19 @@ describe('POST /v1/sessions — sign in', () => {
 });
 
 describe('GET /v1/me', () => {
+  it('lists every currency the server accepts, in order, on sign-in and on GET /v1/me (MUT-280)', async () => {
+    const h = harness();
+    const a = await firm(h);
+    const p = await person(h, a.org.id);
+    const { res, token } = await signIn(h, p.email, p.password);
+    const signedIn = await read(res);
+    const me = await read(await h.app.request('/v1/me', { headers: withSession(token) }));
+    for (const body of [signedIn, me]) {
+      expect(body.currencies).toEqual([...SUPPORTED_CURRENCIES]);
+      expect(MeSchema.safeParse(body).success).toBe(true);
+    }
+  });
+
   it('lists each membership as a hosted profile with its writer of record and access', async () => {
     const h = harness();
     const a = await firm(h);
