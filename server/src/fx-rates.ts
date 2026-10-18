@@ -19,8 +19,8 @@ import { SUPPORTED_CURRENCIES, type Currency } from './money.js';
  */
 
 /** The currencies the ECB snapshot prices directly. Every other supported currency must have a USD peg. */
-const ECB_CURRENCIES = ['USD', 'EUR', 'ILS'] as const;
-export type PeggedCurrency = Exclude<Currency, (typeof ECB_CURRENCIES)[number]>;
+type EcbCurrency = 'USD' | 'EUR' | 'ILS';
+export type PeggedCurrency = Exclude<Currency, EcbCurrency>;
 
 /**
  * Units per 1 USD, each fixed by its central bank (ADR-087 §3, ADR-098). Keyed by every currency the ECB
