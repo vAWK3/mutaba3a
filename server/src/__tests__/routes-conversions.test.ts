@@ -110,6 +110,13 @@ describe('POST /v1/conversions', () => {
     expect((await read(res)).amount).toBe('100.000');
   });
 
+  it('converts AED to BHD, each leg in its own digits (MUT-280)', async () => {
+    const { create } = await setup();
+    const res = await create({ amount: '100.00', currency: 'AED', toAmount: '10.250', toCurrency: 'BHD' });
+    expect(res.status).toBe(201);
+    expect(await read(res)).toMatchObject({ amount: '100.00', currency: 'AED', toAmount: '10.250', toCurrency: 'BHD' });
+  });
+
   it.each([
     ['a zero source amount', { amount: '0.00' }, 'AMOUNT_INVALID', 'amount'],
     ['a negative source amount', { amount: '-5.00' }, 'AMOUNT_INVALID', 'amount'],

@@ -196,6 +196,14 @@ describe('POST /v1/expenses', () => {
     expect((await read(patched)).error.details).toMatchObject({ reason: 'CATEGORY_NOT_FOUND', field: 'categoryId' });
   });
 
+  it('records an OMR expense at 3 decimals and refuses a 4th (MUT-280)', async () => {
+    const { create } = await setup();
+    const res = await create({ amount: '0.385', currency: 'OMR' });
+    expect(res.status).toBe(201);
+    expect(await read(res)).toMatchObject({ amount: '0.385', currency: 'OMR' });
+    expect((await create({ amount: '0.3851', currency: 'OMR' })).status).toBe(422);
+  });
+
   it('refuses an unsupported currency at the schema', async () => {
     const { create } = await setup();
     const res = await create({ currency: 'GBP' });
