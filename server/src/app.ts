@@ -1,15 +1,15 @@
-import { randomBytes, randomUUID } from 'node:crypto';
-import { OpenAPIHono } from '@hono/zod-openapi';
+import { randomBytes } from 'node:crypto';
+import type { OpenAPIHono } from '@hono/zod-openapi';
 import { contextStorage } from 'hono/context-storage';
-import { HTTPException } from 'hono/http-exception';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { createApiShell } from './app-shell.js';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
 import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
 import { DEFAULT_DEVICE_ABSOLUTE_DAYS, DEFAULT_DEVICE_IDLE_DAYS, SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
 import { SCOPES } from './auth/scopes.js';
 import { requestScopedStore } from './auth/store-guard.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from './auth/users.js';
-import { ApiError, ERROR_CODES } from './errors.js';
+import { ERROR_CODES } from './errors.js';
 import type { CachedFxRates } from './fx-rates.js';
 import type { Logger } from './logger.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
@@ -133,53 +133,20 @@ export const API_VERSION = '1.35.0-mut280';
 export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const now = deps.now ?? (() => new Date());
 
-  const app = new OpenAPIHono<AppEnv>({
-    defaultHook: (result, c) => {
-      if (!result.success) {
-        const err = new ApiError('VALIDATION_FAILED', 'Request validation failed', result.error.issues);
-        return c.json(err.toEnvelope(c.get('requestId')), err.status);
-      }
-      return undefined;
-    },
-  });
+  const { app } = createApiShell({ now, logger: deps.logger });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
   app.use('*', async (c, next) => {
-    const requestId = c.req.header('x-request-id') ?? randomUUID();
-    c.set('requestId', requestId);
-    c.set('now', now);
-    c.header('X-Request-Id', requestId);
+    c.header('X-Request-Id', c.get('requestId'));
     c.header('Cache-Control', 'no-store');
     c.header('Content-Security-Policy', PORTAL_CSP);
     const started = Date.now();
     await next();
     deps.logger.info(
-      { requestId, method: c.req.method, path: c.req.path, status: c.res.status, durationMs: Date.now() - started },
+      { requestId: c.get('requestId'), method: c.req.method, path: c.req.path, status: c.res.status, durationMs: Date.now() - started },
       'request',
     );
-  });
-
-  app.onError((err, c) => {
-    const requestId = c.get('requestId') ?? 'unknown';
-    if (err instanceof ApiError) {
-      if (err.status >= 500) deps.logger.error({ requestId, err }, err.message);
-      return c.json(err.toEnvelope(requestId), err.status);
-    }
-    // TD-148 (MUT-235 review): Hono's validator throws a 400 HTTPException for an unparseable body (e.g. a JSON
-    // content type with no body). That is the client's input, so it is a validation failure, never a 500.
-    if (err instanceof HTTPException && err.status === 400) {
-      const invalid = new ApiError('VALIDATION_FAILED', err.message || 'Request body could not be parsed');
-      return c.json(invalid.toEnvelope(requestId), invalid.status);
-    }
-    deps.logger.error({ requestId, err }, 'unhandled error');
-    const internal = new ApiError('INTERNAL', 'Unexpected server error');
-    return c.json(internal.toEnvelope(requestId), internal.status);
-  });
-
-  app.notFound((c) => {
-    const err = new ApiError('NOT_FOUND', `No route for ${c.req.method} ${c.req.path}`);
-    return c.json(err.toEnvelope(c.get('requestId')), err.status);
   });
 
   const passwordHasher = deps.passwordHasher ?? createArgon2Hasher(ARGON2_MINIMUMS);
