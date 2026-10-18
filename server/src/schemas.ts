@@ -7,7 +7,7 @@ import { DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT } from './agreements/compose.j
 import { GROUP_NAME_MAX, MAX_GROUP_SPAN_DAYS } from './expenses/groups.js';
 import { MAX_INSTALLMENTS } from './agreements/schedule.js';
 import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
-import { JOD_PER_USD } from './fx-rates.js';
+import { USD_PEGS } from './fx-rates.js';
 import { IMPORT_MAX_ROWS } from './import/plan.js';
 import { SUPPORTED_CURRENCIES } from './money.js';
 import { ITEM_STATUSES } from './agreements/status.js';
@@ -865,6 +865,9 @@ export const ContingencyTermsSchema = z
   })
   .openapi('ContingencyTerms');
 
+/** "0.709 JOD, 3.6725 AED, …" for the `derived` description (MUT-280, ADR-097). */
+const PEG_LIST = Object.entries(USD_PEGS).map(([currency, peg]) => `${peg} ${currency}`).join(', ');
+
 /** MUT-228 (ADR-087): reference exchange rates for display. Never stored on a record. */
 export const FxRatesQuerySchema = z.object({
   base: CurrencySchema.openapi({ description: 'The currency the rates are quoted against; the phone sends the target profile’s default currency' }),
@@ -873,7 +876,7 @@ export const FxRateSchema = z
   .object({
     currency: CurrencySchema,
     rate: z.number().positive().openapi({ description: 'Units of `currency` per 1 `base`, rounded to 6 decimal places', example: 0.322356 }),
-    derived: z.boolean().openapi({ description: `True when exactly one side of the pair is JOD: the ECB publishes no JOD rate, so it comes from the USD peg (1 USD = ${JOD_PER_USD} JOD)` }),
+    derived: z.boolean().openapi({ description: `True when either side of the pair is pegged to the US dollar (never base→base): the ECB publishes no rate for it, so the rate comes from its USD peg (1 USD = ${PEG_LIST})` }),
   })
   .openapi('FxRate');
 export const FxRatesResponseSchema = z

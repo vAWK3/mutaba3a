@@ -10,10 +10,11 @@
  * desktop hard-codes `/100`; the service carries the exponent per currency so
  * a zero-decimal currency can be added without touching arithmetic.
  */
-export const SUPPORTED_CURRENCIES = ['ILS', 'USD', 'EUR', 'JOD'] as const;
+/** New codes are appended, so existing positions (rates order, the OpenAPI enum) never move. The Gulf five are MUT-280. */
+export const SUPPORTED_CURRENCIES = ['ILS', 'USD', 'EUR', 'JOD', 'AED', 'SAR', 'QAR', 'BHD', 'OMR'] as const;
 export type Currency = (typeof SUPPORTED_CURRENCIES)[number];
 
-const EXPONENT: Record<Currency, number> = { ILS: 2, USD: 2, EUR: 2, JOD: 3 };
+const EXPONENT: Record<Currency, number> = { ILS: 2, USD: 2, EUR: 2, JOD: 3, AED: 2, SAR: 2, QAR: 2, BHD: 3, OMR: 3 };
 
 export function isSupportedCurrency(value: string): value is Currency {
   return (SUPPORTED_CURRENCIES as readonly string[]).includes(value);
@@ -39,7 +40,7 @@ const DECIMAL_RE = /^(-)?(\d+)(?:\.(\d+))?$/;
 
 /**
  * The largest amount the API accepts, in minor units, either sign (MUT-126):
- * 9,999,999,999,999.99 in a 2-decimal currency. Amounts are stored in Postgres
+ * 9,999,999,999,999.99 in a 2-decimal currency, 999,999,999,999.999 in a 3-decimal one. Amounts are stored in Postgres
  * BIGINT columns (max ~9.2e18); without a bound an oversized amount passed
  * validation and failed inside the write as a 500. The headroom below BIGINT
  * also keeps sums of many amounts in range.
