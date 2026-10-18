@@ -3031,3 +3031,10 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
   - **Pattern.** `urlInTextPattern` is in the portable subset.
   - **Script.** It refuses a paginated project list (Link `rel="next"; results="true"`). The admin-token error names a personal token.
 
+
+### MUT-272 — expense currency edit (server half, 2026-10-18)
+
+| Test | Covers |
+|---|---|
+| `server/src/expenses/__tests__/compose.test.ts` › expensePatch currency | currency alone → AMOUNT_REQUIRED (changed or not); amount + currency → both set, read in the new currency's digits (JOD 3, JOD→USD 2); too many digits for the new currency → refused on amount; amount-only keeps the row's currency |
+| `server/src/__tests__/routes-expenses.test.ts` › MUT-272 ×2 | 422 AMOUNT_REQUIRED alone (USD and ILS), row unchanged; USD "1.234" → 422 amount; JOD 1.234 → 200 v2; stale If-Match → 409; USD → 200 v3; audit `currency {from,to}` per move and none on an amount-only edit; month summary counts it under USD only |

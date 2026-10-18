@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-18 — Change an expense's currency together with its amount (MUT-272, ADR-095)
+
+**Why:** logging an expense in the wrong currency meant delete and re-log. This is the server half of MUT-272; the phone's Recent edit sheet (MUT-272 phone half) and the portal (MUT-277) build on it.
+
+### Changed
+- **`PATCH /v1/expenses/{id}`** accepts `currency` together with `amount`:
+  - a currency alone is 422 `AMOUNT_REQUIRED` (`field: amount`), even when unchanged;
+  - the amount is read in the merged currency's digits (JOD 3; "1.234" in USD is refused);
+  - the audit adds `currency {from, to}` when the currency moved.
+- **Code:** `expensePatch` (`server/src/expenses/compose.ts`), `UpdateExpenseRequestSchema`, and `UpdateExpensePatch.currency` (both stores take it through their generic update).
+- **Docs:** the route description; the inbox PATCH description no longer says an expense's currency is fixed (its own `AMOUNT_INVALID` code stays).
+- **Version:** API 1.34.0-mut272. OpenAPI and the portal's `schema.d.ts` are regenerated.
+
+### Technical
+- Tests: a new `server/src/expenses/__tests__/compose.test.ts`; `routes-expenses.test.ts` replaces "never changes a row's currency" with the pair rule, the JOD/USD digits, a stale If-Match, the audit from/to and the summary moving to the new currency.
+
 ## [Unreleased] - 2026-10-18 — Hosted expense groups: trips with per-day and per-category totals (MUT-267, ADR-094)
 
 **Why:** epic MUT-266. A person groups a trip's expenses by date, prunes them, and sees what it cost. This is the API that the portal (MUT-268) and the phone (MUT-269) build on.

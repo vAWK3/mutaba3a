@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.33.0-mut267
+  version: 1.34.0-mut272
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -4294,6 +4294,10 @@ components:
           type: string
           pattern: ^-?\d+(\.\d+)?$
           description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        currency:
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+            - description: Only together with amount (422 AMOUNT_REQUIRED alone), which is then read in this currency's digits.
         title:
           type: string
           nullable: true
@@ -10348,7 +10352,7 @@ paths:
       tags:
         - Expenses
       summary: Change an expense (optimistic, If-Match)
-      description: Any field but the currency, which never changes. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.
+      description: Any field. A currency changes only together with its amount (422 AMOUNT_REQUIRED), and the amount is read in the merged currency's digits. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.
       security:
         - session: []
         - deviceSession: []
@@ -12113,7 +12117,7 @@ paths:
       tags:
         - Inbox
       summary: Fix an unsorted entry (optimistic, If-Match)
-      description: "Anything you captured. Not kind: what an entry is destined to become is fixed at capture, as an expense's currency is. null clears an optional field."
+      description: "Anything you captured. Not kind: what an entry is destined to become is fixed at capture. A changed currency needs the amount again (422 AMOUNT_INVALID), read in that currency's digits. null clears an optional field."
       security:
         - session: []
         - deviceSession: []

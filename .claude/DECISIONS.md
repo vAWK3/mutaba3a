@@ -3719,3 +3719,27 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - One new pair of tables (additive migration `20261018150000_mut267_expense_groups`), eight routes, and `groupId`/`groupMembership` on `GET /v1/expenses`.
 - The list makes one small aggregate per group.
 - API 1.33.0-mut267.
+
+## ADR-095: An Expense's Currency Changes Only Together With Its Amount (the ADR-075 Pair Rule on Expenses)
+
+**Status**: Active
+**Date**: 2026-10-18
+**Context**: MUT-272 (epic MUT-63). Logging an expense in the wrong currency used to mean delete and re-log, which loses the receipts, the links and the history. `PATCH /v1/expenses/{id}` said "Any field but the currency, which never changes", while conversions (ADR-075) and the Unsorted inbox already allowed a currency change with its amount. The phone's Recent edit sheet (MUT-272, phone half) and later the portal (MUT-277) need the server to accept it.
+
+**Decision**:
+1. **The pair rule.** `currency` is accepted only with `amount`. A currency alone is 422 `AMOUNT_REQUIRED` (`field: amount`), **even when it equals the stored one** (eng review R1). This is the conversion rule, so one sentence covers both.
+2. **The amount is read in the merged currency's digits.** A JOD amount keeps 3 decimals; "1.234" in USD is 422 on `amount`. Nothing is rounded.
+3. **Optimistic concurrency is unchanged.** If-Match must match the version, and it bumps on success.
+4. **Audit.** `expense.updated` adds `currency: {from, to}` when the currency actually moved.
+5. **The inbox keeps its own code.** `PATCH /v1/inbox/{id}` still answers `AMOUNT_INVALID` for a changed currency without an amount (eng review R2: no API change for a working route). Only its description now says so.
+6. **Nothing stored needs fixing.** Summaries and expense groups (ADR-094) total per currency when read, so a moved expense simply counts under its new currency.
+
+**Alternatives considered**:
+- **Refuse only a changed currency** (the inbox's leniency). Rejected: two rules for one money question.
+- **Accept a currency alone and keep the minor units.** Rejected: it silently rescales the money (ILS 120.50 → JOD 12.050).
+- **Rename the inbox code to `AMOUNT_REQUIRED`.** Rejected for now: no user-visible gain, and an API change.
+
+**Consequences**:
+- `UpdateExpenseRequest` gains `currency`; `UpdateExpensePatch` gains `currency` in both stores.
+- API 1.34.0-mut272.
+- Clients must deploy after the server: the request schema is strict, so an older server answers 400 to `currency`.
