@@ -33,6 +33,11 @@ export interface TransactionTotalsByCurrency {
   ILS: TransactionTotals;
   EUR: TransactionTotals;
   JOD: TransactionTotals;
+  AED: TransactionTotals;
+  SAR: TransactionTotals;
+  QAR: TransactionTotals;
+  BHD: TransactionTotals;
+  OMR: TransactionTotals;
 }
 
 export interface TransactionTotalsWithActivity extends TransactionTotals {
@@ -331,6 +336,11 @@ export function aggregateTransactionTotalsByCurrency(
     ILS: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
     EUR: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
     JOD: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
+    AED: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
+    SAR: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
+    QAR: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
+    BHD: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
+    OMR: { paidIncomeMinor: 0, unpaidIncomeMinor: 0, expensesMinor: 0 },
   };
 
   for (const tx of transactions) {
@@ -505,7 +515,7 @@ export function sumExpensesMinor(expenses: Expense[]): number {
 
 /** Sum expense amounts per currency. Currencies are never combined (ADR-004). */
 export function sumExpensesByCurrency(expenses: Expense[]): Record<Currency, number> {
-  const result: Record<Currency, number> = { USD: 0, ILS: 0, EUR: 0, JOD: 0 };
+  const result: Record<Currency, number> = { USD: 0, ILS: 0, EUR: 0, JOD: 0, AED: 0, SAR: 0, QAR: 0, BHD: 0, OMR: 0 };
   for (const e of expenses) {
     if (result[e.currency] === undefined) continue;
     result[e.currency] += e.amountMinor;
