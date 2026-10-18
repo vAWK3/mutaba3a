@@ -121,6 +121,5 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false
       - run: terraform validate
-      # Offline: the Sentry provider is mocked, so no token or account is needed.
-      - if: matrix.module == 'sentry'
-        run: terraform test
+      # Offline: the providers are mocked (Sentry; Google and random since MUT-270), so no token or account is needed.
+      - run: terraform test

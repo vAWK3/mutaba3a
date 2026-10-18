@@ -64,11 +64,11 @@ serializeEntry(row, counts) ─► { items, nextCursor: encodeCursor(...) }
 
 ### 2.4 Store port — `EntriesRepository` (ports.ts, memory.ts, prisma.ts)
 
-`list(organizationIds, page: PageRequest): Promise<Page<EntryRow>>`, where `EntryRow` is `{ kind: 'expense', record } | { kind: 'payment', record } | { kind: 'receivable', record } | { kind: 'conversion', record }`. The repository trusts the ids it is given; the route resolves them from memberships. Prisma: one typed `findMany` per organization and kind, in parallel (D3); no raw SQL. Memory: the same filters over its maps. Both finish with `mergeNewestFirst` (`entries/merge.ts`, pure).
+`list(organizationIds, page: PageRequest): Promise<Page<EntryRow>>`, where `EntryRow` is `{ kind: 'expense', record } | { kind: 'payment', record } | { kind: 'receivable', record } | { kind: 'conversion', record }`. The repository trusts the ids it is given; the route resolves them from memberships. Prisma: one typed `findMany` per organization and kind, in parallel (D3); no raw SQL. The cursor condition is `createdAt <= t AND (createdAt < t OR id < i)`, so the index range starts at the cursor (the OR-only form sorted the whole organization). Memory: the same filters over its maps. Both finish with `mergeNewestFirst` (`entries/merge.ts`, pure).
 
 `expenseReceipts.countReadyByExpenseIds(organizationIds, expenseIds): Promise<Map<string, number>>`.
 
-Store guard: both `sessionOnly` (a person's own cross-profile view; an API key has no person).
+Store guard: `entries.list` is `sessionOnly` (a person's own cross-profile view; an API key has no person); `countReadyByExpenseIds` is `{ read: 'expenses' }`, like every expense-receipt method (MUT-42).
 
 ### 2.5 Indexes (migration)
 

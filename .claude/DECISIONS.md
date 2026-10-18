@@ -3650,3 +3650,32 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - No session or feature-flag machinery, which ADR-090 turns off anyway.
 - Apple's privacy label lists only what this client sends.
 
+---
+
+## ADR-093: One Newest-First Entries Feed Across a Person's Profiles, Read-Only and Index-Bounded
+
+**Status**: Accepted (2026-10-18, MUT-270; decisions D1–D6 from the eng review, Basel's answers)
+
+**Context**: The phone's Recent showed only what that phone saved plus the Unsorted inbox. Basel wants the phone and the portal always in sync, so Recent must read what each profile holds, whoever logged it. A profile's history was four per-organization lists (`/v1/expenses`, `/v1/payments`, `/v1/receivables`, `/v1/conversions`) with different orders and cursors; merging them on the phone costs 4 requests per profile per page.
+
+**Decision**:
+1. **The route.** `GET /v1/entries` is session-only and organization-independent (no `X-Mutaba3a-Profile`), like `/v1/inbox`. An optional, repeatable `profileId` narrows it; any id outside the person's memberships answers 404 `Profile not found`, the same as `selectProfile`. `limit` 1..100, default 20. Items wrap the existing Expense, IncomeResponse and Conversion objects in `{ kind, profileId, createdAt, createdByUserId }` (plus `origin` on received payments and `receiptCount` on expenses).
+2. **What an entry is (D2).** Expenses, received payments, Owed receivables of origin ADJUSTMENT, and conversions. Scheduled installments and retainer charges are not entries, and the feed never lazy-posts, so a read never writes. Deleted rows and capture undos are left out; a payment Malafat reversed stays, as `reversed`.
+3. **Order and cursor (D4).** `createdAt desc, id desc` — when each entry was logged — through `pagination.ts`'s (createdAt, id) envelope unchanged. A cross-table UUID collision at the same millisecond on a page boundary would skip one row; accepted.
+4. **Queries (D3).** One typed Prisma `findMany` per organization and kind, `limit + 1` rows each, in parallel, merged by the pure `mergeNewestFirst` (`server/src/entries/merge.ts`), which the memory store shares. No raw SQL. The cursor condition is `createdAt <= t AND (createdAt < t OR id < i)`: the equivalent OR-only form made Postgres sort the organization's rows. New indexes `(organizationId, createdAt desc, id desc)` on expenses and conversions and `(organizationId, origin, createdAt, id)` on receivables; payments reuse `(organizationId, createdAt, id)` backwards. A test:db EXPLAIN test pins every query to an ordered index scan.
+5. **Income status (D5).** `IncomeStatus` widens to `unallocated | partial | allocated | reversed | open | settled`, derived from the record by `incomeStatusOf`; a fresh capture is still `unallocated`.
+6. **Connection pool (D6).** Terraform writes `connection_limit` (`db_pool_size`, 10) into the DATABASE_URL and sets Cloud SQL `max_connections` (`db_max_connections`, 50) explicitly, with a precondition `db_pool_size × max_instances + 10 ≤ db_max_connections`.
+
+**Alternatives considered**:
+- **Every receivable origin, lazy-posting per organization before the read.** Rejected: writes on a GET across every profile, and scheduled rows crowd out what people typed.
+- **Raw `unnest … CROSS JOIN LATERAL` SQL, 4 queries total.** Rejected: bypasses Prisma's row types; the first raw list query in the repo.
+- **One typed query per kind with `organizationId IN (…)`.** Rejected: Postgres may sort a whole firm's rows per page.
+- **A separate `allocationState` field beside `income.status`.** Rejected: two fields that disagree.
+- **`kind` in the cursor.** Rejected: a new envelope and sort column for a case that will not occur.
+
+**Consequences**:
+- 4 × N small queries per page (N = memberships), plus one membership read and one receipt count.
+- The first `terraform apply` after this change restarts Cloud SQL (INFRA.md).
+- The phone (MUT-271) reads this feed and parses the widened status; the server deploys first.
+- API 1.32.0-mut270.
+

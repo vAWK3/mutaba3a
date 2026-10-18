@@ -2466,3 +2466,14 @@ When several surfaces (TypeScript, Dart, the server image) must apply the same r
 ### Pattern: A terraform test that overrides a resource's values runs in its own test file
 Runs in one `.tftest.hcl` share state. Once an earlier `command = apply` run has created a resource, a later run's `override_resource` no longer reaches it, because nothing is re-created. So an expected-failure run that depends on an override (for example a postcondition fed a wrong value) goes in its own file with its own `mock_provider` block. First instance: `server/infrastructure/sentry/tests/eu_region.tftest.hcl` (MUT-147 review).
 
+## Patterns added by MUT-270 (2026-10-18, ADR-093)
+
+### Pattern: A query's index use is pinned by an EXPLAIN test, not assumed
+A list that promises "no full scan" gets a test:db test that captures the SQL Prisma actually sends (`log: [{ emit: 'event', level: 'query' }]`), inlines the bound values, and EXPLAINs it inside a transaction with `enable_seqscan`, `enable_bitmapscan` and `enable_sort` off. The plan must name the intended index and contain no Seq Scan, Bitmap or Sort; seed realistic skew (and `ANALYZE`) where a wider index competes. Prove it by dropping the index once and watching it fail. First instance: `server/src/repositories/__tests__/store-prisma-entries-plan.test.ts`.
+
+### Pattern: A descending keyset cursor leads with a range condition
+`(createdAt < t) OR (createdAt = t AND id < i)` is correct but Postgres cannot turn it into an index range, so it sorts the organization's rows. Write it as `createdAt <= t AND (createdAt < t OR id < i)`: the first conjunct becomes the index range and the OR only filters rows at the same instant. First instance: `feedCursorWhere` in `server/src/repositories/prisma.ts`.
+
+### Pattern: The GCP Terraform module's guards are tested with mocked Google and random providers
+Same as the Sentry module's pattern above, now for `server/infrastructure/terraform/tests/`. A mocked string is random, so give IAM-checked attributes (a service account's `name` and `email`) well-formed `mock_resource` defaults. First instance: `tests/database_pool.tftest.hcl`.
+
