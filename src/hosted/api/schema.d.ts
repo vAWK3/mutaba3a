@@ -11563,7 +11563,7 @@ export interface components {
         /** @enum {string} */
         IncomeKind: "received" | "owed";
         /** @enum {string} */
-        IncomeStatus: "unallocated" | "open" | "settled";
+        IncomeStatus: "unallocated" | "partial" | "allocated" | "reversed" | "open" | "settled";
         CreateIncomeRequest: {
             kind: components["schemas"]["IncomeKind"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */

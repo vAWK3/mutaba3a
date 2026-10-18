@@ -1469,7 +1469,11 @@ export const CreditsResponseSchema = z.object({ receivable: ReceivableSchema, cr
 // ---- MUT-65: personal profile income capture (session-only) ----------------
 
 export const IncomeKindSchema = z.enum(['received', 'owed']).openapi('IncomeKind');
-export const IncomeStatusSchema = z.enum(['unallocated', 'open', 'settled']).openapi('IncomeStatus');
+/**
+ * Received: unallocated / partial / allocated (how much Malafat has applied) or reversed. Owed: open / settled.
+ * MUT-270 (D5) added partial, allocated and reversed: a fresh capture is still unallocated.
+ */
+export const IncomeStatusSchema = z.enum(['unallocated', 'partial', 'allocated', 'reversed', 'open', 'settled']).openapi('IncomeStatus');
 
 const incomeText = z.string().trim().min(1).max(200);
 const incomeNotes = z.string().max(2000);

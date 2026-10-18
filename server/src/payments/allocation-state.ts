@@ -10,3 +10,11 @@ export function allocationStateOf(p: Pick<PaymentRecord, 'amountMinor' | 'alloca
   if (p.allocatedMinor <= 0n) return 'unallocated';
   return p.allocatedMinor < p.amountMinor ? 'partial' : 'allocated';
 }
+
+/**
+ * MUT-270 (D5): what a received payment's income status reads. A reversal zeroes `allocatedMinor`, so it is
+ * checked first; otherwise the allocation state. A fresh capture is always `unallocated`.
+ */
+export function incomeStatusOf(p: Pick<PaymentRecord, 'amountMinor' | 'allocatedMinor' | 'status'>): AllocationState | 'reversed' {
+  return p.status === 'REVERSED' ? 'reversed' : allocationStateOf(p);
+}

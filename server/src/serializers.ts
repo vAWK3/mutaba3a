@@ -7,7 +7,7 @@ import { formatMoney, type Currency } from './money.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource } from './schemas.js';
-import { allocationStateOf } from './payments/allocation-state.js';
+import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
 import type {
   ConversionRecord,
   ExpenseCategoryRecord,
@@ -539,9 +539,9 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
       title: null,
       notes: p.notes,
       dueDate: null,
-      // Always true at creation: a fresh Received payment carries no allocations yet. MUT-223's PATCH keeps it true:
-      // it refuses an allocated payment before serializing one here.
-      status: 'unallocated' as const,
+      // MUT-270 (D5): read from the record. A fresh capture is unallocated; the entries feed also shows payments
+      // Malafat has since allocated or reversed.
+      status: incomeStatusOf(p),
       version: p.version,
     };
   }

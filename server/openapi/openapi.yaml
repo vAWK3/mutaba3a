@@ -4571,6 +4571,9 @@ components:
       type: string
       enum:
         - unallocated
+        - partial
+        - allocated
+        - reversed
         - open
         - settled
     CreateIncomeRequest:
