@@ -37,7 +37,7 @@
 - **`server/src/entries/merge.ts`**: `mergeNewestFirst`, `isBeforeCursor`, `compareNewestFirst`, shared by both stores.
 - **Store:** `entries.list` (memory + Prisma, one typed query per organization and kind) and `expenseReceipts.countReadyByExpenseIds`; store guard `sessionOnly` / `{ read: 'expenses' }`.
 - **Migration `20261018120000_mut270_entries_feed_indexes`:** indexes only.
-- **Tests:** `routes-entries.test.ts` (11), `entries/__tests__/merge.test.ts` (6), `payments/__tests__/allocation-state.test.ts` (2), store contract `store-contract-entries.ts` (4, memory + Postgres), `store-prisma-entries-plan.test.ts` (2, EXPLAIN), `route-security.test.ts` updated.
+- **Tests:** `routes-entries.test.ts` (12), `entries/__tests__/merge.test.ts` (6), `payments/__tests__/allocation-state.test.ts` (2), store contract `store-contract-entries.ts` (4, memory + Postgres), `store-prisma-entries-plan.test.ts` (2, EXPLAIN), `route-security.test.ts` updated.
 
 ### Changed
 - **`IncomeStatus`** gains `partial`, `allocated`, `reversed`; `serializeIncomeEntry` reads a received payment's status from the record (`incomeStatusOf`). Fresh captures still read `unallocated`.

@@ -293,6 +293,16 @@ describe('GET /v1/entries — who may call it, and what it accepts', () => {
     expect((await feed('', {})).status).toBe(401);
   });
 
+  it('pages 20 at a time when no limit is given', async () => {
+    const { h, a, u, feed } = await setup();
+    for (let i = 0; i < 21; i++) await expense(h, u, a.id);
+
+    const body = await read(await feed());
+    expect(body.items).toHaveLength(20);
+    expect(typeof body.nextCursor).toBe('string');
+    expect((await read(await feed(`?cursor=${body.nextCursor}`))).items).toHaveLength(1);
+  });
+
   it('rejects a cursor it did not issue and a limit outside 1..100', async () => {
     const { feed } = await setup();
     for (const query of ['?cursor=garbage', '?limit=0', '?limit=101', '?limit=two']) {
