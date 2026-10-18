@@ -23,6 +23,10 @@ locals {
   # Operator-side migrations: Cloud SQL Auth Proxy listens here (scripts/deploy.sh).
   proxy_port = 5440
 
+  # MUT-270: connections outside the API's pool — `prisma migrate deploy` and the operator's proxy session, plus
+  # the few Cloud SQL keeps for its own superuser and maintenance.
+  db_reserved_connections = 10
+
   secret_database_url   = "mutaba3a-api-database-url${local.suffix}"
   secret_admin_token    = "mutaba3a-api-admin-token${local.suffix}"
   secret_session_pepper = "mutaba3a-api-session-pepper${local.suffix}"
@@ -123,6 +127,13 @@ resource "google_sql_database_instance" "postgres" {
       hour         = 3
       update_track = "stable"
     }
+
+    # MUT-270: chosen, not inherited, so it stays above every client's pool (see the precondition on the
+    # DATABASE_URL secret). Changing it restarts the instance.
+    database_flags {
+      name  = "max_connections"
+      value = tostring(var.db_max_connections)
+    }
   }
 
   deletion_protection = var.deletion_protection
@@ -164,8 +175,17 @@ resource "google_secret_manager_secret" "database_url" {
 }
 
 resource "google_secret_manager_secret_version" "database_url" {
-  secret      = google_secret_manager_secret.database_url.id
-  secret_data = "postgresql://${local.db_user}:${random_password.db.result}@localhost/${local.db_name}?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
+  secret = google_secret_manager_secret.database_url.id
+  # MUT-270: connection_limit sizes Prisma's pool per instance. Its default is derived from the CPU count it sees,
+  # which in a container can be the host's; GET /v1/entries runs 4 queries per profile in parallel.
+  secret_data = "postgresql://${local.db_user}:${random_password.db.result}@localhost/${local.db_name}?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}&connection_limit=${var.db_pool_size}"
+
+  lifecycle {
+    precondition {
+      condition     = var.db_pool_size * var.max_instances + local.db_reserved_connections <= var.db_max_connections
+      error_message = "db_pool_size × max_instances plus ${local.db_reserved_connections} reserved connections (migrations, the operator's proxy, Cloud SQL's own) must fit within db_max_connections."
+    }
+  }
 }
 
 resource "random_password" "admin_token" {

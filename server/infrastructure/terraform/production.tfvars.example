@@ -7,6 +7,9 @@ db_availability     = "REGIONAL"
 db_backup_enabled   = true
 deletion_protection = true
 min_instances       = 1
+# MUT-270: Prisma pool per instance, and Cloud SQL's max_connections (db_pool_size x max_instances + 10 must fit).
+# db_pool_size        = 10
+# db_max_connections  = 50
 log_level           = "info"
 # alert_notification_channels = ["projects/your-gcp-project/notificationChannels/1234567890"]
 

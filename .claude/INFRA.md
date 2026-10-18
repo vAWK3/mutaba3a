@@ -100,7 +100,13 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 | `API_KEY_ENVIRONMENT` | `live` |
 | Cloud SQL | `db-g1-small`, REGIONAL, daily backups + PITR 7d, deletion protection |
 | Cloud Run instances | min 1 · max 1 (TD-017) |
+| Prisma pool per instance | `db_pool_size` = 10, as `connection_limit` in the DATABASE_URL secret Terraform writes (MUT-270) |
+| Cloud SQL `max_connections` | `db_max_connections` = 50, an explicit flag (db-g1-small's own default) (MUT-270) |
 | Terraform state | `gs://<bucket>/mutaba3a-api/production` |
+
+> **Connection budget (MUT-270, 2026-10-18).** `GET /v1/entries` runs 4 queries per profile in parallel, so the API's pool is now chosen instead of inherited: Prisma's default is derived from the CPU count it sees, which inside a container can be the host's. Rule, enforced by a Terraform precondition: `db_pool_size × max_instances + 10 ≤ db_max_connections` (the 10 cover `prisma migrate deploy`, the operator's proxy session and Cloud SQL's reserved connections). Raise `db_max_connections` with a bigger tier or when `max_instances` grows (TD-017).
+>
+> **The first `terraform apply` after this change restarts the Cloud SQL instance** (adding the `max_connections` flag needs a restart, even at the default value), and writes a new DATABASE_URL secret version that the new Cloud Run revision picks up. Deploy in a quiet window; the API returns errors for the minute or so the database is down.
 
 ### Code-defined
 
