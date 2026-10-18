@@ -425,7 +425,8 @@
 /* ---------- Phone: the sidebar becomes a top bar ---------- */
 
 @media (max-width: 760px) {
-  .hp-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  /* minmax(0, …): the top bar's nav scrolls inside itself, so its full width must not set the column's (MUT-268: every page scrolled sideways at 375 px) */
+  .hp-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .hp-side {
     position: sticky;
     height: auto;
@@ -632,6 +633,8 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-members-table .hp-dayhead:focus { outline: none; }
 .hp-members-table .hp-dayhead:focus-visible th { box-shadow: var(--focus-ring); }
 .hp-dayhead-note { color: var(--muted); font-weight: normal; }
+/* A day header is a row label, not a column header: it wraps (Table.css keeps th on one line) */
+.hp-members-table .hp-dayhead th { white-space: normal; }
 .hp-member-title { overflow-wrap: anywhere; }
 .hp-member-sub { display: block; font-size: var(--text-label); color: var(--muted); }
 .hp-member-out .hp-member-title { color: var(--muted); }
@@ -678,5 +681,8 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
   .hp-group-actions-narrow { display: block; }
   .hp-group-dates { grid-template-columns: 1fr; }
   .hp-member-action .btn { min-height: 44px; }
+  /* 21A: title, amount and the action fit 375 px; the title wraps, the action never scrolls away */
+  .hp-members .hp-members-table :is(th, td) { padding-inline: var(--space-2); }
+  .hp-members .hp-members-table :is(th, td):first-child { padding-inline-start: var(--space-3); }
 }
 [dir='rtl'] .hp-daybar-other::after { translate: 50% 0; }

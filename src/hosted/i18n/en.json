@@ -643,7 +643,7 @@
       "dateRequired": "Pick a date."
     },
     "groups": {
-      "sectionsLabel": "Expenses sections",
+      "sectionsLabel": "Expenses pages",
       "tabExpenses": "Expenses",
       "tabGroups": "Groups",
       "new": "New group",
@@ -801,7 +801,8 @@
         "removed": "Left out of {name}",
         "failed": "Couldn't change the group. Try again."
       },
-      "nothingYet": "nothing yet"
+      "nothingYet": "nothing yet",
+      "crumbLabel": "Breadcrumb"
     }
   }
 }

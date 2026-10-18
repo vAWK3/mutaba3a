@@ -96,7 +96,7 @@ export function ExpenseGroupDetail({ groupId, search, setSearch }: ExpenseGroupD
 
   return (
     <>
-      <nav className="hp-crumb" aria-label={t('hosted.groups.sectionsLabel')}>
+      <nav className="hp-crumb" aria-label={t('hosted.groups.crumbLabel')}>
         <Link to={`/p/${profile.id}/expenses`} activeOptions={{ exact: true }}>
           {t('hosted.groups.tabExpenses')}
         </Link>

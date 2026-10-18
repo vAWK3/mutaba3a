@@ -1,0 +1,110 @@
+app: portal
+area: expense-groups
+title: Expense groups in the portal (trips)
+tier: secondary
+paths:
+  - src/hosted/pages/views/ExpenseGroupsList.tsx
+  - src/hosted/pages/views/ExpenseGroupDetail.tsx
+  - src/hosted/components/SectionTabs.tsx
+  - src/hosted/components/groups/**
+  - src/hosted/data/expenseGroups.ts
+  - src/hosted/data/expenseGroupQueries.ts
+  - src/hosted/components/Toast.tsx
+  - src/lib/motion/rowEnter.ts
+  - src/lib/motion/mediaQuery.ts
+features:
+  - id: create
+    title: Create a trip group for some past dates and land on it with every expense in those dates listed, oldest first
+    tier: secondary
+    steps:
+      - Open Expenses and choose the Groups tab
+      - Choose New group, save it empty
+      - Name it Jordan trip, pick its five days, and create it
+    expect:
+      - The Groups tab is the current section and the empty list invites the first group
+      - Empty Save says "Give the group a name" and "Pick an end date, or tick Still going"; From defaults to today
+      - POST /v1/expense-groups gets the name and dates with an Idempotency-Key
+      - The group page opens with the headline per currency and count, and every expense in those dates by day, oldest first
+  - id: leave-out-undo
+    title: Leave an expense out; it leaves the totals at once and moves to Left out; Undo and Bring back restore it
+    tier: secondary
+    steps:
+      - Open a trip group with expenses
+      - Leave out the Dead Sea day pass
+      - Undo
+      - Leave it out again, open Left out, and Bring back
+    expect:
+      - The JOD headline drops by its amount at once and "Left out (1)" appears; PUT mark excluded is sent
+      - Undo sends DELETE and the expense is a member again
+      - Bring back sends DELETE and the expense is back in the list
+  - id: add-from-outside
+    title: Keep an expense from before the trip; it joins as Kept, counts in its currency, and gets its own bar before the trip
+    tier: secondary
+    steps:
+      - Open the group and choose Add from outside these dates
+      - Tick the flight booked three weeks earlier and add it
+    expect:
+      - The picker lists the 30 days before the start, minus current members
+      - PUT mark included is sent; the flight is listed under "before the trip" with Kept
+      - The JOD total grows by its amount and the chart has a bar for it before the trip
+  - id: currencies-converted
+    title: Totals never add currencies; the ≈ line names the profile currency and the rate date; the currency tab scopes the chart and categories
+    tier: secondary
+    steps:
+      - Open a group with JOD and USD expenses
+      - Switch the currency tab to USD
+    expect:
+      - The headline shows JOD and USD each with its count; the ≈ line says ILS at today's ECB rate with its date and the JOD peg
+      - The chart and categories switch to USD; the headline does not change
+  - id: category-prune
+    title: Filter the members by a category and leave all of it out in one go, with one Undo
+    tier: secondary
+    steps:
+      - Open the group and click Rent in By category
+      - Choose Leave out all 2 Rent
+      - Undo
+    expect:
+      - The member list shows only Rent, and the URL keeps the category
+      - Two PUT marks go out one after the other; "Left out 2 · Rent" is announced
+      - Undo sends DELETE for both and they are members again
+  - id: states
+    title: Empty, upcoming and deleted groups each say what is going on; a failed list offers Try again
+    tier: secondary
+    steps:
+      - Open a past group with nothing in its dates
+      - Open an upcoming group
+      - Open a group that was deleted
+      - Open Groups while the server is unreachable, then Try again
+    expect:
+      - '"Nothing dated in these days yet" with Add from outside these dates'
+      - '"<name> starts <date>"'
+      - '"This group was deleted" with Back to Groups'
+      - The unreachable card, then the list after Try again
+  - id: in-groups-line
+    title: An expense's drawer lists its groups and adds it to another group
+    tier: secondary
+    paths:
+      - src/hosted/components/ExpenseDrawer.tsx
+    steps:
+      - Open an expense from the Expenses list
+      - Choose Add to group… and pick Amman conference
+    expect:
+      - The drawer's In groups line links Jordan trip, with Leave out beside it
+      - The menu offers only the groups the expense is not in; PUT mark included is sent for Amman conference
+  - id: edit-delete
+    title: Edit a group with If-Match, then delete it after a confirm that says its expenses stay
+    tier: secondary
+    steps:
+      - Open the group and choose Edit; rename it and save
+      - Choose Edit, Delete group, and confirm
+    expect:
+      - PATCH carries If-Match 1 and the new name, which the page shows
+      - The confirm says "Its 4 expenses stay in Expenses."; DELETE is sent and Groups opens without the group
+  - id: arabic-375
+    title: In Arabic on a 375 px phone the group page reads right to left without sideways scrolling
+    tier: secondary
+    steps:
+      - Open the group in Arabic on a 375 px wide screen
+    expect:
+      - The page is right to left with Arabic labels; headline currencies stack; Edit and Add sit in a ⋯ menu
+      - The member table drops its Category column and the page never scrolls sideways

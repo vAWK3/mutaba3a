@@ -663,7 +663,7 @@
       "dateRequired": "اختر تاريخاً."
     },
     "groups": {
-      "sectionsLabel": "أقسام المصاريف",
+      "sectionsLabel": "صفحات المصاريف",
       "tabExpenses": "المصاريف",
       "tabGroups": "المجموعات",
       "new": "مجموعة جديدة",
@@ -833,7 +833,8 @@
         "removed": "استُبعد من «{name}»",
         "failed": "تعذّر تغيير المجموعة. حاول مجددًا."
       },
-      "nothingYet": "لا شيء بعد"
+      "nothingYet": "لا شيء بعد",
+      "crumbLabel": "مسار التنقل"
     }
   }
 }

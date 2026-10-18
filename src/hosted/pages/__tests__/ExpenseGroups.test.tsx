@@ -114,7 +114,7 @@ function portal(path: string, world: World = {}) {
 describe('Expenses · Groups tabs (17A)', () => {
   it('marks the ledger as the current section on /expenses and Groups on /expenses/groups', async () => {
     portal(`/p/${ORG_A}/expenses`, { routes: { 'GET /v1/expenses': () => ok({ items: [], nextCursor: null }) } });
-    const tabs = await screen.findByRole('navigation', { name: 'Expenses sections' });
+    const tabs = await screen.findByRole('navigation', { name: 'Expenses pages' });
     expect(within(tabs).getByRole('link', { name: 'Expenses' })).toHaveAttribute('aria-current', 'page');
     expect(within(tabs).getByRole('link', { name: 'Groups' })).not.toHaveAttribute('aria-current');
   });
@@ -124,7 +124,7 @@ describe('Groups list (3A, 8A)', () => {
   it('invites the first group when there is none', async () => {
     portal(BASE, { groups: [] });
     expect(await screen.findByRole('heading', { name: "Group a trip's spending" })).toBeInTheDocument();
-    expect(within(screen.getByRole('navigation', { name: 'Expenses sections' })).getByRole('link', { name: 'Groups' })).toHaveAttribute('aria-current', 'page');
+    expect(within(screen.getByRole('navigation', { name: 'Expenses pages' })).getByRole('link', { name: 'Groups' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('lists ongoing, then upcoming, then past, with dates, days, counts and at most two totals', async () => {
