@@ -38,6 +38,13 @@ export type CreateReceiptUploadResponse = Schemas['CreateReceiptUploadResponse']
 export type Conversion = Schemas['Conversion'];
 export type CreateConversionRequest = Schemas['CreateConversionRequest'];
 export type UpdateConversionRequest = Schemas['UpdateConversionRequest'];
+export type ExpenseGroup = Schemas['ExpenseGroup'];
+export type ExpenseGroupDetail = Schemas['ExpenseGroupDetail'];
+export type ExpenseGroupSummary = Schemas['ExpenseGroupSummary'];
+export type CreateExpenseGroupRequest = Schemas['CreateExpenseGroupRequest'];
+export type UpdateExpenseGroupRequest = Schemas['UpdateExpenseGroupRequest'];
+export type ExpenseGroupMark = Schemas['ExpenseGroupOverrideMode'];
+export type FxRatesResponse = Schemas['FxRatesResponse'];
 export type CreateIncomeRequest = Schemas['CreateIncomeRequest'];
 export type IncomeResponse = Schemas['IncomeResponse'];
 export type PaymentMethod = Schemas['PaymentMethod'];
@@ -181,7 +188,7 @@ async function toApiError(response: Response): Promise<ApiError> {
   );
 }
 
-export async function request<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, options: RequestOptions = {}): Promise<T> {
+export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (options.profileId) headers['X-Mutaba3a-Profile'] = options.profileId;
@@ -257,8 +264,8 @@ export const api = {
     ),
 
   // Expenses (MUT-44) — the portal's only write. See mut-44-expense-capture.md §4.
-  expenses: (profileId: string, query: Query<'/v1/expenses'> = {}) =>
-    request<Get<'/v1/expenses'>>('GET', '/v1/expenses', { profileId, query }),
+  expenses: (profileId: string, query: Query<'/v1/expenses'> = {}, signal?: AbortSignal) =>
+    request<Get<'/v1/expenses'>>('GET', '/v1/expenses', { profileId, query, signal }),
   expense: (profileId: string, expenseId: string) =>
     request<Get<'/v1/expenses/{expenseId}'>>('GET', `/v1/expenses/${encodeURIComponent(expenseId)}`, { profileId }),
   createExpense: (profileId: string, body: CreateExpenseRequest, idempotencyKey: string) =>
@@ -329,4 +336,28 @@ export const api = {
     request<Conversion>('PATCH', `/v1/conversions/${encodeURIComponent(conversionId)}`, { profileId, body, ifMatchVersion: version }),
   deleteConversion: (profileId: string, conversionId: string) =>
     request<void>('DELETE', `/v1/conversions/${encodeURIComponent(conversionId)}`, { profileId }),
+
+  // Expense groups (MUT-267/268): session-only, under the expenses scopes. Marks are idempotent PUT/DELETE with no
+  // If-Match (last write wins, MUT-267 D6), so the portal orders them per expense itself (eng review R3).
+  expenseGroups: (profileId: string, query: Query<'/v1/expense-groups'> = {}) =>
+    request<Get<'/v1/expense-groups'>>('GET', '/v1/expense-groups', { profileId, query }),
+  expenseGroup: (profileId: string, groupId: string) =>
+    request<ExpenseGroupDetail>('GET', `/v1/expense-groups/${encodeURIComponent(groupId)}`, { profileId }),
+  createExpenseGroup: (profileId: string, body: CreateExpenseGroupRequest, idempotencyKey: string) =>
+    request<ExpenseGroup>('POST', '/v1/expense-groups', { profileId, body, idempotencyKey }),
+  updateExpenseGroup: (profileId: string, groupId: string, body: UpdateExpenseGroupRequest, version: number) =>
+    request<ExpenseGroup>('PATCH', `/v1/expense-groups/${encodeURIComponent(groupId)}`, { profileId, body, ifMatchVersion: String(version) }),
+  deleteExpenseGroup: (profileId: string, groupId: string) =>
+    request<void>('DELETE', `/v1/expense-groups/${encodeURIComponent(groupId)}`, { profileId }),
+  expenseGroupSummary: (profileId: string, groupId: string) =>
+    request<ExpenseGroupSummary>('GET', `/v1/expense-groups/${encodeURIComponent(groupId)}/summary`, { profileId }),
+  /** `mode` null clears the mark (DELETE). */
+  setExpenseGroupMark: (profileId: string, groupId: string, expenseId: string, mode: ExpenseGroupMark | null) =>
+    request<unknown>(mode ? 'PUT' : 'DELETE', `/v1/expense-groups/${encodeURIComponent(groupId)}/expenses/${encodeURIComponent(expenseId)}`, {
+      profileId,
+      body: mode ? { mode } : undefined,
+    }),
+
+  /** Display-only reference rates (MUT-228, ADR-087); no profile header. */
+  fxRates: (base: Currency) => request<FxRatesResponse>('GET', '/v1/fx-rates', { query: { base } }),
 };
