@@ -60,6 +60,11 @@ const app = createApp({
         }
       : null,
   fxRates,
+  minimumBuild: {
+    ios: { min: config.IOS_MIN_BUILD, recommended: config.IOS_RECOMMENDED_BUILD },
+    android: { min: config.ANDROID_MIN_BUILD, recommended: config.ANDROID_RECOMMENDED_BUILD },
+    disabled: config.MIN_BUILD_CHECK_DISABLED,
+  },
 });
 if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; attachments routes answer 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');

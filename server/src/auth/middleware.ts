@@ -450,7 +450,8 @@ export function lazyPostingOf(c: AuthReader, store: LedgerStore): { store: Ledge
   return { store: actor.actorType === 'SYSTEM' ? unguarded(store) : store, actor };
 }
 
-function endpointKey(c: Context): string | null {
+/** Exported for requireMinimumBuild (MUT-293), which needs the same public-route exemption authenticate() uses. */
+export function endpointKey(c: Context): string | null {
   const endpoint = matchedRoutes(c).find((r) => r.method !== 'ALL' && !r.path.endsWith('*'));
   return endpoint ? `${endpoint.method} ${endpoint.path}` : null;
 }

@@ -59,9 +59,24 @@ const envSchema = z.object({
   ANDROID_PACKAGE_NAME: z.string().min(1).optional(),
   /** Comma-separated SHA-256 cert fingerprints (debug + upload-key at minimum, MUT-114). Split into an array in index.ts. */
   ANDROID_SHA256_FINGERPRINTS: z.string().min(1).optional(),
+  /**
+   * MUT-293: the lowest phone build still served, per platform. Absent = that
+   * platform is never gated. `*_RECOMMENDED_BUILD` is the softer "update
+   * available" ceiling below which the phone gets a nudge, not a block.
+   */
+  IOS_MIN_BUILD: z.coerce.number().int().positive().optional(),
+  ANDROID_MIN_BUILD: z.coerce.number().int().positive().optional(),
+  IOS_RECOMMENDED_BUILD: z.coerce.number().int().positive().optional(),
+  ANDROID_RECOMMENDED_BUILD: z.coerce.number().int().positive().optional(),
+  /** Instant kill switch for the minimum-build gate, independent of the floor values — a misconfigured floor is undone by flipping this, not editing/redeploying the floor itself. */
+  MIN_BUILD_CHECK_DISABLED: z.coerce.boolean().default(false),
 });
 
 const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
+const MIN_BUILD_PLATFORMS = [
+  { min: 'IOS_MIN_BUILD', recommended: 'IOS_RECOMMENDED_BUILD' },
+  { min: 'ANDROID_MIN_BUILD', recommended: 'ANDROID_RECOMMENDED_BUILD' },
+] as const;
 
 export type Config = z.infer<typeof envSchema>;
 
@@ -91,6 +106,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   // silently serving assetlinks.json with an empty fingerprint list.
   if (config.ANDROID_SHA256_FINGERPRINTS && !config.ANDROID_SHA256_FINGERPRINTS.split(',').some((fp) => fp.trim().length > 0)) {
     throw new ConfigError('Invalid configuration:\n  ANDROID_SHA256_FINGERPRINTS: must contain at least one non-blank fingerprint');
+  }
+  for (const { min, recommended } of MIN_BUILD_PLATFORMS) {
+    const floor = config[min];
+    const target = config[recommended];
+    if (floor !== undefined && target !== undefined && target < floor) {
+      throw new ConfigError(`Invalid configuration:\n  ${recommended}: must be >= ${min} (${target} < ${floor})`);
+    }
   }
   return config;
 }
