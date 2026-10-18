@@ -45,7 +45,7 @@ describe('crossRates', () => {
     expect(rateOf(crossRates(SNAPSHOT, 'ILS'), 'JOD').rate).toBe(0.22855); // 1.1208 × 0.709 / 3.4769
   });
 
-  // MUT-280 (ADR-097): literal pegs here, not USD_PEGS, so a typo in the table fails.
+  // MUT-280 (ADR-098): literal pegs here, not USD_PEGS, so a typo in the table fails.
   const PEGS: Record<string, number> = { JOD: 0.709, AED: 3.6725, SAR: 3.75, QAR: 3.64, BHD: 0.376, OMR: 0.3845 };
   const perUsd: Record<string, number> = {
     USD: 1,

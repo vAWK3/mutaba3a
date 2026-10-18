@@ -3362,7 +3362,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 **Decision**:
 1. `GET /v1/fx-rates?base=` (sessions and device sessions, no API keys, no `X-Mutaba3a-Profile`) answers every supported currency against `base`: units of that currency per 1 `base`, rounded to 6 decimal places, with the ECB `rateDate`, the instance's `fetchedAt` and `source` `live` | `stale`. `base` is required; a missing or unknown one is 422 `VALIDATION_FAILED` like every other validation failure (the ticket's "400" was amended).
 2. The server reads Frankfurter (`FX_RATES_URL`, base EUR, symbols USD and ILS) with a timeout (`FX_RATES_TIMEOUT_MS`, 3 s) and a strict body check, and crosses the euro rates for any base (`server/src/fx-rates.ts`). `FX_RATES_URL` must be https (plain http only for a localhost stub), and a redirect is a provider failure, not rates to accept.
-3. **JOD** comes from the Central Bank of Jordan's peg, 1 USD = 0.709 JOD, as a constant in code. Every pair with exactly one JOD side is marked `derived`. A re-peg is a deploy.
+3. **JOD** comes from the Central Bank of Jordan's peg, 1 USD = 0.709 JOD, as a constant in code. Every pair with exactly one JOD side is marked `derived`. A re-peg is a deploy. *(Extended by ADR-098, MUT-280: JOD is one of six USD pegs, and `derived` is "either side pegged".)*
 4. **Display only.** No record stores a rate, and no amount is converted on the server.
 5. **Cache in process, per instance**, like the rate limiter (TD-017). A snapshot is fresh for `FX_RATES_TTL_MINUTES` (240). Concurrent misses share one provider call. A failed refresh serves the last snapshot as `stale` and does not call the provider again for 60 s. With nothing cached, the route answers 503 `FX_RATES_UNAVAILABLE`, never a zero rate. So a new instance that starts while the provider is down answers 503 until it is back; the phone keeps its own last copy and shows "as of" (MUT-229). Production runs one instance, so every deploy starts empty: `index.ts` fills the cache once at startup (6b).
 6. The refresh runs inline on the request that finds the snapshot expired (at most `FX_RATES_TIMEOUT_MS`, 3 s by default, once per window per instance): a background refresh is unreliable if Cloud Run throttles CPU between requests. Stale-while-revalidate was considered in the pre-landing review and kept out for the same reason.
@@ -3767,3 +3767,31 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Clients must deploy after the server: the request schema is strict, so an older server answers 422 VALIDATION_FAILED (zod issue: unrecognized key `currency`).
 - Clients send `amount`, formatted in the **new** currency's digits, whenever they send `currency`, whatever their changed-fields diff says (ILS 12.50 → USD 12.50 has equal minor units but still needs the amount).
 - `AMOUNT_REQUIRED` and `SAME_CURRENCY` are now in the published 422 reasons list.
+
+## ADR-098: Gulf Currencies Come From Their USD Pegs; Every Currency the ECB Doesn't Price Must Have One
+
+**Status**: Active (extends ADR-087 §3)
+**Date**: 2026-10-18
+**Context**: MUT-280, epic MUT-278 (brief `.claude/designs/gulf-currencies.md`, approved by Basel 2026-10-18; plan `.claude/designs/mut-280-gulf-currencies-server.md`). People who bill in the Gulf couldn't record AED, SAR, QAR, BHD or OMR. Basel kept Frankfurter (ECB) as the only rate provider and left KWD out (its rate follows an undisclosed basket, so there is no fixed USD rate). Numbered 098 because the unmerged MUT-285 branch already wrote ADR-097.
+
+**Decision**:
+1. **Five more currencies.** `SUPPORTED_CURRENCIES` appends AED, SAR, QAR (2 decimals) and BHD, OMR (3 decimals), so existing positions (the OpenAPI enum, `/v1/fx-rates` row order) never move. No migration: every currency column is `VarChar(3)` with no check.
+2. **One peg table.** `USD_PEGS` (`server/src/fx-rates.ts`) replaces `JOD_PER_USD`: JOD 0.709, AED 3.6725, SAR 3.75, QAR 3.64, BHD 0.376, OMR 0.3845, each set by its central bank. It is typed `Record<PeggedCurrency, number>`, where `PeggedCurrency` is every supported currency the ECB fetch doesn't price, so a new code with no rate source fails typecheck. A re-peg is a deploy (ADR-087 §3).
+3. **Every pair goes through USD.** `rate(base → c) = perUsd[c] / perUsd[base]`. The ECB fetch is unchanged (`base=EUR&symbols=USD,ILS`, the raw figures). Existing ILS/USD/EUR/JOD rates are identical to before (pinned tests unchanged).
+4. **`derived` = either side pegged, never base→base.** AED↔JOD has no ECB figure in it and is still derived. Clients show "(USD peg)" on derived rates.
+5. **No peg-only rates without the provider.** With nothing servable cached, every base is 503 `FX_RATES_UNAVAILABLE`, pegged ones included: one source of truth for "rates are available".
+6. **The server lists its currencies.** `currencies: string[]` (each `^[A-Z]{3}$`, required) on `GET /v1/me`, `POST /v1/sessions` and `POST /v1/device-sessions`, equal to `SUPPORTED_CURRENCIES`. It is a plain string list, not the `Currency` enum, so a client built from today's spec never rejects a code a newer server adds (eng review D3). The phone offers only codes in this list (MUT-279 D4); servers older than MUT-280 omit it.
+7. **Peg parity.** `docs/fx/pegs.json` mirrors `USD_PEGS`; a server test checks it both ways, and the web (MUT-282/283) reads it. `server-ci.yml` watches `docs/fx/**`.
+8. **Analytics contract 1.2.0** (Basel D10): `docs/analytics/events.json` currencies equal the server list (the taxonomy test pins them), so the bump lands with this change.
+
+**Alternatives rejected**:
+- KWD from a second, keyed provider: a second source of truth and its own failure modes (epic D1).
+- Fetching `base=USD` from Frankfurter: it divides and rounds before we see the ECB figures.
+- Serving pegged↔pegged rates while the provider is down: two meanings of "rates are available".
+- `currencies` typed as the `Currency` enum: closes the set in the spec (D3).
+
+**Consequences**:
+- API 1.35.0-mut280.
+- **The portal's typed client (`src/hosted/api/schema.d.ts`) is not regenerated here** (eng review D2): regenerating it gives 15 portal type errors, because the portal reuses the local app's 4-currency type and exponent table. MUT-281 regenerates it first (TD-170).
+- **Release order:** the phone with tolerant parsing (MUT-279) is released and adopted first. Then this change and MUT-281 go out in **one** `make release server`: the portal ships inside the API image, and a portal older than MUT-281 would render AED amounts as NaN.
+- The Malafat project import (`import/plan.ts`) accepts the five codes too; KWD and other unknown codes stay `UNSUPPORTED_CURRENCY`.

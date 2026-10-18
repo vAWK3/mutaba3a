@@ -136,6 +136,14 @@
 **Impact**: a profile type change (MUT-182) deletes categories and nulls `categoryId`. Groups and marks are untouched, and the summary shows the spending as uncategorized, but nothing asserts it.
 **Fix**: a store-contract case: create a group with a categorized member, run the type change, and assert the group, its mark and a `null` category bucket.
 
+### TD-170: The portal's typed API client lags the spec until MUT-281
+**Status**: Open
+**Ticket**: MUT-281 (MUT-280 eng review D2, 2026-10-18)
+**Added**: 2026-10-18
+**Priority**: Medium (blocks any unrelated `npm run hosted:types` until MUT-281 lands)
+**Impact**: MUT-280 grew the server's `Currency` enum and added `Me.currencies`, but `src/hosted/api/schema.d.ts` was not regenerated, so `npm run hosted:types:check` fails on main (it isn't in CI). Regenerating it gives 15 portal type errors in 8 files: the portal reuses the local app's 4-currency `Currency` type and `src/lib/utils.ts` `CURRENCY_EXPONENT`, and the MUT-183 `coversEveryCurrency` guard fails on purpose. Another session that regenerates the types for an unrelated server change hits the same errors.
+**Fix**: MUT-281's first step: `npm run hosted:types`, then make the portal's currency list and exponents cover the API's nine codes. MUT-280 and MUT-281 ship in one server release.
+
 ### TD-169: Audit rows are appended after the write, outside its transaction
 **Status**: Open
 **Ticket**: none (found 2026-10-18, MUT-272 pre-landing adversarial review; numbered after main's MUT-268 TD-166..168)

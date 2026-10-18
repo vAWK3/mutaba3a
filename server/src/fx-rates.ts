@@ -9,7 +9,7 @@ import { SUPPORTED_CURRENCIES, type Currency } from './money.js';
  * The ECB publishes a daily euro reference rate for USD and ILS; Frankfurter
  * serves it as JSON with no key. JOD and the Gulf currencies are not in the
  * ECB set; each is fixed to the US dollar by its central bank, so its rate
- * comes from that peg (USD_PEGS, ADR-097). Every pair is priced through USD.
+ * comes from that peg (USD_PEGS, ADR-098). Every pair is priced through USD.
  * Rates here are a hint for people entering money in another currency:
  * nothing stores them on a record.
  *
@@ -23,7 +23,7 @@ const ECB_CURRENCIES = ['USD', 'EUR', 'ILS'] as const;
 export type PeggedCurrency = Exclude<Currency, (typeof ECB_CURRENCIES)[number]>;
 
 /**
- * Units per 1 USD, each fixed by its central bank (ADR-087 §3, ADR-097). Keyed by every currency the ECB
+ * Units per 1 USD, each fixed by its central bank (ADR-087 §3, ADR-098). Keyed by every currency the ECB
  * doesn't price, so a new code with no rate source fails typecheck. A re-peg is a deploy, not an env flip;
  * docs/fx/pegs.json mirrors this table for the web and phone tests.
  */

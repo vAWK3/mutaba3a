@@ -3042,6 +3042,19 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Pages | `src/hosted/pages/__tests__/ExpenseGroups.test.tsx` (23) | tabs aria-current, list order/totals/+N/nudges/error, create defaults + validation + POST/key + landing, GROUP_LIMIT fresh key, headline/≈/tab/chart/per day, members by day + Kept + verbs, optimistic leave out + Undo, category leave-out-all, Uncategorized, every 8A detail state, Arabic default, edit If-Match + delete confirm, picker pool/partial, In groups line |
 | Release-QA | `qa/specs/portal/expense-groups.spec.ts` (9, tagged `@portal.expense-groups.*`) | create, leave-out-undo, add-from-outside, currencies-converted, category-prune, states, in-groups-line, edit-delete, arabic-375 (no sideways scroll) |
 
+### MUT-280 — Gulf currencies on the server (2026-10-18)
+
+| Test | Covers |
+|---|---|
+| `server/src/__tests__/money.test.ts` › currency support, Gulf currencies | nine codes in order, exponents, KWD/GBP/lower-case unsupported, AED/SAR/QAR 2 dp, BHD/OMR 3 dp, over-precision refused, BHD ceiling = `MAX_AMOUNT_MINOR` |
+| `server/src/__tests__/fx-rates.test.ts` › crossRates, peg fixture | 9×9 equals a hand-built per-USD table with literal pegs; AED→SAR 1.021103, BHD→OMR 1.022606, ratio independent of the ECB snapshot; `derived` matrix (AED base: 8, USD base: the 6 pegged); `USD_PEGS` literal; `docs/fx/pegs.json` equals `USD_PEGS` |
+| `server/src/__tests__/routes-fx-rates.test.ts` | ILS base lists nine rows with the Gulf rates; base AED/BHD: nine rows, 8 derived; KWD 422; pegged base 503 with the provider down and nothing cached; every peg in the `derived` description |
+| `server/src/__tests__/routes-sessions.test.ts`, `routes-device-sessions.test.ts` › MUT-280 | `currencies` = `SUPPORTED_CURRENCIES` on POST /v1/sessions, GET /v1/me and POST /v1/device-sessions; bodies parse with `MeSchema` / `DeviceSessionSchema` |
+| `income-routes`, `routes-expenses`, `routes-conversions`, `routes-profiles` › MUT-280 | AED 1250.50 and BHD 12.345 income; BHD 4th / AED 3rd decimal / KWD → 422; OMR 0.385 expense, 4th decimal 422; AED→BHD conversion; SAR profile moved to QAR |
+| `server/src/import/__tests__/plan.test.ts` › MUT-280 | AED project planned as create; KWD → `UNSUPPORTED_CURRENCY` |
+| `server/src/repositories/__tests__/store-contract-expenses.ts` › MUT-280 | BHD 12_345n round-trips in both stores (Postgres via `test:db`) |
+| `scripts/__tests__/analytics-taxonomy.test.ts` | contract 1.2.0 pinned by sha256; its currencies equal the server list |
+
 ### MUT-272 — expense currency edit (server half, 2026-10-18)
 
 | Test | Covers |

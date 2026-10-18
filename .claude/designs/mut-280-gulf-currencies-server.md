@@ -2,7 +2,7 @@
 
 Epic MUT-278. Epic brief: `.claude/designs/gulf-currencies.md` (approved 2026-10-18), §2, §3, §4a, §5, §6, §7.
 Tracker: Jira · barmajiyat · MUT via `mcp__atlassian-barmajiyat__*` · Backlog → **Planned** (this plan) → In Progress → In Review (qa-reconcile) → Done after landed + pushed.
-Repo state when planned: mini-crm `main` at `ed6f34a9` (API `1.33.0-mut267`, last ADR-095, last TD-168). Updated during review: MUT-272 merged as `61928c64` (API `1.34.0-mut272`, ADR-096, TD-169), so this ticket's numbers are API `1.35.0-mut280`, ADR-097, TD-170, renumbered at landing only if something else lands first.
+Repo state when planned: mini-crm `main` at `ed6f34a9` (API `1.33.0-mut267`, last ADR-095, last TD-168). Updated during review: MUT-272 merged as `61928c64` (API `1.34.0-mut272`, ADR-096, TD-169), so this ticket's numbers are API `1.35.0-mut280`, ADR-098, TD-170 (ADR-098, not 097: the unmerged MUT-285 branch already wrote ADR-097), renumbered at landing only if something else lands first.
 
 ## 1. Neighbourhood
 
@@ -11,7 +11,7 @@ Repo state when planned: mini-crm `main` at `ed6f34a9` (API `1.33.0-mut267`, las
   - **Added:** `currencies: string[]` on `GET /v1/me` and the device-session answer, the same pattern as `limits` (MUT-182). The phone offers only codes in this list (MUT-279 D4), so it can ship before this server does.
   - ~~Removed: the analytics contract 1.2.0 bump~~ **Back in scope (Basel, D10, 2026-10-18, correcting comment on MUT-280).** `scripts/__tests__/analytics-taxonomy.test.ts:215-216` pins `docs/analytics/events.json` `currencies` to exactly the server's `SUPPORTED_CURRENCIES`, so the contract bump must land in the same change as `money.ts` (§2f). MUT-279 copies 1.2.0 into the phone after this merges to local main.
 - **Related, done:** MUT-228 (ADR-087, `/v1/fx-rates`), MUT-140/119 (per-currency exponents), MUT-182 (`limits` on Me).
-- **Landed during planning:** MUT-272 merged to main (`61928c64`) as **API `1.34.0-mut272`**, **ADR-096**, TD-169. This ticket therefore takes **API `1.35.0-mut280`** and **ADR-097** for now, renumbered at landing to whatever is next free. MUT-272's expense currency patch re-parses amounts in the new currency's digits (`expenses/compose.ts`), so the five new codes work there with no extra code.
+- **Landed during planning:** MUT-272 merged to main (`61928c64`) as **API `1.34.0-mut272`**, **ADR-096**, TD-169. This ticket therefore takes **API `1.35.0-mut280`** and **ADR-098** for now, renumbered at landing to whatever is next free. MUT-272's expense currency patch re-parses amounts in the new currency's digits (`expenses/compose.ts`), so the five new codes work there with no extra code.
 - **MUT-293** (minimum app version) is related but separate. It doesn't change this plan.
 - **Blocker gate:** passed. The only `is blocked by` link is MUT-279, which is release order only (comment above).
 
@@ -30,7 +30,7 @@ Repo state when planned: mini-crm `main` at `ed6f34a9` (API `1.33.0-mut267`, las
 const ECB_CURRENCIES = ['USD', 'EUR', 'ILS'] as const;
 export type PeggedCurrency = Exclude<Currency, (typeof ECB_CURRENCIES)[number]>;
 
-/** Units per 1 USD, each set by its central bank (ADR-087 §3, ADR-097). A re-peg is a deploy; docs/fx/pegs.json mirrors this. */
+/** Units per 1 USD, each set by its central bank (ADR-087 §3, ADR-098). A re-peg is a deploy; docs/fx/pegs.json mirrors this. */
 export const USD_PEGS: Readonly<Record<PeggedCurrency, number>> = { JOD: 0.709, AED: 3.6725, SAR: 3.75, QAR: 3.64, BHD: 0.376, OMR: 0.3845 };
 
 export function isPegged(c: Currency): c is PeggedCurrency { return Object.hasOwn(USD_PEGS, c); }
@@ -74,7 +74,7 @@ export function crossRates(snapshot: EcbSnapshot, base: Currency): FxRate[] {
   ```
   The file is edited by hand. A server test checks it equals `USD_PEGS` in both directions and prints the expected JSON when it doesn't. A generator script for six numbers would be YAGNI; the `openapi:check` pattern exists for a 10k-line file.
 - `.github/workflows/server-ci.yml` `paths` gains `docs/fx/**` for both push and pull_request. Otherwise a commit that only edits the fixture would skip the parity test that guards it.
-- **ADR-097** (renumbered at landing): "Gulf currencies come from their USD pegs; every currency the ECB doesn't price must have one", extending ADR-087 §3. Contents: the peg table and the central bank behind each rate; cross rates through USD (D3); `derived` = either side pegged; KWD excluded (no fixed rate, D1); the `Record<PeggedCurrency>` exhaustiveness rule; `currencies` on Me as a forward-compatible `string[]`; peg parity through `docs/fx/pegs.json`; release coupling with MUT-279/MUT-281 (§5).
+- **ADR-098** (renumbered at landing): "Gulf currencies come from their USD pegs; every currency the ECB doesn't price must have one", extending ADR-087 §3. Contents: the peg table and the central bank behind each rate; cross rates through USD (D3); `derived` = either side pegged; KWD excluded (no fixed rate, D1); the `Record<PeggedCurrency>` exhaustiveness rule; `currencies` on Me as a forward-compatible `string[]`; peg parity through `docs/fx/pegs.json`; release coupling with MUT-279/MUT-281 (§5).
 
 ### 2f. Analytics contract 1.2.0 (D10, back in scope)
 - `docs/analytics/events.json`: `version` `1.1.0` → `1.2.0`; `currencies` → `["AED", "BHD", "EUR", "ILS", "JOD", "OMR", "QAR", "SAR", "USD"]` (alphabetical, as today). Nothing else changes, and the file keeps its current formatting and line endings, because the phone's copy is pinned byte for byte.
@@ -84,7 +84,7 @@ export function crossRates(snapshot: EcbSnapshot, base: Currency): FxRate[] {
 - ADR-090 (analytics contract) needs no change: this is a version bump under its rules. CHANGELOG notes it.
 
 ### 2e. Knowledge files (after implementation)
-CHANGELOG; SYSTEM_OVERVIEW (supported currencies, `/v1/me.currencies`); DECISIONS (ADR-097, and an amendment line on ADR-087 §3 pointing to it); TECH_DEBT (**new TD**: `schema.d.ts` lags the spec until MUT-281, resolved by MUT-281); TEST_PLAN; `server/README.md` or API docs wherever the currency list is written out (grep `ILS, USD, EUR, JOD` / `ILS | USD | EUR | JOD` under `server/` and `docs/` at build time).
+CHANGELOG; SYSTEM_OVERVIEW (supported currencies, `/v1/me.currencies`); DECISIONS (ADR-098, and an amendment line on ADR-087 §3 pointing to it); TECH_DEBT (**new TD**: `schema.d.ts` lags the spec until MUT-281, resolved by MUT-281); TEST_PLAN; `server/README.md` or API docs wherever the currency list is written out (grep `ILS, USD, EUR, JOD` / `ILS | USD | EUR | JOD` under `server/` and `docs/` at build time).
 
 ## 3. Files
 

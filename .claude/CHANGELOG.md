@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-18 — Server: Gulf currencies and a USD-peg table (MUT-280, ADR-098)
+
+**Why:** epic MUT-278. People who bill in the Gulf can record AED, SAR, QAR, BHD and OMR on the hosted side, with rates from fixed USD pegs and the same single ECB provider. **Release:** after the phone (MUT-279) is out, and together with the portal (MUT-281) in one server release.
+
+### Added
+- **Currencies:** AED, SAR, QAR (2 decimals) and BHD, OMR (3 decimals) on every money endpoint (`server/src/money.ts`), appended after ILS/USD/EUR/JOD. Over-precision stays 422 `VALIDATION_FAILED`. No migration.
+- **`currencies` on `GET /v1/me`, `POST /v1/sessions` and `POST /v1/device-sessions`:** the codes this server accepts, in order (`string[]`, required). The phone offers only these (MUT-279).
+- **`docs/fx/pegs.json`:** the peg table for the web and phone tests, checked against the server's.
+
+### Changed
+- **Rates:** `JOD_PER_USD` became `USD_PEGS` (JOD, AED, SAR, QAR, BHD, OMR), typed so a currency with no rate source fails typecheck. `crossRates` prices every pair through USD; existing rates are unchanged. `derived` is now "either side pegged" (was "exactly one side JOD"), and its OpenAPI description lists every peg.
+- **Analytics contract 1.2.0:** `docs/analytics/events.json` currencies are the nine server codes; new `PINNED_VERSIONS` row (D10).
+- **Malafat project import** plans AED/SAR/QAR/BHD/OMR projects; KWD stays `UNSUPPORTED_CURRENCY`.
+- **Version:** API 1.35.0-mut280. OpenAPI regenerated; the portal's `schema.d.ts` deliberately is not (TD-170, MUT-281).
+
+### Technical
+- Tests: `money.test.ts` (list, exponents, AED/BHD/OMR parsing, over-precision, BHD ceiling, KWD unsupported); `fx-rates.test.ts` (9×9 against a hand-built per-USD table with literal pegs, pegged↔pegged ratios, the `derived` matrix, the peg table, the fixture); `routes-fx-rates.test.ts` (nine ILS rows, base AED/BHD, KWD 422, pegged 503, every peg documented); Me on all three sign-in surfaces; income, expenses, conversions, profiles and import cases; a BHD expense through the Prisma store.
+- CI: `server-ci.yml` also runs on `docs/fx/**`.
+- Tech debt: TD-170.
+
 ## [Unreleased] - 2026-10-18 — Change an expense's currency together with its amount (MUT-272, ADR-096)
 
 **Why:** logging an expense in the wrong currency meant delete and re-log. This is the server half of MUT-272; the phone's Recent edit sheet (MUT-272 phone half) and the portal (MUT-277) build on it.

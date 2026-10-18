@@ -399,7 +399,7 @@ export const MeSchema = z
     /** MUT-182: how many profiles the caller owns (the personal one included) and how many they may. */
     limits: z.object({ ownedProfiles: z.number().int().min(0), maxOwnedProfiles: z.number().int().min(1) }).openapi('ProfileLimits'),
     /**
-     * MUT-280 (ADR-097): plain three-letter strings, not the Currency enum, so a client built against this spec
+     * MUT-280 (ADR-098): plain three-letter strings, not the Currency enum, so a client built against this spec
      * never rejects a code a newer server adds.
      */
     currencies: z
@@ -876,7 +876,7 @@ export const ContingencyTermsSchema = z
   })
   .openapi('ContingencyTerms');
 
-/** "0.709 JOD, 3.6725 AED, …" for the `derived` description (MUT-280, ADR-097). */
+/** "0.709 JOD, 3.6725 AED, …" for the `derived` description (MUT-280, ADR-098). */
 const PEG_LIST = Object.entries(USD_PEGS).map(([currency, peg]) => `${peg} ${currency}`).join(', ');
 
 /** MUT-228 (ADR-087): reference exchange rates for display. Never stored on a record. */
