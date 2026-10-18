@@ -5,6 +5,7 @@ import { HTTPException } from 'hono/http-exception';
 import { serveStatic } from '@hono/node-server/serve-static';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
 import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
+import { requireMinimumBuild, type MinimumBuildConfig } from './auth/minimum-build.js';
 import { DEFAULT_DEVICE_ABSOLUTE_DAYS, DEFAULT_DEVICE_IDLE_DAYS, SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
 import { SCOPES } from './auth/scopes.js';
 import { requestScopedStore } from './auth/store-guard.js';
@@ -77,7 +78,11 @@ export interface AppDependencies {
   appAssociation?: AppAssociationConfig | null;
   /** Reference exchange rates (MUT-228), cached per instance. Null or absent = GET /v1/fx-rates answers 503 FX_RATES_UNAVAILABLE. */
   fxRates?: CachedFxRates | null;
+  /** MUT-293 minimum app version gate. Null or absent = no platform gated (every floor/recommended undefined, check not disabled). */
+  minimumBuild?: MinimumBuildConfig | null;
 }
+
+const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disabled: false };
 
 /**
  * Paths the hosted-portal SPA fallback must never catch (hosted-portal.md
@@ -190,6 +195,16 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const signInThrottle = deps.signInThrottle ?? new SignInThrottle();
   const signInIpLimiter = deps.signInIpLimiter ?? new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute);
   let routeAccess: RouteAccessIndex | undefined;
+  // Built on first request, after every route below has registered its OpenAPI definition. Shared with requireMinimumBuild (MUT-293) so both answer "is this route public" from the one index.
+  const resolveRouteAccess = (): RouteAccessIndex => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes));
+  app.use(
+    '/v1/*',
+    requireMinimumBuild({
+      config: deps.minimumBuild ?? NO_MINIMUM_BUILD_CONFIG,
+      routeAccess: resolveRouteAccess,
+      logger: deps.logger,
+    }),
+  );
   app.use(
     '/v1/*',
     authenticate({
@@ -197,8 +212,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       environment: deps.keyEnvironment,
       rateLimiter: deps.rateLimiter,
       sessions,
-      // Built on first request, after every route below has registered its OpenAPI definition.
-      routeAccess: () => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes)),
+      routeAccess: resolveRouteAccess,
       organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
