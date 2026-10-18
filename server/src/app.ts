@@ -18,6 +18,7 @@ import type { AttachmentStorage } from './attachments/storage.js';
 import { adminAuth, adminRoutes } from './routes/admin.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
+import { ME_ORGANIZATION_INDEPENDENT_ROUTES, meRoutes } from './routes/me.js';
 import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
 import { attachmentRoutes } from './routes/attachments.js';
@@ -166,7 +167,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       sessions,
       // Built on first request, after every route below has registered its OpenAPI definition.
       routeAccess: () => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes)),
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
@@ -223,6 +224,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', inboxRoutes(store));
   app.route('/', entriesRoutes(store));
   app.route('/', profileRoutes(store));
+  app.route('/', meRoutes(store));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions }));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));

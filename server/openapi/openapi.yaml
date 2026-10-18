@@ -5852,33 +5852,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/me:
-    get:
-      tags:
-        - Sessions
-      summary: The signed-in person and the hosted profiles they may open
-      security:
-        - session: []
-        - deviceSession: []
-      responses:
-        "200":
-          description: Me
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Me"
-        "401":
-          description: No valid session
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: PRINCIPAL_NOT_ACCEPTED
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/me/malafat-suggestions:
     patch:
       tags:
@@ -12671,6 +12644,33 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/me:
+    get:
+      tags:
+        - Sessions
+      summary: The signed-in person and the hosted profiles they may open
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Me
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED
           content:
             application/json:
               schema:

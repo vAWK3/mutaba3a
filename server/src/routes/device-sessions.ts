@@ -7,7 +7,7 @@ import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { DeviceSessionSchema, ErrorEnvelopeSchema, SignInRequestSchema } from '../schemas.js';
-import { buildMe } from './sessions.js';
+import { buildMe } from './me.js';
 
 /**
  * Native-app sign-in and sign-out (MUT-64): the bearer-token mirror of
