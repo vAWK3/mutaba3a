@@ -128,7 +128,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.35.0-mut280';
+export const API_VERSION = '1.36.0-mut293';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -315,6 +315,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         'Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\\/`, `\\u00e9`) do not count; array order and values do.',
         '',
         'PATCH routes require `If-Match: <version>` (optimistic concurrency).',
+        '',
+        'Minimum app version (MUT-293): a phone client sends `X-App-Platform: ios|android` and `X-App-Build: <int>` on every request. Below the configured floor for that platform, every endpoint except sign-in (`POST /v1/sessions`, `POST /v1/device-sessions`) and `/health` answers 426 APP_UPDATE_REQUIRED with `details: { platform, minimumBuild }`. Between the floor and the configured recommended build, the request still succeeds but carries `X-Update-Available: true` and `X-Recommended-Build: <int>`. A request with no `X-App-Platform` header (the portal, or any build older than this contract version) is untouched — this is scoped to the phone API only, not enforced against it.',
         '',
         `409 CONFLICT responses carry details.reason, one of: ${CONFLICT_REASONS.join(', ')}.`,
         '',
