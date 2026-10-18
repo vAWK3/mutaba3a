@@ -107,9 +107,9 @@ export function GroupMembers(props: GroupMembersProps) {
           </div>
         )}
       </section>
-      {excluded.length > 0 && (
+      {(excluded.length > 0 || excludedError) && (
         <section ref={leftOutRef} className="hp-members hp-leftout">
-          <details open={excludedOpen || undefined}>
+          <details open={excludedOpen || Boolean(excludedError) || undefined}>
             <summary>{labels.leftOut}</summary>
             {excludedError}
             <div className="table-wrapper hp-table-wrapper">

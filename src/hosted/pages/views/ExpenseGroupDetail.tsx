@@ -180,6 +180,8 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
     motion.current.leaving.add(from);
     // A refused save puts the row back the way it left (craft 2)
     motion.current.returning.add(from);
+    // Where it lands (Left out, or the members on Undo / Bring back / Add), it slides in from the inline end
+    if (verb !== 'remove') motion.current.returning.add(motionKey(verb === 'leaveOut' ? 'excluded' : 'member', row.id));
     const ok = await marks.act(verb, row);
     if (ok) {
       motion.current.returning.delete(from);
@@ -387,7 +389,16 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
         motion={motion}
         fallbackFocus={headingRef}
         excludedOpen={nothing}
-        excludedError={excludedQuery.isError ? <p className="form-error">{t('hosted.groups.detail.states.sectionError')}</p> : undefined}
+        excludedError={
+          excludedQuery.isError ? (
+            <p className="form-error">
+              {t('hosted.groups.detail.states.sectionError')}{' '}
+              <button type="button" className="hp-link-button press" onClick={() => void excludedQuery.refetch()}>
+                {t('hosted.states.unreachable.retry')}
+              </button>
+            </p>
+          ) : undefined
+        }
         filterBar={
           selectedCategory && (
             <div className="hp-member-filter">

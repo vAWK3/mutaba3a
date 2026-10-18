@@ -304,6 +304,27 @@ describe('Group page states (8A)', () => {
     expect(screen.getByText('Left out (1)').closest('details')).toHaveAttribute('open');
   });
 
+  it('Left out failing to load says so in place and retries just that list', async () => {
+    let fails = true;
+    const { user, api } = portal(`${BASE}/${G1}`, {
+      members: [pass],
+      routes: {
+        'GET /v1/expenses': ({ url }) =>
+          url.searchParams.get('groupMembership') === 'excluded'
+            ? fails
+              ? fail(422, 'VALIDATION_FAILED')
+              : ok({ items: [taxi], nextCursor: null })
+            : ok({ items: [pass], nextCursor: null }),
+      },
+    });
+    expect(await screen.findByText(/Couldn't load this list\./)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Total spent' })).toBeInTheDocument();
+    fails = false;
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('Left out (1)')).toBeInTheDocument();
+    expect(api.calls.filter((c) => c.url.searchParams.get('groupMembership') === 'excluded').length).toBe(2);
+  });
+
   it('a deleted group says so and links back', async () => {
     portal(`${BASE}/${G1}`, { routes: { [`GET /v1/expense-groups/${G1}`]: () => fail(404, 'NOT_FOUND') } });
     expect(await screen.findByRole('heading', { name: 'This group was deleted' })).toBeInTheDocument();
