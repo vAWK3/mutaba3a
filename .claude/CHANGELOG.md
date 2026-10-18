@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-10-18 — Portal: trip groups with daily and category spend (MUT-268, ADR-095)
+
+**Why:** epic MUT-266. On MUT-267's API, a person groups a trip's expenses in the portal, prunes them and sees what the trip cost per currency, per day and per category.
+
+### Added
+- **Expenses · Groups** (`SectionTabs`): `/p/:id/expenses/groups` lists groups ongoing → upcoming → past with dates, day count, member count and up to two currency totals (+N); "Still going? Add an end date" after 11 months; "reached a year" once an open group stops collecting.
+- **Group drawer** (`?newGroup=1`, `?editGroup=1`): name, From (today), To (capped at From + 365, required unless "Still going"), notes; edit hint; Delete confirmed in place with the member count. A 422 ends the idempotency attempt (TD-163).
+- **Group page** `/p/:id/expenses/groups/:groupId` (`?currency=`, `?category=uuid|none`): headline per currency with counts, "≈ <profile currency> at today's ECB rate (<date>)" with per-currency rates and the JOD peg (hidden while loading/unavailable, "rate from" when stale), currency tab, per day, hand-built `DayBars` (daily ≤ 31 days, else weekly; sparse before/after bars past a ⋯ gap; keyboard and RTL arrows; jump to the day) and `CategoryBars` (filters the members), members by day oldest first with Kept, Leave out / Remove, Left out with Bring back, category "Leave out all", every 8A state.
+- **Optimistic marks** with Undo/Retry toasts; one save at a time for batches; marks for one expense reach the server in order.
+- **Add from outside these dates** (`?addToGroup=1`): the 30 days before (and after, for a closed group) minus members; partial result with Retry of the failed ones.
+- **ExpenseDrawer "In groups"**: links, Leave out / Remove per group, "Add to group…".
+- `playRowEnter` (`src/lib/motion/rowEnter.ts`): Undo retraces a row's exit.
+- Release-QA: `qa/features/portal/expense-groups.yaml` (9 features) + `qa/specs/portal/expense-groups.spec.ts`; FakeApi learns groups, marks, summaries, paging and FX.
+
+### Changed
+- `Toast` options gain `action` (both tones); hover/focus holds the toast.
+- `Skeleton` takes `rows`. `minorToDecimal` moves to `src/hosted/format/currencies.ts` (re-exported from `incomeForm.ts`). `usePrefersReducedMotion` moves to `src/lib/motion/mediaQuery.ts` (with `useMediaQuery`); `src/hooks/usePrefersReducedMotion.ts` re-exports it.
+- Expense create/update/delete also refresh every group read. `request()` accepts PUT; `api.expenses` takes a signal.
+
+### Fixed
+- **Every portal page scrolled sideways on a phone** (found by the arabic-375 spec): the phone shell column was `1fr`, so the top bar's nav set its minimum width (~611 px). Now `minmax(0, 1fr)`.
+
 ## [Unreleased] - 2026-10-18 — Hosted expense groups: trips with per-day and per-category totals (MUT-267, ADR-094)
 
 **Why:** epic MUT-266. A person groups a trip's expenses by date, prunes them, and sees what it cost. This is the API that the portal (MUT-268) and the phone (MUT-269) build on.
