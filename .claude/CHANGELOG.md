@@ -28,6 +28,33 @@
 
 ---
 
+## [Unreleased] - 2026-10-18 — Hosted expense groups: trips with per-day and per-category totals (MUT-267, ADR-094)
+
+**Why:** epic MUT-266. A person groups a trip's expenses by date, prunes them, and sees what it cost. This is the API that the portal (MUT-268) and the phone (MUT-269) build on.
+
+### Added
+- **Tables.** `expense_groups` and `expense_group_overrides`, in the purely additive migration `20261018120000_mut267_expense_groups`.
+- **Routes:**
+  - `GET/POST /v1/expense-groups`: the list carries per-currency totals and `memberCount`; `?expenseId=` returns the groups an expense belongs to.
+  - `GET/PATCH/DELETE /v1/expense-groups/{id}`: the detail carries an in-window `excludedCount`; PATCH uses If-Match; DELETE is soft and leaves the expenses alone.
+  - `PUT/DELETE /v1/expense-groups/{id}/expenses/{expenseId}`: keep, leave out, reset.
+  - `GET /v1/expense-groups/{id}/summary`: per currency, by category, client and day, with before/after buckets.
+- **Ledger filter.** `GET /v1/expenses` gains `groupId` and `groupMembership`.
+- **Code:**
+  - `server/src/expenses/groups.ts`: the membership window, `isGroupMember`, series bounds, create/patch validation;
+  - `summarizeGroup` in `summary.ts`;
+  - `ExpenseGroupRepository` and `expenses.totalsByCurrency` on both stores.
+- **Version.** API 1.33.0-mut267, numbered after MUT-270's unmerged 1.32.0. OpenAPI and the portal's `schema.d.ts` are regenerated.
+
+### Changed
+- Writability matrix: the `expenses` row covers `/v1/expense-groups*`, in both the code and the `hosted-portal.md` brief.
+- Store guard: classifies the new methods in the expenses domain.
+- Audit: `EXPENSE_ENTITY_TYPES` gains `expense_group`.
+
+### Technical
+- Prisma's expense list now AND-merges the filter and cursor clauses (Q1).
+- The shared store contract pins the Prisma `where` to `isGroupMember` on Postgres.
+
 ## [Unreleased] - 2026-10-17 — The phone app asks first, then sends anonymous activation events (MUT-157, ADR-090, ADR-092)
 
 **Why:** epic MUT-152's activation funnel on iOS and Android. Built in the Flutter repo on `feature/mut-157-phone-analytics` (its brief: `.claude/designs/mut-157-phone-analytics.md` there).

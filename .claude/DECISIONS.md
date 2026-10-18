@@ -3650,3 +3650,39 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - No session or feature-flag machinery, which ADR-090 turns off anyway.
 - Apple's privacy label lists only what this client sends.
 
+
+## ADR-094: Expense Groups Are Date Ranges Whose Members Are Computed When Read; Per-Currency Only, No Server Conversion
+
+**Status**: Active
+**Date**: 2026-10-18
+**Context**: MUT-267 (epic MUT-266). A person wants a trip (e.g. to Jordan) as one view: every expense dated while away, minus the ones that don't belong, plus a few from before (the flight). Totals overall, per day and per category. Hosted only (portal MUT-268, phone MUT-269), because the phone, where trip expenses are logged, talks to hosted profiles only. Numbered 094 because MUT-270's unmerged branch holds ADR-093.
+
+**Decision**:
+1. **A group is a named range on one profile.** `expense_groups`: `startOn`, `endOn` (null = still going), notes, versioned, soft-deleted. It lives in the **expenses** writability domain: `expenses:read|write`, session-only, writer of record USER, and audit entity `expense_group` is hidden from Malafat's key.
+2. **Membership is computed when read, never stored.** A member is dated inside the window and not left out, or kept. The window is `startOn..(endOn ?? startOn + 365)`: an open group stops collecting a year after its start (eng re-review R6).
+   - `groups.ts` `isGroupMember` is the one rule.
+   - Prisma's `expenseGroupWhere` is pinned to it by the shared store contract.
+3. **Marks.** `expense_group_overrides` (PK group + expense) holds `excluded` or `included`.
+   - Any mark is accepted on any expense of the profile, and the last write wins (D3/D6).
+   - A mark survives date changes.
+   - "Left out" lists only excluded expenses dated inside the window (design review 22A).
+4. **Ranges** are at most 366 days (`GROUP_RANGE_TOO_LONG`). The merged range is checked on PATCH. The MUT-227 floor applies to changed dates.
+5. **Per currency only.** The summary and the list totals never sum or convert across currencies. ADR-087 #4 stands: the portal and phone convert on the client at today's ECB rate via `/v1/fx-rates`, labelled with its date. Converting at each day's rate is MUT-273, which needs its own override of ADR-087.
+6. **The summary's day buckets reconcile with the total.** Series days are zero-filled. Every member dated outside the series gets a sparse `before`/`after` bucket (design review 6A).
+7. **List totals reuse the filter.** They are one `groupBy(currency)` aggregate per group over the same `where` as the member list, at most 4 groups at a time (re-review D1, A2).
+
+**Override log (client-accounting core, 2026-10-05 scope decision)**:
+- **What it overrides.** That decision keeps expenses optional and outside the three client questions. Expense groups are a deliberate exception that Basel asked for on 2026-10-18.
+- **What replaces it.** The exception is confined to the hosted expenses domain: no new sidebar entry (portal: a tab inside Expenses, MUT-268 1A), and no local-app surface.
+- **Date:** 2026-10-18.
+
+**Alternatives considered**:
+- **Storing membership as rows (a snapshot).** Rejected: expenses logged later would not join.
+- **A server-side converted total at today's rate.** Rejected: it contradicts ADR-087 #4 for a figure the client can label honestly.
+- **One union scan for list totals.** Rejected: it would be a second copy of the membership logic.
+- **Unbounded open groups.** Rejected: a forgotten group would grow every scan forever.
+
+**Consequences**:
+- One new pair of tables (additive migration `20261018120000_mut267_expense_groups`), eight routes, and `groupId`/`groupMembership` on `GET /v1/expenses`.
+- The list makes one small aggregate per group.
+- API 1.33.0-mut267.
