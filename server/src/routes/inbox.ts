@@ -141,6 +141,10 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const userId = owner(c);
       const body = c.req.valid('json');
       const existing = await mustGet(userId, c.req.valid('param').entryId);
+      // MUT-272: stale is a 409 before the body's business rules run (zod schema validation still runs first), since
+      // the amount is parsed in a currency a newer version may have changed. The store's version check still covers a
+      // write that lands after this read.
+      if (existing.version !== c.get('expectedVersion')) throw versionMismatch(existing.version);
       // The amount is re-parsed against whichever currency ends up on the row, not the one it had.
       const currency: Currency = body.currency ?? (existing.currency as Currency);
       const patch: UpdateInboxEntryPatch = {

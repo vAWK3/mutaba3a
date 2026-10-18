@@ -82,6 +82,8 @@ export interface ExpenseFormFieldsProps<T extends ExpenseFormFieldsShape> {
   clientField: ReactNode;
   projectField?: ReactNode;
   disabled?: boolean;
+  /** Hosted edit (MUT-272 review): the currency is shown but can't be picked until the portal sends it with the amount (MUT-277). */
+  currencyDisabled?: boolean;
   /** False only for local's recurring mode, which swaps the date field for its own frequency/start/end block via `dateSlotOverride`. Hosted always leaves this true — it has no recurring mode. */
   showDate?: boolean;
   /** Rendered in the date field's place when `showDate` is false. */
@@ -103,6 +105,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
   clientField,
   projectField,
   disabled,
+  currencyDisabled = false,
   showDate = true,
   dateSlotOverride,
   showNotes = true,
@@ -158,7 +161,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
             name={'currency' as never}
             control={control}
             render={({ field }) => (
-              <Select id="expense-currency" disabled={disabled} {...field}>
+              <Select id="expense-currency" disabled={disabled || currencyDisabled} {...field}>
                 {currencyOptions.map((code) => (
                   <option key={code} value={code}>
                     {code}
