@@ -4959,6 +4959,130 @@ components:
       required:
         - kind
       additionalProperties: false
+    EntryPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entry"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
+    Entry:
+      oneOf:
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - expense
+            profileId:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            createdByUserId:
+              type: string
+              format: uuid
+            expense:
+              allOf:
+                - $ref: "#/components/schemas/Expense"
+                - type: object
+                  properties:
+                    receiptCount:
+                      type: integer
+                      minimum: 0
+                      description: READY receipts attached
+                  required:
+                    - receiptCount
+          required:
+            - kind
+            - profileId
+            - createdAt
+            - createdByUserId
+            - expense
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - received
+            profileId:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            createdByUserId:
+              type: string
+              nullable: true
+              format: uuid
+            origin:
+              type: string
+              enum:
+                - capture
+                - integration
+            income:
+              $ref: "#/components/schemas/IncomeResponse"
+          required:
+            - kind
+            - profileId
+            - createdAt
+            - createdByUserId
+            - origin
+            - income
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - owed
+            profileId:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            createdByUserId:
+              type: string
+              nullable: true
+              format: uuid
+            income:
+              $ref: "#/components/schemas/IncomeResponse"
+          required:
+            - kind
+            - profileId
+            - createdAt
+            - createdByUserId
+            - income
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - conversion
+            profileId:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            createdByUserId:
+              type: string
+              format: uuid
+            conversion:
+              $ref: "#/components/schemas/Conversion"
+          required:
+            - kind
+            - profileId
+            - createdAt
+            - createdByUserId
+            - conversion
     CreateProfileRequest:
       type: object
       properties:
@@ -11493,6 +11617,81 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/entries:
+    get:
+      tags:
+        - Entries
+      summary: Your entries across profiles, newest logged first
+      description: Expenses, received payments, Owed entries and conversions on every profile you belong to (or the profiles you name), ordered by when each was logged. Everything on a profile, whoever logged it, Malafat's payments included; scheduled installments and retainer charges are not entries. No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: array
+            items:
+              type: string
+            description: Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404.
+          required: false
+          description: Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404.
+          style: form
+          explode: true
+          name: profileId
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            description: Page size, 1–100.
+          required: false
+          description: Page size, 1–100.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntryPage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
           content:
             application/json:
               schema:

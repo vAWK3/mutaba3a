@@ -93,8 +93,12 @@ import type {
   InboxEntryCursor,
   InboxEntryKind,
   InboxEntryRepository,
+  EntriesRepository,
+  EntryRow,
+  PageCursor,
 } from './ports.js';
 import { CAPTURE_UNDO_REASON } from './ports.js';
+import { mergeNewestFirst } from '../entries/merge.js';
 
 /**
  * Production LedgerStore over Postgres.
@@ -1359,6 +1363,41 @@ export class PrismaLedgerStore implements LedgerStore {
         await tx.expenseReceipt.updateMany({ where: { id: { in: live.map((r) => r.id) }, deletedAt: null }, data: { deletedAt: at } });
         return live.map((r) => ({ ...r, deletedAt: at }));
       }),
+    countReadyByExpenseIds: async (organizationIds, expenseIds) => {
+      if (expenseIds.length === 0) return new Map();
+      const groups = await this.prisma.expenseReceipt.groupBy({
+        by: ['expenseId'],
+        where: { organizationId: { in: [...organizationIds] }, expenseId: { in: [...expenseIds] }, status: 'READY', deletedAt: null },
+        _count: { _all: true },
+      });
+      return new Map(groups.map((g) => [g.expenseId, g._count._all]));
+    },
+  };
+
+  // ---- MUT-270: the entries feed -------------------------------------------
+
+  readonly entries: EntriesRepository = {
+    // D3: one typed, index-bounded query per organization and kind (limit + 1 rows each), merged in memory.
+    list: async (organizationIds, page) => {
+      const take = page.limit + 1;
+      const after = feedCursorWhere(page.cursor);
+      const newestFirst = [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
+      const perOrganization = organizationIds.flatMap((organizationId) => [
+        this.prisma.expense
+          .findMany({ where: { organizationId, deletedAt: null, ...after }, orderBy: newestFirst, take })
+          .then((rows) => rows.map((record): EntryRow => ({ kind: 'expense', record }))),
+        this.prisma.payment
+          .findMany({ where: { organizationId, AND: [after, { OR: [{ reversalReason: null }, { reversalReason: { not: CAPTURE_UNDO_REASON } }] }] }, orderBy: newestFirst, take })
+          .then((rows) => rows.map((record): EntryRow => ({ kind: 'payment', record }))),
+        this.prisma.receivable
+          .findMany({ where: { organizationId, origin: 'ADJUSTMENT', deletedAt: null, ...after }, orderBy: newestFirst, take })
+          .then((rows) => rows.map((record): EntryRow => ({ kind: 'receivable', record }))),
+        this.prisma.conversion
+          .findMany({ where: { organizationId, deletedAt: null, ...after }, orderBy: newestFirst, take })
+          .then((rows) => rows.map((record): EntryRow => ({ kind: 'conversion', record }))),
+      ]);
+      return mergeNewestFirst(await Promise.all(perOrganization), page.limit, (row) => row.record);
+    },
   };
 
   // ---- MUT-66: the unsorted inbox ------------------------------------------
@@ -1739,6 +1778,17 @@ function toAuditEvent(r: { id: string; organizationId: string; actorType: AuditE
     requestId: r.requestId,
     createdAt: r.createdAt,
   };
+}
+
+/**
+ * MUT-270: newest first — rows strictly after the cursor in (createdAt, id) descending order, written as
+ * `createdAt <= t AND (createdAt < t OR id < i)`. Equivalent to `(createdAt < t) OR (createdAt = t AND id < i)`,
+ * but the leading `createdAt <= t` becomes the index range: the plain OR form made Postgres scan and sort the whole
+ * organization (store-prisma-entries-plan.test.ts).
+ */
+function feedCursorWhere(cursor: PageCursor | null): { createdAt?: { lte: Date }; OR?: Array<Record<string, unknown>> } {
+  if (!cursor) return {};
+  return { createdAt: { lte: cursor.createdAt }, OR: [{ createdAt: { lt: cursor.createdAt } }, { id: { lt: cursor.id } }] };
 }
 
 function cursorWhere(page: PageRequest): { OR?: Array<Record<string, unknown>> } {

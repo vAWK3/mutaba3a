@@ -10,6 +10,7 @@ import type { CaptureSource } from './schemas.js';
 import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
 import type {
   ConversionRecord,
+  EntryRow,
   ExpenseCategoryRecord,
   ExpenseReceiptRecord,
   ExpenseRecord,
@@ -560,6 +561,29 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
     status: r.status === 'SETTLED' ? ('settled' as const) : ('open' as const),
     version: r.version,
   };
+}
+
+// ---- MUT-270: the entries feed ----------------------------------------------
+
+/** One feed item: the existing Expense / IncomeResponse / Conversion shape inside a small envelope. */
+export function serializeEntry(row: EntryRow, receiptCounts: ReadonlyMap<string, number>) {
+  const envelope = { profileId: row.record.organizationId, createdAt: row.record.createdAt.toISOString() };
+  switch (row.kind) {
+    case 'expense':
+      return { kind: 'expense' as const, ...envelope, createdByUserId: row.record.createdByUserId, expense: { ...serializeExpense(row.record), receiptCount: receiptCounts.get(row.record.id) ?? 0 } };
+    case 'payment':
+      return {
+        kind: 'received' as const,
+        ...envelope,
+        createdByUserId: row.record.createdByUserId,
+        origin: row.record.origin === 'CAPTURE' ? ('capture' as const) : ('integration' as const),
+        income: serializeIncomeEntry({ kind: 'received', payment: row.record }),
+      };
+    case 'receivable':
+      return { kind: 'owed' as const, ...envelope, createdByUserId: row.record.createdByUserId, income: serializeIncomeEntry({ kind: 'owed', receivable: row.record }) };
+    case 'conversion':
+      return { kind: 'conversion' as const, ...envelope, createdByUserId: row.record.createdByUserId, conversion: serializeConversion(row.record) };
+  }
 }
 
 // ---- MUT-66: the unsorted inbox ---------------------------------------------
