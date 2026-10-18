@@ -2728,6 +2728,22 @@ Plan: `.claude/designs/mut-165-spacing-guard.md` (Section 3 test review). Each n
 
 **Pre-existing, not MUT-165 (MUT-250):** `@web.brand.layout` at 375px in Arabic, light and dark, fails on unchanged main 1150d40 too, reproduced before any MUT-165 change: Income and the income drawer measure 727px against the 726px `KNOWN_OVERFLOW` cap (TD-083). The cap is left at 726 by decision; MUT-250 fixes or re-measures it.
 
+## MUT-270 — GET /v1/entries (2026-10-18, ADR-093)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `server/src/entries/__tests__/merge.test.ts` (new) | Unit | 6 | branches interleave newest first with the id tie-break; a cursor only when rows exceed the limit, at the last row; empty input; `isBeforeCursor` strictness |
+| `server/src/payments/__tests__/allocation-state.test.ts` (new) | Unit | 2 | `incomeStatusOf`: unallocated / partial / allocated by applied amount; reversed wins |
+| `server/src/__tests__/routes-entries.test.ts` (new) | Route (memory store) | 14 | every kind across profiles newest logged first with its envelope; stable paging while a row lands between pages; no filter = every membership, named / repeated / duplicated `profileId`; 404 alike for another person's, unknown and malformed ids; the profile header ignored; deleted / undone entries out, a Malafat reversal in as `reversed`; `partial` / `allocated` / `origin`; installments out; READY live receipts counted; API key 403, anonymous 401; bad cursor / limit 422; 20 per page by default; a settle links `settlesOwedId` to its Owed and a Malafat correction `replacesPaymentId`; a partial settle links while the Owed reads open; the installment case posts a real installment |
+| `server/src/repositories/__tests__/store-contract-entries.ts` (new; memory + Postgres) | Contract | 5 each | merge across organizations and nothing from others; paging without gaps or repeats across equal instants; exclusions incl. a posted INSTALLMENT; receipt counts scoped to the organizations given; `settledOwedIds` links a one-allocation settle to its Owed, never a split, a bare capture or a payment to a scheduled installment |
+| `server/src/repositories/__tests__/store-prisma-entries-fanout.test.ts` (new) | Unit (fake Prisma) | 1 | at most 4 queries in flight over 10 organizations, all 40 branches still read |
+| `server/src/auth/__tests__/store-guard.test.ts` (changed) | Unit | +1 | `entries.list` is `sessionOnly`: a session on any profile writer, never an API key |
+| `server/src/repositories/__tests__/store-prisma-entries-plan.test.ts` (new; test:db) | Query plan | 2 | on a firm with 2,000 installments, every per-kind query is an ordered index scan on its MUT-270 index (no Seq Scan, Bitmap or Sort), and past a cursor the index range starts at `createdAt <=`; fails with the indexes dropped |
+| `server/src/__tests__/route-security.test.ts` (changed) | Contract | 0 new | `GET /v1/entries` in the session and device surfaces, organization-independent, API key refused |
+| `server/infrastructure/terraform/tests/database_pool.tftest.hcl` (new; `terraform test`, mocked Google + random) | Terraform | 3 | the DATABASE_URL ends `&connection_limit=10` and Cloud SQL has `max_connections` 50; a pool of 20 (2 × 20 + 10 = 50) is accepted and 21 refused by the precondition. CI now runs `terraform test` for this module too |
+
+Unchanged and green: `income-routes.test.ts`, `inbox-filing.test.ts` (fresh payments still `unallocated`), `store-guard.test.ts` (receipt count classified `{ read: 'expenses' }`), `routes-m2/m3/m4/m5/m6/m8.test.ts` (pinned `API_VERSION` bumped to 1.32.0-mut270).
+
 ## MUT-237 — change your own password (2026-10-16, ADR-037 amendment)
 
 | File | Kind | Tests | What it proves |

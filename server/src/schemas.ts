@@ -1475,7 +1475,12 @@ export const CreditsResponseSchema = z.object({ receivable: ReceivableSchema, cr
 // ---- MUT-65: personal profile income capture (session-only) ----------------
 
 export const IncomeKindSchema = z.enum(['received', 'owed']).openapi('IncomeKind');
-export const IncomeStatusSchema = z.enum(['unallocated', 'open', 'settled']).openapi('IncomeStatus');
+/**
+ * Received: unallocated / partial / allocated (how much of it is applied to receivables: Malafat's doing on a
+ * Malafat-fed profile, a settle's on your own) or reversed. Owed: open / settled.
+ * MUT-270 (D5) added partial, allocated and reversed: a fresh capture is still unallocated.
+ */
+export const IncomeStatusSchema = z.enum(['unallocated', 'partial', 'allocated', 'reversed', 'open', 'settled']).openapi('IncomeStatus');
 
 const incomeText = z.string().trim().min(1).max(200);
 const incomeNotes = z.string().max(2000);
@@ -2148,3 +2153,64 @@ export const FileAsIncomeRequestSchema = z
   })
   .strict()
   .openapi('FileAsIncomeRequest');
+
+// ---- MUT-270: the entries feed (session-only, no profile header) ------------
+
+/** A repeated query parameter arrives as an array, a single one as a string: always an array here. */
+const repeatable = <T extends z.ZodTypeAny>(item: T) =>
+  z.preprocess((v) => (v === undefined || Array.isArray(v) ? v : [v]), z.array(item).optional());
+
+export const ListEntriesQuerySchema = z.object({
+  profileId: repeatable(z.string()).openapi({
+    description: 'Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404.',
+    param: { style: 'form', explode: true },
+  }),
+  limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ description: 'Page size, 1–100.' }),
+  cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
+});
+
+/** What every feed item says about itself, whatever it is. */
+const entryEnvelope = {
+  /** The profile (organization) the entry is on. */
+  profileId: uuid,
+  /** When it was logged — the feed's order, newest first. Not the money date (`occurredOn`). */
+  createdAt: z.string().datetime(),
+};
+
+export const EntrySchema = z
+  .discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('expense'),
+      ...entryEnvelope,
+      createdByUserId: uuid,
+      expense: ExpenseSchema.and(z.object({ receiptCount: z.number().int().nonnegative().openapi({ description: 'READY receipts attached' }) })),
+    }),
+    z.object({
+      kind: z.literal('received'),
+      ...entryEnvelope,
+      /** Null for a payment Malafat recorded: no person logged it. */
+      createdByUserId: uuid.nullable(),
+      /** capture: a person recorded it (POST /v1/income, inbox filing or a settle); integration: Malafat did. */
+      origin: z.enum(['capture', 'integration']),
+      /** The one Owed entry this payment paid toward (a settle, full or partial), or null. The Owed reads `settled` once paid in full, `open` before. */
+      settlesOwedId: uuid.nullable(),
+      /** The payment Malafat reversed and replaced with this one, or null. The replaced one reads `reversed`. */
+      replacesPaymentId: uuid.nullable(),
+      income: IncomeResponseSchema,
+    }),
+    z.object({
+      kind: z.literal('owed'),
+      ...entryEnvelope,
+      createdByUserId: uuid.nullable(),
+      income: IncomeResponseSchema,
+    }),
+    z.object({
+      kind: z.literal('conversion'),
+      ...entryEnvelope,
+      createdByUserId: uuid,
+      conversion: ConversionSchema,
+    }),
+  ])
+  .openapi('Entry');
+
+export const EntryPageSchema = z.object({ items: z.array(EntrySchema), nextCursor: z.string().nullable() }).openapi('EntryPage');

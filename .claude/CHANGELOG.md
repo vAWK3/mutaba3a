@@ -70,6 +70,23 @@
 - Prisma's expense list now AND-merges the filter and cursor clauses (Q1).
 - Deferred review items are recorded as TD-161 to TD-165.
 - The shared store contract pins the Prisma `where` to `isGroupMember` on Postgres.
+## [Unreleased] - 2026-10-18 — GET /v1/entries: one newest-first feed across a person's profiles (MUT-270, ADR-093, API 1.32.0-mut270)
+
+**Why:** the phone's Recent (MUT-271) must mirror the portal, not just what the phone itself saved. Brief: `.claude/designs/mut-270-entries-feed.md`.
+
+### Added
+- **`GET /v1/entries`** (`server/src/routes/entries.ts`): session-only, no `X-Mutaba3a-Profile`. Expenses, received payments, Owed (ADJUSTMENT) receivables and conversions, newest logged first, `pagination.ts` cursor, optional repeatable `profileId` (404 outside your memberships), `limit` 1..100 default 20.
+- **`server/src/entries/merge.ts`**: `mergeNewestFirst`, `isBeforeCursor`, `compareNewestFirst`, shared by both stores.
+- **Store:** `entries.list` (memory + Prisma, one typed query per organization and kind) and `expenseReceipts.countReadyByExpenseIds`; store guard `sessionOnly` / `{ read: 'expenses' }`.
+- **Migration `20261018120000_mut270_entries_feed_indexes`:** indexes only.
+- **Review fixes (2026-10-18):** at most 4 feed queries in flight per request; received items carry `settlesOwedId` and `replacesPaymentId`; the route documents that a page is a snapshot; payment origin mapped exhaustively; the connection budget counts both revisions during a deploy.
+- **Tests:** `routes-entries.test.ts` (14), `entries/__tests__/merge.test.ts` (6), `payments/__tests__/allocation-state.test.ts` (2), store contract `store-contract-entries.ts` (4, memory + Postgres), `store-prisma-entries-plan.test.ts` (2, EXPLAIN), `route-security.test.ts` updated.
+
+### Changed
+- **`IncomeStatus`** gains `partial`, `allocated`, `reversed`; `serializeIncomeEntry` reads a received payment's status from the record (`incomeStatusOf`). Fresh captures still read `unallocated`.
+- **Terraform:** `db_pool_size` (10) as `connection_limit` in the DATABASE_URL, `db_max_connections` (50) as an explicit Cloud SQL flag, with a precondition (2 × pool × instances + 10 ≤ max). Adding the flag restarts Cloud SQL: apply the instance on its own first (INFRA.md).
+- **CI:** `terraform test` runs for the GCP module too (`tests/database_pool.tftest.hcl`, mocked providers).
+- `API_VERSION` 1.32.0-mut270; `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
 
 ## [Unreleased] - 2026-10-17 — The phone app asks first, then sends anonymous activation events (MUT-157, ADR-090, ADR-092)
 

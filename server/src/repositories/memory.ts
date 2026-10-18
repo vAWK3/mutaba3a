@@ -124,9 +124,12 @@ import type {
   ExpenseGroupRecord,
   ExpenseGroupRepository,
   UpdateExpenseGroupPatch,
+  EntriesRepository,
+  EntryRow,
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON } from './ports.js';
+import { isBeforeCursor, mergeNewestFirst } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import { resolveClaim } from './idempotency-claim.js';
@@ -1607,6 +1610,42 @@ export class MemoryLedgerStore implements LedgerStore {
       const live = [...this.expReceipts.values()].filter((r) => r.organizationId === organizationId && r.expenseId === expenseId && !r.deletedAt);
       for (const r of live) r.deletedAt = at;
       return live.map((r) => ({ ...r }));
+    },
+    countReadyByExpenseIds: async (organizationIds, expenseIds) => {
+      const counts = new Map<string, number>();
+      for (const r of this.expReceipts.values()) {
+        if (!organizationIds.includes(r.organizationId) || !expenseIds.includes(r.expenseId) || r.status !== 'READY' || r.deletedAt) continue;
+        counts.set(r.expenseId, (counts.get(r.expenseId) ?? 0) + 1);
+      }
+      return counts;
+    },
+  };
+
+  // ---- MUT-270: the entries feed -------------------------------------------
+
+  readonly entries: EntriesRepository = {
+    list: async (organizationIds, page) => {
+      const inScope = (row: { organizationId: string; createdAt: Date; id: string }) => organizationIds.includes(row.organizationId) && (!page.cursor || isBeforeCursor(row, page.cursor));
+      const branches: EntryRow[][] = [
+        [...this.exps.values()].filter((e) => inScope(e) && !e.deletedAt).map((e) => ({ kind: 'expense', record: { ...e } })),
+        [...this.pays.values()].filter((p) => inScope(p) && p.reversalReason !== CAPTURE_UNDO_REASON).map((p) => ({ kind: 'payment', record: { ...p } })),
+        [...this.recs.values()].filter((r) => inScope(r) && r.origin === 'ADJUSTMENT' && !r.deletedAt).map((r) => ({ kind: 'receivable', record: { ...r } })),
+        [...this.convs.values()].filter((c) => inScope(c) && !c.deletedAt).map((c) => ({ kind: 'conversion', record: { ...c } })),
+      ];
+      return mergeNewestFirst(branches, page.limit, (row) => row.record);
+    },
+    settledOwedIds: async (organizationIds, paymentIds) => {
+      const byPayment = new Map<string, AllocationRecord[]>();
+      for (const a of this.allocs.values()) {
+        if (!organizationIds.includes(a.organizationId) || !paymentIds.includes(a.paymentId)) continue;
+        byPayment.set(a.paymentId, [...(byPayment.get(a.paymentId) ?? []), a]);
+      }
+      const links = new Map<string, string>();
+      for (const [paymentId, allocations] of byPayment) {
+        const only = allocations.length === 1 ? allocations[0]! : null;
+        if (only && this.recs.get(only.receivableId)?.origin === 'ADJUSTMENT') links.set(paymentId, only.receivableId);
+      }
+      return links;
     },
   };
 

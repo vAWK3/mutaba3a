@@ -192,6 +192,8 @@ export const STORE_ACCESS: StoreAccess = {
     complete: { write: 'expenses' },
     softDelete: { write: 'expenses' },
     softDeleteByExpense: { write: 'expenses' },
+    // MUT-270: counts for the entries feed, across the person's own profiles (the route resolves them from memberships).
+    countReadyByExpenseIds: { read: 'expenses' },
   },
   /**
    * MUT-66. Capturing is the person's own business, on no profile — hence
@@ -224,6 +226,12 @@ export const STORE_ACCESS: StoreAccess = {
     update: { write: 'conversions' },
     softDelete: { write: 'conversions' },
   },
+  /**
+   * MUT-270: a person's own view across every profile they belong to, so no single matrix domain fits — hence
+   * `sessionOnly`, as the inbox. The route resolves the organizations from the person's memberships; an API key has
+   * no person behind it and so no feed.
+   */
+  entries: { list: 'sessionOnly', settledOwedIds: 'sessionOnly' },
 };
 
 export interface StoreGuard {
