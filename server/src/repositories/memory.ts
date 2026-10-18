@@ -135,10 +135,57 @@ import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileOwnerOf, pro
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 
+/** Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it. */
+export const CURRENT_STORE_SNAPSHOT_VERSION = 1;
+
 /**
- * In-memory LedgerStore for tests. Mirrors every uniqueness constraint the
- * Prisma schema declares so a route test fails here for the same reasons it
- * would fail in Postgres.
+ * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
+ * `private readonly` Map except the six ephemeral ones (`idem`, `userIdem`,
+ * `sessionsById`, `setupLinks`, `events`, `keys`): idempotency keys, sessions
+ * and setup links are a server-identity concern that never survives a
+ * restore, and the audit log and API keys are not portal-local-mode concerns
+ * either. `counters` is included (payment/charge numbering must resume where
+ * it left off).
+ */
+export interface LocalSnapshotMaps {
+  orgs: Map<string, Organization>;
+  ints: Map<string, IntegrationRecord>;
+  custs: Map<string, CustomerRecord>;
+  projs: Map<string, ProjectRecord>;
+  refs: Map<string, ExternalReferenceRecord>;
+  rates: Map<string, VatRateRecord>;
+  agrs: Map<string, AgreementRecord>;
+  insts: Map<string, InstallmentRecord>;
+  charges: Map<string, RetainerChargeRecord>;
+  recs: Map<string, ReceivableRecord>;
+  supps: Map<string, SupplementRecord>;
+  versions: Map<string, RetainerVersionRecord>;
+  files: Map<string, AttachmentRecord>;
+  pays: Map<string, PaymentRecord>;
+  allocs: Map<string, AllocationRecord>;
+  credits: Map<string, CreditRecord>;
+  counters: Map<string, number>;
+  props: Map<string, FeeProposalRecord>;
+  people: Map<string, UserRecord>;
+  members: Map<string, MembershipRecord>;
+  exps: Map<string, ExpenseRecord>;
+  expCats: Map<string, ExpenseCategoryRecord>;
+  expReceipts: Map<string, ExpenseReceiptRecord>;
+  convs: Map<string, ConversionRecord>;
+  expGroups: Map<string, ExpenseGroupRecord>;
+  groupMarks: Map<string, ExpenseGroupOverrideRecord>;
+  inbox: Map<string, InboxEntryRecord>;
+}
+
+export interface LocalSnapshot {
+  formatVersion: number;
+  maps: LocalSnapshotMaps;
+}
+
+/**
+ * In-memory LedgerStore for tests and the portal's local mode. Mirrors every
+ * uniqueness constraint the Prisma schema declares so a route test fails
+ * here for the same reasons it would fail in Postgres.
  */
 export class MemoryLedgerStore implements LedgerStore {
   private readonly orgs = new Map<string, Organization>();
@@ -1744,6 +1791,94 @@ export class MemoryLedgerStore implements LedgerStore {
   auditCount(organizationId: string): number {
     return this.events.filter((e) => e.organizationId === organizationId).length;
     }
+
+  /**
+   * The business-data half of this store (MUT-286): every field in
+   * `LocalSnapshotMaps`, by reference. Safe to pass by reference because the
+   * only caller outside tests — the portal's local-mode persistence layer
+   * (Phase B) — structured-clones it into IndexedDB immediately, rather than
+   * holding the live Maps.
+   */
+  snapshot(): LocalSnapshot {
+    return {
+      formatVersion: CURRENT_STORE_SNAPSHOT_VERSION,
+      maps: {
+        orgs: this.orgs,
+        ints: this.ints,
+        custs: this.custs,
+        projs: this.projs,
+        refs: this.refs,
+        rates: this.rates,
+        agrs: this.agrs,
+        insts: this.insts,
+        charges: this.charges,
+        recs: this.recs,
+        supps: this.supps,
+        versions: this.versions,
+        files: this.files,
+        pays: this.pays,
+        allocs: this.allocs,
+        credits: this.credits,
+        counters: this.counters,
+        props: this.props,
+        people: this.people,
+        members: this.members,
+        exps: this.exps,
+        expCats: this.expCats,
+        expReceipts: this.expReceipts,
+        convs: this.convs,
+        expGroups: this.expGroups,
+        groupMarks: this.groupMarks,
+        inbox: this.inbox,
+      },
+    };
+  }
+
+  /**
+   * Replaces every business-data field with the snapshot's rows. The six
+   * ephemeral fields (idempotency keys, sessions, setup links, the audit log,
+   * API keys) are left exactly as they are on this instance — a restored
+   * store never replays old idempotency keys or sessions (ADR-097 §2.3.4);
+   * the portal's local-mode boot mints a fresh device session afterward.
+   * Mutates each field's own Map in place (`clear()` then repopulate) rather
+   * than reassigning, since every field is `private readonly`.
+   */
+  restore(snapshot: LocalSnapshot): void {
+    const { maps } = snapshot;
+    replaceMap(this.orgs, maps.orgs);
+    replaceMap(this.ints, maps.ints);
+    replaceMap(this.custs, maps.custs);
+    replaceMap(this.projs, maps.projs);
+    replaceMap(this.refs, maps.refs);
+    replaceMap(this.rates, maps.rates);
+    replaceMap(this.agrs, maps.agrs);
+    replaceMap(this.insts, maps.insts);
+    replaceMap(this.charges, maps.charges);
+    replaceMap(this.recs, maps.recs);
+    replaceMap(this.supps, maps.supps);
+    replaceMap(this.versions, maps.versions);
+    replaceMap(this.files, maps.files);
+    replaceMap(this.pays, maps.pays);
+    replaceMap(this.allocs, maps.allocs);
+    replaceMap(this.credits, maps.credits);
+    replaceMap(this.counters, maps.counters);
+    replaceMap(this.props, maps.props);
+    replaceMap(this.people, maps.people);
+    replaceMap(this.members, maps.members);
+    replaceMap(this.exps, maps.exps);
+    replaceMap(this.expCats, maps.expCats);
+    replaceMap(this.expReceipts, maps.expReceipts);
+    replaceMap(this.convs, maps.convs);
+    replaceMap(this.expGroups, maps.expGroups);
+    replaceMap(this.groupMarks, maps.groupMarks);
+    replaceMap(this.inbox, maps.inbox);
+  }
+}
+
+/** `target.clear()` then repopulate from `source` — `target` is a `private readonly` field, so it is mutated in place, never reassigned. */
+function replaceMap<K, V>(target: Map<K, V>, source: Map<K, V>): void {
+  target.clear();
+  for (const [key, value] of source) target.set(key, value);
 }
 
 function membershipKey(userId: string, organizationId: string): string {
