@@ -129,6 +129,23 @@ describe('membership (MUT-267 acceptance criteria)', () => {
     expect((await t.summary(g.id)).currencies[0]).toMatchObject({ currency: 'JOD', total: '10.000', count: 1 });
   });
 
+  it('MUT-272: a member moved to another currency is summed under its new currency, with day buckets that still add up', async () => {
+    const t = await setup();
+    const g = await t.newGroup();
+    const e = await t.expense({ occurredOn: '2026-10-05', amount: '120.50', currency: 'ILS' });
+    expect((await t.summary(g.id)).currencies.map((c: Loose) => c.currency)).toEqual(['ILS']);
+    const moved = await t.app.request(`/v1/expenses/${e.id}`, json({ amount: '1.234', currency: 'JOD' }, { ...t.as(), 'if-match': '1' }, 'PATCH'));
+    expect(moved.status).toBe(200);
+    const s = await t.summary(g.id);
+    expect(s.currencies).toHaveLength(1);
+    expect(s.currencies[0]).toMatchObject({ currency: 'JOD', total: '1.234', count: 1 });
+    const thousandths = (x: string) => Math.round(Number(x) * 1000);
+    expect(s.currencies[0].byDay.reduce((sum: number, d: Loose) => sum + thousandths(d.total), 0)).toBe(1234);
+    const listed = async (currency: string) => read(await t.app.request(`/v1/expenses?currency=${currency}`, { headers: t.as() }));
+    expect((await listed('JOD')).items.map((x: Loose) => x.id)).toEqual([e.id]);
+    expect((await listed('ILS')).items).toEqual([]);
+  });
+
   it('AC2: leaving out drops it from the summary and the member list; reset brings it back', async () => {
     const t = await setup();
     const g = await t.newGroup();

@@ -227,8 +227,8 @@ describe('ExpenseDrawer (hosted)', () => {
   });
 
   it('PATCHes on edit with no currency field and null (not omitted) for a cleared field', async () => {
-    // UpdateExpenseRequest has no `currency` at all (the API never changes it
-    // on a PATCH) and its optional fields are `string | null`, where `null`
+    // The drawer sends no `currency` on edit (the API takes one only with
+    // `amount`, ADR-096; MUT-277) and its optional fields are `string | null`, where `null`
     // clears a field and omission leaves it unchanged — sending `undefined`
     // for a field the user cleared would silently fail to clear it.
     const user = userEvent.setup();
@@ -265,6 +265,9 @@ describe('ExpenseDrawer (hosted)', () => {
 
     const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1' });
     const vendorInput = await screen.findByDisplayValue('ACME');
+    // MUT-272 review: the currency can't be picked on edit until MUT-277 sends it — a pick the PATCH dropped saved
+    // the old currency silently.
+    expect(document.getElementById('expense-currency')).toBeDisabled();
     await user.clear(vendorInput);
     await user.click(screen.getByRole('button', { name: 'Save' }));
 

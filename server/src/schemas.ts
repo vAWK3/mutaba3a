@@ -843,6 +843,9 @@ export const VALIDATION_REASONS = [
   'GROUP_RANGE_TOO_LONG',
   'GROUP_LIMIT',
   'GROUP_ID_REQUIRED',
+  // MUT-194 (ADR-075) / MUT-272 (ADR-096): a currency travels with its amount; a conversion's legs differ
+  'AMOUNT_REQUIRED',
+  'SAME_CURRENCY',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -1846,11 +1849,13 @@ export const CreateExpenseRequestSchema = z
   .strict()
   .openapi('CreateExpenseRequest');
 
-/** No `currency`: a row's currency never changes, so it is never converted. Null clears an optional field. */
+/** MUT-272: `currency` only together with `amount` (ADR-096); the amount is never converted, only re-read in the new currency's digits. Null clears an optional field. */
 export const UpdateExpenseRequestSchema = z
   .object({
     occurredOn: FlooredMoneyDatePatchSchema.optional(),
     amount: AmountSchema.optional(),
+    /** MUT-272: only together with `amount` (422 AMOUNT_REQUIRED alone), which is then read in this currency's digits. */
+    currency: CurrencySchema.optional().openapi({ description: 'Only together with amount (422 AMOUNT_REQUIRED alone), which is then read in this currency\'s digits.' }),
     title: expenseText.nullable().optional(),
     vendor: expenseText.nullable().optional(),
     categoryId: uuid.nullable().optional(),
@@ -2109,7 +2114,7 @@ export const CreateInboxEntryRequestSchema = z
   .strict()
   .openapi('CreateInboxEntryRequest');
 
-/** No `kind`: what an entry is destined to become is fixed at capture, as an expense's currency is. Null clears an optional field. */
+/** No `kind`: what an entry is destined to become is fixed at capture. A changed currency comes with its amount. Null clears an optional field. */
 export const UpdateInboxEntryRequestSchema = z
   .object({
     amount: AmountSchema.optional(),

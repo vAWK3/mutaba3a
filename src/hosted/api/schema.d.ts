@@ -6614,7 +6614,7 @@ export interface paths {
         head?: never;
         /**
          * Change an expense (optimistic, If-Match)
-         * @description Any field but the currency, which never changes. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.
+         * @description Any field. A currency changes only together with its amount (422 AMOUNT_REQUIRED), and the amount is read in the merged currency's digits. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.
          */
         patch: {
             parameters: {
@@ -9081,7 +9081,7 @@ export interface paths {
         head?: never;
         /**
          * Fix an unsorted entry (optimistic, If-Match)
-         * @description Anything you captured. Not kind: what an entry is destined to become is fixed at capture, as an expense's currency is. null clears an optional field.
+         * @description Anything you captured. Not kind: what an entry is destined to become is fixed at capture. A changed currency needs the amount again (422 AMOUNT_INVALID), read in that currency's digits. null clears an optional field.
          */
         patch: {
             parameters: {
@@ -12192,6 +12192,7 @@ export interface components {
             occurredOn?: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
+            currency?: components["schemas"]["Currency"] & unknown;
             title?: string | null;
             vendor?: string | null;
             /** Format: uuid */
