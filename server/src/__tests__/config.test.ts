@@ -143,6 +143,44 @@ describe('loadConfig — app association files (MUT-111)', () => {
   );
 });
 
+describe('loadConfig — minimum app version (MUT-293)', () => {
+  it('defaults to no floor configured on either platform, check not disabled', () => {
+    const config = loadConfig(base);
+    expect(config.IOS_MIN_BUILD).toBeUndefined();
+    expect(config.ANDROID_MIN_BUILD).toBeUndefined();
+    expect(config.IOS_RECOMMENDED_BUILD).toBeUndefined();
+    expect(config.ANDROID_RECOMMENDED_BUILD).toBeUndefined();
+    expect(config.MIN_BUILD_CHECK_DISABLED).toBe(false);
+  });
+
+  it('accepts a floor and a recommended build per platform', () => {
+    const config = loadConfig({ ...base, IOS_MIN_BUILD: '10', IOS_RECOMMENDED_BUILD: '12', ANDROID_MIN_BUILD: '5', ANDROID_RECOMMENDED_BUILD: '5' });
+    expect(config).toMatchObject({ IOS_MIN_BUILD: 10, IOS_RECOMMENDED_BUILD: 12, ANDROID_MIN_BUILD: 5, ANDROID_RECOMMENDED_BUILD: 5 });
+  });
+
+  it('accepts the kill switch', () => {
+    expect(loadConfig({ ...base, MIN_BUILD_CHECK_DISABLED: 'true' }).MIN_BUILD_CHECK_DISABLED).toBe(true);
+  });
+
+  it.each([
+    ['IOS_MIN_BUILD', '0'],
+    ['IOS_MIN_BUILD', '-1'],
+    ['IOS_MIN_BUILD', 'not-a-number'],
+    ['ANDROID_RECOMMENDED_BUILD', '0'],
+  ])('refuses %s=%s at boot, naming the variable', (name, value) => {
+    expect(() => loadConfig({ ...base, [name]: value })).toThrow(name);
+  });
+
+  it('refuses a recommended build below the floor on the same platform', () => {
+    expect(() => loadConfig({ ...base, IOS_MIN_BUILD: '10', IOS_RECOMMENDED_BUILD: '9' })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, IOS_MIN_BUILD: '10', IOS_RECOMMENDED_BUILD: '9' })).toThrow('IOS_RECOMMENDED_BUILD');
+  });
+
+  it('does not cross-check recommended/floor across different platforms', () => {
+    expect(loadConfig({ ...base, IOS_MIN_BUILD: '10', ANDROID_RECOMMENDED_BUILD: '1' })).toMatchObject({ IOS_MIN_BUILD: 10, ANDROID_RECOMMENDED_BUILD: 1 });
+  });
+});
+
 describe('loadConfig — reference exchange rates (MUT-228)', () => {
   it('defaults to Frankfurter, a 4-hour window and a 3-second timeout', () => {
     expect(loadConfig(base)).toMatchObject({
