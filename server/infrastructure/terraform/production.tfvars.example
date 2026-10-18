@@ -7,7 +7,7 @@ db_availability     = "REGIONAL"
 db_backup_enabled   = true
 deletion_protection = true
 min_instances       = 1
-# MUT-270: Prisma pool per instance, and Cloud SQL's max_connections (db_pool_size x max_instances + 10 must fit).
+# MUT-270: Prisma pool per instance, and Cloud SQL's max_connections (see the precondition on the DATABASE_URL secret in main.tf).
 # db_pool_size        = 10
 # db_max_connections  = 50
 log_level           = "info"

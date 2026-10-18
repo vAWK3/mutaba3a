@@ -27,7 +27,12 @@ if (!url) {
   const queries: Prisma.QueryEvent[] = [];
   client.$on('query', (e) => queries.push(e));
   const store = new PrismaLedgerStore(client);
-  afterAll(() => store.disconnect());
+  const seeded: string[] = [];
+  // The seed is 2,000 rows per test: remove it, so a reused local test database does not grow with every run.
+  afterAll(async () => {
+    await client.receivable.deleteMany({ where: { organizationId: { in: seeded } } });
+    await store.disconnect();
+  });
 
   const unique = () => Math.random().toString(36).slice(2, 10);
 
@@ -63,6 +68,7 @@ if (!url) {
    */
   async function firmWithInstallments() {
     const org = await store.organizations.create({ name: 'Firm', slug: `firm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    seeded.push(org.id);
     const base = Date.UTC(2026, 0, 1);
     await client.receivable.createMany({
       data: Array.from({ length: 2_000 }, (_, i) => ({

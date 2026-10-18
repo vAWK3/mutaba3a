@@ -30,7 +30,7 @@ Response `EntryPage { items: Entry[], nextCursor: string | null }`; `Entry` is a
 | kind | envelope | embedded |
 |---|---|---|
 | `expense` | `profileId, createdAt, createdByUserId` | `expense: Expense & { receiptCount }` |
-| `received` | `profileId, createdAt, createdByUserId \| null, origin: capture \| integration` | `income: IncomeResponse` (status unallocated / partial / allocated / reversed) |
+| `received` | `profileId, createdAt, createdByUserId \| null, origin: capture \| integration, settlesOwedId, replacesPaymentId` | `income: IncomeResponse` (status unallocated / partial / allocated / reversed) |
 | `owed` | `profileId, createdAt, createdByUserId \| null` | `income: IncomeResponse` (status open / settled) |
 | `conversion` | `profileId, createdAt, createdByUserId` | `conversion: Conversion` |
 
@@ -64,9 +64,11 @@ serializeEntry(row, counts) ─► { items, nextCursor: encodeCursor(...) }
 
 ### 2.4 Store port — `EntriesRepository` (ports.ts, memory.ts, prisma.ts)
 
-`list(organizationIds, page: PageRequest): Promise<Page<EntryRow>>`, where `EntryRow` is `{ kind: 'expense', record } | { kind: 'payment', record } | { kind: 'receivable', record } | { kind: 'conversion', record }`. The repository trusts the ids it is given; the route resolves them from memberships. Prisma: one typed `findMany` per organization and kind, in parallel (D3); no raw SQL. The cursor condition is `createdAt <= t AND (createdAt < t OR id < i)`, so the index range starts at the cursor (the OR-only form sorted the whole organization). Memory: the same filters over its maps. Both finish with `mergeNewestFirst` (`entries/merge.ts`, pure).
+`list(organizationIds, page: PageRequest): Promise<Page<EntryRow>>`, where `EntryRow` is `{ kind: 'expense', record } | { kind: 'payment', record } | { kind: 'receivable', record } | { kind: 'conversion', record }`. The repository trusts the ids it is given; the route resolves them from memberships. Prisma: one typed `findMany` per organization and kind (D3), one organization at a time with its 4 kinds in parallel, so a request holds at most 4 pooled connections (review D1); no raw SQL. The cursor condition is `createdAt <= t AND (createdAt < t OR id < i)`, so the index range starts at the cursor (the OR-only form sorted the whole organization). Memory: the same filters over its maps. Both finish with `mergeNewestFirst` (`entries/merge.ts`, pure).
 
 `expenseReceipts.countReadyByExpenseIds(organizationIds, expenseIds): Promise<Map<string, number>>`.
+
+`entries.settledOwedIds(organizationIds, paymentIds): Promise<Map<string, string>>` (review D2): a payment with exactly one allocation, to an ADJUSTMENT receivable, is that Owed's settle. The route asks only for CAPTURE payments with money applied. `replacesPaymentId` comes straight from the payment row. A page is a snapshot: edits and deletions show when a page is re-read (review D3, in the route's OpenAPI description).
 
 Store guard: `entries.list` is `sessionOnly` (a person's own cross-profile view; an API key has no person); `countReadyByExpenseIds` is `{ read: 'expenses' }`, like every expense-receipt method (MUT-42).
 
@@ -79,7 +81,7 @@ Store guard: `entries.list` is `sessionOnly` (a person's own cross-profile view;
 
 ### 2.6 Connection pool (D6)
 
-Terraform writes `DATABASE_URL`; it gains `&connection_limit=${var.db_pool_size}` (default 10). The Cloud SQL instance gets an explicit `max_connections` flag (`var.db_max_connections`, default 50, db-g1-small's default). A precondition keeps `db_pool_size × max_instances + 10` (migrations, operator proxy, Cloud SQL's reserved connections) within `db_max_connections`. Prisma's default pool is CPU-derived and, in a container, can read the host's CPU count, so the size is now chosen, not inherited. Changing the flag restarts the instance; INFRA.md records it.
+Terraform writes `DATABASE_URL`; it gains `&connection_limit=${var.db_pool_size}` (default 10). The Cloud SQL instance gets an explicit `max_connections` flag (`var.db_max_connections`, default 50, db-g1-small's default). A precondition keeps `2 × db_pool_size × max_instances + 10` (two revisions overlap during a deploy; the 10 cover migrations, the operator's proxy and Cloud SQL's reserved connections) within `db_max_connections`. Prisma's default pool is CPU-derived and, in a container, can read the host's CPU count, so the size is now chosen, not inherited. Changing the flag restarts the instance; INFRA.md records it.
 
 ## 3. Reuse analysis
 

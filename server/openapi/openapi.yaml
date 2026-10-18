@@ -5027,6 +5027,14 @@ components:
               enum:
                 - capture
                 - integration
+            settlesOwedId:
+              type: string
+              nullable: true
+              format: uuid
+            replacesPaymentId:
+              type: string
+              nullable: true
+              format: uuid
             income:
               $ref: "#/components/schemas/IncomeResponse"
           required:
@@ -5035,6 +5043,8 @@ components:
             - createdAt
             - createdByUserId
             - origin
+            - settlesOwedId
+            - replacesPaymentId
             - income
         - type: object
           properties:
@@ -11638,7 +11648,7 @@ paths:
       tags:
         - Entries
       summary: Your entries across profiles, newest logged first
-      description: Expenses, received payments, Owed entries and conversions on every profile you belong to (or the profiles you name), ordered by when each was logged. Everything on a profile, whoever logged it, Malafat's payments included; scheduled installments and retainer charges are not entries. No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox.
+      description: "Expenses, received payments, Owed entries and conversions on every profile you belong to (or the profiles you name), ordered by when each was logged. Everything on a profile, whoever logged it, Malafat's payments included; scheduled installments and retainer charges are not entries. No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox. A page is a snapshot: an entry edited or deleted later changes only when that page is read again (a deleted one is simply absent), so cache only the pages you re-read. A settle shows as a received payment with settlesOwedId next to its Owed (settled once paid in full, open before); a Malafat correction as a received payment with replacesPaymentId next to the reversed one."
       security:
         - session: []
         - deviceSession: []

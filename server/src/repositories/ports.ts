@@ -1723,6 +1723,12 @@ export interface EntriesRepository {
    * resolves them from the person's memberships. Never lazy-posts (MUT-270 D2): a read here never writes.
    */
   list(organizationIds: readonly string[], page: PageRequest): Promise<Page<EntryRow>>;
+  /**
+   * MUT-270 review (D2): for each payment with exactly one allocation, to an Owed (ADJUSTMENT) receivable, that
+   * receivable's id: the Owed it paid toward, which a settle (full or partial) is. Judged by shape, not by which route
+   * made it. Other payments are absent. Same trust in `organizationIds` as `list`.
+   */
+  settledOwedIds(organizationIds: readonly string[], paymentIds: readonly string[]): Promise<Map<string, string>>;
 }
 
 // ---- MUT-66: the unsorted inbox ---------------------------------------------

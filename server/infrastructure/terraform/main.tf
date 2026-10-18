@@ -181,9 +181,12 @@ resource "google_secret_manager_secret_version" "database_url" {
   secret_data = "postgresql://${local.db_user}:${random_password.db.result}@localhost/${local.db_name}?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}&connection_limit=${var.db_pool_size}"
 
   lifecycle {
+    # No create_before_destroy: Terraform would propagate it to the instance and the secret, whose fixed names would
+    # then clash on any future replacement. A changed URL replaces this version destroy-first; INFRA.md covers the gap.
     precondition {
-      condition     = var.db_pool_size * var.max_instances + local.db_reserved_connections <= var.db_max_connections
-      error_message = "db_pool_size × max_instances plus ${local.db_reserved_connections} reserved connections (migrations, the operator's proxy, Cloud SQL's own) must fit within db_max_connections."
+      # × 2: during a deploy the old and the new revision both hold a pool.
+      condition     = 2 * var.db_pool_size * var.max_instances + local.db_reserved_connections <= var.db_max_connections
+      error_message = "2 × db_pool_size × max_instances (old and new revisions overlap during a deploy) plus ${local.db_reserved_connections} reserved connections (migrations, the operator's proxy, Cloud SQL's own) must fit within db_max_connections."
     }
   }
 }

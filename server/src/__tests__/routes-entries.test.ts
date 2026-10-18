@@ -4,7 +4,6 @@ import { createApp } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
-import type { ReceivableRecord } from '../repositories/ports.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
@@ -249,13 +248,65 @@ describe('GET /v1/entries — what counts as an entry', () => {
     expect(byId.get(full.id)).toMatchObject({ origin: 'integration', income: { status: 'allocated' } });
   });
 
+  it('links a settle payment to the Owed it paid, and a Malafat correction to the payment it replaces', async () => {
+    const { h, b, u, feed } = await setup();
+    const customerB = await customer(h, u.as(b.id));
+    const owed = await income(h, u, b.id, { kind: 'owed', customerId: customerB.id, title: 'Logo' });
+    h.tick();
+    expect((await h.app.request(`/v1/receivables/${owed.id}/settle`, json({}, { ...u.as(b.id), ...idem() }))).status).toBe(201);
+    const fresh = await income(h, u, b.id, { kind: 'received' });
+
+    const firm = await organization(h, 'Firm');
+    const key = await malafatKey(h, firm.id);
+    await h.app.request(`/admin/v1/users/${u.userId}/memberships`, json({ organizationId: firm.id }, admin));
+    const client = await customer(h, key);
+    const malafatPayment = (replacesPaymentId: string | null) =>
+      h.store.payments.create({ organizationId: firm.id, customerId: client.id, projectId: null, currency: 'ILS', amountMinor: 30_000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, h.clock.now);
+    h.tick();
+    const original = (await malafatPayment(null)).payment;
+    await h.store.payments.reverse(firm.id, original.id, 'corrected', h.clock.now);
+    h.tick();
+    const replacement = (await malafatPayment(original.id)).payment;
+
+    const items = (await read(await feed())).items as Loose[];
+    const received = new Map(items.filter((i) => i.kind === 'received').map((i) => [i.income.id, i]));
+    const settle = items.find((i) => i.kind === 'received' && i.settlesOwedId === owed.id);
+    expect(settle).toMatchObject({ origin: 'capture', replacesPaymentId: null, income: { status: 'allocated' } });
+    expect(items.find((i) => i.kind === 'owed' && i.income.id === owed.id)).toMatchObject({ income: { status: 'settled' } });
+    expect(received.get(fresh.id)).toMatchObject({ settlesOwedId: null, replacesPaymentId: null, income: { status: 'unallocated' } });
+    expect(received.get(replacement.id)).toMatchObject({ origin: 'integration', replacesPaymentId: original.id, settlesOwedId: null });
+    expect(received.get(original.id)).toMatchObject({ replacesPaymentId: null, income: { status: 'reversed' } });
+  });
+
+  it('links a partial settle to its Owed, which still reads open', async () => {
+    const { h, b, u, feed } = await setup();
+    const customerB = await customer(h, u.as(b.id));
+    const owed = await income(h, u, b.id, { kind: 'owed', customerId: customerB.id, title: 'Logo', amount: '500.00' });
+    h.tick();
+    expect((await h.app.request(`/v1/receivables/${owed.id}/settle`, json({ amount: '200.00' }, { ...u.as(b.id), ...idem() }))).status).toBe(201);
+
+    const items = (await read(await feed())).items as Loose[];
+    expect(items.find((i) => i.kind === 'received')).toMatchObject({ settlesOwedId: owed.id, income: { amount: '200.00', status: 'allocated' } });
+    expect(items.find((i) => i.kind === 'owed')).toMatchObject({ income: { id: owed.id, status: 'open' } });
+  });
+
   it('shows only Owed a person recorded: scheduled installments stay out', async () => {
     const { h, b, u, feed } = await setup();
     const customerB = await customer(h, u.as(b.id));
     const owed = await income(h, u, b.id, { kind: 'owed', customerId: customerB.id, title: 'Logo' });
-    const scheduled = await income(h, u, b.id, { kind: 'owed', customerId: customerB.id, title: 'Installment' });
-    // No agreement route is needed to prove the filter: relabel one Owed row as a posted installment.
-    (h.store as unknown as { recs: Map<string, ReceivableRecord> }).recs.get(scheduled.id)!.origin = 'INSTALLMENT';
+    // A posted installment: the schedule's own receivable, through the store's public agreement API.
+    const project = await h.store.projects.create({ organizationId: b.id, customerId: customerB.id, name: 'Case', currency: 'ILS' }, h.clock.now);
+    const { installments } = await h.store.agreements.create(
+      {
+        organizationId: b.id, projectId: project.id, customerId: customerB.id, type: 'FIXED', currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', vatTreatment: 'EXEMPT', vatRateBasisPoints: 0,
+        amountMinor: 1_000n, netMinor: 1_000n, vatMinor: 0n, grossMinor: 1_000n, agreementDate: '2026-10-08', description: null, paymentTerms: 'EOM', startMonth: null, billingDay: null, endMonth: null,
+        installments: [{ position: 1, label: 'I1', amountMinor: 1_000n, netMinor: 1_000n, vatMinor: 0n, grossMinor: 1_000n, vatTreatment: 'EXEMPT', rateBasisPoints: 0, triggerType: 'IMMEDIATE', triggerDate: null, paymentTerms: null, dueDateOverride: null }],
+      },
+      h.clock.now,
+    );
+    h.tick();
+    const posted = await h.store.agreements.postInstallment(b.id, installments[0]!.id, { postingDate: '2026-10-08', dueDate: '2026-10-31', at: h.clock.now });
+    expect(posted?.receivable.origin).toBe('INSTALLMENT');
 
     expect(ids(await read(await feed()))).toEqual([owed.id]);
   });

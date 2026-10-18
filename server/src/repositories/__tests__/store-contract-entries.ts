@@ -104,6 +104,38 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       expect(page.items[0]!.record).toMatchObject({ status: 'REVERSED', reversalReason: 'bounced' });
     });
 
+    it('links a settle payment to the Owed it paid, and nothing else', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const owed = await w.owed(1);
+      const other = await w.owed(2);
+      const pay = (allocations: Array<{ receivableId: string; amountMinor: bigint }>, s: number) =>
+        store.payments.create({ organizationId: w.b.id, customerId: w.client.id, projectId: null, currency: 'ILS', amountMinor: 50_000n, receivedOn: '2026-10-08', method: 'CASH', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: w.user.id, origin: 'CAPTURE', captureSource: null, allocations }, at(s));
+      const settle = (await pay([{ receivableId: owed.id, amountMinor: 50_000n }], 3)).payment;
+      const split = (await pay([{ receivableId: other.id, amountMinor: 25_000n }, { receivableId: (await w.owed(4)).id, amountMinor: 25_000n }], 5)).payment;
+      const bare = await w.capture(w.b.id, 6);
+      const project = await store.projects.create({ organizationId: w.b.id, customerId: w.client.id, name: 'Case', currency: 'ILS' }, at(7));
+      const { installments } = await store.agreements.create(
+        {
+          organizationId: w.b.id, projectId: project.id, customerId: w.client.id, type: 'FIXED', currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', vatTreatment: 'EXEMPT', vatRateBasisPoints: 0,
+          amountMinor: 50_000n, netMinor: 50_000n, vatMinor: 0n, grossMinor: 50_000n, agreementDate: '2026-10-08', description: null, paymentTerms: 'EOM', startMonth: null, billingDay: null, endMonth: null,
+          installments: [{ position: 1, label: 'I1', amountMinor: 50_000n, netMinor: 50_000n, vatMinor: 0n, grossMinor: 50_000n, vatTreatment: 'EXEMPT', rateBasisPoints: 0, triggerType: 'IMMEDIATE', triggerDate: null, paymentTerms: null, dueDateOverride: null }],
+        },
+        at(8),
+      );
+      const posted = await store.agreements.postInstallment(w.b.id, installments[0]!.id, { postingDate: '2026-10-08', dueDate: '2026-10-31', at: at(9) });
+      const toInstallment = (await pay([{ receivableId: posted!.receivable.id, amountMinor: 50_000n }], 10)).payment;
+
+      const links = await store.entries.settledOwedIds([w.b.id], [settle.id, split.id, bare.id, toInstallment.id]);
+
+      expect(links.get(settle.id)).toBe(owed.id);
+      expect(links.has(split.id)).toBe(false); // more than one allocation: not one Owed's settle
+      expect(links.has(bare.id)).toBe(false);
+      expect(links.has(toInstallment.id)).toBe(false); // one allocation, but to a scheduled installment, not an Owed
+      expect((await store.entries.settledOwedIds([w.a.id], [settle.id])).size).toBe(0);
+      expect((await store.entries.settledOwedIds([w.b.id], [])).size).toBe(0);
+    });
+
     it('counts READY, live receipts per expense, within the given organizations', async () => {
       const store = await makeStore();
       const w = await world(store);

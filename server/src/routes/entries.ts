@@ -33,7 +33,9 @@ export function entriesRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       description:
         'Expenses, received payments, Owed entries and conversions on every profile you belong to (or the profiles you name), ordered by when each was logged. ' +
         'Everything on a profile, whoever logged it, Malafat\'s payments included; scheduled installments and retainer charges are not entries. ' +
-        'No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox.',
+        'No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox. ' +
+        'A page is a snapshot: an entry edited or deleted later changes only when that page is read again (a deleted one is simply absent), so cache only the pages you re-read. ' +
+        'A settle shows as a received payment with settlesOwedId next to its Owed (settled once paid in full, open before); a Malafat correction as a received payment with replacesPaymentId next to the reversed one.',
       security: SESSION_ONLY,
       request: { query: ListEntriesQuerySchema },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: EntryPageSchema } } }, ...validationResponse, ...notFoundResponse, ...errorResponses },
@@ -50,8 +52,13 @@ export function entriesRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
 
       const page = await store.entries.list(organizationIds, { limit: q.limit, cursor });
       const expenseIds = page.items.flatMap((row) => (row.kind === 'expense' ? [row.record.id] : []));
-      const receiptCounts = await store.expenseReceipts.countReadyByExpenseIds(organizationIds, expenseIds);
-      return c.json({ items: page.items.map((row) => serializeEntry(row, receiptCounts)), nextCursor: page.nextCursor ? encodeCursor(page.nextCursor) : null }, 200);
+      // Only a capture with money applied can be a settle; most pages ask nothing.
+      const settleCandidates = page.items.flatMap((row) => (row.kind === 'payment' && row.record.origin === 'CAPTURE' && row.record.allocatedMinor > 0n ? [row.record.id] : []));
+      const [receiptCounts, settledOwed] = await Promise.all([
+        store.expenseReceipts.countReadyByExpenseIds(organizationIds, expenseIds),
+        store.entries.settledOwedIds(organizationIds, settleCandidates),
+      ]);
+      return c.json({ items: page.items.map((row) => serializeEntry(row, { receiptCounts, settledOwed })), nextCursor: page.nextCursor ? encodeCursor(page.nextCursor) : null }, 200);
     },
   );
 

@@ -219,7 +219,7 @@ export const STORE_ACCESS: StoreAccess = {
    * `sessionOnly`, as the inbox. The route resolves the organizations from the person's memberships; an API key has
    * no person behind it and so no feed.
    */
-  entries: { list: 'sessionOnly' },
+  entries: { list: 'sessionOnly', settledOwedIds: 'sessionOnly' },
 };
 
 export interface StoreGuard {

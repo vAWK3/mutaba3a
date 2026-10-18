@@ -1377,12 +1377,13 @@ export class PrismaLedgerStore implements LedgerStore {
   // ---- MUT-270: the entries feed -------------------------------------------
 
   readonly entries: EntriesRepository = {
-    // D3: one typed, index-bounded query per organization and kind (limit + 1 rows each), merged in memory.
+    // D3: one typed, index-bounded query per organization and kind (limit + 1 rows each), merged in memory. Review D1:
+    // one organization at a time, its 4 kinds in parallel, so a request holds at most 4 pooled connections.
     list: async (organizationIds, page) => {
       const take = page.limit + 1;
       const after = feedCursorWhere(page.cursor);
       const newestFirst = [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
-      const perOrganization = organizationIds.flatMap((organizationId) => [
+      const branchesOf = (organizationId: string) => [
         this.prisma.expense
           .findMany({ where: { organizationId, deletedAt: null, ...after }, orderBy: newestFirst, take })
           .then((rows) => rows.map((record): EntryRow => ({ kind: 'expense', record }))),
@@ -1395,8 +1396,20 @@ export class PrismaLedgerStore implements LedgerStore {
         this.prisma.conversion
           .findMany({ where: { organizationId, deletedAt: null, ...after }, orderBy: newestFirst, take })
           .then((rows) => rows.map((record): EntryRow => ({ kind: 'conversion', record }))),
-      ]);
-      return mergeNewestFirst(await Promise.all(perOrganization), page.limit, (row) => row.record);
+      ];
+      const branches: EntryRow[][] = [];
+      for (const organizationId of organizationIds) branches.push(...(await Promise.all(branchesOf(organizationId))));
+      return mergeNewestFirst(branches, page.limit, (row) => row.record);
+    },
+    settledOwedIds: async (organizationIds, paymentIds) => {
+      if (paymentIds.length === 0) return new Map();
+      const allocations = await this.prisma.paymentAllocation.findMany({
+        where: { organizationId: { in: [...organizationIds] }, paymentId: { in: [...paymentIds] } },
+        select: { paymentId: true, receivableId: true, receivable: { select: { origin: true } } },
+      });
+      const count = new Map<string, number>();
+      for (const a of allocations) count.set(a.paymentId, (count.get(a.paymentId) ?? 0) + 1);
+      return new Map(allocations.filter((a) => count.get(a.paymentId) === 1 && a.receivable.origin === 'ADJUSTMENT').map((a) => [a.paymentId, a.receivableId]));
     },
   };
 

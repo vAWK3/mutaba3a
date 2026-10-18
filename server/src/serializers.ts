@@ -22,6 +22,7 @@ import type {
   ApiKeyRecord,
   CreditRecord,
   IdempotencyRecord,
+  PaymentOrigin,
   PaymentRecord,
   AuditEventRecord,
   CustomerRecord,
@@ -565,18 +566,30 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
 
 // ---- MUT-270: the entries feed ----------------------------------------------
 
+/** A new PaymentOrigin fails to compile here until the feed says what it is. */
+const FEED_PAYMENT_ORIGIN: Record<PaymentOrigin, 'capture' | 'integration'> = { CAPTURE: 'capture', INTEGRATION: 'integration' };
+
 /** One feed item: the existing Expense / IncomeResponse / Conversion shape inside a small envelope. */
-export function serializeEntry(row: EntryRow, receiptCounts: ReadonlyMap<string, number>) {
+export interface EntryContext {
+  /** READY receipts per expense id. */
+  receiptCounts: ReadonlyMap<string, number>;
+  /** The Owed a settle payment paid, per payment id (`entries.settledOwedIds`). */
+  settledOwed: ReadonlyMap<string, string>;
+}
+
+export function serializeEntry(row: EntryRow, context: EntryContext) {
   const envelope = { profileId: row.record.organizationId, createdAt: row.record.createdAt.toISOString() };
   switch (row.kind) {
     case 'expense':
-      return { kind: 'expense' as const, ...envelope, createdByUserId: row.record.createdByUserId, expense: { ...serializeExpense(row.record), receiptCount: receiptCounts.get(row.record.id) ?? 0 } };
+      return { kind: 'expense' as const, ...envelope, createdByUserId: row.record.createdByUserId, expense: { ...serializeExpense(row.record), receiptCount: context.receiptCounts.get(row.record.id) ?? 0 } };
     case 'payment':
       return {
         kind: 'received' as const,
         ...envelope,
         createdByUserId: row.record.createdByUserId,
-        origin: row.record.origin === 'CAPTURE' ? ('capture' as const) : ('integration' as const),
+        origin: FEED_PAYMENT_ORIGIN[row.record.origin],
+        settlesOwedId: context.settledOwed.get(row.record.id) ?? null,
+        replacesPaymentId: row.record.replacesPaymentId,
         income: serializeIncomeEntry({ kind: 'received', payment: row.record }),
       };
     case 'receivable':

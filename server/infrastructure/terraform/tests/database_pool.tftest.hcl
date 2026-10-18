@@ -32,11 +32,24 @@ run "pool_size_reaches_the_database_url_and_max_connections_is_explicit" {
   }
 }
 
+run "the_largest_pool_that_fits_is_accepted" {
+  command = plan
+
+  variables {
+    db_pool_size = 20 # 2 revisions x 20 x 1 instance + 10 reserved = 50
+  }
+
+  assert {
+    condition     = endswith(google_secret_manager_secret_version.database_url.secret_data, "&connection_limit=20")
+    error_message = "A pool that exactly fills db_max_connections must be accepted."
+  }
+}
+
 run "a_pool_that_does_not_fit_under_max_connections_is_refused" {
   command = plan
 
   variables {
-    db_pool_size = 41
+    db_pool_size = 21 # 2 x 21 + 10 = 52 > 50
   }
 
   expect_failures = [google_secret_manager_secret_version.database_url]

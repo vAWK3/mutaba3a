@@ -1470,7 +1470,8 @@ export const CreditsResponseSchema = z.object({ receivable: ReceivableSchema, cr
 
 export const IncomeKindSchema = z.enum(['received', 'owed']).openapi('IncomeKind');
 /**
- * Received: unallocated / partial / allocated (how much Malafat has applied) or reversed. Owed: open / settled.
+ * Received: unallocated / partial / allocated (how much of it is applied to receivables: Malafat's doing on a
+ * Malafat-fed profile, a settle's on your own) or reversed. Owed: open / settled.
  * MUT-270 (D5) added partial, allocated and reversed: a fresh capture is still unallocated.
  */
 export const IncomeStatusSchema = z.enum(['unallocated', 'partial', 'allocated', 'reversed', 'open', 'settled']).openapi('IncomeStatus');
@@ -2095,8 +2096,12 @@ export const EntrySchema = z
       ...entryEnvelope,
       /** Null for a payment Malafat recorded: no person logged it. */
       createdByUserId: uuid.nullable(),
-      /** capture: a person recorded it (POST /v1/income or inbox filing); integration: Malafat did. */
+      /** capture: a person recorded it (POST /v1/income, inbox filing or a settle); integration: Malafat did. */
       origin: z.enum(['capture', 'integration']),
+      /** The one Owed entry this payment paid toward (a settle, full or partial), or null. The Owed reads `settled` once paid in full, `open` before. */
+      settlesOwedId: uuid.nullable(),
+      /** The payment Malafat reversed and replaced with this one, or null. The replaced one reads `reversed`. */
+      replacesPaymentId: uuid.nullable(),
       income: IncomeResponseSchema,
     }),
     z.object({

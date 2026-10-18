@@ -1550,6 +1550,19 @@ export class MemoryLedgerStore implements LedgerStore {
       ];
       return mergeNewestFirst(branches, page.limit, (row) => row.record);
     },
+    settledOwedIds: async (organizationIds, paymentIds) => {
+      const byPayment = new Map<string, AllocationRecord[]>();
+      for (const a of this.allocs.values()) {
+        if (!organizationIds.includes(a.organizationId) || !paymentIds.includes(a.paymentId)) continue;
+        byPayment.set(a.paymentId, [...(byPayment.get(a.paymentId) ?? []), a]);
+      }
+      const links = new Map<string, string>();
+      for (const [paymentId, allocations] of byPayment) {
+        const only = allocations.length === 1 ? allocations[0]! : null;
+        if (only && this.recs.get(only.receivableId)?.origin === 'ADJUSTMENT') links.set(paymentId, only.receivableId);
+      }
+      return links;
+    },
   };
 
   private categoryNamed(organizationId: string, name: string): ExpenseCategoryRecord | undefined {
