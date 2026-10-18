@@ -1860,6 +1860,8 @@ export const ListExpensesQuerySchema = z.object({
   customerId: uuid.optional(),
   projectId: uuid.optional(),
   linked: z.enum(['none']).optional().openapi({ description: '`none`: only expenses linked to no client' }),
+  groupId: uuid.optional().openapi({ description: 'MUT-267: only this group\'s members (or, with groupMembership=excluded, its left-out expenses dated inside its window). 404 for a group this profile does not have.' }),
+  groupMembership: z.enum(['member', 'excluded']).optional().openapi({ description: 'With groupId. Default `member`.' }),
 });
 
 export const ExpenseIdParamSchema = z.object({ expenseId: uuid });
@@ -1969,6 +1971,92 @@ export const ExpenseSummarySchema = z
     ),
   })
   .openapi('ExpenseSummary');
+
+// ---- MUT-267: expense groups (ADR-094) -----------------------------------------
+
+const groupName = z.string().max(120);
+const groupNotes = z.string().max(4000);
+const groupDate = IsoDateSchema.openapi({ description: `Calendar date in the organization timezone, YYYY-MM-DD; not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today (422 DATE_INVALID).` });
+const currencyTotal = z.object({ currency: CurrencySchema, ...expenseBucket });
+
+export const ExpenseGroupSchema = z
+  .object({
+    id: uuid,
+    name: z.string(),
+    startOn: IsoDateSchema,
+    /** Null = still going. */
+    endOn: IsoDateSchema.nullable(),
+    /** The last day the group collects: endOn, or a year after startOn while still going (R6). */
+    windowEnd: IsoDateSchema,
+    notes: z.string().nullable(),
+    /** Members per currency, never summed across currencies (ADR-004). */
+    currencies: z.array(currencyTotal),
+    memberCount: z.number().int(),
+    createdByUserId: uuid,
+    version: z.number().int(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi('ExpenseGroup');
+
+export const ExpenseGroupDetailSchema = ExpenseGroupSchema.extend({
+  /** Left-out expenses dated inside the window (design review 22A). */
+  excludedCount: z.number().int(),
+}).openapi('ExpenseGroupDetail');
+
+export const ExpenseGroupListSchema = z.object({ items: z.array(ExpenseGroupSchema) }).openapi('ExpenseGroupList');
+
+export const ListExpenseGroupsQuerySchema = z.object({
+  expenseId: uuid.optional().openapi({ description: 'Only the groups this expense belongs to (dated in the window and not left out, or kept)' }),
+});
+
+export const CreateExpenseGroupRequestSchema = z
+  .object({
+    name: groupName.openapi({ description: 'Trimmed; 1–120 characters (422 NAME_REQUIRED when blank)' }),
+    startOn: groupDate,
+    endOn: groupDate.optional().openapi({ description: 'Absent = still going. Not before startOn (END_BEFORE_START); at most 366 days including both ends (GROUP_RANGE_TOO_LONG)' }),
+    notes: groupNotes.optional(),
+  })
+  .strict()
+  .openapi('CreateExpenseGroupRequest');
+
+export const UpdateExpenseGroupRequestSchema = z
+  .object({
+    name: groupName.optional(),
+    startOn: groupDate.optional(),
+    endOn: groupDate.nullable().optional().openapi({ description: 'null = still going. The merged range is checked' }),
+    notes: groupNotes.nullable().optional(),
+  })
+  .strict()
+  .openapi('UpdateExpenseGroupRequest');
+
+export const ExpenseGroupIdParamSchema = z.object({ groupId: uuid });
+export const ExpenseGroupExpenseParamSchema = z.object({ groupId: uuid, expenseId: uuid });
+
+export const ExpenseGroupOverrideModeSchema = z.enum(['excluded', 'included']).openapi('ExpenseGroupOverrideMode');
+export const SetExpenseGroupOverrideRequestSchema = z.object({ mode: ExpenseGroupOverrideModeSchema }).strict().openapi('SetExpenseGroupOverrideRequest');
+export const ExpenseGroupOverrideSchema = z
+  .object({ groupId: uuid, expenseId: uuid, mode: ExpenseGroupOverrideModeSchema, updatedAt: z.string().datetime() })
+  .openapi('ExpenseGroupOverride');
+
+export const ExpenseGroupSummarySchema = z
+  .object({
+    groupId: uuid,
+    /** The zero-filled days (C2): a closed group's range, or an open group's start up to today, within its window. */
+    seriesFrom: IsoDateSchema,
+    seriesTo: IsoDateSchema,
+    currencies: z.array(
+      z.object({
+        currency: CurrencySchema,
+        ...expenseBucket,
+        byCategory: z.array(z.object({ categoryId: uuid.nullable(), ...expenseBucket })),
+        byCustomer: z.array(z.object({ customerId: uuid.nullable(), ...expenseBucket })),
+        /** Every series day, plus a sparse bucket for each member dated outside it, so the buckets sum to the total (6A). */
+        byDay: z.array(z.object({ date: IsoDateSchema, position: z.enum(['before', 'in', 'after']), ...expenseBucket })),
+      }),
+    ),
+  })
+  .openapi('ExpenseGroupSummary');
 
 // ---- MUT-66: the unsorted inbox ---------------------------------------------
 

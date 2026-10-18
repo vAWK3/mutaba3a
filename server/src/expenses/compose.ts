@@ -10,7 +10,7 @@ import type { ExpenseRecord, LedgerStore, UpdateExpensePatch } from '../reposito
  */
 
 /** Audit entity types of the expenses domain; GET /v1/audit (Malafat's key) never lists them. */
-export const EXPENSE_ENTITY_TYPES = ['expense', 'expense_receipt', 'expense_category'] as const;
+export const EXPENSE_ENTITY_TYPES = ['expense', 'expense_receipt', 'expense_category', 'expense_group'] as const;
 
 export const MAX_RECEIPTS_PER_EXPENSE = 10;
 

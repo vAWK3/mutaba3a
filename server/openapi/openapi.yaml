@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.31.1-mut237
+  version: 1.33.0-mut267
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -4625,6 +4625,268 @@ components:
       required:
         - occurredOn
       additionalProperties: false
+    ExpenseGroupList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpenseGroup"
+      required:
+        - items
+    ExpenseGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        startOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        endOn:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        windowEnd:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        notes:
+          type: string
+          nullable: true
+        currencies:
+          type: array
+          items:
+            type: object
+            properties:
+              currency:
+                $ref: "#/components/schemas/Currency"
+              total:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              count:
+                type: integer
+            required:
+              - currency
+              - total
+              - count
+        memberCount:
+          type: integer
+        createdByUserId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - startOn
+        - endOn
+        - windowEnd
+        - notes
+        - currencies
+        - memberCount
+        - createdByUserId
+        - version
+        - createdAt
+        - updatedAt
+    CreateExpenseGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          description: Trimmed; 1–120 characters (422 NAME_REQUIRED when blank)
+        startOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD; not more than ten years (3660 days) before the organization's today (422 DATE_INVALID).
+        endOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Absent = still going. Not before startOn (END_BEFORE_START); at most 366 days including both ends (GROUP_RANGE_TOO_LONG)
+        notes:
+          type: string
+          maxLength: 4000
+      required:
+        - name
+        - startOn
+      additionalProperties: false
+    ExpenseGroupDetail:
+      allOf:
+        - $ref: "#/components/schemas/ExpenseGroup"
+        - type: object
+          properties:
+            excludedCount:
+              type: integer
+          required:
+            - excludedCount
+    UpdateExpenseGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        startOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD; not more than ten years (3660 days) before the organization's today (422 DATE_INVALID).
+        endOn:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: null = still going. The merged range is checked
+        notes:
+          type: string
+          nullable: true
+          maxLength: 4000
+      additionalProperties: false
+    ExpenseGroupOverride:
+      type: object
+      properties:
+        groupId:
+          type: string
+          format: uuid
+        expenseId:
+          type: string
+          format: uuid
+        mode:
+          $ref: "#/components/schemas/ExpenseGroupOverrideMode"
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - groupId
+        - expenseId
+        - mode
+        - updatedAt
+    ExpenseGroupOverrideMode:
+      type: string
+      enum:
+        - excluded
+        - included
+    SetExpenseGroupOverrideRequest:
+      type: object
+      properties:
+        mode:
+          $ref: "#/components/schemas/ExpenseGroupOverrideMode"
+      required:
+        - mode
+      additionalProperties: false
+    ExpenseGroupSummary:
+      type: object
+      properties:
+        groupId:
+          type: string
+          format: uuid
+        seriesFrom:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        seriesTo:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        currencies:
+          type: array
+          items:
+            type: object
+            properties:
+              currency:
+                $ref: "#/components/schemas/Currency"
+              total:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              count:
+                type: integer
+              byCategory:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    categoryId:
+                      type: string
+                      nullable: true
+                      format: uuid
+                    total:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    count:
+                      type: integer
+                  required:
+                    - categoryId
+                    - total
+                    - count
+              byCustomer:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    customerId:
+                      type: string
+                      nullable: true
+                      format: uuid
+                    total:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    count:
+                      type: integer
+                  required:
+                    - customerId
+                    - total
+                    - count
+              byDay:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    date:
+                      type: string
+                      pattern: ^\d{4}-\d{2}-\d{2}$
+                      description: Calendar date in the organization timezone, YYYY-MM-DD
+                    position:
+                      type: string
+                      enum:
+                        - before
+                        - in
+                        - after
+                    total:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    count:
+                      type: integer
+                  required:
+                    - date
+                    - position
+                    - total
+                    - count
+            required:
+              - currency
+              - total
+              - count
+              - byCategory
+              - byCustomer
+              - byDay
+      required:
+        - groupId
+        - seriesFrom
+        - seriesTo
+        - currencies
     Conversion:
       type: object
       properties:
@@ -9783,6 +10045,24 @@ paths:
           description: "`none`: only expenses linked to no client"
           name: linked
           in: query
+        - schema:
+            type: string
+            format: uuid
+            description: "MUT-267: only this group's members (or, with groupMembership=excluded, its left-out expenses dated inside its window). 404 for a group this profile does not have."
+          required: false
+          description: "MUT-267: only this group's members (or, with groupMembership=excluded, its left-out expenses dated inside its window). 404 for a group this profile does not have."
+          name: groupId
+          in: query
+        - schema:
+            type: string
+            enum:
+              - member
+              - excluded
+            description: With groupId. Default `member`.
+          required: false
+          description: With groupId. Default `member`.
+          name: groupMembership
+          in: query
       responses:
         "200":
           description: A page
@@ -10699,6 +10979,459 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expense-groups:
+    get:
+      tags:
+        - Expense groups
+      summary: List expense groups, newest start first, with their totals per currency
+      description: "Unpaged: a profile holds tens of groups. With expenseId, only the groups that expense belongs to (dated in the window and not left out, or kept); 404 for an expense this profile does not have."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            description: Only the groups this expense belongs to (dated in the window and not left out, or kept)
+          required: false
+          description: Only the groups this expense belongs to (dated in the window and not left out, or kept)
+          name: expenseId
+          in: query
+      responses:
+        "200":
+          description: The groups
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseGroupList"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      tags:
+        - Expense groups
+      summary: Create an expense group
+      description: Expenses dated from startOn to endOn (or, with no endOn, to a year after startOn) join automatically, including ones logged later.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExpenseGroupRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseGroup"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expense-groups/{groupId}:
+    get:
+      tags:
+        - Expense groups
+      summary: An expense group with its totals and how many expenses inside its window are left out
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: groupId
+          in: path
+      responses:
+        "200":
+          description: The group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseGroupDetail"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      tags:
+        - Expense groups
+      summary: Change an expense group (optimistic, If-Match)
+      description: null endOn = still going; null clears the notes. The merged range is checked. Keep and leave-out marks stay when the dates change.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: groupId
+          in: path
+        - schema:
+            type: string
+            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          required: true
+          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          name: if-match
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateExpenseGroupRequest"
+      responses:
+        "200":
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseGroup"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Expense groups
+      summary: Delete an expense group (soft; its expenses are untouched)
+      description: 204 again for a group already deleted; 404 for an id this profile never had.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: groupId
+          in: path
+      responses:
+        "204":
+          description: Done
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expense-groups/{groupId}/expenses/{expenseId}:
+    put:
+      tags:
+        - Expense groups
+      summary: Keep (included) or leave out (excluded) one expense
+      description: Idempotent; the last mark wins. Any mark is accepted on any expense of the profile, and it stays when the expense's date changes. 404 for a group or expense this profile does not have.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: groupId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: expenseId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetExpenseGroupOverrideRequest"
+      responses:
+        "200":
+          description: Marked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseGroupOverride"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Expense groups
+      summary: "Remove a keep or leave-out mark: the expense follows the date rule again"
+      description: 204 whether or not a mark existed; 404 for a group this profile does not have.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: groupId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: expenseId
+          in: path
+      responses:
+        "204":
+          description: Done
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expense-groups/{groupId}/summary:
+    get:
+      tags:
+        - Expense groups
+      summary: A group's spending per currency, by category, by client and by day
+      description: One block per currency, never summed or converted (ADR-004, ADR-087). byDay zero-fills seriesFrom..seriesTo and adds a bucket for every member dated outside it (position before/after), so each currency's buckets sum to its total.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: groupId
+          in: path
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseGroupSummary"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
           content:
             application/json:
               schema:

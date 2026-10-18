@@ -4,12 +4,16 @@ import { incomeCaptureRulesFor } from './income/compose.js';
 import { profileOwnerOf, profileTypeOf } from './personal-profile.js';
 import type { IsoDate } from './dates.js';
 import { formatMoney, type Currency } from './money.js';
+import { windowEnd } from './expenses/groups.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource } from './schemas.js';
 import { allocationStateOf } from './payments/allocation-state.js';
 import type {
   ConversionRecord,
+  ExpenseCurrencyTotal,
+  ExpenseGroupOverrideRecord,
+  ExpenseGroupRecord,
   ExpenseCategoryRecord,
   ExpenseReceiptRecord,
   ExpenseRecord,
@@ -482,6 +486,28 @@ export function serializeConversion(c: ConversionRecord) {
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
+}
+
+/** MUT-267: a group with its members' totals per currency (never summed across currencies) and its window end. */
+export function serializeExpenseGroup(g: ExpenseGroupRecord, totals: readonly ExpenseCurrencyTotal[]) {
+  return {
+    id: g.id,
+    name: g.name,
+    startOn: g.startOn,
+    endOn: g.endOn,
+    windowEnd: windowEnd(g),
+    notes: g.notes,
+    currencies: totals.map((x) => ({ currency: x.currency as Currency, total: formatMoney({ minor: x.totalMinor, currency: x.currency as Currency }), count: x.count })),
+    memberCount: totals.reduce((n, x) => n + x.count, 0),
+    createdByUserId: g.createdByUserId,
+    version: g.version,
+    createdAt: g.createdAt.toISOString(),
+    updatedAt: g.updatedAt.toISOString(),
+  };
+}
+
+export function serializeExpenseGroupOverride(m: ExpenseGroupOverrideRecord) {
+  return { groupId: m.groupId, expenseId: m.expenseId, mode: m.mode, updatedAt: m.updatedAt.toISOString() };
 }
 
 /** MUT-42: the original amount, formatted in its own currency — never converted. */

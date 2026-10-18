@@ -9,6 +9,7 @@ import { ApiError } from '../errors.js';
 import { assertCategoryChoosable, expenseDate, expenseOccurredOn, expensePatch, MAX_RECEIPTS_PER_EXPENSE, parseExpenseAmount, requestedLinks, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
 import { summarizeExpenses } from '../expenses/summary.js';
+import { groupFilter } from './expense-groups.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import type { ExpenseFilter, ExpenseRecord, JsonObject, LedgerStore } from '../repositories/ports.js';
@@ -98,6 +99,12 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
         ...(q.projectId ? { projectId: q.projectId } : {}),
         ...(q.linked === 'none' ? { unlinked: true } : {}),
       };
+      // MUT-267: a group's members (or its left-out expenses inside its window); 404 for a group this profile does not have.
+      if (q.groupId) {
+        const group = await store.expenseGroups.getById(organization.id, q.groupId);
+        if (!group) throw new ApiError('NOT_FOUND', 'No such expense group');
+        filter.group = groupFilter(group, q.groupMembership ?? 'member');
+      }
       const cursor = await ledgerPageStart(q, decodeExpenseCursor, (id) => store.expenses.getById(organization.id, id), 'No such expense');
       const page = await store.expenses.list(organization.id, filter, { limit: q.limit, cursor });
       return c.json({ items: page.items.map(serializeExpense), nextCursor: page.nextCursor ? encodeExpenseCursor(page.nextCursor) : null }, 200);

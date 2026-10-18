@@ -28,6 +28,7 @@ import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, profileRoutes } from './routes
 import { conversionRoutes } from './routes/conversions.js';
 import { FX_ORGANIZATION_INDEPENDENT_ROUTES, fxRateRoutes } from './routes/fx-rates.js';
 import { expenseRoutes } from './routes/expenses.js';
+import { expenseGroupRoutes } from './routes/expense-groups.js';
 import { incomeRoutes } from './routes/income.js';
 import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from './inbox/routes-keys.js';
 import { inboxRoutes } from './routes/inbox.js';
@@ -121,7 +122,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.31.1-mut237';
+export const API_VERSION = '1.33.0-mut267';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -248,6 +249,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', expenseRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
   app.route('/', expenseCategoryRoutes(store));
   app.route('/', incomeRoutes(store));
+  app.route('/', expenseGroupRoutes(store));
   app.route('/', conversionRoutes(store));
   app.route('/', fxRateRoutes(deps.fxRates ?? null));
   app.route('/', inboxRoutes(store));
