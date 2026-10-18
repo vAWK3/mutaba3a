@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Expense, ExpenseGroup, ExpenseGroupSummary, FxRatesResponse } from '../../api/client';
+import { currencyExponent } from '../../../lib/utils';
 import {
   addDays,
   applyMarks,
@@ -58,7 +59,7 @@ function block(currency: Block['currency'], byDay: Bucket[], byCategory: Block['
 }
 
 function totals(currency: Block['currency'], byDay: Bucket[]) {
-  const exp = currency === 'JOD' ? 3 : 2;
+  const exp = currencyExponent(currency);
   const minor = byDay.reduce((sum, b) => sum + Math.round(Number(b.total) * 10 ** exp), 0);
   return { total: (minor / 10 ** exp).toFixed(exp), count: byDay.reduce((n, b) => n + b.count, 0) };
 }
@@ -298,6 +299,35 @@ describe('converted total', () => {
     expect(convertTotal(s, rates({ rates: [{ currency: 'ILS', rate: 1, derived: false }] }))).toBeNull();
     expect(convertTotal(s, rates({ source: 'stale' }))?.stale).toBe(true);
     expect(convertTotal(summary([]), rates())).toBeNull();
+  });
+
+  it('carries the derived flag per rate line, not just a single JOD check (MUT-281, the peg-label bug)', () => {
+    // A mixed group: OMR (pegged, like JOD) and EUR (not pegged) into an ILS base.
+    // Before this fix, `used` carried only {currency, rate} -- the component had
+    // to re-derive "is this pegged?" itself, and it only ever checked === 'JOD'.
+    const s = summary([block('OMR', [bucket('2026-10-05', '9.500')]), block('EUR', [bucket('2026-10-05', '10.00')])]);
+    const c = convertTotal(
+      s,
+      rates({
+        rates: [
+          { currency: 'ILS', rate: 1, derived: false },
+          { currency: 'EUR', rate: 0.25, derived: false },
+          { currency: 'OMR', rate: 0.104, derived: true },
+        ],
+      })
+    );
+    expect(c?.used).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ currency: 'OMR', derived: true }),
+        expect.objectContaining({ currency: 'EUR', derived: false }),
+      ])
+    );
+  });
+
+  it('still carries derived: true on a JOD line after the per-line refactor (regression)', () => {
+    const s = summary([block('JOD', [bucket('2026-10-05', '1.914')])]);
+    const c = convertTotal(s, rates());
+    expect(c?.used).toEqual([expect.objectContaining({ currency: 'JOD', derived: true })]);
   });
 });
 

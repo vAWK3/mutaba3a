@@ -494,9 +494,9 @@ function useConverted(summary: ExpenseGroupSummary, base: Currency): ReactNode {
   const total = convertTotal(summary, rates.data);
   if (!total) return null;
   const number = new Intl.NumberFormat(getLocale(language), { maximumFractionDigits: RATE_DIGITS });
-  const rateLines = total.used.map(({ currency, rate }) => {
+  const rateLines = total.used.map(({ currency, rate, derived }) => {
     const line = t('hosted.groups.detail.rateLine', { from: currency, rate: number.format(1 / rate), to: total.currency });
-    return currency === 'JOD' || total.currency === 'JOD' ? `${line} (${t('hosted.groups.detail.peg')})` : line;
+    return derived ? `${line} (${t('hosted.groups.detail.peg')})` : line;
   });
   const when = total.stale ? t('hosted.groups.detail.convertedStale', { date: formatDay(total.rateDate, language) }) : t('hosted.groups.detail.convertedNote', { date: formatDay(total.rateDate, language) });
   return (

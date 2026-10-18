@@ -236,16 +236,16 @@ export interface ConvertedTotal {
   currency: Currency;
   rateDate: string;
   stale: boolean;
-  /** Any rate used is JOD's, derived from the USD peg. */
+  /** True if any line below is derived from a USD peg rather than a live ECB rate. */
   derived: boolean;
-  /** The rates used, per 1 base unit, for the label. */
-  used: { currency: Currency; rate: number }[];
+  /** The rates used, per 1 base unit, for the label; each line's own pegged/ECB status. */
+  used: { currency: Currency; rate: number; derived: boolean }[];
 }
 
 /**
  * The ≈ line (2A, ADR-087): each currency's total in the base at today's rate.
  * `rate` is units of the currency per 1 base, so a currency goes to the base by
- * dividing; minor units are rescaled between exponents (JOD 3, others 2).
+ * dividing; minor units are rescaled between exponents (3 for JOD/BHD/OMR, 2 for the rest).
  */
 export function convertTotal(summary: ExpenseGroupSummary, rates: FxRatesResponse): ConvertedTotal | null {
   if (summary.currencies.length === 0) return null;
@@ -259,7 +259,7 @@ export function convertTotal(summary: ExpenseGroupSummary, rates: FxRatesRespons
     const scale = 10 ** (baseExponent - currencyExponent(block.currency));
     minor += (minorOf(block.total, block.currency) * scale) / rate.rate;
     derived ||= rate.derived;
-    if (block.currency !== rates.base) used.push({ currency: block.currency, rate: rate.rate });
+    if (block.currency !== rates.base) used.push({ currency: block.currency, rate: rate.rate, derived: rate.derived ?? false });
   }
   return { total: minorToDecimal(roundMinor(minor), rates.base), currency: rates.base, rateDate: rates.rateDate, stale: rates.source === 'stale', derived, used };
 }
