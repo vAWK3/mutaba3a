@@ -112,6 +112,14 @@
 **Impact**: a profile type change (MUT-182) deletes categories and nulls `categoryId`. Groups and marks are untouched, and the summary shows the spending as uncategorized, but nothing asserts it.
 **Fix**: a store-contract case: create a group with a categorized member, run the type change, and assert the group, its mark and a `null` category bucket.
 
+### TD-169: Audit rows are appended after the write, outside its transaction
+**Status**: Open
+**Ticket**: none (found 2026-10-18, MUT-272 pre-landing adversarial review; numbered after main's MUT-268 TD-166..168)
+**Added**: 2026-10-18
+**Priority**: Low (needs the audit append to fail right after a committed write)
+**Impact**: every route calls `audit(...)` after the store write commits. If the append fails, the client gets a 500 for a write that landed (a retry with the old If-Match then gets a 409), and the audit row is lost. ADR-096 makes this sharper for expenses: the `expense.updated` row with `currency`/`amount` `{from, to}` is the only record of the amount before a currency move.
+**Fix**: a store-level "write + audit" in one transaction (Prisma `$transaction`; the memory store already applies both synchronously), adopted route by route, starting with the money-moving edits.
+
 ### TD-158: Changing your password keeps this device's token rather than issuing a new one
 **Status**: Open
 **Ticket**: MUT-262 (found 2026-10-16, MUT-238 pre-landing adversarial review of MUT-237)

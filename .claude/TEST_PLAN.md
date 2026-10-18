@@ -3037,4 +3037,9 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Test | Covers |
 |---|---|
 | `server/src/expenses/__tests__/compose.test.ts` › expensePatch currency | currency alone → AMOUNT_REQUIRED (changed or not); amount + currency → both set, read in the new currency's digits (JOD 3, JOD→USD 2); too many digits for the new currency → refused on amount; amount-only keeps the row's currency |
-| `server/src/__tests__/routes-expenses.test.ts` › MUT-272 ×2 | 422 AMOUNT_REQUIRED alone (USD and ILS), row unchanged; USD "1.234" → 422 amount; JOD 1.234 → 200 v2; stale If-Match → 409; USD → 200 v3; audit `currency {from,to}` per move and none on an amount-only edit; month summary counts it under USD only |
+| `server/src/__tests__/routes-expenses.test.ts` › MUT-272 ×5 | 422 AMOUNT_REQUIRED alone (USD and ILS), row unchanged; USD "1.234" → 422 amount; JOD 1.234 → 200 v2; stale If-Match → 409; USD → 200 v3; exact audit per version (`currency` + `amount` {from,to}), none on an amount-only edit; month summary under USD only; same currency resent → plain edit, no move audited; another profile's expense → 404, unchanged; JOD→USD move then stale JOD-shaped amount → 409 VERSION_MISMATCH (not 422) |
+| `server/src/__tests__/inbox-routes.test.ts` › MUT-272 ×2 | stale edit after a JOD→USD move → 409 before the amount is read; a write landing between read and update → store 409, that write survives |
+| `server/src/__tests__/routes-expenses.test.ts` › MUT-272 race | a write landing between read and update → store 409 with currentVersion 2, the other device's notes survive (fails with the stale mapping removed) |
+| `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` › PATCHes on edit | the currency select is disabled on edit (MUT-272 review; MUT-277 enables it) |
+| `server/src/__tests__/routes-expense-groups.test.ts` › MUT-272 | a moved member sums under JOD only, day buckets add up to the total, `?currency=JOD` lists it and `?currency=ILS` doesn't |
+| `server/src/repositories/__tests__/store-contract-expenses.ts` › MUT-272 | both stores write `currency` with `amountMinor` |

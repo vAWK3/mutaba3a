@@ -3,7 +3,7 @@ import { ApiError } from '../../errors.js';
 import type { ExpenseRecord } from '../../repositories/ports.js';
 import { expensePatch } from '../compose.js';
 
-/** MUT-272 (ADR-095): an expense's currency travels only with its amount, the way a conversion leg's does. */
+/** MUT-272 (ADR-096): an expense's currency travels only with its amount, the way a conversion leg's does. */
 const row = (over: Partial<ExpenseRecord> = {}): ExpenseRecord =>
   ({ id: 'e1', organizationId: 'o1', occurredOn: '2026-10-05', amountMinor: 12050n, currency: 'ILS', version: 1, ...over }) as ExpenseRecord;
 const today = '2026-10-20';

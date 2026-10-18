@@ -3720,17 +3720,17 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - The list makes one small aggregate per group.
 - API 1.33.0-mut267.
 
-## ADR-095: An Expense's Currency Changes Only Together With Its Amount (the ADR-075 Pair Rule on Expenses)
+## ADR-096: An Expense's Currency Changes Only Together With Its Amount (the ADR-075 Pair Rule on Expenses)
 
 **Status**: Active
 **Date**: 2026-10-18
-**Context**: MUT-272 (epic MUT-63). Logging an expense in the wrong currency used to mean delete and re-log, which loses the receipts, the links and the history. `PATCH /v1/expenses/{id}` said "Any field but the currency, which never changes", while conversions (ADR-075) and the Unsorted inbox already allowed a currency change with its amount. The phone's Recent edit sheet (MUT-272, phone half) and later the portal (MUT-277) need the server to accept it.
+**Context**: MUT-272 (epic MUT-63). Numbered 096 because MUT-268, merged first, holds ADR-095. Logging an expense in the wrong currency used to mean delete and re-log, which loses the receipts, the links and the history. `PATCH /v1/expenses/{id}` said "Any field but the currency, which never changes", while conversions (ADR-075) and the Unsorted inbox already allowed a currency change with its amount. The phone's Recent edit sheet (MUT-272, phone half) and later the portal (MUT-277) need the server to accept it.
 
 **Decision**:
 1. **The pair rule.** `currency` is accepted only with `amount`. A currency alone is 422 `AMOUNT_REQUIRED` (`field: amount`), **even when it equals the stored one** (eng review R1). This is the conversion rule, so one sentence covers both.
 2. **The amount is read in the merged currency's digits.** A JOD amount keeps 3 decimals; "1.234" in USD is 422 on `amount`. Nothing is rounded.
-3. **Optimistic concurrency is unchanged.** If-Match must match the version, and it bumps on success.
-4. **Audit.** `expense.updated` adds `currency: {from, to}` when the currency actually moved.
+3. **A stale version is a 409 before the body's business rules run** (pre-landing review; zod schema validation still runs first, so a schema-invalid body is a 422 whatever its version). The amount is parsed in the row's current currency, which a newer version may have changed: after JOD → USD, a stale JOD-shaped "13.456" used to come back as 422 AMOUNT_INVALID instead of 409 VERSION_MISMATCH. Both `PATCH /v1/expenses/{id}` and `PATCH /v1/inbox/{id}` compare the version first, the order expense groups already use (MUT-267); the store's atomic version check still covers a write that lands after the read.
+4. **Audit.** `expense.updated` adds `currency: {from, to}` and `amount: {from, to}` (formatted in each currency) when the currency actually moved, so the original amount is recoverable.
 5. **The inbox keeps its own code.** `PATCH /v1/inbox/{id}` still answers `AMOUNT_INVALID` for a changed currency without an amount (eng review R2: no API change for a working route). Only its description now says so.
 6. **Nothing stored needs fixing.** Summaries and expense groups (ADR-094) total per currency when read, so a moved expense simply counts under its new currency.
 
@@ -3742,4 +3742,6 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 **Consequences**:
 - `UpdateExpenseRequest` gains `currency`; `UpdateExpensePatch` gains `currency` in both stores.
 - API 1.34.0-mut272.
-- Clients must deploy after the server: the request schema is strict, so an older server answers 400 to `currency`.
+- Clients must deploy after the server: the request schema is strict, so an older server answers 422 VALIDATION_FAILED (zod issue: unrecognized key `currency`).
+- Clients send `amount`, formatted in the **new** currency's digits, whenever they send `currency`, whatever their changed-fields diff says (ILS 12.50 → USD 12.50 has equal minor units but still needs the amount).
+- `AMOUNT_REQUIRED` and `SAME_CURRENCY` are now in the published 422 reasons list.

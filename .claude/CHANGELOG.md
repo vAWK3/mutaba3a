@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-18 — Change an expense's currency together with its amount (MUT-272, ADR-095)
+## [Unreleased] - 2026-10-18 — Change an expense's currency together with its amount (MUT-272, ADR-096)
 
 **Why:** logging an expense in the wrong currency meant delete and re-log. This is the server half of MUT-272; the phone's Recent edit sheet (MUT-272 phone half) and the portal (MUT-277) build on it.
 
@@ -36,13 +36,19 @@
 - **`PATCH /v1/expenses/{id}`** accepts `currency` together with `amount`:
   - a currency alone is 422 `AMOUNT_REQUIRED` (`field: amount`), even when unchanged;
   - the amount is read in the merged currency's digits (JOD 3; "1.234" in USD is refused);
-  - the audit adds `currency {from, to}` when the currency moved.
+  - the audit adds `currency {from, to}` and `amount {from, to}` when the currency moved;
+  - a stale If-Match is a 409 before the body's business rules run (schema validation still first), on this route and on `PATCH /v1/inbox/{id}` (pre-landing review: after a JOD → USD move a stale JOD-shaped amount used to answer 422 AMOUNT_INVALID).
 - **Code:** `expensePatch` (`server/src/expenses/compose.ts`), `UpdateExpenseRequestSchema`, and `UpdateExpensePatch.currency` (both stores take it through their generic update).
 - **Docs:** the route description; the inbox PATCH description no longer says an expense's currency is fixed (its own `AMOUNT_INVALID` code stays).
+- **Docs:** `AMOUNT_REQUIRED` and `SAME_CURRENCY` join the published 422 reasons list (conversions already raised both).
 - **Version:** API 1.34.0-mut272. OpenAPI and the portal's `schema.d.ts` are regenerated.
 
 ### Technical
-- Tests: a new `server/src/expenses/__tests__/compose.test.ts`; `routes-expenses.test.ts` replaces "never changes a row's currency" with the pair rule, the JOD/USD digits, a stale If-Match, the audit from/to and the summary moving to the new currency.
+- Tests: a new `server/src/expenses/__tests__/compose.test.ts`; `routes-expenses.test.ts` replaces "never changes a row's currency" with the pair rule, the JOD/USD digits, a stale If-Match, the exact per-version audit, the summary moving to the new currency, the same currency resent (no move audited), another profile's expense (404) and the stale-after-move 409; `inbox-routes.test.ts` gets the same stale-after-move 409; `routes-expense-groups.test.ts` checks a moved member regroups under its new currency (summary, day buckets, `?currency=`).
+- Comments: the inbox request schema and the portal's `ExpenseDrawer` no longer say an expense's currency can't change.
+- Portal: the expense drawer's currency select is disabled on edit (it was live, but the PATCH dropped the pick, so a USD choice silently saved ILS); MUT-277 enables it and sends the pair. Shared `ExpenseFormFields` gains `currencyDisabled`.
+- Tests: a write landing between the read and the update is still a 409 from the store (expenses and inbox), proven to fail with the store-stale mapping removed.
+- Tech debt: TD-169 (audit appended outside the write's transaction).
 
 ## [Unreleased] - 2026-10-18 — Hosted expense groups: trips with per-day and per-category totals (MUT-267, ADR-094)
 

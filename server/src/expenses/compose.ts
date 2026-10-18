@@ -99,7 +99,7 @@ export async function assertCategoryChoosable(store: LedgerStore, organizationId
  * The patch fields a PATCH body sets. A resent, unchanged `occurredOn` is left out rather than re-checked: the portal
  * sends the date on every save, and a row already older than MUT-227's floor must stay editable.
  *
- * MUT-272 (ADR-095), the conversion rule (ADR-075) on an expense:
+ * MUT-272 (ADR-096), the conversion rule (ADR-075) on an expense:
  *
  *   currency sent ──▶ amount must be sent too ── else 422 AMOUNT_REQUIRED (field amount), even if unchanged
  *   amount sent ────▶ parsed in the merged currency's digits (a JOD row keeps 3; "1.234" in USD is refused)
