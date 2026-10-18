@@ -131,7 +131,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/inbox/{entryId}',
       tags: ['Inbox'],
       summary: 'Fix an unsorted entry (optimistic, If-Match)',
-      description: 'Anything you captured. Not kind: what an entry is destined to become is fixed at capture, as an expense\'s currency is. null clears an optional field.',
+      description: 'Anything you captured. Not kind: what an entry is destined to become is fixed at capture. A changed currency needs the amount again (422 AMOUNT_INVALID), read in that currency\'s digits. null clears an optional field.',
       security: SESSION_ONLY,
       middleware: [ifMatch()] as const,
       request: { params: InboxEntryIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateInboxEntryRequestSchema) },

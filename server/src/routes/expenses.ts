@@ -167,7 +167,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       path: '/v1/expenses/{expenseId}',
       tags: ['Expenses'],
       summary: 'Change an expense (optimistic, If-Match)',
-      description: 'Any field but the currency, which never changes. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.',
+      description: 'Any field. A currency changes only together with its amount (422 AMOUNT_REQUIRED), and the amount is read in the merged currency\'s digits. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.',
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write'), ifMatch()] as const,
       request: { params: ExpenseIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateExpenseRequestSchema) },
@@ -184,7 +184,8 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const result = await withCategoryForeignKey(() => store.expenses.update(organization.id, existing.id, c.get('expectedVersion'), patch, c.get('now')()));
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such expense');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
-      await audit(c, 'expense.updated', 'expense', result.record.id, { fields: Object.keys(body), version: result.record.version });
+      const currencyMove = patch.currency !== undefined && patch.currency !== existing.currency ? { currency: { from: existing.currency, to: patch.currency } } : {};
+      await audit(c, 'expense.updated', 'expense', result.record.id, { fields: Object.keys(body), version: result.record.version, ...currencyMove });
       return c.json(serializeExpense(result.record), 200);
     },
   );

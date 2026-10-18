@@ -1851,6 +1851,8 @@ export const UpdateExpenseRequestSchema = z
   .object({
     occurredOn: FlooredMoneyDatePatchSchema.optional(),
     amount: AmountSchema.optional(),
+    /** MUT-272: only together with `amount` (422 AMOUNT_REQUIRED alone), which is then read in this currency's digits. */
+    currency: CurrencySchema.optional().openapi({ description: 'Only together with amount (422 AMOUNT_REQUIRED alone), which is then read in this currency\'s digits.' }),
     title: expenseText.nullable().optional(),
     vendor: expenseText.nullable().optional(),
     categoryId: uuid.nullable().optional(),

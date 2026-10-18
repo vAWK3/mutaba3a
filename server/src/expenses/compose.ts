@@ -96,14 +96,26 @@ export async function assertCategoryChoosable(store: LedgerStore, organizationId
 }
 
 /**
- * The patch fields a PATCH body sets, amount parsed in the row's own currency. A resent, unchanged `occurredOn` is
- * left out rather than re-checked: the portal sends the date on every save, and a row already older than MUT-227's
- * floor must stay editable.
+ * The patch fields a PATCH body sets. A resent, unchanged `occurredOn` is left out rather than re-checked: the portal
+ * sends the date on every save, and a row already older than MUT-227's floor must stay editable.
+ *
+ * MUT-272 (ADR-095), the conversion rule (ADR-075) on an expense:
+ *
+ *   currency sent ──▶ amount must be sent too ── else 422 AMOUNT_REQUIRED (field amount), even if unchanged
+ *   amount sent ────▶ parsed in the merged currency's digits (a JOD row keeps 3; "1.234" in USD is refused)
+ *
+ * A currency never travels alone because the stored minor units depend on it: ILS → JOD without the amount
+ * would silently rescale the money.
  */
-export function expensePatch(existing: ExpenseRecord, today: IsoDate, body: { occurredOn?: string | undefined; amount?: string | undefined; title?: string | null | undefined; vendor?: string | null | undefined; categoryId?: string | null | undefined; notes?: string | null | undefined }): UpdateExpensePatch {
+export function expensePatch(existing: ExpenseRecord, today: IsoDate, body: { occurredOn?: string | undefined; amount?: string | undefined; currency?: Currency | undefined; title?: string | null | undefined; vendor?: string | null | undefined; categoryId?: string | null | undefined; notes?: string | null | undefined }): UpdateExpensePatch {
+  if (body.currency !== undefined && body.amount === undefined) {
+    throw validationError('AMOUNT_REQUIRED', 'currency can only change together with amount', { field: 'amount' });
+  }
+  const currency = body.currency ?? (existing.currency as Currency);
   const patch: UpdateExpensePatch = {};
   if (body.occurredOn !== undefined && body.occurredOn !== existing.occurredOn) patch.occurredOn = expenseOccurredOn(body.occurredOn, today);
-  if (body.amount !== undefined) patch.amountMinor = parseExpenseAmount(body.amount, existing.currency as Currency);
+  if (body.amount !== undefined) patch.amountMinor = parseExpenseAmount(body.amount, currency);
+  if (body.currency !== undefined) patch.currency = body.currency;
   if (body.title !== undefined) patch.title = body.title;
   if (body.vendor !== undefined) patch.vendor = body.vendor;
   if (body.categoryId !== undefined) patch.categoryId = body.categoryId;
