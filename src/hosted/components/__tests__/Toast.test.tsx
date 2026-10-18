@@ -62,3 +62,28 @@ describe('Toast (MUT-133)', () => {
     expect(second).not.toBe(first);
   });
 });
+
+function ActionTrigger({ tone }: { tone: 'error' | 'info' }) {
+  const show = useToast();
+  return (
+    <button type="button" onClick={() => show('Left out of Jordan trip', { tone, action: { label: 'Undo', onAction: () => show('Undone', { tone: 'info' }) } })}>
+      act
+    </button>
+  );
+}
+
+describe('Toast actions (MUT-268)', () => {
+  it.each(['info', 'error'] as const)('offers a pressable action in the %s tone and closes once it is used', async (tone) => {
+    render(
+      <ToastProvider>
+        <ActionTrigger tone={tone} />
+      </ToastProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'act' }));
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    expect(undo).toHaveClass('press');
+    await userEvent.click(undo);
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(screen.getByTestId('toast-live')).toHaveTextContent('Undone');
+  });
+});

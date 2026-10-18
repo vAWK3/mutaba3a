@@ -18,8 +18,14 @@ import { AlertIcon, InfoIcon } from './Icons';
 const TOAST_MS = 6000;
 
 export type ToastTone = 'error' | 'info';
+export interface ToastAction {
+  label: string;
+  onAction: () => void;
+}
 export interface ToastOptions {
   tone?: ToastTone;
+  /** MUT-268: one button (Undo, Retry). Using it closes the toast; hovering or focusing the toast holds it open. */
+  action?: ToastAction;
 }
 export type ShowToast = (message: string, options?: ToastOptions) => void;
 
@@ -28,6 +34,7 @@ const ToastContext = createContext<ShowToast>(() => {});
 interface ToastState {
   message: string;
   tone: ToastTone;
+  action?: ToastAction;
   /** Bumped on every show, so an identical second message re-renders and is announced again. */
   id: number;
 }
@@ -36,30 +43,54 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastState | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const show = useCallback<ShowToast>((message, options) => {
+  const startTimer = useCallback(() => {
     clearTimeout(timer.current);
-    setToast((current) => ({ message, tone: options?.tone ?? 'error', id: (current?.id ?? 0) + 1 }));
     timer.current = setTimeout(() => setToast(null), TOAST_MS);
   }, []);
+
+  const show = useCallback<ShowToast>(
+    (message, options) => {
+      setToast((current) => ({ message, tone: options?.tone ?? 'error', action: options?.action, id: (current?.id ?? 0) + 1 }));
+      startTimer();
+    },
+    [startTimer],
+  );
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const info = toast?.tone === 'info' ? toast : null;
+  // While the pointer or focus is on a toast with an action, it stays (craft spec 2: until the next action).
+  const hold = { onPointerEnter: () => clearTimeout(timer.current), onPointerLeave: startTimer, onFocus: () => clearTimeout(timer.current), onBlur: startTimer };
+  const actionButton = (current: ToastState) =>
+    current.action && (
+      <button
+        type="button"
+        className="hp-link-button press hp-toast-action"
+        onClick={() => {
+          setToast(null);
+          current.action?.onAction();
+        }}
+      >
+        {current.action.label}
+      </button>
+    );
 
   return (
     <ToastContext.Provider value={show}>
       {children}
       {toast?.tone === 'error' && (
-        <div className="hp-toast" role="alert">
+        <div className="hp-toast" role="alert" {...hold}>
           <AlertIcon />
           <span>{toast.message}</span>
+          {actionButton(toast)}
         </div>
       )}
-      <div className={info ? 'hp-toast hp-toast-info' : 'sr-only'} aria-live="polite" aria-atomic="true" data-testid="toast-live">
+      <div className={info ? 'hp-toast hp-toast-info' : 'sr-only'} aria-live="polite" aria-atomic="true" data-testid="toast-live" {...hold}>
         {info && (
           <>
             <InfoIcon />
             <span key={info.id}>{info.message}</span>
+            {actionButton(info)}
           </>
         )}
       </div>

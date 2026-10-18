@@ -127,3 +127,34 @@ describe('invalidation', () => {
     expect(fxRatesKey(ORG_A, 'ILS')).toEqual(profileKey(ORG_A, 'fx-rates', 'ILS'));
   });
 });
+
+describe('useGroupMarks.actMany', () => {
+  it('moves every row at once, saves one at a time, refetches once, and reports the failures', async () => {
+    const order: string[] = [];
+    const api = stubApi({
+      [`PUT /v1/expense-groups/${G}/expenses/e1`]: () => (order.push('e1'), ok({})),
+      [`PUT /v1/expense-groups/${G}/expenses/e2`]: () => (order.push('e2'), ok({ error: { code: 'NOT_FOUND', message: 'x' } }, 404)),
+      [`PUT /v1/expense-groups/${G}/expenses/e3`]: () => (order.push('e3'), ok({})),
+      [`GET /v1/expense-groups/${G}/summary`]: () => ok(summary('0.000', 0)),
+    });
+    const { queryClient, wrapper } = client();
+    queryClient.setQueryData(groupsKey(ORG_A, 'group', G, 'summary'), summary('30.000', 3));
+    const spy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useGroupMarks(ORG_A, G), { wrapper });
+    const rows = [row('e1', '2026-10-05'), row('e2', '2026-10-05'), row('e3', '2026-10-05')];
+    let outcome!: Promise<{ done: Expense[]; failed: Expense[] }>;
+    act(() => {
+      outcome = result.current.actMany('leaveOut', rows);
+    });
+    expect(result.current.rows(rows, [], 0).members).toEqual([]);
+    let settled!: { done: Expense[]; failed: Expense[] };
+    await act(async () => {
+      settled = await outcome;
+    });
+    expect(order).toEqual(['e1', 'e2', 'e3']);
+    expect(settled.failed.map((r) => r.id)).toEqual(['e2']);
+    expect(result.current.rows(rows, [], 0).members.map((r) => r.id)).toEqual(['e2']);
+    expect(spy.mock.calls.filter(([arg]) => JSON.stringify(arg) === JSON.stringify({ queryKey: groupsKey(ORG_A) }))).toHaveLength(1);
+    expect(api.count(`GET /v1/expense-groups/${G}/summary`)).toBeLessThanOrEqual(1);
+  });
+});

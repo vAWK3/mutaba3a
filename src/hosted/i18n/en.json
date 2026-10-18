@@ -641,6 +641,167 @@
       "conflict": "This changed elsewhere. The latest date is shown: check it and save again.",
       "gone": "This entry is no longer available.",
       "dateRequired": "Pick a date."
+    },
+    "groups": {
+      "sectionsLabel": "Expenses sections",
+      "tabExpenses": "Expenses",
+      "tabGroups": "Groups",
+      "new": "New group",
+      "listLabel": "Expense groups",
+      "status": {
+        "upcoming": "Upcoming",
+        "ongoing": "Ongoing",
+        "past": "Past"
+      },
+      "range": "{from} – {to}",
+      "today": "today",
+      "days": {
+        "one": "{count} day",
+        "other": "{count} days"
+      },
+      "expenses": {
+        "one": "{count} expense",
+        "other": "{count} expenses"
+      },
+      "moreCurrencies": "+{count}",
+      "nudge": "Still going? Add an end date",
+      "reachedYear": "This group reached a year — new expenses no longer join",
+      "empty": {
+        "title": "Group a trip's spending",
+        "body": "Pick the dates and every expense in them lands here. See what the trip cost, day by day."
+      },
+      "created": "{name} created",
+      "saved": "{name} saved",
+      "deleted": "{name} deleted. Its expenses stay in Expenses.",
+      "drawer": {
+        "newTitle": "New group",
+        "editTitle": "Edit group",
+        "name": "Name",
+        "namePlaceholder": "Jordan trip",
+        "from": "From",
+        "to": "To",
+        "maxEnd": "Up to {date}",
+        "stillGoing": "Still going (no end date yet)",
+        "autoJoin": "Expenses dated in these days join automatically, including ones you log later. You can leave any out.",
+        "editHint": "Changing dates re-checks which expenses belong; kept and left-out choices stay.",
+        "notes": "Notes",
+        "optional": "(optional)",
+        "create": "Create group",
+        "creating": "Creating…",
+        "delete": "Delete group",
+        "confirmTitle": "Delete {name}?",
+        "confirmBody": {
+          "one": "Its {count} expense stays in Expenses.",
+          "other": "Its {count} expenses stay in Expenses."
+        },
+        "keep": "Keep",
+        "errors": {
+          "nameRequired": "Give the group a name",
+          "endRequired": "Pick an end date, or tick Still going",
+          "endBeforeStart": "The end can't be before the start",
+          "tooLong": "A group can cover up to a year. Pick an end by {date}.",
+          "dateTooOld": "That date is too far in the past",
+          "dateTooFar": "That date is too far ahead",
+          "limit": "This profile already has 200 groups, the most allowed. Delete one to add another.",
+          "conflict": "This group changed elsewhere. It has been reloaded; check it and save again.",
+          "network": "Couldn't reach Mutaba3a. Try again.",
+          "notFound": "This group was deleted."
+        },
+        "confirmEmpty": "It has no expenses."
+      },
+      "detail": {
+        "addOutside": "Add from outside these dates",
+        "edit": "Edit",
+        "moreActions": "More actions",
+        "totalLabel": "Total spent",
+        "converted": "≈ {amount}",
+        "convertedNote": "at today's ECB rate ({date})",
+        "convertedStale": "rate from {date}",
+        "rateLine": "1 {from} = {rate} {to}",
+        "peg": "USD peg",
+        "currencyTabs": "Currency for chart and categories",
+        "perDay": "Per day",
+        "perDayHint": "Excludes expenses kept from outside the dates",
+        "dayByDay": "Day by day",
+        "weekByWeek": "Week by week",
+        "chartLabel": "{currency} per day. Arrow keys move between days.",
+        "chartLabelWeekly": "{currency} per week. Arrow keys move between weeks.",
+        "before": "before the trip",
+        "after": "after the trip",
+        "upcoming": "upcoming",
+        "otherCurrency": "+ {currencies} spent",
+        "noSpend": "no {currency}",
+        "byCategory": "By category",
+        "uncategorized": "Uncategorized",
+        "membersTitle": "Expenses in this group",
+        "columns": {
+          "title": "Expense",
+          "category": "Category",
+          "amount": "Amount",
+          "action": "Action"
+        },
+        "kept": "Kept",
+        "leaveOut": "Leave out",
+        "remove": "Remove",
+        "bringBack": "Bring back",
+        "leaveOutAll": "Leave out all {count} {category}",
+        "clearCategory": "Show every category",
+        "leftOut": "Left out ({count})",
+        "untitled": "Untitled expense",
+        "toast": {
+          "leaveOut": "{title} left out of {group}",
+          "remove": "{title} removed from {group}",
+          "bringBack": "{title} brought back to {group}",
+          "add": "{title} added to {group}",
+          "leftOutMany": "Left out {count} · {category}",
+          "partialLeftOut": "Left out {done} of {total}",
+          "failed": "Couldn't change {title}. Try again.",
+          "undo": "Undo",
+          "retry": "Retry"
+        },
+        "states": {
+          "emptyTitle": "Nothing dated in these days yet",
+          "emptyBody": "Log an expense in these dates, or pull one in from before.",
+          "upcomingTitle": "{name} starts {date}",
+          "upcomingBody": "Expenses you log from then on join this group. Booked something already?",
+          "allOutTitle": "Everything here is left out",
+          "allOutBody": "Bring back what belongs to this trip from the list below.",
+          "deletedTitle": "This group was deleted",
+          "deletedBody": "Its expenses are still in Expenses.",
+          "backToGroups": "Back to Groups",
+          "sectionError": "Couldn't load this list."
+        }
+      },
+      "picker": {
+        "title": "Add to {name}",
+        "sides": "Which days",
+        "before": "30 days before",
+        "after": "30 days after",
+        "range": "{from} – {to}, not already in this group.",
+        "afterHint": "\"30 days after\" appears once the group has an end date.",
+        "emptyBefore": "Nothing in the 30 days before",
+        "emptyAfter": "Nothing in the 30 days after",
+        "add": "Add ({count})",
+        "adding": "Adding…",
+        "added": "Added {count} to {name}",
+        "partial": "Added {done} of {total} · {failed} failed",
+        "retry": "Retry {count}",
+        "addNone": "Add"
+      },
+      "inGroups": {
+        "label": "In groups",
+        "none": "Not in any group",
+        "add": "Add to group…",
+        "menu": "Groups to add this expense to",
+        "noOther": "No other groups",
+        "leaveOut": "Leave out",
+        "remove": "Remove",
+        "actionLabel": "{action}: {name}",
+        "added": "Added to {name}",
+        "removed": "Left out of {name}",
+        "failed": "Couldn't change the group. Try again."
+      },
+      "nothingYet": "nothing yet"
     }
   }
 }

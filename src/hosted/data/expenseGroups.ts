@@ -110,6 +110,9 @@ export function verbFor(list: RowList, occurredOn: Day, group: GroupDates): Verb
   return inWindow(occurredOn, group) ? 'leaveOut' : 'remove';
 }
 
+/** A row's identity for its exit/return motion: the same expense can be in Members and Left out. */
+export const motionKey = (list: RowList, id: string) => `${list}:${id}`;
+
 /** The mark each verb sends; null = DELETE. */
 export const VERB_MARK: Record<Verb, ExpenseGroupMark | null> = { leaveOut: 'excluded', remove: null, bringBack: null, add: 'included' };
 

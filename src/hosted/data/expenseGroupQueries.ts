@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api, type CreateExpenseGroupRequest, type Currency, type Expense, type ExpenseGroupSummary, type UpdateExpenseGroupRequest } from '../api/client';
 import { profileKey } from '../session/me';
-import { VERB_MARK, applyMarks, applyRowMarks, sortOldestFirst, type PendingMark, type Verb } from './expenseGroups';
+import { VERB_MARK, applyMarks, applyRowMarks, runSequential, sortOldestFirst, type PendingMark, type Verb } from './expenseGroups';
 
 /**
  * Expense-group reads and writes (MUT-268, eng plan E1/E2/E5, review R1–R3).
@@ -140,6 +140,8 @@ let markSerial = 0;
 export function useGroupMarks(profileId: string, groupId: string) {
   const queryClient = useQueryClient();
   const [marks, setMarks] = useState<PendingMark[]>([]);
+  // While a batch runs, its saves don't each refetch; the batch refetches once at the end (eng R2).
+  const batching = useRef(false);
   const mutationKey = markMutationKey(groupId);
   const mutation = useMutation({
     mutationKey,
@@ -150,7 +152,7 @@ export function useGroupMarks(profileId: string, groupId: string) {
     },
     onMutate: () => queryClient.cancelQueries({ queryKey: groupKey(profileId, groupId) }),
     onSettled: () => {
-      if (queryClient.isMutating({ mutationKey }) <= 1) void invalidateGroups(queryClient, profileId);
+      if (!batching.current && queryClient.isMutating({ mutationKey }) <= 1) void invalidateGroups(queryClient, profileId);
     },
   });
   const { mutateAsync } = mutation;
@@ -171,10 +173,33 @@ export function useGroupMarks(profileId: string, groupId: string) {
     [mutateAsync],
   );
 
+  /** Several rows at once (13A Leave out all, 12A picker): they all move now; the saves go one at a time (no batch API). */
+  const actMany = useCallback(
+    async (verb: Verb, rows: Expense[]) => {
+      const pending = rows.map((row) => {
+        markSerial += 1;
+        return { id: `m${markSerial}`, verb, row, settledAt: null } satisfies PendingMark;
+      });
+      setMarks((current) => [...current, ...pending]);
+      batching.current = true;
+      try {
+        const result = await runSequential(pending, (mark) => mutateAsync({ verb, row: mark.row, markId: mark.id }));
+        const failed = new Set(result.failed.map((m) => m.id));
+        if (failed.size > 0) setMarks((current) => current.filter((m) => !failed.has(m.id)));
+        return { done: result.done.map((m) => m.row), failed: result.failed.map((m) => m.row) };
+      } finally {
+        batching.current = false;
+        void invalidateGroups(queryClient, profileId);
+      }
+    },
+    [mutateAsync, queryClient, profileId],
+  );
+
   const pendingSince = (updatedAt: number) => marks.filter((m) => m.settledAt === null || updatedAt < m.settledAt);
 
   return {
     act,
+    actMany,
     summary: (summary: ExpenseGroupSummary, updatedAt: number) => applyMarks(summary, pendingSince(updatedAt)),
     rows: (members: Expense[], excluded: Expense[], updatedAt: number) => applyRowMarks(members, excluded, pendingSince(updatedAt)),
   };

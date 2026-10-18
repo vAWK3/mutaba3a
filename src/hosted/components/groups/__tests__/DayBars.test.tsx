@@ -1,0 +1,65 @@
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { Bar } from '../../../data/expenseGroups';
+import { DayBars } from '../DayBars';
+
+/** MUT-268 20A: a labelled group of bar buttons with one tab stop; arrows follow the reading direction. */
+
+const bar = (from: string, minor: number, position: Bar['position'] = 'in'): Bar => ({ key: `${position}:${from}`, from, to: from, position, minor, total: (minor / 1000).toFixed(3), count: minor > 0 ? 1 : 0, max: 120000 });
+const bars = [bar('2026-09-12', 120000, 'before'), bar('2026-10-03', 48000), bar('2026-10-04', 0), bar('2026-10-05', 96000)];
+
+function renderBars(dir: 'ltr' | 'rtl', onJump = vi.fn()) {
+  render(
+    <div dir={dir}>
+      <DayBars
+        bars={bars}
+        label="JOD per day"
+        describe={(b) => `${b.from} ${b.total}`}
+        axisLabel={(b, i) => (i === 0 ? b.from : null)}
+        gapLabel={(p) => (p === 'before' ? 'before the trip' : 'upcoming')}
+        hasOther={(b) => b.from === '2026-10-04'}
+        onJump={onJump}
+        reducedMotion
+      />
+    </div>,
+  );
+  return onJump;
+}
+
+describe('DayBars', () => {
+  it('is one labelled group of buttons with a single tab stop on the first day of the dates', () => {
+    renderBars('ltr');
+    const group = screen.getByRole('group', { name: 'JOD per day' });
+    const buttons = screen.getAllByRole('button');
+    expect(group).toContainElement(buttons[0]!);
+    expect(buttons.map((b) => b.tabIndex)).toEqual([-1, 0, -1, -1]);
+    expect(screen.getByText(/before the trip/)).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByRole('button', { name: '2026-10-04 0.000' })).toHaveClass('hp-daybar-other', 'hp-daybar-zero');
+  });
+
+  it('moves with the arrows left to right, Home and End, and jumps on Enter', async () => {
+    const onJump = renderBars('ltr');
+    const user = userEvent.setup();
+    await user.tab();
+    expect(document.activeElement).toHaveAccessibleName('2026-10-03 48.000');
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toHaveAccessibleName('2026-10-04 0.000');
+    await user.keyboard('{End}');
+    expect(document.activeElement).toHaveAccessibleName('2026-10-05 96.000');
+    await user.keyboard('{Home}');
+    expect(document.activeElement).toHaveAccessibleName('2026-09-12 120.000');
+    await user.keyboard('{Enter}');
+    expect(onJump).toHaveBeenCalledWith(bars[0]);
+  });
+
+  it('mirrors the arrows right to left', async () => {
+    renderBars('rtl');
+    const user = userEvent.setup();
+    await user.tab();
+    await user.keyboard('{ArrowLeft}');
+    expect(document.activeElement).toHaveAccessibleName('2026-10-04 0.000');
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(document.activeElement).toHaveAccessibleName('2026-09-12 120.000');
+  });
+});
