@@ -72,6 +72,46 @@
 **Impact**: `GET /admin/v1/users/{id}` shows no "setup pending" or open-link expiry, so when someone says "I never got in", the operator just issues a new link. That is safe (it supersedes the old one) but blind.
 **Fix**: add `passwordSet: boolean` and the open link's `expiresAt` to the admin user detail, plus a `show` CLI command.
 
+### TD-161: An expense group's member query can't use the date index
+**Status**: Open
+**Ticket**: none (MUT-267 pre-landing review, 2026-10-18; owner chose to defer)
+**Added**: 2026-10-18
+**Priority**: Low until profiles hold thousands of expenses
+**Impact**: `expenseGroupWhere` is `(in window AND NOT EXISTS excluded) OR EXISTS included`. The kept branch has no date bound, so Postgres reads the profile's whole ledger (organizationId prefix) for every group aggregate, summary page and `?groupId` page. This costs O(profile expenses) per query, not O(window).
+**Fix**: load the group's kept expense ids first (override PK prefix `groupId`), then query `OR: [(in window AND not excluded), id IN kept]`. That way Postgres can BitmapOr the `(organizationId, occurredOn)` index with the primary key. The store contract already pins the result.
+
+### TD-162: Two identical first marks at the same instant both write an audit row
+**Status**: Accepted
+**Ticket**: none (MUT-267 review cycle 2)
+**Added**: 2026-10-18
+**Priority**: Cosmetic
+**Impact**: Prisma `setOverride` reads the mark, then upserts it. Two concurrent PUTs with the same mode on an unmarked expense both return `changed: true`, so `expense_group.expense_marked` is audited twice for one effective change. The stored mark is correct.
+**Fix**: if exactly-once auditing ever matters, use one raw `INSERT … ON CONFLICT DO UPDATE … WHERE mode IS DISTINCT FROM EXCLUDED.mode RETURNING`.
+
+### TD-163: A refused 201st group is replayed from the idempotency cache
+**Status**: Open
+**Ticket**: check with MUT-268 (the portal's Idempotency-Key policy)
+**Added**: 2026-10-18
+**Priority**: Low
+**Impact**: `idempotency.ts` stores every response below 500, so a 422 `GROUP_LIMIT` becomes that key's outcome. If a client reuses one key across retries of the same form, the user deletes a group, presses Save again, and still gets the cached 422.
+**Fix**: either the portal and phone mint a fresh key per submit (the portal already uses one key per save attempt, MUT-133), or state-dependent 422s are left out of the cache.
+
+### TD-164: Deleted expense groups stay in the list index
+**Status**: Open
+**Ticket**: none
+**Added**: 2026-10-18
+**Priority**: Low (only the owner's own deliberate churn grows it)
+**Impact**: the 200-group cap counts live groups only, so create-and-delete churn grows `expense_groups` without bound. The list index `(organizationId, startOn DESC, id DESC)` includes the dead rows.
+**Fix**: a partial index `WHERE "deletedAt" IS NULL` in place of the full one.
+
+### TD-165: No test pins that groups survive a profile type change
+**Status**: Open
+**Ticket**: none (MUT-267 plan item missed in the build)
+**Added**: 2026-10-18
+**Priority**: Low (no group code reads categories; it holds by construction)
+**Impact**: a profile type change (MUT-182) deletes categories and nulls `categoryId`. Groups and marks are untouched, and the summary shows the spending as uncategorized, but nothing asserts it.
+**Fix**: a store-contract case: create a group with a categorized member, run the type change, and assert the group, its mark and a `null` category bucket.
+
 ### TD-158: Changing your password keeps this device's token rather than issuing a new one
 **Status**: Open
 **Ticket**: MUT-262 (found 2026-10-16, MUT-238 pre-landing adversarial review of MUT-237)

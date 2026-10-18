@@ -6325,7 +6325,7 @@ export interface paths {
                     linked?: "none";
                     /** @description MUT-267: only this group's members (or, with groupMembership=excluded, its left-out expenses dated inside its window). 404 for a group this profile does not have. */
                     groupId?: string;
-                    /** @description With groupId. Default `member`. */
+                    /** @description Requires groupId (422 GROUP_ID_REQUIRED without it). Default `member`. */
                     groupMembership?: "member" | "excluded";
                 };
                 header?: never;
@@ -7675,7 +7675,7 @@ export interface paths {
         };
         /**
          * List expense groups, newest start first, with their totals per currency
-         * @description Unpaged: a profile holds tens of groups. With expenseId, only the groups that expense belongs to (dated in the window and not left out, or kept); 404 for an expense this profile does not have.
+         * @description Unpaged: a profile holds at most 200 live groups. With expenseId, only the groups that expense belongs to (dated in the window and not left out, or kept); 404 for an expense this profile does not have.
          */
         get: {
             parameters: {
@@ -7748,7 +7748,7 @@ export interface paths {
         put?: never;
         /**
          * Create an expense group
-         * @description Expenses dated from startOn to endOn (or, with no endOn, to a year after startOn) join automatically, including ones logged later.
+         * @description Expenses dated from startOn to endOn (or, with no endOn, to a year after startOn) join automatically, including ones logged later. A profile holds at most 200 live groups (422 GROUP_LIMIT).
          */
         post: {
             parameters: {
@@ -7969,7 +7969,7 @@ export interface paths {
         head?: never;
         /**
          * Change an expense group (optimistic, If-Match)
-         * @description null endOn = still going; null clears the notes. The merged range is checked. Keep and leave-out marks stay when the dates change.
+         * @description null endOn = still going; null clears the notes. The merged range is checked. Keep and leave-out marks stay when the dates change. A stale If-Match is a 409 before any validation; a PATCH that changes nothing returns the group unchanged (same version, no audit).
          */
         patch: {
             parameters: {
@@ -12258,7 +12258,7 @@ export interface components {
         CreateExpenseGroupRequest: {
             /** @description Trimmed; 1–120 characters (422 NAME_REQUIRED when blank) */
             name: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD; not more than ten years (3660 days) before the organization's today (422 DATE_INVALID). */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. */
             startOn: string;
             /** @description Absent = still going. Not before startOn (END_BEFORE_START); at most 366 days including both ends (GROUP_RANGE_TOO_LONG) */
             endOn?: string;
@@ -12269,7 +12269,7 @@ export interface components {
         };
         UpdateExpenseGroupRequest: {
             name?: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD; not more than ten years (3660 days) before the organization's today (422 DATE_INVALID). */
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. */
             startOn?: string;
             /** @description null = still going. The merged range is checked */
             endOn?: string | null;

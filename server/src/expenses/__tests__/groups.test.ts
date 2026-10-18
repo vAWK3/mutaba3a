@@ -86,6 +86,12 @@ describe('groupCreate (MUT-267 range rules, 422 like every route)', () => {
     expect(reasonOf(() => groupCreate({ name: 'x', startOn: '2026-01-01', endOn: '2027-01-02' }, TODAY))).toBe('GROUP_RANGE_TOO_LONG');
   });
 
+  it('refuses dates more than ten years ahead, so the window stays in four-digit years (review: year-9999 summary 500)', () => {
+    expect(reasonOf(() => groupCreate({ name: 'x', startOn: '2036-10-24', endOn: '2036-10-25' }, TODAY))).toBeUndefined();
+    expect(reasonOf(() => groupCreate({ name: 'x', startOn: '2036-10-27' }, TODAY))).toBe('DATE_INVALID');
+    expect(reasonOf(() => groupCreate({ name: 'x', startOn: '9998-12-31', endOn: '9999-12-31' }, TODAY))).toBe('DATE_INVALID');
+  });
+
   it('refuses invalid dates and dates more than ten years back (MUT-227 floor)', () => {
     expect(reasonOf(() => groupCreate({ name: 'x', startOn: '2026-02-30' }, TODAY))).toBe('DATE_INVALID');
     expect(reasonOf(() => groupCreate({ name: 'x', startOn: '2010-01-01' }, TODAY))).toBe('DATE_INVALID');
@@ -110,6 +116,12 @@ describe('groupPatch (MUT-267 C3: the merged range is what gets checked)', () =>
   it('does not re-check an unchanged start that is already past the floor', () => {
     const old = { ...existing, startOn: '2016-01-01', endOn: '2016-06-01' };
     expect(groupPatch(old, { startOn: '2016-01-01', name: 'Renamed' }, TODAY)).toEqual({ name: 'Renamed' });
+  });
+
+  it('refuses a blank name and ignores a name that only differs by surrounding spaces', () => {
+    expect(reasonOf(() => groupPatch(existing, { name: '   ' }, TODAY))).toBe('NAME_REQUIRED');
+    expect(groupPatch(existing, { name: '  Jordan trip ' }, TODAY)).toEqual({});
+    expect(groupPatch({ ...existing, notes: 'n' }, { notes: 'n', startOn: existing.startOn, endOn: existing.endOn }, TODAY)).toEqual({});
   });
 
   it('refuses moving a date past the floor', () => {

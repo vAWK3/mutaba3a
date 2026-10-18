@@ -63,14 +63,31 @@ export function describeLedgerStoreExpenseGroupsContract(name: string, makeStore
       expect((await store.expenseGroups.list(w.a.id)).map((x) => x.id)).toEqual([older.id]);
     });
 
+    it('caps live groups per organization under parallel creates; deleted groups free room (review: GROUP_LIMIT race)', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const input = (i: number) => ({ organizationId: w.a.id, name: `g${i}`, startOn: '2026-10-03', endOn: null, notes: null, createdByUserId: w.user.id });
+      for (let i = 0; i < 4; i++) await store.expenseGroups.create(input(i), at(1), 5);
+      const results = await Promise.allSettled([5, 6, 7].map((i) => store.expenseGroups.create(input(i), at(2), 5)));
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      for (const r of results) if (r.status === 'rejected') expect((r.reason as Error).name).toBe('InsufficientCapacity');
+      const live = await store.expenseGroups.list(w.a.id);
+      expect(live).toHaveLength(5);
+      await store.expenseGroups.softDelete(w.a.id, live[0]!.id, at(3));
+      await expect(store.expenseGroups.create(input(8), at(4), 5)).resolves.toMatchObject({ name: 'g8' });
+      await expect(store.expenseGroups.create(input(9), at(4), 5)).rejects.toThrow(/insufficient capacity/);
+      await expect(store.expenseGroups.create({ ...input(10), organizationId: w.b.id }, at(4), 5)).resolves.toMatchObject({ organizationId: w.b.id });
+    });
+
     it('keeps one mark per (group, expense): last write wins, clear resets, marks are found per expense', async () => {
       const store = await makeStore();
       const w = await world(store);
       const g1 = await w.group();
       const g2 = await w.group({ name: 'Amman', startOn: '2026-10-05', endOn: '2026-10-06' });
       const e = await store.expenses.create(w.expense(), at(2));
-      expect(await store.expenseGroups.setOverride(w.a.id, g1.id, e.id, 'excluded', at(3))).toMatchObject({ groupId: g1.id, expenseId: e.id, mode: 'excluded' });
-      expect(await store.expenseGroups.setOverride(w.a.id, g1.id, e.id, 'included', at(4))).toMatchObject({ mode: 'included', createdAt: at(3), updatedAt: at(4) });
+      expect(await store.expenseGroups.setOverride(w.a.id, g1.id, e.id, 'excluded', at(3))).toMatchObject({ changed: true, record: { groupId: g1.id, expenseId: e.id, mode: 'excluded' } });
+      expect(await store.expenseGroups.setOverride(w.a.id, g1.id, e.id, 'excluded', at(4))).toMatchObject({ changed: false, record: { mode: 'excluded', updatedAt: at(3) } });
+      expect(await store.expenseGroups.setOverride(w.a.id, g1.id, e.id, 'included', at(4))).toMatchObject({ changed: true, record: { mode: 'included', createdAt: at(3), updatedAt: at(4) } });
       await store.expenseGroups.setOverride(w.a.id, g2.id, e.id, 'excluded', at(5));
       const marks = await store.expenseGroups.overridesForExpense(w.a.id, e.id);
       expect(marks.map((m) => [m.groupId, m.mode]).sort()).toEqual([[g1.id, 'included'], [g2.id, 'excluded']].sort());

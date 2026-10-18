@@ -59,7 +59,7 @@ async function setup() {
     (await read(await app.request(`/v1/expenses?groupId=${groupId}&groupMembership=${membership}&limit=100`, { headers: as() }))).items.map((e: Loose) => e.id as string);
   const mark = (groupId: string, expenseId: string, mode: 'excluded' | 'included') => app.request(`/v1/expense-groups/${groupId}/expenses/${expenseId}`, json({ mode }, as(), 'PUT'));
   const reset = (groupId: string, expenseId: string) => app.request(`/v1/expense-groups/${groupId}/expenses/${expenseId}`, { method: 'DELETE', headers: as() });
-  return { app, store, clock, a, b, as, expense, group, newGroup, summary, members, mark, reset };
+  return { app, store, clock, a, b, as, expense, group, newGroup, summary, members, mark, reset, userId: created.user.id as string };
 }
 
 describe('POST/GET/PATCH/DELETE /v1/expense-groups', () => {
@@ -268,5 +268,101 @@ describe('access (MUT-267 AC8, A1)', () => {
       expect(res.status, `${method} ${path}`).toBe(403);
       expect((await read(res)).error.code, `${method} ${path}`).toBe('PRINCIPAL_NOT_ACCEPTED');
     }
+  });
+});
+
+describe('pre-landing review fixes (MUT-267)', () => {
+  const groupAudit = async (t: Awaited<ReturnType<typeof setup>>) =>
+    (await t.store.audit.list(t.a.id, {}, { limit: 500, cursor: null })).items.filter((x) => x.entityType === 'expense_group');
+
+  it('refuses group dates more than ten years ahead with 422 DATE_INVALID bound future', async () => {
+    const t = await setup();
+    const res = await t.group({ startOn: '9998-12-31', endOn: '9999-12-31' });
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'DATE_INVALID', bound: 'future' });
+  });
+
+  it('groupMembership without groupId is a 422, never the whole ledger', async () => {
+    const t = await setup();
+    const res = await t.app.request('/v1/expenses?groupMembership=excluded', { headers: t.as() });
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details.reason).toBe('GROUP_ID_REQUIRED');
+  });
+
+  it('an unchanged PATCH keeps the version and writes no audit; a stale If-Match is a 409 before range checks', async () => {
+    const t = await setup();
+    const g = await t.newGroup();
+    const same = await t.app.request(`/v1/expense-groups/${g.id}`, json({ name: 'Jordan trip', startOn: '2026-10-03' }, { ...t.as(), 'if-match': '1' }, 'PATCH'));
+    expect(same.status).toBe(200);
+    expect((await read(same)).version).toBe(1);
+    expect((await groupAudit(t)).map((x) => x.action)).toEqual(['expense_group.created']);
+    await t.app.request(`/v1/expense-groups/${g.id}`, json({ name: 'Jordan', startOn: '2026-10-03', endOn: '2026-10-07' }, { ...t.as(), 'if-match': '1' }, 'PATCH'));
+    const stale = await t.app.request(`/v1/expense-groups/${g.id}`, json({ endOn: '2026-10-01' }, { ...t.as(), 'if-match': '1' }, 'PATCH'));
+    expect(stale.status).toBe(409);
+    expect(((await groupAudit(t)).find((x) => x.action === 'expense_group.updated')?.metadata as { fields: string[] }).fields).toEqual(['name']);
+  });
+
+  it('audits every group write once as the person; a repeated mark, a repeat delete and clearing an absent mark write nothing', async () => {
+    const t = await setup();
+    const g = await t.newGroup();
+    const e = await t.expense({});
+    await t.app.request(`/v1/expense-groups/${g.id}`, json({ name: 'y' }, { ...t.as(), 'if-match': '1' }, 'PATCH'));
+    await t.mark(g.id, e.id, 'excluded');
+    await t.mark(g.id, e.id, 'excluded');
+    await t.reset(g.id, e.id);
+    await t.reset(g.id, e.id);
+    await t.app.request(`/v1/expense-groups/${g.id}`, { method: 'DELETE', headers: t.as() });
+    await t.app.request(`/v1/expense-groups/${g.id}`, { method: 'DELETE', headers: t.as() });
+    const rows = await groupAudit(t);
+    expect(rows.map((x) => x.action).sort()).toEqual(['expense_group.created', 'expense_group.deleted', 'expense_group.expense_marked', 'expense_group.expense_unmarked', 'expense_group.updated']);
+    for (const x of rows) expect(x).toMatchObject({ actorType: 'USER', actorId: t.userId });
+  });
+
+  it('every write on another profile’s or an unknown group is a 404 and changes nothing; ?expenseId= 404s for an unknown expense', async () => {
+    const t = await setup();
+    const g = await t.newGroup();
+    const e = await t.expense({});
+    const ghost = '00000000-0000-4000-8000-0000000000bb';
+    for (const [profile, id] of [[t.b.id, g.id], [t.a.id, ghost]] as const) {
+      const h = t.as(profile);
+      expect((await t.app.request(`/v1/expense-groups/${id}`, json({ name: 'x' }, { ...h, 'if-match': '1' }, 'PATCH'))).status).toBe(404);
+      expect((await t.app.request(`/v1/expense-groups/${id}`, { method: 'DELETE', headers: h })).status).toBe(404);
+      expect((await t.app.request(`/v1/expense-groups/${id}/expenses/${e.id}`, json({ mode: 'included' }, h, 'PUT'))).status).toBe(404);
+      expect((await t.app.request(`/v1/expense-groups/${id}/expenses/${e.id}`, { method: 'DELETE', headers: h })).status).toBe(404);
+    }
+    expect((await t.app.request(`/v1/expense-groups?expenseId=${ghost}`, { headers: t.as() })).status).toBe(404);
+    expect(await read(await t.app.request(`/v1/expense-groups/${g.id}`, { headers: t.as() }))).toMatchObject({ name: 'Jordan trip', version: 1 });
+  });
+
+  it('lists every group across the 4-at-a-time totals chunks, in order, each with its own count', async () => {
+    const t = await setup();
+    const ids: string[] = [];
+    for (let d = 1; d <= 6; d++) ids.unshift((await t.newGroup({ name: `g${d}`, startOn: `2026-10-0${d}`, endOn: `2026-10-0${d}` })).id);
+    await t.expense({ occurredOn: '2026-10-05' });
+    const list = await read(await t.app.request('/v1/expense-groups', { headers: t.as() }));
+    expect(list.items.map((x: Loose) => x.id)).toEqual(ids);
+    expect(list.items.map((x: Loose) => x.memberCount)).toEqual([0, 1, 0, 0, 0, 0]);
+  });
+
+  it('summarizes past one 200-row page: every member counted, buckets sum to the total', async () => {
+    const t = await setup();
+    const g = await t.newGroup();
+    for (let i = 0; i < 205; i++) {
+      await t.store.expenses.create({ organizationId: t.a.id, occurredOn: `2026-10-0${3 + (i % 5)}`, amountMinor: 1_000n, currency: 'JOD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: t.userId }, t.clock.now);
+    }
+    const jod = (await t.summary(g.id)).currencies[0];
+    expect(jod).toMatchObject({ currency: 'JOD', count: 205, total: '205.000' });
+    expect(jod.byDay.reduce((n: number, d: Loose) => n + d.count, 0)).toBe(205);
+  });
+
+  it('refuses a 201st live group with 422 GROUP_LIMIT; deleting one makes room', async () => {
+    const t = await setup();
+    let last = '';
+    for (let i = 0; i < 200; i++) last = (await t.store.expenseGroups.create({ organizationId: t.a.id, name: `g${i}`, startOn: '2026-10-03', endOn: null, notes: null, createdByUserId: t.userId }, t.clock.now)).id;
+    const over = await t.group();
+    expect(over.status).toBe(422);
+    expect((await read(over)).error.details).toMatchObject({ reason: 'GROUP_LIMIT', max: 200 });
+    await t.app.request(`/v1/expense-groups/${last}`, { method: 'DELETE', headers: t.as() });
+    expect((await t.group()).status).toBe(201);
   });
 });

@@ -1620,16 +1620,17 @@ export interface ExpenseGroupOverrideRecord {
 }
 
 export interface ExpenseGroupRepository {
-  create(input: CreateExpenseGroupInput, at: Date): Promise<ExpenseGroupRecord>;
+  /** With `maxLive`, throws InsufficientCapacity when the organization already holds that many live groups; counted and inserted atomically (review: GROUP_LIMIT race). */
+  create(input: CreateExpenseGroupInput, at: Date, maxLive?: number): Promise<ExpenseGroupRecord>;
   /** Live groups only; a deleted one reads null. */
   getById(organizationId: string, id: string): Promise<ExpenseGroupRecord | null>;
-  /** Live groups, newest startOn first (ties by id descending). A profile holds tens, so unpaged. */
+  /** Live groups, newest startOn first (ties by id descending). Unpaged: the create route caps a profile at MAX_GROUPS_PER_PROFILE (expenses/groups.ts). */
   list(organizationId: string): Promise<ExpenseGroupRecord[]>;
   update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpenseGroupPatch, at: Date): Promise<UpdateResult<ExpenseGroupRecord>>;
   /** Null for an id the organization never had; `changed: false` when already deleted. Its expenses are untouched. */
   softDelete(organizationId: string, id: string, at: Date): Promise<{ record: ExpenseGroupRecord; changed: boolean } | null>;
-  /** Upsert the mark (the caller has checked the group and expense are this organization's). */
-  setOverride(organizationId: string, groupId: string, expenseId: string, mode: ExpenseGroupOverrideMode, at: Date): Promise<ExpenseGroupOverrideRecord>;
+  /** Upsert the mark (the caller has checked the group and expense are this organization's). `changed` is false when the same mark was already there. */
+  setOverride(organizationId: string, groupId: string, expenseId: string, mode: ExpenseGroupOverrideMode, at: Date): Promise<{ record: ExpenseGroupOverrideRecord; changed: boolean }>;
   /** True when a mark was removed. */
   clearOverride(organizationId: string, groupId: string, expenseId: string): Promise<boolean>;
   /** Every mark on one expense, across this organization's groups (GET /v1/expense-groups?expenseId=). */

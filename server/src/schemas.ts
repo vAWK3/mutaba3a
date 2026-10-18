@@ -4,6 +4,7 @@ import { SCOPES } from './auth/scopes.js';
 import { ERROR_CODES } from './errors.js';
 import { CONTINGENCY_OUTCOMES, MAX_COMMISSION_RATE_BASIS_POINTS, MIN_COMMISSION_RATE_BASIS_POINTS, UPFRONT_TREATMENTS } from './agreements/contingency.js';
 import { DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT } from './agreements/compose.js';
+import { GROUP_NAME_MAX, MAX_GROUP_SPAN_DAYS } from './expenses/groups.js';
 import { MAX_INSTALLMENTS } from './agreements/schedule.js';
 import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
 import { JOD_PER_USD } from './fx-rates.js';
@@ -837,6 +838,11 @@ export const VALIDATION_REASONS = [
   'COMMISSION_LABEL_REQUIRED',
   // MUT-107: contingency fee proposals
   'SCHEDULE_REQUIRED',
+  // MUT-267: expense groups
+  'NAME_REQUIRED',
+  'GROUP_RANGE_TOO_LONG',
+  'GROUP_LIMIT',
+  'GROUP_ID_REQUIRED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -1861,7 +1867,7 @@ export const ListExpensesQuerySchema = z.object({
   projectId: uuid.optional(),
   linked: z.enum(['none']).optional().openapi({ description: '`none`: only expenses linked to no client' }),
   groupId: uuid.optional().openapi({ description: 'MUT-267: only this group\'s members (or, with groupMembership=excluded, its left-out expenses dated inside its window). 404 for a group this profile does not have.' }),
-  groupMembership: z.enum(['member', 'excluded']).optional().openapi({ description: 'With groupId. Default `member`.' }),
+  groupMembership: z.enum(['member', 'excluded']).optional().openapi({ description: 'Requires groupId (422 GROUP_ID_REQUIRED without it). Default `member`.' }),
 });
 
 export const ExpenseIdParamSchema = z.object({ expenseId: uuid });
@@ -1974,9 +1980,9 @@ export const ExpenseSummarySchema = z
 
 // ---- MUT-267: expense groups (ADR-094) -----------------------------------------
 
-const groupName = z.string().max(120);
+const groupName = z.string().trim().max(GROUP_NAME_MAX);
 const groupNotes = z.string().max(4000);
-const groupDate = IsoDateSchema.openapi({ description: `Calendar date in the organization timezone, YYYY-MM-DD; not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today (422 DATE_INVALID).` });
+const groupDate = IsoDateSchema.openapi({ description: `Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today nor ten years (${DAYS_IN_FUTURE_LIMIT} days) after it: 422 DATE_INVALID with details.bound past or future.` });
 const currencyTotal = z.object({ currency: CurrencySchema, ...expenseBucket });
 
 export const ExpenseGroupSchema = z
@@ -2012,9 +2018,9 @@ export const ListExpenseGroupsQuerySchema = z.object({
 
 export const CreateExpenseGroupRequestSchema = z
   .object({
-    name: groupName.openapi({ description: 'Trimmed; 1–120 characters (422 NAME_REQUIRED when blank)' }),
+    name: groupName.openapi({ description: `Trimmed; 1–${GROUP_NAME_MAX} characters (422 NAME_REQUIRED when blank)` }),
     startOn: groupDate,
-    endOn: groupDate.optional().openapi({ description: 'Absent = still going. Not before startOn (END_BEFORE_START); at most 366 days including both ends (GROUP_RANGE_TOO_LONG)' }),
+    endOn: groupDate.optional().openapi({ description: `Absent = still going. Not before startOn (END_BEFORE_START); at most ${MAX_GROUP_SPAN_DAYS} days including both ends (GROUP_RANGE_TOO_LONG)` }),
     notes: groupNotes.optional(),
   })
   .strict()

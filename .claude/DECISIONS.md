@@ -3666,7 +3666,11 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
    - Any mark is accepted on any expense of the profile, and the last write wins (D3/D6).
    - A mark survives date changes.
    - "Left out" lists only excluded expenses dated inside the window (design review 22A).
-4. **Ranges** are at most 366 days (`GROUP_RANGE_TOO_LONG`). The merged range is checked on PATCH. The MUT-227 floor applies to changed dates.
+4. **Ranges** are at most 366 days (`GROUP_RANGE_TOO_LONG`). The merged range is checked on PATCH. Changed dates must be within ten years either side of the profile's today: the MUT-227 floor, plus the `DAYS_IN_FUTURE_LIMIT` bound added at pre-landing review. The future bound keeps `windowEnd` in four-digit years; a year-9999 group summary used to 500.
+   - A profile holds at most **200** live groups (`GROUP_LIMIT`), bounding the list's per-group aggregates.
+   - A PATCH answers 409 on a stale If-Match before validating. A PATCH that changes nothing writes nothing.
+   - A repeated identical mark writes no audit row.
+   - `groupMembership` without `groupId` is 422 `GROUP_ID_REQUIRED`.
 5. **Per currency only.** The summary and the list totals never sum or convert across currencies. ADR-087 #4 stands: the portal and phone convert on the client at today's ECB rate via `/v1/fx-rates`, labelled with its date. Converting at each day's rate is MUT-273, which needs its own override of ADR-087.
 6. **The summary's day buckets reconcile with the total.** Series days are zero-filled. Every member dated outside the series gets a sparse `before`/`after` bucket (design review 6A).
 7. **List totals reuse the filter.** They are one `groupBy(currency)` aggregate per group over the same `where` as the member list, at most 4 groups at a time (re-review D1, A2).
@@ -3683,6 +3687,6 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Unbounded open groups.** Rejected: a forgotten group would grow every scan forever.
 
 **Consequences**:
-- One new pair of tables (additive migration `20261018120000_mut267_expense_groups`), eight routes, and `groupId`/`groupMembership` on `GET /v1/expenses`.
+- One new pair of tables (additive migration `20261018150000_mut267_expense_groups`), eight routes, and `groupId`/`groupMembership` on `GET /v1/expenses`.
 - The list makes one small aggregate per group.
 - API 1.33.0-mut267.

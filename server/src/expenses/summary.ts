@@ -1,5 +1,6 @@
 import { addDays, compareIsoDates, type IsoDate } from '../dates.js';
 import { formatMoney, type Currency } from '../money.js';
+import { MAX_GROUP_SPAN_DAYS } from './groups.js';
 import type { ExpenseRecord } from '../repositories/ports.js';
 
 /**
@@ -51,12 +52,6 @@ function breakdown(rows: readonly Summarized[], key: (e: Summarized) => string |
   });
 }
 
-/**
- * A group's summary (MUT-267): the expense summary per currency plus one
- * bucket per day. Every series day is zero-filled; every member dated outside
- * the series gets a sparse bucket marked before or after it (design review 6A),
- * so a currency's buckets always sum to its total.
- */
 export type DayPosition = 'before' | 'in' | 'after';
 
 export interface DayBucket extends ExpenseBucket {
@@ -70,6 +65,12 @@ export interface GroupSummaryBlock extends ExpenseSummaryBlock {
 
 type GroupSummarized = Summarized & Pick<ExpenseRecord, 'occurredOn'>;
 
+/**
+ * A group's summary (MUT-267): the expense summary per currency plus one
+ * bucket per day. Every series day is zero-filled; every member dated outside
+ * the series gets a sparse bucket marked before or after it (design review 6A),
+ * so a currency's buckets always sum to its total.
+ */
 export function summarizeGroup(members: readonly GroupSummarized[], series: { from: IsoDate; to: IsoDate }): GroupSummaryBlock[] {
   return summarizeExpenses(members).map((block) => ({
     ...block,
@@ -83,9 +84,14 @@ export function summarizeGroup(members: readonly GroupSummarized[], series: { fr
 
 function dayBuckets(rows: readonly GroupSummarized[], series: { from: IsoDate; to: IsoDate }, currency: Currency): DayBucket[] {
   const byDate = new Map<IsoDate, GroupSummarized[]>();
-  for (const e of rows) byDate.set(e.occurredOn, [...(byDate.get(e.occurredOn) ?? []), e]);
+  for (const e of rows) {
+    const day = byDate.get(e.occurredOn);
+    if (day) day.push(e);
+    else byDate.set(e.occurredOn, [e]);
+  }
   const dates = new Set(byDate.keys());
-  for (let d = series.from; compareIsoDates(d, series.to) <= 0; d = addDays(d, 1)) dates.add(d);
+  // A counted walk, never an open-ended string comparison (pre-landing review): at most one group span of days.
+  for (let d = series.from, i = 0; i < MAX_GROUP_SPAN_DAYS && compareIsoDates(d, series.to) <= 0; d = addDays(d, 1), i++) dates.add(d);
   return [...dates].sort().map((date) => {
     const group = byDate.get(date) ?? [];
     const position: DayPosition = compareIsoDates(date, series.from) < 0 ? 'before' : compareIsoDates(date, series.to) > 0 ? 'after' : 'in';

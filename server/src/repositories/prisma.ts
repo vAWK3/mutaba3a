@@ -1261,7 +1261,7 @@ export class PrismaLedgerStore implements LedgerStore {
     totalsByCurrency: async (organizationId, filter) => {
       const rows = await this.prisma.expense.groupBy({
         by: ['currency'],
-        where: { organizationId, deletedAt: null, AND: [expenseWhere(filter)] },
+        where: { organizationId, deletedAt: null, ...expenseWhere(filter) },
         _sum: { amountMinor: true },
         _count: { _all: true },
         orderBy: { currency: 'asc' },
@@ -1273,7 +1273,17 @@ export class PrismaLedgerStore implements LedgerStore {
   // ---- MUT-267: expense groups (ADR-094) ------------------------------------
 
   readonly expenseGroups: ExpenseGroupRepository = {
-    create: (input, at) => translate(() => this.prisma.expenseGroup.create({ data: { ...input, createdAt: at, updatedAt: at } })),
+    create: (input, at, maxLive) =>
+      translate(() =>
+        maxLive === undefined
+          ? this.prisma.expenseGroup.create({ data: { ...input, createdAt: at, updatedAt: at } })
+          : this.prisma.$transaction(async (tx) => {
+              // The org row lock serializes concurrent creates, so the count and the insert can't interleave past the cap.
+              await lockOrganization(tx, input.organizationId);
+              if ((await tx.expenseGroup.count({ where: { organizationId: input.organizationId, deletedAt: null } })) >= maxLive) throw new InsufficientCapacity(input.organizationId);
+              return tx.expenseGroup.create({ data: { ...input, createdAt: at, updatedAt: at } });
+            }),
+      ),
     getById: (organizationId, id) => this.prisma.expenseGroup.findFirst({ where: { id, organizationId, deletedAt: null } }),
     list: (organizationId) =>
       this.prisma.expenseGroup.findMany({ where: { organizationId, deletedAt: null }, orderBy: [{ startOn: 'desc' }, { id: 'desc' }] }),
@@ -1290,16 +1300,16 @@ export class PrismaLedgerStore implements LedgerStore {
       const record = await this.prisma.expenseGroup.findFirst({ where: { id, organizationId } });
       return record ? { record, changed: count === 1 } : null;
     },
-    setOverride: async (organizationId, groupId, expenseId, mode, at) =>
-      toGroupOverride(
-        await translate(() =>
-          this.prisma.expenseGroupOverride.upsert({
-            where: { groupId_expenseId: { groupId, expenseId } },
-            create: { groupId, expenseId, organizationId, mode, createdAt: at, updatedAt: at },
-            update: { mode, updatedAt: at },
-          }),
-        ),
-      ),
+    setOverride: async (organizationId, groupId, expenseId, mode, at) => {
+      const key = { groupId_expenseId: { groupId, expenseId } };
+      const existing = await this.prisma.expenseGroupOverride.findUnique({ where: key });
+      if (existing?.mode === mode) return { record: toGroupOverride(existing), changed: false };
+      // Native INSERT … ON CONFLICT DO UPDATE (verified at review), so concurrent first marks don't collide.
+      const row = await translate(() =>
+        this.prisma.expenseGroupOverride.upsert({ where: key, create: { groupId, expenseId, organizationId, mode, createdAt: at, updatedAt: at }, update: { mode, updatedAt: at } }),
+      );
+      return { record: toGroupOverride(row), changed: true };
+    },
     clearOverride: async (organizationId, groupId, expenseId) => {
       const { count } = await this.prisma.expenseGroupOverride.deleteMany({ where: { groupId, expenseId, organizationId } });
       return count === 1;

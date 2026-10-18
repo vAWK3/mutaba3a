@@ -81,6 +81,12 @@ describe('summarizeGroup (MUT-267 6A: every member has a day bucket, so buckets 
     }
   });
 
+  it('walks a full 366-day series exactly, the last day included (counted loop)', () => {
+    const [jod] = summarizeGroup([m('JOD', 1_000n, '2027-01-01')], { from: '2026-01-01', to: '2027-01-01' });
+    expect(jod!.byDay).toHaveLength(366);
+    expect(jod!.byDay.at(-1)).toEqual({ date: '2027-01-01', total: '1.000', count: 1, position: 'in' });
+  });
+
   it('keeps the category breakdown of summarizeExpenses', () => {
     const [jod] = summarizeGroup([m('JOD', 1_000n, '2026-10-03', 'cat-a'), m('JOD', 3_000n, '2026-10-04', null)], series);
     expect(jod!.byCategory).toEqual([

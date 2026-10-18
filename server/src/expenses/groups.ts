@@ -1,5 +1,6 @@
-import { assertIsoDate, assertNotTooOld, validationError } from '../agreements/compose.js';
+import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld, validationError } from '../agreements/compose.js';
 import { addDays, compareIsoDates, type IsoDate } from '../dates.js';
+import type { ExpenseGroupFilter, ExpenseGroupOverrideMode } from '../repositories/ports.js';
 
 /**
  * Expense groups (MUT-267, ADR-094): a named date range on one profile whose
@@ -13,7 +14,8 @@ export const MAX_GROUP_SPAN_DAYS = 366;
 
 export const GROUP_NAME_MAX = 120;
 
-export type GroupOverrideMode = 'excluded' | 'included';
+/** Live groups a profile may hold: bounds the list's per-group aggregates (pre-landing review). */
+export const MAX_GROUPS_PER_PROFILE = 200;
 
 export interface GroupRange {
   startOn: IsoDate;
@@ -25,15 +27,20 @@ export function windowEnd(group: GroupRange): IsoDate {
   return group.endOn ?? addDays(group.startOn, MAX_GROUP_SPAN_DAYS - 1);
 }
 
-export function inWindow(date: IsoDate, group: GroupRange): boolean {
+function inWindow(date: IsoDate, group: GroupRange): boolean {
   return compareIsoDates(date, group.startOn) >= 0 && compareIsoDates(date, windowEnd(group)) <= 0;
 }
 
 /** Kept wins; left out loses; otherwise the date decides (D4, D3 permissive marks). */
-export function isGroupMember(expense: { occurredOn: IsoDate }, group: GroupRange, mode: GroupOverrideMode | null): boolean {
+export function isGroupMember(expense: { occurredOn: IsoDate }, group: GroupRange, mode: ExpenseGroupOverrideMode | null): boolean {
   if (mode === 'included') return true;
   if (mode === 'excluded') return false;
   return inWindow(expense.occurredOn, group);
+}
+
+/** The ledger filter for a group: its members, or its left-out expenses dated inside its window (22A). */
+export function groupFilter(group: GroupRange & { id: string }, membership: ExpenseGroupFilter['membership'] = 'member'): ExpenseGroupFilter {
+  return { groupId: group.id, startOn: group.startOn, windowEnd: windowEnd(group), membership };
 }
 
 /**
@@ -77,7 +84,7 @@ export function groupPatch(existing: GroupFields, body: GroupBody, today: IsoDat
   if (body.name !== undefined && body.name.trim() !== existing.name) patch.name = groupName(body.name);
   if (body.startOn !== undefined && body.startOn !== existing.startOn) patch.startOn = groupDate(body.startOn, today, 'startOn');
   if (body.endOn !== undefined && body.endOn !== existing.endOn) patch.endOn = body.endOn === null ? null : groupDate(body.endOn, today, 'endOn');
-  if (body.notes !== undefined) patch.notes = body.notes;
+  if (body.notes !== undefined && body.notes !== existing.notes) patch.notes = body.notes;
   if (patch.startOn !== undefined || patch.endOn !== undefined) {
     assertRange({ startOn: patch.startOn ?? existing.startOn, endOn: patch.endOn !== undefined ? patch.endOn : existing.endOn });
   }
@@ -93,6 +100,8 @@ function groupName(raw: string): string {
 function groupDate(value: string, today: IsoDate, field: 'startOn' | 'endOn'): IsoDate {
   const date = assertIsoDate(value, field);
   assertNotTooOld(date, today, field);
+  // Ten years ahead at most, like every bounded money date: keeps the window (start + 365) a four-digit-year date.
+  assertNotAbsurdDate(date, today, field);
   return date;
 }
 

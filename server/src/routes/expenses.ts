@@ -8,8 +8,8 @@ import { endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { assertCategoryChoosable, expenseDate, expenseOccurredOn, expensePatch, MAX_RECEIPTS_PER_EXPENSE, parseExpenseAmount, requestedLinks, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
+import { groupFilter } from '../expenses/groups.js';
 import { summarizeExpenses } from '../expenses/summary.js';
-import { groupFilter } from './expense-groups.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import type { ExpenseFilter, ExpenseRecord, JsonObject, LedgerStore } from '../repositories/ports.js';
@@ -100,6 +100,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
         ...(q.linked === 'none' ? { unlinked: true } : {}),
       };
       // MUT-267: a group's members (or its left-out expenses inside its window); 404 for a group this profile does not have.
+      if (q.groupMembership && !q.groupId) throw validationError('GROUP_ID_REQUIRED', '`groupMembership` needs `groupId`', { field: 'groupMembership' });
       if (q.groupId) {
         const group = await store.expenseGroups.getById(organization.id, q.groupId);
         if (!group) throw new ApiError('NOT_FOUND', 'No such expense group');

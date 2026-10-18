@@ -1435,8 +1435,10 @@ export class MemoryLedgerStore implements LedgerStore {
   // ---- MUT-267: expense groups ----------------------------------------------
 
   readonly expenseGroups: ExpenseGroupRepository = {
-    create: async (input: CreateExpenseGroupInput, at) => {
+    create: async (input: CreateExpenseGroupInput, at, maxLive) => {
       if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('expense_groups.organizationId');
+      // No await between the count and the insert, so concurrent creates serialize here as the Postgres org lock makes them.
+      if (maxLive !== undefined && [...this.expGroups.values()].filter((g) => g.organizationId === input.organizationId && !g.deletedAt).length >= maxLive) throw new InsufficientCapacity(input.organizationId);
       const record: ExpenseGroupRecord = { id: randomUUID(), ...input, version: 1, createdAt: at, updatedAt: at, deletedAt: null };
       this.expGroups.set(record.id, record);
       return { ...record };
@@ -1471,9 +1473,10 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!this.exps.has(expenseId)) throw new ForeignKeyViolation('expense_group_overrides_expenseId_fkey');
       const key = `${groupId}:${expenseId}`;
       const existing = this.groupMarks.get(key);
+      if (existing?.mode === mode) return { record: { ...existing }, changed: false };
       const record: ExpenseGroupOverrideRecord = { groupId, expenseId, organizationId, mode, createdAt: existing?.createdAt ?? at, updatedAt: at };
       this.groupMarks.set(key, record);
-      return { ...record };
+      return { record: { ...record }, changed: true };
     },
     clearOverride: async (organizationId, groupId, expenseId) => {
       const key = `${groupId}:${expenseId}`;
@@ -1741,7 +1744,7 @@ export class LockConflict extends Error {
   }
 }
 
-/** A receivable (or payment) can no longer absorb an allocation or credit — a race the preview token did not see (M4). */
+/** A receivable (or payment) can no longer absorb an allocation or credit — a race the preview token did not see (M4); since MUT-267 also a profile already at its expense-group cap. */
 export class InsufficientCapacity extends Error {
   constructor(readonly entityId: string) {
     super(`insufficient capacity on ${entityId}`);

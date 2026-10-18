@@ -33,7 +33,7 @@
 **Why:** epic MUT-266. A person groups a trip's expenses by date, prunes them, and sees what it cost. This is the API that the portal (MUT-268) and the phone (MUT-269) build on.
 
 ### Added
-- **Tables.** `expense_groups` and `expense_group_overrides`, in the purely additive migration `20261018120000_mut267_expense_groups`.
+- **Tables.** `expense_groups` and `expense_group_overrides`, in the purely additive migration `20261018150000_mut267_expense_groups`.
 - **Routes:**
   - `GET/POST /v1/expense-groups`: the list carries per-currency totals and `memberCount`; `?expenseId=` returns the groups an expense belongs to.
   - `GET/PATCH/DELETE /v1/expense-groups/{id}`: the detail carries an in-window `excludedCount`; PATCH uses If-Match; DELETE is soft and leaves the expenses alone.
@@ -51,8 +51,24 @@
 - Store guard: classifies the new methods in the expenses domain.
 - Audit: `EXPENSE_ENTITY_TYPES` gains `expense_group`.
 
+### Fixed (pre-landing review)
+- **Future dates.** Group dates more than ten years ahead are refused (422 DATE_INVALID, bound future). A year-9999 group's summary used to answer 500.
+- **Day loop.** It is a counted walk.
+- **Group cap.** At most 200 live groups per profile (422 GROUP_LIMIT). The count and the insert happen in one transaction under the organization row lock, so parallel creates can't overshoot.
+- **Ledger.** `groupMembership` without `groupId` is 422 GROUP_ID_REQUIRED.
+- **PATCH.** A stale If-Match is a 409 before validation. An unchanged PATCH keeps its version and writes no audit, and the audit lists only changed fields.
+- **Marks.** A repeated identical mark writes no audit.
+- **Migration.** Renamed to `20261018150000_mut267_expense_groups`, so it no longer shares MUT-270's timestamp prefix.
+- **Tests.** Added coverage for:
+  - Malafat's audit feed hiding expense_group rows (mutation-checked);
+  - the audit trail;
+  - 404s on writes;
+  - the totals chunks and summary pages;
+  - groupPatch name branches.
+
 ### Technical
 - Prisma's expense list now AND-merges the filter and cursor clauses (Q1).
+- Deferred review items are recorded as TD-161 to TD-165.
 - The shared store contract pins the Prisma `where` to `isGroupMember` on Postgres.
 
 ## [Unreleased] - 2026-10-17 — The phone app asks first, then sends anonymous activation events (MUT-157, ADR-090, ADR-092)

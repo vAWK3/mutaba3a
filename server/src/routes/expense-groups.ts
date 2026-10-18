@@ -1,13 +1,14 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
-import { todayFor } from '../agreements/compose.js';
+import { todayFor, validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
-import { groupCreate, groupPatch, isGroupMember, seriesBounds, windowEnd } from '../expenses/groups.js';
+import { InsufficientCapacity } from '../repositories/memory.js';
+import { groupCreate, groupFilter, groupPatch, isGroupMember, MAX_GROUPS_PER_PROFILE, seriesBounds } from '../expenses/groups.js';
 import { summarizeGroup } from '../expenses/summary.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
-import type { ExpenseCurrencyTotal, ExpenseGroupFilter, ExpenseGroupRecord, ExpenseRecord, JsonObject, LedgerStore } from '../repositories/ports.js';
+import type { ExpenseCurrencyTotal, ExpenseGroupRecord, ExpenseRecord, JsonObject, LedgerStore } from '../repositories/ports.js';
 import {
   CreateExpenseGroupRequestSchema,
   ExpenseGroupDetailSchema,
@@ -31,11 +32,6 @@ const noContent = { 204: { description: 'Done' } } as const;
 /** Per-group aggregates run at most this many at a time, so a long list can't take every pooled connection (re-review A2). */
 const TOTALS_CONCURRENCY = 4;
 const SUMMARY_PAGE = 200;
-
-/** The ledger filter for a group (ADR-094): its members, or its left-out expenses dated inside its window. */
-export function groupFilter(group: ExpenseGroupRecord, membership: ExpenseGroupFilter['membership'] = 'member'): ExpenseGroupFilter {
-  return { groupId: group.id, startOn: group.startOn, windowEnd: windowEnd(group), membership };
-}
 
 /**
  * /v1/expense-groups (MUT-267, ADR-094): trips and other date ranges on a
@@ -81,7 +77,7 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/expense-groups',
       tags: ['Expense groups'],
       summary: 'List expense groups, newest start first, with their totals per currency',
-      description: 'Unpaged: a profile holds tens of groups. With expenseId, only the groups that expense belongs to (dated in the window and not left out, or kept); 404 for an expense this profile does not have.',
+      description: `Unpaged: a profile holds at most ${MAX_GROUPS_PER_PROFILE} live groups. With expenseId, only the groups that expense belongs to (dated in the window and not left out, or kept); 404 for an expense this profile does not have.`,
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:read')] as const,
       request: { query: ListExpenseGroupsQuerySchema },
@@ -106,7 +102,7 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/expense-groups',
       tags: ['Expense groups'],
       summary: 'Create an expense group',
-      description: 'Expenses dated from startOn to endOn (or, with no endOn, to a year after startOn) join automatically, including ones logged later.',
+      description: `Expenses dated from startOn to endOn (or, with no endOn, to a year after startOn) join automatically, including ones logged later. A profile holds at most ${MAX_GROUPS_PER_PROFILE} live groups (422 GROUP_LIMIT).`,
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write'), idempotent(store, 'expenseGroups.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateExpenseGroupRequestSchema) },
@@ -116,7 +112,13 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization, user } = sessionAuth(c);
       const now = c.get('now')();
       const fields = groupCreate(c.req.valid('json'), todayFor(organization, now));
-      const group = await store.expenseGroups.create({ organizationId: organization.id, ...fields, createdByUserId: user.id }, now);
+      let group: ExpenseGroupRecord;
+      try {
+        group = await store.expenseGroups.create({ organizationId: organization.id, ...fields, createdByUserId: user.id }, now, MAX_GROUPS_PER_PROFILE);
+      } catch (err) {
+        if (err instanceof InsufficientCapacity) throw validationError('GROUP_LIMIT', `A profile holds at most ${MAX_GROUPS_PER_PROFILE} expense groups; delete one first`, { max: MAX_GROUPS_PER_PROFILE });
+        throw err;
+      }
       await audit(c, 'expense_group.created', group.id, { startOn: group.startOn, endOn: group.endOn });
       return c.json(serializeExpenseGroup(group, await totalsOf(organization.id, group)), 201);
     },
@@ -147,7 +149,7 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/expense-groups/{groupId}',
       tags: ['Expense groups'],
       summary: 'Change an expense group (optimistic, If-Match)',
-      description: 'null endOn = still going; null clears the notes. The merged range is checked. Keep and leave-out marks stay when the dates change.',
+      description: 'null endOn = still going; null clears the notes. The merged range is checked. Keep and leave-out marks stay when the dates change. A stale If-Match is a 409 before any validation; a PATCH that changes nothing returns the group unchanged (same version, no audit).',
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write'), ifMatch()] as const,
       request: { params: ExpenseGroupIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateExpenseGroupRequestSchema) },
@@ -158,11 +160,15 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const body = c.req.valid('json');
       const now = c.get('now')();
       const existing = await mustGetGroup(organization.id, c.req.valid('param').groupId);
+      // A stale version is a 409 first, so the caller refetches instead of fixing a range against someone else's dates.
+      if (existing.version !== c.get('expectedVersion')) throw versionMismatch(existing.version);
       const patch = groupPatch(existing, body, todayFor(organization, now));
+      // Nothing changes: no write, no new version, no audit.
+      if (Object.keys(patch).length === 0) return c.json(serializeExpenseGroup(existing, await totalsOf(organization.id, existing)), 200);
       const result = await store.expenseGroups.update(organization.id, existing.id, c.get('expectedVersion'), patch, now);
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such expense group');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
-      await audit(c, 'expense_group.updated', result.record.id, { fields: Object.keys(body), version: result.record.version });
+      await audit(c, 'expense_group.updated', result.record.id, { fields: Object.keys(patch), version: result.record.version });
       return c.json(serializeExpenseGroup(result.record, await totalsOf(organization.id, result.record)), 200);
     },
   );
@@ -207,8 +213,8 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const group = await mustGetGroup(organization.id, groupId);
       const expense = await mustGetExpense(organization.id, expenseId);
       const marked = await store.expenseGroups.setOverride(organization.id, group.id, expense.id, mode, c.get('now')());
-      await audit(c, 'expense_group.expense_marked', group.id, { expenseId: expense.id, mode });
-      return c.json(serializeExpenseGroupOverride(marked), 200);
+      if (marked.changed) await audit(c, 'expense_group.expense_marked', group.id, { expenseId: expense.id, mode });
+      return c.json(serializeExpenseGroupOverride(marked.record), 200);
     },
   );
 
