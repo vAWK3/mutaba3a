@@ -22,6 +22,7 @@ import { ApiError, type CreateExpenseRequest, type Expense, type UpdateExpenseRe
 import { HOSTED_CURRENCIES } from '../format/currencies';
 import { BrandLoader } from '../../components/brand/BrandLoader';
 import { trackPortal } from '../analytics/portalAnalytics';
+import { InGroupsLine } from './groups/InGroupsLine';
 
 /**
  * The hosted portal's expense capture (MUT-44). Builds on
@@ -315,6 +316,8 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
       {mode === 'edit' && existingExpense && (
         <ReceiptUploader profileId={profileId} expenseId={existingExpense.id} receipts={existingExpense.receipts} />
       )}
+      {/* MUT-268 (11A): the groups this expense is in, and Add to group… */}
+      {mode === 'edit' && existingExpense && <InGroupsLine profileId={profileId} expense={existingExpense} />}
     </Drawer>
   );
 }

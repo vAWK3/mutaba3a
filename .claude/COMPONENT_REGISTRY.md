@@ -1983,3 +1983,38 @@ await importProfileFile(file, existing ? { mode: 'merge', profileId: existing.id
 
 ### goHosted helpers — `src/lib/goHosted.ts`
 `GO_HOSTED_SNOOZE_DAYS`, `GO_HOSTED_DISMISSED_KEY`, `isGoHostedCardDue(dismissedAt, now)`, `readDismissedAt()`, `writeDismissedAt(at)`, `goHostedEnabled()`, `hostedPortalUrl()`. Reuse `goHostedEnabled()`'s typeof-guard shape for any other web-only UI (MUT-190, MUT-90) rather than a bare `__BUILD_MODE__` read.
+
+## Expense groups (portal) — MUT-268
+
+### SectionTabs — `src/hosted/components/SectionTabs.tsx`
+**Purpose**: sub-pages of one section as underlined router links in a labelled `<nav>`, `aria-current="page"` on the lit one (17A). Props: `label`, `tabs: { to, label, exact? }[]` (`exact` for the parent route's own tab). Not a tablist: each tab is a route. `useExpensesTabs()` (ExpenseGroupsList.tsx) builds Expenses · Groups.
+Tests: `src/hosted/pages/__tests__/ExpenseGroups.test.tsx` (aria-current on both routes).
+
+### DayBars — `src/hosted/components/groups/DayBars.tsx`
+**Purpose**: bar chart of `Bar[]` (from `toBars`): one button per bar in a labelled group, roving tab stop, ←/→ mirrored in RTL, Home/End, Enter/click → `onJump(bar)`; ⋯ gap labels between before/in/after; value tooltip on hover/focus flipped inward at the ends; dot for other-currency days. Heights spring via `useSpringScale`.
+Tests: `components/groups/__tests__/DayBars.test.tsx`.
+
+### CategoryBars — `src/hosted/components/groups/CategoryBars.tsx`
+**Purpose**: `CategoryRow[]` as toggle buttons (`aria-pressed`) with amount · share and a width bar; `onSelect(key | undefined)`; Uncategorized muted.
+Tests: `components/groups/__tests__/CategoryBars.test.tsx`.
+
+### useSpringScale — `src/hosted/components/groups/useSpringScale.ts`
+**Purpose**: paints a scaleX/scaleY before first frame, then springs changes from the presentation value on `UI_SPRING`; reduced motion = value swap + 150 ms opacity dip.
+
+### GroupMembers — `src/hosted/components/groups/GroupMembers.tsx`
+**Purpose**: members by day (day headers + rows in one tbody) and Left out (`<details>`), each row's verb from `verbFor`; rows the page removes slide out (`captureRowExit`), rows Undo brings back slide in (`playRowEnter`), focus moves to the neighbouring action. Phone: no Category column, category under the title.
+
+### GroupDrawer / AddToGroupDrawer / InGroupsLine — `src/hosted/components/groups/`
+**Purpose**: create/edit/delete a group (422 → fields; GROUP_LIMIT ends the attempt); the add-from-outside picker (pool − members, sequential saves, partial Retry); the expense drawer's "In groups" line (omitted while loading or failing).
+Tests: `pages/__tests__/ExpenseGroups.test.tsx`.
+
+### playRowEnter — `src/lib/motion/rowEnter.ts`
+**Purpose**: the reverse of `captureRowExit`: a row already in its slot starts 30% toward the inline end, transparent, and settles on `UI_SPRING`; reduced motion fades only; no layout, no motion.
+Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
+
+### useMediaQuery / usePrefersReducedMotion — `src/lib/motion/mediaQuery.ts`
+**Purpose**: a media query as state via `useSyncExternalStore` (false without `matchMedia`). Moved from `src/hooks` so the portal can use it; `src/hooks/usePrefersReducedMotion.ts` re-exports.
+
+### Toast action — `src/hosted/components/Toast.tsx`
+`show(message, { tone, action: { label, onAction } })`: a `.press` link-button in either tone; using it closes the toast; hover/focus holds the 6 s timer.
+

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { omitShellOverlay, parseClientDetail, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseReceivablesPage, pickShellOverlay, splitIncomeDrawer } from '../filters';
+import { omitShellOverlay, parseClientDetail, parseGroupDetail, parseGroupsPage, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseReceivablesPage, pickShellOverlay, splitIncomeDrawer } from '../filters';
 
 const R = 'b1111111-1111-4111-8111-111111111111';
 
@@ -95,5 +95,20 @@ describe('shell overlay keys (MUT-183 R1)', () => {
     const search = { status: 'OPEN', changePassword: 'true' };
     expect(omitShellOverlay(search)).toEqual({ status: 'OPEN' });
     expect(pickShellOverlay(search)).toEqual({ changePassword: 'true' });
+  });
+});
+
+describe('expense groups URL state (MUT-268)', () => {
+  it('opens New group with ?newGroup=1', () => {
+    expect(parseGroupsPage({ newGroup: '1' })).toEqual({ newGroup: true });
+    // What TanStack's search parser actually hands over for ?newGroup=1
+    expect(parseGroupsPage({ newGroup: 1 })).toEqual({ newGroup: true });
+    expect(parseGroupsPage({ newGroup: 'yes' })).toEqual({});
+  });
+
+  it('keeps the detail page\'s currency, category (uuid or none) and drawers', () => {
+    expect(parseGroupDetail({ currency: 'JOD', category: R, editGroup: '1', addToGroup: true })).toEqual({ currency: 'JOD', category: R, editGroup: true, addToGroup: true });
+    expect(parseGroupDetail({ category: 'none' })).toEqual({ category: 'none' });
+    expect(parseGroupDetail({ currency: 'GBP', category: 'rent' })).toEqual({});
   });
 });

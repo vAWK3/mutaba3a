@@ -3,6 +3,7 @@ import { ApiError, api, type CreateExpenseRequest, type Expense, type UpdateExpe
 import { useCursorList } from './queries';
 import { profileKey } from '../session/me';
 import type { ExpenseFilters } from './filters';
+import { invalidateGroups } from './expenseGroupQueries';
 
 /**
  * The portal's expense query and mutation hooks (MUT-44), in their own file
@@ -64,6 +65,8 @@ export function useExpenseCategories(profileId: string) {
 function invalidateExpenses(queryClient: ReturnType<typeof useQueryClient>, profileId: string) {
   queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'expenses') });
   queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'summary', 'expenses') });
+  // MUT-268: an expense's date, amount, category or very existence moves it in or out of groups (membership is computed when read).
+  void invalidateGroups(queryClient, profileId);
 }
 
 export function useCreateExpense(profileId: string) {

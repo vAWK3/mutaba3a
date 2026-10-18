@@ -1,7 +1,11 @@
 import { z } from 'zod';
-import { amountInputCurrency, currencyExponent, parseAmountInput } from '../../lib/utils';
+import { amountInputCurrency, parseAmountInput } from '../../lib/utils';
 import type { CreateIncomeRequest, Currency, PaymentMethod } from '../api/client';
 import type { IncomeKind } from '../data/incomeAffordances';
+import { minorToDecimal } from '../format/currencies';
+
+/** Moved to format/currencies.ts (MUT-268: expense groups use it too); re-exported for this module's callers. */
+export { minorToDecimal };
 
 /**
  * The income drawers' form logic (MUT-133), kept out of the component files
@@ -26,14 +30,6 @@ export type AmountParse =
   | { kind: 'invalid' }
   | { kind: 'notPositive' }
   | { kind: 'currencyMismatch'; typed: Currency };
-
-/** Minor units as a canonical decimal string with exactly the currency's digits; string arithmetic only. */
-export function minorToDecimal(minor: number, currency: Currency): string {
-  const exponent = currencyExponent(currency);
-  const digits = String(Math.abs(minor)).padStart(exponent + 1, '0');
-  const sign = minor < 0 ? '-' : '';
-  return exponent === 0 ? `${sign}${digits}` : `${sign}${digits.slice(0, -exponent)}.${digits.slice(-exponent)}`;
-}
 
 export function parseIncomeAmount(text: string, currency: Currency): AmountParse {
   if (!text.trim()) return { kind: 'empty' };
