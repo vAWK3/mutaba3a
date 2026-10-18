@@ -8732,6 +8732,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your entries across profiles, newest logged first
+         * @description Expenses, received payments, Owed entries and conversions on every profile you belong to (or the profiles you name), ordered by when each was logged. Everything on a profile, whoever logged it, Malafat's payments included; scheduled installments and retainer charges are not entries. No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox. A page is a snapshot: an entry edited or deleted later changes only when that page is read again (a deleted one is simply absent), so cache only the pages you re-read. A settle shows as a received payment with settlesOwedId next to its Owed (settled once paid in full, open before); a Malafat correction as a received payment with replacesPaymentId next to the reversed one.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404. */
+                    profileId?: string[];
+                    /** @description Page size, 1–100. */
+                    limit?: number;
+                    /** @description Opaque `nextCursor` from the previous page. */
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EntryPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/profiles": {
         parameters: {
             query?: never;
@@ -11563,7 +11654,7 @@ export interface components {
         /** @enum {string} */
         IncomeKind: "received" | "owed";
         /** @enum {string} */
-        IncomeStatus: "unallocated" | "open" | "settled";
+        IncomeStatus: "unallocated" | "partial" | "allocated" | "reversed" | "open" | "settled";
         CreateIncomeRequest: {
             kind: components["schemas"]["IncomeKind"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
@@ -11730,6 +11821,60 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             dueDate?: string;
             method?: components["schemas"]["PaymentMethod"];
+        };
+        EntryPage: {
+            items: components["schemas"]["Entry"][];
+            nextCursor: string | null;
+        };
+        Entry: {
+            /** @enum {string} */
+            kind: "expense";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string;
+            expense: components["schemas"]["Expense"] & {
+                /** @description READY receipts attached */
+                receiptCount: number;
+            };
+        } | {
+            /** @enum {string} */
+            kind: "received";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string | null;
+            /** @enum {string} */
+            origin: "capture" | "integration";
+            /** Format: uuid */
+            settlesOwedId: string | null;
+            /** Format: uuid */
+            replacesPaymentId: string | null;
+            income: components["schemas"]["IncomeResponse"];
+        } | {
+            /** @enum {string} */
+            kind: "owed";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string | null;
+            income: components["schemas"]["IncomeResponse"];
+        } | {
+            /** @enum {string} */
+            kind: "conversion";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string;
+            conversion: components["schemas"]["Conversion"];
         };
         CreateProfileRequest: {
             name: string;

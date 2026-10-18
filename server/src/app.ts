@@ -31,6 +31,7 @@ import { expenseRoutes } from './routes/expenses.js';
 import { incomeRoutes } from './routes/income.js';
 import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from './inbox/routes-keys.js';
 import { inboxRoutes } from './routes/inbox.js';
+import { ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, entriesRoutes } from './routes/entries.js';
 import { agreementRoutes } from './routes/agreements.js';
 import { contingencyRoutes } from './routes/contingency.js';
 import { customerRoutes } from './routes/customers.js';
@@ -121,7 +122,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.31.1-mut237';
+export const API_VERSION = '1.32.0-mut270';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -197,7 +198,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       sessions,
       // Built on first request, after every route below has registered its OpenAPI definition.
       routeAccess: () => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes)),
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
@@ -251,6 +252,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', conversionRoutes(store));
   app.route('/', fxRateRoutes(deps.fxRates ?? null));
   app.route('/', inboxRoutes(store));
+  app.route('/', entriesRoutes(store));
   app.route('/', profileRoutes(store));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions }));

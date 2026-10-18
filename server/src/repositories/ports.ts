@@ -1384,6 +1384,8 @@ export interface LedgerStore {
   userIdempotency: UserIdempotencyRepository;
   /** MUT-161: conversions on hosted profiles; session-only, invisible to API keys (store guard `conversions`). MUT-194: optimistic update and soft delete, like expenses. */
   conversions: ConversionRepository;
+  /** MUT-270: one newest-first feed across a person's profiles; session-only (store guard `sessionOnly`). */
+  entries: EntriesRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------
@@ -1696,6 +1698,37 @@ export interface ExpenseReceiptRepository {
   softDelete(organizationId: string, id: string, at: Date): Promise<ExpenseReceiptRecord | null>;
   /** Every live receipt of the expense, pending ones included; returns those it deleted (their objects are removed by the caller). */
   softDeleteByExpense(organizationId: string, expenseId: string, at: Date): Promise<ExpenseReceiptRecord[]>;
+  /**
+   * MUT-270: READY, live receipts per expense, the same rule as `listByExpense`. Expenses with none are absent from
+   * the map. The caller passes organizations the person belongs to; the expense ids come from those organizations.
+   */
+  countReadyByExpenseIds(organizationIds: readonly string[], expenseIds: readonly string[]): Promise<Map<string, number>>;
+}
+
+// ---- MUT-270: the entries feed ----------------------------------------------
+
+/**
+ * One row of the feed, before serialization. Receivables are ADJUSTMENT ("Owed" a person recorded) only; payments
+ * leave out capture undos. Ordered by (createdAt, id) descending across kinds.
+ */
+export type EntryRow =
+  | { kind: 'expense'; record: ExpenseRecord }
+  | { kind: 'payment'; record: PaymentRecord }
+  | { kind: 'receivable'; record: ReceivableRecord }
+  | { kind: 'conversion'; record: ConversionRecord };
+
+export interface EntriesRepository {
+  /**
+   * Newest first, (createdAt, id) descending, strictly after `page.cursor`. Trusts `organizationIds`: the route
+   * resolves them from the person's memberships. Never lazy-posts (MUT-270 D2): a read here never writes.
+   */
+  list(organizationIds: readonly string[], page: PageRequest): Promise<Page<EntryRow>>;
+  /**
+   * MUT-270 review (D2): for each payment with exactly one allocation, to an Owed (ADJUSTMENT) receivable, that
+   * receivable's id: the Owed it paid toward, which a settle (full or partial) is. Judged by shape, not by which route
+   * made it. Other payments are absent. Same trust in `organizationIds` as `list`.
+   */
+  settledOwedIds(organizationIds: readonly string[], paymentIds: readonly string[]): Promise<Map<string, string>>;
 }
 
 // ---- MUT-66: the unsorted inbox ---------------------------------------------

@@ -7,9 +7,10 @@ import { formatMoney, type Currency } from './money.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource } from './schemas.js';
-import { allocationStateOf } from './payments/allocation-state.js';
+import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
 import type {
   ConversionRecord,
+  EntryRow,
   ExpenseCategoryRecord,
   ExpenseReceiptRecord,
   ExpenseRecord,
@@ -21,6 +22,7 @@ import type {
   ApiKeyRecord,
   CreditRecord,
   IdempotencyRecord,
+  PaymentOrigin,
   PaymentRecord,
   AuditEventRecord,
   CustomerRecord,
@@ -539,9 +541,9 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
       title: null,
       notes: p.notes,
       dueDate: null,
-      // Always true at creation: a fresh Received payment carries no allocations yet. MUT-223's PATCH keeps it true:
-      // it refuses an allocated payment before serializing one here.
-      status: 'unallocated' as const,
+      // MUT-270 (D5): read from the record. A fresh capture is unallocated; the entries feed also shows payments
+      // Malafat has since allocated or reversed.
+      status: incomeStatusOf(p),
       version: p.version,
     };
   }
@@ -560,6 +562,41 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
     status: r.status === 'SETTLED' ? ('settled' as const) : ('open' as const),
     version: r.version,
   };
+}
+
+// ---- MUT-270: the entries feed ----------------------------------------------
+
+/** A new PaymentOrigin fails to compile here until the feed says what it is. */
+const FEED_PAYMENT_ORIGIN: Record<PaymentOrigin, 'capture' | 'integration'> = { CAPTURE: 'capture', INTEGRATION: 'integration' };
+
+/** One feed item: the existing Expense / IncomeResponse / Conversion shape inside a small envelope. */
+export interface EntryContext {
+  /** READY receipts per expense id. */
+  receiptCounts: ReadonlyMap<string, number>;
+  /** The Owed a settle payment paid, per payment id (`entries.settledOwedIds`). */
+  settledOwed: ReadonlyMap<string, string>;
+}
+
+export function serializeEntry(row: EntryRow, context: EntryContext) {
+  const envelope = { profileId: row.record.organizationId, createdAt: row.record.createdAt.toISOString() };
+  switch (row.kind) {
+    case 'expense':
+      return { kind: 'expense' as const, ...envelope, createdByUserId: row.record.createdByUserId, expense: { ...serializeExpense(row.record), receiptCount: context.receiptCounts.get(row.record.id) ?? 0 } };
+    case 'payment':
+      return {
+        kind: 'received' as const,
+        ...envelope,
+        createdByUserId: row.record.createdByUserId,
+        origin: FEED_PAYMENT_ORIGIN[row.record.origin],
+        settlesOwedId: context.settledOwed.get(row.record.id) ?? null,
+        replacesPaymentId: row.record.replacesPaymentId,
+        income: serializeIncomeEntry({ kind: 'received', payment: row.record }),
+      };
+    case 'receivable':
+      return { kind: 'owed' as const, ...envelope, createdByUserId: row.record.createdByUserId, income: serializeIncomeEntry({ kind: 'owed', receivable: row.record }) };
+    case 'conversion':
+      return { kind: 'conversion' as const, ...envelope, createdByUserId: row.record.createdByUserId, conversion: serializeConversion(row.record) };
+  }
 }
 
 // ---- MUT-66: the unsorted inbox ---------------------------------------------

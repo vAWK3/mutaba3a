@@ -100,7 +100,13 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 | `API_KEY_ENVIRONMENT` | `live` |
 | Cloud SQL | `db-g1-small`, REGIONAL, daily backups + PITR 7d, deletion protection |
 | Cloud Run instances | min 1 · max 1 (TD-017) |
+| Prisma pool per instance | `db_pool_size` = 10, as `connection_limit` in the DATABASE_URL secret Terraform writes (MUT-270) |
+| Cloud SQL `max_connections` | `db_max_connections` = 50, an explicit flag (db-g1-small's own default) (MUT-270) |
 | Terraform state | `gs://<bucket>/mutaba3a-api/production` |
+
+> **Connection budget (MUT-270, 2026-10-18).** `GET /v1/entries` runs 4 queries per profile in parallel, so the API's pool is now chosen instead of inherited: Prisma's default is derived from the CPU count it sees, which inside a container can be the host's. Rule, enforced by a Terraform precondition: `2 × db_pool_size × max_instances + 10 ≤ db_max_connections` (× 2 because the old and new revisions both hold a pool while a deploy rolls; the 10 cover `prisma migrate deploy`, the operator's proxy session and Cloud SQL's reserved connections). Raise `db_max_connections` with a bigger tier or when `max_instances` grows (TD-017).
+>
+> **The first deploy after this change restarts the Cloud SQL instance, at `deploy.sh` step 0** (review finding, 2026-10-18). Step 0's targeted apply names the DATABASE_URL secret version and `google_sql_user.api`; Terraform also applies what a target depends on, and both depend on the instance, so the `max_connections` flag (which needs a restart, even at the default value) lands there: before the image build and the migration, while the old revision still serves. Do it on purpose instead: in a quiet window, before that deploy, run `terraform apply -target=google_sql_database_instance.postgres` without `AUTO_APPROVE`, read the plan, and let the instance restart (the API errors for the minute or so the database is down). The same step writes a new DATABASE_URL version: Terraform destroys the old version before creating the new one (no `create_before_destroy`, which would spread to the fixed-name instance and secret), so a Cloud Run cold start in those seconds cannot read `latest`. It falls inside the same quiet window as the restart.
 
 ### Code-defined
 

@@ -742,6 +742,8 @@ model Receivable {
   @@index([organizationId, projectId])
   @@index([organizationId, dueDate])
   @@index([organizationId, createdAt, id])
+  /// MUT-270: the entries feed reads Owed (ADJUSTMENT) rows only, newest logged first.
+  @@index([organizationId, origin, createdAt, id])
   @@map("receivables")
 }
 
@@ -987,6 +989,8 @@ model Expense {
   @@index([organizationId, categoryId])
   /// MUT-182: a type change deletes categories; ON DELETE SET NULL then probes expenses by categoryId alone.
   @@index([categoryId])
+  /// MUT-270: the entries feed, newest logged first within an organization.
+  @@index([organizationId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("expenses")
 }
 
@@ -1062,5 +1066,7 @@ model Conversion {
 
   /// The ledger: newest first by date within an organization.
   @@index([organizationId, occurredOn(sort: Desc), id(sort: Desc)])
+  /// MUT-270: the entries feed, newest logged first within an organization.
+  @@index([organizationId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("conversions")
 }
