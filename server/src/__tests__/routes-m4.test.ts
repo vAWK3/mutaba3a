@@ -445,8 +445,8 @@ describe('contract', () => {
   it('publishes every M4 path, the reason vocabularies and the version', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.34.0-mut272');
-    expect(API_VERSION).toBe('1.34.0-mut272');
+    expect(doc.info.version).toBe('1.35.0-mut280');
+    expect(API_VERSION).toBe('1.35.0-mut280');
     for (const path of ['/v1/allocations/preview', '/v1/payments', '/v1/payments/{paymentId}', '/v1/payments/{paymentId}/allocations', '/v1/payments/{paymentId}/reverse', '/v1/receivables/{receivableId}/credits', '/v1/operations/{idempotencyKey}']) {
       expect(doc.paths[path], path).toBeDefined();
     }

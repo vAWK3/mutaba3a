@@ -59,6 +59,13 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       expect(await store.expenses.getById(w.b.id, created.id)).toBeNull();
     });
 
+    it('MUT-280: stores a Gulf currency and its fils exactly, with no migration (VarChar(3))', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const created = await store.expenses.create(w.expense({ currency: 'BHD', amountMinor: 12_345n }), at(1));
+      expect(await store.expenses.getById(w.a.id, created.id)).toMatchObject({ currency: 'BHD', amountMinor: 12_345n });
+    });
+
     it('lists newest first by (occurredOn, id), paginated without gaps or repeats, with every filter', async () => {
       const store = await makeStore();
       const w = await world(store);

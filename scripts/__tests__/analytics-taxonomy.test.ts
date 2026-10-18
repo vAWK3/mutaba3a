@@ -19,6 +19,7 @@ const CONTRACT_PATH = 'docs/analytics/events.json';
  */
 const PINNED_VERSIONS: Record<string, string> = {
   '1.1.0': '2654fb1f1dde9896c359d58356c478181c0f8b8f7fa43a1b56f1d6b6986ad099',
+  '1.2.0': 'cf7e4022ee0ce261ebf945c32e5374eafc543467d6b2902922507fb8265e8ff7',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;

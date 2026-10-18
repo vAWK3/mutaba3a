@@ -4,7 +4,9 @@ import { createApp } from '../app.js';
 import { SIGN_IN_POLICY } from '../auth/sessions.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from '../auth/users.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
+import { SUPPORTED_CURRENCIES } from '../money.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { DeviceSessionSchema } from '../schemas.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
@@ -173,6 +175,17 @@ describe('DELETE /v1/device-sessions/current — device sign-out', () => {
     const res = await h.app.request('/v1/device-sessions/current', { method: 'DELETE', headers: { authorization: `Bearer ${key.secret}` } });
     expect(res.status).toBe(403);
     expect((await read(res)).error.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+  });
+});
+
+describe('MUT-280: the device sign-in Me lists the server’s currencies', () => {
+  it('carries currencies equal to SUPPORTED_CURRENCIES, so the phone offers only codes this server accepts', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { body } = await deviceSignIn(h, p.email, p.password);
+    expect(body.currencies).toEqual([...SUPPORTED_CURRENCIES]);
+    expect(DeviceSessionSchema.safeParse(body).success).toBe(true);
   });
 });
 

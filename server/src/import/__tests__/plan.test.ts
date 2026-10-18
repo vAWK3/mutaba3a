@@ -105,6 +105,19 @@ describe('planImport', () => {
     expect(plan[3]).toMatchObject({ action: 'create' });
   });
 
+  it('plans a project in a Gulf currency like any other, and still refuses KWD (MUT-280)', () => {
+    const plan = planImport(
+      [
+        { entityType: 'CUSTOMER', externalId: 'c1', name: 'Acme' },
+        { entityType: 'PROJECT', externalId: 'p1', name: 'Dubai case', currency: 'AED', customerExternalId: 'c1' },
+        { entityType: 'PROJECT', externalId: 'p2', name: 'Kuwait case', currency: 'KWD', customerExternalId: 'c1' },
+      ],
+      state(),
+    );
+    expect(plan[1]).toMatchObject({ action: 'create' });
+    expect(plan[2]).toMatchObject({ action: 'conflict', reason: 'VALIDATION', detail: 'UNSUPPORTED_CURRENCY' });
+  });
+
   it('keeps input order and caps the batch', () => {
     const rows: ImportRow[] = Array.from({ length: IMPORT_MAX_ROWS + 1 }, (_, i) => ({ entityType: 'CUSTOMER', externalId: `c${i}`, name: `N${i}` }));
     expect(() => planImport(rows, state())).toThrow(/rows/);
