@@ -1941,14 +1941,17 @@ function clone<T extends object>(value: T | undefined): T | null {
 }
 
 function matchesExpense(e: ExpenseRecord, f: ExpenseFilter): boolean {
+  // MUT-286: mirrors Prisma's where-object spread (prisma.ts expenseWhere), where a later `customerId: null` key
+  // (from `unlinked`) overwrites an earlier `customerId: f.customerId` key — `unlinked` wins whenever both are set,
+  // rather than ANDing them (which was never true: a real customerId can never equal null).
+  const customerMatches = f.unlinked ? e.customerId === null : !f.customerId || e.customerId === f.customerId;
   return (
     (!f.from || e.occurredOn >= f.from) &&
     (!f.to || e.occurredOn <= f.to) &&
     (!f.currency || e.currency === f.currency) &&
     (!f.categoryId || e.categoryId === f.categoryId) &&
-    (!f.customerId || e.customerId === f.customerId) &&
-    (!f.projectId || e.projectId === f.projectId) &&
-    (!f.unlinked || e.customerId === null)
+    customerMatches &&
+    (!f.projectId || e.projectId === f.projectId)
   );
 }
 

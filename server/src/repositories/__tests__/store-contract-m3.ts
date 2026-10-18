@@ -98,6 +98,9 @@ export function describeLedgerStoreM3Contract(name: string, makeStore: () => Pro
       const first = await store.agreements.postInstallment(a.id, installments[0]!.id, { postingDate: '2026-10-08', dueDate: '2026-10-31', at: at(1) });
       expect(first?.created).toBe(true);
       expect(first?.receivable).toMatchObject({ origin: 'INSTALLMENT', originId: installments[0]!.id, grossMinor: 1180n, paidMinor: 0n, status: 'OPEN', dueDate: '2026-10-31', customerId: c.id, projectId: p.id });
+      // MUT-286: locks the invariant postedAt === at holds at this call site too (see store-contract-m4.ts's
+      // createAdjustment case for the full reasoning).
+      expect(first?.receivable.createdAt).toEqual(at(1));
       expect(first?.installment).toMatchObject({ receivableId: first?.receivable.id, postingDate: '2026-10-08', version: 2 });
       const second = await store.agreements.postInstallment(a.id, installments[0]!.id, { postingDate: '2026-10-09', dueDate: '2026-11-30', at: at(2) });
       expect(second?.created).toBe(false);
@@ -174,6 +177,9 @@ export function describeLedgerStoreM3Contract(name: string, makeStore: () => Pro
       const first = await store.agreements.createPostedCharge(charge, at(1));
       expect(first.created).toBe(true);
       expect(first.receivable).toMatchObject({ origin: 'RETAINER_CHARGE', originId: first.charge.id, grossMinor: 1180n, dueDate: '2026-08-31' });
+      // MUT-286: locks the invariant postedAt === at holds at this call site too (see store-contract-m4.ts's
+      // createAdjustment case for the full reasoning).
+      expect(first.receivable.createdAt).toEqual(at(1));
       const dup = await store.agreements.createPostedCharge(charge, at(2));
       expect(dup.created).toBe(false);
       expect(dup.charge.id).toBe(first.charge.id);

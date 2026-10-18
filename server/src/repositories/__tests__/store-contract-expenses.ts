@@ -94,6 +94,9 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       expect(await ids({ customerId: w.customer.id })).toEqual([made[1]!.id, made[2]!.id].sort());
       expect(await ids({ projectId: w.project.id })).toEqual([made[2]!.id]);
       expect(await ids({ unlinked: true })).toEqual([made[0]!.id, made[3]!.id, made[4]!.id, made[5]!.id].sort());
+      // MUT-286: unlinked wins when both are set (memory previously ANDed them, which is never true since a real
+      // customerId can never equal null — Prisma's where-object spread already let unlinked win, memory.ts:1639,1641).
+      expect(await ids({ unlinked: true, customerId: w.customer.id })).toEqual([made[0]!.id, made[3]!.id, made[4]!.id, made[5]!.id].sort());
     });
 
 
