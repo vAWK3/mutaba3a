@@ -20,6 +20,8 @@ MUT-36 acceptance, and where each one is met:
 
 ## 2. Rendering surface — decision: a hosted-only build target in this repo, served same-origin by the API
 
+> **Superseded in part (2026-10-18, ADR-097, MUT-285).** Signed out, the portal now shows local profiles stored in IndexedDB. It runs the server's own route modules in the browser (the hosted model, not the local `Transaction` model), so the mapping and Dexie objections below no longer apply. Hosted and local data are still separate datasets with no sync. See `.claude/designs/mut-285-portal-local-mode.md`.
+
 **Decision.** The portal is a **third Vite build target** (`--mode hosted` → `dist-hosted/`, entry `hosted.html` → `src/hosted/main.tsx`). It lives in the same repo and **reuses the design system**:
 
 - **Reused as-is** (each checked to import nothing from `db`, `sync`, the stores or the local hooks): CSS variables and tokens, `Button`, `Badge`, `Card`, `EmptyState`, `SegmentedTabs`, `SearchInput`, `Pagination`, `Table.css`, `ThemeProvider`, `LanguageProvider`/`t()`/RTL.
@@ -306,6 +308,8 @@ If the server ever answers `READ_ONLY_PROFILE` (a stale UI), the toast uses the 
 
 ### 7.5 States (M8 wireframe, four per view)
 
+> **Superseded in part (2026-10-18, ADR-097, MUT-285).** The portal gains a service worker for install and offline (MUT-288). The query cache is still memory-only; the local mode's data lives in its own IndexedDB snapshot, never in a query cache. See `.claude/designs/mut-285-portal-local-mode.md`.
+
 - **Loading:** skeletons in the strip and two table rows.
 - **Empty:** `EmptyState`, with copy per view. For example, receivables: "Nothing is owed on this profile right now."
 - **Error / unreachable:** a whole-view `role="alert"` card with Retry: "Can't reach Mutaba3a right now. Figures aren't stored on this device, so nothing is shown until the connection is back."
@@ -334,6 +338,8 @@ If the server ever answers `READ_ONLY_PROFILE` (a stale UI), the toast uses the 
 - Dates use `Intl.DateTimeFormat` with the organization's `timezone` for date-only fields (server dates are organization-calendar dates, M6). Amounts follow §7.3.
 
 ## 8. Local profiles are unaffected — demonstrated, not asserted
+
+> **Superseded in part (2026-10-18, ADR-097, MUT-285).** The local web app is retired by epic MUT-284. Its users move to the portal's signed-out mode through the netlify bridge (MUT-291). See `.claude/designs/mut-285-portal-local-mode.md`.
 
 Each claim names the check that fails if it stops being true.
 
@@ -384,5 +390,7 @@ Order is unchanged: 37 → 38 → 39 → {42, 43} → 44, with 45 in parallel af
 - **COMPONENT_REGISTRY:** correction note that `DataTable` and `CellAmount` are listed but no such files exist (tables are page-local `<table>` with `Table.css`). The portal adds `DecimalAmount` and a small hosted table wrapper, registered when built (MUT-43), not now.
 
 ## 12. Out of scope
+
+> **Superseded in part (2026-10-18, ADR-097, MUT-285).** "Showing local profiles in the portal" and "offline, PWA or any client-side persistence" are now in scope for local profiles only (MUT-286, MUT-288). A one-time move of local records into an account on sign-in is MUT-290. Ongoing local↔hosted sync stays out of scope. See `.claude/designs/mut-285-portal-local-mode.md`.
 
 Any local↔hosted sync or migration of a local profile into a hosted one; showing local profiles in the portal; self-serve signup, invite, password reset or signed-in password change; MFA, SSO, refresh tokens, "remember this device"; roles or per-user permissions beyond membership; writing income, receivables, payments, customers, projects or agreements from a session; Reports and CSV export; offline, PWA or any client-side persistence for hosted profiles; Hebrew; the desktop app signing in to the hosted service; horizontal scaling (TD-017).

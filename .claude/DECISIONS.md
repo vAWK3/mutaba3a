@@ -65,6 +65,7 @@
 | ADR-070 | Hosted Conversions Are Their Own Prisma Model, Create + Read Only, Behind New Hosted-Only UI | Active; §2 superseded by ADR-075 (2026-10-14) | 2026-10 |
 | ADR-075 | A Conversion Is Edited With If-Match and Soft-Deleted, Like an Expense; Malafat's Audit Feed Never Lists It (Supersedes ADR-070 §2) | Active | 2026-10 |
 | ADR-088 | Operator-Issued One-Time Setup Links Replace Printed Passwords; the Only Public Account Routes Are Sign-In and Redeeming a Link (Partial Override of ADR-037 §1) | Active | 2026-10 |
+| ADR-097 | One App — Signed Out, the Portal Runs the Server's Own Routes in the Browser over a Persisted MemoryLedgerStore (Partial Override of ADR-037 §2; Overrides MUT-185 Decision 1) | Active | 2026-10 |
 
 ---
 
@@ -667,6 +668,8 @@ The superseded ADRs keep their text in place, so numbers and links stay stable; 
 | ADR-013 Local-Only Sync (LAN + File Bundle) | ADR-053 | 2026-10-12 | Device sync retired product-wide; local↔hosted sync is off the roadmap |
 | ADR-070 §2 (and §5's create-only drawer, no JOD) | ADR-075 | 2026-10-14 | MUT-194: a mistaken conversion is fixed or removed, not reversed with a second entry |
 | ADR-037 §1, "no … password-reset route" and operator-delivered passwords only | ADR-088 | 2026-10-16 | MUT-235: the operator issues a one-time setup link; the person sets their own password through one public route |
+| ADR-037 §2, "no IndexedDB in the portal", no local profiles in the portal, no service worker (brief §2, §7.5) | ADR-097 | 2026-10-18 | MUT-284/285: one app; signed out, the portal keeps local profiles in IndexedDB and runs the server's own routes in the browser |
+| MUT-185 epic decision 1, "the local web app stays on the mutaba3a.netlify.app origin" (Jira, not an ADR) | ADR-097 | 2026-10-18 | MUT-284: the app lives at the portal's origin; netlify keeps the landing page and the data-handoff bridge (MUT-291) |
 
 ---
 
@@ -1666,6 +1669,12 @@ and gives no hosted web login. Full design, cost and test strategy:
    ever emits `hosted`. **Hosted profile data is a separate dataset from local
    profile data**: no shared ids, no hosted row in Dexie, no op in the op-log,
    no IndexedDB in the portal.
+
+   > **Override note (2026-10-18, ADR-097, MUT-284/285).** "No IndexedDB in the
+   > portal" no longer holds: signed out, the portal keeps local profiles in
+   > IndexedDB and runs the server's own routes over a persisted
+   > `MemoryLedgerStore`. Hosted and local data are still separate datasets,
+   > with no shared ids, no hosted row stored locally and no sync.
 3. **Sessions are server-side records behind an httpOnly cookie on the API's
    own origin.** `__Host-mut_session; Secure; HttpOnly; SameSite=Strict;
    Path=/`; a 32-byte random token stored as
@@ -3767,3 +3776,62 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Clients must deploy after the server: the request schema is strict, so an older server answers 422 VALIDATION_FAILED (zod issue: unrecognized key `currency`).
 - Clients send `amount`, formatted in the **new** currency's digits, whenever they send `currency`, whatever their changed-fields diff says (ILS 12.50 → USD 12.50 has equal minor units but still needs the amount).
 - `AMOUNT_REQUIRED` and `SAME_CURRENCY` are now in the published 422 reasons list.
+
+---
+
+## ADR-097: One App — Signed Out, the Portal Runs the Server's Own Routes in the Browser over a Persisted MemoryLedgerStore (Partial Override of ADR-037 §2; Overrides MUT-185 Decision 1)
+
+**Status**: Active (design; MUT-286..292 build it) — partial override of ADR-037 §2; overrides MUT-185's epic decision 1
+**Date**: 2026-10-18
+**Context**: Epic MUT-284. The free local web app (Dexie, `mutaba3a.netlify.app/app`) and the hosted portal (`src/hosted`, served by the API) are two apps, so every feature is built twice and the free app can't reach the phone. On 2026-10-18 Basel decided to retire the web app and keep one portal: signed out it works on this device, signed in it is the hosted account, and the screens are the same either way. The one difference, no phone sync, is accented as the hosted + phone upsell. Brief: `.claude/designs/mut-285-portal-local-mode.md`; plan and eng review: `.claude/designs/mut-285-local-mode-plan.md` (owner decisions D1–D3).
+
+**Decision**:
+1. **Signed out, the portal's `request()` sends each `Request` to an in-page local backend instead of `fetch`.** The backend is `createLocalApp`: the **same server route modules** (`PORTAL_ROUTES`) over `MemoryLedgerStore`, loaded as a lazy chunk. Figures match signed in and out by construction, not by a copy kept in step. The old Dexie/Transaction model is not ported.
+2. **No new auth code.** The local backend seeds an ordinary person, a personal profile in the browser's timezone, and a device session in its own store, and sends `Authorization: Bearer mds_…`. The server's `authenticate()`, `requireScope` and writability matrix run unchanged. The per-request store guard (layer 3) is inactive in the browser, because it needs AsyncLocalStorage. That is safe because the only principal owns every local profile.
+3. **Server changes are behaviour-preserving extractions**, landing first:
+   - `createApiShell` (the error, validation and requestId shell);
+   - `meRoutes` (out of `routes/sessions.ts`, whose argon2 import can't run in a browser);
+   - `PORTAL_ROUTES` (one list both apps register, with a coverage test against every portal client path);
+   - `MemoryLedgerStore.snapshot()/restore()`.
+4. **Node APIs are substituted at build time, never edited.** The hosted build aliases `node:crypto` and `node:async_hooks` for the local chunk and installs a `Buffer` shim. A server-suite test holds the shim byte-identical to `node:crypto`/`Buffer` on every shape the routes use. No server module changes.
+5. **Persistence (D1, D2).**
+   - One IndexedDB snapshot `{ formatVersion, stateVersion, savedAt, maps }`, written and committed before a mutating response resolves.
+   - Idempotency replay records, sessions, setup links, audit events and API keys are never persisted.
+   - Ordered migrations upgrade older formats on load. A CI fingerprint of the persisted record types fails an unversioned change. An older tab that finds a newer format refuses to write.
+   - Writes take a Web Lock and reload a stale snapshot first; a BroadcastChannel invalidates other tabs.
+   - `navigator.storage.persist()`, plus "Download my records" and "Restore from file", protect against eviction.
+6. **The app lives at the portal's origin** (MUT-185 decision 1 overridden). `mutaba3a.netlify.app` keeps the landing page and becomes the handoff bridge for existing local data (MUT-291). The web app is retired at least 90 days after the bridge ships (MUT-292).
+7. **Receipts** go through the server's own receipt routes, backed by a browser `AttachmentStorage` (Blobs in IndexedDB, `local-blob:` targets). Downloads only: ADR-028's no-preview rule holds, and the CSP is unchanged. **Documents** stay Malafat uploads, so local profiles have none.
+8. **One public server route (D3)**: `GET /v1/public/fx-rates`, anonymous and rate-limited per IP, returns the cached ECB snapshot. The local backend's `/v1/fx-rates` reads it through `FxRateSource`, so `crossRates` and the JOD peg run unchanged. Offline, the ≈ line hides.
+9. **Modes**:
+   - first visit or sign-out → local; sign-in → remote, with a localStorage hint;
+   - an expired session shows a choice (Sign in / Continue on this device), never a silent switch;
+   - signed in and offline shows an offline state, never local data.
+10. **No telemetry signed out** (ADR-024, ADR-090, ADR-091 carried over to local mode): analytics needs a user id; Sentry stays off.
+
+**Alternatives considered** (the brief, §16, gives one line each):
+- a hand-written local backend, or extracted pure rules plus a hand-written local router;
+- a local-principal middleware;
+- running the backend inside the service worker (UI/backend version skew);
+- porting the Dexie model;
+- a Netlify origin with a proxied API;
+- request-log replay instead of migrations;
+- hiding the ≈ line signed out.
+
+**Consequences**:
+- `MemoryLedgerStore` is now production code for local mode. Its two known differences from Prisma (the expense filter's `unlinked`+`customerId`, receivable `createdAt`) are fixed in MUT-286 with contract cases.
+- Every future `ports.ts` record change needs a local-format migration (D1). The fingerprint test enforces it.
+- The ADR-037 §2 guards are rewritten, not removed:
+  - ESLint portal block and `HOSTED_RULES`: `indexedDB` only in the local chunk, a service worker only for the PWA, Dexie still banned everywhere;
+  - `server/src` may never import `src/`.
+- Spike (2026-10-18), all within the plan's gates:
+  - local chunk 135.7 KB gzip;
+  - persist p95 23.6 ms at about 9.8k ledger records;
+  - boot restore 40 ms;
+  - summary p95 19.4 ms.
+
+  Safari/WebKit was not verified; MUT-286 runs its QA on WebKit.
+
+**Override log — ADR-037 §2 (partial)**: *What*: decision 2 says "no IndexedDB in the portal"; brief §2 rejects local profiles in the portal, and §7.5 says there is no service worker. *Replaced by*: local profiles in the portal when signed out, stored in IndexedDB, plus a PWA service worker (MUT-288). Hosted and local data stay separate datasets: no shared ids, no hosted row stored locally, no sync. *Why*: the owner retired the separate web app (MUT-284). Of §2's reasons against local profiles, two are answered here: the model mapping (the local mode uses the hosted model itself) and Dexie in the bundle (there is none). The third, a shared computer showing local data after sign-out, is accepted: signed-out data is this browser's data, as in the free app, and the marker says so. *Date*: 2026-10-18.
+
+**Override log — MUT-185 decision 1**: *What*: "the local web app stays on the mutaba3a.netlify.app origin", recorded on epic MUT-185 (2026-10-14), not as an ADR. *Replaced by*: the app lives at the portal's origin, and the netlify origin keeps the landing page and the data-handoff bridge (MUT-291). *Why*: one app (MUT-284). The stranded-data risk that motivated decision 1 is handled by the bridge. *Date*: 2026-10-18.

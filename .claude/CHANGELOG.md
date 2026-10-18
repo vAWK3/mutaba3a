@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-18 — Design: the portal's local mode, one app signed in or out (MUT-285, ADR-097)
+
+**Why:** epic MUT-284 retires the free local web app. One portal works on this device when signed out and is the hosted account when signed in, with the same screens either way. This ticket is the design only; MUT-286..292 build it.
+
+### Added
+- **Brief** `.claude/designs/mut-285-portal-local-mode.md`:
+  - Signed out, `request()` hands each `Request` to an in-page `createLocalApp`: the server's own route modules over `MemoryLedgerStore`, persisted to IndexedDB.
+  - The local backend authenticates as a locally seeded person through an ordinary device session, so no new auth code exists.
+  - It covers all 49 portal calls, an owner module for every rule, persistence (versioned snapshot, migrations, Web Locks, persist() + download/restore), modes and session expiry, offline (PWA), receipts through a browser `AttachmentStorage`, the public FX route, guard changes, QA scenarios and the test strategy.
+- **Plan and eng review** `.claude/designs/mut-285-local-mode-plan.md`, with owner decisions D1 (format version + migrations), D2 (persist() + download/restore) and D3 (anonymous `GET /v1/public/fx-rates`).
+- **ADR-097**, with override log rows for ADR-037 §2 and MUT-185 decision 1, plus an override note inside ADR-037 decision 2.
+
+### Changed
+- `hosted-portal.md` §2, §7.5, §8 and §12 now point to ADR-097 where it supersedes them.
+
+### Technical
+- **Spike** (throwaway, not committed), measured in headless Chromium against the plan's gates:
+  - the local chunk is 135.7 KB gzip;
+  - no server module changed: `node:crypto` and `node:async_hooks` are aliased at build time, and the shim is byte-identical in 10,000 checks;
+  - persist p95 is 23.6 ms at about 9.8k ledger records, once idempotency replay records are kept out of the snapshot (134.5 ms with them);
+  - boot restore takes 40 ms, and the summary read 19.4 ms p95.
+
+  Safari/WebKit was not run.
+
 ## [Unreleased] - 2026-10-18 — Change an expense's currency together with its amount (MUT-272, ADR-096)
 
 **Why:** logging an expense in the wrong currency meant delete and re-log. This is the server half of MUT-272; the phone's Recent edit sheet (MUT-272 phone half) and the portal (MUT-277) build on it.
