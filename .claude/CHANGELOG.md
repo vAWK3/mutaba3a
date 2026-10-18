@@ -72,6 +72,23 @@
 - CI: `server-ci.yml` also runs on `docs/fx/**`.
 - Tech debt: TD-170.
 
+## [Unreleased] - 2026-10-19 — Portal: Gulf currencies from one list, "(USD peg)" for every pegged currency (MUT-281)
+
+**Why:** epic MUT-278. MUT-280 made the server accept AED/SAR/QAR/BHD/OMR; this is what makes them usable in the hosted portal. **Release:** together with MUT-280 in one server release (the portal ships inside the API image).
+
+### Added
+- **`HOSTED_CURRENCIES`** (`src/hosted/format/currencies.ts`) grows to all nine codes; `INCOME_CURRENCIES`, `FilterControls.tsx`'s and `data/filters.ts`'s own currency lists now derive from it instead of carrying separate hardcoded copies.
+- Income, expense, conversion and profile forms offer every Gulf currency; BHD/OMR accept 3 decimals, AED/SAR/QAR cap at 2 (no code change needed in the drawers themselves — they already read their options and precision generically).
+
+### Fixed
+- **Expense group peg label**: `ExpenseGroupDetail`'s "≈ … (USD peg)" line tested `currency === 'JOD'` literally, so a BHD/OMR/AED/SAR/QAR pair would have shipped with no peg label at all (an ADR-087/098 honesty-rule violation). `convertTotal` now carries the server's own per-rate `derived` flag through each `used[]` line instead of re-deriving it from a hardcoded string.
+
+### Technical
+- **TD-170 resolved**: `npm run hosted:types` regenerated `schema.d.ts`. The resulting type errors forced widening the *shared* `Currency` type (`src/types/index.ts`) and `src/lib/utils.ts`'s exponent/token tables to all nine codes — not just portal-local files — because `src/components/expenses/ExpenseFormFields.tsx` (shared between the local app's and the portal's expense drawers) calls `currencyExponent()` directly; without the widening, BHD/OMR would have silently gotten 2-decimal precision instead of 3 in the portal's own expense form.
+- The local app's own drawers (`ExpenseDrawer`, `IncomeDrawer`, `ConversionDrawer`, `LegacyExpenseEditDrawer`) keep offering only their existing narrower currency sets — Gulf entry there is MUT-282's job — so existing-record values are cast at the read boundary (same pattern as `ExpenseFormFields.tsx`'s pre-existing `currency as Currency` cast).
+- Three local-app-only exhaustive `Record<Currency, …>` literals (`aggregations.ts`, `currencyAmounts.ts`, `ExpensesLedgerPage.tsx`) patched with zero-value entries — compile-only, no feature work, on pages slated for retirement under MUT-284/292. `landingCopy.ts` gets real ar/en Gulf currency names since the landing page survives that retirement (MUT-291).
+- **Follow-up flagged, not resolved here**: MUT-282/283 ("Local web: currency registry", "Local web: any-base conversion") may need re-scoping or cancellation given the local app's planned retirement.
+
 ## [Unreleased] - 2026-10-18 — Change an expense's currency together with its amount (MUT-272, ADR-096)
 
 **Why:** logging an expense in the wrong currency meant delete and re-log. This is the server half of MUT-272; the phone's Recent edit sheet (MUT-272 phone half) and the portal (MUT-277) build on it.
