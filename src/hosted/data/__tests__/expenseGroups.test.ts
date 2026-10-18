@@ -302,7 +302,7 @@ describe('optimistic marks', () => {
   const base = summary([
     { ...block('JOD', [bucket('2026-10-05', '18.000')]), byCategory: [{ categoryId: 'travel', total: '18.000', count: 1 }] },
   ]);
-  const mark = (verb: PendingMark['verb'], row: Expense): PendingMark => ({ id: `${verb}-${row.id}`, verb, row, settledAt: null });
+  const mark = (verb: PendingMark['verb'], row: Expense): PendingMark => ({ id: `${verb}-${row.id}`, verb, row, settled: null });
 
   it('takes a left-out expense off its currency, day and category', () => {
     const after = applyMarks(base, [mark('leaveOut', taxi)]);

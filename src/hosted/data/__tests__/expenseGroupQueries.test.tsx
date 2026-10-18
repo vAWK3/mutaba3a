@@ -81,7 +81,7 @@ describe('useGroupMarks', () => {
     const { queryClient, wrapper } = client();
     const summaryKey = groupsKey(ORG_A, 'group', G, 'summary');
     queryClient.setQueryData(summaryKey, summary('30.000', 3));
-    const before = queryClient.getQueryState(summaryKey)!.dataUpdatedAt;
+    const before = queryClient.getQueryState(summaryKey)!.dataUpdateCount;
     const { result } = renderHook(() => useGroupMarks(ORG_A, G), { wrapper });
 
     let pending!: Promise<boolean>;
@@ -94,10 +94,10 @@ describe('useGroupMarks', () => {
       expect(await pending).toBe(true);
     });
     expect(api.count(`PUT /v1/expense-groups/${G}/expenses/e1`)).toBe(1);
-    // The refetch (newer than the settled mark) already carries the leave-out: shown as served, not taken off again.
-    expect(result.current.summary(summary('20.000', 2), Date.now() + 1).currencies[0]!.total).toBe('20.000');
-    // Members not refetched yet: the row overlay still holds.
-    expect(result.current.rows([row('e1', '2026-10-05')], [], before).excluded.map((r) => r.id)).toEqual(['e1']);
+    // The refetch (a load after the settled mark) already carries the leave-out: shown as served, not taken off again.
+    expect(result.current.summary(summary('20.000', 2), before + 1).currencies[0]!.total).toBe('20.000');
+    // Members not reloaded yet: the row overlay still holds.
+    expect(result.current.rows([row('e1', '2026-10-05')], [], { members: 0, excluded: 0 }).excluded.map((r) => r.id)).toEqual(['e1']);
   });
 
   it('puts the row back and says so when the server refuses', async () => {
@@ -109,7 +109,7 @@ describe('useGroupMarks', () => {
       outcome = await result.current.act('leaveOut', row('e1', '2026-10-05'));
     });
     expect(outcome).toBe(false);
-    expect(result.current.rows([row('e1', '2026-10-05')], [], 0).members.map((r) => r.id)).toEqual(['e1']);
+    expect(result.current.rows([row('e1', '2026-10-05')], [], { members: 0, excluded: 0 }).members.map((r) => r.id)).toEqual(['e1']);
   });
 });
 
@@ -146,14 +146,14 @@ describe('useGroupMarks.actMany', () => {
     act(() => {
       outcome = result.current.actMany('leaveOut', rows);
     });
-    expect(result.current.rows(rows, [], 0).members).toEqual([]);
+    expect(result.current.rows(rows, [], { members: 0, excluded: 0 }).members).toEqual([]);
     let settled!: { done: Expense[]; failed: Expense[] };
     await act(async () => {
       settled = await outcome;
     });
     expect(order).toEqual(['e1', 'e2', 'e3']);
     expect(settled.failed.map((r) => r.id)).toEqual(['e2']);
-    expect(result.current.rows(rows, [], 0).members.map((r) => r.id)).toEqual(['e2']);
+    expect(result.current.rows(rows, [], { members: 0, excluded: 0 }).members.map((r) => r.id)).toEqual(['e2']);
     expect(spy.mock.calls.filter(([arg]) => JSON.stringify(arg) === JSON.stringify({ queryKey: groupsKey(ORG_A) }))).toHaveLength(1);
     expect(api.count(`GET /v1/expense-groups/${G}/summary`)).toBeLessThanOrEqual(1);
   });

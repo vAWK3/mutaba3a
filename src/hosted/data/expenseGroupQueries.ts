@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api, type CreateExpenseGroupRequest, type Currency, type Expense, type ExpenseGroupSummary, type UpdateExpenseGroupRequest } from '../api/client';
 import { profileKey } from '../session/me';
-import { VERB_MARK, applyMarks, applyRowMarks, runSequential, sortOldestFirst, type PendingMark, type Verb } from './expenseGroups';
+import { VERB_MARK, applyMarks, applyRowMarks, runSequential, sortOldestFirst, type PendingMark, type SeenReads, type Verb } from './expenseGroups';
 
 /**
  * Expense-group reads and writes (MUT-268, eng plan E1/E2/E5, review R1–R3).
@@ -128,14 +128,26 @@ export function sendMark(profileId: string, groupId: string, expenseId: string, 
 
 export const markMutationKey = (groupId: string) => ['expense-group-mark', groupId] as const;
 
+/**
+ * How many times a group's summary, members and Left out have loaded, read from
+ * the cache during render: the page re-renders whenever those queries change, so
+ * the counts are current there (the hook results don't carry `dataUpdateCount`).
+ */
+export function groupLoads(queryClient: QueryClient, profileId: string, groupId: string): SeenReads {
+  const loads = (part: string) => queryClient.getQueryState(groupKey(profileId, groupId, part))?.dataUpdateCount ?? 0;
+  return { summary: loads('summary'), members: loads('member'), excluded: loads('excluded') };
+}
+
 let markSerial = 0;
 
 /**
  * Optimistic leave-out (craft spec 1, eng R1): a mark shows at once and stays
- * until a read newer than its settled request lands, so the server's figures
- * replace it without ever counting it twice. A refused mark is dropped (the row
- * goes back) and the caller hears `false`. Refetch only after the last mark in
- * flight, so a burst of leave-outs reads once.
+ * until a read loads again after its request settled, so the server's figures
+ * replace it without ever counting it twice. "Again" is TanStack's per-query
+ * load counter, not a clock, so two events in one millisecond (or a test's
+ * frozen clock) can't confuse it. A refused mark is dropped (the row goes back)
+ * and the caller hears `false`. Refetch only after the last mark in flight, so
+ * a burst of leave-outs reads once.
  */
 export function useGroupMarks(profileId: string, groupId: string) {
   const queryClient = useQueryClient();
@@ -147,8 +159,8 @@ export function useGroupMarks(profileId: string, groupId: string) {
     mutationKey,
     mutationFn: async ({ verb, row, markId }: { verb: Verb; row: Expense; markId: string }) => {
       await sendMark(profileId, groupId, row.id, verb);
-      const settledAt = Date.now();
-      setMarks((current) => current.map((m) => (m.id === markId ? { ...m, settledAt } : m)));
+      const settled = groupLoads(queryClient, profileId, groupId);
+      setMarks((current) => current.map((m) => (m.id === markId ? { ...m, settled } : m)));
     },
     onMutate: () => queryClient.cancelQueries({ queryKey: groupKey(profileId, groupId) }),
     onSettled: () => {
@@ -161,7 +173,7 @@ export function useGroupMarks(profileId: string, groupId: string) {
     async (verb: Verb, row: Expense): Promise<boolean> => {
       markSerial += 1;
       const markId = `m${markSerial}`;
-      setMarks((current) => [...current, { id: markId, verb, row, settledAt: null }]);
+      setMarks((current) => [...current, { id: markId, verb, row, settled: null }]);
       try {
         await mutateAsync({ verb, row, markId });
         return true;
@@ -178,7 +190,7 @@ export function useGroupMarks(profileId: string, groupId: string) {
     async (verb: Verb, rows: Expense[]) => {
       const pending = rows.map((row) => {
         markSerial += 1;
-        return { id: `m${markSerial}`, verb, row, settledAt: null } satisfies PendingMark;
+        return { id: `m${markSerial}`, verb, row, settled: null } satisfies PendingMark;
       });
       setMarks((current) => [...current, ...pending]);
       batching.current = true;
@@ -195,12 +207,13 @@ export function useGroupMarks(profileId: string, groupId: string) {
     [mutateAsync, queryClient, profileId],
   );
 
-  const pendingSince = (updatedAt: number) => marks.filter((m) => m.settledAt === null || updatedAt < m.settledAt);
-
   return {
     act,
     actMany,
-    summary: (summary: ExpenseGroupSummary, updatedAt: number) => applyMarks(summary, pendingSince(updatedAt)),
-    rows: (members: Expense[], excluded: Expense[], updatedAt: number) => applyRowMarks(members, excluded, pendingSince(updatedAt)),
+    /** The summary as last loaded (`loads` = its dataUpdateCount), with the marks it doesn't carry yet. */
+    summary: (summary: ExpenseGroupSummary, loads: number) => applyMarks(summary, marks.filter((m) => m.settled === null || loads <= m.settled.summary)),
+    /** Members and Left out with the marks either list doesn't carry yet (row marks are idempotent, so both lists may get them). */
+    rows: (members: Expense[], excluded: Expense[], loads: { members: number; excluded: number }) =>
+      applyRowMarks(members, excluded, marks.filter((m) => m.settled === null || loads.members <= m.settled.members || loads.excluded <= m.settled.excluded)),
   };
 }

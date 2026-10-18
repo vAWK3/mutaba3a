@@ -36,7 +36,7 @@ import {
   type RowList,
   type Verb,
 } from '../../data/expenseGroups';
-import { forgetGroup, useExpenseGroup, useFxRates, useGroupMarks, useGroupRows, useGroupSummary } from '../../data/expenseGroupQueries';
+import { forgetGroup, groupLoads, useExpenseGroup, useFxRates, useGroupMarks, useGroupRows, useGroupSummary } from '../../data/expenseGroupQueries';
 import { useExpenseCategories } from '../../data/expenseQueries';
 import type { GroupDetailSearch } from '../../data/filters';
 import { DecimalAmount } from '../../format/DecimalAmount';
@@ -106,7 +106,7 @@ export function ExpenseGroupDetail({ groupId, search, setSearch }: ExpenseGroupD
         </Link>
       </nav>
       <QueryView queries={[group, summary, members]} data={data} notFound={deleted} loading={<DetailSkeleton />}>
-        {(loaded) => <GroupBody {...loaded} today={today} search={search} setSearch={setSearch} summaryUpdatedAt={summary.dataUpdatedAt} membersUpdatedAt={members.dataUpdatedAt} />}
+        {(loaded) => <GroupBody {...loaded} today={today} search={search} setSearch={setSearch} />}
       </QueryView>
       {group.data && search.editGroup && (
         <GroupDrawer
@@ -140,15 +140,14 @@ interface GroupBodyProps {
   today: string;
   search: GroupDetailSearch;
   setSearch: (next: GroupDetailSearch) => void;
-  summaryUpdatedAt: number;
-  membersUpdatedAt: number;
 }
 
-function GroupBody({ group, summary: served, members: servedMembers, today, search, setSearch, summaryUpdatedAt, membersUpdatedAt }: GroupBodyProps) {
+function GroupBody({ group, summary: served, members: servedMembers, today, search, setSearch }: GroupBodyProps) {
   const profile = useProfile();
   const { t, language } = useLanguage();
   const tp = useTp();
   const showToast = useToast();
+  const queryClient = useQueryClient();
   const range = useGroupRange();
   const narrow = useMediaQuery(NARROW_QUERY);
   const reducedMotion = usePrefersReducedMotion();
@@ -159,9 +158,10 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [selectedBar, setSelectedBar] = useState<string | undefined>(undefined);
 
-  const summary = marks.summary(served, summaryUpdatedAt);
-  const rowsUpdatedAt = Math.min(membersUpdatedAt, excludedQuery.dataUpdatedAt || membersUpdatedAt);
-  const rows = marks.rows(servedMembers, excludedQuery.data ?? [], rowsUpdatedAt);
+  // Which loads already carry each mark (eng R1)
+  const loads = groupLoads(queryClient, profile.id, group.id);
+  const summary = marks.summary(served, loads.summary);
+  const rows = marks.rows(servedMembers, excludedQuery.data ?? [], loads);
   const currency = defaultCurrency(summary.currencies, profile.defaultCurrency, search.currency);
   const block = summary.currencies.find((c) => c.currency === currency);
   const names = useMemo(() => new Map((categories.data ?? []).map((c) => [c.id, c.name])), [categories.data]);

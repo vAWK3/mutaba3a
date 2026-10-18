@@ -263,13 +263,20 @@ export function convertTotal(summary: ExpenseGroupSummary, rates: FxRatesRespons
   return { total: minorToDecimal(roundMinor(minor), rates.base), currency: rates.base, rateDate: rates.rateDate, stale: rates.source === 'stale', derived, used };
 }
 
+/** How many times each read had loaded when a mark's request settled (TanStack's `dataUpdateCount`). */
+export interface SeenReads {
+  summary: number;
+  members: number;
+  excluded: number;
+}
+
 /** A leave-out (or its undo) shown before the server confirms it (craft spec 1, eng R1). */
 export interface PendingMark {
   id: string;
   verb: Verb;
   row: Expense;
-  /** When its request settled; the overlay stops once a refetch newer than this lands. */
-  settledAt: number | null;
+  /** The reads' load counts when its request settled; the overlay stops once a read loads again after that. */
+  settled: SeenReads | null;
 }
 
 function addTo<T>(items: T[], match: (item: T) => boolean, make: () => T, change: (item: T) => T): T[] {
