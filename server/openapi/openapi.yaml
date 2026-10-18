@@ -697,236 +697,6 @@ components:
       required:
         - integration
         - apiKeyRevoked
-    Customer:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        email:
-          type: string
-          nullable: true
-        phone:
-          type: string
-          nullable: true
-        notes:
-          type: string
-          nullable: true
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        status:
-          $ref: "#/components/schemas/EntityStatus"
-        archivedAt:
-          type: string
-          nullable: true
-          format: date-time
-        externalReference:
-          $ref: "#/components/schemas/ExternalReference"
-        version:
-          type: integer
-          minimum: 1
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - name
-        - email
-        - phone
-        - notes
-        - vatTreatment
-        - status
-        - archivedAt
-        - externalReference
-        - version
-        - createdAt
-        - updatedAt
-    VatTreatment:
-      type: string
-      nullable: true
-      enum:
-        - STANDARD_RATED
-        - ZERO_RATED
-        - EXEMPT
-        - OUT_OF_SCOPE
-        - null
-    EntityStatus:
-      type: string
-      enum:
-        - ACTIVE
-        - ARCHIVED
-    ExternalReference:
-      type: object
-      nullable: true
-      properties:
-        provider:
-          $ref: "#/components/schemas/Provider"
-        externalId:
-          type: string
-          minLength: 1
-          maxLength: 128
-      required:
-        - provider
-        - externalId
-    Provider:
-      type: string
-      enum:
-        - MALAFAT
-    CreateCustomerRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 200
-        email:
-          type: string
-          maxLength: 254
-          format: email
-        phone:
-          type: string
-          minLength: 1
-          maxLength: 64
-        notes:
-          type: string
-          maxLength: 4000
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        externalReference:
-          $ref: "#/components/schemas/ExternalReference"
-      required:
-        - name
-    CustomerPage:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Customer"
-        nextCursor:
-          type: string
-          nullable: true
-      required:
-        - items
-        - nextCursor
-    UpdateCustomerRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 200
-        email:
-          type: string
-          nullable: true
-          maxLength: 254
-          format: email
-        phone:
-          type: string
-          nullable: true
-          minLength: 1
-          maxLength: 64
-        notes:
-          type: string
-          nullable: true
-          maxLength: 4000
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-      additionalProperties: false
-    Project:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        customerId:
-          type: string
-          format: uuid
-        name:
-          type: string
-        currency:
-          $ref: "#/components/schemas/Currency"
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        status:
-          $ref: "#/components/schemas/EntityStatus"
-        archivedAt:
-          type: string
-          nullable: true
-          format: date-time
-        externalReference:
-          $ref: "#/components/schemas/ExternalReference"
-        version:
-          type: integer
-          minimum: 1
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - customerId
-        - name
-        - currency
-        - vatTreatment
-        - status
-        - archivedAt
-        - externalReference
-        - version
-        - createdAt
-        - updatedAt
-    CreateProjectRequest:
-      type: object
-      properties:
-        customerId:
-          type: string
-          format: uuid
-        name:
-          type: string
-          minLength: 1
-          maxLength: 200
-        currency:
-          $ref: "#/components/schemas/Currency"
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        externalReference:
-          $ref: "#/components/schemas/ExternalReference"
-      required:
-        - customerId
-        - name
-        - currency
-    ProjectPage:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Project"
-        nextCursor:
-          type: string
-          nullable: true
-      required:
-        - items
-        - nextCursor
-    UpdateProjectRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 200
-        currency:
-          $ref: "#/components/schemas/Currency"
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-      additionalProperties: false
     ImportPreviewResponse:
       type: object
       properties:
@@ -1016,6 +786,10 @@ components:
       required:
         - provider
         - rows
+    Provider:
+      type: string
+      enum:
+        - MALAFAT
     ImportRow:
       oneOf:
         - type: object
@@ -1502,6 +1276,13 @@ components:
         - FIXED
         - RECURRING
         - CONTINGENCY
+    VatTreatment:
+      type: string
+      enum:
+        - STANDARD_RATED
+        - ZERO_RATED
+        - EXEMPT
+        - OUT_OF_SCOPE
     PaymentTerms:
       type: string
       enum:
@@ -2888,6 +2669,801 @@ components:
         - installmentsPosted
         - chargesCreated
         - today
+    Operation:
+      type: object
+      properties:
+        key:
+          type: string
+        operation:
+          type: string
+        status:
+          type: string
+          enum:
+            - PENDING
+            - COMPLETED
+        responseStatus:
+          type: integer
+          nullable: true
+        response:
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - key
+        - operation
+        - status
+        - responseStatus
+        - createdAt
+        - completedAt
+    AuditPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
+    AuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        actorType:
+          type: string
+          enum:
+            - API_KEY
+            - ADMIN
+            - SYSTEM
+            - USER
+        actorId:
+          type: string
+          nullable: true
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties:
+            nullable: true
+        requestId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - actorType
+        - actorId
+        - action
+        - entityType
+        - entityId
+        - requestId
+        - createdAt
+    InboxEntryPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InboxEntry"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
+    InboxEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/InboxEntryKind"
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        currency:
+          $ref: "#/components/schemas/Currency"
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        note:
+          type: string
+          nullable: true
+        captureSource:
+          allOf:
+            - $ref: "#/components/schemas/CaptureSource"
+            - nullable: true
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - kind
+        - amount
+        - currency
+        - occurredOn
+        - note
+        - captureSource
+        - version
+        - createdAt
+        - updatedAt
+    InboxEntryKind:
+      type: string
+      enum:
+        - income
+        - expense
+    InboxCount:
+      type: object
+      properties:
+        count:
+          type: integer
+          minimum: 0
+      required:
+        - count
+    CreateInboxEntryRequest:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/InboxEntryKind"
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Greater than zero, in the currency's fractional digits
+        currency:
+          $ref: "#/components/schemas/Currency"
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: "May be in the future: an unsorted entry has no profile, so no timezone to judge \"today\" in. Filing applies that check. Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past; filing applies the exact floor in the profile's timezone."
+        note:
+          type: string
+          maxLength: 2000
+        captureSource:
+          $ref: "#/components/schemas/CaptureSource"
+      required:
+        - kind
+        - amount
+        - currency
+        - occurredOn
+      additionalProperties: false
+    UpdateInboxEntryRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        currency:
+          $ref: "#/components/schemas/Currency"
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: "Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date."
+        note:
+          type: string
+          nullable: true
+          maxLength: 2000
+        captureSource:
+          allOf:
+            - $ref: "#/components/schemas/CaptureSource"
+            - nullable: true
+      additionalProperties: false
+    Expense:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        currency:
+          $ref: "#/components/schemas/Currency"
+        title:
+          type: string
+          nullable: true
+        vendor:
+          type: string
+          nullable: true
+        categoryId:
+          type: string
+          nullable: true
+          format: uuid
+        customerId:
+          type: string
+          nullable: true
+          format: uuid
+        projectId:
+          type: string
+          nullable: true
+          format: uuid
+        notes:
+          type: string
+          nullable: true
+        createdByUserId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - occurredOn
+        - amount
+        - currency
+        - title
+        - vendor
+        - categoryId
+        - customerId
+        - projectId
+        - notes
+        - createdByUserId
+        - version
+        - createdAt
+        - updatedAt
+    FileAsExpenseRequest:
+      type: object
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+        vendor:
+          type: string
+          minLength: 1
+          maxLength: 200
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        customerId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+          description: With projectId alone, customerId is the project's customer
+      additionalProperties: false
+    IncomeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/IncomeKind"
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        currency:
+          $ref: "#/components/schemas/Currency"
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        customerId:
+          type: string
+          nullable: true
+          format: uuid
+        projectId:
+          type: string
+          nullable: true
+          format: uuid
+        title:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        status:
+          $ref: "#/components/schemas/IncomeStatus"
+        version:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+      required:
+        - id
+        - kind
+        - amount
+        - currency
+        - occurredOn
+        - customerId
+        - projectId
+        - title
+        - notes
+        - dueDate
+        - status
+        - version
+    IncomeKind:
+      type: string
+      enum:
+        - received
+        - owed
+    IncomeStatus:
+      type: string
+      enum:
+        - unallocated
+        - partial
+        - allocated
+        - reversed
+        - open
+        - settled
+    FileAsIncomeRequest:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/IncomeKind"
+        customerId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        method:
+          $ref: "#/components/schemas/PaymentMethod"
+      required:
+        - kind
+      additionalProperties: false
+    PaymentMethod:
+      type: string
+      enum:
+        - CASH
+        - BANK
+    EntryPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entry"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
+    Entry:
+      oneOf:
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - expense
+            profileId:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            createdByUserId:
+              type: string
+              format: uuid
+            expense:
+              allOf:
+                - $ref: "#/components/schemas/Expense"
+                - type: object
+                  properties:
+                    receiptCount:
+                      type: integer
+                      minimum: 0
+                      description: READY receipts attached
+                  required:
+                    - receiptCount
+          required:
+            - kind
+            - profileId
+            - createdAt
+            - createdByUserId
+            - expense
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - received
+            profileId:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            createdByUserId:
+              type: string
+              nullable: true
+              format: uuid
+            origin:
+              type: string
+              enum:
+                - capture
+                - integration
+            settlesOwedId:
+              type: string
+              nullable: true
+              format: uuid
+            replacesPaymentId:
+              type: string
+              nullable: true
+              format: uuid
+            income:
+              $ref: "#/components/schemas/IncomeResponse"
+          required:
+            - kind
+            - profileId
+            - createdAt
+            - createdByUserId
+            - origin
+            - settlesOwedId
+            - replacesPaymentId
+            - income
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - owed
+            profileId:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            createdByUserId:
+              type: string
+              nullable: true
+              format: uuid
+            income:
+              $ref: "#/components/schemas/IncomeResponse"
+          required:
+            - kind
+            - profileId
+            - createdAt
+            - createdByUserId
+            - income
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - conversion
+            profileId:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+            createdByUserId:
+              type: string
+              format: uuid
+            conversion:
+              $ref: "#/components/schemas/Conversion"
+          required:
+            - kind
+            - profileId
+            - createdAt
+            - createdByUserId
+            - conversion
+    Conversion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        currency:
+          $ref: "#/components/schemas/Currency"
+        toAmount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        toCurrency:
+          $ref: "#/components/schemas/Currency"
+        notes:
+          type: string
+          nullable: true
+        createdByUserId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - occurredOn
+        - amount
+        - currency
+        - toAmount
+        - toCurrency
+        - notes
+        - createdByUserId
+        - version
+        - createdAt
+        - updatedAt
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        vatTreatment:
+          allOf:
+            - $ref: "#/components/schemas/VatTreatment"
+            - nullable: true
+        status:
+          $ref: "#/components/schemas/EntityStatus"
+        archivedAt:
+          type: string
+          nullable: true
+          format: date-time
+        externalReference:
+          $ref: "#/components/schemas/ExternalReference"
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - email
+        - phone
+        - notes
+        - vatTreatment
+        - status
+        - archivedAt
+        - externalReference
+        - version
+        - createdAt
+        - updatedAt
+    EntityStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - ARCHIVED
+    ExternalReference:
+      type: object
+      nullable: true
+      properties:
+        provider:
+          $ref: "#/components/schemas/Provider"
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 128
+      required:
+        - provider
+        - externalId
+    CreateCustomerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          maxLength: 254
+          format: email
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 64
+        notes:
+          type: string
+          maxLength: 4000
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        externalReference:
+          $ref: "#/components/schemas/ExternalReference"
+      required:
+        - name
+    CustomerPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Customer"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
+    UpdateCustomerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        email:
+          type: string
+          nullable: true
+          maxLength: 254
+          format: email
+        phone:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 64
+        notes:
+          type: string
+          nullable: true
+          maxLength: 4000
+        vatTreatment:
+          allOf:
+            - $ref: "#/components/schemas/VatTreatment"
+            - nullable: true
+      additionalProperties: false
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        currency:
+          $ref: "#/components/schemas/Currency"
+        vatTreatment:
+          allOf:
+            - $ref: "#/components/schemas/VatTreatment"
+            - nullable: true
+        status:
+          $ref: "#/components/schemas/EntityStatus"
+        archivedAt:
+          type: string
+          nullable: true
+          format: date-time
+        externalReference:
+          $ref: "#/components/schemas/ExternalReference"
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - customerId
+        - name
+        - currency
+        - vatTreatment
+        - status
+        - archivedAt
+        - externalReference
+        - version
+        - createdAt
+        - updatedAt
+    CreateProjectRequest:
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        currency:
+          $ref: "#/components/schemas/Currency"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        externalReference:
+          $ref: "#/components/schemas/ExternalReference"
+      required:
+        - customerId
+        - name
+        - currency
+    ProjectPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
+    UpdateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        currency:
+          $ref: "#/components/schemas/Currency"
+        vatTreatment:
+          allOf:
+            - $ref: "#/components/schemas/VatTreatment"
+            - nullable: true
+      additionalProperties: false
     ReceivablePage:
       type: object
       properties:
@@ -3120,11 +3696,6 @@ components:
         - unallocated
         - partial
         - allocated
-    PaymentMethod:
-      type: string
-      enum:
-        - CASH
-        - BANK
     PaymentStatus:
       type: string
       enum:
@@ -3486,37 +4057,6 @@ components:
           maxLength: 500
       required:
         - reason
-    Operation:
-      type: object
-      properties:
-        key:
-          type: string
-        operation:
-          type: string
-        status:
-          type: string
-          enum:
-            - PENDING
-            - COMPLETED
-        responseStatus:
-          type: integer
-          nullable: true
-        response:
-          nullable: true
-        createdAt:
-          type: string
-          format: date-time
-        completedAt:
-          type: string
-          nullable: true
-          format: date-time
-      required:
-        - key
-        - operation
-        - status
-        - responseStatus
-        - createdAt
-        - completedAt
     OrganizationSummary:
       type: object
       properties:
@@ -3910,61 +4450,6 @@ components:
               description: Calendar date in the organization timezone, YYYY-MM-DD
           required:
             - asOf
-    AuditPage:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/AuditEvent"
-        nextCursor:
-          type: string
-          nullable: true
-      required:
-        - items
-        - nextCursor
-    AuditEvent:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        actorType:
-          type: string
-          enum:
-            - API_KEY
-            - ADMIN
-            - SYSTEM
-            - USER
-        actorId:
-          type: string
-          nullable: true
-        action:
-          type: string
-        entityType:
-          type: string
-        entityId:
-          type: string
-          nullable: true
-        metadata:
-          type: object
-          additionalProperties:
-            nullable: true
-        requestId:
-          type: string
-          nullable: true
-        createdAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - actorType
-        - actorId
-        - action
-        - entityType
-        - entityId
-        - requestId
-        - createdAt
     CreateUploadResponse:
       type: object
       properties:
@@ -4153,69 +4638,6 @@ components:
       required:
         - items
         - nextCursor
-    Expense:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        occurredOn:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        currency:
-          $ref: "#/components/schemas/Currency"
-        title:
-          type: string
-          nullable: true
-        vendor:
-          type: string
-          nullable: true
-        categoryId:
-          type: string
-          nullable: true
-          format: uuid
-        customerId:
-          type: string
-          nullable: true
-          format: uuid
-        projectId:
-          type: string
-          nullable: true
-          format: uuid
-        notes:
-          type: string
-          nullable: true
-        createdByUserId:
-          type: string
-          format: uuid
-        version:
-          type: integer
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - occurredOn
-        - amount
-        - currency
-        - title
-        - vendor
-        - categoryId
-        - customerId
-        - projectId
-        - notes
-        - createdByUserId
-        - version
-        - createdAt
-        - updatedAt
     ExpenseDetail:
       allOf:
         - $ref: "#/components/schemas/Expense"
@@ -4532,76 +4954,6 @@ components:
         archived:
           type: boolean
       additionalProperties: false
-    IncomeResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        kind:
-          $ref: "#/components/schemas/IncomeKind"
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        currency:
-          $ref: "#/components/schemas/Currency"
-        occurredOn:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        customerId:
-          type: string
-          nullable: true
-          format: uuid
-        projectId:
-          type: string
-          nullable: true
-          format: uuid
-        title:
-          type: string
-          nullable: true
-        notes:
-          type: string
-          nullable: true
-        dueDate:
-          type: string
-          nullable: true
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        status:
-          $ref: "#/components/schemas/IncomeStatus"
-        version:
-          type: integer
-          minimum: 0
-          exclusiveMinimum: true
-      required:
-        - id
-        - kind
-        - amount
-        - currency
-        - occurredOn
-        - customerId
-        - projectId
-        - title
-        - notes
-        - dueDate
-        - status
-        - version
-    IncomeKind:
-      type: string
-      enum:
-        - received
-        - owed
-    IncomeStatus:
-      type: string
-      enum:
-        - unallocated
-        - partial
-        - allocated
-        - reversed
-        - open
-        - settled
     CreateIncomeRequest:
       type: object
       properties:
@@ -4916,54 +5268,6 @@ components:
         - seriesFrom
         - seriesTo
         - currencies
-    Conversion:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        occurredOn:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        currency:
-          $ref: "#/components/schemas/Currency"
-        toAmount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        toCurrency:
-          $ref: "#/components/schemas/Currency"
-        notes:
-          type: string
-          nullable: true
-        createdByUserId:
-          type: string
-          format: uuid
-        version:
-          type: integer
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - occurredOn
-        - amount
-        - currency
-        - toAmount
-        - toCurrency
-        - notes
-        - createdByUserId
-        - version
-        - createdAt
-        - updatedAt
     CreateConversionRequest:
       type: object
       properties:
@@ -5083,304 +5387,6 @@ components:
         - currency
         - rate
         - derived
-    InboxEntryPage:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/InboxEntry"
-        nextCursor:
-          type: string
-          nullable: true
-      required:
-        - items
-        - nextCursor
-    InboxEntry:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        kind:
-          $ref: "#/components/schemas/InboxEntryKind"
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        currency:
-          $ref: "#/components/schemas/Currency"
-        occurredOn:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        note:
-          type: string
-          nullable: true
-        captureSource:
-          allOf:
-            - $ref: "#/components/schemas/CaptureSource"
-            - nullable: true
-        version:
-          type: integer
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - kind
-        - amount
-        - currency
-        - occurredOn
-        - note
-        - captureSource
-        - version
-        - createdAt
-        - updatedAt
-    InboxEntryKind:
-      type: string
-      enum:
-        - income
-        - expense
-    InboxCount:
-      type: object
-      properties:
-        count:
-          type: integer
-          minimum: 0
-      required:
-        - count
-    CreateInboxEntryRequest:
-      type: object
-      properties:
-        kind:
-          $ref: "#/components/schemas/InboxEntryKind"
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Greater than zero, in the currency's fractional digits
-        currency:
-          $ref: "#/components/schemas/Currency"
-        occurredOn:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: "May be in the future: an unsorted entry has no profile, so no timezone to judge \"today\" in. Filing applies that check. Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past; filing applies the exact floor in the profile's timezone."
-        note:
-          type: string
-          maxLength: 2000
-        captureSource:
-          $ref: "#/components/schemas/CaptureSource"
-      required:
-        - kind
-        - amount
-        - currency
-        - occurredOn
-      additionalProperties: false
-    UpdateInboxEntryRequest:
-      type: object
-      properties:
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        currency:
-          $ref: "#/components/schemas/Currency"
-        occurredOn:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: "Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date."
-        note:
-          type: string
-          nullable: true
-          maxLength: 2000
-        captureSource:
-          allOf:
-            - $ref: "#/components/schemas/CaptureSource"
-            - nullable: true
-      additionalProperties: false
-    FileAsExpenseRequest:
-      type: object
-      properties:
-        categoryId:
-          type: string
-          format: uuid
-        vendor:
-          type: string
-          minLength: 1
-          maxLength: 200
-        title:
-          type: string
-          minLength: 1
-          maxLength: 200
-        customerId:
-          type: string
-          format: uuid
-        projectId:
-          type: string
-          format: uuid
-          description: With projectId alone, customerId is the project's customer
-      additionalProperties: false
-    FileAsIncomeRequest:
-      type: object
-      properties:
-        kind:
-          $ref: "#/components/schemas/IncomeKind"
-        customerId:
-          type: string
-          format: uuid
-        projectId:
-          type: string
-          format: uuid
-        title:
-          type: string
-          minLength: 1
-          maxLength: 200
-        dueDate:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        method:
-          $ref: "#/components/schemas/PaymentMethod"
-      required:
-        - kind
-      additionalProperties: false
-    EntryPage:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Entry"
-        nextCursor:
-          type: string
-          nullable: true
-      required:
-        - items
-        - nextCursor
-    Entry:
-      oneOf:
-        - type: object
-          properties:
-            kind:
-              type: string
-              enum:
-                - expense
-            profileId:
-              type: string
-              format: uuid
-            createdAt:
-              type: string
-              format: date-time
-            createdByUserId:
-              type: string
-              format: uuid
-            expense:
-              allOf:
-                - $ref: "#/components/schemas/Expense"
-                - type: object
-                  properties:
-                    receiptCount:
-                      type: integer
-                      minimum: 0
-                      description: READY receipts attached
-                  required:
-                    - receiptCount
-          required:
-            - kind
-            - profileId
-            - createdAt
-            - createdByUserId
-            - expense
-        - type: object
-          properties:
-            kind:
-              type: string
-              enum:
-                - received
-            profileId:
-              type: string
-              format: uuid
-            createdAt:
-              type: string
-              format: date-time
-            createdByUserId:
-              type: string
-              nullable: true
-              format: uuid
-            origin:
-              type: string
-              enum:
-                - capture
-                - integration
-            settlesOwedId:
-              type: string
-              nullable: true
-              format: uuid
-            replacesPaymentId:
-              type: string
-              nullable: true
-              format: uuid
-            income:
-              $ref: "#/components/schemas/IncomeResponse"
-          required:
-            - kind
-            - profileId
-            - createdAt
-            - createdByUserId
-            - origin
-            - settlesOwedId
-            - replacesPaymentId
-            - income
-        - type: object
-          properties:
-            kind:
-              type: string
-              enum:
-                - owed
-            profileId:
-              type: string
-              format: uuid
-            createdAt:
-              type: string
-              format: date-time
-            createdByUserId:
-              type: string
-              nullable: true
-              format: uuid
-            income:
-              $ref: "#/components/schemas/IncomeResponse"
-          required:
-            - kind
-            - profileId
-            - createdAt
-            - createdByUserId
-            - income
-        - type: object
-          properties:
-            kind:
-              type: string
-              enum:
-                - conversion
-            profileId:
-              type: string
-              format: uuid
-            createdAt:
-              type: string
-              format: date-time
-            createdByUserId:
-              type: string
-              format: uuid
-            conversion:
-              $ref: "#/components/schemas/Conversion"
-          required:
-            - kind
-            - profileId
-            - createdAt
-            - createdByUserId
-            - conversion
     CreateProfileRequest:
       type: object
       properties:
@@ -6222,682 +6228,6 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/customers:
-    post:
-      tags:
-        - Customers
-      summary: Create a customer
-      description: "With `externalReference`, creation is idempotent on that reference: a known reference returns the existing customer with 200 and changes nothing. Requires a CONNECTED integration for the provider. A session may create a customer on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there."
-      security:
-        - apiKey: []
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: string
-            minLength: 8
-            maxLength: 128
-            description: Client-generated key, unique per operation attempt (plan §14.2).
-          required: true
-          description: Client-generated key, unique per operation attempt (plan §14.2).
-          name: idempotency-key
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateCustomerRequest"
-      responses:
-        "200":
-          description: Already exists for this external reference
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Customer"
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Customer"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "409":
-          description: Conflict; `details.reason` says which (see the API description)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-    get:
-      tags:
-        - Customers
-      summary: List customers
-      security:
-        - apiKey: []
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 50
-            description: Page size, 1–200.
-          required: false
-          description: Page size, 1–200.
-          name: limit
-          in: query
-        - schema:
-            type: string
-            description: Opaque `nextCursor` from the previous page.
-          required: false
-          description: Opaque `nextCursor` from the previous page.
-          name: cursor
-          in: query
-        - schema:
-            $ref: "#/components/schemas/EntityStatus"
-          required: false
-          name: status
-          in: query
-        - schema:
-            $ref: "#/components/schemas/Provider"
-          required: false
-          name: provider
-          in: query
-        - schema:
-            type: string
-            minLength: 1
-            maxLength: 128
-          required: false
-          name: externalId
-          in: query
-      responses:
-        "200":
-          description: A page
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CustomerPage"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/customers/{customerId}:
-    get:
-      tags:
-        - Customers
-      summary: Get a customer
-      security:
-        - apiKey: []
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: customerId
-          in: path
-      responses:
-        "200":
-          description: The customer
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Customer"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-    patch:
-      tags:
-        - Customers
-      summary: Update a customer (optimistic, If-Match)
-      security:
-        - apiKey: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: customerId
-          in: path
-        - schema:
-            type: string
-            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
-          required: true
-          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
-          name: if-match
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateCustomerRequest"
-      responses:
-        "200":
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Customer"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "409":
-          description: Conflict; `details.reason` says which (see the API description)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/customers/{customerId}/archive:
-    post:
-      tags:
-        - Customers
-      summary: Archive a customer
-      description: Idempotent. Refused with 409 HAS_ACTIVE_PROJECTS while any of its projects is ACTIVE. Nothing is ever deleted.
-      security:
-        - apiKey: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: customerId
-          in: path
-        - schema:
-            type: string
-            minLength: 8
-            maxLength: 128
-            description: Client-generated key, unique per operation attempt (plan §14.2).
-          required: true
-          description: Client-generated key, unique per operation attempt (plan §14.2).
-          name: idempotency-key
-          in: header
-      responses:
-        "200":
-          description: Archived (or already was)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Customer"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "409":
-          description: Conflict; `details.reason` says which (see the API description)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/projects:
-    post:
-      tags:
-        - Projects
-      summary: Create a project
-      description: "One currency per project. With `externalReference`, creation is idempotent on that reference: a known reference returns the existing project with 200 when it belongs to the same customer, or 409 CUSTOMER_MISMATCH when it does not. A session may create a project on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there."
-      security:
-        - apiKey: []
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: string
-            minLength: 8
-            maxLength: 128
-            description: Client-generated key, unique per operation attempt (plan §14.2).
-          required: true
-          description: Client-generated key, unique per operation attempt (plan §14.2).
-          name: idempotency-key
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateProjectRequest"
-      responses:
-        "200":
-          description: Already exists for this external reference
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Project"
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Project"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "409":
-          description: Conflict; `details.reason` says which (see the API description)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-    get:
-      tags:
-        - Projects
-      summary: List projects
-      security:
-        - apiKey: []
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 50
-            description: Page size, 1–200.
-          required: false
-          description: Page size, 1–200.
-          name: limit
-          in: query
-        - schema:
-            type: string
-            description: Opaque `nextCursor` from the previous page.
-          required: false
-          description: Opaque `nextCursor` from the previous page.
-          name: cursor
-          in: query
-        - schema:
-            $ref: "#/components/schemas/EntityStatus"
-          required: false
-          name: status
-          in: query
-        - schema:
-            type: string
-            format: uuid
-          required: false
-          name: customerId
-          in: query
-        - schema:
-            $ref: "#/components/schemas/Currency"
-          required: false
-          name: currency
-          in: query
-        - schema:
-            $ref: "#/components/schemas/Provider"
-          required: false
-          name: provider
-          in: query
-        - schema:
-            type: string
-            minLength: 1
-            maxLength: 128
-          required: false
-          name: externalId
-          in: query
-      responses:
-        "200":
-          description: A page
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ProjectPage"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/projects/{projectId}:
-    get:
-      tags:
-        - Projects
-      summary: Get a project
-      security:
-        - apiKey: []
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: projectId
-          in: path
-      responses:
-        "200":
-          description: The project
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Project"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-    patch:
-      tags:
-        - Projects
-      summary: Update a project (optimistic, If-Match)
-      description: "`currency` can change only while nothing is posted against the project; afterwards it is refused with 409 CURRENCY_LOCKED. `customerId` is immutable."
-      security:
-        - apiKey: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: projectId
-          in: path
-        - schema:
-            type: string
-            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
-          required: true
-          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
-          name: if-match
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateProjectRequest"
-      responses:
-        "200":
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Project"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "409":
-          description: Conflict; `details.reason` says which (see the API description)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/projects/{projectId}/archive:
-    post:
-      tags:
-        - Projects
-      summary: Archive a project
-      description: Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding and 409 PROPOSAL_OPEN while a fee proposal is open (withdraw it first). Nothing is ever deleted.
-      security:
-        - apiKey: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: projectId
-          in: path
-        - schema:
-            type: string
-            minLength: 8
-            maxLength: 128
-            description: Client-generated key, unique per operation attempt (plan §14.2).
-          required: true
-          description: Client-generated key, unique per operation attempt (plan §14.2).
-          name: idempotency-key
-          in: header
-      responses:
-        "200":
-          description: Archived (or already was)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Project"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "409":
-          description: Conflict; `details.reason` says which (see the API description)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
           content:
             application/json:
               schema:
@@ -8665,6 +7995,1303 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operations/{idempotencyKey}:
+    get:
+      tags:
+        - Payments
+      summary: The stored outcome of an idempotent write
+      description: COMPLETED carries the response the original request received (2xx or 4xx, both final). PENDING means a request with this key is still running. 404 means the key was never claimed by this organization or was released after a server error — retrying with the same key is safe.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+          required: true
+          name: idempotencyKey
+          in: path
+      responses:
+        "200":
+          description: The operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operation"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/audit:
+    get:
+      tags:
+        - Audit
+      summary: List audit events, oldest first, filtered by entity or action
+      description: entityType is the API’s entity name (payment, receivable, agreement, installment, retainer_charge, customer, project, attachment, …); entityId its id. Keyset pagination like every list.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+            description: Page size, 1–200.
+          required: false
+          description: Page size, 1–200.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+          required: false
+          name: entityType
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+          required: false
+          name: entityId
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+          required: false
+          name: action
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/inbox:
+    get:
+      tags:
+        - Inbox
+      summary: List your unsorted entries, newest first
+      description: "Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+            description: Page size, 1–200.
+          required: false
+          description: Page size, 1–200.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InboxEntryPage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      tags:
+        - Inbox
+      summary: Capture an amount now, decide where it belongs later
+      description: 'occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. A typo year is refused at once: not more than ten years before UTC yesterday (MUT-227); filing applies the exact floor. kind is fixed at capture.'
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInboxEntryRequest"
+      responses:
+        "201":
+          description: Captured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InboxEntry"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/inbox/count:
+    get:
+      tags:
+        - Inbox
+      summary: How many unsorted entries are waiting
+      description: "Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile. MUT-240: the Capture hub's Recent handle wants an exact \"N to file\" without paging a whole list."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: The count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InboxCount"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/inbox/{entryId}:
+    patch:
+      tags:
+        - Inbox
+      summary: Fix an unsorted entry (optimistic, If-Match)
+      description: "Anything you captured. Not kind: what an entry is destined to become is fixed at capture. A changed currency needs the amount again (422 AMOUNT_INVALID), read in that currency's digits. null clears an optional field."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: entryId
+          in: path
+        - schema:
+            type: string
+            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          required: true
+          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          name: if-match
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInboxEntryRequest"
+      responses:
+        "200":
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InboxEntry"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Inbox
+      summary: Throw away an unsorted entry
+      description: Gone for good — an entry is a scratch note, not a ledger row, so there is no tombstone and no 204-again. A second delete is 404.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: entryId
+          in: path
+      responses:
+        "204":
+          description: Done
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/inbox/{entryId}/file-as-expense:
+    post:
+      tags:
+        - Inbox
+      summary: File an unsorted entry as an expense on a profile
+      description: "Amount, currency, date and note come from the entry; only what it could not know is sent here. The expense is created and the entry removed in one transaction: on success it is gone, on any refusal it is untouched. 409 ENTRY_KIND_MISMATCH for an entry captured as income."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: entryId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileAsExpenseRequest"
+      responses:
+        "201":
+          description: Filed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/inbox/{entryId}/file-as-income:
+    post:
+      tags:
+        - Inbox
+      summary: File an unsorted entry as income on a profile
+      description: "Received or Owed is chosen here, not at capture: the distinction only means something once a client is (or deliberately is not) in the picture. MUT-65's rules apply unchanged — Owed requires a client, and a Malafat-fed profile refuses the write with READ_ONLY_PROFILE, leaving the entry in place. 409 ENTRY_KIND_MISMATCH for an entry captured as an expense."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: entryId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileAsIncomeRequest"
+      responses:
+        "201":
+          description: Filed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/entries:
+    get:
+      tags:
+        - Entries
+      summary: Your entries across profiles, newest logged first
+      description: "Expenses, received payments, Owed entries and conversions on every profile you belong to (or the profiles you name), ordered by when each was logged. Everything on a profile, whoever logged it, Malafat's payments included; scheduled installments and retainer charges are not entries. No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox. A page is a snapshot: an entry edited or deleted later changes only when that page is read again (a deleted one is simply absent), so cache only the pages you re-read. A settle shows as a received payment with settlesOwedId next to its Owed (settled once paid in full, open before); a Malafat correction as a received payment with replacesPaymentId next to the reversed one."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: array
+            items:
+              type: string
+            description: Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404.
+          required: false
+          description: Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404.
+          style: form
+          explode: true
+          name: profileId
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            description: Page size, 1–100.
+          required: false
+          description: Page size, 1–100.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntryPage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/customers:
+    post:
+      tags:
+        - Customers
+      summary: Create a customer
+      description: "With `externalReference`, creation is idempotent on that reference: a known reference returns the existing customer with 200 and changes nothing. Requires a CONNECTED integration for the provider. A session may create a customer on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there."
+      security:
+        - apiKey: []
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
+      responses:
+        "200":
+          description: Already exists for this external reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      tags:
+        - Customers
+      summary: List customers
+      security:
+        - apiKey: []
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+            description: Page size, 1–200.
+          required: false
+          description: Page size, 1–200.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+        - schema:
+            $ref: "#/components/schemas/EntityStatus"
+          required: false
+          name: status
+          in: query
+        - schema:
+            $ref: "#/components/schemas/Provider"
+          required: false
+          name: provider
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+          required: false
+          name: externalId
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerPage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/customers/{customerId}:
+    get:
+      tags:
+        - Customers
+      summary: Get a customer
+      security:
+        - apiKey: []
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: customerId
+          in: path
+      responses:
+        "200":
+          description: The customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      tags:
+        - Customers
+      summary: Update a customer (optimistic, If-Match)
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: customerId
+          in: path
+        - schema:
+            type: string
+            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          required: true
+          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          name: if-match
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomerRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/customers/{customerId}/archive:
+    post:
+      tags:
+        - Customers
+      summary: Archive a customer
+      description: Idempotent. Refused with 409 HAS_ACTIVE_PROJECTS while any of its projects is ACTIVE. Nothing is ever deleted.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: customerId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      responses:
+        "200":
+          description: Archived (or already was)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/projects:
+    post:
+      tags:
+        - Projects
+      summary: Create a project
+      description: "One currency per project. With `externalReference`, creation is idempotent on that reference: a known reference returns the existing project with 200 when it belongs to the same customer, or 409 CUSTOMER_MISMATCH when it does not. A session may create a project on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there."
+      security:
+        - apiKey: []
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "200":
+          description: Already exists for this external reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      tags:
+        - Projects
+      summary: List projects
+      security:
+        - apiKey: []
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+            description: Page size, 1–200.
+          required: false
+          description: Page size, 1–200.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+        - schema:
+            $ref: "#/components/schemas/EntityStatus"
+          required: false
+          name: status
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: customerId
+          in: query
+        - schema:
+            $ref: "#/components/schemas/Currency"
+          required: false
+          name: currency
+          in: query
+        - schema:
+            $ref: "#/components/schemas/Provider"
+          required: false
+          name: provider
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+          required: false
+          name: externalId
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectPage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/projects/{projectId}:
+    get:
+      tags:
+        - Projects
+      summary: Get a project
+      security:
+        - apiKey: []
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: projectId
+          in: path
+      responses:
+        "200":
+          description: The project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      tags:
+        - Projects
+      summary: Update a project (optimistic, If-Match)
+      description: "`currency` can change only while nothing is posted against the project; afterwards it is refused with 409 CURRENCY_LOCKED. `customerId` is immutable."
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: projectId
+          in: path
+        - schema:
+            type: string
+            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          required: true
+          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          name: if-match
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/projects/{projectId}/archive:
+    post:
+      tags:
+        - Projects
+      summary: Archive a project
+      description: Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding and 409 PROPOSAL_OPEN while a fee proposal is open (withdraw it first). Nothing is ever deleted.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: projectId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      responses:
+        "200":
+          description: Archived (or already was)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/receivables:
     get:
       tags:
@@ -9507,59 +10134,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/operations/{idempotencyKey}:
-    get:
-      tags:
-        - Payments
-      summary: The stored outcome of an idempotent write
-      description: COMPLETED carries the response the original request received (2xx or 4xx, both final). PENDING means a request with this key is still running. 404 means the key was never claimed by this organization or was released after a server error — retrying with the same key is safe.
-      security:
-        - apiKey: []
-      parameters:
-        - schema:
-            type: string
-            minLength: 8
-            maxLength: 128
-          required: true
-          name: idempotencyKey
-          in: path
-      responses:
-        "200":
-          description: The operation
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Operation"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/summaries/organization:
     get:
       tags:
@@ -9697,84 +10271,6 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/audit:
-    get:
-      tags:
-        - Audit
-      summary: List audit events, oldest first, filtered by entity or action
-      description: entityType is the API’s entity name (payment, receivable, agreement, installment, retainer_charge, customer, project, attachment, …); entityId its id. Keyset pagination like every list.
-      security:
-        - apiKey: []
-      parameters:
-        - schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 50
-            description: Page size, 1–200.
-          required: false
-          description: Page size, 1–200.
-          name: limit
-          in: query
-        - schema:
-            type: string
-            description: Opaque `nextCursor` from the previous page.
-          required: false
-          description: Opaque `nextCursor` from the previous page.
-          name: cursor
-          in: query
-        - schema:
-            type: string
-            minLength: 1
-            maxLength: 64
-          required: false
-          name: entityType
-          in: query
-        - schema:
-            type: string
-            minLength: 1
-            maxLength: 128
-          required: false
-          name: entityId
-          in: query
-        - schema:
-            type: string
-            minLength: 1
-            maxLength: 64
-          required: false
-          name: action
-          in: query
-      responses:
-        "200":
-          description: A page
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuditPage"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
           content:
             application/json:
               schema:
@@ -11956,496 +12452,6 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           description: "No rates to serve: the provider is down or answered with an unusable rate date, and this instance has nothing cached within 7 days of its rate date; or no rate source is configured"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/inbox:
-    get:
-      tags:
-        - Inbox
-      summary: List your unsorted entries, newest first
-      description: "Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile."
-      security:
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-            default: 50
-            description: Page size, 1–200.
-          required: false
-          description: Page size, 1–200.
-          name: limit
-          in: query
-        - schema:
-            type: string
-            description: Opaque `nextCursor` from the previous page.
-          required: false
-          description: Opaque `nextCursor` from the previous page.
-          name: cursor
-          in: query
-      responses:
-        "200":
-          description: A page
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InboxEntryPage"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-    post:
-      tags:
-        - Inbox
-      summary: Capture an amount now, decide where it belongs later
-      description: 'occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. A typo year is refused at once: not more than ten years before UTC yesterday (MUT-227); filing applies the exact floor. kind is fixed at capture.'
-      security:
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: string
-            minLength: 8
-            maxLength: 128
-            description: Client-generated key, unique per operation attempt (plan §14.2).
-          required: true
-          description: Client-generated key, unique per operation attempt (plan §14.2).
-          name: idempotency-key
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateInboxEntryRequest"
-      responses:
-        "201":
-          description: Captured
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InboxEntry"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/inbox/count:
-    get:
-      tags:
-        - Inbox
-      summary: How many unsorted entries are waiting
-      description: "Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile. MUT-240: the Capture hub's Recent handle wants an exact \"N to file\" without paging a whole list."
-      security:
-        - session: []
-        - deviceSession: []
-      responses:
-        "200":
-          description: The count
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InboxCount"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/inbox/{entryId}:
-    patch:
-      tags:
-        - Inbox
-      summary: Fix an unsorted entry (optimistic, If-Match)
-      description: "Anything you captured. Not kind: what an entry is destined to become is fixed at capture. A changed currency needs the amount again (422 AMOUNT_INVALID), read in that currency's digits. null clears an optional field."
-      security:
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: entryId
-          in: path
-        - schema:
-            type: string
-            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
-          required: true
-          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
-          name: if-match
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateInboxEntryRequest"
-      responses:
-        "200":
-          description: Changed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/InboxEntry"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "409":
-          description: Conflict; `details.reason` says which (see the API description)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-    delete:
-      tags:
-        - Inbox
-      summary: Throw away an unsorted entry
-      description: Gone for good — an entry is a scratch note, not a ledger row, so there is no tombstone and no 204-again. A second delete is 404.
-      security:
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: entryId
-          in: path
-      responses:
-        "204":
-          description: Done
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/inbox/{entryId}/file-as-expense:
-    post:
-      tags:
-        - Inbox
-      summary: File an unsorted entry as an expense on a profile
-      description: "Amount, currency, date and note come from the entry; only what it could not know is sent here. The expense is created and the entry removed in one transaction: on success it is gone, on any refusal it is untouched. 409 ENTRY_KIND_MISMATCH for an entry captured as income."
-      security:
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: entryId
-          in: path
-        - schema:
-            type: string
-            minLength: 8
-            maxLength: 128
-            description: Client-generated key, unique per operation attempt (plan §14.2).
-          required: true
-          description: Client-generated key, unique per operation attempt (plan §14.2).
-          name: idempotency-key
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/FileAsExpenseRequest"
-      responses:
-        "201":
-          description: Filed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Expense"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "409":
-          description: Conflict; `details.reason` says which (see the API description)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/inbox/{entryId}/file-as-income:
-    post:
-      tags:
-        - Inbox
-      summary: File an unsorted entry as income on a profile
-      description: "Received or Owed is chosen here, not at capture: the distinction only means something once a client is (or deliberately is not) in the picture. MUT-65's rules apply unchanged — Owed requires a client, and a Malafat-fed profile refuses the write with READ_ONLY_PROFILE, leaving the entry in place. 409 ENTRY_KIND_MISMATCH for an entry captured as an expense."
-      security:
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: entryId
-          in: path
-        - schema:
-            type: string
-            minLength: 8
-            maxLength: 128
-            description: Client-generated key, unique per operation attempt (plan §14.2).
-          required: true
-          description: Client-generated key, unique per operation attempt (plan §14.2).
-          name: idempotency-key
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/FileAsIncomeRequest"
-      responses:
-        "201":
-          description: Filed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IncomeResponse"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "409":
-          description: Conflict; `details.reason` says which (see the API description)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/entries:
-    get:
-      tags:
-        - Entries
-      summary: Your entries across profiles, newest logged first
-      description: "Expenses, received payments, Owed entries and conversions on every profile you belong to (or the profiles you name), ordered by when each was logged. Everything on a profile, whoever logged it, Malafat's payments included; scheduled installments and retainer charges are not entries. No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox. A page is a snapshot: an entry edited or deleted later changes only when that page is read again (a deleted one is simply absent), so cache only the pages you re-read. A settle shows as a received payment with settlesOwedId next to its Owed (settled once paid in full, open before); a Malafat correction as a received payment with replacesPaymentId next to the reversed one."
-      security:
-        - session: []
-        - deviceSession: []
-      parameters:
-        - schema:
-            type: array
-            items:
-              type: string
-            description: Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404.
-          required: false
-          description: Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404.
-          style: form
-          explode: true
-          name: profileId
-          in: query
-        - schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-            description: Page size, 1–100.
-          required: false
-          description: Page size, 1–100.
-          name: limit
-          in: query
-        - schema:
-            type: string
-            description: Opaque `nextCursor` from the previous page.
-          required: false
-          description: Opaque `nextCursor` from the previous page.
-          name: cursor
-          in: query
-      responses:
-        "200":
-          description: A page
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EntryPage"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
           content:
             application/json:
               schema:

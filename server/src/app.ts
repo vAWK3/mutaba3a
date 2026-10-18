@@ -18,36 +18,26 @@ import type { AttachmentStorage } from './attachments/storage.js';
 import { adminAuth, adminRoutes } from './routes/admin.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
-import { ME_ORGANIZATION_INDEPENDENT_ROUTES, meRoutes } from './routes/me.js';
+import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
 import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
-import { attachmentRoutes } from './routes/attachments.js';
 import { auditRoutes } from './routes/audit.js';
-import { summaryRoutes } from './routes/summaries.js';
-import { expenseCategoryRoutes } from './routes/expense-categories.js';
-import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, profileRoutes } from './routes/profiles.js';
-import { conversionRoutes } from './routes/conversions.js';
-import { FX_ORGANIZATION_INDEPENDENT_ROUTES, fxRateRoutes } from './routes/fx-rates.js';
-import { expenseRoutes } from './routes/expenses.js';
-import { expenseGroupRoutes } from './routes/expense-groups.js';
-import { incomeRoutes } from './routes/income.js';
+import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/profiles.js';
+import { FX_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/fx-rates.js';
 import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from './inbox/routes-keys.js';
 import { inboxRoutes } from './routes/inbox.js';
 import { ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, entriesRoutes } from './routes/entries.js';
 import { agreementRoutes } from './routes/agreements.js';
 import { contingencyRoutes } from './routes/contingency.js';
-import { customerRoutes } from './routes/customers.js';
 import { feeProposalRoutes } from './routes/fee-proposals.js';
 import { installmentRoutes } from './routes/installments.js';
 import { operationRoutes } from './routes/operations.js';
-import { paymentRoutes } from './routes/payments.js';
-import { receivableRoutes } from './routes/receivables.js';
+import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { retainerRoutes } from './routes/retainers.js';
 import { vatRoutes } from './routes/vat.js';
 import { healthRoutes } from './routes/health.js';
 import { importRoutes } from './routes/import.js';
 import { integrationRoutes } from './routes/integration.js';
-import { projectRoutes } from './routes/projects.js';
 import { wellKnownRoutes, type AppAssociationConfig } from './routes/well-known.js';
 import { CaptureSourceSchema, CONFLICT_REASONS, VALIDATION_REASONS } from './schemas.js';
 import { DAYS_IN_PAST_LIMIT } from './agreements/compose.js';
@@ -200,8 +190,6 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
   app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle }));
   app.route('/', integrationRoutes(store, deps.version));
-  app.route('/', customerRoutes(store));
-  app.route('/', projectRoutes(store));
   app.route('/', importRoutes(store));
   app.route('/', vatRoutes(store));
   app.route('/', feeProposalRoutes(store));
@@ -209,22 +197,16 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', contingencyRoutes(store));
   app.route('/', installmentRoutes(store));
   app.route('/', retainerRoutes(store));
-  app.route('/', receivableRoutes(store));
-  app.route('/', paymentRoutes(store));
   app.route('/', operationRoutes(store));
-  app.route('/', summaryRoutes(store));
   app.route('/', auditRoutes(store));
-  app.route('/', attachmentRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
-  app.route('/', expenseRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
-  app.route('/', expenseCategoryRoutes(store));
-  app.route('/', incomeRoutes(store));
-  app.route('/', expenseGroupRoutes(store));
-  app.route('/', conversionRoutes(store));
-  app.route('/', fxRateRoutes(deps.fxRates ?? null));
   app.route('/', inboxRoutes(store));
   app.route('/', entriesRoutes(store));
-  app.route('/', profileRoutes(store));
-  app.route('/', meRoutes(store));
+  const portalRouteDeps: PortalRouteDependencies = {
+    store,
+    attachments: { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 },
+    fxRates: deps.fxRates ?? null,
+  };
+  for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions }));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
