@@ -23,7 +23,7 @@ export const todayInJerusalem = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
 type Json = Record<string, unknown>;
-type Currency = 'ILS' | 'USD' | 'EUR' | 'JOD';
+type Currency = 'ILS' | 'USD' | 'EUR' | 'JOD' | 'AED' | 'SAR' | 'QAR' | 'BHD' | 'OMR';
 
 export interface Logged {
   method: string;
@@ -243,7 +243,7 @@ const addDays = (day: string, days: number) => {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 };
-const exponent = (currency: string) => (currency === 'JOD' ? 3 : 2);
+const exponent = (currency: string) => (currency === 'JOD' || currency === 'BHD' || currency === 'OMR' ? 3 : 2);
 const minorOf = (amount: string, currency: string) => Math.round(Number(amount) * 10 ** exponent(currency));
 const decimalOf = (minor: number, currency: string) => (minor / 10 ** exponent(currency)).toFixed(exponent(currency));
 
