@@ -68,7 +68,7 @@ endif
 
 .PHONY: help release release-web release-server release-full \
         preflight-web preflight-server doctor \
-        check-web check-server check check-e2e \
+        check-web check-server check check-e2e qa-view \
         bump-web bump-server \
         migrate-status clean-dist
 
@@ -87,6 +87,7 @@ help:
 	@printf '  make check-server      lint + typecheck + tests + openapi + build\n'
 	@printf '  make check             both of the above\n'
 	@printf '  make check-e2e         release-qa core-tier specs (not part of a release)\n'
+	@printf '  make qa-view           open the latest release-qa report\n'
 	@printf '  make migrate-status    pending prisma migrations against $(ENVIRONMENT)\n'
 	@printf '\n$(C_BOLD)Pieces$(C_OFF)\n'
 	@printf '  make bump-web          choose patch/minor/major for the app version\n'
@@ -153,6 +154,11 @@ check: check-web check-server
 # See qa/qa.config.mjs and ~/Work/tools/release-qa/SKILL.md.
 check-e2e:
 	@release-qa release --no-open
+
+# Opens the latest release-qa report (qa/runs/<slug>/index.html) in the
+# browser. Just opens the file — run `make check-e2e` first to refresh it.
+qa-view:
+	@release-qa open
 
 migrate-status:
 	@cd server && TF_STATE_BUCKET=$${TF_STATE_BUCKET:?set TF_STATE_BUCKET} npm run --silent db:migrate:status
