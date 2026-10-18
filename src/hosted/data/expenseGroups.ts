@@ -139,7 +139,8 @@ const roundMinor = (value: number) => Math.sign(value) * Math.round(Math.abs(val
 export function perDay(block: CurrencyBlock, group: GroupDates, today: Day): string | null {
   if (today < group.startOn) return null;
   const elapsed = daysBetween(group.startOn, minDay(today, group.endOn ?? group.windowEnd));
-  const inMinor = block.byDay.filter((b) => b.position === 'in').reduce((sum, b) => sum + minorOf(b.total, block.currency), 0);
+  // Spend on days still to come (a prepaid hotel) waits for its day, as an open group's 'after' buckets do
+  const inMinor = block.byDay.filter((b) => b.position === 'in' && b.date <= today).reduce((sum, b) => sum + minorOf(b.total, block.currency), 0);
   return minorToDecimal(roundMinor(inMinor / elapsed), block.currency);
 }
 

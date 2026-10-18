@@ -34,5 +34,12 @@ export function useSpringScale(ref: RefObject<HTMLElement | null>, scale: number
     return () => controls.stop();
   }, [ref, scale, axis, reducedMotion]);
 
-  useEffect(() => () => value.current?.destroy(), []);
+  useEffect(
+    () => () => {
+      // Cleared too, so StrictMode's rehearsal remount builds a fresh, painted value
+      value.current?.destroy();
+      value.current = null;
+    },
+    [],
+  );
 }

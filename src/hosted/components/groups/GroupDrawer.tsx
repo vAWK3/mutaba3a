@@ -72,6 +72,7 @@ export function GroupDrawer({ profileId, today, group, onClose, onCreated, onSav
   function check(): Errors {
     const found: Errors = {};
     if (!values.name.trim()) found.name = e('nameRequired');
+    if (!values.startOn) found.startOn = e('startRequired');
     if (!values.stillGoing && !values.endOn) found.endOn = e('endRequired');
     else if (!values.stillGoing && values.endOn < values.startOn) found.endOn = e('endBeforeStart');
     else if (!values.stillGoing && lastEnd && values.endOn > lastEnd) found.endOn = e('tooLong', { date: formatDay(lastEnd, language) });
@@ -97,7 +98,7 @@ export function GroupDrawer({ profileId, today, group, onClose, onCreated, onSav
       case 'GROUP_LIMIT':
         return { form: e('limit') };
       default:
-        return { form: e('network') };
+        return { form: e('invalid') };
     }
   }
 

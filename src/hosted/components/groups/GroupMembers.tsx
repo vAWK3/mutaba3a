@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { Fragment, useCallback, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 import '../../../components/ui/Table.css';
 import { getLocale, useLanguage } from '../../../lib/i18n/core';
 import { usePrefersReducedMotion } from '../../../lib/motion/mediaQuery';
@@ -83,24 +83,29 @@ export function GroupMembers(props: GroupMembersProps) {
               <tbody>
                 {days.map((day) => {
                   const note = props.dayLabel(day.position, day.date);
-                  return [
-                    <tr key={`day-${day.date}`} id={dayId(group.id, day.date)} className="hp-dayhead" tabIndex={-1}>
-                      <th scope="rowgroup" colSpan={textColumns}>
-                        {weekday.format(new Date(`${day.date}T00:00:00Z`))}
-                        {note && <span className="hp-dayhead-note"> · {note}</span>}
-                      </th>
-                      <td className="hp-num">
-                        {day.subtotals.map((s, i) => (
-                          <span key={s.currency}>
-                            {i > 0 && ' · '}
-                            <DecimalAmount value={s.total} currency={s.currency} />
-                          </span>
-                        ))}
-                      </td>
-                      <td />
-                    </tr>,
-                    ...day.rows.map((row) => <MemberRow key={row.id} {...props} row={row} list="member" container={sectionRef} />),
-                  ];
+                  // Keyed per day: rows on later days keep their DOM nodes when a day empties (focus and glide follow them)
+                  return (
+                    <Fragment key={day.date}>
+                      <tr id={dayId(group.id, day.date)} className="hp-dayhead" tabIndex={-1}>
+                        <th scope="rowgroup" colSpan={textColumns}>
+                          {weekday.format(new Date(`${day.date}T00:00:00Z`))}
+                          {note && <span className="hp-dayhead-note"> · {note}</span>}
+                        </th>
+                        <td className="hp-num">
+                          {day.subtotals.map((s, i) => (
+                            <span key={s.currency}>
+                              {i > 0 && ' · '}
+                              <DecimalAmount value={s.total} currency={s.currency} />
+                            </span>
+                          ))}
+                        </td>
+                        <td />
+                      </tr>
+                      {day.rows.map((row) => (
+                        <MemberRow key={row.id} {...props} row={row} list="member" container={sectionRef} />
+                      ))}
+                    </Fragment>
+                  );
                 })}
               </tbody>
             </table>

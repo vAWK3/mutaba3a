@@ -173,8 +173,13 @@ describe('currency choice and per day', () => {
   it('divides in-window spend by elapsed days, hidden before day 1', () => {
     const withKept = block('JOD', [bucket('2026-09-12', '120.000', 1, 'before'), ...jod.byDay]);
     expect(perDay(withKept, group(), '2026-10-02')).toBeNull();
-    expect(perDay(withKept, group(), '2026-10-04')).toBe('72.000');
+    expect(perDay(withKept, group(), '2026-10-04')).toBe('24.000');
     expect(perDay(withKept, group(), '2026-12-01')).toBe('28.800');
+  });
+
+  it('leaves spend on days still to come out of per day (a prepaid hotel in a trip under way)', () => {
+    const b = block('JOD', [bucket('2026-10-03', '10.000'), bucket('2026-10-06', '90.000')]);
+    expect(perDay(b, group(), '2026-10-04')).toBe('5.000');
   });
 
   it('rounds half away from zero in the currency’s digits', () => {

@@ -705,7 +705,9 @@
           "limit": "This profile already has 200 groups, the most allowed. Delete one to add another.",
           "conflict": "This group changed elsewhere. It has been reloaded; check it and save again.",
           "network": "Couldn't reach Mutaba3a. Try again.",
-          "notFound": "This group was deleted."
+          "notFound": "This group was deleted.",
+          "startRequired": "Pick the day it starts",
+          "invalid": "Check the name and dates, then try again."
         },
         "confirmEmpty": "It has no expenses."
       },

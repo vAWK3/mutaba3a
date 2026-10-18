@@ -188,6 +188,17 @@ describe('New group (14A, 9A, 10A)', () => {
     expect(await screen.findByText('Jordan trip created')).toBeInTheDocument();
   });
 
+  it('needs a From date', async () => {
+    const { user, api } = portal(`${BASE}?newGroup=1`, { groups: [] });
+    const drawer = await screen.findByRole('dialog', { name: 'New group' });
+    await user.type(within(drawer).getByLabelText('Name'), 'Trip');
+    await user.clear(within(drawer).getByLabelText('From'));
+    await user.click(within(drawer).getByLabelText('Still going (no end date yet)'));
+    await user.click(within(drawer).getByRole('button', { name: 'Create group' }));
+    expect(within(drawer).getByText('Pick the day it starts')).toBeInTheDocument();
+    expect(api.count('POST /v1/expense-groups')).toBe(0);
+  });
+
   it('says the profile is full, and a resubmit gets a fresh key instead of the cached refusal (TD-163)', async () => {
     let answer: Handler = () => fail(422, 'VALIDATION_FAILED', { reason: 'GROUP_LIMIT', max: 200 });
     const { user, api } = portal(`${BASE}?newGroup=1`, { groups: [], routes: { 'POST /v1/expense-groups': (r) => answer(r) } });
@@ -275,6 +286,29 @@ describe('Group page (2A, 4A, 5A, 6A, 7A)', () => {
     await user.click(screen.getByRole('button', { name: 'Leave out all 2 Rent' }));
     await waitFor(() => expect(api.calls.filter((c) => c.method === 'PUT').map((c) => c.url.pathname.split('/').pop())).toEqual(['rent', 'rent2']));
     expect(await screen.findByText('Left out 2 · Rent')).toBeInTheDocument();
+  });
+
+  it('keeps the currency tab while pruning, even when another currency becomes the busiest', async () => {
+    const usd2 = expense('usd2', { occurredOn: '2026-10-06', amount: '5.00', currency: 'USD', title: 'Water' });
+    const { user } = portal(`${BASE}/${G1}`, {
+      members: [taxi, pass, rent, esim, usd2],
+      routes: {
+        [`PUT /v1/expense-groups/${G1}/expenses/taxi`]: never,
+        [`PUT /v1/expense-groups/${G1}/expenses/pass`]: never,
+      },
+    });
+    expect(await screen.findByRole('tab', { name: 'JOD' })).toHaveAttribute('aria-selected', 'true');
+    await user.click(screen.getByRole('button', { name: 'Leave out: Airport taxi' }));
+    await user.click(screen.getByRole('button', { name: 'Leave out: Dead Sea day pass' }));
+    expect(screen.getByRole('group', { name: 'Total spent' })).toHaveTextContent('1 expense');
+    expect(screen.getByRole('tab', { name: 'JOD' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('keeps the next day’s rows in place when a day empties, so focus moves to the next row', async () => {
+    const { user } = portal(`${BASE}/${G1}`, { members: [taxi, pass], routes: { [`PUT /v1/expense-groups/${G1}/expenses/taxi`]: never } });
+    const next = await screen.findByRole('button', { name: 'Leave out: Dead Sea day pass' });
+    await user.click(screen.getByRole('button', { name: 'Leave out: Airport taxi' }));
+    expect(screen.getByRole('button', { name: 'Leave out: Dead Sea day pass' })).toBe(next);
   });
 
   it('says Uncategorized for expenses with no category, last', async () => {

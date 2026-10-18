@@ -36,7 +36,7 @@ import {
   type RowList,
   type Verb,
 } from '../../data/expenseGroups';
-import { forgetGroup, groupLoads, useExpenseGroup, useFxRates, useGroupMarks, useGroupRows, useGroupSummary } from '../../data/expenseGroupQueries';
+import { forgetGroup, groupLoads, groupsKey, useExpenseGroup, useFxRates, useGroupMarks, useGroupRows, useGroupSummary } from '../../data/expenseGroupQueries';
 import { useExpenseCategories } from '../../data/expenseQueries';
 import type { GroupDetailSearch } from '../../data/filters';
 import { DecimalAmount } from '../../format/DecimalAmount';
@@ -120,6 +120,8 @@ export function ExpenseGroupDetail({ groupId, search, setSearch }: ExpenseGroupD
           }}
           onDeleted={(gone) => {
             // Leave first, then forget: the page never refetches a deleted group into "This group was deleted" (eng R8)
+            // …and off the cached list first, so it never shows there for a moment (review 9)
+            queryClient.setQueriesData<{ items: ExpenseGroup[] }>({ queryKey: groupsKey(profile.id, 'list') }, (old) => old && { ...old, items: old.items.filter((g) => g.id !== gone.id) });
             void navigate({ to: groupsPath }).then(() => forgetGroup(queryClient, profile.id, gone.id));
             showToast(t('hosted.groups.deleted', { name: gone.name }), { tone: 'info' });
           }}
@@ -162,7 +164,9 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
   const loads = groupLoads(queryClient, profile.id, group.id);
   const summary = marks.summary(served, loads.summary);
   const rows = marks.rows(servedMembers, excludedQuery.data ?? [], loads);
-  const currency = defaultCurrency(summary.currencies, profile.defaultCurrency, search.currency);
+  // The default tab is chosen once, from what the page first loaded (5A): pruning must not flip the chart mid-task
+  const [firstChoice] = useState(() => defaultCurrency(served.currencies, profile.defaultCurrency));
+  const currency = defaultCurrency(summary.currencies, profile.defaultCurrency, search.currency ?? firstChoice);
   const block = summary.currencies.find((c) => c.currency === currency);
   const names = useMemo(() => new Map((categories.data ?? []).map((c) => [c.id, c.name])), [categories.data]);
   const categoryName = (row: Expense) => (row.categoryId ? names.get(row.categoryId) ?? '—' : t('hosted.groups.detail.uncategorized'));
@@ -177,9 +181,12 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
 
   async function act(verb: Verb, row: Expense, list: RowList) {
     const from = motionKey(list, row.id);
-    motion.current.leaving.add(from);
-    // A refused save puts the row back the way it left (craft 2)
-    motion.current.returning.add(from);
+    // An added row isn't on screen yet: it neither leaves nor comes back
+    if (verb !== 'add') {
+      motion.current.leaving.add(from);
+      // A refused save puts the row back the way it left (craft 2)
+      motion.current.returning.add(from);
+    }
     // Where it lands (Left out, or the members on Undo / Bring back / Add), it slides in from the inline end
     if (verb !== 'remove') motion.current.returning.add(motionKey(verb === 'leaveOut' ? 'excluded' : 'member', row.id));
     const ok = await marks.act(verb, row);
@@ -199,10 +206,11 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
     const verbOf = (row: Expense) => verbFor('member', row.occurredOn, group);
     const inside = targets.filter((r) => verbOf(r) === 'leaveOut');
     const outside = targets.filter((r) => verbOf(r) === 'remove');
+    // Cleared now, not after the saves: anything the person changes meanwhile (tab, a drawer) must survive
+    setSearch({ ...search, category: undefined });
     const results = [await marks.actMany('leaveOut', inside), await marks.actMany('remove', outside)];
     const done = results.flatMap((r) => r.done);
     const failed = results.flatMap((r) => r.failed);
-    setSearch({ ...search, category: undefined });
     if (failed.length > 0) {
       showToast(t('hosted.groups.detail.toast.partialLeftOut', { done: done.length, total: targets.length }), {
         action: { label: t('hosted.groups.detail.toast.retry'), onAction: () => void leaveOutAll(failed, label) },
@@ -213,13 +221,18 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
       tone: 'info',
       action: {
         label: t('hosted.groups.detail.toast.undo'),
-        onAction: () => {
-          done.forEach((row) => motion.current.returning.add(motionKey('member', row.id)));
-          void marks.actMany('bringBack', done.filter((r) => verbOf(r) === 'leaveOut'));
-          void marks.actMany('add', done.filter((r) => verbOf(r) === 'remove'));
-        },
+        onAction: () => void undoMany(done),
       },
     });
+  }
+
+  /** Undo of a bulk leave-out: the two batches one after the other (one refetch each), and a toast if any fails. */
+  async function undoMany(rows: Expense[]) {
+    rows.forEach((row) => motion.current.returning.add(motionKey('member', row.id)));
+    const back = await marks.actMany('bringBack', rows.filter((r) => verbFor('member', r.occurredOn, group) === 'leaveOut'));
+    const kept = await marks.actMany('add', rows.filter((r) => verbFor('member', r.occurredOn, group) === 'remove'));
+    const failed = [...back.failed, ...kept.failed];
+    if (failed.length > 0) showToast(t('hosted.groups.detail.toast.failed', { title: titleOf(failed[0]!) }), { action: { label: t('hosted.groups.detail.toast.retry'), onAction: () => void undoMany(failed) } });
   }
 
   async function addRows(targets: Expense[]) {

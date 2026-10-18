@@ -809,7 +809,8 @@ export class FakeApi {
       t.count += 1;
       byCurrency.set(x.currency, t);
     }
-    return [...byCurrency.values()].map((t) => ({ currency: t.currency, total: decimalOf(t.minor, t.currency), count: t.count }));
+    // Alphabetical by currency, as the API orders them
+    return [...byCurrency.values()].sort((a, b) => (a.currency < b.currency ? -1 : 1)).map((t) => ({ currency: t.currency, total: decimalOf(t.minor, t.currency), count: t.count }));
   }
 
   private listedGroup(group: StubGroup) {

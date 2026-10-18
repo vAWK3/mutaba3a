@@ -149,7 +149,8 @@ export const parseConversionsPage = (raw: Raw): ConversionsPageSearch => ({ ...p
 export interface GroupsPageSearch {
   newGroup?: true;
 }
-const one = (value: unknown): true | undefined => (value === '1' || value === true ? true : undefined);
+// TanStack parses `?newGroup=1` to the number 1
+const one = (value: unknown): true | undefined => (value === '1' || value === 1 || value === true ? true : undefined);
 export const parseGroupsPage = (raw: Raw): GroupsPageSearch => compact({ newGroup: one(raw.newGroup) });
 
 /**

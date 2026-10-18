@@ -49,6 +49,17 @@
 
 ### Fixed
 - **Every portal page scrolled sideways on a phone** (found by the arabic-375 spec): the phone shell column was `1fr`, so the top bar's nav set its minimum width (~611 px). Now `minmax(0, 1fr)`.
+- qa-reconcile and pre-landing review:
+  - Left out retries in place.
+  - Undo slides a row back in.
+  - Day rows are keyed per day, so a later day's rows keep their nodes and focus.
+  - The default currency tab is fixed at first load.
+  - "Leave out all" clears the category before saving, and its Undo runs the two batches in turn with a failure toast.
+  - From is required, and an unknown 422 no longer says "Couldn't reach".
+  - Per day ignores days still to come.
+  - `?newGroup=1` parses as a number too.
+  - A deleted group leaves the cached list before navigation.
+  - StrictMode no longer freezes the bar springs in dev.
 
 ## [Unreleased] - 2026-10-18 — Hosted expense groups: trips with per-day and per-category totals (MUT-267, ADR-094)
 

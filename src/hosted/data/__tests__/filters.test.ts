@@ -101,6 +101,8 @@ describe('shell overlay keys (MUT-183 R1)', () => {
 describe('expense groups URL state (MUT-268)', () => {
   it('opens New group with ?newGroup=1', () => {
     expect(parseGroupsPage({ newGroup: '1' })).toEqual({ newGroup: true });
+    // What TanStack's search parser actually hands over for ?newGroup=1
+    expect(parseGroupsPage({ newGroup: 1 })).toEqual({ newGroup: true });
     expect(parseGroupsPage({ newGroup: 'yes' })).toEqual({});
   });
 
