@@ -1846,7 +1846,7 @@ export const CreateExpenseRequestSchema = z
   .strict()
   .openapi('CreateExpenseRequest');
 
-/** No `currency`: a row's currency never changes, so it is never converted. Null clears an optional field. */
+/** MUT-272: `currency` only together with `amount` (ADR-095); the amount is never converted, only re-read in the new currency's digits. Null clears an optional field. */
 export const UpdateExpenseRequestSchema = z
   .object({
     occurredOn: FlooredMoneyDatePatchSchema.optional(),
