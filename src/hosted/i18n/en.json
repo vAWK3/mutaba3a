@@ -237,7 +237,9 @@
         "title": "No clients on this profile yet",
         "body": "Clients recorded for this profile appear here."
       },
-      "noMatch": "No clients match \"{query}\"."
+      "noMatch": "No clients match \"{query}\".",
+      "add": "Add client",
+      "addFailed": "Couldn't add the client. Try again."
     },
     "client": {
       "back": "All clients",

@@ -3,8 +3,7 @@ area: local
 title: The portal signed out, on this device
 tier: secondary
 # MUT-286 (epic MUT-284, ADR-097): signed out, the portal runs the server's own routes in the page over IndexedDB.
-# The brief's local.income-persists asks for money *owed*; the portal has no way to create a client yet (hosted
-# clients come from the phone or Malafat), so it is covered with money received until that gap is decided.
+# The brief's local.income-persists is owed-part-paid below; the client it needs is added from the picker (TD-172).
 # local.expense-receipt, local.offline, local.marker-upsell, local.fx-line, local.move-on-sign-in belong to MUT-287..290.
 paths:
   - src/hosted/local/**
@@ -39,6 +38,24 @@ features:
       - Reload the page
     expect:
       - The payment is listed after saving and again after the reload, on the same profile
+      - No request reached the server after the first-visit check
+  - id: owed-part-paid
+    title: Signed out, add a client from the picker, record money owed and part of it paid, reload, and both are there
+    tier: core # the brief's local.income-persists: the free app's everyday loop
+    paths:
+      - src/hosted/components/ClientPicker.tsx
+      - src/hosted/data/customerQueries.ts
+      - src/hosted/data/incomeAffordances.ts
+      - src/hosted/components/RecordPaymentDrawer.tsx
+    steps:
+      - Open Receivables signed out, in English
+      - Add income, Owed, 900.00, typing a client nobody has yet ("Ramallah Bakery") and choosing "Add client: Ramallah Bakery"
+      - Record a payment of 400.00 on it
+      - Reload the page
+    expect:
+      - The new client is picked in the drawer, and the entry is listed under it
+      - After the payment the entry is Partly paid with 500.00 still owed
+      - After the reload it is still Partly paid with 500.00 owed, and Clients lists Ramallah Bakery
       - No request reached the server after the first-visit check
   - id: two-tabs
     title: Two tabs on this device see each other's saves

@@ -50,4 +50,18 @@ describe('signed out: no network (AC4)', () => {
     expect(receivables.items).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('adds a client, records money owed for them and part of it paid, all on this device (MUT-286)', async () => {
+    const me = await api.me();
+    const profileId = me.profiles[0]!.id;
+
+    const client = await api.createCustomer(profileId, { name: 'Ramallah Bakery' }, 'no-network-client-1');
+    const owed = await api.createIncome(profileId, { kind: 'owed', amount: '900.00', currency: 'ILS', occurredOn: '2026-10-01', customerId: client.id, title: 'Menu design' }, 'no-network-owed-1');
+    await api.settleReceivable(profileId, owed.id, { amount: '400.00' }, 'no-network-settle-1');
+    const receivable = await api.receivable(profileId, owed.id);
+
+    expect(receivable.status).toBe('PARTIALLY_PAID');
+    expect(receivable.outstanding).toBe('500.00');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });

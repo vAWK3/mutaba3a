@@ -19,6 +19,7 @@ export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];
 export type Currency = Schemas['Currency'];
 export type Customer = Schemas['Customer'];
+export type CreateCustomerRequest = Schemas['CreateCustomerRequest'];
 export type Project = Schemas['Project'];
 export type Receivable = Schemas['Receivable'];
 export type Payment = Schemas['Payment'];
@@ -304,6 +305,9 @@ export const api = {
     request<Get<'/v1/summaries/customers/{customerId}'>>('GET', `/v1/summaries/customers/${encodeURIComponent(customerId)}`, { profileId }),
   customers: (profileId: string, query: Query<'/v1/customers'> = {}) =>
     request<Get<'/v1/customers'>>('GET', '/v1/customers', { profileId, query }),
+  /** MUT-286: the client picker's Add «name», on a profile the person owns (session `customers:write`, MUT-65). */
+  createCustomer: (profileId: string, body: CreateCustomerRequest, idempotencyKey: string) =>
+    request<Customer>('POST', '/v1/customers', { profileId, body, idempotencyKey }),
   customer: (profileId: string, customerId: string) =>
     request<Get<'/v1/customers/{customerId}'>>('GET', `/v1/customers/${encodeURIComponent(customerId)}`, { profileId }),
   projects: (profileId: string, query: Query<'/v1/projects'> = {}) =>

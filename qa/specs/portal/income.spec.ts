@@ -454,3 +454,41 @@ test('Add income in QAR from Receivables; it saves, shows QAR, and the currency 
   });
 });
 
+test('Add income for a client that isn\'t there yet, with Add client in the picker; a Malafat-fed profile never offers it', { tag: '@portal.income.add-client' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio'), malafatFirm()], clients: 1 });
+  const drawer = page.getByRole('dialog', { name: 'New income' });
+
+  await step('On your own profile, + Add income, Owed, and type a client nobody has', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.getByRole('button', { name: '+ Add income' }).first().click();
+    await drawer.getByRole('radio', { name: 'Owed' }).click();
+    await drawer.getByLabel('Client').fill('Ramallah Bakery');
+    await expect(drawer.getByRole('option', { name: /Add client.*Ramallah Bakery/ })).toBeVisible();
+  });
+
+  await step('Choose Add client: Ramallah Bakery, type 900, and save', async () => {
+    await drawer.getByRole('option', { name: /Add client.*Ramallah Bakery/ }).click();
+    await expect(drawer.getByLabel('Client')).toHaveValue('Ramallah Bakery');
+    const created = api.last('POST', /^\/v1\/customers$/);
+    expect(created?.body).toEqual({ name: 'Ramallah Bakery' });
+    expect(created?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
+    expect(created?.headers['x-mutaba3a-profile']).toBe(OFFICE_A);
+    await drawer.getByLabel('Amount').fill('900');
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  await step('The income went to the server for the new client, and is listed under it', async () => {
+    const income = api.last('POST', /^\/v1\/income$/);
+    expect((income?.body as { customerId?: string }).customerId).toBe(customer(1).id);
+    await expect(page.getByRole('table', { name: 'Receivables' }).getByRole('row', { name: /Ramallah Bakery/ })).toContainText('900.00');
+  });
+
+  await step('On the Malafat-fed profile, the expense drawer\'s client list offers no Add client', async () => {
+    await page.goto(`/p/${FIRM}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    const expense = page.getByRole('dialog', { name: 'Record expense' });
+    await expense.getByLabel('Client').fill('Ramallah Bakery');
+    await expect(expense.getByRole('option', { name: /Add client/ })).toHaveCount(0);
+  });
+});

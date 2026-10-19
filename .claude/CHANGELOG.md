@@ -39,6 +39,11 @@
 - **Account menu signed out:** "On this device" instead of an email; Sign in and Your data; no sign-out, password, Malafat, usage or store links. Expenses and Conversions are hidden until MUT-287.
 - **Your data drawer** (`?yourData=true`): Download my records (versioned JSON, `mutaba3a-records-<date>.json`) and Restore from file (confirm names the record count; refuses a non-records or newer file; lands on the restored profile). `navigator.storage.persist()` after the first save.
 - **Reload screen** when another tab saved records with a newer build (D1).
+- **Add client from the picker** (both modes, owned profiles): a typed name no client has offers "Add client: «name»", which creates the client (`POST /v1/customers`) and picks it, in the income and expense drawers. Signed out this is how a client first exists, so money owed can be recorded (TD-172 resolved).
+
+### Fixed (Phase C)
+- The expense drawer's Client label now names its field (the picker had no `id`).
+- Restore lands on the restored profile (it redirected from a stale `/v1/me`).
 
 ### Changed (Phase C)
 - `client.ts` `request()` routes by mode through `send()`; sign-in and setup always go to the server; a local 401 never triggers the session-expired handler. The lazy chunk is reached through `@mut/local-backend` (types: `session/localBackendContract.ts`; code: `local/index.ts`).

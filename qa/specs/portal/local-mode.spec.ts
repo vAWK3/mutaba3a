@@ -102,6 +102,55 @@ test('Money received signed out is still there after a reload, and nothing is se
   });
 });
 
+test('Signed out, add a client from the picker, record money owed and part of it paid, reload, and both are there', { tag: '@portal.local.owed-part-paid' }, async ({ page, step }) => {
+  const server = await signedOutServer(page);
+  const table = page.getByRole('table', { name: 'Receivables' });
+  const row = () => table.getByRole('row', { name: /Ramallah Bakery/ });
+
+  await step('Open Receivables signed out', async () => {
+    await page.goto('/');
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Receivables' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Receivables' })).toBeVisible();
+  });
+
+  await step('Add 900.00 owed by a client nobody has yet: Add client: Ramallah Bakery', async () => {
+    await page.getByRole('button', { name: '+ Add income' }).first().click();
+    const drawer = page.getByRole('dialog', { name: 'New income' });
+    await drawer.getByRole('radio', { name: 'Owed' }).click();
+    await drawer.getByLabel('Amount').fill('900');
+    const client = drawer.getByLabel('Client');
+    await client.fill('Ramallah Bakery');
+    await drawer.getByRole('option', { name: /Add client.*Ramallah Bakery/ }).click();
+    await expect(client).toHaveValue('Ramallah Bakery');
+    await drawer.getByLabel('What was it for?').fill('Menu design');
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer).toBeHidden();
+    await expect(row()).toContainText('900.00');
+  });
+
+  await step('Record a payment of 400.00 on it: Partly paid, 500.00 still owed', async () => {
+    await row().getByRole('button', { name: /^Record payment for Ramallah Bakery/ }).click();
+    const drawer = page.getByRole('dialog', { name: /Record payment/ });
+    await drawer.getByLabel('Amount (ILS)').fill('400');
+    await drawer.getByRole('button', { name: 'Record payment' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(row()).toContainText('Partly paid');
+    await expect(row().getByRole('button', { name: /^Record payment for Ramallah Bakery, remaining: .*500\.00/ })).toBeVisible();
+  });
+
+  await step('Reload: still Partly paid with 500.00 owed, and Clients lists Ramallah Bakery', async () => {
+    await page.reload();
+    await expect(row()).toContainText('Partly paid');
+    await expect(row().getByRole('button', { name: /remaining: .*500\.00/ })).toBeVisible();
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Clients' }).click();
+    await expect(page.getByRole('main')).toContainText('Ramallah Bakery');
+  });
+
+  await step('Nothing reached the server after the first-visit check', async () => {
+    expect(server.requests).toEqual(['GET /v1/me']);
+  });
+});
+
 test('Two tabs on this device see each other\'s saves', { tag: '@portal.local.two-tabs' }, async ({ page, step }) => {
   await signedOutServer(page);
   const other = await page.context().newPage();

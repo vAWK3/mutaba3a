@@ -3105,4 +3105,10 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `src/hosted/session/__tests__/local-mode.test.tsx` (21) | through the real router: first visit (one request, Arabic, pre-existing session kept); account menu, nav, switcher, Malafat hidden (AC5); cross-tab refresh; reload screen; sign-in "Continue on this device", expired choice, sign-in → remote + local cache dropped, sign-out → local; Your data download, restore lands on the restored profile, cancel, refusals, absent signed in |
 | `scripts/__tests__/hosted-lint.test.ts` › local mode | portal ⊄ server/src; no static `@mut/local-backend`; allowlist admits route list + store, refuses sessions routes, app.ts, prisma; portal bans hold in the local backend |
 | `scripts/__tests__/check-bundles.test.ts` › local backend stays lazy | IndexedDB allowed lazily, flagged in a statically loaded file |
-| Release-QA `qa/specs/portal/local-mode.spec.ts` (`@portal.local.*`) | first-visit, received-persists, two-tabs, download-restore, session-expired — all pass on a preview build. Owed + part-paid waits on TD-172 |
+| `src/hosted/components/__tests__/ClientPicker.test.tsx` › Add «name» (4) | offered only for a name no client has (any case) and only with `canCreate`; picking POSTs `{ name }` with Idempotency-Key and profile header and picks the new client; a refusal keeps the name unpicked with a toast; directory and summaries refetch |
+| `incomeAffordances.test.ts` › canAddClient (3) | owned personal/business yes; Malafat-fed and writer-null firm no |
+| `ExpenseDrawer.test.tsx` › client label | the Client label names the picker; no Add row without `canAddClient` |
+| `no-network.test.ts` › client + owed + part paid | createCustomer → Owed 900 → settle 400 → PARTIALLY_PAID, 500.00 outstanding, no fetch |
+| `portal-routes-coverage.test.ts` | 50 portal calls (MUT-286 adds `POST /v1/customers`) |
+| Release-QA `qa/specs/portal/local-mode.spec.ts` (`@portal.local.*`) | first-visit, received-persists, owed-part-paid (Add client in the picker), two-tabs, download-restore, session-expired — all pass on a preview build |
+| Release-QA `qa/specs/portal/income.spec.ts` › `@portal.income.add-client` | signed in: Add client creates and picks the client, the income goes to it; no Add row on a Malafat-fed profile |

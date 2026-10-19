@@ -537,6 +537,12 @@ export class FakeApi {
       if (id === 'organization') return json({ asOf: '2026-10-15', currencies: this.summary });
       if (id === 'customers' && sub) return this.customerSummaries.has(sub) ? json(this.customerSummaries.get(sub)) : notFound();
     }
+    if (resource === 'customers' && method === 'POST' && !id) {
+      // MUT-286: the client picker's Add «name». The new client joins the directory the next GET returns.
+      const created = { ...customer(this.customers.length), name: String((e.body as { name?: unknown } | null)?.name ?? '') };
+      this.customers.push(created);
+      return json(created, 201);
+    }
     if (resource === 'customers' && method === 'GET') {
       if (!id) return page(this.customers);
       const found = this.customers.find((c) => c.id === id);
