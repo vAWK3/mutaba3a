@@ -156,3 +156,17 @@
 **Context:** In the MUT-153 eng review (2026-10-17, D3), Basel chose MCP + INFRA for now, following the Netlify Forms precedent (INFRA §1). Terraform for GCP lives in `server/infrastructure` (ADR-026).
 
 **Depends on / blocked by:** MUT-153 T6 (the project exists). The dashboards come from MUT-154 and MUT-157.
+
+## 16. Closed months can only be fixed by reopening them (firm books, MUT-299 D2)
+
+**What:** Allow a correction expense that names the expense it corrects (`correctsExpenseId`), may be negative, and is dated in an open month. A bill-payment reversal dated after the close then posts a negative expense instead of needing a reopen.
+
+**Why:** Under MUT-299 D2, a mistake in a closed month is fixed by the owner reopening it (reason, audited). The month's reports can change after the accountant saw them. Firms whose accountants or auditors need frozen months will want current-period adjustments instead (the Odoo-style approach).
+
+**Pros of fixing:** Closed months never change, and corrections land where accountants expect them.
+
+**Cons / cost / risk:** Every reader that sums expenses must handle negative rows: summaries, category charts, expense groups, CSV and the accountant pack, plus the phone app. About a week of human work, or about 2 hours with CC.
+
+**Context:** Decided 2026-10-19 in the MUT-299 eng review (R2/D2, `.claude/designs/mut-299-firm-books-plan.md`). Trigger: an accountant or auditor asks for frozen months. Start at `server/src/expenses/compose.ts:20`, which refuses amounts ≤ 0.
+
+**Depends on / blocked by:** MUT-312 (month close) shipped.

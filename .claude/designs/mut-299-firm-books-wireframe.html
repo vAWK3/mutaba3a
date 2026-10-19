@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firm books wireframe (MUT-299)</title>
+<style>
+/* Tokens copied from src/styles/brand/mutaba3a-theme.css (brand v2). */
+:root {
+  --m-canvas: oklch(0.975 0.014 80); --m-surface: oklch(0.993 0.008 80); --m-line: oklch(0.92 0.015 300);
+  --m-field-bg: oklch(0.965 0.012 300); --m-ink: oklch(0.33 0.05 300); --m-ink2: oklch(0.442 0.043 298.7);
+  --m-primary: oklch(0.55 0.14 295); --m-on-primary: oklch(0.98 0.012 80); --m-focus: oklch(0.6 0.13 295);
+  --m-lavender: oklch(0.9 0.06 295); --m-lavender-ink: oklch(0.401 0.114 294.5);
+  --m-mint: oklch(0.9 0.06 165); --m-mint-ink: oklch(0.387 0.076 170.2);
+  --m-rose: oklch(0.9 0.06 10); --m-rose-ink: oklch(0.398 0.103 14.8);
+  --m-peach: oklch(0.9 0.06 55); --m-peach-ink: oklch(0.4 0.104 50.8);
+  --m-butter: oklch(0.93 0.07 95); --m-butter-ink: oklch(0.419 0.083 74.8);
+  --m-font-body: "Thmanyah Sans", system-ui, sans-serif; --m-font-num: "IBM Plex Mono", "Thmanyah Sans", ui-monospace, monospace;
+  --m-radius-sm: 12px; --m-radius-md: 14px; --m-radius-lg: 18px; --m-radius-pill: 999px;
+  --text-micro: 0.6875rem; --text-label: 0.8125rem; --text-body: 1rem; --text-headline: 1.25rem;
+  --m-shadow-card: 0 1px 2px color-mix(in oklch, oklch(0.45 0.08 300) 6%, transparent), 0 12px 40px color-mix(in oklch, oklch(0.45 0.08 300) 7%, transparent);
+}
+:root[data-theme="dark"] {
+  --m-canvas: oklch(0.24 0.035 300); --m-surface: oklch(0.29 0.04 300); --m-line: oklch(0.4 0.04 300);
+  --m-field-bg: oklch(0.34 0.045 300); --m-ink: oklch(0.95 0.015 80); --m-ink2: oklch(0.78 0.03 300);
+  --m-primary: oklch(0.78 0.11 295); --m-on-primary: oklch(0.27 0.06 300); --m-focus: oklch(0.75 0.12 295);
+  --m-lavender: oklch(0.38 0.07 295); --m-lavender-ink: oklch(0.88 0.08 295);
+  --m-mint: oklch(0.38 0.07 165); --m-mint-ink: oklch(0.88 0.08 165);
+  --m-rose: oklch(0.38 0.07 10); --m-rose-ink: oklch(0.88 0.08 10);
+  --m-peach: oklch(0.38 0.07 55); --m-peach-ink: oklch(0.88 0.08 55);
+  --m-butter: oklch(0.4 0.06 85); --m-butter-ink: oklch(0.9 0.09 95);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--m-canvas); color: var(--m-ink); font: var(--text-body)/1.5 var(--m-font-body); }
+::selection { background: var(--m-lavender); color: var(--m-lavender-ink); }
+:focus-visible { outline: 2px solid var(--m-focus); outline-offset: 2px; }
+.top { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 16px; background: var(--m-surface); border-block-end: 1px solid var(--m-line); }
+.top h1 { font-size: var(--text-headline); margin: 0; margin-inline-end: auto; min-width: 0; }
+.top button { font: inherit; font-size: var(--text-label); padding: 6px 12px; border-radius: var(--m-radius-pill); border: 1px solid var(--m-line); background: var(--m-field-bg); color: var(--m-ink); cursor: pointer; }
+main { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; display: grid; gap: 40px; }
+.frame { display: grid; gap: 12px; }
+.frame > h2 { font-size: var(--text-headline); margin: 0; }
+.note { font-size: var(--text-label); color: var(--m-ink2); margin: 0; max-width: 72ch; }
+.note b { color: var(--m-ink); }
+.app { display: grid; grid-template-columns: 220px minmax(0, 1fr); background: var(--m-surface); border: 1px solid var(--m-line); border-radius: var(--m-radius-lg); overflow: hidden; min-height: 360px; }
+.side { border-inline-end: 1px solid var(--m-line); padding: 16px 12px; display: grid; align-content: start; gap: 2px; }
+.side .mark { font-weight: 700; margin-block-end: 12px; }
+.side a { display: block; padding: 8px 10px; border-radius: var(--m-radius-sm); color: var(--m-ink); text-decoration: none; font-size: var(--text-label); }
+.side a[aria-current] { background: var(--m-lavender); color: var(--m-lavender-ink); font-weight: 600; }
+.side a.new::after { content: " ·جديد"; color: var(--m-primary); font-size: var(--text-micro); }
+.page { padding: 20px 24px; display: grid; align-content: start; gap: 16px; position: relative; }
+.page h3 { margin: 0; font-size: var(--text-headline); }
+.tabs { display: flex; gap: 4px; border-block-end: 1px solid var(--m-line); }
+.tabs span { padding: 8px 12px; font-size: var(--text-label); border-block-end: 2px solid transparent; }
+.tabs span.on { border-color: var(--m-primary); font-weight: 600; }
+.count { display: inline-block; min-width: 20px; padding: 0 6px; margin-inline-start: 4px; border-radius: var(--m-radius-pill); background: var(--m-lavender); color: var(--m-lavender-ink); font-size: var(--text-micro); text-align: center; }
+.rows { display: grid; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 12px 0; border-block-end: 1px solid var(--m-line); }
+.row .sub { font-size: var(--text-label); color: var(--m-ink2); }
+.num { font-family: var(--m-font-num); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
+.pill { display: inline-block; padding: 0 8px; border-radius: var(--m-radius-pill); font-size: var(--text-micro); font-weight: 500; }
+.p-wait { background: var(--m-butter); color: var(--m-butter-ink); } .p-rej, .p-over { background: var(--m-rose); color: var(--m-rose-ink); }
+.p-soon { background: var(--m-peach); color: var(--m-peach-ink); } .p-paid { background: var(--m-mint); color: var(--m-mint-ink); }
+.p-closed { background: var(--m-lavender); color: var(--m-lavender-ink); }
+.btn { font: inherit; font-size: var(--text-label); min-height: 44px; padding: 0 16px; border-radius: var(--m-radius-md); border: 1px solid var(--m-line); background: var(--m-surface); color: var(--m-ink); cursor: pointer; }
+.btn.primary { background: var(--m-primary); border-color: var(--m-primary); color: var(--m-on-primary); font-weight: 600; }
+.btns { display: flex; gap: 8px; }
+.drawer { position: absolute; inset-block: 0; inset-inline-end: 0; width: min(420px, 100%); background: var(--m-surface); border-inline-start: 1px solid var(--m-line); box-shadow: var(--m-shadow-card); padding: 20px; display: grid; align-content: start; gap: 14px; }
+.drawer h4 { margin: 0; font-size: var(--text-headline); }
+.field { display: grid; gap: 4px; }
+.field label { font-size: var(--text-label); font-weight: 600; }
+.field .input { min-height: 44px; display: flex; align-items: center; padding: 0 12px; border-radius: var(--m-radius-sm); background: var(--m-field-bg); border: 1px solid transparent; }
+.field .input.empty { color: var(--m-ink2); }
+.src { font-size: var(--text-micro); color: var(--m-ink2); }
+.banner { display: flex; gap: 8px; padding: 10px 12px; border-radius: var(--m-radius-sm); font-size: var(--text-label); }
+.banner.info { background: var(--m-lavender); color: var(--m-lavender-ink); }
+.banner.error { background: var(--m-rose); color: var(--m-rose-ink); }
+.readonly { padding: 10px 12px; border-radius: var(--m-radius-sm); border: 1px dashed var(--m-line); color: var(--m-ink2); font-size: var(--text-label); }
+.figures { display: flex; gap: 32px; flex-wrap: wrap; }
+.figure .label { font-size: var(--text-label); color: var(--m-ink2); }
+.figure .value { font-size: 2rem; font-weight: 700; }
+.attn a { color: var(--m-primary); text-underline-offset: 3px; }
+.phone { width: 100%; max-width: 375px; border: 1px solid var(--m-line); border-radius: 28px; background: var(--m-surface); padding: 20px 16px; display: grid; gap: 12px; }
+.qrow { display: grid; gap: 8px; padding: 12px 0; border-block-end: 1px solid var(--m-line); }
+.qrow .line { display: flex; justify-content: space-between; gap: 12px; }
+.qrow .btns .btn { flex: 1; }
+.pair { display: flex; gap: 24px; flex-wrap: wrap; align-items: start; }
+@media (max-width: 760px) { .app { grid-template-columns: 1fr; } .side { display: none; } .drawer { position: static; width: 100%; box-shadow: none; border: 1px solid var(--m-line); border-radius: var(--m-radius-lg); } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>دفاتر المكاتب: نموذج أولي (MUT-299)</h1>
+  <button type="button" id="dir">English layout (LTR)</button>
+  <button type="button" id="theme">Dark</button>
+</header>
+<main>
+
+<section class="frame" aria-labelledby="f1">
+  <h2 id="f1">1 · Expenses › To review, with a receipt open (v1, DR1 + DR6)</h2>
+  <p class="note"><b>DR1:</b> spending lives under Expenses as tabs; <b>Firm</b> is the one new nav item. <b>DR6:</b> each read field says where it came from in words; a low-confidence field stays empty with a hint; the caption disappears once edited.</p>
+  <div class="app">
+    <nav class="side" aria-label="الأقسام">
+      <div class="mark">متابعة</div>
+      <a href="#">نظرة عامة</a><a href="#">العملاء</a><a href="#">المستحقات</a><a href="#">الدفعات</a><a href="#">المستندات</a>
+      <a href="#" aria-current="page">المصاريف</a><a href="#">التحويلات</a><a href="#" class="new">المكتب</a>
+    </nav>
+    <div class="page">
+      <h3>المصاريف</h3>
+      <div class="tabs"><span>المصاريف</span><span class="on">للمراجعة<span class="count num">4</span></span><span>الفواتير</span><span>المجموعات</span></div>
+      <div class="rows">
+        <div class="row"><div>محطة وقود الرياض<div class="sub">مشاركة من الهاتف · قبل ساعة</div></div><span class="num">SAR 184.00</span><span class="pill p-wait">جاهز للمراجعة</span></div>
+        <div class="row"><div>مكتبة جرير<div class="sub">رفع PDF · اليوم</div></div><span class="num">SAR 62.50</span><span class="pill p-wait">جاهز للمراجعة</span></div>
+        <div class="row"><div>صورة إيصال<div class="sub">تعذّرت القراءة، املأها يدويًا</div></div><span class="num">—</span><span class="pill p-wait">جاهز للمراجعة</span></div>
+      </div>
+      <aside class="drawer" aria-label="مراجعة الإيصال">
+        <h4>مراجعة الإيصال</h4>
+        <div class="field"><label>المورّد</label><div class="input">محطة وقود الرياض</div><span class="src">من رمز QR</span></div>
+        <div class="field"><label>الرقم الضريبي</label><div class="input num">300012345600003</div><span class="src">من رمز QR</span></div>
+        <div class="field"><label>التاريخ</label><div class="input num">2027-09-14</div><span class="src">من رمز QR</span></div>
+        <div class="field"><label>المبلغ المدفوع</label><div class="input num">SAR 184.00</div><span class="src">من رمز QR</span></div>
+        <div class="field"><label>الفئة</label><div class="input empty">اختر فئة</div><span class="src">تحقّق من الإيصال</span></div>
+        <div class="field"><label>الضريبة</label><div class="input">ضريبة ١٥٪ · <span class="num">24.00</span></div><span class="src">من رمز QR</span></div>
+        <div class="btns"><button class="btn primary" type="button">حفظ كمصروف</button><button class="btn" type="button">حفظ كفاتورة</button></div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<section class="frame" aria-labelledby="f2">
+  <h2 id="f2">2 · Firm request in Manage profiles (v1, MUT-300)</h2>
+  <p class="note">One row on an owned Business profile. States: offer → <b>Requested</b> → <b>Firm features are on</b>. Personal profiles never show it.</p>
+  <div class="pair">
+    <div class="phone" aria-label="Manage profiles drawer, request state">
+      <strong>إدارة الملفات</strong>
+      <div class="row"><div>مكتب الخطيب للمحاماة<div class="sub">ملف تجاري تملكه</div></div><span></span><button class="btn" type="button">استخدمه لمكتب</button></div>
+      <p class="note">بعد الطلب: "تم الطلب · سنراسلك عند التفعيل"</p>
+    </div>
+    <div class="phone" aria-label="Overview banner on the day it turns on (DR5)">
+      <div class="banner info">ميزات المكتب مفعّلة. ادعُ فريقك من المكتب › الأعضاء.<span style="margin-inline-start:auto">✕</span></div>
+      <p class="note"><b>DR5:</b> one dismissible banner, no checklist; empty states carry the next step.</p>
+    </div>
+  </div>
+</section>
+
+<section class="frame" aria-labelledby="f3">
+  <h2 id="f3">3 · Firm › Members (v3, DR12 + D3/D4/D10)</h2>
+  <p class="note">Rows, not cards. Pending invites show expiry with Resend/Revoke. The last owner's role and Remove are disabled with the reason. The invite drawer always answers "Invitation sent" (D10).</p>
+  <div class="app">
+    <nav class="side" aria-label="الأقسام"><div class="mark">متابعة</div><a href="#">المصاريف</a><a href="#" aria-current="page">المكتب</a></nav>
+    <div class="page">
+      <h3>المكتب</h3>
+      <div class="tabs"><span class="on">الأعضاء</span><span>إقفال الشهر</span><span>حزمة المحاسب</span></div>
+      <div class="rows">
+        <div class="row"><div>ريم الخطيب<div class="sub">مالكة · آخر مالك، لا يمكن تغيير دورها</div></div><span class="pill p-closed">مالك</span><span></span></div>
+        <div class="row"><div>سامي ناصر<div class="sub">محاسب · يوافق على المصاريف ويقفل الأشهر</div></div><span class="pill p-paid">محاسب</span><button class="btn" type="button">إدارة</button></div>
+        <div class="row"><div>lina@example.com<div class="sub">مدعوّة كمقدّمة مصاريف · تنتهي خلال ٦ أيام</div></div><span class="pill p-wait">مدعوّة</span><button class="btn" type="button">إعادة الإرسال</button></div>
+      </div>
+      <button class="btn primary" type="button" style="justify-self:start">دعوة شخص</button>
+    </div>
+  </div>
+</section>
+
+<section class="frame" aria-labelledby="f4">
+  <h2 id="f4">4 · Approval queue: desktop row and 375 px stack (v3, DR8 + DR9)</h2>
+  <p class="note">Focus moves to the next row's Approve after an action; a live region announces what's left. Reject opens a drawer with a required reason. A rejected expense can be edited and resubmitted (DR9). A row dated in a closed month has its buttons disabled with the reason (O6).</p>
+  <div class="pair">
+    <div class="app" style="flex:1;min-width:0;grid-template-columns:1fr">
+      <div class="page">
+        <div class="rows">
+          <div class="row"><div>مطعم البيت · ليلى<div class="sub">2027-10-03 · غداء عمل مع عميل</div></div><span class="num">SAR 240.00</span><div class="btns"><button class="btn primary" type="button">موافقة</button><button class="btn" type="button">رفض</button></div></div>
+          <div class="row"><div>أوبر · سامي<div class="sub">2027-09-28 · سبتمبر مقفل</div></div><span class="num">SAR 38.00</span><div class="btns"><button class="btn" type="button" disabled>موافقة</button><button class="btn" type="button" disabled>رفض</button></div></div>
+        </div>
+        <p class="note" role="status">تمت الموافقة. بقي ١.</p>
+      </div>
+    </div>
+    <div class="phone" aria-label="375 px approval row">
+      <div class="qrow"><div class="line"><span>مطعم البيت</span><span class="num">SAR 240.00</span></div><div class="line sub"><span>ليلى</span><span class="num">2027-10-03</span></div><div class="btns"><button class="btn primary" type="button">موافقة</button><button class="btn" type="button">رفض</button></div></div>
+      <div class="qrow"><div class="line"><span>قرطاسية</span><span class="num">SAR 55.00</span></div><span class="pill p-rej" style="justify-self:start">مرفوض</span><span class="sub">السبب: الإيصال غير واضح. يمكنك تعديله وإعادة إرساله.</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="frame" aria-labelledby="f5">
+  <h2 id="f5">5 · A write refused by a closed month (v5, DR4 + DR10)</h2>
+  <p class="note">The drawer stays open, the error names the month, and an owner gets the reopen link. Never a toast alone. Close is blocked while the month has pending rows (DR10).</p>
+  <div class="pair">
+    <div class="phone" aria-label="Bookkeeper sees">
+      <strong>تعديل مصروف</strong>
+      <div class="banner error">شهر سبتمبر ٢٠٢٧ مقفل. اطلب من المالك إعادة فتحه.</div>
+      <div class="field"><label>التاريخ</label><div class="input num">2027-09-14</div></div>
+    </div>
+    <div class="phone" aria-label="Owner sees">
+      <strong>تعديل مصروف</strong>
+      <div class="banner error">شهر سبتمبر ٢٠٢٧ مقفل. <a href="#" style="color:inherit">إعادة فتح سبتمبر</a></div>
+      <div class="readonly">إقفال أكتوبر غير متاح: ٢ مصروف بانتظار الموافقة. <a href="#">راجعها</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="frame" aria-labelledby="f6">
+  <h2 id="f6">6 · Overview for owners and bookkeepers (v4–v5, DR3)</h2>
+  <p class="note">Collections stay first (money-M8). <b>We owe</b> sits beside <b>Owed to us</b>, per currency. "Needs attention" gains rows, not cards, each deep-linking to its tab.</p>
+  <div class="app" style="grid-template-columns:1fr">
+    <div class="page">
+      <div class="figures">
+        <div class="figure"><div class="label">مستحق لنا</div><div class="value num">SAR 42,300</div></div>
+        <div class="figure"><div class="label">علينا</div><div class="value num">SAR 6,850</div></div>
+      </div>
+      <div class="rows attn">
+        <div class="row"><div><a href="#">٤ إيصالات للمراجعة</a></div><span></span><span class="pill p-wait">للمراجعة</span></div>
+        <div class="row"><div><a href="#">٢ مصروف بانتظار الموافقة</a></div><span></span><span class="pill p-wait">بانتظار</span></div>
+        <div class="row"><div><a href="#">فاتورة متأخرة · ٣ مستحقة هذا الأسبوع</a></div><span></span><span class="pill p-over">متأخرة</span></div>
+        <div class="row"><div><a href="#">لم يُقفل سبتمبر بعد</a></div><span></span><span class="pill p-closed">إقفال</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+<script>
+(function () {
+  var root = document.documentElement;
+  document.getElementById('dir').addEventListener('click', function (e) {
+    var rtl = root.getAttribute('dir') === 'rtl';
+    root.setAttribute('dir', rtl ? 'ltr' : 'rtl');
+    e.currentTarget.textContent = rtl ? 'Arabic layout (RTL)' : 'English layout (LTR)';
+  });
+  document.getElementById('theme').addEventListener('click', function (e) {
+    var dark = root.getAttribute('data-theme') === 'dark';
+    root.setAttribute('data-theme', dark ? 'light' : 'dark');
+    e.currentTarget.textContent = dark ? 'Dark' : 'Light';
+  });
+})();
+</script>
+</body>
+</html>
