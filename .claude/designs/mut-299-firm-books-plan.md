@@ -151,13 +151,13 @@ Binding decisions in force: intake D1–D9 (`firm-books-intake-drafts.md`, Basel
 
 unverified=1
 
-REALITY: premise-table finding 10 premises, unverified=1 (JoFotara QR payload) plan §3
+REALITY: premise-table finding 10 premises, unverified=1 (JoFotara QR payload) .claude/designs/mut-299-firm-books-plan.md:81
 REALITY: already-done pass nothing for MUT-298..315 on main or any branch (`git log --all --grep`) .claude/designs/mut-299-firm-books-plan.md:1
 REALITY: surface-check finding admin has no organization PATCH; B2 adds it, correctly flagged; `/v1/me` moves to routes/me.ts on the MUT-284 branch server/src/routes/admin.ts:64
 REALITY: binding-decisions finding MUT-312's approved "corrections are reversing entries" collides with positive-only expenses (R2) server/src/expenses/compose.ts:20
-REALITY: numbers pass every number is a target or estimate, tagged; SES/Postmark/Resend prices [estimated, re-check on vendor pages] plan §1 B7
-REALITY: deferred-asks pass MUT-299 ACs all mapped in §5; nothing left out plan §5
-REALITY: pr-count pass one PR (docs only), no ship-policy override .gstack/ship-policy.json (absent)
+REALITY: numbers pass every number is a target or estimate, tagged; SES/Postmark/Resend prices [estimated, re-check on vendor pages] .claude/designs/mut-299-firm-books-plan.md:49
+REALITY: deferred-asks pass MUT-299 ACs all mapped in §5; nothing left out .claude/designs/mut-299-firm-books-plan.md:100
+REALITY: pr-count pass one PR (docs only), no .gstack/ship-policy.json override .claude/designs/mut-299-firm-books-plan.md:88
 
 **Scope Challenge findings**
 1. [P2] (confidence: 9/10) plan §0.1 — `/v1/me` and route registration move on the unmerged MUT-284 branch (`routes/me.ts`, `PORTAL_ROUTES`). Factual correction: the brief names both locations and says firm children that touch `/v1/me` rebase after MUT-286 lands. No behaviour change, no question.
@@ -378,7 +378,7 @@ An invite to an existing account is refused and the operator adds the membership
 State: approved
 Actual answer: A) One link, accept to join (Basel, D3, 2026-10-19)
 Accepted scope: The brief specifies: every invite issues one link bound to the invited email, under a new INVITE purpose; SETUP/RESET is never minted on an existing account through an invite. A new person sets a password through the link. An existing account signs in as that email and accepts (or declines); the membership is pending until accepted. The owner gets the same response and a copyable link either way. MUT-306 gains the invite token lifecycle, the pending membership state and an Accept screen on portal and phone (Jira comment on MUT-306 with the brief). Rate limit, expiry and revoke as approved in MUT-306; email provider (B7) stays pending.
-History: none
+History: 2026-10-19, R10/D10 superseded the sentence "The owner gets the same response and a copyable link either way": the owner now sees only "Invite sent" and the link goes to the invited email. Reason: outside voice O5 showed the owner holding the link defeats D3's privacy goals. The rest of this accepted scope stands.
 
 ### R4: Roles members get when firm features are turned on
 Finding: Section 1 #4, P2, confidence 8/10, plan §1 B3 "default `OWNER` (every existing membership keeps today's behaviour)", reviewer Claude (native).
@@ -658,7 +658,650 @@ Before MUT-313, ask one accountant per market (IL, PS, JO, SA) which basis their
 D) Defer this proposed change only
 Leave this row unresolved and visible; MUT-313 stays as drafted. Effort: none now. Risk: double count if built as written. Maintenance: an open item.
 
-State: pending
-Actual answer: unanswered
-Accepted scope: none
+State: approved
+Actual answer: A) Apply: invoice basis (Basel, D9, 2026-10-19)
+Accepted scope: The brief specifies: input VAT = VAT on bills dated by the bill's issue date, plus VAT on approved expenses that did not come from a bill; expenses posted by bill payments show their VAT share but are left out of the VAT summary; a bill's VAT is split across its payments by largest remainder so the shares add up exactly. MUT-313's AC is reworded (Jira comment with the brief), MUT-302 carries the split rule for posted expenses. Summary stays labelled "for your accountant, not a return".
 History: none
+
+### R10: Who receives the invite link
+Finding: Outside voice O5, High, confidence 8/10, R3 accepted scope "The owner gets the same response and a copyable link either way" and `server/src/routes/admin-users.ts:187` (email unique), reviewer Claude subagent. Reopens part of R3 (D3) and intake D6 on new evidence: the owner holding the link defeats D3's own privacy goals.
+Plan baseline: intake D6 (approved): "the invite always yields a copyable setup link; email delivery when a provider is chosen". R3/D3 (approved): one link bound to the email; owner sees the same response and a copyable link either way.
+Runtime evidence: no outbound email exists (survey, searched twice). Whoever opens a link for a new email sets that account's password, so an owner can create and control an account under someone else's address; for an existing account the link lands on "sign in", which tells the opener the account exists. A pending User row created at invite time occupies the email (`admin-users.ts:187` refuses a taken email).
+Comparison grid:
+| Choice | Current | A | B | C | D |
+|---|---|---|---|---|---|
+| R10 who receives the link | owner copies it (D6, D3) | The link goes only to the invited email; the owner sees "Invite sent", never the link. MUT-306 needs an outbound email provider in v3. The User row is created only when the link is redeemed, so redeeming proves the person controls the email | Keep D3/D6: the owner copies the link; owner can claim a new email's account and can tell existing accounts from new ones | Investigate: bounded look at a copy-link design that still proves email ownership (e.g. code sent by email); nothing else changes | Defer this proposal only |
+| R3 one link, accept to join, pending membership | approved (D3) | approved (unchanged) except the copy-link sentence | approved (unchanged) | approved (unchanged) | approved (unchanged) |
+| B7/O11 email provider timing | pending (R12) | becomes required in v3 (R12 then only picks the provider) | pending (unchanged) | pending (unchanged) | pending (unchanged) |
+Question D10:
+D10 — Should the invite link go only to the invited person's email, instead of being shown to the owner to copy?
+Project/branch/task: main, MUT-299 brief for epic MUT-298 (firm books).
+ELI10: D3 made one invite link for everyone, but the owner still sees and copies it. If the owner opens it for a new email, they set that person's password and own an account in someone else's name. If the email already has an account, the link asks to sign in instead of set a password, which tells the owner the account exists. Sending the link only to the invitee's inbox fixes both, but it means we need an email service in v3 instead of later.
+Stakes if we pick wrong: a firm owner can create accounts in other people's names and check which emails use Mutaba3a.
+Recommendation: A because it is the only option that makes the person prove they own the email, and email cost at firm volume is small; it reverses the intake's "copyable link" call, so it is yours to make.
+Note: options differ in kind, not coverage — no completeness score.
+Pros / cons:
+A) Apply this change (recommended)
+  ✅ Only the real owner of the email can redeem an invite, so no account in someone else's name
+  ✅ The owner sees "Invite sent" for every email, so nothing reveals who has an account
+  ❌ v3 needs an outbound email provider with domain setup (SPF/DKIM) and bounce handling (human: ~2 days / CC: ~1 hour plus DNS)
+B) Keep this row's current value
+  ✅ v3 ships with no email service, as the intake allowed
+  ✅ Owners can hand links over WhatsApp, which firms already use
+  ❌ The owner can claim a new person's account and can still probe which emails exist
+C) Investigate before choosing
+  ✅ Looks for a design that keeps copy-paste and still proves email ownership
+  ✅ Bounded to MUT-306 planning; nothing else changes
+  ❌ Any ownership proof needs an email or SMS anyway, so this likely ends at A
+D) Defer this proposed change only
+  ✅ Keeps the brief moving; v3 is three months out
+  ✅ No other plan change
+  ❌ MUT-306 may be planned on copy-link and need rework
+Net: an email service in v3 is the price of invites nobody can abuse.
+Header: Invite delivery
+Options:
+A) Apply this change (recommended)
+The invite link goes only to the invited email; the owner sees "Invite sent" and never the link. MUT-306 needs an outbound email provider in v3 (R12 then only picks which). The User row is created only when the link is redeemed. Overrides intake D6's "always yields a copyable link" and D3's copy-link sentence; the rest of D3 stands. Effort: human ~2 days / CC ~1 hour plus DNS setup. Risk: low. Maintenance: a provider account and DNS records.
+B) Keep this row's current value
+The owner copies the link as D3/D6 say. The owner can claim a new email's account and can tell existing accounts from new ones. Effort: none. Risk: high, impersonation and probing. Maintenance: none.
+C) Investigate before choosing
+In MUT-306 planning, look for a copy-link design that still proves email ownership; this row stays pending. Effort: one planning pass. Risk: likely ends at A. Maintenance: none.
+D) Defer this proposed change only
+Leave this row unresolved and visible; D3/D6 stand for now. Effort: none now. Risk: rework in MUT-306. Maintenance: an open item.
+
+State: approved
+Actual answer: A) Apply this change (Basel, D10, 2026-10-19)
+Accepted scope: The brief specifies: the invite link goes only to the invited email; the owner sees "Invite sent" for every invite and never the link; the User row is created only when the link is redeemed. MUT-306 needs an outbound email provider in v3; R12 only picks which. Overrides intake D6's "always yields a copyable link" and R3/D3's copy-link sentence (logged in ADR-099's override log); the rest of D3 stands (INVITE purpose, never SETUP/RESET on an existing account, pending membership until accepted, same response either way).
+History: none
+
+### R11: What a closed month's accountant pack may claim
+Finding: Outside voice O8, Medium, confidence 8/10, MUT-314 (approved as drafted) "closed-month packs marked final" and plan B6 "Income/payments call sites are not locked", reviewer Claude subagent.
+Plan baseline: MUT-314 (approved): packs for closed months are marked final and include receivables and payments. B6 (pending): the lock covers expenses, bills, bill payments and receipt approvals only.
+Runtime evidence: receivables and payments are written by Malafat's API key on Malafat-fed firms and by sessions on other firms (`writability.ts:104-108`); capture income (`/v1/income`) is read-write for every session. None of those writes would check the month lock.
+Comparison grid:
+| Choice | Current | A | B | C | D |
+|---|---|---|---|---|---|
+| R11 pack wording | "final" | The pack says "Expenses and bills closed through <month>"; the receivables, payments and income sheets carry "May still change: recorded by Malafat or by your team after the close". No "final" anywhere | Keep "final" although income and payments can still change | Investigate: bounded look at extending the lock to session-written payments and income in non-Malafat firms (Malafat-fed rows stay Malafat's); nothing else changes | Defer this proposal only |
+| B6 lock scope (expenses, bills, bill payments, receipt approve) | pending | pending (unchanged) | pending (unchanged) | pending (unchanged) | pending (unchanged) |
+| B10 compliance copy guard | pending (amended O10) | pending (unchanged) | pending (unchanged) | pending (unchanged) | pending (unchanged) |
+Question D11:
+D11 — Can the accountant pack for a closed month call itself "final"?
+Project/branch/task: main, MUT-299 brief for epic MUT-298 (firm books).
+ELI10: Closing a month locks expenses and bills. But the pack also includes what clients owed and paid, and those keep changing after the close: Malafat writes them, and in other firms your team can still record income and payments. Calling the pack "final" would promise something the lock doesn't cover. Saying exactly what is closed, and flagging the sheets that can still move, keeps the pack honest.
+Stakes if we pick wrong: an accountant files with a "final" pack, then the income figures change underneath them.
+Recommendation: A because it is a copy change that tells the truth today, and widening the lock to client money is a bigger product question that can come later.
+Note: options differ in kind, not coverage — no completeness score.
+Pros / cons:
+A) Apply this change (recommended)
+  ✅ The pack claims only what the lock really guarantees
+  ✅ Copy-only change in MUT-314; no new lock rules
+  ❌ Accountants see a "may still change" note on the income sheets (human: ~1 hour / CC: ~5 min)
+B) Keep this row's current value
+  ✅ A simple "final" stamp accountants like to see
+  ✅ No change to the approved MUT-314 text
+  ❌ The stamp is untrue for receivables, payments and income
+C) Investigate before choosing
+  ✅ Checks whether the lock can reach session-written payments and income in non-Malafat firms
+  ✅ Bounded to MUT-312 planning; nothing else changes
+  ❌ Malafat-written rows can never be locked by us, so "final" stays untrue for Malafat firms anyway
+D) Defer this proposed change only
+  ✅ MUT-314 is in v5; time to decide later
+  ✅ No other plan change
+  ❌ The approved text still promises "final"
+Net: honest wording now; a wider lock is a separate, later choice.
+Header: Pack wording
+Options:
+A) Apply this change (recommended)
+The pack says "Expenses and bills closed through <month>". The receivables, payments and income sheets carry "May still change: recorded by Malafat or by your team after the close". The word "final" is not used. MUT-314's AC is reworded. Effort: human ~1 hour / CC ~5 min. Risk: none. Maintenance: none.
+B) Keep this row's current value
+Closed-month packs are marked final, as drafted, though receivables, payments and income can still change. Effort: none. Risk: medium, a false claim to accountants. Maintenance: none.
+C) Investigate before choosing
+In MUT-312 planning, look at extending the lock to session-written payments and income in non-Malafat firms; this row stays pending. Effort: one planning pass. Risk: "final" stays untrue for Malafat firms. Maintenance: none.
+D) Defer this proposed change only
+Leave this row unresolved and visible; MUT-314 stays as drafted. Effort: none now. Risk: false claim if built as written. Maintenance: an open item.
+
+State: approved
+Actual answer: A) Apply this change (Basel, D11, 2026-10-19)
+Accepted scope: The brief specifies: the accountant pack says "Expenses and bills closed through <month>"; the receivables, payments and income sheets carry "May still change: recorded by Malafat or by your team after the close"; the word "final" is not used. MUT-314's AC is reworded (Jira comment with the brief). B6 lock scope unchanged.
+History: none
+
+### R12: How deep the brief goes for v4–v5
+Finding: Outside voice O9 (first half), Medium, confidence 7/10, MUT-299 AC (approved as drafted) "The brief covers every story in MUT-298 with API contracts and error states" and plan §2 item 12, reviewer Claude subagent.
+Plan baseline: MUT-299 AC 1: API contracts and error states for all 15 children now.
+Runtime evidence: v2–v5 depend on unfinished MUT-253 (engine), MUT-254 (vendor table), MUT-255 (receipt library), and on local mode (MUT-284) landing; each child also runs its own `/eng-ticket` plan and eng review (repo practice, e.g. MUT-267, MUT-285).
+Comparison grid:
+| Choice | Current | A | B | C | D |
+|---|---|---|---|---|---|
+| R12 brief depth | full API contracts for all 15 children | The brief locks every cross-cutting rule (firm flag, role derivation and matrix, approval in totals, posted-expense and receipt rules, VAT basis, lock model and race, invites, `ReceiptSuggestion`, local-mode rule) plus full contracts for v1 (MUT-300, 301); v2–v5 children get route names, data shapes and error codes only, and each child's eng-ticket writes its full contract against the brief. MUT-299 AC 1 reworded | Keep: full API contracts and error states for all 15 now | Investigate: bounded, write v1+v2 contracts first and decide v3–v5 depth after; nothing else changes | Defer this proposal only |
+| Decisions D1–D11 | approved | approved (unchanged) | approved (unchanged) | approved (unchanged) | approved (unchanged) |
+| Pilot-firm gate (R13) | pending | pending (unchanged) | pending (unchanged) | pending (unchanged) | pending (unchanged) |
+Question D12:
+D12 — Should the brief write full API contracts for all 15 tickets now, or lock the shared rules and leave later tickets' contracts to their own planning?
+Project/branch/task: main, MUT-299 brief for epic MUT-298 (firm books).
+ELI10: The brief's job is to stop 15 tickets from each inventing their own rules about roles, totals, VAT and locks. Those rules are now decided (D1–D11). Writing every endpoint's exact request and response for work five months out is different: it depends on tickets that aren't built yet, and each ticket is re-planned anyway before it's coded. Locking the rules plus v1's full contracts, and giving later tickets only names, shapes and error codes, keeps the brief accurate.
+Stakes if we pick wrong: either v4–v5 contracts go stale and mislead their builders, or a later ticket drifts because the brief left a shared rule open.
+Recommendation: A because every rule that could cause a leak or a double count is locked either way, and stale detailed contracts are worse than none.
+Note: options differ in kind, not coverage — no completeness score.
+Pros / cons:
+A) Apply this change (recommended)
+  ✅ Every cross-cutting rule is fixed in one place now
+  ✅ Later contracts are written when their dependencies exist, so they're right the first time
+  ❌ v2–v5 builders do one more contract-writing step in their own planning (human: ~2 hours per ticket / CC: ~10 min)
+B) Keep this row's current value
+  ✅ One document with every contract, readable today
+  ✅ Matches the approved MUT-299 AC as written
+  ❌ v4–v5 contracts are written against unbuilt dependencies and will need rewriting
+C) Investigate before choosing
+  ✅ Writes v1 and v2 contracts first, then decides
+  ✅ Bounded to this brief; nothing else changes
+  ❌ Postpones the depth decision into the middle of writing the brief
+D) Defer this proposed change only
+  ✅ Leaves the AC as is for now
+  ✅ No other plan change
+  ❌ The brief author has no answer on how deep to go
+Net: lock the rules now, write each contract when it can be right.
+Header: Brief depth
+Options:
+A) Apply this change (recommended)
+The brief locks every cross-cutting rule (firm flag, role derivation and matrix, approval in totals, posted-expense and receipt rules, VAT basis, lock model and race, invites, ReceiptSuggestion, local-mode rule) and full contracts for v1 (MUT-300, MUT-301). v2–v5 children get route names, data shapes and error codes; each child's eng-ticket writes its full contract against the brief. MUT-299 AC 1 is reworded. Effort: smaller brief now. Risk: low. Maintenance: low.
+B) Keep this row's current value
+The brief carries full API contracts and error states for all 15 children now, as the AC says. Effort: larger brief now. Risk: medium, stale v4–v5 contracts. Maintenance: rewrites later.
+C) Investigate before choosing
+Write v1 and v2 contracts first, then decide v3–v5 depth; this row stays pending. Effort: none extra. Risk: decision mid-brief. Maintenance: none.
+D) Defer this proposed change only
+Leave this row unresolved; AC 1 stands for now. Effort: none now. Risk: no guidance on depth. Maintenance: an open item.
+
+State: approved
+Actual answer: A) Apply this change (Basel, D12, 2026-10-19)
+Accepted scope: The brief locks every cross-cutting rule (firm flag, role derivation and matrix, approval in totals, posted-expense and receipt rules, VAT basis, lock model and race, invites, `ReceiptSuggestion`, local-mode rule) and full API contracts for v1 (MUT-300, MUT-301). v2–v5 children get route names, data shapes and error codes; each child's eng-ticket writes its full contract against the brief. MUT-299 AC 1 reworded to match (Jira edit with the brief). Pilot-firm gate (R13) stays pending.
+History: none
+
+### R13: A pilot firm before v3–v5
+Finding: Outside voice O9 (second half), Medium, confidence 6/10 (strategic, no code evidence), reviewer Claude subagent. Medium confidence: verify this is actually an issue.
+Plan baseline: MUT-298 (approved): six versions, Nov 2026 – Apr 2027, no validation gate; success signals measured through opt-in PostHog (MUT-152). Memory: founder is pre-revenue with users.
+Runtime evidence: none in code; the epic names no firm that has asked for roles, payables or month close.
+Comparison grid:
+| Choice | Current | A | B | C | D |
+|---|---|---|---|---|---|
+| R13 validation gate | none | Name one pilot firm before v3 planning. v1–v2 ship as planned; MUT-305..315 eng-tickets start only after the pilot has used v1–v2 for two weeks and given feedback, which may reorder or cut v3–v5 | Keep: build v1–v5 on the plan with no gate | Investigate: Basel checks, bounded to one week, whether a current Malafat firm or Mutaba3a user fits as a pilot; nothing else changes | Defer this proposal only |
+| R12 brief depth (v1 full, v2–v5 shapes) | approved (D12) | approved (unchanged) | approved (unchanged) | approved (unchanged) | approved (unchanged) |
+Question D13:
+D13 — Should v3–v5 wait for a pilot firm to use v1–v2 first?
+Project/branch/task: main, MUT-299 brief for epic MUT-298 (firm books).
+ELI10: The plan spends six months turning Mutaba3a toward small firms. v1–v2 (receipts and reading) are useful to everyone, so they're low risk. v3–v5 (roles, bills, month close) are firm-only and bigger. The outside reviewer noticed no specific firm has asked for them yet. A light checkpoint, one real firm using v1–v2 for two weeks before v3 is planned in detail, tells you whether roles, bills or close matter most, or whether something else does.
+Stakes if we pick wrong: three months go into v3–v5 features a paying firm doesn't use, or a gate slows a plan you already know is right.
+Recommendation: A because v1–v2 aren't slowed at all, and two weeks of one firm's use is cheap insurance on the three most expensive versions; you know your pipeline better than this review does, so B is reasonable if a firm has already asked.
+Note: options differ in kind, not coverage — no completeness score.
+Pros / cons:
+A) Apply this change (recommended)
+  ✅ v3–v5 are shaped by a real firm's use instead of a guess
+  ✅ v1–v2 ship on schedule; only detailed v3 planning waits
+  ❌ Needs a firm willing to pilot, and v3 can slip if none is found by December
+B) Keep this row's current value
+  ✅ The six-month schedule stays exactly as planned
+  ✅ No dependency on finding a pilot
+  ❌ v3–v5 are built on assumptions nobody outside has checked
+C) Investigate before choosing
+  ✅ One week to see whether a pilot is realistic before committing to a gate
+  ✅ Nothing else changes meanwhile
+  ❌ Postpones the decision by a week
+D) Defer this proposed change only
+  ✅ v3 planning is two months out; plenty of time to decide
+  ✅ No other plan change
+  ❌ The question may be forgotten until v3 starts
+Net: a two-week pilot gate on the expensive half of the plan, at no cost to v1–v2.
+Header: Pilot gate
+Options:
+A) Apply this change (recommended)
+Name one pilot firm before v3 planning. v1–v2 ship as planned. MUT-305..315 eng-tickets start only after the pilot has used v1–v2 for two weeks and given feedback; the feedback may reorder or cut v3–v5. Effort: founder time to recruit. Risk: v3 slips if no pilot by December. Maintenance: none.
+B) Keep this row's current value
+Build v1–v5 on the plan with no validation gate. Effort: none. Risk: building unvalidated firm features. Maintenance: none.
+C) Investigate before choosing
+Within one week, check whether a current Malafat firm or Mutaba3a user fits as a pilot; this row stays pending. Effort: a week of outreach. Risk: decision postponed a week. Maintenance: none.
+D) Defer this proposed change only
+Leave this row unresolved and visible until v3 planning. Effort: none now. Risk: forgotten. Maintenance: an open item.
+
+State: approved
+Actual answer: A) Apply this change (Basel, D13, 2026-10-19)
+Accepted scope: One pilot firm is named before v3 planning. v1–v2 (MUT-300..304 plus the MUT-252 children) ship as planned. MUT-305..315 eng-tickets start only after the pilot has used v1–v2 for two weeks and given feedback, which may reorder or cut v3–v5. Recorded in the brief's build-order section and on MUT-298 (Jira comment with the brief). Risk accepted: v3 slips if no pilot by December.
+History: none
+
+### R14: When the email provider is chosen
+Finding: Outside voice O11, Low, confidence 7/10, plan §1 B7 "recommend Amazon SES … cost at small-firm volume is cents per month" and MUT-299 AC (approved) "Email-provider decision recorded, with cost", reviewer Claude subagent.
+Plan baseline: B7 (pending): pick SES in the brief. MUT-299 AC 4: provider decision recorded with cost. R10/D10 (approved): v3 requires an outbound email provider.
+Runtime evidence: no mail code or provider account exists; SES needs domain verification (SPF/DKIM), leaving the sandbox and bounce handling, none of which B7's cost line covers. R13/D13 gates v3 planning on a pilot firm.
+Comparison grid:
+| Choice | Current | A | B | C | D |
+|---|---|---|---|---|---|
+| R14 provider choice timing | pick SES in the brief | The brief records the requirement (an outbound provider behind a `Mailer` port, EU region, in v3 per D10) and the selection criteria (EU region, DKIM, bounce webhooks, price at 1k/10k emails a month); MUT-306's planning picks the provider with setup cost. MUT-299 AC 4 reworded to "requirement and criteria recorded" | Keep: the brief picks SES now with a cost estimate | Investigate: bounded, price SES/Postmark/Resend EU setup and running cost now, decide in the brief; nothing else changes | Defer this proposal only |
+| R10 link only to invitee's email | approved (D10) | approved (unchanged) | approved (unchanged) | approved (unchanged) | approved (unchanged) |
+| R13 pilot gate before v3 | approved (D13) | approved (unchanged) | approved (unchanged) | approved (unchanged) | approved (unchanged) |
+Question D14:
+D14 — Should the brief pick the email provider now, or only record the requirement and let MUT-306 pick it?
+Project/branch/task: main, MUT-299 brief for epic MUT-298 (firm books).
+ELI10: D10 means v3 has to send invite emails, so an email service is now required. The plan suggested Amazon SES with a "cents per month" cost, but that skipped the real setup work: proving we own the sending domain, getting out of SES's test mode, and handling bounced emails. v3 is now also gated on a pilot firm, so it may be months away. Writing down what the provider must do, and picking it when MUT-306 is planned, avoids choosing on half the facts.
+Stakes if we pick wrong: either the brief commits to a provider on an incomplete cost picture, or v3 starts with the provider still undecided.
+Recommendation: A because the requirement is what other tickets depend on, and the provider pick is better made with setup costs in hand when v3 is actually planned.
+Note: options differ in kind, not coverage — no completeness score.
+Pros / cons:
+A) Apply this change (recommended)
+  ✅ The requirement and criteria are fixed now; only the vendor waits
+  ✅ The pick is made with real setup costs when v3 is planned
+  ❌ MUT-306 planning carries one more decision (human: ~half day / CC: ~15 min)
+B) Keep this row's current value
+  ✅ One less open item; SES is the cheapest per email
+  ✅ Matches the approved MUT-299 AC as written
+  ❌ The cost line leaves out domain setup, sandbox exit and bounce handling
+C) Investigate before choosing
+  ✅ Prices all three options with setup costs before the brief closes
+  ✅ Bounded to the brief-writing session; nothing else changes
+  ❌ Effort spent now on a v3 decision that the pilot gate may move
+D) Defer this proposed change only
+  ✅ No change now
+  ✅ No other plan change
+  ❌ The brief's AC 4 stays unmet or half met
+Net: fix the requirement now, pick the vendor when v3 is real.
+Header: Email provider
+Options:
+A) Apply this change (recommended)
+The brief records the requirement: an outbound provider behind a Mailer port, EU region, needed in v3 (D10), plus selection criteria (EU region, DKIM, bounce webhooks, price at 1k and 10k emails a month). MUT-306's planning picks the provider with setup cost. MUT-299 AC 4 reworded to "requirement and criteria recorded". Effort: none now. Risk: low. Maintenance: none.
+B) Keep this row's current value
+The brief picks Amazon SES now with the current cost estimate. Effort: none now. Risk: incomplete cost picture. Maintenance: none.
+C) Investigate before choosing
+While writing the brief, price SES, Postmark and Resend EU setup and running costs, then pick; this row stays pending until then. Effort: an hour of research. Risk: low. Maintenance: none.
+D) Defer this proposed change only
+Leave this row unresolved; B7 stays as drafted. Effort: none. Risk: AC 4 half met. Maintenance: an open item.
+
+State: approved
+Actual answer: A) Apply this change (Basel, D14, 2026-10-19)
+Accepted scope: The brief records the requirement: an outbound email provider behind a `Mailer` port, EU region, needed in v3 (D10), with selection criteria (EU region, DKIM, bounce webhooks, price at 1k and 10k emails a month). MUT-306's planning picks the provider with setup cost. MUT-299 AC 4 reworded to "requirement and criteria recorded" (Jira edit with the brief). B7's SES recommendation becomes a candidate, not a decision.
+History: none
+
+### R15: TODO for adjusting entries
+Finding: R2 ceiling (D2), TODO review.
+Question D15: add a TODOS.md entry for negative correction expenses as D2's upgrade path. Header: TODO. Options: A) Add to TODOS.md (recommended); B) Skip, not valuable enough; C) Build it now in this PR instead.
+State: approved
+Actual answer: A) Add to TODOS.md (Basel, D15, 2026-10-19)
+Accepted scope: TODOS.md item 16 "Closed months can only be fixed by reopening them" added (trigger: an accountant or auditor asks for frozen months; depends on MUT-312).
+History: none
+
+Approval readiness: PASS. Checked R1 (D1), R2 (D2), R3 (D3; sentence superseded by D10, history kept), R4 (D4), R5 (D5), R6 (D6), R7 (D7), R8 (D8), R9 (D9), R10 (D10), R11 (D11), R12 (D12), R13 (D13), R14 (D14), R15 (D15). Accepted without a question, each citing its approval: Scope Challenge #1 (factual), Section 1 #6 (B1 CHECK rule), Section 2 #1–2 (intake D7), Section 4 #1 (implementation), O2 (D5), O6 (D2), O7 (D1), O10 (correction of pending B10). Still pending by design, for Basel's approval of the brief itself: B1–B12 as amended above.
+
+## Changes this review makes to the plan
+
+The brief (§2) must carry these, in addition to §1's B-decisions:
+- Roles: one derivation (D1); a row for every session domain, submitter limited to own expenses and receipts (D6); action scopes `expenses:approve`, `close:write`, `members:write` and a repository-level own-row check (O7); operator names owners at enable, others BOOKKEEPER, last-owner rule (D4).
+- Approval: `initialApprovalFor(role, firm)` on all four creation paths; totals pass `APPROVED`; row counts stay unfiltered (Section 2); approve/reject refused in a closed month (O6).
+- Bills: posted expenses read-only (D7); one receipt files to one record, DB CHECK (D8); invoice-basis VAT with largest-remainder split (D9); bills index `(organizationId, status, dueDate)`.
+- Close: reopen to correct (D2); check inside the write transaction behind the repository port (O2) under FOR SHARE (D5); old and new date checked on PATCH; close lists Pending rows.
+- Invites: INVITE purpose, never SETUP/RESET on an existing account, pending membership until accepted (D3); link only to the invitee's email, User row created on redemption (D10); provider requirement and criteria recorded, vendor picked in MUT-306 (D14).
+- Pack: "Expenses and bills closed through <month>", "may still change" on client-money sheets, no "final" (D11).
+- Depth: cross-cutting rules + full v1 contracts; v2–v5 names, shapes, error codes (D12). Pilot-firm gate before v3 planning (D13).
+- B10 compliance list is phrase-level (O10). B1 conversion clears `profileType`; the built-in personal profile never converts.
+- MUT-299 ACs reworded: AC 1 per D12, AC 4 per D14. ADR-099's override log adds: intake D6 copy-link (D10).
+
+## NOT in scope
+
+- Negative adjusting expenses: deferred by D2; TODOS.md item 16 holds the upgrade path.
+- Locking session-written payments and income in a closed month: not chosen in D11; the pack's wording tells the truth instead.
+- Picking the email vendor: moved to MUT-306 by D14.
+- Full API contracts for v2–v5: each child's own eng-ticket writes them (D12).
+- Self-service firm switch, custom roles, multi-step approval, vendor credit notes, bank reconciliation: out of scope per the epic and the intake.
+
+## What already exists
+
+- Writability matrix + drift test: reused and extended (D1, D6).
+- Store guard typed over `LedgerStore`: reused; new repository methods can't compile until classified.
+- Receivable / Payment / PaymentAllocation / ReceivableCredit and `payments/allocate.ts`: the template for bills (B5), reused, not rebuilt.
+- `computeVat` / `roundHalfUpDiv`: reused for expense and bill VAT (B9, D9).
+- Setup links (MUT-235): extended with an INVITE purpose (D3), not replaced.
+- `lockOrganization` / org row locks: the same mechanism, taken as FOR SHARE for close (D5).
+- `expenseWhere` / `matchesExpense`: extended with an approval option (B4), one filter for list and totals.
+
+## Flows
+
+```
+Invite (D3, D10)
+owner ──POST invite(email, role)──▶ server ──INVITE token──▶ Mailer ──▶ invitee inbox
+   ▲ "Invite sent" (same for every email)                          │
+   │                                         new email: set password ─┤─▶ User + pending membership ─▶ active
+   │                                   existing account: sign in, Accept ─▶ pending membership ─▶ active
+
+Firm write under month lock (D2, D5, O2)
+route ─▶ requireScope(role scopes, D1) ─▶ repo.write
+            └─ tx: SELECT org FOR SHARE ─▶ assertOpenPeriod(old date, new date) ─▶ write ─▶ commit
+close/reopen: UPDATE org.closedThroughMonth (waits for in-flight FOR SHARE holders)
+
+Bill payment (B5, D7, D8, D9)
+bill(receipt?, VAT) ─pay(part)─▶ BillPayment ─▶ posted Expense(billPaymentId, VAT share by largest remainder, read-only)
+VAT summary: bills by issue date + expenses without billPaymentId
+```
+
+## Failure modes
+
+| Path | Realistic failure | Covered by | User sees |
+|---|---|---|---|
+| Role derivation | a new firm route is added without role cells | role refusal table test + drift test | clear 403 READ_ONLY-style error |
+| Approval in totals | a new total reader forgets the approval option | totals contract test | n/a (caught in CI) |
+| Bill payment posting | posted expense edited directly | D7 refusal + test | 409 naming the bill |
+| Receipt filing | same receipt filed as expense and bill | DB CHECK (D8) + test | 409 |
+| Month close | write in flight during close | FOR SHARE (D5) + test:db concurrency test | the write is refused with the month named |
+| Phone outbox | refused write after a close | outbox surfaces refusal (MUT-312 AC) | the entry shows as refused, not dropped |
+| Invite | email bounces or provider down | MUT-306 (provider + bounce webhooks, D14) | owner sees invite status; no silent loss once bounces are wired |
+
+Critical gaps (no test, no handling, silent): 0.
+
+## Worktree parallelization strategy
+
+Sequential implementation, no parallelization opportunity. This ticket writes one brief, its tests doc and the knowledge files in one sitting.
+
+## Implementation Tasks
+
+Synthesized from this review's findings. Each task derives from a specific finding above. Run with Claude Code or Codex; checkbox as you ship.
+
+- [ ] **T1 (P1, human: ~1 day / CC: ~1 hour)** — brief — Write `.claude/designs/firm-books.md` with B1–B12 as amended and D1–D14
+  - Surfaced by: Decision ledger R1–R14; "Changes this review makes to the plan"
+  - Files: .claude/designs/firm-books.md
+  - Verify: every MUT-298 child has a section; v1 has full contracts (D12); Basel approves
+- [ ] **T2 (P1, human: ~2 hours / CC: ~15 min)** — ADR — ADR-099 with the override log: minimize-to-core decision 3 (firms only), MUT-252 decision 5, ADR-037 decision 1 "no invite route", ADR-037 MUT-182 amendment (conversion), intake D6 copy-link (D10)
+  - Surfaced by: plan §4; R10
+  - Files: .claude/DECISIONS.md
+  - Verify: number still free at merge (ADR-099; MUT-284 branch tops at 098)
+- [ ] **T3 (P1, human: ~2 hours / CC: ~15 min)** — tests doc — `.claude/designs/firm-books-tests.md` with the required proof list from Section 3
+  - Surfaced by: Section 3
+  - Files: .claude/designs/firm-books-tests.md
+  - Verify: each card has protects/fails_when/why_new
+- [ ] **T4 (P2, human: ~1 hour / CC: ~10 min)** — Jira — comments on MUT-298 (pilot gate D13), MUT-300 (owner naming D4), MUT-302 (VAT split D9), MUT-305 (all domains D6, action scopes O7), MUT-306 (invite model D3/D10, provider D14), MUT-308/309 (D7, D8), MUT-312 (D2, D5, O2, O6), MUT-313 (D9), MUT-314 (D11), MUT-255 (D8); edit MUT-299 AC 1 and AC 4; link MUT-254 blocks MUT-308
+  - Surfaced by: R1–R14
+  - Files: Jira only
+  - Verify: read one comment back
+- [ ] **T5 (P2, human: ~30 min / CC: ~5 min)** — knowledge — CHANGELOG, SYSTEM_OVERVIEW (planned firm capability), TEST_PLAN pointer
+  - Surfaced by: plan §4
+  - Files: .claude/CHANGELOG.md, .claude/SYSTEM_OVERVIEW.md, .claude/TEST_PLAN.md
+  - Verify: entries dated 2026-10-19
+- [ ] **T6 (P3, human: ~1 hour / CC: ~10 min)** — research — JoFotara QR payload from official ISTD material; record the finding in the brief
+  - Surfaced by: reality row premise P10 (unverified)
+  - Files: .claude/designs/firm-books.md
+  - Verify: source and date cited, or "not public" recorded
+
+## Unresolved decisions that may bite you later
+
+None in this review. B1–B12 (as amended) await Basel's approval of the brief itself, by design (MUT-299 AC 5).
+
+## Completion summary
+
+- Step 0: Scope Challenge — scope accepted as-is
+- Reality rows: 7/7 applicable rows emitted (PLAN_REALITY complete), 1 unverified premise (JoFotara QR payload)
+- Architecture Review: 6 issues found
+- Code Quality Review: 2 issues found
+- Test Review: diagram produced, 22 gaps identified (all proposed future code)
+- Performance Review: 2 issues found (1 informational)
+- NOT in scope: written
+- What already exists: written
+- TODOS.md updates: 1 item proposed to user (added, item 16)
+- Failure modes: 0 critical gaps flagged
+- Unresolved decisions: 0 in this review
+- Outside voice: Claude Plan subagent (native fallback; Codex CLI not installed), completed in 2m14s, 11 findings, all dispositioned
+- Parallelization: 1 lane, 0 parallel / 1 sequential
+- Lake Score: 1/5 (D1 picked a 10/10 option; D2 picked 7/10, D3–D5 picked 9/10, the best available)
+
+## Suppressed findings (appendix)
+
+- (confidence 4/10) The `Organization` row lock (D5) could become a hot spot for a firm with many concurrent writers. FOR SHARE locks don't conflict with each other, and firm write volume is small [estimated]. Suppressed; revisit only if `test:db` shows contention.
+
+---
+
+# Design review (plan-design-review, 2026-10-19)
+
+> **Approved 2026-10-19:** Basel approved the brief as written, including DR1–DR14. Every "pending" below now reads as approved.
+
+Target: this plan's user-facing surfaces (portal `src/hosted`, phone app). Reviewer: Claude (native), gstack v1.91.143.0.
+**How this review ran:** Basel declined the focus and outside-voice questions and said "continue". So every design call below is my **recommended default (DR1–DR14), written into the plan as pending**. None is approved until Basel approves the brief. The brief carries them as "proposed design rules" for that approval.
+
+## Step 0
+
+- **Initial rating: 2/10.** The plan names every firm surface but specifies no hierarchy, no states, no copy, no phone behaviour, and no home for Members, Bills, Close or the pack in today's nav (Overview · Clients · Receivables · Payments · Documents · Expenses · Conversions, `src/hosted/shell/HostedShell.tsx:23-31`).
+- **What a 10 looks like:** every firm surface has a place in the nav, a first/second/third, a full state table, Arabic-first copy rules, a 375px layout and keyboard behaviour. A wireframe covers the v1 screens and the riskiest v3–v5 moments.
+- **DESIGN.md:** absent. The brand v2 kit (`docs/brand/README.md`, tokens in `src/styles/brand/mutaba3a-theme.css`) is the system. Not running /design-consultation: the kit is enough for an OPERATE surface.
+- **Reuse:**
+  - `Drawer` (drawer-first rule), `SectionTabs` (Expenses › Groups precedent), `HostedTable`, `QueryView`
+  - `.hp-banner-info` / `.hp-banner-error`, `.hp-readonly` (`ReadOnlyNotice`), `.hp-chip` / `.hp-pill-*`
+  - `RecordPaymentDrawer` (partial-payment pattern for bills), `ReceiptUploader`, `ExpenseDrawer`
+  - the `ProfilesManageDrawer` / account-menu patterns, `Select` from `ui/Input`
+- **Focus:** all 7 passes, depth matching D12. v1 screens are fully specified and wireframed; v2–v5 get hierarchy, states, copy rules and phone behaviour.
+- **Mockups:** the gstack designer is available, but Basel prefers HTML wireframes built from real tokens (learning `basel-prefers-html-wireframes-over-ai-mockups`). The wireframe is `.claude/designs/mut-299-firm-books-wireframe.html`.
+- **Outside design voice:** declined (question rejected); not run.
+
+## Pass 1 — Information architecture: 2/10 → 8/10 with DR1–DR3 (pending)
+
+**DR1 (pending). Where firm surfaces live.**
+- **Expenses** gains tabs, using the same `SectionTabs` pattern as Groups: Expenses · To review (count) · Bills · Groups.
+- A new nav item **Firm** sits after Conversions, for owners and bookkeepers on firm profiles only. Its tabs are Members · Month close · Accountant pack.
+- The **firm request** (MUT-300) is a row in the profile's Manage drawer on an owned Business profile ("Use this profile for a firm" → Request → "Requested").
+- Why: no new top-level page per feature, and spending stays in one place. Recommendation principle: constraint worship, so the nav grows by one item, not four.
+
+**DR2 (pending). What a submitter sees** (D6 limits a submitter to their own expenses).
+- The nav shows **Expenses** only, with two tabs: Expenses (mine) · To review (mine).
+- The profile opens on Expenses, not Overview. No Clients, Receivables, Payments, Documents, Conversions, Bills or Firm.
+- Why: subtraction default; showing pages a submitter can't use is noise and invites a "why can't I" moment.
+
+**DR3 (pending). The Overview for owners and bookkeepers on a firm.**
+- The collections-first block stays first (money-M8 decision).
+- **We owe** sits in the same row as **Owed to us**, per currency.
+- The existing "Needs attention" list gains rows, **not cards**:
+  - "4 receipts to review"
+  - "2 expenses waiting for approval"
+  - "1 bill overdue · 3 due this week"
+  - (owners, after the 1st) "September isn't closed yet"
+- Each row deep-links to its tab.
+
+```
+Firm profile, owner/bookkeeper                Submitter
+┌ Sidebar ─────────────┐                      ┌ Sidebar ──────────┐
+│ Overview             │ ← collections, We    │ Expenses          │ ← opens here
+│ Clients              │   owe, attention rows│   Expenses (mine) │
+│ Receivables          │                      │   To review (mine)│
+│ Payments             │                      └───────────────────┘
+│ Documents            │
+│ Expenses             │ → Expenses · To review · Bills · Groups
+│ Conversions          │
+│ Firm                 │ → Members · Month close · Accountant pack
+└──────────────────────┘
+```
+
+## Pass 2 — Interaction states: 1/10 → 8/10 with DR4 + the state table (pending)
+
+**DR4 (pending). A write refused because the month is closed.**
+- The drawer stays open with an inline error naming the month: "September 2027 is closed. Ask an owner to reopen it."
+- An owner also gets a "Reopen September" link to Firm › Month close, with the reason field focused.
+- Never a toast-only refusal. On the phone, an outbox entry refused for this reason shows the same sentence and stays editable (MUT-312).
+
+| Feature | Loading | Empty | Error | Success | Partial / special |
+|---|---|---|---|---|---|
+| Firm request row (Manage drawer) | button spinner | n/a | inline banner-error under the row | row reads "Requested · we'll email you" | already enabled: row reads "Firm features are on" |
+| Members tab | QueryView skeleton rows | "Only you so far." + primary "Invite someone" | banner-error + retry | toast "Invitation sent to …" | pending invites listed with "Invited · expires in 6 days" + Resend/Revoke |
+| Invite drawer | submit spinner | n/a | field error under email; rate-limited: "Too many invites. Try again in an hour." | closes; same "Invitation sent" whatever the email (D3/D10) | n/a |
+| Invitee accept (portal interstitial / phone sheet) | spinner | n/a | expired link: "This invitation has expired. Ask {owner} to send a new one." | lands in the firm's Expenses (submitter) or Overview | decline: "You declined. Nothing was shared." |
+| Approval queue (Expenses › filter "Waiting for approval") | skeleton | "Nothing waiting. New submissions show up here." | per-row inline error, row keeps its buttons | row leaves the list; live region "Approved. 2 left." | row dated in a closed month: buttons disabled + "September is closed" (O6) |
+| Expense row states | n/a | n/a | n/a | approved rows show no pill (quiet default) | Pending = butter pill "Waiting for approval"; Rejected = rose pill "Rejected" + reason on open |
+| To review queue | skeleton | "No receipts to review. Share one from your phone or upload here." + Upload | upload error banner per file | file appears at top as "Reading…" then "Ready to review" | read failed: "Couldn't read this one. Fill it in by hand." (never blocks) |
+| Receipt review drawer | fields show shimmer while reading (≤ 1.5 s PDF/QR, ≤ 4 s photo) | n/a | reader error → empty fields + caption "Couldn't read this receipt" | approve → toast "Saved as an expense" / "Saved as a bill" | low-confidence field left empty with hint "Check the receipt" (DR6) |
+| Bills tab | skeleton | "No bills yet. Turn a receipt into a bill, or add one." | banner-error + retry | toast "Bill saved" | partial: "Paid 300 of 500 SAR"; overdue: rose pill "Overdue 12 days" |
+| Pay bill drawer (RecordPaymentDrawer pattern) | submit spinner | n/a | over-payment: inline "More than what's left (200 SAR)" | bill shows new remaining; posted expense appears as "From bill …" | closed month: DR4 refusal |
+| Month close tab | skeleton | first use: "No month closed yet." + "Close September" | close blocked: list of pending rows (DR10) | lavender pill "Closed" on the month; toast "September closed" | reopen requires a reason; audit line "Reopened by … · reason" |
+| Accountant pack | "Preparing the pack… 1,000 rows usually takes under 10 seconds" | month with no rows: "Nothing recorded in August." | banner-error + retry | browser download starts; toast "Pack downloaded" | open month: banner-info "September is still open; figures can change" (D11) |
+
+## Pass 3 — Journey & emotional arc: 2/10 → 7/10 with DR5 (pending)
+
+| Step | User does | User feels | Plan specifies? |
+|---|---|---|---|
+| 1 | Owner gets "Firm features are on" | Curious, slightly unsure what changed | DR5: one dismissible banner-info on Overview, "Firm features are on. Invite your team in Firm › Members." |
+| 2 | Opens Members, sees "Only you so far" | Clear next step | Members empty state with "Invite someone" |
+| 3 | Invites the bookkeeper and two staff | Confident nothing leaks | Same "Invitation sent" for every email; roles explained in one line each in the role Select |
+| 4 | Staff member opens the invite email on their phone, accepts | Welcomed, not confused | Accept sheet names the firm and the inviter, one primary action |
+| 5 | Staff snaps receipts all week | Fast, no admin | To review + reader prefill; submitter sees only their own |
+| 6 | Bookkeeper approves on Friday | In control | Approval filter + live count; reject needs a reason |
+| 7 | Month end: bookkeeper closes, downloads the pack | Relief: "done for the month" | Close tab, then pack with honest wording (D11) |
+| 8 | A mistake surfaces in a closed month | Reassured it's fixable, and visible | DR4 refusal names the month; owner reopens with reason (D2) |
+
+- **5 seconds:** the Overview attention rows say what needs doing today.
+- **5 minutes:** approve and review in one queue.
+- **5 years:** closed months and the audit trail make the books trustworthy for the accountant.
+
+**DR5 (pending):** no onboarding checklist. One dismissible banner, then the empty states carry each next action. Principle: users don't read instructions; guidance is brief and in the place it's needed.
+
+## Pass 4 — AI slop risk: 5/10 → 8/10 with DR6 (pending)
+
+- **Classifier:** OPERATE (app UI) everywhere.
+- **Hard rejections:**
+  - #7 "app UI made of stacked cards": a risk on the Overview attention block and the Members list; DR3 and the Members rows use list rows.
+  - #1 "generic card grid": not present.
+- **Litmus checks:**
+  1. Brand in the first screen: YES (existing shell wordmark).
+  2. One visual anchor: YES (collections figure).
+  3. Scannable by headings: YES with the DR1 tabs.
+  4. One job per section: YES.
+  5. Cards necessary: NO, rows instead.
+  6. Motion: only the existing press and stagger tokens, no new motion.
+  7. Premium without shadows: YES.
+
+**DR6 (pending). How a read field shows where it came from.**
+- A one-line caption under the field in `--text-micro`, `--m-ink2`: "From the QR code" · "Read from the PDF" · "Read from the photo; check it".
+- The caption disappears once the person edits the field.
+- A low-confidence field stays empty with the hint "Check the receipt".
+- No icon chips, no colored left borders, no confidence percentages.
+- Principle: trust is earned at the pixel level; say where a number came from in words.
+
+## Pass 5 — Design system alignment: 3/10 → 8/10 with DR7 (pending)
+
+**DR7 (pending). Status vocabulary and new components.**
+- **Status pills** (text label always present, never colour alone; all pairs are brand tokens from `src/styles/brand/mutaba3a-theme.css`):
+  - Waiting for approval: `--m-butter` / `--m-butter-ink`
+  - Rejected and Overdue: `--m-rose` / `--m-rose-ink`
+  - Due soon: `--m-peach` / `--m-peach-ink`
+  - Paid / Settled: `--m-mint` / `--m-mint-ink`
+  - Closed (month): `--m-lavender` / `--m-lavender-ink`
+  - Approved: no pill
+- **Notices:** the closed-month notice is `.hp-readonly` (`ReadOnlyNotice`); refusals are `.hp-banner-error`; the "firm features on" message is `.hp-banner-info`.
+- **New reusable pieces, registered in `COMPONENT_REGISTRY.md` with the children that build them:**
+  - `StatusPill`, extending the `.hp-pill-*` family rather than adding a new chip
+  - `MemberRow`
+  - `SourceCaption` (DR6)
+  - `ClosedMonthNotice`, wrapping `ReadOnlyNotice`
+- No DESIGN.md this round; the brand kit stays the source.
+
+## Pass 6 — Responsive & accessibility: 1/10 → 8/10 with DR8 (pending)
+
+**DR8 (pending). The approval queue, and a11y rules for every firm surface.**
+- **Approval queue, desktop:** `HostedTable` rows with Approve / Reject buttons at the end of each row.
+- **Approval queue, 375 px:** each row stacks into vendor + amount, then submitter + date, then two full-width 44 px buttons.
+- **Approval queue, keyboard:** buttons follow DOM order. After an action, focus moves to the next row's Approve. An `aria-live="polite"` region announces "Approved. 2 left."
+- **Reject** opens a `Drawer` with a required, labelled reason textarea.
+- **All firm surfaces:**
+  - layout uses logical properties (RTL first, Arabic default)
+  - figures use `--m-font-num` with tabular numerals
+  - every drawer uses `Drawer`'s focus trap and returns focus to its trigger
+  - role pickers use `Select` from `ui/Input`
+  - touch targets are at least 44 px
+  - body text is at least 16 px, with AA contrast on the brand inks (already AAA per the brand-v2 decisions)
+  - status is never colour alone
+  - the 375 px layouts of the Members, Bills and Close tabs follow the MUT-165 spacing guard: no sideways scroll
+
+## Pass 7 — Unresolved design decisions (register)
+
+| ID | Decision needed | Recommended default (pending) | If deferred |
+|---|---|---|---|
+| DR9 | Can a submitter fix a rejected expense? | Yes: edit and resubmit; it goes back to Waiting for approval, with the rejection reason shown above the form. Or delete it. | Rejected rows pile up with no way forward. |
+| DR10 | Close a month that still has pending expenses? | Close is blocked while that month has Waiting-for-approval rows; the Close tab lists them with Review links. O6 makes decisions in a closed month impossible, so allowing it would strand them. | Pending rows get trapped behind a close. |
+| DR11 | Bulk approve? | Not in v3: small firms have small queues. Revisit after the pilot (D13). | none |
+| DR12 | Where does an invitee accept? | Portal: a full-page "Join {firm}?" step after sign-in, before the app (Accept / Decline). Phone: the same as a sheet. Pending invitations also show in the profile switcher as "Invited". | Invites accepted by accident, or never found. |
+| DR13 | Accountant pack flow | Firm › Accountant pack: a month picker (closed months first, with the Closed pill), one primary "Download pack (.zip)" containing CSV + XLSX + receipts, and D11's wording on the sheets. | Each export ends up looking different. |
+| DR14 | VAT in the ExpenseDrawer | On firm profiles, a collapsed "VAT" row reads "No VAT recorded". Expanding it shows treatment (Select) + rate, with net and VAT computed read-only; the amount field stays the total paid. Prefilled from the QR or the vendor (MUT-303). | The form gets three extra required-looking fields for everyone. |
+
+Resolved this review: none by Basel (questions declined). Deferred: none. All DR1–DR14 are pending his brief approval.
+
+## NOT in scope (design)
+
+- Bulk approve (DR11 default): after the pilot.
+- A separate firm dashboard: the Overview attention rows cover it (DR3).
+- Onboarding checklist or tour (DR5).
+- Phone UI for Members, Close and the pack: portal-only in v3–v5; the phone gets Accept (DR12), approval status, bills due (MUT-310) and refusals.
+- DESIGN.md / /design-consultation: the brand v2 kit suffices.
+
+## What already exists (design)
+
+`Drawer`, `SectionTabs`, `HostedTable`, `QueryView`, `ReadOnlyNotice` (`.hp-readonly`), `.hp-banner-*`, `.hp-chip`, `.hp-pill-*`, `RecordPaymentDrawer`, `ReceiptUploader`, `ExpenseDrawer`, `ProfilesManageDrawer`, `Select` (`ui/Input`), brand tokens `--m-*`, and the MUT-268 wireframe conventions.
+
+## Design implementation tasks
+
+- [ ] **DT1 (P1, human: ~1 day / CC: ~1 hour)** — brief — Carry DR1–DR14, the state table and the storyboard into `firm-books.md` as "proposed design rules", for Basel's approval with the brief.
+  - Surfaced by: Passes 1–7
+  - Files: .claude/designs/firm-books.md
+  - Verify: each DR appears with its child ticket (MUT-300..314)
+- [ ] **DT2 (P2, human: ~2 hours / CC: ~10 min)** — Jira — Add the matching DR to each child's brief comment (DR1/DR3 MUT-309, DR2/DR8/DR9 MUT-305/307, DR4/DR10 MUT-312, DR6 MUT-301/304, DR12 MUT-306, DR13 MUT-314, DR14 MUT-302).
+  - Surfaced by: Pass 7 register
+  - Files: Jira only
+  - Verify: one comment read back
+- [ ] **DT3 (P2, human: ~1 hour / CC: ~5 min)** — QA — The brief's QA scenarios include the journey storyboard steps 3, 4, 6, 7 and 8 as portal features.
+  - Surfaced by: Pass 3
+  - Files: .claude/designs/firm-books.md (QA scenarios)
+  - Verify: one scenario per storyboard step
+
+## Approved Mockups
+
+| Screen/Section | Mockup Path | Direction | Notes |
+|----------------|-------------|-----------|-------|
+| v1 receipts review, firm request, Members, approval queue, closed-month refusal, Overview attention | /Users/basel/Work/elMokhtbr/Mutaba3a/mini-crm/.claude/designs/mut-299-firm-books-wireframe.html | HTML wireframe from brand tokens, RTL Arabic first (per Basel's preference over generated mockups) | Not approved yet: it illustrates DR1–DR14 for the brief approval |
+
+## Design Review Completion Summary
+
+```
+  +====================================================================+
+  |         DESIGN PLAN REVIEW — COMPLETION SUMMARY                    |
+  +====================================================================+
+  | System Audit         | no DESIGN.md (brand v2 kit used); ~9 surfaces|
+  | Step 0               | 2/10; all passes, depth by version (default)|
+  | Pass 1  (Info Arch)  | 2/10 → 8/10 if DR1–DR3 are approved         |
+  | Pass 2  (States)     | 1/10 → 8/10 if DR4 + state table approved   |
+  | Pass 3  (Journey)    | 2/10 → 7/10 if DR5 approved                 |
+  | Pass 4  (AI Slop)    | 5/10 → 8/10 if DR6 approved                 |
+  | Pass 5  (Design Sys) | 3/10 → 8/10 if DR7 approved                 |
+  | Pass 6  (Responsive) | 1/10 → 8/10 if DR8 approved                 |
+  | Pass 7  (Decisions)  | 0 resolved, 6 pending (DR9–DR14)            |
+  +--------------------------------------------------------------------+
+  | NOT in scope         | written (5 items)                           |
+  | What already exists  | written                                     |
+  | TODOS.md updates     | 0 items proposed                            |
+  | Approved Mockups     | 1 wireframe generated, 0 approved           |
+  | Decisions made       | 0 approved (14 recommended, pending)        |
+  | Decisions deferred   | 14 (DR1–DR14, pending brief approval)       |
+  | Overall design score | 1/10 → 1/10 approved (7/10 if all approved) |
+  +====================================================================+
+```
+
+### Unresolved Decisions
+
+All pending Basel's approval of the brief. Recommended defaults are written above:
+- DR1 home for firm surfaces · DR2 submitter nav · DR3 Overview rows and We owe
+- DR4 closed-month refusal · DR5 no checklist · DR6 source caption · DR7 status vocabulary
+- DR8 approval queue and a11y · DR9 resubmit after reject · DR10 no close with pending rows
+- DR11 no bulk approve · DR12 invitee accept step · DR13 pack flow · DR14 VAT row
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
+| Outside Review | Claude Plan subagent, native fallback (Codex CLI not installed), eng phase | Independent 2nd opinion | 41 | unavailable (external); in-host completed | 11 findings, all dispositioned |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 42 | ISSUES OPEN | 32 issues, 0 critical gaps |
+| Design Review | `/plan-design-review` | UI/UX gaps | 10 | ISSUES OPEN | score: 1/10 → 1/10 approved (7/10 if DR1–DR14 approved), 0 decisions approved |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
+
+- **OUTSIDE COVERAGE:** eng phase: codex unavailable (CLI not installed); the native Claude subagent completed with 11 findings, which is not external coverage. Design phase: outside voices skipped (Basel declined the question).
+- **CROSS-MODEL:** not applicable; no completed external review.
+- **VERDICT:** No review CLEAR. The eng review is ISSUES OPEN: all decisions are answered and the findings are mapped to tasks. The design review is ISSUES OPEN: 14 recommended defaults await Basel's approval with the brief. Eng review required before clearing.
+
+**UNRESOLVED DECISIONS:**
+- DR1–DR3 (where firm surfaces live, submitter nav, Overview rows): pending Basel's brief approval
+- DR4–DR8 (closed-month refusal, no checklist, source caption, status vocabulary, approval queue and a11y): pending Basel's brief approval
+- DR9–DR14 (resubmit after reject, no close with pending rows, no bulk approve, invitee accept step, pack flow, VAT row): pending Basel's brief approval
