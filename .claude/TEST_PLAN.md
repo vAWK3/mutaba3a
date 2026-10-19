@@ -183,6 +183,9 @@ Every money rule runs on both stores (memory and `test:db`).
 | `src/pages/projects/__tests__/ProjectsPage.searchEmpty.test.tsx` › summary strip | Component (real dictionaries) | One project reads "1 project" |
 | `YourDataSection`, `OrphanedRecordsBanner`, `OrphanedRecordsDrawer`, `ClientsPage`, `ClientDetailPage`, `ProjectDetailPage`, `IncomePage` tests | Updated | Pick the CLDR form via `pluralKey` instead of the Singular/Plural keys; the "label: {count}" Arabic workaround test now asserts few ≠ many; i18n mocks also mock `plural` |
 | QA `@web.home.attention-day-plurals`, `@web.clients.count-plurals`, `@web.landing.arabic-day-counts` | Browser (Playwright) | EN and AR on Home, Clients and the landing page with real day counts |
+| QA `@web.businesses.shared-client`, `@web.data.older-backup` | Updated | They asserted the old wording ("D1 entries", "1 uploaded receipt files", "1 receipts exported"); now the singular |
+
+**Run (2026-10-19, preview build, Node 22):** full web QA suite, 133/135 passed. The 2 failures are `@web.brand.layout` at 375px in Arabic, light and dark: Income measures 727px against the 726px `KNOWN_OVERFLOW` cap. That is MUT-250, already measured on main on 2026-10-16. What's New needs `MUTABA3A_APP_VERSION` set to a version with notes (0.1.10 used here).
 
 ### Craft-fix bundle (MUT-92, added 2026-10-14)
 | File | Type | Covers |

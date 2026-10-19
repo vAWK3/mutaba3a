@@ -443,10 +443,10 @@ test(
 
     await step('Download ZIP under Export receipts', async () => {
       const receipts = page.getByTestId('settings-export-receipts');
-      await expect(receipts).toContainText('1 uploaded receipt files');
+      await expect(receipts).toContainText('1 uploaded receipt file,');
       const download = await downloadFrom(page, () => receipts.getByRole('button', { name: 'Download ZIP' }).click());
       expect(download.suggestedFilename()).toBe('mutaba3a_receipts.zip');
-      await expect(page.getByText('1 receipts exported')).toBeVisible();
+      await expect(page.getByText('1 receipt exported')).toBeVisible();
       const zip = await JSZip.loadAsync(await readDownload(download));
       expect(Object.keys(zip.files)).toContain('Default Profile/2025-03/printer-ink.pdf');
     });
