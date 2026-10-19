@@ -65,12 +65,13 @@ test('A first visit opens the app on this device in Arabic, with no sign-in and 
     await expect(links).toHaveText(['نظرة عامة', 'العملاء', 'المستحقات', 'الدفعات', 'المستندات']);
   });
 
-  await step('The account menu is this device\'s: Sign in and Your data, nothing that needs an account', async () => {
+  await step('The account menu is this device\'s: Sign in, Your data and the terms, nothing that needs an account', async () => {
     const account = page.getByRole('button', { name: /^الحساب/ });
     await expect(account).toContainText('على هذا الجهاز');
     await account.click();
     const items = page.getByRole('menu', { name: 'الحساب' }).getByRole('menuitem');
-    await expect(items).toHaveText(['تسجيل الدخول', 'بياناتك']);
+    // MUT-324: the terms are a link in either mode
+    await expect(items).toHaveText(['تسجيل الدخول', 'بياناتك', 'شروط الخدمة']);
   });
 
   await step('Only the first-visit check reached the server', async () => {
