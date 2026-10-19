@@ -1,5 +1,7 @@
 import { MemoryLedgerStore } from '../../../server/src/repositories/memory.js';
-import type { BootLocalBackend, LocalBackend, PendingRestore } from '../session/localBackendContract.js';
+import { localBlobKey, type BootLocalBackend, type LocalBackend, type PendingRestore } from '../session/localBackendContract.js';
+import { LocalAttachmentStorage, liveReceiptKeys, sweepBlobs } from './attachments.js';
+import { IndexedDbBlobStore } from './blobStore.js';
 import { createLocalApp } from './createLocalApp.js';
 import { LocalLock } from './locks.js';
 import { mintLocalSession, type LocalSession } from './mintLocalSession.js';
@@ -43,8 +45,12 @@ async function boot(): Promise<LocalBackend> {
 
   let session = loaded.kind === 'empty' ? await createOnFirstBoot(lock, persistence, store) : await mintLocalSession(store, now, 'ar');
 
-  const app = createLocalApp({ store, now });
-  const transport = createLocalTransport({ app, store, persistence, lock, now });
+  const blobs = new IndexedDbBlobStore();
+  const attachments = new LocalAttachmentStorage(blobs);
+  await sweepUnusedBlobs(lock, persistence, store, blobs);
+
+  const app = createLocalApp({ store, now, attachments });
+  const transport = createLocalTransport({ app, store, persistence, lock, now, removals: attachments });
   let persistRequested = false;
 
   async function send(request: Request): Promise<Response> {
@@ -76,6 +82,8 @@ async function boot(): Promise<LocalBackend> {
           // Disk first: if the browser refuses the save, memory still holds this device's records, not the file's.
           await persistence.save({ ...decoded, formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now() });
           store.restore(decoded);
+          // After the save (eng review R1): until then, the records being replaced still had their files.
+          await sweepBlobs(blobs, liveReceiptKeys(store.snapshot().maps)).catch(() => undefined);
           return { result: undefined, wrote: true };
         });
         session = await mintLocalSession(store, now, 'ar');
@@ -95,7 +103,25 @@ async function boot(): Promise<LocalBackend> {
         return { result: new Blob([text], { type: 'application/json' }), wrote: false };
       }),
     readRecordsFile,
+    putBlob: async (url, file) => blobs.put(localBlobKey(url), file),
+    readBlob: async (url) => blobs.get(localBlobKey(url)),
   };
+}
+
+/**
+ * On boot, under the lock and over the latest snapshot: deletes stored files
+ * no live receipt names. They're left by a crash between a save and its
+ * deletes, or by an upload whose receipt never saved. A pending upload's file
+ * is kept, even another tab's. Best effort: a failure here never stops boot.
+ */
+async function sweepUnusedBlobs(lock: LocalLock, persistence: IndexedDbPersistence, store: MemoryLedgerStore, blobs: IndexedDbBlobStore): Promise<void> {
+  await lock
+    .withLock(async ({ stale }) => {
+      if (stale) await reloadFromDisk(store, persistence);
+      await sweepBlobs(blobs, liveReceiptKeys(store.snapshot().maps));
+      return { result: undefined, wrote: false };
+    })
+    .catch(() => undefined);
 }
 
 /**

@@ -42,6 +42,28 @@ export function isRecordsFileRefused(error: unknown): error is LocalRecordsFileR
   return error instanceof Error && error.name === 'LocalRecordsFileRefused';
 }
 
+/**
+ * Receipts signed out (MUT-287, brief §6): the server's receipt routes hand
+ * out `local-blob:<key>` instead of a bucket's signed URL. The portal's two
+ * off-API flows (the upload PUT and the download) branch on it and go to
+ * `LocalBackend.putBlob` / `readBlob`; nothing ever fetches the URL.
+ */
+export const LOCAL_BLOB_SCHEME = 'local-blob:';
+
+export function localBlobUrl(key: string): string {
+  return `${LOCAL_BLOB_SCHEME}${key}`;
+}
+
+export function isLocalBlobUrl(url: string): boolean {
+  return url.startsWith(LOCAL_BLOB_SCHEME);
+}
+
+/** The storage key a `local-blob:` URL names. Throws for any other URL, so a bucket URL can never reach the device's store. */
+export function localBlobKey(url: string): string {
+  if (!isLocalBlobUrl(url)) throw new Error('Not a local-blob URL');
+  return url.slice(LOCAL_BLOB_SCHEME.length);
+}
+
 export interface LocalBackend {
   fetch: LocalFetch;
   /** Another tab saved; returns the unsubscribe function. */
@@ -50,6 +72,10 @@ export interface LocalBackend {
   exportRecords(): Promise<Blob>;
   /** Reads and migrates a records file; rejects with `LocalRecordsFileRefused`. Nothing changes until `apply()`. */
   readRecordsFile(file: Blob): Promise<PendingRestore>;
+  /** Stores a receipt's bytes for the `local-blob:` URL a receipt upload was signed with. Rejects any other URL, and when the browser refuses the space. */
+  putBlob(url: string, file: Blob): Promise<void>;
+  /** The bytes behind a `local-blob:` download URL; `null` when this device no longer has them. Rejects any other URL. */
+  readBlob(url: string): Promise<Blob | null>;
 }
 
 export type BootLocalBackend = () => Promise<LocalBackend>;

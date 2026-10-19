@@ -14,6 +14,13 @@ export interface LocalTransportOptions {
   persistence: IndexedDbPersistence;
   lock: LocalLock;
   now: () => Date;
+  /** Receipt files a request staged for deletion (`LocalAttachmentStorage`, MUT-287): deleted only once that request's snapshot saved. */
+  removals?: StagedRemovals;
+}
+
+export interface StagedRemovals {
+  flushRemovals(): Promise<void>;
+  discardRemovals(): void;
 }
 
 /**
@@ -83,7 +90,7 @@ export async function reloadFromDisk(store: MemoryLedgerStore, persistence: Inde
  * yet to tell them so.
  */
 export function createLocalTransport(options: LocalTransportOptions): LocalTransport {
-  const { app, store, persistence, lock, now } = options;
+  const { app, store, persistence, lock, now, removals } = options;
 
   let stopped: LocalSaveFailedError | null = null;
 
@@ -92,17 +99,27 @@ export function createLocalTransport(options: LocalTransportOptions): LocalTrans
     return lock.withLock(async ({ stale, onDiskVersion }) => {
       if (stale) await reloadFromDisk(store, persistence);
 
-      const response = await app.fetch(request);
+      let response: Response;
+      try {
+        response = await app.fetch(request);
+      } catch (error) {
+        removals?.discardRemovals();
+        throw error;
+      }
 
       const wrote = MUTATING_METHODS.has(request.method) && response.status >= 200 && response.status < 300;
+      if (!wrote) removals?.discardRemovals();
       if (wrote) {
         const { maps } = store.snapshot();
         try {
           await persistence.save({ formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now(), maps });
         } catch (cause) {
+          removals?.discardRemovals();
           stopped = new LocalSaveFailedError(cause);
           throw stopped;
         }
+        // Still under the lock: no other tab's Restore or sweep can run between this save and the deletes it allows.
+        await removals?.flushRemovals();
       }
 
       return { result: response, wrote };
