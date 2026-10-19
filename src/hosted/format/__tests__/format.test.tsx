@@ -32,7 +32,9 @@ describe('formatDecimal', () => {
 });
 
 describe('DecimalAmount', () => {
-  it('isolates the amount left-to-right inside right-to-left text', () => {
+  // MUT-109: a plain <bdi> (dir=auto). The Arabic string's leading RLM resolves it right to left,
+  // the order Arabic amounts have always had on screen; dir="ltr" would flip them.
+  it('isolates the amount in a plain <bdi> inside right-to-left text', () => {
     render(
       <I18nProvider translations={{ en: {}, ar: {} }} language="ar" setLanguage={() => {}}>
         <p>
@@ -42,7 +44,8 @@ describe('DecimalAmount', () => {
     );
     const amount = screen.getByText(/15\.00/);
     expect(amount.tagName).toBe('BDI');
-    expect(amount).toHaveAttribute('dir', 'ltr');
+    expect(amount).not.toHaveAttribute('dir');
+    expect(amount.textContent?.startsWith('\u200F')).toBe(true);
     expect(amount).toHaveClass('hp-amount-negative');
   });
 });

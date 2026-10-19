@@ -204,7 +204,7 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
   );
 
   const amount = (amountMinor: number, currency: Currency, key: string) => (
-    <bdi key={key} dir="ltr" className="client-index-amount" data-testid="client-amount">
+    <bdi key={key} className="client-index-amount" data-testid="client-amount">
       {formatAmount(amountMinor, currency, locale)}
     </bdi>
   );

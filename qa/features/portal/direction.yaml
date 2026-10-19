@@ -1,0 +1,48 @@
+app: portal
+area: direction
+title: Text direction in the portal (MUT-109)
+tier: core
+paths:
+  - src/styles/theme.css
+  - src/index.css
+  - src/hosted/format/DecimalAmount.tsx
+  - src/hosted/pages/auth/SignInPage.tsx
+  - src/hosted/pages/auth/SetupPage.tsx
+  - src/hosted/pages/views/DocumentsList.tsx
+  - src/hosted/pages/views/PaymentsList.tsx
+  - src/hosted/shell/UserMenu.tsx
+  - src/hosted/components/ChangePasswordDrawer.tsx
+  - src/hosted/components/FilterControls.tsx
+  - src/hosted/components/IncomeCaptureDrawer.tsx
+  - src/hosted/components/ConversionDrawer.tsx
+  - src/hosted/components/RecordPaymentDrawer.tsx
+  - src/hosted/components/ExpenseDrawer.tsx
+  - src/hosted/components/ProfileCreateDrawer.tsx
+  - src/hosted/components/ProfileEditForm.tsx
+  - src/hosted/components/ProfilesManageDrawer.tsx
+features:
+  - id: signin
+    title: In Arabic, sign-in's email and password are typed left to right, on the right as before
+    tier: core
+    legacy: [MUT-109]
+    steps:
+      - Open sign-in in Arabic, signed out, and type an email
+    expect:
+      - Both fields compute left to right and keep their text on the right
+  - id: amount-input
+    title: In Arabic, the expense form's amount is typed left to right, on the right as before
+    tier: secondary
+    legacy: [MUT-109]
+    steps:
+      - Open a new expense in Arabic and type 1,200.50
+    expect:
+      - The amount field computes left to right and keeps its text on the right
+  - id: ledger
+    title: In Arabic, payment and invoice numbers read left to right, and amounts keep their place
+    tier: secondary
+    legacy: [MUT-109]
+    steps:
+      - Open Payments in Arabic, then Documents
+    expect:
+      - PAY-2026-0001 and INV-2026-007 compute left to right and read in order
+      - The payment's amount reads ₪ 1,500.00 on screen, as before, from a plain <bdi>

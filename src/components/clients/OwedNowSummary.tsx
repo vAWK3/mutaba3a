@@ -33,7 +33,7 @@ export function OwedNowSummary({ owed, className }: OwedNowSummaryProps) {
         <div className="owed-now-currencies">
           {owed.map(({ currency, owedMinor, overdueMinor }) => (
             <div key={currency} className="owed-now-currency">
-              <bdi dir="ltr" className="owed-now-amount" data-testid="owed-now-amount">
+              <bdi className="owed-now-amount" data-testid="owed-now-amount">
                 {formatAmount(owedMinor, currency, locale)}
               </bdi>
               {overdueMinor > 0 ? (

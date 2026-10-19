@@ -100,10 +100,10 @@ export function isolate(text: string): string {
 
 /**
  * Wrap a formatted amount in a left-to-right isolate so it always reads
- * left-to-right inside a sentence of either direction, matching the
- * `<bdi dir="ltr">` convention used for a standalone amount. Unlike FSI,
- * LRI ignores the strong RLM an Arabic `Intl.NumberFormat` currency string
- * carries (MUT-110).
+ * left-to-right inside a sentence of either direction. Unlike FSI, LRI
+ * ignores the strong RLM an Arabic `Intl.NumberFormat` currency string
+ * carries (MUT-110). A standalone amount is a plain `<bdi>` instead, which
+ * that RLM resolves right to left (MUT-109).
  */
 export function isolateAmount(text: string): string {
   return `${LEFT_TO_RIGHT_ISOLATE}${text}${POP_ISOLATE}`;

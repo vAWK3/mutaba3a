@@ -2,7 +2,7 @@
 
 **Ticket**: [MUT-109](https://barmajiyat.atlassian.net/browse/MUT-109) · epic MUT-101 (Brand v2), its last open child · blocked by MUT-102 (Done) · relates to MUT-110 (Done)
 **Debt**: TD-048, direction half (font half closed by MUT-102)
-**Status**: Draft, 2026-10-19 — awaiting Basel's approval (decisions D1–D4 below)
+**Status**: APPROVED 2026-10-19 by Basel with the recommended D1–D4
 
 ## 1. Problem
 
