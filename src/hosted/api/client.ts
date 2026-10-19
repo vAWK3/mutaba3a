@@ -183,9 +183,10 @@ let unhintedProbe: Promise<boolean> | null = null;
 function probeRemote(): Promise<boolean> {
   unhintedProbe ??= fetch('/v1/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
     .then((response) => {
+      // Only the request in flight is shared; once answered, the saved hint is the answer.
+      unhintedProbe = null;
       if (response.status === 200) setMode('remote');
       else if (response.status === 401) setMode('local');
-      else unhintedProbe = null;
       return response.status !== 401;
     })
     .catch((error: unknown) => {

@@ -48,6 +48,37 @@ describe('portal lint guards', () => {
     30_000,
   );
 
+  // ADR-097 (MUT-286): server code runs in the page only from src/hosted/local, and only the allowlisted modules.
+  describe('local mode', () => {
+    const LOCAL = 'src/hosted/local/__probe__.ts';
+
+    it('forbids the portal from importing server code', async () => {
+      expect(await rulesFor("import { MemoryLedgerStore } from '../../../server/src/repositories/memory.js';\nexport const x = MemoryLedgerStore;\n")).toContain('no-restricted-imports');
+    }, 30_000);
+
+    it('forbids a static import of the local backend: it must stay a lazy chunk', async () => {
+      expect(await rulesFor("import { bootLocalBackend } from '@mut/local-backend';\nexport const x = bootLocalBackend;\n")).toContain('no-restricted-imports');
+    }, 30_000);
+
+    it('lets the local backend import the allowlisted server modules', async () => {
+      const code = "import { MemoryLedgerStore } from '../../../server/src/repositories/memory.js';\nimport { PORTAL_ROUTES } from '../../../server/src/routes/portal-routes.js';\nexport const x = [MemoryLedgerStore, PORTAL_ROUTES];\n";
+      expect(await rulesFor(code, LOCAL)).not.toContain('no-restricted-imports');
+    }, 30_000);
+
+    it.each([
+      ["import { sessionRoutes } from '../../../server/src/routes/sessions.js';"],
+      ["import { createApp } from '../../../server/src/app.js';"],
+      ["import { PrismaLedgerStore } from '../../../server/src/repositories/prisma.js';"],
+    ])('forbids the local backend %s', async (line) => {
+      expect(await rulesFor(`${line}\nexport const x = 1;\n`, LOCAL)).toContain('no-restricted-imports');
+    }, 30_000);
+
+    it('keeps the portal bans in the local backend too', async () => {
+      expect(await rulesFor("import Dexie from 'dexie';\nexport const x = Dexie;\n", LOCAL)).toContain('no-restricted-imports');
+      expect(await rulesFor("const amount = '1.10';\nexport const n = Number(amount);\n", LOCAL)).toContain('no-restricted-syntax');
+    }, 30_000);
+  });
+
   it('leaves the local app alone', async () => {
     expect(await rulesFor("export const n = Number('1');\n", 'src/lib/__probe__.ts')).not.toContain('no-restricted-syntax');
   }, 30_000);

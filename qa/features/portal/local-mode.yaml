@@ -1,0 +1,84 @@
+app: portal
+area: local
+title: The portal signed out, on this device
+tier: secondary
+# MUT-286 (epic MUT-284, ADR-097): signed out, the portal runs the server's own routes in the page over IndexedDB.
+# The brief's local.income-persists asks for money *owed*; the portal has no way to create a client yet (hosted
+# clients come from the phone or Malafat), so it is covered with money received until that gap is decided.
+# local.expense-receipt, local.offline, local.marker-upsell, local.fx-line, local.move-on-sign-in belong to MUT-287..290.
+paths:
+  - src/hosted/local/**
+  - src/hosted/session/mode.ts
+  - src/hosted/session/localBackendContract.ts
+  - src/hosted/api/client.ts
+features:
+  - id: first-visit
+    title: A first visit opens the app on this device in Arabic, with no sign-in and nothing sent but one check
+    tier: core # the portal's front door for everyone without an account
+    paths:
+      - src/hosted/session/AuthGate.tsx
+      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/shell/HostedShell.tsx
+      - src/hosted/shell/ProfileSwitcher.tsx
+    steps:
+      - Open the portal for the first time, with nobody signed in
+      - Open the account menu
+    expect:
+      - The Personal profile's Overview opens in Arabic, right to left, with no sign-in form
+      - The account reads "على هذا الجهاز" (On this device); the menu offers Sign in and Your data, and no sign-out, password, Malafat or store link
+      - The nav has no Expenses or Conversions (MUT-287)
+      - Exactly one request reached the server, the first-visit check of /v1/me
+  - id: received-persists
+    title: Money received signed out is still there after a reload, and nothing is sent
+    tier: core
+    paths:
+      - src/hosted/components/IncomeCaptureDrawer.tsx
+    steps:
+      - Open the portal signed out, in English
+      - On Payments, add 250.00 received
+      - Reload the page
+    expect:
+      - The payment is listed after saving and again after the reload, on the same profile
+      - No request reached the server after the first-visit check
+  - id: two-tabs
+    title: Two tabs on this device see each other's saves
+    tier: secondary
+    paths:
+      - src/hosted/session/SessionBridge.tsx
+    steps:
+      - Open Payments in two tabs
+      - Add money received in the first tab
+      - Add money received in the second tab
+    expect:
+      - The second tab lists the first tab's payment without a reload
+      - Both tabs list both payments; payment numbers follow on (PAY-…-0001, then 0002)
+  - id: download-restore
+    title: Download my records, clear the site's data, restore the file, and every record is back
+    tier: secondary
+    paths:
+      - src/hosted/components/YourDataDrawer.tsx
+      - src/hosted/shell/AccountDrawers.tsx
+      - src/hosted/data/filters.ts
+    steps:
+      - Add money received signed out
+      - Open Your data from the account menu and download my records
+      - Clear this site's data, then open the portal again
+      - Open Your data, restore the downloaded file, and replace
+    expect:
+      - The download is a mutaba3a-records-<date>.json file
+      - After clearing, the payment is gone
+      - The confirm names how many records the file holds; after Replace, "Records restored." shows and the payment is back
+  - id: session-expired
+    title: When a signed-in session ends, the portal offers Sign in or Continue on this device, and never switches by itself
+    tier: secondary
+    paths:
+      - src/hosted/pages/auth/SignInPage.tsx
+      - src/hosted/session/useSignOut.ts
+      - src/hosted/pages/auth/SetupPage.tsx
+    steps:
+      - Open Payments signed in
+      - The session ends on the server; open Receivables
+      - Choose Continue on this device
+    expect:
+      - Sign-in says "You've been signed out. Sign in again to continue." and offers both Sign in and Continue on this device
+      - Continuing opens this device's own app, with none of the account's figures

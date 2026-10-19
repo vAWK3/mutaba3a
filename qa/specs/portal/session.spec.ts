@@ -88,10 +88,14 @@ test('Sign out: a failure keeps you signed in and says so; then it ends the sess
     expect(api.calls('DELETE', /^\/v1\/sessions\/current$/)).toHaveLength(2);
   });
 
-  await step('Opening the payments page again asks to sign in first, with no figure shown', async () => {
+  await step('Opening the payments page again opens this device on its own, with none of the account\'s figures', async () => {
+    // MUT-286: signed out, the portal is this device's own app; the account's profile isn't one of its profiles
+    const before = api.calls('GET', /^\/v1\//).length;
     await page.goto(`/p/${OFFICE_A}/payments`);
-    await expect(page).toHaveURL(/\/sign-in\?next=/);
+    await expect(page.getByRole('heading', { name: "This profile isn't available" })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Account/ })).toContainText('On this device');
     await expect(page.getByText('PAY-0001')).toHaveCount(0);
+    expect(api.calls('GET', /^\/v1\//)).toHaveLength(before);
   });
 
   await step('After a sign-out, the next sign-in starts at the portal’s home, not where the last person was', async () => {

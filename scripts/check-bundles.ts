@@ -24,6 +24,7 @@ import {
   bootSplashProblems,
   extractOrigins,
   findForbidden,
+  localBackendInEntryGraph,
   fontProblems,
   newOrigins,
   posthogInEntryGraph,
@@ -120,6 +121,16 @@ function checkPosthog(): string[] {
   return problems;
 }
 
+/** ADR-097: the local backend stays a lazy chunk, out of every page a signed-in person loads. */
+function checkLocalBackendLazy(): string[] {
+  const dir = 'dist-hosted';
+  if (!existsSync(dir)) return [];
+  const read = (path: string) => (existsSync(join(dir, path)) ? readFileSync(join(dir, path), 'utf8') : '');
+  return ENTRY_HTML[dir].flatMap((name) =>
+    localBackendInEntryGraph(read(name), read).map((path) => `${dir}/${path}: IndexedDB is statically reachable from ${name}; only the lazy local backend may open it (ADR-097)`),
+  );
+}
+
 function check(dir: string, rules: Rule[], origins: string[]): string[] {
   if (!existsSync(dir)) return [`${dir} is missing: build it first`];
   const problems: string[] = [];
@@ -140,6 +151,7 @@ const problems = [
   ...['dist-web', 'dist-desktop', 'dist-hosted'].flatMap(checkBrandFonts),
   ...['dist-web', 'dist-desktop', 'dist-hosted'].flatMap(checkBootSplash),
   ...checkPosthog(),
+  ...checkLocalBackendLazy(),
 ];
 
 if (problems.length > 0) {
@@ -147,5 +159,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  'Bundle check passed: dist-web and dist-desktop carry no portal code; PostHog is unreachable from the local app (lazy landing chunks only, never precached), lazy in the portal, and absent from desktop; dist-hosted carries no local storage and no self-service account door; every dist ships Thmanyah unmodified, preloads no font, resolves every CSS url(), and opens on a boot splash whose assets resolve.',
+  'Bundle check passed: dist-web and dist-desktop carry no portal code; PostHog is unreachable from the local app (lazy landing chunks only, never precached), lazy in the portal, and absent from desktop; dist-hosted opens IndexedDB only from its lazy local backend and carries no self-service account door; every dist ships Thmanyah unmodified, preloads no font, resolves every CSS url(), and opens on a boot splash whose assets resolve.',
 );

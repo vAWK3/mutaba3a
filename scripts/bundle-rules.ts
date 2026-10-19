@@ -35,12 +35,12 @@ export const LOCAL_RULES: Rule[] = [
 ];
 
 /**
- * The portal must hold no figure on the device (no IndexedDB, no Dexie, no
- * service worker) and offer no self-service account door, in either language.
- * `تسجيل` alone is allowed: `تسجيل الدخول` is "sign in".
+ * The portal offers no self-service account door, in either language, and
+ * carries no Dexie or service worker. `تسجيل` alone is allowed: `تسجيل الدخول`
+ * is "sign in". IndexedDB is allowed since ADR-097, but only in the lazy local
+ * backend: see `localBackendInEntryGraph`.
  */
 export const HOSTED_RULES: Rule[] = [
-  { name: 'indexedDB', pattern: /indexedDB/i },
   { name: 'Dexie', pattern: /\bDexie\b/ },
   { name: 'service worker', pattern: /serviceWorker/ },
   { name: 'sign up', pattern: /\bsign[\s-]?up\b/i },
@@ -257,6 +257,19 @@ export function staticGraph(html: string, read: (path: string) => string): strin
  */
 export function posthogInEntryGraph(html: string, read: (path: string) => string): string[] {
   return staticGraph(html, read).filter((path) => POSTHOG_MARKER.test(read(path)));
+}
+
+/** What only the portal's local backend (ADR-097) does: open IndexedDB. */
+export const LOCAL_BACKEND_MARKER = /indexedDB/i;
+
+/**
+ * The statically loaded portal files that touch IndexedDB. The local backend
+ * is the portal's one IndexedDB user and a lazy chunk, loaded only signed out
+ * (MUT-285 brief §2.7, §9): a hit means a signed-in page would download it, or
+ * that something else in the portal stores data on the device. Empty when clean.
+ */
+export function localBackendInEntryGraph(html: string, read: (path: string) => string): string[] {
+  return staticGraph(html, read).filter((path) => LOCAL_BACKEND_MARKER.test(read(path)));
 }
 
 /** The files a Workbox `sw.js` precaches, from its `{url:"…"}` entries (minified or JSON-quoted). */

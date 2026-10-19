@@ -455,13 +455,14 @@ export class FakeApi {
   }
 
   /** Sign in with every /v1 call answered by this API (and openSignedInPortal's defaults behind it). */
-  async open(page: Page, path: string, language: 'en' | 'ar' = 'en', options: { chooseLanguage?: boolean } = {}) {
+  async open(page: Page, path: string, language: 'en' | 'ar' = 'en', options: { chooseLanguage?: boolean; mode?: 'remote' | 'local' | null } = {}) {
     await page.context().route(`${STORAGE}/**`, (route) => this.serveStorage(route));
     return openSignedInPortal(page, {
       profiles: this.profiles.map((p) => p.stub),
       language,
       path,
       chooseLanguage: options.chooseLanguage,
+      mode: options.mode,
       handle: (route, request, url) => this.handle(route, request, url, language),
     });
   }
