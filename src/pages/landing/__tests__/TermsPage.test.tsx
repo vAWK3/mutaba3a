@@ -75,7 +75,7 @@ describe('TermsPage (MUT-324)', () => {
     expect(text).toContain('يسود النص الإنجليزي');
   });
 
-  it('is busy only while the text loads, including when the version does not exist', async () => {
+  it('is busy only while the text loads', async () => {
     renderPage('en');
     expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'true');
     await loaded(en);

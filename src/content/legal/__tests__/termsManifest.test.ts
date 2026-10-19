@@ -25,13 +25,18 @@ describe('termsManifest (MUT-324 D11)', () => {
     expect(() => termsManifest([{ name: 'draft.en.json', bytes: Buffer.from('x') }])).toThrow(/draft\.en\.json/);
   });
 
-  it('skips files that are not JSON, such as .DS_Store, instead of failing the build', () => {
+  it('skips dotfiles such as .DS_Store, instead of failing the build', () => {
     const files = [
       { name: '.DS_Store', bytes: Buffer.from('finder') },
-      { name: 'README.md', bytes: Buffer.from('notes') },
       { name: '2026-10-19.en.json', bytes: Buffer.from('en') },
       { name: '2026-10-19.ar.json', bytes: Buffer.from('ar') },
     ];
     expect(termsManifest(files).versions.map((v) => v.version)).toEqual(['2026-10-19']);
+  });
+
+  it('still refuses any other misnamed file, so a typo never slips past the build (review pass 2)', () => {
+    for (const name of ['README.md', '2026-11-01.en.JSON', '2026-11-01.en.json.bak']) {
+      expect(() => termsManifest([{ name, bytes: Buffer.from('x') }]), name).toThrow(name);
+    }
   });
 });

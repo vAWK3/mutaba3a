@@ -2531,7 +2531,7 @@ A picker that creates on pick (Add «name») reports `onCreatingChange(true/fals
 Each version is its own content file, never edited once released. The side that records acceptance (the server) pins the version and the sha256 of each language's file, and stores the hash with every acceptance. A root test keeps the pin and the files in step, so a changed text that kept its version fails CI.
 
 ### Pattern: Prove a static file is live with a build-emitted manifest, not a page fetch
-Netlify's SPA fallback answers 200 for every path, so a release guard can't fetch a page to learn whether it exists. The web build emits a small JSON manifest (`legal/terms-versions.json`), like `__forms.html`. The guard (`server/src/scripts/check-terms-live.ts`, run by `deploy.sh`) reads that file and compares it to what the release is about to name.
+Netlify's SPA fallback answers 200 for every path, so a release guard can't fetch a page to learn whether it exists. The web build emits a small JSON manifest (`legal/terms-versions.json`), like `__forms.html`. The guard (`server/src/scripts/check-terms-live.ts`, run by `scripts/preflight.sh server` before the version bump and again by `deploy.sh`) reads that file and compares it to what the release is about to name.
 ## Patterns added by MUT-287 (2026-10-19, ADR-100 decision 11)
 
 ### Pattern: Two local databases are kept consistent by order, not by one transaction

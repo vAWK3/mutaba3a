@@ -8,8 +8,8 @@ import type { SessionKind } from './auth/sessions.js';
  * and never edited once released: a new text is a new version. These are its
  * sha256 fingerprints, pinned to the files by `scripts/__tests__/legal-terms.test.ts`,
  * so an acceptance can always be tied to the exact words it accepted.
- * `server/scripts/deploy.sh` refuses to release a version the public site does not
- * yet list in `/legal/terms-versions.json` (web first).
+ * The server release (`scripts/preflight.sh server`, then `server/scripts/deploy.sh`) refuses
+ * a version the public site does not yet list in `/legal/terms-versions.json` (web first).
  *
  * Versions are ISO dates, so comparing them as strings orders them by release.
  */

@@ -69,7 +69,7 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
 }
 
 /** MUT-324: the current version, and whether the person's latest acceptance covers it (D10). */
-export async function termsStatus(store: LedgerStore, userId: string, terms: CurrentTerms) {
+async function termsStatus(store: LedgerStore, userId: string, terms: CurrentTerms) {
   const latest = await store.users.latestTermsAcceptance(userId);
   return { version: terms.version, accepted: termsAccepted(latest?.version ?? null, terms.version) };
 }

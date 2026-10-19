@@ -274,7 +274,10 @@ function legalTermsManifest(): Plugin {
   return {
     name: "mutaba3a:legal-terms-manifest",
     generateBundle() {
-      const files = readdirSync(dir).map((name) => ({ name, bytes: readFileSync(`${dir}${name}`) }));
+      // Files only: a folder in there (drafts/) is not a released text
+      const files = readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map(({ name }) => ({ name, bytes: readFileSync(`${dir}${name}`) }));
       this.emitFile({ type: "asset", fileName: TERMS_MANIFEST_FILE, source: `${JSON.stringify(termsManifest(files), null, 2)}\n` });
     },
   };

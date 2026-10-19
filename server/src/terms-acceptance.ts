@@ -20,7 +20,8 @@ export function staleTerms(terms: CurrentTerms): ApiError {
 /**
  * `user.terms_accepted`, as the person, on each profile they own (D2): a person
  * accepts for themselves and, as owner, for their own profiles. A firm they are
- * only a member of never sees it. The profiles are read side by side, not one after another.
+ * only a member of never sees it. The profiles are read in one tick: Prisma batches same-tick
+ * `findUnique` calls into a single query, so this is one round trip, not a fan-out on the pool.
  */
 export async function termsAcceptedAudit(store: LedgerStore, person: UserRecord, acceptance: TermsAcceptanceInput, requestId: string): Promise<AuditEventInput[]> {
   const memberships = await store.memberships.listByUser(person.id);
