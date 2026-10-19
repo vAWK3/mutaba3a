@@ -1240,6 +1240,16 @@ describe('IncomePage', () => {
       }
     });
 
+    it('sets the compact date in the tabular figure face, so the column is one width on any day (MUT-250)', async () => {
+      media.compact = true;
+      await renderEntries();
+
+      for (const row of screen.getAllByRole('row').slice(1)) {
+        const date = within(row).getAllByRole('cell')[0].querySelector('.num');
+        expect(date?.textContent).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
+      }
+    });
+
     it('renders every row from the same column list as the header', async () => {
       await renderEntries();
 

@@ -701,6 +701,7 @@
 **Impact**: At 375px the 240px sidebar stays open and the content beside it is clipped inside `<main>`. Income scrolls sideways: its top bar, status tabs and table are about 680px wide (714px with Brand v2's body 16). Every drawer is `--drawer-width` 480px, so it starts 105px off-screen (or ends 105px past the edge in Arabic). `qa/specs/web/brand.spec.ts` annotates the two overflows (`KNOWN_OVERFLOW`) instead of failing; it fails on any other.
 **Remediation**: Collapse the sidebar to the rail or a menu below a breakpoint; let the Income table scroll inside its own container and wrap the top bar and tabs; cap drawers at `min(var(--drawer-width), 100vw)`. Remove each `KNOWN_OVERFLOW` entry as it fits. Needs a ticket (the app is desktop-first; the iPhone app is Flutter).
 **Effort**: Medium
+**Update (2026-10-19, MUT-250):** the Income cap was flaky, not the layout. The compact date column took its width from its widest date, and Thmanyah's digits are proportional, so Income at 375px in Arabic measured 718–736px depending on today's date (726 on 12/10, 727 on 19/10, 734 on 28/09). Compact dates now render through `CompactDate` (Plex Mono, tabular digits): 735px on every date across nine dates spanning the year. `Income@375` and `Income drawer@375` caps are 735 (was 726), and `@web.brand.date-width` pins the width across three dates. The overflow itself (this TD) is unchanged and still open; the local web app is due to retire (MUT-292).
 
 ### TD-082: The portal sign-in page's language switch sits outside any landmark
 **Status**: Open
