@@ -28,6 +28,37 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Counts read right in English and Arabic (MUT-179, epic MUT-74)
+
+**Why:** counted strings dropped a number into fixed text, giving English "1 clients" and "receipt(s)", and one Arabic noun form for every count ("متأخر 3 يوم", "مستحق خلال 34 يوم"). The landing page opens in Arabic (ADR-077), and its mocks showed 3, 34, 158 and 227 days, all in the wrong form. MUT-74's last open child.
+
+### Fixed
+- **18 counted strings are CLDR plural objects read through `tp()`.** English has `one`/`other`; Arabic has all six forms, with `one`/`two` in words. The strings are:
+  - day counts: `transactions.status.overdue` and `dueIn`, `clients.index.oldestOverdue`, `expenses.recurring.occurrence.dueIn` and `overdueDays`;
+  - entity counts: `clients.summary.clientsCount`, `clients.emptyFilteredCount`, `clients.crossProfileTxCount`, `projects.summary.projectsCount`;
+  - receipts: `expenses.receiptsAttached`, `settings.exportReceiptsDesc` and `exportReceiptsDone`;
+  - Settings and integrity messages: `settings.importBackupDone`, `orphanedRecords.assigned` and `partialFailure`, `integrity.orphanedRecord`, `checkIssues` and `toastIssues`.
+- **Screens touched:**
+  - the landing Clients and client-profile mocks;
+  - Home Needs attention and the client work list;
+  - the project profile;
+  - Income (the overdue line, a caller the ticket missed and the grep gate caught);
+  - Clients, Projects, the Expenses receipt badge, recurring rows and cards;
+  - Settings › Your data;
+  - the orphaned-records banner and drawer.
+
+### Removed
+- The hand-rolled `…Singular`/`…Plural` pairs (`importBackupDone`, `assigned`, `partialFailure`, `orphanedRecord`, `checkIssues`, `toastIssues`) and `clients.summary.clientsCountOne` / `projects.summary.projectsCountOne`, along with their `count === 1 ?` ternaries.
+- `orphanedRecords.groups.*` is kept: the ticket listed it as unused, but the drawer reads it.
+
+### Technical
+- The count placeholder is `{count}` (was `{days}`). Test mocks of `lib/i18n` / `lib/i18n/core` now also mock `lib/i18n/plural` (PATTERNS › Plurals).
+- No layout, bidi or digit change: strings only.
+
+Files: `src/lib/i18n/translations/{en,ar}/{clients,expenses,integrity,projects,settings,transactions}.json`; the callers above; tests `pluralCountKeys.test.ts`, `HomeAttentionRow.plurals.test.tsx`, `landingMockPlurals.test.tsx` and updates to 9 suites; QA `web.home.attention-day-plurals`, `web.clients.count-plurals`, `web.landing.arabic-day-counts`.
+
+---
+
 ## [Unreleased] - 2026-10-19 — Use the portal without an account: the server's routes run in the page (MUT-286, ADR-097, ADR-100)
 
 **Why:** epic MUT-284's load-bearing ticket. Signed out, the portal runs the server's own route modules in the page over IndexedDB, so the free app and the hosted account are one portal with the same figures.

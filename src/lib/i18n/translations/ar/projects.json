@@ -31,8 +31,14 @@
       "lastActivity": "آخر نشاط"
     },
     "summary": {
-      "projectsCount": "{count} مشاريع",
-      "projectsCountOne": "مشروع واحد",
+      "projectsCount": {
+        "zero": "لا مشاريع",
+        "one": "مشروع واحد",
+        "two": "مشروعان",
+        "few": "{count} مشاريع",
+        "many": "{count} مشروعًا",
+        "other": "{count} مشروع"
+      },
       "totalReceived": "إجمالي المحصّل",
       "totalUnpaid": "إجمالي غير المحصّل",
       "totalExpenses": "إجمالي المصروفات",

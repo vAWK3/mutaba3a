@@ -63,6 +63,16 @@ describe('ProjectsPage search with no match', () => {
     await waitFor(() => expect(screen.getByPlaceholderText(SEARCH.en)).toHaveValue(''));
   });
 
+  it('counts one project in the singular on the summary strip (MUT-179)', async () => {
+    withProjects(1);
+    vi.spyOn(useQueries, 'useProjectSummaries').mockReturnValue({
+      data: [{ id: 'pr-0', name: 'Project 0' }],
+      isLoading: false,
+    } as unknown as ReturnType<typeof useQueries.useProjectSummaries>);
+    renderWithProviders(<ProjectsPage />);
+    expect(await screen.findByText('1 project')).toBeInTheDocument();
+  });
+
   it('is in Arabic, with the Arabic plural, when Arabic is chosen', async () => {
     chooseLanguage('ar');
     withProjects(2);

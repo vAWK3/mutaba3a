@@ -11,6 +11,7 @@ import { useDrawerStore } from '../../lib/stores';
 import { formatDate, formatAmount, getDaysUntil, getDateRangePreset, cn, EMPTY_CELL } from '../../lib/utils';
 import { AmountWithConversion } from '../../components/ui';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
+import { useTp } from '../../lib/i18n/plural';
 import type { TxKind, TxStatus, QueryFilters } from '../../types';
 import { BrandLoader } from '../../components/brand/BrandLoader';
 
@@ -19,6 +20,7 @@ export function ProjectDetailPage() {
   const { openIncomeDrawer, openExpenseDrawer, openLegacyExpenseDrawer, openProjectDrawer, openPartialPaymentDrawer } = useDrawerStore();
   const expensesEnabled = useFeatureEnabled('expenses');
   const t = useT();
+  const tp = useTp();
   const { language } = useLanguage();
   const locale = getLocale(language);
 
@@ -288,7 +290,7 @@ export function ProjectDetailPage() {
                                 />
                                 {isOverdue && (
                                   <div style={{ fontSize: 'var(--text-label)', color: 'var(--error)' }}>
-                                    {t('transactions.status.overdue', { days: Math.abs(daysUntilDue!) })}
+                                    {tp('transactions.status.overdue', Math.abs(daysUntilDue!))}
                                   </div>
                                 )}
                               </div>
@@ -297,10 +299,10 @@ export function ProjectDetailPage() {
                                 {tx.status === 'paid' ? (
                                   <span className="status-badge paid">{t('transactions.status.paid')}</span>
                                 ) : isOverdue ? (
-                                  <span className="status-badge overdue">{t('transactions.status.overdue', { days: Math.abs(daysUntilDue!) })}</span>
+                                  <span className="status-badge overdue">{tp('transactions.status.overdue', Math.abs(daysUntilDue!))}</span>
                                 ) : (
                                   <span className="status-badge unpaid">
-                                    {daysUntilDue === 0 ? t('transactions.status.dueToday') : t('transactions.status.dueIn', { days: daysUntilDue ?? 0 })}
+                                    {daysUntilDue === 0 ? t('transactions.status.dueToday') : tp('transactions.status.dueIn', daysUntilDue ?? 0)}
                                   </span>
                                 )}
                               </>

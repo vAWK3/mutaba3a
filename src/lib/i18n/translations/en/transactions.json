@@ -13,8 +13,14 @@
       "paid": "Paid",
       "unpaid": "Unpaid",
       "partial": "Partial ({percent}%)",
-      "overdue": "{days}d overdue",
-      "dueIn": "Due in {days}d",
+      "overdue": {
+        "one": "{count}d overdue",
+        "other": "{count}d overdue"
+      },
+      "dueIn": {
+        "one": "Due in {count}d",
+        "other": "Due in {count}d"
+      },
       "dueToday": "Due today"
     },
     "partialPayment": {

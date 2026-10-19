@@ -20,8 +20,14 @@
       "overdue": "المتأخر"
     },
     "summary": {
-      "clientsCount": "{count} عملاء",
-      "clientsCountOne": "عميل واحد"
+      "clientsCount": {
+        "zero": "لا عملاء",
+        "one": "عميل واحد",
+        "two": "عميلان",
+        "few": "{count} عملاء",
+        "many": "{count} عميلًا",
+        "other": "{count} عميل"
+      }
     },
     "detail": {
       "noReceivables": "لا توجد مستحقات",
@@ -49,17 +55,38 @@
       }
     },
     "emptyFiltered": "لا يوجد عملاء مطابقون للبحث",
-    "emptyFilteredCount": "{count} عميل إجمالاً.",
+    "emptyFilteredCount": {
+      "zero": "لا عملاء إجمالاً.",
+      "one": "عميل واحد إجمالاً.",
+      "two": "عميلان إجمالاً.",
+      "few": "{count} عملاء إجمالاً.",
+      "many": "{count} عميلًا إجمالاً.",
+      "other": "{count} عميل إجمالاً."
+    },
     "clearSearch": "مسح البحث",
     "split": {
       "profile": "ملف العميل",
       "showing": "يُعرض الآن: {name}"
     },
-    "crossProfileTxCount": "{count} إدخال",
+    "crossProfileTxCount": {
+      "zero": "لا إدخالات",
+      "one": "إدخال واحد",
+      "two": "إدخالان",
+      "few": "{count} إدخالات",
+      "many": "{count} إدخالًا",
+      "other": "{count} إدخال"
+    },
     "index": {
       "settled": "مسدَّد",
       "neverPaid": "لم يدفع بعد",
-      "oldestOverdue": "الأقدم {days} يوم",
+      "oldestOverdue": {
+        "zero": "الأقدم {count} يوم",
+        "one": "الأقدم يوم واحد",
+        "two": "الأقدم يومان",
+        "few": "الأقدم {count} أيام",
+        "many": "الأقدم {count} يومًا",
+        "other": "الأقدم {count} يوم"
+      },
       "owedOrderHint": "مرتّبة حسب سعر الصرف اليوم. لا تُحوَّل المبالغ أبداً.",
       "bucket": {
         "noClient": {

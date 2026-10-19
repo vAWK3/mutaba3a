@@ -1528,6 +1528,14 @@ A plural string is an object of CLDR forms (`zero|one|two|few|many|other`);
 `other`, with `{count}` always available. English needs `one` + `other`; Arabic
 all six (parity-tested in `src/hosted/i18n`).
 
+**The count's placeholder is `{count}`, never `{days}` or `{n}` (MUT-179).** Arabic
+`one`/`two` name the count in words ("يوم واحد", "يومان") and drop the digit; `few`
+(3–10) takes the plural ("أيام"), `many` (11–99) the accusative singular ("يومًا").
+No `count === 1 ? …Singular : …Plural` ternaries and no `…One` keys: one plural
+object per string. **Tests:** a test that mocks `lib/i18n` or `lib/i18n/core`
+must also mock `lib/i18n/plural` (route `useTp` through its mocked `t`), or
+`useTp` reaches the real `useLanguage` and the render throws.
+
 ### Relative time goes through `Intl.RelativeTimeFormat` (MUT-92, ADR-019)
 "3 days ago", "1 week ago" come from `formatRelativeDate(iso, t, locale)`
 (`src/lib/utils.ts`), which hands the count to `Intl.RelativeTimeFormat` with

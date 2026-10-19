@@ -42,12 +42,14 @@ import { resolveIncomeFilters, type IncomeStatusFilter } from '../../lib/incomeS
 import { toIncomeRow, incomeColumns, type IncomeColumnKey, type IncomeRow } from './incomeRows';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
+import { useTp } from '../../lib/i18n/plural';
 
 const STATUS_TABS: IncomeStatusFilter[] = ['all', 'unpaid', 'received', 'overdue'];
 
 export function IncomePage() {
   const { openTransactionDrawer, openPartialPaymentDrawer } = useDrawerStore();
   const t = useT();
+  const tp = useTp();
   const { language } = useLanguage();
   const locale = getLocale(language);
   const isCompact = useIsCompactTable();
@@ -185,7 +187,7 @@ export function IncomePage() {
             )}
             {row.overdueDays !== undefined && (
               <div style={{ fontSize: 'var(--text-label)', color: 'var(--error)', marginTop: 'var(--space-0-5)' }}>
-                {t('transactions.status.overdue', { days: row.overdueDays })}
+                {tp('transactions.status.overdue', row.overdueDays)}
               </div>
             )}
           </>

@@ -1,12 +1,14 @@
 import { useT } from '../../../../lib/i18n';
+import { useTp } from '../../../../lib/i18n/plural';
 import { SAMPLE_CLIENT, SAMPLE_WORK, type SampleWorkRow } from '../../sampleData';
 import { useMockFormat } from './useMockFormat';
 
 function StatusBadge({ row }: { row: SampleWorkRow }) {
   const t = useT();
+  const tp = useTp();
   const label =
     row.status === 'overdue'
-      ? t('transactions.status.overdue', { days: row.daysOverdue ?? 0 })
+      ? tp('transactions.status.overdue', row.daysOverdue ?? 0)
       : t(`transactions.status.${row.status}`);
 
   return <span className={`landing-mock-badge landing-mock-badge--${row.status}`}>{label}</span>;

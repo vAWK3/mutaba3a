@@ -1,4 +1,5 @@
 import { useT } from '../../../../lib/i18n';
+import { useTp } from '../../../../lib/i18n/plural';
 import { SAMPLE_CLIENTS, sampleOwedTotals } from '../../sampleData';
 import { CountUpAmount } from './CountUpAmount';
 import { useMockFormat } from './useMockFormat';
@@ -12,6 +13,7 @@ const TOTALS = sampleOwedTotals(SAMPLE_CLIENTS);
  */
 export function ClientsListMock() {
   const t = useT();
+  const tp = useTp();
   const { money } = useMockFormat();
 
   return (
@@ -63,7 +65,7 @@ export function ClientsListMock() {
                       {money(overdue.overdueMinor, overdue.currency)}
                     </span>
                     <span className="landing-mock-oldest">
-                      {t('clients.index.oldestOverdue', { days: overdue.oldestOverdueDays ?? 0 })}
+                      {tp('clients.index.oldestOverdue', overdue.oldestOverdueDays ?? 0)}
                     </span>
                   </>
                 )}

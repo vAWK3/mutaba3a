@@ -173,6 +173,21 @@ Every money rule runs on both stores (memory and `test:db`).
 | `src/db/__tests__/paymentRecords.test.ts` › update | Integration (Dexie) | Moving a payment's date re-dates a fully paid entry (stays paid, same received); a part-paid entry stays part-paid |
 | `qa/specs/web/record-payment.spec.ts` | E2E (release-qa) | `@web.record-payment.edit-payment-date` (row menu → date focused → Enter updates, never a second payment) and `-rtl` |
 
+### Plural counts (MUT-179, added 2026-10-19)
+| File | Type | Covers |
+|------|------|--------|
+| `src/lib/i18n/__tests__/pluralCountKeys.test.ts` (new) | Unit | All 18 counted strings are plural objects (en one/other, ar six forms, `{count}` in every numeric form, `{total}`/`{version}` kept); the 14 retired Singular/Plural/One keys are gone; `orphanedRecords.groups` stays; `tp` gives "1 project", "Due in 1d", "متأخر 3 أيام", "متأخر 11 يومًا", "الأقدم 227 يومًا", and words 1 and 2 in Arabic |
+| `src/components/home/__tests__/HomeAttentionRow.plurals.test.tsx` (new) | Component (real dictionaries) | "Due in 1d" in EN; 3 and 11 days overdue in the AR few/many forms |
+| `src/pages/landing/__tests__/landingMockPlurals.test.tsx` (new) | Component (real dictionaries) | AR Clients mock 3/227/158 days and profile badge 34 days in their forms; no "{n} يوم" past 2; EN stays "oldest 3d" |
+| `src/components/expenses/__tests__/RecurringAttentionList.test.tsx` › MUT-179 | Component | AR lateness −3, −11, +3 in few/many forms (/expenses) |
+| `src/components/ui/__tests__/RecurringOccurrenceCard.test.tsx` (new, qa-reconcile) | Component (real dictionaries) | Due/overdue in EN one form and AR few/many/two; these branches are unreachable from the ledger today (it passes only projected occurrences) |
+| `src/pages/projects/__tests__/ProjectsPage.searchEmpty.test.tsx` › summary strip | Component (real dictionaries) | One project reads "1 project" |
+| `YourDataSection`, `OrphanedRecordsBanner`, `OrphanedRecordsDrawer`, `ClientsPage`, `ClientDetailPage`, `ProjectDetailPage`, `IncomePage` tests | Updated | Pick the CLDR form via `pluralKey` instead of the Singular/Plural keys; the "label: {count}" Arabic workaround test now asserts few ≠ many; i18n mocks also mock `plural` |
+| QA `@web.home.attention-day-plurals`, `@web.clients.count-plurals`, `@web.landing.arabic-day-counts` | Browser (Playwright) | EN and AR on Home, Clients and the landing page with real day counts |
+| QA `@web.businesses.shared-client`, `@web.data.older-backup` | Updated | They asserted the old wording ("D1 entries", "1 uploaded receipt files", "1 receipts exported"); now the singular |
+
+**Run (2026-10-19, preview build, Node 22):** full web QA suite, 133/135 passed. The 2 failures are `@web.brand.layout` at 375px in Arabic, light and dark: Income measures 727px against the 726px `KNOWN_OVERFLOW` cap. That is MUT-250, already measured on main on 2026-10-16. What's New needs `MUTABA3A_APP_VERSION` set to a version with notes (0.1.10 used here).
+
 ### Craft-fix bundle (MUT-92, added 2026-10-14)
 | File | Type | Covers |
 |------|------|--------|

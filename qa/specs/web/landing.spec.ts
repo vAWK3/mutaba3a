@@ -635,3 +635,25 @@ test.describe('in an English browser with no stored choice', () => {
     });
   });
 });
+
+// MUT-179: the landing opens in Arabic (ADR-077), so its mocks' overdue ages are what every visitor reads first.
+test("the landing page's mocks word their overdue ages correctly in Arabic", { tag: '@web.landing.arabic-day-counts' }, async ({ page, step }) => {
+  await step('Open the landing page in Arabic and look at the hero Clients picture', async () => {
+    await openLanding(page, 'ar');
+    const clients = page.locator('.landing-mock-client-overdue');
+    await expect(clients.filter({ hasText: 'الأقدم 3 أيام' })).toHaveCount(1);
+    await expect(clients.filter({ hasText: 'الأقدم 227 يومًا' })).toHaveCount(1);
+    await expect(clients.filter({ hasText: 'الأقدم 158 يومًا' })).toHaveCount(1);
+  });
+
+  await step('Scroll to the client-profile picture: "متأخر 34 يومًا"', async () => {
+    const badge = page.locator('.landing-mock-badge--overdue').first();
+    await badge.scrollIntoViewIfNeeded();
+    await expect(badge).toHaveText('متأخر 34 يومًا');
+  });
+
+  await step('No count above 2 is followed by a bare "يوم"', async () => {
+    const ages = await page.locator('.landing-mock-client-overdue, .landing-mock-badge--overdue').allTextContents();
+    for (const age of ages) expect(age).not.toMatch(/\d+ يوم(?!ًا)/);
+  });
+});

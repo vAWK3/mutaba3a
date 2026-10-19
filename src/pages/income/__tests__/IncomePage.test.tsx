@@ -84,6 +84,17 @@ vi.mock('../../../lib/i18n', () => ({
   getLocale: () => 'en-US',
 }));
 
+// MUT-179: counted strings go through tp(); route them through the mocked t() above
+vi.mock('../../../lib/i18n/plural', async () => {
+  const { useT } = await import('../../../lib/i18n');
+  return {
+    useTp: () => {
+      const t = useT();
+      return (key: string, count: number, vars?: Record<string, string | number>) => t(key, { ...vars, count });
+    },
+  };
+});
+
 // SearchInput imports useT from core directly (MUT-43: the hosted bundle must
 // never carry the app's full translation dictionary), so it isn't covered by
 // the barrel mock above.

@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { openFreshApp, logIncome, openNewIncomeDrawer, switchToArabic, addSecondBusiness } from '../../support/app';
+import { openFreshApp, logIncome, openNewIncomeDrawer, switchToArabic, addSecondBusiness, localDateFromToday } from '../../support/app';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { ar } from '../../support/i18n';
 
@@ -351,6 +351,37 @@ test(
       await drawer.getByRole('button', { name: 'Save', exact: true }).click();
       await expect(drawer).toBeHidden();
       await expect(page.getByRole('link', { name: 'Acme Studio' }).first()).toBeVisible();
+    });
+  },
+);
+
+// MUT-179: counts go through tp(), so Arabic says "عميلان" and "3 أيام" / "11 يومًا", never "3 يوم".
+test(
+  "the Clients summary and each client's oldest-overdue age read in the count's own form",
+  { tag: '@web.clients.count-plurals' },
+  async ({ page, step }) => {
+    const clientRow = (name: string) => page.getByRole('row').filter({ hasText: name });
+    const summary = () => page.locator('.clients-summary-count');
+
+    await step('Log income for two clients, overdue by 3 and by 11 days', async () => {
+      await openFreshApp(page, '/income');
+      await logIncome(page, { title: 'Logo redesign', amount: '1200', client: 'Acme Studio', dueDate: localDateFromToday(-3) });
+      await logIncome(page, { title: 'Brand book', amount: '800', client: 'Beta Labs', dueDate: localDateFromToday(-11) });
+    });
+
+    await step('Open Clients in English: "2 clients", "oldest 3d" and "oldest 11d"', async () => {
+      await page.goto('/app/clients');
+      await expect(summary()).toHaveText('2 clients');
+      await expect(clientRow('Acme Studio')).toContainText('oldest 3d');
+      await expect(clientRow('Beta Labs')).toContainText('oldest 11d');
+    });
+
+    await step('Switch to Arabic and open Clients: "عميلان", "الأقدم 3 أيام" and "الأقدم 11 يومًا"', async () => {
+      await switchToArabic(page);
+      await page.goto('/app/clients');
+      await expect(summary()).toHaveText('عميلان');
+      await expect(clientRow('Acme Studio')).toContainText('الأقدم 3 أيام');
+      await expect(clientRow('Beta Labs')).toContainText('الأقدم 11 يومًا');
     });
   },
 );

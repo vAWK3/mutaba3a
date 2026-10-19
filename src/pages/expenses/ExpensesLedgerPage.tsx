@@ -407,6 +407,7 @@ function ExpenseListView({
   onEditRule,
   t,
 }: ExpenseListViewProps) {
+  const tp = useTp();
   return (
     <div className="data-table">
       <table>
@@ -440,7 +441,7 @@ function ExpenseListView({
                     </span>
                   )}
                   {expense.receiptCount > 0 && (
-                    <span className="receipt-badge" title={t('expenses.receiptsAttached', { count: expense.receiptCount })}>
+                    <span className="receipt-badge" title={tp('expenses.receiptsAttached', expense.receiptCount)}>
                       📎 {expense.receiptCount}
                     </span>
                   )}

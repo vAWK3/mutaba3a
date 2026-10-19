@@ -129,3 +129,13 @@ features:
     expect:
       - '"Name is required" shows and the drawer stays open'
       - The drawer closes and Acme Studio is listed on Clients
+  - id: count-plurals
+    title: "The Clients summary and each client's oldest-overdue age read in the count's own form (MUT-179)"
+    tier: secondary
+    legacy: [MUT-179]
+    steps:
+      - Log income for two clients, overdue by 3 and by 11 days
+      - Open Clients in English, then switch to Arabic and open Clients again
+    expect:
+      - 'English reads "2 clients", "oldest 3d" and "oldest 11d"'
+      - 'Arabic reads "عميلان", "الأقدم 3 أيام" and "الأقدم 11 يومًا"'
