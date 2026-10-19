@@ -11,6 +11,8 @@
       "byCategory": "حسب الفئة"
     },
     "confirmDelete": "هل أنت متأكد من حذف هذا المصروف؟",
+    "saveSuccess": "تم حفظ المصروف بنجاح",
+    "recurringSaveSuccess": "تم حفظ القاعدة المتكررة بنجاح",
     "deleteSuccess": "تم حذف المصروف بنجاح",
     "deleteError": "فشل حذف المصروف",
     "recurringDeleteSuccess": "تم حذف القاعدة المتكررة بنجاح",

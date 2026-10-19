@@ -30,6 +30,7 @@ import { ExpenseFormFields, type ExpenseFormFieldsLabels } from '../expenses/Exp
 import type { Currency, ExpenseFrequency, RecurringEndMode } from '../../types';
 import { schema, type FormData } from './expenseDrawerFormSchema';
 import { BrandLoader } from '../brand/BrandLoader';
+import { SaveFeedbackIcon } from '../icons/SaveFeedbackIcon';
 
 export function ExpenseDrawer() {
   const { expenseDrawer, closeExpenseDrawer } = useDrawerStore();
@@ -201,6 +202,7 @@ export function ExpenseDrawer() {
         } else {
           await createRuleMutation.mutateAsync(ruleData);
         }
+        showToast(t('expenses.recurringSaveSuccess'), { icon: <SaveFeedbackIcon preset="playful" /> });
       } else {
         // Handle one-time expense
         const expenseData = {
@@ -222,6 +224,7 @@ export function ExpenseDrawer() {
         } else {
           await createExpenseMutation.mutateAsync(expenseData);
         }
+        showToast(t('expenses.saveSuccess'), { icon: <SaveFeedbackIcon preset="playful" /> });
       }
       closeExpenseDrawer();
     } catch (error) {
