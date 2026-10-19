@@ -24,8 +24,8 @@ export interface CurrentTerms {
 export const CURRENT_TERMS: CurrentTerms = {
   version: '2026-10-19',
   sha256: {
-    en: '92c4ede3d4dee929c66205d7c90f83883c5677f12ced4e2bd45b1c43355377f1',
-    ar: '61b3bafe15f604819e55cdcc1f5ecf22d965eec43e6493369bfec2d741be042f',
+    en: '2ed299dc133d011452175ef182ae3701ab126dc8a316d0c3befe49c4833c864c',
+    ar: '7f997e6b13e6a7ed0259f71523c8c2e5b0a8ead0ed9a405be6851753b77272cc',
   },
 };
 
