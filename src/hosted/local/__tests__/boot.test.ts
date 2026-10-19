@@ -92,6 +92,44 @@ describe('bootLocalBackend', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
     expect(await paymentAmounts(reloaded, profileId)).toEqual(['120.00']);
   });
 
+  it('manages local profiles like MUT-183: create up to the cap of 6, then rename, re-currency and re-type, kept across a reload', async () => {
+    const page = await openPage();
+    const json = { 'Content-Type': 'application/json' };
+    const create = (n: number) =>
+      page.fetch(
+        new Request('http://localhost/v1/profiles', {
+          method: 'POST',
+          headers: { ...json, 'Idempotency-Key': `boot-profile-${n}` },
+          body: JSON.stringify({ name: `Studio ${n}`, type: 'BUSINESS', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }),
+        }),
+      );
+
+    const created: Array<{ id: string; version: number }> = [];
+    for (let n = 1; n <= 5; n++) {
+      const response = await create(n);
+      expect(response.status).toBe(201);
+      created.push((await response.json()) as { id: string; version: number });
+    }
+    const refused = await create(6);
+    expect(refused.status).toBe(409);
+    expect(((await refused.json()) as { error: { details: { reason: string } } }).error.details.reason).toBe('PROFILE_LIMIT');
+
+    const first = created[0]!;
+    const patched = await page.fetch(
+      new Request(`http://localhost/v1/profiles/${first.id}`, {
+        method: 'PATCH',
+        headers: { ...json, 'If-Match': String(first.version) },
+        body: JSON.stringify({ name: 'Renamed Studio', defaultCurrency: 'USD', type: 'PERSONAL' }),
+      }),
+    );
+    expect(patched.status).toBe(200);
+
+    const after = (await me(await openPage())).body as unknown as { profiles: Array<{ id: string; name: string; defaultCurrency: string; type: string }>; limits: { ownedProfiles: number; maxOwnedProfiles: number } };
+    expect(after.profiles).toHaveLength(6);
+    expect(after.limits).toEqual({ ownedProfiles: 6, maxOwnedProfiles: 6 });
+    expect(after.profiles.find((p) => p.id === first.id)).toMatchObject({ name: 'Renamed Studio', defaultCurrency: 'USD', type: 'PERSONAL' });
+  });
+
   it('two tabs opened together on an empty device end up as one person', async () => {
     vi.resetModules();
     const a = await import('../index.js');
