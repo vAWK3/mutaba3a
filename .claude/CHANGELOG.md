@@ -41,7 +41,7 @@
   - full v1 contracts for MUT-300 and MUT-301, and names, shapes and error codes for v2–v5;
   - QA scenarios, build order and the pilot gate.
 - `.claude/designs/firm-books-tests.md`: cross-cutting contract tests and the minimum tests for each child.
-- `.claude/designs/mut-299-firm-books-plan.md`: the eng review (D1–D15, Basel) and the design review (DR1–DR14, recommended defaults pending his approval).
+- `.claude/designs/mut-299-firm-books-plan.md`: the eng review (D1–D15, Basel) and the design review (DR1–DR14, approved by Basel with the brief on 2026-10-19).
 - `.claude/designs/mut-299-firm-books-wireframe.html`: the RTL wireframe of six screens.
 - ADR-099, with override-log rows: minimize-to-core decision 3 (firms only), MUT-252 decision 5, ADR-037 decision 1 (invites), the ADR-037 MUT-182 amendment (conversion), and MUT-298 intake decision 6 (copyable link).
 - TODOS.md #16: adjusting entries, the upgrade path from "reopen to correct".
