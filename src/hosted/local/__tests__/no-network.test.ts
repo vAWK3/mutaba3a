@@ -1,6 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api } from '../../api/client';
+import { api, localBackend } from '../../api/client';
 import { setMode } from '../../session/mode';
 
 /**
@@ -26,6 +26,7 @@ describe('signed out: no network (AC4)', () => {
   beforeEach(() => {
     globalThis.indexedDB = new IDBFactory();
     Object.defineProperty(globalThis.navigator, 'locks', { value: new FakeLockManager(), configurable: true });
+    fetchSpy.mockClear();
     vi.stubGlobal('fetch', fetchSpy);
     setMode('local');
   });
@@ -79,5 +80,64 @@ describe('signed out: no network (AC4)', () => {
     expect(receivable.customerId).toBe(client.id);
     expect(receivable.projectId).toBe(matter.id);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('records, edits and deletes an expense with a receipt, and lists documents, all on this device (MUT-287 AC1-AC3)', async () => {
+    const profileId = (await api.me()).profiles[0]!.id;
+
+    const expense = await api.createExpense(profileId, { occurredOn: '2026-10-01', amount: '120.00', currency: 'ILS', title: 'Printer ink' }, 'no-network-expense-1');
+    const edited = await api.updateExpense(profileId, expense.id, { amount: '125.00' }, String(expense.version));
+    const { receipt, upload } = await api.startReceipt(profileId, expense.id, { filename: 'Ink.pdf', mimeType: 'application/pdf', sizeBytes: 8 });
+    await (await localBackend()).putBlob(upload.url, new Blob(['%PDF-1.7'], { type: 'application/pdf' }));
+    const ready = await api.completeReceipt(profileId, expense.id, receipt.id);
+    const download = await api.receiptDownload(profileId, expense.id, receipt.id);
+    const documents = await api.attachments(profileId);
+    const categories = await api.expenseCategories(profileId);
+    await api.deleteExpense(profileId, expense.id);
+
+    expect(edited.amount).toBe('125.00');
+    expect(ready.status).toBe('READY');
+    expect(download.filename).toBe('Ink.pdf');
+    expect(documents.items).toEqual([]);
+    expect(categories.items.length).toBeGreaterThan(0);
+    expect((await api.expenses(profileId)).items).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('runs a trip group and a conversion end to end on this device (MUT-287 AC1)', async () => {
+    const profileId = (await api.me()).profiles[0]!.id;
+
+    const expense = await api.createExpense(profileId, { occurredOn: '2026-10-02', amount: '40.00', currency: 'USD', title: 'Taxi' }, 'no-network-expense-2');
+    const group = await api.createExpenseGroup(profileId, { name: 'Amman trip', startOn: '2026-10-01', endOn: '2026-10-05' }, 'no-network-group-1');
+    const summary = await api.expenseGroupSummary(profileId, group.id);
+    await api.setExpenseGroupMark(profileId, group.id, expense.id, 'excluded');
+    const afterMark = await api.expenseGroupSummary(profileId, group.id);
+    await api.setExpenseGroupMark(profileId, group.id, expense.id, null);
+    await api.deleteExpenseGroup(profileId, group.id);
+    const conversion = await api.createConversion(profileId, { occurredOn: '2026-10-03', amount: '100.00', currency: 'USD', toAmount: '365.00', toCurrency: 'ILS' }, 'no-network-conversion-1');
+    const updated = await api.updateConversion(profileId, conversion.id, { toAmount: '366.00' }, String(conversion.version));
+    await api.deleteConversion(profileId, conversion.id);
+
+    expect(JSON.stringify(summary)).toContain('40.00');
+    expect(JSON.stringify(afterMark)).not.toContain('40.00');
+    expect(updated.toAmount).toBe('366.00');
+    expect((await api.expenseGroups(profileId)).items).toEqual([]);
+    expect((await api.conversions(profileId)).items).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('sends exactly one request for reference rates, to the public snapshot, with no credentials (D3, the one named exception)', async () => {
+    fetchSpy.mockImplementationOnce(
+      async () => new Response(JSON.stringify({ rateDate: '2026-10-17', perEur: { USD: 1.1208, ILS: 3.4769 }, fetchedAt: '2026-10-19T08:00:00.000Z', source: 'live' }), { status: 200 }) as never,
+    );
+
+    const ils = await api.fxRates('ILS');
+    await api.fxRates('USD');
+
+    expect(ils.rateDate).toBe('2026-10-17');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/v1/public/fx-rates');
+    expect(init.credentials).toBe('omit');
   });
 });

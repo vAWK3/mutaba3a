@@ -1,8 +1,10 @@
+import { CachedFxRates } from '../../../server/src/fx-rates.js';
 import { MemoryLedgerStore } from '../../../server/src/repositories/memory.js';
 import { localBlobKey, type BootLocalBackend, type LocalBackend, type PendingRestore } from '../session/localBackendContract.js';
 import { LocalAttachmentStorage, liveReceiptKeys, sweepBlobs } from './attachments.js';
 import { IndexedDbBlobStore } from './blobStore.js';
 import { createLocalApp } from './createLocalApp.js';
+import { PublicFxRateSource } from './fxSource.js';
 import { LocalLock } from './locks.js';
 import { mintLocalSession, type LocalSession } from './mintLocalSession.js';
 import { LOCAL_FORMAT_VERSION } from './migrations/index.js';
@@ -30,6 +32,9 @@ import { createLocalTransport, LocalFormatTooNewError, reloadFromDisk } from './
 
 const now = () => new Date();
 
+/** How long this page reuses the public snapshot before asking again. The ECB publishes once a business day; the server caches longer still. */
+const LOCAL_FX_TTL_MS = 60 * 60 * 1000;
+
 async function boot(): Promise<LocalBackend> {
   installBufferShim();
   const store = new MemoryLedgerStore();
@@ -49,7 +54,8 @@ async function boot(): Promise<LocalBackend> {
   const attachments = new LocalAttachmentStorage(blobs);
   await sweepUnusedBlobs(lock, persistence, store, blobs);
 
-  const app = createLocalApp({ store, now, attachments });
+  const fxRates = new CachedFxRates({ source: new PublicFxRateSource(), ttlMs: LOCAL_FX_TTL_MS, now });
+  const app = createLocalApp({ store, now, attachments, fxRates });
   const transport = createLocalTransport({ app, store, persistence, lock, now, removals: attachments });
   let persistRequested = false;
 

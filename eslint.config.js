@@ -82,6 +82,7 @@ const LOCAL_SERVER_ALLOWLIST = [
   'routes/me',
   'routes/portal-routes',
   'routes/profiles',
+  'schemas',
 ]
 
 export default defineConfig([
