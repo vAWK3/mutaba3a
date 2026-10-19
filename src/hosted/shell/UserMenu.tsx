@@ -1,6 +1,8 @@
+import { useNavigate } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n/core';
 import { LanguageSwitch } from '../components/Brand';
 import { useMe } from '../session/me';
+import { useIsLocalMode } from '../session/mode';
 import { useSignOut } from '../session/useSignOut';
 import { usePopover } from './usePopover';
 import { useAccountDrawers } from './AccountDrawers';
@@ -21,17 +23,34 @@ function initialsOf(name: string): string {
     .toUpperCase();
 }
 
-/** The account menu (hosted-portal.md §7.1): who is signed in, the language, Sign out, on an eligible profile Malafat (MUT-191), and the app store links (MUT-261). */
+/**
+ * The account menu (hosted-portal.md §7.1): who is signed in, the language, Sign out, on an eligible profile Malafat
+ * (MUT-191), and the app store links (MUT-261). Signed out on this device (MUT-286) it has no account to show: "On
+ * this device" instead of the placeholder email, Sign in and Your data instead of Sign out and Change password, and
+ * nothing that needs an account (Malafat, the usage switch).
+ */
 export function UserMenu({ profile = null }: { profile?: HostedProfile | null }) {
   const t = useT();
   const { user } = useMe();
+  const local = useIsLocalMode();
   const { signOut, signingOut } = useSignOut();
   const { open, close, toggle, buttonRef, panelRef } = usePopover();
   const accountDrawers = useAccountDrawers();
+  const navigate = useNavigate();
 
   function openChangePassword() {
     close(false);
     accountDrawers.open();
+  }
+
+  function openYourData() {
+    close(false);
+    accountDrawers.openYourData();
+  }
+
+  function goToSignIn() {
+    close(false);
+    void navigate({ to: '/sign-in' });
   }
 
   return (
@@ -50,7 +69,7 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
         </span>
         <span className="hp-usermenu-who">
           <span>{user.displayName}</span>
-          <small dir="ltr">{user.email}</small>
+          {local ? <small>{t('hosted.local.onThisDevice')}</small> : <small dir="ltr">{user.email}</small>}
         </span>
       </button>
       {open && (
@@ -60,18 +79,32 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
             <LanguageSwitch />
           </div>
           <div className="hp-menu-sep" role="separator" />
-          <button type="button" role="menuitem" className="hp-menu-item press" disabled={signingOut} onClick={() => void signOut()}>
-            {t('hosted.auth.signOut')}
-          </button>
-          <button type="button" role="menuitem" className="hp-menu-item press" onClick={openChangePassword}>
-            {t('hosted.auth.changePassword')}
-          </button>
-          {/* After Sign out, so Sign out stays the menu's first item (focus on open) */}
-          <MalafatMenuItems profile={profile} />
-          {/* MUT-155: the anonymous-usage switch */}
-          <UsageMenuItem />
-          {/* Last item (MUT-261) */}
-          <AppDownloadMenuItems />
+          {local ? (
+            <>
+              <button type="button" role="menuitem" className="hp-menu-item press" onClick={goToSignIn}>
+                {t('hosted.local.signIn')}
+              </button>
+              <button type="button" role="menuitem" className="hp-menu-item press" onClick={openYourData}>
+                {t('hosted.local.yourData')}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" role="menuitem" className="hp-menu-item press" disabled={signingOut} onClick={() => void signOut()}>
+                {t('hosted.auth.signOut')}
+              </button>
+              <button type="button" role="menuitem" className="hp-menu-item press" onClick={openChangePassword}>
+                {t('hosted.auth.changePassword')}
+              </button>
+              {/* After Sign out, so Sign out stays the menu's first item (focus on open) */}
+              <MalafatMenuItems profile={profile} />
+              {/* MUT-155: the anonymous-usage switch; no telemetry signed out (brief §10) */}
+              <UsageMenuItem />
+            </>
+          )}
+          {/* Last item (MUT-261). Not signed out: the phone app can't see this device's records, and signed-out
+              screens carry no store links (MUT-285 brief §11, MUT-186 9A). */}
+          {!local && <AppDownloadMenuItems />}
         </div>
       )}
     </div>

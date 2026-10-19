@@ -1,10 +1,15 @@
 import type { components, paths } from './schema';
+import type { LocalBackend } from '../session/localBackendContract';
+import { currentMode, setMode } from '../session/mode';
 
 /**
  * The portal's only door to data (hosted-portal.md §7.1): same-origin `fetch`
  * with the session cookie, typed by `schema.d.ts` (generated from the server's
  * OpenAPI document; `npm run hosted:types:check` fails on drift). The active
  * hosted profile travels as `X-Mutaba3a-Profile`; the identity routes carry none.
+ *
+ * Signed out (MUT-286, ADR-097), the same requests go to the local backend, the
+ * server's own routes running in this page: see `send()` below.
  */
 
 export type Schemas = components['schemas'];
@@ -62,7 +67,8 @@ export type SetupLinkCheck = Schemas['SetupLinkCheckResponse'];
 export type SetupLinkRefusal = Exclude<SetupLinkCheck['state'], 'valid'>;
 
 type ServerErrorCode = Schemas['ErrorEnvelope']['error']['code'];
-export type ApiErrorCode = ServerErrorCode | 'NETWORK' | 'UNKNOWN';
+/** `LOCAL_FORMAT_TOO_NEW`: another tab saved this device's records with a newer build; this one must reload (D1). */
+export type ApiErrorCode = ServerErrorCode | 'NETWORK' | 'UNKNOWN' | 'LOCAL_FORMAT_TOO_NEW';
 
 type Query<P extends keyof paths> = paths[P] extends { get: { parameters: { query?: infer Q } } } ? NonNullable<Q> : never;
 type OkJson<P extends keyof paths, M extends 'get' | 'post'> = paths[P][M] extends {
@@ -147,6 +153,56 @@ interface RequestOptions {
 }
 
 const SIGN_IN_PATH = '/v1/sessions';
+/** Signing in and redeeming a setup link always talk to the server, whatever the mode (brief §2.6). */
+const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup)(\/|\?|$)/;
+/** `transport.ts`'s refusal when another tab saved a newer format; matched by name, since the class lives in the lazy chunk. */
+const LOCAL_FORMAT_TOO_NEW_ERROR = 'LocalFormatTooNewError';
+
+let localBackendPromise: Promise<LocalBackend> | null = null;
+
+/** The lazy local chunk (brief §2.7): imported on the first signed-out request, never by a signed-in page. */
+export function localBackend(): Promise<LocalBackend> {
+  localBackendPromise ??= import('@mut/local-backend')
+    .then((module) => module.bootLocalBackend())
+    .catch((error: unknown) => {
+      localBackendPromise = null;
+      throw error;
+    });
+  return localBackendPromise;
+}
+
+let unhintedProbe: Promise<boolean> | null = null;
+
+/**
+ * No mode hint (first visit, or a session from before local mode): ask the
+ * server once whether this browser is signed in. Only a 200 or a 401 is an
+ * answer, and only an answer is saved; anything else uses the server for this
+ * request and asks again next time, so an outage never sends a signed-in
+ * person to an empty local app. Resolves true when the server should answer.
+ */
+function probeRemote(): Promise<boolean> {
+  unhintedProbe ??= fetch('/v1/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+    .then((response) => {
+      if (response.status === 200) setMode('remote');
+      else if (response.status === 401) setMode('local');
+      else unhintedProbe = null;
+      return response.status !== 401;
+    })
+    .catch((error: unknown) => {
+      unhintedProbe = null;
+      throw error;
+    });
+  return unhintedProbe;
+}
+
+/** Where a request goes: the server (cookie) or the local backend (this page), by mode. */
+async function send(url: string, init: RequestInit): Promise<{ response: Response; remote: boolean }> {
+  const mode = currentMode();
+  const remote = ALWAYS_REMOTE.test(url) || mode === 'remote' || (mode === 'probe' && (await probeRemote()));
+  if (remote) return { response: await fetch(url, init), remote: true };
+  const backend = await localBackend();
+  return { response: await backend.fetch(new Request(new URL(url, window.location.origin), init)), remote: false };
+}
 
 function withQuery(path: string, query?: Record<string, QueryValue>): string {
   const params = new URLSearchParams();
@@ -196,23 +252,28 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DEL
   if (options.ifMatchVersion) headers['If-Match'] = options.ifMatchVersion;
 
   let response: Response;
+  let wentRemote: boolean;
   try {
-    response = await fetch(withQuery(path, options.query), {
+    ({ response, remote: wentRemote } = await send(withQuery(path, options.query), {
       method,
       credentials: 'same-origin',
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: options.signal,
-    });
+    }));
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === 'AbortError') throw cause;
+    if (cause instanceof Error && cause.name === LOCAL_FORMAT_TOO_NEW_ERROR) {
+      throw new ApiError(0, 'LOCAL_FORMAT_TOO_NEW', 'This device has records saved by a newer version. Reload to continue.');
+    }
     throw new ApiError(0, 'NETWORK', 'The request did not reach the server');
   }
 
   if (!response.ok) {
     const error = await toApiError(response);
     const isSignIn = method === 'POST' && path === SIGN_IN_PATH;
-    if (error.status === 401 && !isSignIn) unauthorisedHandler?.(error);
+    // A local 401 is the local backend's own business (it re-mints its session); only the server's ends a session.
+    if (error.status === 401 && !isSignIn && wentRemote) unauthorisedHandler?.(error);
     throw error;
   }
   if (response.status === 204) return undefined as T;

@@ -805,6 +805,33 @@
       },
       "nothingYet": "nothing yet",
       "crumbLabel": "Breadcrumb"
+    },
+    "local": {
+      "continueLead": "Or keep your records in this browser, without an account.",
+      "continue": "Continue on this device",
+      "onThisDevice": "On this device",
+      "signIn": "Sign in",
+      "yourData": "Your data",
+      "tooNew": {
+        "title": "Reload to continue",
+        "body": "Another tab saved the records on this device with a newer version of Mutaba3a. Reload to keep working.",
+        "reload": "Reload"
+      },
+      "data": {
+        "title": "Your data",
+        "body": "Your records are saved in this browser only. Download a copy to keep them safe, or restore a copy you saved.",
+        "download": "Download my records",
+        "restore": "Restore from file",
+        "confirm": {
+          "one": "Replace everything on this device with the {count} record in this file?",
+          "other": "Replace everything on this device with the {count} records in this file?"
+        },
+        "replace": "Replace",
+        "restored": "Records restored.",
+        "notAFile": "This isn't a Mutaba3a records file.",
+        "tooNew": "This file was saved by a newer version of Mutaba3a. Reload and try again.",
+        "failed": "Couldn't restore the file. Nothing was changed."
+      }
     }
   }
 }

@@ -9,7 +9,7 @@ export type LocalTransport = (request: Request) => Promise<Response>;
 
 export interface LocalTransportOptions {
   /** `createLocalApp`'s return value; typed structurally so this file doesn't need `@hono/zod-openapi`'s own type (see `createLocalApp.ts`'s docblock on why that import doesn't resolve from here). */
-  app: { fetch(request: Request): Promise<Response> };
+  app: { fetch(request: Request): Response | Promise<Response> };
   store: MemoryLedgerStore;
   persistence: IndexedDbPersistence;
   lock: LocalLock;

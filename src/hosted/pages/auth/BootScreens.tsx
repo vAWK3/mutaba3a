@@ -54,3 +54,21 @@ export function BootUnreachable({ onRetry, retrying }: { onRetry: () => void; re
     </div>
   );
 }
+
+/**
+ * D1 (MUT-286): another tab saved this device's records with a newer build.
+ * This page's code must not read or write them, so the only way on is a reload.
+ */
+export function ReloadToContinue() {
+  const t = useT();
+  return (
+    <div className="hp-center">
+      <Wordmark />
+      <div className="hp-card hp-boot-card" role="alert">
+        <h2>{t('hosted.local.tooNew.title')}</h2>
+        <p>{t('hosted.local.tooNew.body')}</p>
+        <Button onClick={() => window.location.reload()}>{t('hosted.local.tooNew.reload')}</Button>
+      </div>
+    </div>
+  );
+}

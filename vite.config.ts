@@ -363,6 +363,11 @@ function hostedConfig(): UserConfig {
         "node:async_hooks": fileURLToPath(
           new URL("./src/hosted/local/platform/async-hooks.ts", import.meta.url),
         ),
+        // The portal reaches the lazy local chunk only through this alias
+        // (src/hosted/session/localBackendContract.ts).
+        "@mut/local-backend": fileURLToPath(
+          new URL("./src/hosted/local/index.ts", import.meta.url),
+        ),
       },
     },
     define: {

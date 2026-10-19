@@ -26,7 +26,12 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+
+    /* MUT-286: the lazy local backend's types, not its code (session/localBackendContract.ts explains the split) */
+    "paths": {
+      "@mut/local-backend": ["./src/hosted/session/localBackendContract.ts"]
+    }
   },
   "include": ["src/hosted", "src/vite-env.d.ts"],
   // src/hosted/local/** (MUT-286) runs the server's own route modules in the page and is checked separately, under
