@@ -1,25 +1,29 @@
 /**
- * SavedFlashAnnouncer (MUT-81, R1)
+ * SavedFlashAnnouncer (MUT-81, R1; icon MUT-338)
  *
  * Mounted once in AppShell. Watches the saved-flash store's resolution:
- * - claimed -> a polite, visually-hidden "Saved", the only feedback the
- *   visible row needs (it already tints itself via useSavedFlashRows).
+ * - claimed -> a brief "Saved" toast carrying the animated save-feedback icon
+ *   (the row also tints itself via useSavedFlashRows, so this is additional
+ *   feedback, not the only signal).
  * - not claimed -> a message naming where the save went, with a Show action
  *   that switches profile if needed, navigates, and re-arms the flash so
  *   the row is tinted on arrival and the original message can never repeat.
  *
- * The message rides the existing Toast (role="status", aria-live, action
- * support already built) rather than a new floating surface added here.
+ * Both ride the existing Toast (role="status", aria-live, action support
+ * already built) rather than a new floating surface added here - the legacy
+ * app has no firm concept (MUT-299 B11), so the icon preset is always
+ * playful.
  */
 
 import { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useSavedFlashResolution } from '../../lib/useSavedFlash';
-import { useSavedFlashStore, flashTarget, type SavedFlash } from '../../lib/savedFlashStore';
+import { useSavedFlashStore, flashTarget, FLASH_MS, type SavedFlash } from '../../lib/savedFlashStore';
 import { useProfileStore } from '../../lib/profileStore';
 import { useToast } from '../../lib/toastStore';
 import { useT } from '../../lib/i18n';
 import { isolate } from '../../lib/utils';
+import { SaveFeedbackIcon } from '../icons/SaveFeedbackIcon';
 
 function messageFor(flash: SavedFlash, t: ReturnType<typeof useT>): string {
   switch (flash.kind) {
@@ -47,6 +51,7 @@ export function SavedFlashAnnouncer() {
   // identity, not just "unclaimed", so a re-render with the same unresolved
   // save never shows it a second time.
   const shownFor = useRef<SavedFlash | null>(null);
+  const shownClaimedFor = useRef<SavedFlash | null>(null);
 
   useEffect(() => {
     if (!pending || claimed !== false || pending.messaged || shownFor.current === pending) return;
@@ -67,15 +72,15 @@ export function SavedFlashAnnouncer() {
     showToast(messageFor(pending, t), {
       action: { label: t('savedFlash.show'), onClick: handleShow },
       duration: 6000,
+      icon: <SaveFeedbackIcon preset="playful" />,
     });
   }, [pending, claimed, showToast, navigate, t]);
 
-  if (pending && claimed === true) {
-    return (
-      <span className="sr-only" role="status" aria-live="polite">
-        {t('savedFlash.saved')}
-      </span>
-    );
-  }
+  useEffect(() => {
+    if (!pending || claimed !== true || shownClaimedFor.current === pending) return;
+    shownClaimedFor.current = pending;
+    showToast(t('savedFlash.saved'), { icon: <SaveFeedbackIcon preset="playful" />, duration: FLASH_MS });
+  }, [pending, claimed, showToast, t]);
+
   return null;
 }

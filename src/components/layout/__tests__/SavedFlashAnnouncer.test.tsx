@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, waitFor } from '@testing-library/react';
-import { renderWithProviders, screen } from '../../../test/utils';
+import { renderWithProviders } from '../../../test/utils';
 import { SavedFlashAnnouncer } from '../SavedFlashAnnouncer';
 import { useSavedFlashStore, type SavedFlash } from '../../../lib/savedFlashStore';
 import { useProfileStore } from '../../../lib/profileStore';
@@ -39,10 +39,10 @@ describe('SavedFlashAnnouncer', () => {
   it('renders nothing while unresolved', () => {
     act(() => useSavedFlashStore.getState().markSaved(income()));
     renderWithProviders(<SavedFlashAnnouncer />);
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(useToastStore.getState().toasts).toHaveLength(0);
   });
 
-  it('announces "Saved" politely once the row is claimed, and raises no message', async () => {
+  it('raises a brief "Saved" toast with the animated icon once the row is claimed (MUT-338)', async () => {
     act(() => {
       useSavedFlashStore.getState().markSaved(income());
       useSavedFlashStore.getState().registerList('list-a');
@@ -50,8 +50,25 @@ describe('SavedFlashAnnouncer', () => {
     });
     renderWithProviders(<SavedFlashAnnouncer />);
 
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
-    expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
+    await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1));
+    const toast = useToastStore.getState().toasts[0];
+    expect(toast.message).toBe('Saved');
+    expect(toast.icon).toBeTruthy();
+    expect(toast.action).toBeUndefined();
+  });
+
+  it('never raises the claimed toast twice for the same save', async () => {
+    act(() => {
+      useSavedFlashStore.getState().markSaved(income());
+      useSavedFlashStore.getState().registerList('list-a');
+      useSavedFlashStore.getState().reportSettled('list-a', ['tx-1'], true);
+    });
+    renderWithProviders(<SavedFlashAnnouncer />);
+    await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1));
+
+    act(() => useToastStore.setState({ toasts: [] }));
+    act(() => useSavedFlashStore.getState().reportSettled('list-a', ['tx-1'], true));
+
     expect(useToastStore.getState().toasts).toHaveLength(0);
   });
 
@@ -68,6 +85,7 @@ describe('SavedFlashAnnouncer', () => {
     await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1));
     expect(useToastStore.getState().toasts[0].message).toContain('Furniture Co.');
     expect(useToastStore.getState().toasts[0].action?.label).toBe('Show');
+    expect(useToastStore.getState().toasts[0].icon).toBeTruthy();
   });
 
   it('Show switches the active profile, navigates, and re-arms so the original message cannot fire twice', async () => {
