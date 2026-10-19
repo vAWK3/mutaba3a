@@ -19,6 +19,10 @@
 
 :lang(ar) .privacy-policy-title {
   font-family: var(--font-heading-ar);
+}
+
+/* On the title's own language, so an English title on an Arabic page (/terms?lang=en) keeps its tracking */
+.privacy-policy-title:lang(ar) {
   letter-spacing: 0;
 }
 
