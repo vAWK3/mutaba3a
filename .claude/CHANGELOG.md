@@ -44,7 +44,7 @@
   - The setup check names `termsVersion`; the redeem requires it (409 `TERMS_VERSION_STALE`).
   - `Me.terms`, and `POST /v1/me/terms-acceptance`.
   - The admin `GET /admin/v1/terms-acceptance` and `npm run terms:report`.
-  - `deploy.sh` checks that the terms are live (`terms:check-live`). API 1.37.0-mut324.
+  - `deploy.sh` checks that the terms are live (`terms:check-live`). API 1.38.0-mut324.
 - **Portal:**
   - A required "I agree" tick on the setup page, linking the exact version.
   - The Updated-terms step for anyone behind on the terms.

@@ -109,7 +109,7 @@
   - Accepts a portal session or a device session. The surface comes from the principal (portal / ios / android), never from the body.
   - The version must equal current, else 409.
   - Audit `user.terms_accepted`, one row per membership, like `user.password_set`.
-- **`API_VERSION`:** `1.37.0-mut324`. Regenerate `openapi.json`, then `src/hosted/api/schema.d.ts`.
+- **`API_VERSION`:** `1.38.0-mut324`. Regenerate `openapi.json`, then `src/hosted/api/schema.d.ts`.
 
 ### 3.2 Landing (web build)
 
