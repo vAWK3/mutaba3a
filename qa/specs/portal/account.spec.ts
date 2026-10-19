@@ -64,7 +64,7 @@ test('A new password under 12 characters is refused inline, before anything is s
   expect(api.log.filter((c) => c.method === 'POST' && c.path === '/v1/me/password')).toHaveLength(0);
 });
 
-test('The account menu ends with Get the app: the iPhone link names the portal, Android is coming soon', { tag: '@portal.account.get-the-app' }, async ({ page, step }) => {
+test('The account menu ends with Get the app: the iPhone and Android links name the portal', { tag: '@portal.account.get-the-app' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });
   const menu = page.getByRole('menu', { name: 'Account' });
 
@@ -82,10 +82,14 @@ test('The account menu ends with Get the app: the iPhone link names the portal, 
     await expect(ios).toHaveAttribute('target', '_blank');
   });
 
-  await step('"Android — coming soon" is the last row, and not a link', async () => {
-    const android = menu.getByText('Android — coming soon');
-    await expect(android).toHaveAttribute('aria-disabled', 'true');
-    await expect(android).not.toHaveAttribute('href');
-    await expect(menu.locator('[role^="menuitem"], [aria-disabled="true"]').last()).toHaveText('Android — coming soon');
+  await step('"Get the Android app" is the last row and opens the Play Store in a new tab, saying it came from the portal', async () => {
+    const android = menu.getByRole('menuitem', { name: /Get the Android app/ });
+    const raw = (await android.getAttribute('href'))!;
+    const href = new URL(raw);
+    expect(href.hostname).toBe('play.google.com');
+    expect(href.searchParams.get('id')).toBe('com.barmajiyat.mutaba3a');
+    expect(href.searchParams.get('referrer')).toContain('utm_campaign=mutaba3a-portal');
+    await expect(android).toHaveAttribute('target', '_blank');
+    await expect(menu.locator('[role^="menuitem"]').last()).toHaveAttribute('href', raw);
   });
 });

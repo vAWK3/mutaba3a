@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Android app live: the Play Store link on the landing page and the portal
+
+**Why:** the Android app is in production on Google Play, so the "Android coming soon" rows can become real store links.
+
+### Changed
+- `MOBILE_APP_LINKS.android` (`src/content/download-config.ts`) is now available, with `https://play.google.com/store/apps/details?id=com.barmajiyat.mutaba3a`. Every reader follows from the config:
+  - the landing page's phone chapter links it with `utm_campaign=mutaba3a-landing`;
+  - the portal's account menu shows "Get the Android app" with `utm_campaign=mutaba3a-portal`;
+  - `/hosted` drops its Android "coming soon" chip but still never links a store (MUT-186, 9A).
+- `scripts/bundle-origins.json`: `https://play.google.com` is allowed in the local and hosted bundles.
+- The portal's account-menu unit test and the `@portal.account.get-the-app` spec expect the Android link. The `portal/account` and `web/landing` QA catalogs describe both links.
+
+---
+
 ## [Unreleased] - 2026-10-18 — Design: the portal's local mode, one app signed in or out (MUT-285, ADR-097)
 
 **Why:** epic MUT-284 retires the free local web app. One portal works on this device when signed out and is the hosted account when signed in, with the same screens either way. This ticket is the design only; MUT-286..292 build it.

@@ -126,7 +126,7 @@ features:
       - Open the landing page, scroll past Get Mutaba3a to the phone chapter, read it and the two platform lines, press "See hosted accounts"; same in Arabic, also at 375 px
     expect:
       - The chapter says the phone app is for logging and the portal, your hosted account in a browser, is where you see every client, what they owe and what they paid; it claims no reports
-      - Today iPhone is named with "with your hosted account" and no link, and Android says "coming soon"; a store link appears only once one is configured, and then presses and keeps its colour like every landing control
+      - Today both iPhone and Android link to their store listings, carrying the landing's campaign; a platform without a configured listing is named with "with your hosted account" or says "coming soon" instead, and a store link presses and keeps its colour like every landing control
       - The laptop-and-phone picture stays whole, also on a phone; the underlined link opens /hosted
   - id: malafat
     title: The Malafat band tells law firms and accounting offices that Mutaba3a connects to Malafat, and links to Malafat in the page's language (MUT-174)
