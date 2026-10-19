@@ -2532,3 +2532,14 @@ Each version is its own content file, never edited once released. The side that 
 
 ### Pattern: Prove a static file is live with a build-emitted manifest, not a page fetch
 Netlify's SPA fallback answers 200 for every path, so a release guard can't fetch a page to learn whether it exists. The web build emits a small JSON manifest (`legal/terms-versions.json`), like `__forms.html`. The guard (`server/src/scripts/check-terms-live.ts`, run by `deploy.sh`) reads that file and compares it to what the release is about to name.
+## Patterns added by MUT-287 (2026-10-19, ADR-100 decision 11)
+
+### Pattern: Two local databases are kept consistent by order, not by one transaction
+When records (`mut-local`) and their files (`mut-local-blobs`) live apart, never delete a file before the records that stop naming it are saved: stage removals during the request and flush them inside the same lock right after the save; on Restore add the new files, save, then sweep files no live record names; sweep on boot for whatever a crash left. A crash at any step leaves records whose files all exist. First instance: `LocalAttachmentStorage` + `transport.ts`, `restore.ts` `applyRestore`.
+
+### Pattern: A Node stand-in for server modules is bound per module, never on `globalThis`
+Server code that runs in the page (`server/src` in the local chunk) gets its Node globals as module bindings injected at build time (`scopeServerBufferShim`, like the `node:crypto` alias), not as a global: libraries sniff `typeof Buffer` and take a Node path a partial stand-in can't serve (jszip did). Verify such paths in a real browser (release-QA): unit tests run on Node's real globals and can't see the difference.
+
+### Pattern: Every local IndexedDB database opens through `LocalDatabase` (MUT-287 review D12)
+A database the page owns must let go when a newer build upgrades it (`onversionchange`: close, then refuse further use so the reload screen shows) and must not hang when an older tab won't (`onblocked` rejects). Both rules live in `src/hosted/local/idb.ts`; `persistence.ts` and `blobStore.ts` use it, and so must any later local database. Tabs running a build are the old tabs of the next one.
+

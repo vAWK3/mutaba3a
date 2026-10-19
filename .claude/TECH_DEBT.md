@@ -162,6 +162,21 @@
 - An account that predates the terms and only uses the phone isn't asked until MUT-344 ships. After a bump, a phone user who never opens the portal keeps saving under the old version.
 - `npm --prefix server run terms:report` makes them visible; nothing stops them.
 **Fix**: ship MUT-344. Then decide whether writes from a session behind on the terms answer 409 (gated on MUT-293's minimum app version so old builds are told to update first).
+### TD-179: "Download my records" holds the whole zip in memory
+**Status**: Open
+**Ticket**: MUT-287 (2026-10-19, eng review R2)
+**Added**: 2026-10-19
+**Priority**: Low (only a device with hundreds of MB of receipts gets near a tab's memory limit)
+**Impact**: `src/hosted/local/recordsArchive.ts` builds the zip with jszip's `generateAsync({ type: 'blob' })` and Restore reads the file into one ArrayBuffer, so every receipt is in memory at once on both sides. The zip removed the ~512 MB string ceiling of a base64 JSON file, but not memory as the bound.
+**Fix**: stream the zip (jszip `generateInternalStream`, or a streaming writer) into the download, and read entries one at a time on Restore, writing each to `mut-local-blobs` before the next.
+
+### TD-178: Signed out, a stale FX answer reads as live
+**Status**: Resolved (MUT-287 pre-landing review D7, 2026-10-19: `EcbSnapshot.upstream` relays the server's source and fetch time)
+**Ticket**: MUT-287 (2026-10-19, plan §1c)
+**Added**: 2026-10-19
+**Priority**: Low (the rate date shown is still the true ECB date)
+**Impact**: `PublicFxRateSource.latest()` returns only the snapshot (`FxRateSource` has no room for `source`), so when the server answers `source: 'stale'` the local `CachedFxRates` caches it as a fresh fetch and its `/v1/fx-rates` says `live`. The ≈ line shows the snapshot's own rate date, so nothing false is shown, but the stale/live distinction is lost signed out.
+**Fix**: let `FxRateSource.latest()` return an optional `{ stale: true }` the cache carries through, or treat the public snapshot's `fetchedAt` as the reading's `fetchedAt`.
 
 ### TD-177: A session may write clients and matters on a writer-null firm it doesn't own
 **Status**: Open
@@ -188,7 +203,7 @@
 **Fix**: Check whether the bloom loader's slow caption timer restarts when the loader blooms in place (the static mark is swapped for the loader at 400 ms), and fix the timer or the spec's window.
 
 ### TD-171: The local snapshot fingerprint covers 3 of 27 record types
-**Status**: Open
+**Status**: Resolved (MUT-287, 2026-10-19: every map fingerprinted from `helpers/everyRecord.ts`, plus an every-key and a non-empty assertion)
 **Ticket**: MUT-286 (2026-10-19)
 **Added**: 2026-10-19
 **Priority**: Medium (a silent shape change in an uncovered record breaks restores of saved local data)

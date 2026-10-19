@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../../../server/src/app.js';
+import { MemoryAttachmentStorage } from '../../../../server/src/attachments/storage.js';
 import { SlidingWindowRateLimiter } from '../../../../server/src/rate-limit.js';
 import { MemoryLedgerStore } from '../../../../server/src/repositories/memory.js';
+import { LocalAttachmentStorage } from '../attachments.js';
+import { IndexedDbBlobStore } from '../blobStore.js';
 import { createLocalApp } from '../createLocalApp.js';
 import { LOCAL_PEPPER, mintLocalSession } from '../mintLocalSession.js';
 
@@ -26,7 +30,7 @@ function clock() {
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
 
 interface Side {
-  request(method: string, path: string, body?: unknown): Promise<{ status: number; body: unknown }>;
+  request(method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<{ status: number; body: unknown }>;
 }
 
 type FetchLike = { fetch(request: Request): Response | Promise<Response> };
@@ -37,9 +41,9 @@ async function side(app: FetchLike, store: MemoryLedgerStore, time: ReturnType<t
   if (!membership) throw new Error('no personal profile');
   let key = 0;
   return {
-    async request(method, path, body) {
+    async request(method, path, body, extraHeaders = {}) {
       time.tick();
-      const headers: Record<string, string> = { Authorization: `Bearer ${token}`, 'X-Mutaba3a-Profile': membership.organizationId };
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}`, 'X-Mutaba3a-Profile': membership.organizationId, ...extraHeaders };
       if (body !== undefined) headers['Content-Type'] = 'application/json';
       if (method === 'POST') headers['Idempotency-Key'] = `parity-key-${++key}`;
       const response = await app.fetch(
@@ -72,6 +76,7 @@ function remoteSide(): Promise<Side> {
     version: '0.1.0-test',
     now: time.now,
     sessions: { pepper: LOCAL_PEPPER, idleMinutes: 60, absoluteHours: 24, secureCookie: true, trustedProxyHops: 1 },
+    attachments: new MemoryAttachmentStorage(),
   });
   return side(app, store, time);
 }
@@ -79,7 +84,7 @@ function remoteSide(): Promise<Side> {
 function localSide(): Promise<Side> {
   const store = new MemoryLedgerStore();
   const time = clock();
-  return side(createLocalApp({ store, now: time.now }), store, time);
+  return side(createLocalApp({ store, now: time.now, attachments: new LocalAttachmentStorage(new IndexedDbBlobStore()) }), store, time);
 }
 
 /** Every UUID becomes `id-N`, numbered by first appearance, so two stores' answers compare structurally. */
@@ -117,7 +122,46 @@ async function script(s: Side): Promise<unknown[]> {
   return out;
 }
 
+/**
+ * MUT-287 (plan §2 parity row, review D9): expenses, categories, a receipt's
+ * record, a trip group with a mark, and a conversion with an edit. A receipt
+ * start is compared without its upload URL and headers, which are a bucket's
+ * signed URL on one side and `local-blob:` on the other by design.
+ */
+async function expenseScript(s: Side): Promise<unknown[]> {
+  const out: unknown[] = [];
+  const record = async (method: string, path: string, body?: unknown, headers?: Record<string, string>, project = (b: unknown) => b) => {
+    const result = await s.request(method, path, body, headers);
+    out.push({ method, path: path.replace(UUID, ':id'), status: result.status, body: project(result.body) });
+    return result.body as Record<string, unknown>;
+  };
+
+  const categories = (await record('GET', '/v1/expense-categories')) as { items: Array<{ id: string }> };
+  const taxi = await record('POST', '/v1/expenses', { occurredOn: '2026-10-02', amount: '40.00', currency: 'USD', title: 'Taxi', categoryId: categories.items[0]!.id });
+  await record('POST', '/v1/expenses', { occurredOn: '2026-10-03', amount: '120.00', currency: 'ILS', title: 'Hotel', vendor: 'Seaside' });
+  await record('POST', `/v1/expenses/${String(taxi.id)}/receipts`, { filename: 'taxi.pdf', mimeType: 'application/pdf', sizeBytes: 16 }, undefined, (b) => ({ receipt: (b as { receipt: unknown }).receipt }));
+  await record('GET', '/v1/expenses');
+  await record('GET', '/v1/summaries/expenses');
+
+  const group = await record('POST', '/v1/expense-groups', { name: 'Amman trip', startOn: '2026-10-01', endOn: '2026-10-05' });
+  await record('GET', `/v1/expense-groups/${String(group.id)}/summary`);
+  await record('PUT', `/v1/expense-groups/${String(group.id)}/expenses/${String(taxi.id)}`, { mode: 'excluded' });
+  await record('GET', `/v1/expense-groups/${String(group.id)}/summary`);
+  await record('GET', '/v1/expense-groups');
+
+  const conversion = await record('POST', '/v1/conversions', { occurredOn: '2026-10-04', amount: '100.00', currency: 'USD', toAmount: '365.00', toCurrency: 'ILS' });
+  await record('PATCH', `/v1/conversions/${String(conversion.id)}`, { toAmount: '366.00' }, { 'If-Match': String(conversion.version) });
+  await record('GET', '/v1/conversions');
+  await record('DELETE', `/v1/expenses/${String(taxi.id)}`);
+  await record('GET', '/v1/expenses');
+  return out;
+}
+
 describe('local/remote parity (AC3)', () => {
+  beforeEach(() => {
+    globalThis.indexedDB = new IDBFactory();
+  });
+
   it('the same records give the same statuses, totals and refusals signed in and signed out', async () => {
     const [remote, local] = await Promise.all([remoteSide(), localSide()]);
 
@@ -134,4 +178,16 @@ describe('local/remote parity (AC3)', () => {
     const receivables = transcript[7]?.body as { items: Array<{ status: string }> };
     expect(receivables.items.map((r) => r.status)).toEqual(['OVERDUE']);
   });
+
+  it('expenses, receipts, groups and conversions answer the same signed in and signed out (MUT-287)', async () => {
+    const [remote, local] = await Promise.all([remoteSide(), localSide()]);
+
+    const remoteTranscript = normalize(await expenseScript(remote));
+    const localTranscript = normalize(await expenseScript(local));
+
+    expect(localTranscript).toEqual(remoteTranscript);
+    const statuses = (localTranscript as Array<{ status: number }>).map((step) => step.status);
+    expect(statuses).toEqual([200, 201, 201, 201, 200, 200, 201, 200, 200, 200, 200, 201, 200, 200, 204, 200]);
+  });
 });
+

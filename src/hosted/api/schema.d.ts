@@ -9841,6 +9841,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/fx-rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The ECB reference snapshot behind /v1/fx-rates, with no session
+         * @description Public market data for the portal used signed out, which computes cross rates itself. Same cache, age rules and 503 as /v1/fx-rates; rate-limited to 120 requests per minute per address. Display only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Snapshot */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicFxRatesResponse"];
+                    };
+                };
+                /** @description Too many requests from this address; `Retry-After` and `details.retryAfterSeconds` say when to try again */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No rates to serve, or no rate source configured */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/organizations": {
         parameters: {
             query?: never;
@@ -12809,6 +12866,28 @@ export interface components {
             deletedCategories: number;
             /** @enum {string} */
             preset: "lawFirm" | "personal" | "general";
+        };
+        PublicFxRatesResponse: {
+            /**
+             * @description The ECB reference date (its last business day), YYYY-MM-DD
+             * @example 2026-10-15
+             */
+            rateDate: string;
+            /** @description Units of each currency per 1 EUR, as the ECB publishes them. Every other supported currency derives from these and the USD pegs. */
+            perEur: {
+                USD: number;
+                ILS: number;
+            };
+            /**
+             * Format: date-time
+             * @description When this server instance read the rates from the provider
+             */
+            fetchedAt: string;
+            /**
+             * @description live = inside the cache window; stale = the last refresh failed and these are the last good rates
+             * @enum {string}
+             */
+            source: "live" | "stale";
         };
         CreateOrganizationRequest: {
             name: string;

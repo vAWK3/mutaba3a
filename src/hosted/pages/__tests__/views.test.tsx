@@ -274,7 +274,7 @@ describe('Payments', () => {
 
 describe('Documents', () => {
   it('downloads through a signed URL, with no inline preview', async () => {
-    const open = vi.spyOn(downloadNavigator, 'open').mockImplementation(() => {});
+    const open = vi.spyOn(downloadNavigator, 'open').mockImplementation(async () => {});
     const { user, container } = portal(`/p/${ORG_A}/documents`, {
       'GET /v1/attachments': () => ok(page([attachment('f1111111-1111-4111-8111-111111111111', 'invoice-014.pdf'), attachment('f2222222-2222-4222-8222-222222222222', 'pending.pdf', 'PENDING_UPLOAD')])),
       'GET /v1/attachments/f1111111-1111-4111-8111-111111111111/download': () =>
@@ -283,7 +283,7 @@ describe('Documents', () => {
     await screen.findByRole('table', { name: 'Documents' });
     expect(screen.getByText('Still uploading')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Download invoice-014.pdf' }));
-    await waitFor(() => expect(open).toHaveBeenCalledWith('https://storage.googleapis.com/signed/invoice-014.pdf?X-Goog-Signature=abc'));
+    await waitFor(() => expect(open).toHaveBeenCalledWith('https://storage.googleapis.com/signed/invoice-014.pdf?X-Goog-Signature=abc', 'invoice-014.pdf'));
     // The shell's Brand v2 mark (MUT-104) is the only image allowed on the page
     expect(container.querySelector('iframe, object, embed, img:not(.hp-wordmark-mark)')).toBeNull();
   });

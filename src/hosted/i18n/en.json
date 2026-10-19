@@ -849,6 +849,10 @@
           "one": "Replace everything on this device with the {count} record in this file?",
           "other": "Replace everything on this device with the {count} records in this file?"
         },
+        "missingReceipts": {
+          "one": "{count} receipt file isn't in this file. That receipt will be restored without its file.",
+          "other": "{count} receipt files aren't in this file. Those receipts will be restored without their files."
+        },
         "replace": "Replace",
         "restored": "Records restored.",
         "notAFile": "This isn't a Mutaba3a records file.",

@@ -946,6 +946,18 @@ export const FxRatesResponseSchema = z
   })
   .openapi('FxRatesResponse');
 
+/** MUT-287 (MUT-285 D3): the raw ECB snapshot behind /v1/fx-rates, for the portal's signed-out mode to run the same crossRates in the page. */
+export const PublicFxRatesResponseSchema = z
+  .object({
+    rateDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).openapi({ description: 'The ECB reference date (its last business day), YYYY-MM-DD', example: '2026-10-15' }),
+    perEur: z
+      .object({ USD: z.number().positive(), ILS: z.number().positive() })
+      .openapi({ description: 'Units of each currency per 1 EUR, as the ECB publishes them. Every other supported currency derives from these and the USD pegs.' }),
+    fetchedAt: z.string().datetime().openapi({ description: 'When this server instance read the rates from the provider' }),
+    source: z.enum(['live', 'stale']).openapi({ description: 'live = inside the cache window; stale = the last refresh failed and these are the last good rates' }),
+  })
+  .openapi('PublicFxRatesResponse');
+
 export const VatRateSchema = z
   .object({ id: uuid, rateBasisPoints: z.number().int().min(0).max(10000), effectiveFrom: IsoDateSchema, createdAt: z.string().datetime() })
   .openapi('VatRate');

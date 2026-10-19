@@ -4,6 +4,8 @@ import { useCursorList } from './queries';
 import { profileKey } from '../session/me';
 import type { ExpenseFilters } from './filters';
 import { invalidateGroups } from './expenseGroupQueries';
+import { localFiles } from './download';
+import { isLocalBlobUrl } from '../session/localBackendContract';
 
 /**
  * The portal's expense query and mutation hooks (MUT-44), in their own file
@@ -108,6 +110,15 @@ export function useDeleteExpense(profileId: string) {
  * the portal's eventual `connect-src` (MUT-45, not yet drafted).
  */
 async function putToSignedUrl(url: string, headers: Record<string, string>, file: File): Promise<void> {
+  // Signed out (MUT-287): the server's routes run in the page and signed a local-blob URL; the bytes go to this device's IndexedDB.
+  if (isLocalBlobUrl(url)) {
+    try {
+      await localFiles.put(url, file);
+    } catch {
+      throw new ApiError(0, 'UNKNOWN', 'The receipt could not be saved on this device');
+    }
+    return;
+  }
   let response: Response;
   try {
     response = await fetch(url, { method: 'PUT', headers, body: file, credentials: 'omit' });

@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import { localBackend } from '../api/client';
+import { saveBlobAs } from '../data/download';
 import { ME_KEY, meQuery } from '../session/me';
 import { isRecordsFileRefused, type PendingRestore } from '../session/localBackendContract';
 import { AlertIcon } from './Icons';
@@ -14,8 +15,9 @@ import { useToast } from './Toast';
 /**
  * Settings › Your data (D2, MUT-286 brief §2.5, §8), signed out only: the
  * portal has no Settings page, so it is the account menu's drawer, beside
- * Change password. Download writes everything on this device to one versioned
- * file; Restore reads one back, names how many records it holds, and replaces
+ * Change password. Download writes everything on this device, receipt files
+ * included, to one versioned zip (MUT-287); Restore reads one back (or a
+ * MUT-286 .json), names how many records it holds, and replaces
  * local data only after that confirm. A refused file changes nothing.
  */
 
@@ -27,16 +29,7 @@ function problemFor(error: unknown): Problem {
 }
 
 function recordsFileName(today: Date): string {
-  return `mutaba3a-records-${today.toISOString().slice(0, 10)}.json`;
-}
-
-function saveBlob(blob: Blob, name: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(url);
+  return `mutaba3a-records-${today.toISOString().slice(0, 10)}.zip`;
 }
 
 export function YourDataDrawer({ onClose }: { onClose: () => void }) {
@@ -56,7 +49,7 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
     setProblem(null);
     try {
       const backend = await localBackend();
-      saveBlob(await backend.exportRecords(), recordsFileName(new Date()));
+      saveBlobAs(await backend.exportRecords(), recordsFileName(new Date()));
     } catch {
       setProblem('failed');
     }
@@ -131,7 +124,7 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
           <input
             ref={fileRef}
             type="file"
-            accept="application/json,.json"
+            accept="application/zip,.zip,application/json,.json"
             className="sr-only"
             tabIndex={-1}
             aria-hidden="true"
@@ -143,6 +136,8 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
         {pending && (
           <div className="hp-card hp-your-data-confirm" role="alertdialog" aria-labelledby="your-data-confirm">
             <p id="your-data-confirm">{tp('hosted.local.data.confirm', pending.recordCount)}</p>
+            {/* MUT-287 review D4: said before Replace, while the person can still cancel. */}
+            {pending.missingReceiptFiles > 0 && <p className="hp-your-data-missing">{tp('hosted.local.data.missingReceipts', pending.missingReceiptFiles)}</p>}
             <div className="hp-empty-actions">
               <Button variant="danger" onClick={() => void replace()} disabled={busy} aria-busy={busy}>
                 {t('hosted.local.data.replace')}

@@ -1,3 +1,4 @@
+import { LocalDatabase } from './idb.js';
 import { LOCAL_FORMAT_VERSION, migrate, type StoredSnapshot } from './migrations/index.js';
 
 const DB_NAME = 'mut-local';
@@ -30,26 +31,15 @@ export type LoadResult =
  * exactly what comes back out of `load()` (after migration, if older).
  */
 export class IndexedDbPersistence {
-  private readonly dbName: string;
-  private dbPromise: Promise<IDBDatabase> | null = null;
+  private readonly db: LocalDatabase;
 
   /** `dbName` defaults to the one real database (`mut-local`); a test passes a fresh name per case instead of deleting and recreating the shared one between tests (IndexedDB's `deleteDatabase` blocks on any connection this class never explicitly closes, which is otherwise harmless in a real tab that lives for the page's lifetime). */
   constructor(dbName: string = DB_NAME) {
-    this.dbName = dbName;
+    this.db = new LocalDatabase(dbName, DB_VERSION, [STORE_NAME]);
   }
 
   private openDb(): Promise<IDBDatabase> {
-    if (!this.dbPromise) {
-      this.dbPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(this.dbName, DB_VERSION);
-        request.onupgradeneeded = () => {
-          if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME);
-        };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error ?? new Error('Failed to open the mut-local database'));
-      });
-    }
-    return this.dbPromise;
+    return this.db.open();
   }
 
   /** The two small numbers `locks.ts` checks before every request, without touching the full snapshot. `null` when nothing has ever been saved. */
@@ -104,9 +94,6 @@ export class IndexedDbPersistence {
 
   /** Releases the connection, if one was opened. A real tab never needs this (the connection lives as long as the page); a test tears down between cases with it instead of `indexedDB.deleteDatabase`, which blocks on any open connection. */
   async close(): Promise<void> {
-    if (!this.dbPromise) return;
-    const db = await this.dbPromise;
-    db.close();
-    this.dbPromise = null;
+    await this.db.close();
   }
 }

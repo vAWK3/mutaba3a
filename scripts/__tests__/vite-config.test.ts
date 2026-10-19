@@ -19,6 +19,7 @@ import configFn, {
   netlifyFormsHtml,
   portalUrl,
   posthogKey,
+  scopeServerBufferShim,
   socialMetaTags,
   withPageMeta,
 } from '../../vite.config';
@@ -481,6 +482,31 @@ describe('vite.config', () => {
       const proxy = config.server?.proxy as Record<string, { target: string }>;
       expect(proxy['/v1'].target).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
       expect(config.server?.port).not.toBe(5173);
+    });
+  });
+
+  describe('server modules get their Buffer per module in the hosted build (MUT-287)', () => {
+    type Transform = (code: string, id: string) => { code: string; map: null } | null;
+    const transform = scopeServerBufferShim().transform as unknown as Transform;
+
+    it('binds Buffer in a server module that uses it, at the end so nothing else moves', () => {
+      const code = "export const encode = (s) => Buffer.from(s, 'utf8').toString('base64url');";
+      const out = transform(code, '/repo/server/src/expenses/cursor.ts');
+      expect(out?.code.startsWith(code)).toBe(true);
+      expect(out?.code).toMatch(/\nimport \{ bufferShim as Buffer \} from ".*src\/hosted\/local\/platform\/buffer-shim\.ts";\n$/);
+      expect(out?.map).toBeNull();
+    });
+
+    it('leaves dependencies, non-server modules and code without Buffer alone', () => {
+      expect(transform('Buffer.from(x)', '/repo/node_modules/hono/server/src/a.js')).toBeNull();
+      expect(transform('Buffer.from(x)', '/repo/src/hosted/api/client.ts')).toBeNull();
+      expect(transform('export const view = new Uint8Array(new ArrayBuffer(4));', '/repo/server/src/a.ts')).toBeNull();
+    });
+
+    it('is in the hosted build and in no other', () => {
+      expect(pluginNames(resolve('hosted').plugins)).toContain('mut-scope-server-buffer-shim');
+      expect(pluginNames(resolve('web').plugins)).not.toContain('mut-scope-server-buffer-shim');
+      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mut-scope-server-buffer-shim');
     });
   });
 });
