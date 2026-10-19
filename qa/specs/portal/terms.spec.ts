@@ -40,6 +40,30 @@ test('a setup link can’t be finished without agreeing to the terms, and the sa
   });
 });
 
+test('switching the setup page’s language clears the terms tick, so the agreement follows a read in the recorded language', { tag: '@portal.terms.language-switch-clears-tick' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], signedIn: false, setupLink: { state: 'valid', email: EMAIL, locale: 'en' } });
+
+  await step('Open the setup link in English, type a password and tick the terms', async () => {
+    await api.open(page, `/setup#${TOKEN}`, 'en', { chooseLanguage: false });
+    await page.getByLabel('New password').fill(PASSWORD);
+    await terms(page).check();
+  });
+
+  await step('Switch to Arabic: the tick is cleared and the link now opens the Arabic text', async () => {
+    await page.getByRole('button', { name: 'عربي' }).click();
+    const tick = page.getByRole('checkbox', { name: /شروط الخدمة/ });
+    await expect(tick).not.toBeChecked();
+    await expect(page.getByRole('link', { name: 'شروط الخدمة' })).toHaveAttribute('href', new RegExp(`/terms/${QA_TERMS_VERSION}\\?lang=ar$`));
+  });
+
+  await step('Tick again and save: Arabic is recorded', async () => {
+    await page.getByRole('checkbox', { name: /شروط الخدمة/ }).check();
+    await page.getByRole('button', { name: 'احفظ وسجّل الدخول' }).click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
+    expect(api.last('POST', /^\/v1\/account-setup$/)?.body).toMatchObject({ acceptedTermsVersion: QA_TERMS_VERSION, termsLocale: 'ar' });
+  });
+});
+
 test('someone behind on the terms agrees once on the Updated-terms step, then works as usual', { tag: '@portal.terms.updated-terms-step' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], termsAccepted: false });
 

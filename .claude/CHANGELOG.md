@@ -35,7 +35,7 @@
 ### Fixed
 - **Recorded language = read language.** Portal terms links carry `?lang=<portal language>`. `/terms` shows that language for the text only (lang/dir on the text), and never stores it.
 - **`make release full`** is web, then server (ADR-102 override log; ADR-043's server-first addendum overridden).
-- **The terms guard runs in `scripts/preflight.sh server`**, before the version bump and push. `deploy.sh` checks again only when run on its own. A failure names the HTTP status or fetch error.
+- **The terms guard runs in `scripts/preflight.sh server`**, before the version bump and push. `deploy.sh` checks again every time, and only `SKIP_TERMS_CHECK=1` skips either (pass 2: a `TERMS_CHECKED_BY_PREFLIGHT` flag let `SKIP_REMOTE=1` skip both). A failure names the HTTP status or fetch error.
 - **The Updated-terms step recovers from a 409 `TERMS_VERSION_STALE`.** It refetches Me and says the terms changed, and the retry accepts the new version. A success cancels in-flight Me fetches and writes through an updater.
 - **Wording (Basel's choices):**
   - privacy: "restore your records to any moment in the last 7 days" (point-in-time recovery is 7 days; backups are kept 14);
@@ -45,6 +45,14 @@
   - the manifest skips non-JSON files;
   - a setup 409 without `details.current` asks the link again;
   - only `Me.terms` is nullable in OpenAPI.
+
+- **Review pass 2:**
+  - the Updated-terms step never switches version silently: a refetch that names newer terms, or a 409's `details.current`, shows "the terms changed";
+  - `Me.terms` is null again in the portal's generated types (an inline nullable object; TD-181 logs the repo-wide 3.0-style `nullable` under the 3.1.0 label);
+  - the setup page clears the terms tick when its language changes (Basel), and a 409 with no version followed by a dead or unreachable re-check says so;
+  - §10 is reworded again (Basel): "by email or the next time you open your account on the web";
+  - the consent row reads at body size; Arabic heading tracking is keyed on the heading's own language;
+  - `termsManifest` refuses misnamed files again (dotfiles skipped); `users.acceptTerms` returns only `{ created }`.
 
 ### Technical
 - `LegalPage` takes `loading` and `textLanguage`.

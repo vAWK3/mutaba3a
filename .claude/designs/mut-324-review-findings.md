@@ -4,6 +4,15 @@
 
 **Status (updated 2026-10-19, later):** the must-fix items 1–6 and the should-fix list are fixed on `fix/mut-324-review-fixes`. Items 5–6 use Basel's wording. The INVESTIGATE items were filed as MUT-346/347/348, with the purge added to MUT-333.
 
+**Pass 2 (2026-10-19):** 9 reviewers (testing, maintainability, security, performance, api-contract, design, simplification, state-machines, Claude adversarial; no red team, Codex not installed). Fixed:
+- the TERMS_CHECKED_BY_PREFLIGHT flag let SKIP_REMOTE=1 skip every terms check (5 reviewers);
+- Me.terms lost its null in the generated types (TD-181);
+- the Updated-terms step could switch version silently on a refetch, and ignored details.current;
+- the setup page's re-check failure path, and clearing the tick on a language switch (Basel);
+- §10 wording (Basel), consent row size, Arabic heading tracking on mixed-language pages;
+- the manifest's strictness, stale docs, the store read-back.
+Left as is (Basel): `make release full` still refuses its server half right after a terms bump; `make help` now says to release web, wait for Netlify, then release the server.
+
 **Status at pass 1:**
 - **Paused at Basel's request after review pass 1, before Fix-First (Step 5).** No fixes are applied yet.
 - **Not done yet:** Step 4.7 exploratory QA (the release-QA specs did run in /eng-build), the Step 5 fix question, and the /qa-reconcile verdict and Jira update.

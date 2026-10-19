@@ -20,6 +20,19 @@ features:
       - Without the tick the page asks to agree and sends nothing
       - The terms link opens the version being accepted, in the page language (?lang), in a new tab
       - Saving sends that version and the page language, and the person lands signed in on Overview
+  - id: language-switch-clears-tick
+    title: Switching the setup page's language clears the terms tick, so the agreement follows a read in the language recorded (MUT-324 review pass 2)
+    tier: secondary
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/pages/auth/SetupPage.tsx
+    steps:
+      - Open a valid setup link in English, type a password and tick the terms
+      - Switch the page to Arabic
+      - Tick again and save
+    expect:
+      - The switch clears the tick and the terms link opens the Arabic text
+      - Saving records Arabic and lands signed in
   - id: updated-terms-step
     title: A signed-in person behind on the terms sees the Updated-terms step before the portal, agrees once, and is not asked again (MUT-324)
     tier: core
