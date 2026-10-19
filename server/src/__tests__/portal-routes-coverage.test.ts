@@ -98,8 +98,8 @@ describe('PORTAL_ROUTES coverage (MUT-286)', () => {
     expect(missing).toEqual([]);
   });
 
-  it('matches the brief §3 table plus the client and matter creates (MUT-286, MUT-318): 51 calls, 6 remote-only', () => {
-    expect(CLIENT_CALLS.filter((call) => call.path !== '/v1/summaries/expenses')).toHaveLength(51);
-    expect(CLIENT_CALLS.filter((call) => !call.local)).toHaveLength(6);
+  it('matches the brief §3 table plus the client and matter creates (MUT-286, MUT-318) and the terms acceptance (MUT-324): 52 calls, 7 remote-only', () => {
+    expect(CLIENT_CALLS.filter((call) => call.path !== '/v1/summaries/expenses')).toHaveLength(52);
+    expect(CLIENT_CALLS.filter((call) => !call.local)).toHaveLength(7);
   });
 });
