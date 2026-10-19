@@ -635,6 +635,47 @@ describe('EntityTypeahead', () => {
       expect(document.activeElement).toBe(input);
     });
 
+    it('offers no second pick while one is saving: the list stays shut, so a late create cannot overwrite it (A1)', async () => {
+      const save = deferred<void>();
+      const onSelect = vi.fn(() => save.promise);
+      function TwoOptions() {
+        const [value, setValue] = useState('');
+        return (
+          <EntityTypeahead
+            options={[
+              { id: 'old', label: 'Newco Old', isNew: false },
+              { id: 'new', label: 'Newco', isNew: true },
+            ]}
+            inputValue={value}
+            onInputChange={setValue}
+            onSelect={(option) => {
+              setValue(option.label);
+              return onSelect(option);
+            }}
+          />
+        );
+      }
+      render(<TwoOptions />);
+      const input = screen.getByRole('combobox');
+      input.focus();
+      fireEvent.change(input, { target: { value: 'Newco' } });
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(onSelect).toHaveBeenCalledTimes(1);
+
+      // Focus stays on the read-only input; ArrowDown or a refocus must not reopen the list mid-save
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+      fireEvent.focus(input);
+      expect(screen.queryByRole('listbox')).toBeNull();
+      expect(screen.queryAllByRole('option')).toHaveLength(0);
+
+      await act(async () => {
+        save.settle();
+        await save.promise;
+      });
+      expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+
     it('pulses the border once a create is saved, and not when it fails (A2)', async () => {
       const ok = deferred<void>();
       const { container, unmount } = render(<Saving onSelect={() => ok.promise} />);
@@ -667,6 +708,25 @@ describe('EntityTypeahead', () => {
       expect(root).not.toHaveClass('cascade-flash');
       rerender(<Saving onSelect={() => Promise.resolve()} flashSignal={1} />);
       expect(root).toHaveClass('cascade-flash');
+    });
+
+    it('takes the cascade flash off after its span, and plays it again on the next signal (A3)', () => {
+      vi.useFakeTimers();
+      try {
+        const { container, rerender } = render(<Saving onSelect={() => Promise.resolve()} flashSignal={0} />);
+        const root = container.querySelector('.entity-typeahead');
+        rerender(<Saving onSelect={() => Promise.resolve()} flashSignal={1} />);
+        expect(root).toHaveClass('cascade-flash');
+        act(() => {
+          vi.advanceTimersByTime(500);
+        });
+        // A reduced-motion tint never fires animationend, so the timer alone must end it
+        expect(root).not.toHaveClass('cascade-flash');
+        rerender(<Saving onSelect={() => Promise.resolve()} flashSignal={2} />);
+        expect(root).toHaveClass('cascade-flash');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('points aria-describedby at the hint it is given (5A)', () => {

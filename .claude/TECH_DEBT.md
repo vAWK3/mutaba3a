@@ -136,6 +136,30 @@
 **Impact**: a profile type change (MUT-182) deletes categories and nulls `categoryId`. Groups and marks are untouched, and the summary shows the spending as uncategorized, but nothing asserts it.
 **Fix**: a store-contract case: create a group with a categorized member, run the type change, and assert the group, its mark and a `null` category bucket.
 
+### TD-175: Typed-over picker text can still save the earlier client or matter
+**Status**: Open
+**Ticket**: none (MUT-318 reconcile, adversarial review finding 3, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Low (pre-dates MUT-318; the Add row makes it easier to reach)
+**Impact**: ClientPicker and ProjectPicker clear their value only when the box is emptied. Typing "Foo" over a picked matter and clicking Save (not picking) saves the earlier matter while the box shows "Foo". The local IncomeDrawer guards this with `clientDraft`.
+**Fix**: clear the value when the text stops matching the picked label, or refuse Save with an unresolved draft as the local drawer does.
+
+### TD-176: Add matter's failures all say "Try again", even when a retry can't help
+**Status**: Open
+**Ticket**: none (MUT-318 reconcile, API-contract review, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Low
+**Impact**: the client directory includes archived clients, and POST /v1/projects refuses them (`CUSTOMER_ARCHIVED`); a name over 200 characters fails validation. Both end in "Couldn't add the matter. Try again." The same holds for Add client.
+**Fix**: map `CUSTOMER_ARCHIVED` and the name-length refusal to their own messages, cap the input at 200, and offer no Add row under an archived client.
+
+### TD-177: A session may write clients and matters on a writer-null firm it doesn't own
+**Status**: Open
+**Ticket**: none (MUT-318 reconcile, adversarial review finding 9, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Medium (server policy; pre-dates MUT-286/318, which hide the Add rows there)
+**Impact**: `mayWriteFor` grants `customers:write` and `projects:write` to any session on a profile with no writer of record, and POST /v1/customers and /v1/projects check no ownership. ADR-066 says a writer-null firm is nobody's own; the portal gate (`canAddClient`) only hides the rows, so a firm member can still create them by calling the API.
+**Fix**: decide the firm rule (MUT-305 firm roles is the natural home) and enforce it in the routes, with a server test per route.
+
 ### TD-174: Clicking a typeahead option drops focus to the page
 **Status**: Open
 **Ticket**: none (found during MUT-318, 2026-10-19)

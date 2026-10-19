@@ -29,11 +29,13 @@ export interface ProjectPickerProps {
   canCreate?: boolean;
   /** The currency a new matter is opened in: the drawer's (MUT-318). */
   currency?: Currency;
+  /** Told when an Add «name» starts and ends, so the drawer holds Save meanwhile (MUT-318, usePendingPicks). */
+  onCreatingChange?: (creating: boolean) => void;
 }
 
 const NEW_OPTION_ID = 'new';
 
-export function ProjectPicker({ profileId, customerId, value, onChange, placeholder, disabled, id, canCreate = false, currency }: ProjectPickerProps) {
+export function ProjectPicker({ profileId, customerId, value, onChange, placeholder, disabled, id, canCreate = false, currency, onCreatingChange }: ProjectPickerProps) {
   const t = useT();
   const toast = useToast();
   const hintId = useId();
@@ -82,14 +84,18 @@ export function ProjectPicker({ profileId, customerId, value, onChange, placehol
       onChange(option.id);
       return true;
     }
+    onCreatingChange?.(true);
     try {
       const created = await createProject.mutateAsync({ customerId: customerId!, name: option.label, currency: currency! });
+      onCreatingChange?.(false);
       setInputValue(created.name);
       // The directory hasn't refetched yet; the sync effect mustn't clear the name it can't find.
       prevValue.current = created.id;
       onChange(created.id);
       return true;
     } catch {
+      // No `finally` (the React Compiler skips a component that has one): each path reports the end itself
+      onCreatingChange?.(false);
       // As ClientPicker: the name stays in the box, unpicked, and any matter picked before it is dropped.
       setInputValue(option.label);
       prevValue.current = '';

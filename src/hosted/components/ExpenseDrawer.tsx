@@ -14,6 +14,7 @@ import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { ClientPicker } from './ClientPicker';
 import { ProjectPicker } from './ProjectPicker';
 import { useMatterCascade } from './useMatterCascade';
+import { usePendingPicks } from './usePendingPicks';
 import { ReceiptUploader } from './ReceiptUploader';
 import { Drawer } from './Drawer';
 import { applyExpenseApiError } from './expenseApiErrors';
@@ -107,6 +108,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
   const { control, handleSubmit, reset, setError, formState } = form;
   const [selectedClientId, selectedCurrency] = useWatch({ control, name: ['clientId', 'currency'] });
   const clientFlash = useMatterCascade(form, profileId, 'clientId');
+  const picks = usePendingPicks();
 
   // (Re)fill the form when a genuinely new version arrives: the first load, or
   // the refetch after a 409 (MUT-221, as ConversionDrawer's D6). Keyed on id and
@@ -240,14 +242,14 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
             <Button type="button" variant="secondary" onClick={onClose}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" form="hosted-expense-form" disabled={isSubmitting}>
+            <Button type="submit" form="hosted-expense-form" disabled={isSubmitting || picks.pending}>
               {isSubmitting ? t('common.saving') : t('common.save')}
             </Button>
           </div>
         </>
       }
     >
-      <form id="hosted-expense-form" onSubmit={handleSubmit(onSubmit)}>
+      <form id="hosted-expense-form" onSubmit={picks.guard(handleSubmit(onSubmit))}>
         <ExpenseFormFields
           control={control}
           errors={formState.errors}
@@ -293,6 +295,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
                     placeholder={t('hosted.expenses.drawer.clientPlaceholder')}
                     canCreate={canAddClient}
                     flashSignal={clientFlash}
+                    onCreatingChange={picks.track}
                   />
                 )}
               />
@@ -317,6 +320,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
                     placeholder={t('hosted.expenses.drawer.matterPlaceholder')}
                     canCreate={canAddClient}
                     currency={selectedCurrency}
+                    onCreatingChange={picks.track}
                   />
                 )}
               />

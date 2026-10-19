@@ -250,3 +250,14 @@ None.
 - **VERDICT:** DESIGN CLEARED — eng review required.
 
 NO UNRESOLVED DECISIONS
+
+## Reconcile (2026-10-19, /qa-reconcile)
+
+All seven acceptance criteria met; design decisions 1A–5A and A1–A3 built as written. Review fixes on the branch (Basel's D1–D3):
+- A1 regression fixed: with the input focused while saving, the list could reopen and a second pick race the first; the list now stays shut and a pick is ignored while one saves.
+- D1: both hosted drawers hold Save while an Add is in flight (`usePendingPicks`).
+- D2: CURRENCY_MISMATCH said under Matter; the expense drawer's USD default is MUT-319.
+- D3: the flash counter stays per caller (advisory skipped).
+- RTL: option names now align right in Arabic (an old `text-align: end` override); client chips truncate.
+- 4A extended to the income drawer's two matter errors.
+Open, pre-existing: TD-175 (typed-over text), TD-176 (archived/long names), TD-177 (firm writes, server).

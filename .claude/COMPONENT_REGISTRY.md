@@ -2035,6 +2035,9 @@ Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
 ### ProjectPicker `canCreate` / `currency` — `src/hosted/components/ProjectPicker.tsx` (extended, MUT-318)
 **Purpose**: the portal's matter field offers "Add matter: «name»" when `canCreate` (`canAddClient(profile)`), a client is chosen (`customerId`) and the client has no matter of that name; picking creates it in `currency` through `useCreateProject` (`data/projectQueries.ts`) and picks it. With no client chosen: no Add row, a polite hint (`describedBy`), and each row names its client. Used by IncomeCaptureDrawer and ExpenseDrawer. Tests: `components/__tests__/ProjectPicker.test.tsx`.
 
+### usePendingPicks — `src/hosted/components/usePendingPicks.ts` (new, MUT-318 reconcile)
+**Purpose**: holds a hosted drawer's Save while a picker's Add «name» is in flight. Returns `{ pending, track, guard }`: pass `track` as the pickers' `onCreatingChange`, `pending` to Save's disabled/aria-disabled, and wrap the form's submit in `guard(...)`. ClientPicker and ProjectPicker take `onCreatingChange`. Tests: `IncomeCaptureDrawer.test.tsx` › holds Save / Enter held; `ExpenseDrawer.test.tsx` › holds Save.
+
 ### useMatterCascade — `src/hosted/components/useMatterCascade.ts` (new, MUT-318)
 **Purpose**: the hosted drawers' wiring of `useClientProjectCascade` over every client's matters (`ownerOf: customerId`); returns the client field's `flashSignal`. Tests: drawer tests (`IncomeCaptureDrawer.test.tsx` › matters).
 

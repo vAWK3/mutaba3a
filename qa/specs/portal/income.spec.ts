@@ -532,7 +532,12 @@ test('Add income on a matter that isn\'t there yet: a hint until a client is cho
     await page.goto(`/p/${FIRM}/expenses`);
     await page.getByRole('button', { name: 'Record expense' }).first().click();
     const expense = page.getByRole('dialog', { name: 'Record expense' });
-    await expense.getByLabel('Matter').fill('Lease dispute');
+    const matterField = expense.getByLabel('Matter');
+    // The list opens on the matters already there (so an Add row would show), then a new name gets none
+    await matterField.fill('Lease');
+    await expect(expense.getByRole('option', { name: /Lease dispute/ })).toBeVisible();
+    await matterField.fill('Lease appeal');
+    await expect(expense.getByRole('option', { name: /Lease dispute/ })).toHaveCount(0);
     await expect(expense.getByRole('option', { name: /Add matter/ })).toHaveCount(0);
     await expect(expense.getByText('Choose a client first to add a matter.')).toHaveCount(0);
   });

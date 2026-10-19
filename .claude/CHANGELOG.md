@@ -47,6 +47,14 @@
 - **Saving a picked "Add …" no longer drops keyboard focus** (Apple design review A1): ClientPicker disabled its own focused input while creating, which blurred it (HTML focus fixup) and defeated "Enter held while saving submits". EntityTypeahead now makes the input read-only while a pick saves; neither picker disables on `isPending`.
 - The expense drawer's Matter label now names its field (the picker had no `id`).
 
+### Fixed in /qa-reconcile (2026-10-19)
+- **No second pick while one is saving.** A1 kept the input focused, so ArrowDown or a refocus could reopen the list mid-save, and the first create, landing later, overwrote the second pick (the record saved under a client or matter the person had replaced). EntityTypeahead now keeps the list shut and ignores a pick while one is saving, as `disabled` did before A1.
+- **Save waits for an «Add …» in flight** (Basel D1). Saving meanwhile stored the income or expense without the client or matter being added and left it unlinked. Both hosted drawers hold Save (`usePendingPicks`) until the pickers report the create settled; Enter held in the field still saves once it lands.
+- **A Malafat capture in another currency than its matter** now says so under Matter («This matter is in {currency}…», Basel D2) instead of a generic "couldn't save" toast.
+- **Arabic option names sit on the right.** An old `[dir=rtl] … text-align: end` rule put them on the left (`start` already follows the direction); a long client chip truncates on one line instead of wrapping the row.
+- **«القضية» in the income drawer's matter errors** too (design 4A): «هذا الملف…» → «هذه القضية…».
+- Expense drawer default currency (USD whatever the profile's) filed as MUT-319 (Basel D2).
+
 ### Tests
 - See TEST_PLAN.md › MUT-318.
 

@@ -70,6 +70,14 @@ export function mapIncomeError(error: unknown): MappedError {
     }
     if (reason && CUSTOMER_REASONS[reason]) return { fields: [{ field: 'customerId', key: CUSTOMER_REASONS[reason] }] };
     if (reason === 'PROJECT_NOT_FOUND') return { fields: [{ field: 'projectId', key: 'hosted.income.errors.matterNotFound' }] };
+    if (reason === 'CURRENCY_MISMATCH') {
+      // A Malafat-fed profile's capture must be in its matter's currency (MUT-61). Said under the matter, which has no
+      // currency control of its own; the server names the matter's currency (MUT-318 review, Basel D2).
+      const projectCurrency = (apiError.details as { projectCurrency?: unknown } | null)?.projectCurrency;
+      return {
+        fields: [{ field: 'projectId', key: 'hosted.income.errors.matterCurrency', params: { currency: typeof projectCurrency === 'string' ? projectCurrency : '' } }],
+      };
+    }
   }
   return { fields: [], toast: 'hosted.income.errors.saveFailed' };
 }

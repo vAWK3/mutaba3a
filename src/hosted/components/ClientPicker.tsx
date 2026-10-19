@@ -31,11 +31,13 @@ export interface ClientPickerProps {
   canCreate?: boolean;
   /** Flash the field when another one filled it, e.g. from a picked matter (MUT-318 A3). */
   flashSignal?: number;
+  /** Told when an Add «name» starts and ends, so the drawer holds Save meanwhile (MUT-318, usePendingPicks). */
+  onCreatingChange?: (creating: boolean) => void;
 }
 
 const NEW_OPTION_ID = 'new';
 
-export function ClientPicker({ profileId, value, onChange, placeholder, disabled, id, canCreate = false, flashSignal }: ClientPickerProps) {
+export function ClientPicker({ profileId, value, onChange, placeholder, disabled, id, canCreate = false, flashSignal, onCreatingChange }: ClientPickerProps) {
   const t = useT();
   const toast = useToast();
   const { data: customers } = useCustomerDirectory(profileId);
@@ -75,14 +77,18 @@ export function ClientPicker({ profileId, value, onChange, placeholder, disabled
       onChange(option.id);
       return true;
     }
+    onCreatingChange?.(true);
     try {
       const created = await createCustomer.mutateAsync(option.label);
+      onCreatingChange?.(false);
       setInputValue(created.name);
       // The directory hasn't refetched yet; the sync effect mustn't clear the name it can't find.
       prevValue.current = created.id;
       onChange(created.id);
       return true;
     } catch {
+      // No `finally` (the React Compiler skips a component that has one): each path reports the end itself
+      onCreatingChange?.(false);
       // Keep the name in the box, unpicked, and drop any client picked before it: the form must not save under an
       // earlier client while the box shows this name. The sync effect mustn't then clear the box (prevValue).
       setInputValue(option.label);

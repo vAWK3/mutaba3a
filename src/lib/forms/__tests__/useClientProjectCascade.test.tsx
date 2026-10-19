@@ -153,6 +153,35 @@ describe('useClientProjectCascade', () => {
     expect(form.getValues('clientId')).toBe('client-b');
   });
 
+  it('reports a fill through onAutoFill with the default owner (clientId), and not when the client already owns it (MUT-318 A3)', () => {
+    const onAutoFill = vi.fn();
+    const formRef: { current: ReturnType<typeof useForm> | null } = { current: null };
+    function TestComponent() {
+      const form = useForm({ defaultValues: { clientId: '', projectId: '' } });
+      useClientProjectCascade({ form, projectsData: [projectWithClient], onAutoFill });
+      useEffect(() => {
+        formRef.current = form;
+      });
+      return null;
+    }
+    render(<TestComponent />);
+    const form = formRef.current!;
+
+    act(() => {
+      form.setValue('projectId', 'proj-a');
+    });
+    expect(form.getValues('clientId')).toBe('client-a');
+    expect(onAutoFill).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      form.setValue('projectId', '');
+    });
+    act(() => {
+      form.setValue('projectId', 'proj-a');
+    });
+    expect(onAutoFill).toHaveBeenCalledTimes(1);
+  });
+
   // MUT-318: the hosted drawers use the same hook (a hosted matter's owner is `customerId`) and the client field flashes
   // when the hook fills it (Apple design review A3).
   describe('hosted matters and the auto-fill cue (MUT-318)', () => {

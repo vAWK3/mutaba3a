@@ -18,6 +18,7 @@ import { Drawer } from './Drawer';
 import { ProjectPicker } from './ProjectPicker';
 import { useToast } from './Toast';
 import { useMatterCascade } from './useMatterCascade';
+import { usePendingPicks } from './usePendingPicks';
 import { mapIncomeError } from './incomeApiErrors';
 import { trackPortal } from '../analytics/portalAnalytics';
 import {
@@ -69,6 +70,8 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
   const { kinds, customer: customerRule } = incomeAffordancesFor(profile);
   const today = todayInZone(profile.timezone);
   const [detailsToggled, setDetailsToggled] = useState<boolean | null>(null);
+  // Values a server error's message names (e.g. the matter's currency), per field, from the last refused save
+  const [errorParams, setErrorParams] = useState<Partial<Record<string, Record<string, string>>>>({});
 
   const form = useForm<IncomeFormValues>({
     resolver: zodResolver(incomeFormSchema({ today, customerRule })),
@@ -87,6 +90,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
   });
   const { control, handleSubmit, setError, formState } = form;
   const clientFlash = useMatterCascade(form, profile.id, 'customerId');
+  const picks = usePendingPicks();
   const [kind, currency, occurredOn, customerId, dueDate, method, amount] = useWatch({
     control,
     name: ['kind', 'currency', 'occurredOn', 'customerId', 'dueDate', 'method', 'amount'],
@@ -104,7 +108,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
       const detail = amountError(parseIncomeAmount(amount, currency), currency);
       return t(message, detail?.params);
     }
-    return t(message);
+    return t(message, errorParams[field]);
   };
 
   const summary = [
@@ -139,6 +143,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
       onClose();
     } catch (error) {
       const mapped = mapIncomeError(error);
+      setErrorParams(Object.fromEntries(mapped.fields.map(({ field, params }) => [field, params])));
       for (const { field, key } of mapped.fields) setError(field as keyof IncomeFormValues, { type: 'server', message: key });
       if (mapped.toast) showToast(t(mapped.toast));
     }
@@ -159,13 +164,13 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
           <Button type="button" variant="secondary" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" form={FORM_ID} aria-disabled={create.isPending || undefined}>
+          <Button type="submit" form={FORM_ID} aria-disabled={create.isPending || picks.pending || undefined}>
             {create.isPending ? t('common.saving') : t('hosted.income.save')}
           </Button>
         </div>
       }
     >
-      <form id={FORM_ID} onSubmit={handleSubmit(onSubmit)} noValidate>
+      <form id={FORM_ID} onSubmit={picks.guard(handleSubmit(onSubmit))} noValidate>
           {kinds.length > 1 && (
             <div className="form-group">
               <span className="form-label" id="hosted-income-kind-label">
@@ -218,7 +223,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
               name="customerId"
               control={control}
               render={({ field }) => (
-                <ClientPicker id="hosted-income-client" profileId={profile.id} value={field.value} onChange={field.onChange} placeholder={t('hosted.income.clientPlaceholder')} canCreate={canAddClient(profile)} flashSignal={clientFlash} />
+                <ClientPicker id="hosted-income-client" profileId={profile.id} value={field.value} onChange={field.onChange} placeholder={t('hosted.income.clientPlaceholder')} canCreate={canAddClient(profile)} flashSignal={clientFlash} onCreatingChange={picks.track} />
               )}
             />
             {fieldError('customerId')}
@@ -341,6 +346,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
                       placeholder={t('hosted.income.matterPlaceholder')}
                       canCreate={canAddClient(profile)}
                       currency={currency}
+                      onCreatingChange={picks.track}
                     />
                   )}
                 />

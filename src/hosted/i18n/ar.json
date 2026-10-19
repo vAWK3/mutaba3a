@@ -500,8 +500,9 @@
         "clientRequiredOwed": "المستحق يحتاج إلى عميل",
         "clientRequired": "اختر عميلاً",
         "clientNotFound": "هذا العميل غير موجود في هذا الملف",
-        "matterNotFound": "هذا الملف غير موجود في هذا الحساب",
-        "matterMismatch": "هذا الملف يعود لعميل آخر",
+        "matterNotFound": "هذه القضية غير موجودة في هذا الحساب",
+        "matterMismatch": "هذه القضية تابعة لعميل آخر",
+        "matterCurrency": "هذه القضية بعملة {currency}. سجّل الدخل بعملة {currency} أو اختر قضية أخرى.",
         "saveFailed": "تعذّر حفظ هذا القيد. حاول مرة أخرى.",
         "network": "تعذّر الوصول إلى الخادم. حاول مرة أخرى."
       }

@@ -117,8 +117,9 @@ export function EntityTypeahead<T = unknown>({
     playCue('cascade-flash', CASCADE_FLASH_MS);
   }, [flashSignal, playCue]);
 
-  // The list is only "open" for the keyboard when something is actually shown.
-  const isListVisible = isOpen && options.length > 0;
+  // The list is only "open" for the keyboard when something is actually shown. Never while a pick is saving: the input
+  // keeps focus then (read-only, A1), and a second pick there would be overwritten when the first one lands (MUT-318).
+  const isListVisible = isOpen && !selecting && options.length > 0;
   // An empty box highlights nothing, even if the last typed text would (a failed pick may have emptied it)
   const autoIndex = inputValue.trim() ? autoHighlight(options, typedText) : -1;
   const highlightedIndex = highlight === 'auto' ? autoIndex : highlight;
@@ -137,6 +138,7 @@ export function EntityTypeahead<T = unknown>({
 
   const handleSelectOption = useCallback(
     (option: TypeaheadOption<T>) => {
+      if (selectingRef.current) return;
       const result = onSelect(option);
       setIsOpen(false);
       setHighlight(-1);
