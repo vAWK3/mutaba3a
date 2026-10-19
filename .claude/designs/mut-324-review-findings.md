@@ -2,7 +2,9 @@
 
 **Branch:** `feature/mut-324-terms`, head 2405e7e1. **Base:** local `main` 9783b6f7 (32 commits ahead of origin).
 
-**Status:**
+**Status (updated 2026-10-19, later):** the must-fix items 1–6 and the should-fix list are fixed on `fix/mut-324-review-fixes`. Items 5–6 use Basel's wording. The INVESTIGATE items were filed as MUT-346/347/348, with the purge added to MUT-333.
+
+**Status at pass 1:**
 - **Paused at Basel's request after review pass 1, before Fix-First (Step 5).** No fixes are applied yet.
 - **Not done yet:** Step 4.7 exploratory QA (the release-QA specs did run in /eng-build), the Step 5 fix question, and the /qa-reconcile verdict and Jira update.
 

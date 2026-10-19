@@ -28,6 +28,32 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — MUT-324 review fixes: the terms link language, release order, the 409 recovery, wording
+
+**Why:** /review pass 1 on MUT-324 (`.claude/designs/mut-324-review-findings.md`) found six must-fix items before release. Branch `fix/mut-324-review-fixes`.
+
+### Fixed
+- **Recorded language = read language.** Portal terms links carry `?lang=<portal language>`. `/terms` shows that language for the text only (lang/dir on the text), and never stores it.
+- **`make release full`** is web, then server (ADR-102 override log; ADR-043's server-first addendum overridden).
+- **The terms guard runs in `scripts/preflight.sh server`**, before the version bump and push. `deploy.sh` checks again only when run on its own. A failure names the HTTP status or fetch error.
+- **The Updated-terms step recovers from a 409 `TERMS_VERSION_STALE`.** It refetches Me and says the terms changed, and the retry accepts the new version. A success cancels in-flight Me fetches and writes through an updater.
+- **Wording (Basel's choices):**
+  - privacy: "restore your records to any moment in the last 7 days" (point-in-time recovery is 7 days; backups are kept 14);
+  - terms §10: "the next time you open your account on the web, or by email". Version 2026-10-19 has not been released yet, so its sha256 in `server/src/legal.ts` was updated.
+- **Should-fix:**
+  - the setup checkbox row layout, paragraph gaps, link underlines, and a mailto support link;
+  - the manifest skips non-JSON files;
+  - a setup 409 without `details.current` asks the link again;
+  - only `Me.terms` is nullable in OpenAPI.
+
+### Technical
+- `LegalPage` takes `loading` and `textLanguage`.
+- `staleTerms` moved to `terms-acceptance.ts`.
+- The audit profile reads run in parallel, and the accept route no longer reads back.
+- `buildMe` runs its count and the terms status together.
+- `FakeApi.bumpTerms` was added for QA.
+- Follow-ups: MUT-346 (the draft is lost on a bump), MUT-347 (per-environment guard, rollback), MUT-348 (evidence decisions). The MUT-333 scope now includes purging the terms audit rows.
+
 ## [Unreleased] - 2026-10-19 — Terms of service, accepted at setup and on the portal (MUT-324, ADR-102, TD-180)
 
 **Why:** a paying pilot (MUT-322) needs terms people accept, and a privacy policy that says where hosted records live. Basel's D1–D12 are in `.claude/designs/mut-324-terms-plan.md` §0.

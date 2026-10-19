@@ -3187,6 +3187,13 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
   - `SetupPage.test.tsx`: the tick is required, sends the version and the language, links the exact version, terms changed. The existing setup behaviours are kept (R5); `save()` ticks.
   - `setupLink.test.ts` (termsChanged), `TermsUpdatePage.test.tsx`, `UserMenu.terms.test.tsx`.
 - **Release-QA:** `qa/features/web/legal.yaml` (terms-page, links, terms-manifest) and `qa/features/portal/terms.yaml` (setup-requires-accept, updated-terms-step, links); specs in `qa/specs/{web/legal,portal/terms}.spec.ts`. `setup.spec.ts` now ticks the terms.
+- **Review fixes (2026-10-19, `fix/mut-324-review-fixes`):**
+  - Fix 1, the link language: `src/hosted/__tests__/terms.test.ts` (termsHref `?lang`); `TermsPage.test.tsx` `?lang` (wins over the page language, lang/dir on the text, never stored, unknown language ignored, kept on the current-terms link); the portal link hrefs in `SetupPage`/`TermsUpdatePage`/`UserMenu.terms` tests, both languages.
+  - Fixes 2–3, release order: `legal-terms.test.ts` (release-full is web then server; the server preflight runs `terms:check-live` before bump-version; deploy.sh checks only when run alone). `check-terms-live.test.ts` `checkTermsLive` (HTTP status, fetch error, not JSON, missing version).
+  - Fix 4: `TermsUpdatePage.test.tsx` (a 409 refetches Me, and the retry sends the new version; Sign out on the step).
+  - Fix 5: `legal-terms.test.ts` privacy promise = terraform (14 backups, 7 PITR).
+  - Should-fix: a `RELEASED_TERMS` frozen table; `termsManifest` skips non-JSON; the Arabic governing law; Arabic setup (`?lang=ar`, `termsLocale: 'ar'`); a setup 409 without `details.current` asks the check again; `aria-busy` while loading only. Server: accept-route cross-site 403 and 422; a contract test (memory + Postgres) for `listLatestTermsVersions`.
+  - Release-QA: `@web.legal.terms-linked-language`, `@portal.terms.changed-mid-step`, `@portal.terms.step-sign-out`; `?lang` assertions in `portal/terms` and `portal/signin`; the privacy facts list includes "the last 7 days".
 ## MUT-287 — Signed out: expenses, groups, conversions, receipts and documents on this device (2026-10-19, ADR-100 decision 11)
 
 | Test | Covers |

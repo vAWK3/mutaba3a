@@ -2064,7 +2064,7 @@ Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
 ## Terms of service — MUT-324 (ADR-102)
 
 ### LegalPage — `src/pages/landing/LegalPage.tsx` (new, extracted from PrivacyPolicyPage)
-Landing chrome plus a dated, titled-sections legal document. `sections: { title, paragraphs[] }[]`, optional `updated`/`intro`, `after` slot. Used by `PrivacyPolicyPage` and `TermsPage`. Usage: `<LegalPage title={…} updated={…} intro={…} sections={…} />`. Tests: `PrivacyPolicyPage.test.tsx`, `TermsPage.test.tsx`.
+Landing chrome plus a dated, titled-sections legal document. `sections: { title, paragraphs[] }[]`, optional `updated`/`intro`, `after` slot, `loading` (sets `aria-busy`), and `textLanguage` (sets lang/dir on the text when it differs from the page's, as in /terms?lang; MUT-324 review). Used by `PrivacyPolicyPage` and `TermsPage`. Usage: `<LegalPage title={…} updated={…} intro={…} sections={…} />`. Tests: `PrivacyPolicyPage.test.tsx`, `TermsPage.test.tsx`.
 
 ### TermsPage — `src/pages/landing/TermsPage.tsx`
 `/terms` (latest) and `/terms/<version>`: loads the frozen text for the page language through `src/content/legal/terms.ts` (`loadTerms`, `TERMS_VERSIONS`, `LATEST_TERMS_VERSION`, `termsVersionOf`). An unknown version says so and links `/terms`.
