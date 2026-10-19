@@ -1,18 +1,21 @@
 import { useT } from '../../../lib/i18n';
-import { useLatestRelease } from '../../../hooks/useLatestRelease';
-import { DOWNLOAD_URLS, HOSTED_OFFER_URL, WEB_APP_URL } from '../../../content/download-config';
-import { AppleIcon, BrowserIcon, WindowsIcon } from './PlatformIcons';
+import { MOBILE_APP_LINKS, storeLinkUrl } from '../../../content/download-config';
+import { hostedPortalUrl } from '../../../lib/goHosted';
+import { AndroidIcon, IosIcon } from './PlatformIcons';
+import { HostedRequestForm } from './HostedRequestForm';
 
 /**
- * Every way to get the app: the free apps first, then the paid hosted account
- * and phone app with one link to /hosted (MUT-172). The Windows installer is
- * offered only when the latest release actually has one; while the release is
- * unknown the stable redirect is offered, because it usually resolves.
+ * Hosted-only "get it" (landing rewrite, retiring the free local app and the
+ * /hosted comparison page): request an account, sign in if you already have
+ * one, or get the phone app if your organization already set you up. The
+ * request form itself lives here now, inline, instead of on its own page —
+ * there's only one plan to ask for.
  */
 export function GetItSection() {
   const t = useT();
-  const { release, isLoading } = useLatestRelease();
-  const windowsAvailable = release?.hasWindowsBuild !== false;
+  const portalUrl = hostedPortalUrl();
+  const iosUrl = storeLinkUrl(MOBILE_APP_LINKS.ios, 'mutaba3a-landing');
+  const androidUrl = storeLinkUrl(MOBILE_APP_LINKS.android, 'mutaba3a-landing');
 
   return (
     <section id="get-it" data-part="get-it" aria-labelledby="get-it-title" className="landing-section landing-get-it">
@@ -20,60 +23,41 @@ export function GetItSection() {
         <h2 id="get-it-title" className="landing-section-headline">
           {t('landing.getIt.title')}
         </h2>
-        <p className="landing-get-it-free">{t('landing.getIt.free')}</p>
-        <p className="landing-get-it-note">{t('landing.getIt.freeNote')}</p>
+        <p className="landing-get-it-lead">{t('landing.getIt.lead')}</p>
 
         <div className="landing-get-it-options">
-          <a href={DOWNLOAD_URLS.mac} className="landing-get-it-option">
-            <AppleIcon size={24} />
-            <span className="landing-get-it-label">{t('landing.getIt.mac')}</span>
-            <span className="landing-get-it-hint">{t('landing.getIt.macHint')}</span>
-          </a>
-
-          {windowsAvailable ? (
-            <a href={DOWNLOAD_URLS.windowsMsi} className="landing-get-it-option">
-              <WindowsIcon size={24} />
-              <span className="landing-get-it-label">{t('landing.getIt.windows')}</span>
-              <span className="landing-get-it-hint">{t('landing.getIt.windowsHint')}</span>
+          {portalUrl && (
+            <a href={portalUrl} target="_blank" rel="noopener noreferrer" className="landing-get-it-option">
+              <span className="landing-get-it-label">{t('landing.getIt.signInCta')}</span>
             </a>
-          ) : (
-            <div className="landing-get-it-option landing-get-it-option--unavailable" role="note">
-              <WindowsIcon size={24} />
-              <span className="landing-get-it-hint">{t('landing.getIt.windowsUnavailable')}</span>
+          )}
+          {(iosUrl || androidUrl) && (
+            <div className="landing-get-it-apps">
+              <span className="landing-get-it-apps-label">{t('landing.getIt.appsLabel')}</span>
+              {iosUrl && (
+                <a href={iosUrl} target="_blank" rel="noopener noreferrer" className="landing-get-it-option">
+                  <IosIcon size={24} />
+                  <span className="landing-get-it-label">{t('landing.getIt.appsIos')}</span>
+                </a>
+              )}
+              {androidUrl && (
+                <a href={androidUrl} target="_blank" rel="noopener noreferrer" className="landing-get-it-option">
+                  <AndroidIcon size={24} />
+                  <span className="landing-get-it-label">{t('landing.getIt.appsAndroid')}</span>
+                </a>
+              )}
             </div>
           )}
-
-          <a href={WEB_APP_URL} className="landing-get-it-option">
-            <BrowserIcon size={24} />
-            <span className="landing-get-it-label">{t('landing.getIt.webApp')}</span>
-            <span className="landing-get-it-hint">{t('landing.getIt.webAppHint')}</span>
-          </a>
         </div>
 
-        <p className="landing-get-it-meta">
-          {windowsAvailable && (
-            <a href={DOWNLOAD_URLS.windowsExe} className="landing-get-it-alt">
-              {t('landing.getIt.windowsExe')}
-            </a>
-          )}
-          {isLoading && <span className="landing-get-it-version">…</span>}
-          {release && (
-            <span className="landing-get-it-version">
-              {t('landing.getIt.version', { version: release.version })}
-              {' · '}
-              <a href={release.releaseNotesUrl} target="_blank" rel="noopener noreferrer">
-                {t('landing.getIt.releaseNotes')}
-              </a>
-            </span>
-          )}
-        </p>
+        <p className="landing-get-it-note">{t('landing.getIt.note')}</p>
 
-        <div className="landing-get-it-paid" data-part="get-it-paid">
-          <p className="landing-get-it-paid-lead">{t('landing.getIt.paid.lead')}</p>
-          <p className="landing-get-it-paid-hint">{t('landing.getIt.paid.hint')}</p>
-          <a href={HOSTED_OFFER_URL} className="landing-get-it-paid-cta">
-            {t('landing.getIt.paid.cta')}
-          </a>
+        <div className="landing-get-it-request" data-part="get-it-request">
+          <h3 id="get-it-request-title" className="landing-section-headline landing-section-headline--start">
+            {t('landing.getIt.requestCta')}
+          </h3>
+          <p className="landing-get-it-request-hint">{t('landing.getIt.requestHint')}</p>
+          <HostedRequestForm titleId="get-it-request-title" />
         </div>
       </div>
     </section>

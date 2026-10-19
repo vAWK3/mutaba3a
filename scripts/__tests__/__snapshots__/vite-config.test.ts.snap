@@ -127,7 +127,6 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
     "mutaba3a:netlify-forms",
     "mutaba3a:legal-terms-manifest",
     "mutaba3a:hosted-offer-dev-route",
-    "mutaba3a:hosted-offer-html",
     "vite-plugin-pwa",
     "vite-plugin-pwa:info",
     "vite-plugin-pwa:build",

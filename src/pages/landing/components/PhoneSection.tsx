@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useT } from '../../../lib/i18n';
-import { HOSTED_OFFER_URL, MOBILE_APP_LINKS, storeLinkUrl } from '../../../content/download-config';
+import { MOBILE_APP_LINKS, storeLinkUrl } from '../../../content/download-config';
 import { ChapterSection } from './ChapterSection';
 import { HostedDevicesMock } from './mocks';
 import { AndroidIcon, IosIcon } from './PlatformIcons';
@@ -23,7 +23,7 @@ function StoreEntry({ platform }: { platform: Platform }) {
   const t = useT();
   const link = MOBILE_APP_LINKS[platform];
   const Icon = ICONS[platform];
-  const name = t(`landing.hostedOffer.platform.${platform}`);
+  const name = t(`${T}.platform.${platform}`);
   const url = storeLinkUrl(link, 'mutaba3a-landing');
 
   if (url) {
@@ -47,7 +47,7 @@ function StoreEntry({ platform }: { platform: Platform }) {
   return (
     <span className="landing-phone-platform landing-phone-platform--soon">
       <Icon size={20} />
-      {t('landing.hostedOffer.platform.comingSoon', { platform: name })}
+      {t(`${T}.platform.comingSoon`, { platform: name })}
     </span>
   );
 }
@@ -57,7 +57,7 @@ function PhoneExtra() {
   return (
     <>
       <p className="landing-phone-hint">
-        {t(`${T}.hint`)} <a href={HOSTED_OFFER_URL}>{t(`${T}.hintLink`)}</a>
+        {t(`${T}.hint`)} <a href="#get-it">{t(`${T}.hintLink`)}</a>
       </p>
       <ul className="landing-phone-stores" aria-label={t(`${T}.storesLabel`)}>
         {PLATFORMS.map((platform) => (

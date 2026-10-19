@@ -12,7 +12,7 @@ import {
   MULTILINE_FIELDS,
   NETLIFY_FORMS_FILE,
 } from "./src/pages/landing/hostedRequest";
-import { HOSTED_OFFER_FILE, HOSTED_OFFER_URL } from "./src/content/download-config";
+import { HOSTED_OFFER_URL } from "./src/content/download-config";
 import { TERMS_MANIFEST_FILE, termsManifest } from "./src/content/legal/termsManifest";
 
 /** Dev-only default for where `vite --mode hosted` proxies `/v1`; override with MUTABA3A_API_ORIGIN. */
@@ -124,18 +124,6 @@ const HOME_PAGE: SocialPage = {
   description: ar.landing.hero.subheadline,
 };
 
-/** /hosted's card, so a shared link previews the offer, not the home page (MUT-186, F7). */
-export const HOSTED_OFFER_PAGE: SocialPage = {
-  path: HOSTED_OFFER_URL,
-  title: ar.landing.hostedOffer.hero.title,
-  description: ar.landing.hostedOffer.hero.sub,
-};
-
-/** /hosted's static tab title, for crawlers (the page sets its own once it runs). */
-export const HOSTED_OFFER_TITLE = ar.common.pageTitle.replace("{page}", ar.landing.hostedOffer.meta.title);
-
-export { HOSTED_OFFER_FILE };
-
 /** The share card in `public/`: Claude Design's Arabic card, 1.91:1 so feeds show it large (MUT-104, D9). */
 const SOCIAL_CARD = { path: "/og-card-ar-1200x630.png", width: 1200, height: 630 };
 
@@ -243,29 +231,6 @@ export function withPageMeta(html: string, tags: HtmlTagDescriptor[], documentTi
 }
 
 /**
- * Emits hosted-offer.html: the built index.html with /hosted's link preview
- * (MUT-186, F7). Crawlers run no JavaScript, so the one shared index.html
- * would preview every /hosted link as the home page. Web build only.
- */
-function hostedOfferHtml(): Plugin {
-  const origin = (process.env.MUTABA3A_PUBLIC_ORIGIN ?? DEFAULT_PUBLIC_ORIGIN).replace(/\/$/, "");
-  const tags = socialMetaTags(origin, HOSTED_OFFER_PAGE);
-  return {
-    name: "mutaba3a:hosted-offer-html",
-    enforce: "post",
-    generateBundle(_options, bundle) {
-      const index = bundle["index.html"];
-      if (!index || index.type !== "asset") throw new Error("mutaba3a:hosted-offer-html: the build emitted no index.html");
-      this.emitFile({
-        type: "asset",
-        fileName: HOSTED_OFFER_FILE,
-        source: withPageMeta(String(index.source), tags, HOSTED_OFFER_TITLE, `${origin}${HOSTED_OFFER_PAGE.path}`),
-      });
-    },
-  };
-}
-
-/**
  * MUT-324 (D11): `/legal/terms-versions.json`, every released terms version and the sha256 of its EN and AR
  * text, which the server release preflight checks before a server naming a new version is released. Web only.
  */
@@ -322,9 +287,8 @@ export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
   globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
   // Share cards are for crawlers, never shown in the app (MUT-104)
   // The Netlify form twin is a bare form for the deploy bot, never opened in the app (MUT-186, D2)
-  // /hosted's page copy is served by Netlify, never from the cache (MUT-186, F7)
   // The landing's PostHog chunks are fetched only on the landing, never stored for the local app (MUT-154)
-  globIgnores: ["og-*.png", NETLIFY_FORMS_FILE, HOSTED_OFFER_FILE, ...POSTHOG_PRECACHE_IGNORES],
+  globIgnores: ["og-*.png", NETLIFY_FORMS_FILE, ...POSTHOG_PRECACHE_IGNORES],
   runtimeCaching: [
     {
       urlPattern: ({ request }) => request.destination === "font",
@@ -474,7 +438,7 @@ export default defineConfig(({ mode }) => {
     },
   plugins: [
     react(),
-    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), legalTermsManifest(), hostedOfferDevRoute(), hostedOfferHtml()] : []),
+    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), legalTermsManifest(), hostedOfferDevRoute()] : []),
     VitePWA({
       disable: isTauri, // Disable PWA for desktop builds
       registerType: "autoUpdate",

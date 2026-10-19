@@ -5,9 +5,6 @@ import { existsSync } from 'node:fs';
 import configFn, {
   DEFAULT_PORTAL_URL,
   DEFAULT_PUBLIC_ORIGIN,
-  HOSTED_OFFER_FILE,
-  HOSTED_OFFER_PAGE,
-  HOSTED_OFFER_TITLE,
   hostedOfferUrl,
   termsUrl,
   PWA_INCLUDE_ASSETS,
@@ -372,18 +369,9 @@ describe('vite.config', () => {
     });
   });
 
-  describe('/hosted link preview (MUT-186 review, F7)', () => {
+  describe('link preview (MUT-104)', () => {
     const meta = (tags: ReturnType<typeof socialMetaTags>) =>
       Object.fromEntries(tags.map(({ attrs }) => [String(attrs?.property ?? attrs?.name), String(attrs?.content)]));
-
-    it('builds the /hosted card from the Arabic /hosted hero, pointing at /hosted', () => {
-      const tags = meta(socialMetaTags('https://mutaba3a.app', HOSTED_OFFER_PAGE));
-      expect(tags['og:url']).toBe('https://mutaba3a.app/hosted');
-      expect(tags['og:title']).toBe(ar.landing.hostedOffer.hero.title);
-      expect(tags['og:description']).toBe(ar.landing.hostedOffer.hero.sub);
-      expect(tags['twitter:title']).toBe(tags['og:title']);
-      expect(tags['og:image']).toBe('https://mutaba3a.app/og-card-ar-1200x630.png');
-    });
 
     it('keeps the home card as it was when no page is given', () => {
       expect(meta(socialMetaTags('https://mutaba3a.app'))['og:url']).toBe('https://mutaba3a.app/');
@@ -398,12 +386,10 @@ describe('vite.config', () => {
     ].join('\n');
 
     it('swaps every link-preview tag and the title, and keeps the app\'s scripts', () => {
-      const html = withPageMeta(INDEX, socialMetaTags('https://mutaba3a.app', HOSTED_OFFER_PAGE), HOSTED_OFFER_TITLE, 'https://mutaba3a.app/hosted');
-      expect(html).not.toContain('content="home"');
-      expect(html).not.toContain('content="https://mutaba3a.app/"');
-      expect(html).toContain('<meta property="og:url" content="https://mutaba3a.app/hosted">');
-      expect(html).toContain(`<title>${HOSTED_OFFER_TITLE}</title>`);
-      expect(html).toContain('<link rel="canonical" href="https://mutaba3a.app/hosted">');
+      const html = withPageMeta(INDEX, socialMetaTags('https://mutaba3a.app'), 'متابعة', 'https://mutaba3a.app/');
+      expect(html).toContain('<meta property="og:url" content="https://mutaba3a.app/">');
+      expect(html).toContain('<title>متابعة</title>');
+      expect(html).toContain('<link rel="canonical" href="https://mutaba3a.app/">');
       expect(html).toContain('<script type="module" src="/assets/index-abc.js"></script>');
       expect(html.match(/property="og:title"/g)).toHaveLength(1);
     });
@@ -421,43 +407,14 @@ describe('vite.config', () => {
       expect(html.match(/<\/head>/g)).toHaveLength(1);
     });
 
-    it('describes the share image for what it shows (the home card), on every page', () => {
-      const alt = meta(socialMetaTags('https://mutaba3a.app', HOSTED_OFFER_PAGE))['og:image:alt'];
-      expect(alt).toBe(meta(socialMetaTags('https://mutaba3a.app'))['og:image:alt']);
-      expect(alt).toContain(ar.landing.hero.headlineLine1);
-    });
-
-    it('emits the page as hosted-offer.html beside index.html, in the web build only', () => {
-      const found = (resolve('web').plugins ?? []).flat().find((p) => p && typeof p === 'object' && 'name' in p && p.name === 'mutaba3a:hosted-offer-html');
-      if (!found) throw new Error('hosted-offer-html plugin missing from the web build');
-      const emitFile = vi.fn();
-      const bundle = { 'index.html': { type: 'asset', fileName: 'index.html', source: INDEX } };
-      (found as { generateBundle: (this: unknown, o: unknown, b: unknown) => void }).generateBundle.call({ emitFile }, {}, bundle);
-      expect(emitFile).toHaveBeenCalledWith(expect.objectContaining({ type: 'asset', fileName: HOSTED_OFFER_FILE }));
-      expect(String(emitFile.mock.calls[0][0].source)).toContain(`content="${DEFAULT_PUBLIC_ORIGIN}/hosted"`);
-      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:hosted-offer-html');
-      expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:hosted-offer-html');
-    });
-
-    // MUT-207: /hosted is a copy of the built index.html, so it opens on the same boot splash.
-    it('keeps the boot splash and its stylesheet in the /hosted copy', () => {
-      const found = (resolve('web').plugins ?? []).flat().find((p) => p && typeof p === 'object' && 'name' in p && p.name === 'mutaba3a:hosted-offer-html');
-      const emitFile = vi.fn();
-      const splash = '<div id="root"><div class="boot-splash" aria-hidden="true"><picture><source srcset="/assets/mark-dark-x.svg" media="(prefers-color-scheme: dark)"><img class="boot-splash-mark" src="/assets/mark-x.svg" width="80" height="80" alt=""></picture></div></div>';
-      const index = INDEX.replace('<div id="root"></div>', splash).replace('</head>', '<link rel="stylesheet" crossorigin href="/assets/index-x.css"></head>');
-      const bundle = { 'index.html': { type: 'asset', fileName: 'index.html', source: index } };
-      (found as { generateBundle: (this: unknown, o: unknown, b: unknown) => void }).generateBundle.call({ emitFile }, {}, bundle);
-      const copy = String(emitFile.mock.calls[0][0].source);
-      expect(copy).toContain(splash);
-      expect(copy).toContain('<link rel="stylesheet" crossorigin href="/assets/index-x.css">');
-    });
-
-    it('is served at /hosted by Netlify, ahead of the SPA catch-all, and never precached', () => {
+    // /hosted (the free-vs-hosted comparison) is retired: hosted is the only plan, and
+    // its request form lives inline on the home page now (landing rewrite, MUT-186 superseded).
+    it('redirects /hosted straight to the homepage, ahead of the SPA catch-all', () => {
       const toml = readFileSync(repoPath('netlify.toml'), 'utf8');
-      const hostedRule = toml.indexOf(`from = "/hosted"\n  to = "/${HOSTED_OFFER_FILE}"\n  status = 200`);
+      const hostedRule = toml.indexOf(`from = "/hosted"\n  to = "/"\n  status = 301`);
       expect(hostedRule).toBeGreaterThan(-1);
       expect(hostedRule).toBeLessThan(toml.indexOf('from = "/*"'));
-      expect(PWA_WORKBOX?.globIgnores).toContain(HOSTED_OFFER_FILE);
+      expect(pluginNames(resolve('web').plugins)).not.toContain('mutaba3a:hosted-offer-html');
     });
   });
 

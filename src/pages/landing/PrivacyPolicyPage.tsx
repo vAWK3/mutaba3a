@@ -3,7 +3,6 @@ import { LegalPage } from './LegalPage';
 
 const SECTION_KEYS = [
   'scope',
-  'dataStorage',
   'mobile',
   'hostedAccounts',
   'whatYouEnter',
@@ -12,7 +11,6 @@ const SECTION_KEYS = [
   'security',
   'noTracking',
   'usageAnalytics',
-  'yourControl',
   'mobileDeletion',
   'children',
   'changes',
@@ -21,8 +19,8 @@ const SECTION_KEYS = [
 ] as const;
 
 /**
- * The policy for every Mutaba3a app: the local-only Mac, Windows, and browser apps, and the
- * account-based portal and iPhone and Android apps that store data on the hosted API (Google Cloud).
+ * The policy for every Mutaba3a app: hosted-only, account-based — the web portal and the
+ * iPhone and Android apps, all storing data on the hosted API (Google Cloud).
  */
 export function PrivacyPolicyPage() {
   const t = useT();
