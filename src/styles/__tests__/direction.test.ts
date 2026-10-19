@@ -80,13 +80,13 @@ const PLAIN_AMOUNT_BDI = [
   'src/hosted/format/DecimalAmount.tsx',
 ];
 
-/** JSX dir attributes only: a word boundary before `dir`, so a comment's `dir="ltr"` in backticks doesn't count. */
-const DIR_ATTRIBUTE = /\sdir="(ltr|rtl|auto)"/g;
+/** JSX dir attributes only, either quote: whitespace before `dir`, so a comment's `dir="ltr"` in backticks doesn't count. */
+const DIR_ATTRIBUTE = /\sdir=(["'])(ltr|rtl|auto)\1/g;
 
 function dirCounts(source: string): Partial<Record<Kind, number>> {
   const counts: Partial<Record<Kind, number>> = {};
   for (const match of source.matchAll(DIR_ATTRIBUTE)) {
-    const kind = match[1] as Kind;
+    const kind = match[2] as Kind;
     counts[kind] = (counts[kind] ?? 0) + 1;
   }
   return counts;
