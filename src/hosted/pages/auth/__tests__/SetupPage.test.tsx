@@ -272,6 +272,40 @@ describe('the terms (MUT-324)', () => {
     await waitFor(() => expect(redeems(api)).toHaveLength(2));
     expect((redeems(api)[1]?.body as { acceptedTermsVersion: string }).acceptedTermsVersion).toBe('2027-01-01');
   });
+
+  it('switching the page language clears the tick, so agreeing follows a read in the language recorded (review pass 2)', async () => {
+    const { api, user, password } = await openForm();
+    await user.type(password, PASSWORD);
+    await user.click(screen.getByRole('checkbox', { name: /terms of service/ }));
+    await user.click(screen.getByRole('button', { name: 'عربي' }));
+    const terms = await screen.findByRole('checkbox', { name: /شروط الخدمة/ });
+    expect(terms).not.toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'احفظ وسجّل الدخول' }));
+    expect(await screen.findByText('ضع علامة للموافقة على الشروط قبل المتابعة.')).toBeInTheDocument();
+    expect(redeems(api)).toHaveLength(0);
+  });
+
+  it('when the terms changed but neither the answer nor the link can say to what, a dead link says so (review pass 2)', async () => {
+    let checks = 0;
+    const { user, password } = await openForm({
+      [CHECK]: () => (++checks === 1 ? valid()() : ok({ state: 'expired' })),
+      [REDEEM]: () => fail(409, 'TERMS_VERSION_STALE'),
+    });
+    await save(user, password);
+    expect(await screen.findByRole('heading', { name: 'This link has expired' })).toBeInTheDocument();
+  });
+
+  it('…and an unreachable re-check says the connection failed instead of resending the stale version silently (review pass 2)', async () => {
+    let checks = 0;
+    const { api, user, password } = await openForm({
+      [CHECK]: () => (++checks === 1 ? valid()() : fail(503, 'INTERNAL')),
+      [REDEEM]: () => fail(409, 'TERMS_VERSION_STALE'),
+    });
+    await save(user, password);
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't reach Mutaba3a");
+    expect(screen.getByRole('checkbox', { name: /terms of service/ })).not.toBeChecked();
+    expect(redeems(api)).toHaveLength(1);
+  });
 });
 
 describe('a link that cannot be used', () => {
