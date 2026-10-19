@@ -11,13 +11,13 @@
 import { useMemo, useRef, useState } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl, type SearchInputRef } from '../../components/filters';
-import { EmptyState, RowActionsMenu } from '../../components/ui';
+import { EmptyState, RowActionsMenu, CompactDate } from '../../components/ui';
 import { TrashIcon } from '../../components/icons';
 import { useConversions, useDeleteConversion } from '../../hooks/useConversionQueries';
 import { useProfileFilter } from '../../hooks/useActiveProfile';
 import { useIsCompactTable } from '../../hooks/useMediaQuery';
 import { useDrawerStore } from '../../lib/stores';
-import { formatAmount, formatDate, formatDateCompact, currencyExponent, getDateRangePreset } from '../../lib/utils';
+import { formatAmount, formatDate, currencyExponent, getDateRangePreset } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
 import type { TransactionDisplay } from '../../types';
 
@@ -110,7 +110,7 @@ export function ConversionsPage() {
                 {conversions.map((tx) => (
                   <tr key={tx.id} className="clickable" onClick={() => handleRowClick(tx.id)}>
                     <td>
-                      {isCompact ? formatDateCompact(tx.occurredAt) : formatDate(tx.occurredAt, locale)}
+                      {isCompact ? <CompactDate iso={tx.occurredAt} /> : formatDate(tx.occurredAt, locale)}
                     </td>
                     <td>{formatAmount(tx.amountMinor, tx.currency, locale)}</td>
                     <td>

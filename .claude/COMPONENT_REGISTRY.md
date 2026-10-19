@@ -14,7 +14,7 @@
 | **Forms** | Input, Select, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
-| **Table cells** | TruncatedTitle (a row's title: one line, opens the record, full text on hover and focus), `EMPTY_CELL` (the dash), `toIncomeRow` / `incomeColumns` (`/income`'s rows and columns) |
+| **Table cells** | TruncatedTitle (a row's title: one line, opens the record, full text on hover and focus), CompactDate (a compact table's dd/mm/yyyy in the tabular figure face), `EMPTY_CELL` (the dash), `toIncomeRow` / `incomeColumns` (`/income`'s rows and columns) |
 | **Display** | Card, Badge, StatusBadge, EmptyState |
 | **Home** | HomeNeedsAttention (rows: HomeAttentionRow), HomeRecentPayments (with OwedNowSummary), usePaymentUndo |
 | **Expenses** | RecurringAttentionList (+ `recurringAttention` helpers), RecurringOccurrenceCard (read-only, forecast) |
@@ -1074,6 +1074,16 @@ ProjectDetailPage, HomeAttentionRow (`compact`, MUT-82).
 **Tests**: `src/components/ui/__tests__/RowActionsHeader.test.tsx`
 
 ---
+
+### CompactDate
+**Location**: `src/components/ui/CompactDate.tsx` (exported from `components/ui`)
+**Purpose**: A compact table's date (`dd/mm/yyyy`, `formatDateCompact`) set in the figure face: the `.num` utility, i.e. IBM Plex Mono with tabular digits. Thmanyah's digits are proportional, so a date column set in it changed width with the date: Income at 375px measured 718px on 11/11 and 736px on 08/08 (MUT-250). In the figure face every date is one width. The wide tables' long dates ("Oct 19, 2026") stay in the body face.
+**Used by**: Income, the Expenses ledger (flat and grouped), Conversions — wherever `isCompact` switches to the short date.
+**Tests**: `src/components/ui/__tests__/CompactDate.test.tsx`; `IncomePage.test.tsx` › compact date; QA `@web.brand.date-width`.
+
+```tsx
+<td>{isCompact ? <CompactDate iso={tx.occurredAt} /> : formatDate(tx.occurredAt, locale)}</td>
+```
 
 ### TruncatedTitle
 **Location**: `src/components/ui/TruncatedTitle.tsx` (+ `.css`)
