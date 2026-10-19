@@ -65,6 +65,45 @@ test('someone behind on the terms agrees once on the Updated-terms step, then wo
   });
 });
 
+test('when the terms change again while the step is open, the step says so and the retry accepts the new version', { tag: '@portal.terms.changed-mid-step' }, async ({ page, step }) => {
+  const NEWER = '2027-01-01';
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], termsAccepted: false });
+
+  await step('Open the portal behind on the terms, then a release names newer terms', async () => {
+    await api.open(page, `/p/${OFFICE_A}`, 'en');
+    await expect(page.getByRole('heading', { level: 1, name: "We've updated our terms" })).toBeVisible();
+    api.bumpTerms(NEWER);
+  });
+
+  await step('I agree: the step says the terms changed and links the new version', async () => {
+    await page.getByRole('button', { name: 'I agree' }).click();
+    await expect(page.getByRole('alert')).toContainText('The terms changed while this page was open');
+    await expect(page.getByRole('link', { name: 'Read the terms' })).toHaveAttribute('href', new RegExp(`/terms/${NEWER}\\?lang=en$`));
+  });
+
+  await step('I agree again: the new version is recorded and Overview opens', async () => {
+    await page.getByRole('button', { name: 'I agree' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    expect(api.last('POST', /^\/v1\/me\/terms-acceptance$/)?.body).toEqual({ version: NEWER, locale: 'en' });
+  });
+});
+
+test('Sign out on the Updated-terms step signs out without accepting', { tag: '@portal.terms.step-sign-out' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], termsAccepted: false });
+
+  await step('Open the portal behind on the terms', async () => {
+    await api.open(page, `/p/${OFFICE_A}`, 'en');
+    await expect(page.getByRole('heading', { level: 1, name: "We've updated our terms" })).toBeVisible();
+  });
+
+  await step('Sign out: the session ends, nothing is accepted, and the step is gone', async () => {
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: "We've updated our terms" })).toHaveCount(0);
+    expect(api.calls('DELETE', /^\/v1\/sessions\/current$/)).toHaveLength(1);
+    expect(api.calls('POST', /^\/v1\/me\/terms-acceptance$/)).toHaveLength(0);
+  });
+});
+
 test('the account menu and the sign-in page link the terms of service', { tag: '@portal.terms.links' }, async ({ page, step }) => {
   await step('The account menu links the terms in a new tab', async () => {
     const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });

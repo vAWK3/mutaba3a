@@ -402,6 +402,8 @@ export class FakeApi {
   private currentPassword: string;
   /** MUT-324: false = the person is behind on the terms and the portal asks them first. */
   private termsAccepted: boolean;
+  /** MUT-324: the version the server names; bumpTerms moves it, as a release would. */
+  private termsVersion = QA_TERMS_VERSION;
 
   constructor(seed: FakeApiSeed) {
     this.signedIn = seed.signedIn ?? true;
@@ -445,12 +447,18 @@ export class FakeApi {
     return this.calls(method, path).at(-1);
   }
 
+  /** MUT-324: a server release names newer terms; the person is behind until they accept those. */
+  bumpTerms(version: string) {
+    this.termsVersion = version;
+    this.termsAccepted = false;
+  }
+
   me(language: 'en' | 'ar' = 'en') {
     const body = meBody(
       this.profiles.map((p) => p.stub),
       language,
       undefined,
-      { version: QA_TERMS_VERSION, accepted: this.termsAccepted },
+      { version: this.termsVersion, accepted: this.termsAccepted },
     );
     return {
       ...body,
@@ -538,9 +546,9 @@ export class FakeApi {
     if (resource === 'me' && method === 'GET' && !id) return json(this.me(language));
     if (resource === 'me' && id === 'terms-acceptance' && method === 'POST') {
       const { version } = (e.body ?? {}) as { version?: string };
-      if (version !== QA_TERMS_VERSION) return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: QA_TERMS_VERSION } } }, 409);
+      if (version !== this.termsVersion) return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: this.termsVersion } } }, 409);
       this.termsAccepted = true;
-      return json({ version: QA_TERMS_VERSION, accepted: true });
+      return json({ version: this.termsVersion, accepted: true });
     }
     if (resource === 'me' && id === 'password' && method === 'POST') return this.changePasswordAnswer(e.body as { currentPassword?: string; newPassword?: string } | null);
 
@@ -606,12 +614,12 @@ export class FakeApi {
     const email = link.email ?? 'nour@office.ps';
     if (e.path === '/v1/account-setup/check') {
       if (link.state !== 'valid') return json({ state: link.state });
-      return json({ state: 'valid', email, locale: link.locale ?? 'en', purpose: link.purpose ?? 'SETUP', expiresAt: '2026-10-19T09:00:00.000Z', termsVersion: QA_TERMS_VERSION });
+      return json({ state: 'valid', email, locale: link.locale ?? 'en', purpose: link.purpose ?? 'SETUP', expiresAt: '2026-10-19T09:00:00.000Z', termsVersion: this.termsVersion });
     }
     if (link.state !== 'valid') return json({ error: { code: 'SETUP_LINK_UNUSABLE', message: 'Ask for a new link', details: { state: link.state } } }, 410);
     // MUT-324: the real server checks the version after the link state
-    if ((e.body as { acceptedTermsVersion?: string } | null)?.acceptedTermsVersion !== QA_TERMS_VERSION) {
-      return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: QA_TERMS_VERSION } } }, 409);
+    if ((e.body as { acceptedTermsVersion?: string } | null)?.acceptedTermsVersion !== this.termsVersion) {
+      return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: this.termsVersion } } }, 409);
     }
     this.markSetupLink('used');
     return json({ email });

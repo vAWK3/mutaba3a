@@ -35,6 +35,32 @@ features:
       - The step shows before any navigation, with Read the terms (that version, ?lang in the page language), I agree, Sign out and the support email
       - Agreeing records the version in the page language and opens Overview
       - After reloading, the step doesn't come back
+  - id: changed-mid-step
+    title: If the terms change again while the Updated-terms step is open, I agree says so, the step names the new version, and the retry accepts it (MUT-324 review fix 4)
+    tier: secondary
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/pages/auth/TermsUpdatePage.tsx
+    steps:
+      - Open the portal behind on the terms
+      - A server release names newer terms while the step is open
+      - Press I agree, then I agree again
+    expect:
+      - The first I agree says the terms changed and the link names the new version
+      - The second records the new version and opens Overview
+  - id: step-sign-out
+    title: Sign out on the Updated-terms step signs out without accepting the terms (MUT-324)
+    tier: secondary
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/pages/auth/TermsUpdatePage.tsx
+      - src/hosted/session/useSignOut.ts
+    steps:
+      - Open the portal behind on the terms
+      - Press Sign out
+    expect:
+      - The session ends and the step is gone
+      - Nothing is accepted
   - id: links
     title: The account menu and the sign-in page link the terms of service (MUT-324)
     tier: secondary
