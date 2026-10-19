@@ -25,6 +25,8 @@ export function TermsUpdatePage({ version }: { version: string }) {
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<'failed' | 'changed' | null>(null);
   const link = termsHref(language, version);
+  // The address is a link inside the sentence, so the sentence is split at its {email}
+  const [beforeEmail, afterEmail = ''] = t('hosted.terms.decline').split('{email}');
 
   async function agree() {
     if (saving) return;
@@ -73,7 +75,13 @@ export function TermsUpdatePage({ version }: { version: string }) {
           <button type="button" className="btn btn-secondary btn-md hp-block" disabled={saving || signingOut} onClick={() => void signOut()}>
             {t('hosted.auth.signOut')}
           </button>
-          <p className="hp-field-hint">{t('hosted.terms.decline', { email: SUPPORT_EMAIL })}</p>
+          <p className="hp-field-hint">
+            {beforeEmail}
+            <a href={`mailto:${SUPPORT_EMAIL}`}>
+              <bdi>{SUPPORT_EMAIL}</bdi>
+            </a>
+            {afterEmail}
+          </p>
         </div>
       </main>
     </div>

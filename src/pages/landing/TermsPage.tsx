@@ -38,7 +38,6 @@ export function TermsPage({ path, search = '' }: { path: string; search?: string
     return (
       <LegalPage
         title={t('landing.terms.missingTitle')}
-        updated=""
         sections={[]}
         after={
           <p className="privacy-policy-intro">
@@ -48,7 +47,7 @@ export function TermsPage({ path, search = '' }: { path: string; search?: string
       />
     );
   }
-  if (current.status === 'loading') return <LegalPage title={t('landing.terms.title')} sections={[]} />;
+  if (current.status === 'loading') return <LegalPage title={t('landing.terms.title')} loading sections={[]} />;
 
   const { text } = current;
   const others = TERMS_VERSIONS.filter((v) => v !== text.version);

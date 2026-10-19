@@ -67,6 +67,19 @@ describe('TermsPage (MUT-324)', () => {
     expect(text).toContain('England and Wales');
   });
 
+  it('is busy only while the text loads, including when the version does not exist', async () => {
+    renderPage('en');
+    expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'true');
+    await loaded(en);
+    expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'false');
+  });
+
+  it('an unknown version is not busy once it says so', async () => {
+    renderPage('en', '/terms/2001-01-01');
+    await screen.findByRole('heading', { level: 1, name: /doesn.t exist/i });
+    expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'false');
+  });
+
   describe('?lang, the language the portal records (review fix 1)', () => {
     it('shows that language over the page language, marked for direction, without storing it', async () => {
       renderPage('ar', '/terms/2026-10-19', '?lang=en');

@@ -51,6 +51,17 @@
   margin: 0;
 }
 
+/* A legal section can run to several paragraphs (MUT-324 terms) */
+.privacy-policy-section p + p {
+  margin-top: var(--space-3);
+}
+
+/* Links inside a sentence carry an underline, not colour alone (axe link-in-text-block) */
+.privacy-policy-intro a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
 .privacy-policy-back {
   display: inline-block;
   margin-top: var(--space-4);

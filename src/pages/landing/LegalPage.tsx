@@ -14,8 +14,10 @@ export interface LegalSection {
 
 interface LegalPageProps {
   title: string;
-  /** "Last updated …" or the version's own line; omitted while the text is still loading. */
+  /** "Last updated …" or the version's own line. */
   updated?: string;
+  /** The text is still loading: the page says it is busy. */
+  loading?: boolean;
   intro?: string;
   sections: readonly LegalSection[];
   /** Below the sections, before the way back home: e.g. links to other versions. */
@@ -28,7 +30,7 @@ interface LegalPageProps {
  * The layout shared by /privacy and /terms (MUT-324): landing chrome, one
  * heading, a dated intro, then titled sections. Mounted outside the router.
  */
-export function LegalPage({ title, updated, intro, sections, after, textLanguage }: LegalPageProps) {
+export function LegalPage({ title, updated, loading = false, intro, sections, after, textLanguage }: LegalPageProps) {
   const t = useT();
   useDocumentTitle(t('common.pageTitle', { page: title }));
   useLandingAnalytics();
@@ -39,7 +41,7 @@ export function LegalPage({ title, updated, intro, sections, after, textLanguage
         {t('landing.skipToContent')}
       </a>
       <LandingHeader homeHref="/" />
-      <main id="main-content" aria-busy={updated === undefined}>
+      <main id="main-content" aria-busy={loading}>
         <article className="landing-section privacy-policy" aria-labelledby="legal-page-title">
           <div className="landing-container privacy-policy-container">
             <div lang={textLanguage} dir={textLanguage && getDirection(textLanguage)}>
