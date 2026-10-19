@@ -26,6 +26,8 @@ export interface ToastOptions {
   tone?: ToastTone;
   /** MUT-268: one button (Undo, Retry). Using it closes the toast; hovering or focusing the toast holds it open. */
   action?: ToastAction;
+  /** MUT-338: overrides the tone's default icon (e.g. SaveFeedbackIcon instead of InfoIcon). None by default. */
+  icon?: ReactNode;
 }
 export type ShowToast = (message: string, options?: ToastOptions) => void;
 
@@ -35,6 +37,7 @@ interface ToastState {
   message: string;
   tone: ToastTone;
   action?: ToastAction;
+  icon?: ReactNode;
   /** Bumped on every show, so an identical second message re-renders and is announced again. */
   id: number;
 }
@@ -50,7 +53,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const show = useCallback<ShowToast>(
     (message, options) => {
-      setToast((current) => ({ message, tone: options?.tone ?? 'error', action: options?.action, id: (current?.id ?? 0) + 1 }));
+      setToast((current) => ({
+        message,
+        tone: options?.tone ?? 'error',
+        action: options?.action,
+        icon: options?.icon,
+        id: (current?.id ?? 0) + 1,
+      }));
       startTimer();
     },
     [startTimer],
@@ -88,7 +97,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className={info ? 'hp-toast hp-toast-info' : 'sr-only'} aria-live="polite" aria-atomic="true" data-testid="toast-live" {...hold}>
         {info && (
           <>
-            <InfoIcon />
+            {info.icon ?? <InfoIcon />}
             <span key={info.id}>{info.message}</span>
             {actionButton(info)}
           </>
