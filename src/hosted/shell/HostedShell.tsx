@@ -18,7 +18,8 @@ import { UserMenu } from './UserMenu';
  * menu, and the page. There is still no "+ Add" menu: the one create action
  * in the portal is the expense drawer, opened from the Expenses list itself.
  * One DOM for every width; CSS turns the sidebar into a top bar on a phone,
- * so nothing is duplicated for assistive tech.
+ * so nothing is duplicated for assistive tech. Signed in or out, the sections
+ * are the same (MUT-287, epic MUT-284 decision 4).
  */
 
 const SECTIONS = [
@@ -31,9 +32,6 @@ const SECTIONS = [
   { path: '/conversions', key: 'conversions', exact: false },
 ] as const;
 
-/** Signed out, until MUT-287 brings receipts and FX to local mode, so nothing half-works (MUT-286 plan). */
-const HOSTED_ONLY_SECTIONS = new Set<string>(['expenses', 'conversions']);
-
 export function HostedShell({ profile, children }: { profile: HostedProfile | null; children: ReactNode }) {
   const t = useT();
   const me = useMe();
@@ -43,7 +41,6 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
   useEffect(() => {
     if (!local) void syncPortalUsage(userId);
   }, [userId, local]);
-  const sections = local ? SECTIONS.filter((section) => !HOSTED_ONLY_SECTIONS.has(section.key)) : SECTIONS;
 
   return (
     <div className="hp-shell">
@@ -52,7 +49,7 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
         {me.profiles.length > 0 && <ProfileSwitcher active={profile} />}
         {profile && (
           <nav className="hp-nav" aria-label={t('hosted.shell.sections')}>
-            {sections.map((section) => (
+            {SECTIONS.map((section) => (
               <Link
                 key={section.key}
                 to={`/p/${profile.id}${section.path}`}

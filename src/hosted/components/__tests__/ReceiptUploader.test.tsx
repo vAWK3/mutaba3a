@@ -59,7 +59,7 @@ beforeEach(() => {
     }
     if (method === 'POST' && path === '/v1/expenses/e1/receipts/r1/complete') return ok(receipt());
     if (method === 'DELETE' && path === '/v1/expenses/e1/receipts/r1') return new Response(null, { status: 204 });
-    if (method === 'GET' && path === '/v1/expenses/e1/receipts/r1/download') return ok({ url: 'https://bucket.test/dl' });
+    if (method === 'GET' && path === '/v1/expenses/e1/receipts/r1/download') return ok({ url: 'https://bucket.test/dl', filename: 'receipt.pdf' });
     return ok({ error: { code: 'NOT_FOUND', message: 'nf' } }, 404);
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -136,9 +136,65 @@ describe('ReceiptUploader', () => {
     try {
       renderUploader([receipt()]);
       await user.click(screen.getByRole('button', { name: 'Download' }));
-      await waitFor(() => expect(openSpy).toHaveBeenCalledWith('https://bucket.test/dl'));
+      await waitFor(() => expect(openSpy).toHaveBeenCalledWith('https://bucket.test/dl', 'receipt.pdf'));
     } finally {
       downloadNavigator.open = original;
+    }
+  });
+
+  it('stores the file on this device when the receipt was signed with a local-blob URL (MUT-287)', async () => {
+    const user = userEvent.setup();
+    const { localFiles } = await import('../../data/download');
+    const original = localFiles.put;
+    const putLocal = vi.fn(async () => undefined);
+    localFiles.put = putLocal;
+    const remote = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const path = new URL(String(input), 'http://portal.test').pathname;
+      if ((init.method ?? 'GET').toUpperCase() === 'POST' && path === '/v1/expenses/e1/receipts') {
+        return ok({ receipt: receipt({ status: 'PENDING_UPLOAD' }), upload: { url: 'local-blob:org/o1/expense-receipts/r1', method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, expiresAt: '' } }, 201);
+      }
+      return remote(input, init);
+    });
+    try {
+      renderUploader([]);
+      const file = pdfFile();
+      await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, file);
+
+      await waitFor(() => expect(putLocal).toHaveBeenCalledWith('local-blob:org/o1/expense-receipts/r1', file));
+      expect(putMock).not.toHaveBeenCalled();
+      expect(fetchMock.mock.calls.some(([u]) => String(u).startsWith('local-blob:'))).toBe(false);
+      await waitFor(() =>
+        expect(fetchMock.mock.calls.some(([u, i]) => String(u).includes('/receipts/r1/complete') && (i as RequestInit).method === 'POST')).toBe(true),
+      );
+    } finally {
+      localFiles.put = original;
+    }
+  });
+
+  it('says the upload failed when this device refuses to store the file', async () => {
+    const user = userEvent.setup();
+    const { localFiles } = await import('../../data/download');
+    const original = localFiles.put;
+    localFiles.put = vi.fn(async () => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+    const remote = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const path = new URL(String(input), 'http://portal.test').pathname;
+      if ((init.method ?? 'GET').toUpperCase() === 'POST' && path === '/v1/expenses/e1/receipts') {
+        return ok({ receipt: receipt({ status: 'PENDING_UPLOAD' }), upload: { url: 'local-blob:k', method: 'PUT', headers: {}, expiresAt: '' } }, 201);
+      }
+      return remote(input, init);
+    });
+    try {
+      renderUploader([]);
+      await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, pdfFile());
+
+      expect(await screen.findByText("Couldn't upload the receipt. Try again.")).toBeInTheDocument();
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/complete'))).toBe(false);
+    } finally {
+      localFiles.put = original;
     }
   });
 

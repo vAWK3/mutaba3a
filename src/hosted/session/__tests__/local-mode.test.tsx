@@ -137,12 +137,12 @@ describe('the shell signed out', () => {
     expect(server.calls).toHaveLength(0);
   });
 
-  it('hides Expenses and Conversions until MUT-287 brings them to this device', async () => {
+  it('shows the same sections as signed in, Expenses and Conversions included (MUT-287)', async () => {
     stubApi({});
     renderPortal(`/p/${ORG_A}`);
     const nav = await screen.findByRole('navigation', { name: 'Sections' });
     const links = within(nav).getAllByRole('link').map((link) => link.textContent);
-    expect(links).toEqual(['Overview', 'Clients', 'Receivables', 'Payments', 'Documents']);
+    expect(links).toEqual(['Overview', 'Clients', 'Receivables', 'Payments', 'Documents', 'Expenses', 'Conversions']);
   });
 
   it('drops the "Hosted" chip and the old local-app note from the profile switcher', async () => {
