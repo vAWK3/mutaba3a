@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle id="face" cx="12" cy="12" r="9"/>
+  <path id="hands" d="M12 6.5V10M13.7 13.2l2.8 1.8"/>
+  <circle id="nuqta" cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/>
+</svg>

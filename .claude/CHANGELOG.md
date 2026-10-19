@@ -28,6 +28,16 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — MUT-335: mini-crm's half of the canonical icon mirror is complete
+
+**Why:** MUT-335 designs one canonical, animatable icon set across mini-crm and mutaba3a-flutter in a shared Claude Design project; mini-crm keeps a byte-identical copy of the source SVGs so MUT-336's web codegen step doesn't need to read across repos.
+
+### Added
+- `assets/icons/source/*.svg` — all 61 canonical icons now mirrored (was 26); the remaining 35 copied from mutaba3a-flutter's `mut-335-icon-system` branch (commit `967794eb`) once that repo finished syncing from Claude Design.
+
+### Technical
+- No call-site migration yet (that's MUT-336, explicitly out of scope for MUT-335) — `src/components/icons/*` and the hand-drawn per-component SVGs are untouched.
+
 ## [Unreleased] - 2026-10-19 — MUT-324 review fixes: the terms link language, release order, the 409 recovery, wording
 
 **Why:** /review pass 1 on MUT-324 (`.claude/designs/mut-324-review-findings.md`) found six must-fix items before release. Branch `fix/mut-324-review-fixes`.
