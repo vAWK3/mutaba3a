@@ -38,6 +38,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — A compact table's dates are one width on every day (MUT-250, epic MUT-101)
+
+**Why:** `@web.brand.layout` failed on unchanged main on some days and passed on others. Income at 375px in Arabic measured 718–736px depending on today's date. The compact date column (`12/10/2026`) takes its width from its widest date, and Thmanyah's digits are proportional (`1` is narrow, `0` and `8` are wide), so the 726px cap held on 12/10 and failed on 19/10.
+
+### Fixed
+- **Compact dates use the figure face.** New `CompactDate` (`src/components/ui/CompactDate.tsx`) renders `formatDateCompact` in `.num` (IBM Plex Mono, tabular digits; brand: figures in Plex Mono, Thmanyah has no `tnum`). It is used on Income, the Expenses ledger (flat and grouped) and Conversions. Income at 375px in Arabic is now 735px on every date (9 dates measured). Wide tables keep their long dates ("Oct 19, 2026") in the body face; a first try that set every `.date-cell` in mono was reverted because it changed the desktop look.
+- **The known-overflow caps are reset** from that stable measurement: `Income@375` and `Income drawer@375` are 735px (were 726). The written reason sits beside them in `qa/specs/web/brand.spec.ts`.
+
+### Added
+- QA `@web.brand.date-width`: Income at 375px in Arabic, logged and opened on 11 November, 8 August and 1 October, is the same width each time.
+
+Files: `src/components/ui/CompactDate.tsx` (+ test), `src/components/ui/index.ts`, `src/pages/income/IncomePage.tsx`, `src/pages/expenses/ExpensesLedgerPage.tsx`, `src/pages/conversions/ConversionsPage.tsx`, `qa/specs/web/brand.spec.ts`, `qa/features/web/brand.yaml`; TD-083 updated.
+
+---
+
 ## [Unreleased] - 2026-10-19 — Counts read right in English and Arabic (MUT-179, epic MUT-74)
 
 **Why:** counted strings dropped a number into fixed text, giving English "1 clients" and "receipt(s)", and one Arabic noun form for every count ("متأخر 3 يوم", "مستحق خلال 34 يوم"). The landing page opens in Arabic (ADR-077), and its mocks showed 3, 34, 158 and 227 days, all in the wrong form. MUT-74's last open child.

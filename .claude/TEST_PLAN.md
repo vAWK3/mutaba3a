@@ -173,6 +173,16 @@ Every money rule runs on both stores (memory and `test:db`).
 | `src/db/__tests__/paymentRecords.test.ts` › update | Integration (Dexie) | Moving a payment's date re-dates a fully paid entry (stays paid, same received); a part-paid entry stays part-paid |
 | `qa/specs/web/record-payment.spec.ts` | E2E (release-qa) | `@web.record-payment.edit-payment-date` (row menu → date focused → Enter updates, never a second payment) and `-rtl` |
 
+### Compact date width (MUT-250, added 2026-10-19)
+| File | Type | Covers |
+|------|------|--------|
+| `src/components/ui/__tests__/CompactDate.test.tsx` (new) | Component | `dd/mm/yyyy` inside `.num` (the tabular figure face) |
+| `src/pages/income/__tests__/IncomePage.test.tsx` › compact date | Component | Every compact row's date cell holds a `.num` `dd/mm/yyyy` |
+| QA `@web.brand.date-width` (new) | Browser (Playwright, mocked clock) | Income at 375px in Arabic is one width on 11/11, 08/08 and 01/10 |
+| QA `@web.brand.layout` | Browser | `Income@375` / `Income drawer@375` caps re-measured to 735px; all 8 cells pass |
+
+**Run (2026-10-19, preview build, Node 22):** a throwaway probe measured 9 dates across the year: 735px on each (it was 718–736px before). Brand, Expenses, Conversions and Income specs: 39/39.
+
 ### Plural counts (MUT-179, added 2026-10-19)
 | File | Type | Covers |
 |------|------|--------|

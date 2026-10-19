@@ -75,6 +75,17 @@ features:
       - The page never scrolls sideways and the drawer sits inside the window
       - Each segmented highlight's top and bottom inset equal its track's padding, so it sits centred
       - A screenshot of each surface is attached for review
+  - id: date-width
+    title: "Income at 375px in Arabic is the same width on any date: compact dates use the tabular figure face (MUT-250)"
+    tier: secondary
+    legacy: [MUT-250]
+    paths:
+      - src/components/ui/CompactDate.tsx
+    steps:
+      - Set the clock to 11 November, 8 August and 1 October in turn
+      - Each time, log two entries and open Income in Arabic at 375px
+    expect:
+      - The page is the same width on every date, no wider than Income's known overflow
   - id: chrome-icons
     title: The tab shows the Brand v2 favicon, a cream tile in a light browser and a plum tile in a dark one, and the head has the PNG fallbacks and apple-touch icon (MUT-104)
     tier: core

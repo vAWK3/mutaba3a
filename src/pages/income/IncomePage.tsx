@@ -20,7 +20,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl } from '../../components/filters';
-import { EmptyState, RowActionsMenu, RowActionsHeader, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton, TruncatedTitle } from '../../components/ui';
+import { EmptyState, RowActionsMenu, RowActionsHeader, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton, TruncatedTitle, CompactDate } from '../../components/ui';
 import { CheckIcon, CopyIcon, PencilIcon } from '../../components/icons';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
 import { useIncome } from '../../hooks/useIncomeQueries';
@@ -32,7 +32,6 @@ import { useIsCompactTable } from '../../hooks/useMediaQuery';
 import { useDrawerStore } from '../../lib/stores';
 import {
   formatDate,
-  formatDateCompact,
   formatAmount,
   cn,
   EMPTY_CELL,
@@ -160,7 +159,7 @@ export function IncomePage() {
   const renderCell = (key: IncomeColumnKey, row: IncomeRow): ReactNode => {
     switch (key) {
       case 'date':
-        return isCompact ? formatDateCompact(row.date) : formatDate(row.date, locale);
+        return isCompact ? <CompactDate iso={row.date} /> : formatDate(row.date, locale);
       case 'work':
         return row.title ? (
           <TruncatedTitle title={row.title} onOpen={() => handleRowClick(row.id)} />
