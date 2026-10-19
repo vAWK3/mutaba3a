@@ -55,7 +55,11 @@ async function paymentAmounts(page: LocalBackend, profileId: string): Promise<st
   return body.items.map((p) => p.amount).sort();
 }
 
-describe('bootLocalBackend', () => {
+// Each "page load" re-imports the whole server route graph (vi.resetModules), the first one cold: seconds under
+// the full suite's parallel load, past Vitest's 5 s default (seen in the MUT-286 gate run).
+const PAGE_LOAD_TIMEOUT_MS = 30_000;
+
+describe('bootLocalBackend', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
   beforeEach(() => {
     globalThis.indexedDB = new IDBFactory();
     Object.defineProperty(globalThis.navigator, 'locks', { value: new FakeLockManager(), configurable: true });

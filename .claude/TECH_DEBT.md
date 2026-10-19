@@ -136,6 +136,22 @@
 **Impact**: a profile type change (MUT-182) deletes categories and nulls `categoryId`. Groups and marks are untouched, and the summary shows the spending as uncategorized, but nothing asserts it.
 **Fix**: a store-contract case: create a group with a categorized member, run the type change, and assert the group, its mark and a `null` category bucket.
 
+### TD-172: Signed out, a person can't record money owed: the portal can't create a client
+**Status**: Open (needs Basel's decision)
+**Ticket**: MUT-286 (2026-10-19)
+**Added**: 2026-10-19
+**Priority**: High for MUT-284 (the brief's `local.income-persists` QA scenario can't be met)
+**Impact**: Owed income needs a client, and the portal's `ClientPicker` only lists existing ones. Hosted clients come from the phone app or Malafat; signed out there is neither, so a local person can record money received but never money owed. The API already allows a session to create a customer on an owned profile (`POST /v1/customers`, MUT-65), and it runs locally. The release-QA catalog covers money received (`portal.local.received-persists`) until this is decided.
+**Fix**: Basel to decide where a client is created in the portal (an "Add «name»" option in the picker, a New client drawer on Clients, or both), for both modes, since signed in and signed out are the same portal. Then extend `local-mode.spec.ts` with the brief's owed + part-paid scenario.
+
+### TD-173: The animated slow-session release-QA spec fails on a preview build, on main too
+**Status**: Open
+**Ticket**: none (found during MUT-286, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Low (the reduced-motion variant passes; the screen itself works)
+**Impact**: `@portal.signin.boot-slow-session` ("a slow session check … then Still connecting…") never sees "Still connecting…" within its 5 s window on a `vite preview` build; the reduced-motion test of the same screen passes. Reproduced on main 58f68b95 with the same spec, so it predates MUT-286. With two Playwright workers the reduced-motion variant fails the same way too (it passes with one): the 5 s window is tight under load.
+**Fix**: Check whether the bloom loader's slow caption timer restarts when the loader blooms in place (the static mark is swapped for the loader at 400 ms), and fix the timer or the spec's window.
+
 ### TD-171: The local snapshot fingerprint covers 3 of 27 record types
 **Status**: Open
 **Ticket**: MUT-286 (2026-10-19)

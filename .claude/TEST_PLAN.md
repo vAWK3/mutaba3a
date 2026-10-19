@@ -3082,7 +3082,7 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `server/src/__tests__/routes-expense-groups.test.ts` › MUT-272 | a moved member sums under JOD only, day buckets add up to the total, `?currency=JOD` lists it and `?currency=ILS` doesn't |
 | `server/src/repositories/__tests__/store-contract-expenses.ts` › MUT-272 | both stores write `currency` with `amountMinor` |
 
-## MUT-286 — Portal local backend, phases A–B (2026-10-19, ADR-097)
+## MUT-286 — Use the portal without an account (2026-10-19, ADR-097, ADR-100)
 
 | Test | Covers |
 |---|---|
@@ -3095,4 +3095,14 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `src/hosted/local/__tests__/format-fingerprint.test.ts` (3) | organization/customer/receivable shapes pinned (D1; the other 24 maps are TD-171) |
 | `src/hosted/local/__tests__/locks.test.ts` (3) | two and three tabs racing a write: the later one sees stale, reloads, and no write is lost |
 | `src/hosted/local/__tests__/transport.test.ts` (5) | a 2xx write persists and bumps stateVersion; a read and a refused write write nothing; a restored store answers with what was saved; a newer stored format refuses the request and is never written over |
-| Not yet | parity test (AC3), no-network test (AC4), session-expired / Settings › Your data components, release-QA `qa/features/portal/local-mode.yaml`: all Phase C |
+| `src/hosted/local/__tests__/parity.test.ts` (2) | AC3: the same records through `createApp` and `createLocalApp` give identical answers (ids normalized, per-side ticking clock); the script hits a part-paid OVERDUE receivable and a 422 |
+| `src/hosted/local/__tests__/no-network.test.ts` | AC4: a whole signed-out session through the portal's `api` with `fetch` booby-trapped: never called |
+| `src/hosted/local/__tests__/boot.test.ts` (9) | first boot answers /v1/me; same person and profile across reloads with nothing entered; records across reloads (AC2); two empty tabs become one person; a write in one tab is in the other's next answer; restore replaces and persists; a tab whose person was replaced re-mints; a non-records file changes nothing; a newer stored format refuses to boot and retries next time |
+| `src/hosted/local/__tests__/recordsFile.test.ts` (6) | Maps/Dates/bigints round-trip; restored store answers; record count; refuses non-JSON, missing maps, newer format |
+| `src/hosted/local/__tests__/createLocalApp.test.ts` › console | a route failure goes to `console.error` |
+| `src/hosted/session/__tests__/mode.test.ts` (5) | no hint → probe; stored modes; junk hint ignored; blocked storage keeps the mode for the page; readers re-render |
+| `src/hosted/api/__tests__/client-mode.test.ts` (11) | remote → fetch only; local → backend with a page-origin Request; sign-in/setup always remote; probe 401 → local saved, 200 → remote saved, 503/offline → nothing saved; a local 401 never ends a session; newer format → `LOCAL_FORMAT_TOO_NEW`; a failed boot retries |
+| `src/hosted/session/__tests__/local-mode.test.tsx` (21) | through the real router: first visit (one request, Arabic, pre-existing session kept); account menu, nav, switcher, Malafat hidden (AC5); cross-tab refresh; reload screen; sign-in "Continue on this device", expired choice, sign-in → remote + local cache dropped, sign-out → local; Your data download, restore lands on the restored profile, cancel, refusals, absent signed in |
+| `scripts/__tests__/hosted-lint.test.ts` › local mode | portal ⊄ server/src; no static `@mut/local-backend`; allowlist admits route list + store, refuses sessions routes, app.ts, prisma; portal bans hold in the local backend |
+| `scripts/__tests__/check-bundles.test.ts` › local backend stays lazy | IndexedDB allowed lazily, flagged in a statically loaded file |
+| Release-QA `qa/specs/portal/local-mode.spec.ts` (`@portal.local.*`) | first-visit, received-persists, two-tabs, download-restore, session-expired — all pass on a preview build. Owed + part-paid waits on TD-172 |

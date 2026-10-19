@@ -28,9 +28,22 @@
 
 ---
 
-## [Unreleased] - 2026-10-19 — The portal's local backend, server refactor + in-page backend (MUT-286, phases A–B of C, ADR-097)
+## [Unreleased] - 2026-10-19 — Use the portal without an account: the server's routes run in the page (MUT-286, ADR-097, ADR-100)
 
-**Why:** epic MUT-284's load-bearing ticket. Signed out, the portal runs the server's own route modules in the page over IndexedDB. Phase C (client wiring, guards, release-QA) is not built yet, so nothing is user-visible.
+**Why:** epic MUT-284's load-bearing ticket. Signed out, the portal runs the server's own route modules in the page over IndexedDB, so the free app and the hosted account are one portal with the same figures.
+
+### Added (Phase C, user-visible)
+- **A first visit opens the app on this device**, in Arabic, on an empty Personal profile, with no sign-in. One `GET /v1/me` decides: 200 keeps a pre-existing session on its account, 401 saves local mode (`session/mode.ts`, ADR-100). After that a signed-out person sends nothing.
+- **Records survive reload and browser restart**, and two tabs see each other's saves (BroadcastChannel → query invalidation in `SessionBridge`).
+- **Sign-in page:** "Continue on this device" under the form, so an expired session offers Sign in or this device, never a silent switch.
+- **Account menu signed out:** "On this device" instead of an email; Sign in and Your data; no sign-out, password, Malafat, usage or store links. Expenses and Conversions are hidden until MUT-287.
+- **Your data drawer** (`?yourData=true`): Download my records (versioned JSON, `mutaba3a-records-<date>.json`) and Restore from file (confirm names the record count; refuses a non-records or newer file; lands on the restored profile). `navigator.storage.persist()` after the first save.
+- **Reload screen** when another tab saved records with a newer build (D1).
+
+### Changed (Phase C)
+- `client.ts` `request()` routes by mode through `send()`; sign-in and setup always go to the server; a local 401 never triggers the session-expired handler. The lazy chunk is reached through `@mut/local-backend` (types: `session/localBackendContract.ts`; code: `local/index.ts`).
+- Guards: ESLint (portal ⊄ `server/src`, no static `@mut/local-backend`, `LOCAL_SERVER_ALLOWLIST` for `src/hosted/local`, server ⊄ app `src/`); `HOSTED_RULES` drop `indexedDB`, and `localBackendInEntryGraph` bans it from everything the entry loads statically (local chunk: 112.7 KB gzip).
+- Release-QA: `qa/features/portal/local-mode.yaml` (`portal.local.*`) and its spec; portal openers default to `mut-mode=remote`; the sign-out and slow-session specs updated for local mode.
 
 ### Technical
 - **Phase A, server refactor (behavior-preserving):** `server/src/app-shell.ts` `createApiShell`; `GET /v1/me` moved to `routes/me.ts` (sessions.ts keeps argon2, which can't run in a browser); `routes/portal-routes.ts` `PORTAL_ROUTES`, one registration list `createApp` loops over; `MemoryLedgerStore.snapshot()`/`restore()` (27 business maps, the six ephemeral ones left alone).
