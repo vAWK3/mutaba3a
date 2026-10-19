@@ -66,6 +66,7 @@
 | ADR-075 | A Conversion Is Edited With If-Match and Soft-Deleted, Like an Expense; Malafat's Audit Feed Never Lists It (Supersedes ADR-070 §2) | Active | 2026-10 |
 | ADR-088 | Operator-Issued One-Time Setup Links Replace Printed Passwords; the Only Public Account Routes Are Sign-In and Redeeming a Link (Partial Override of ADR-037 §1) | Active | 2026-10 |
 | ADR-097 | One App — Signed Out, the Portal Runs the Server's Own Routes in the Browser over a Persisted MemoryLedgerStore (Partial Override of ADR-037 §2; Overrides MUT-185 Decision 1) | Active | 2026-10 |
+| ADR-099 | Firm Books — Firms Are Flagged Organizations With Roles, Approval, Bills and a Month Lock; Receipts Are Read on the Device (Partial Overrides of ADR-037 Decision 1 and Its MUT-182 Amendment, MUT-252 Decision 5, Minimize-to-Core Decision 3) | Active | 2026-10 |
 
 ---
 
@@ -670,6 +671,11 @@ The superseded ADRs keep their text in place, so numbers and links stay stable; 
 | ADR-037 §1, "no … password-reset route" and operator-delivered passwords only | ADR-088 | 2026-10-16 | MUT-235: the operator issues a one-time setup link; the person sets their own password through one public route |
 | ADR-037 §2, "no IndexedDB in the portal", no local profiles in the portal, no service worker (brief §2, §7.5) | ADR-097 | 2026-10-18 | MUT-284/285: one app; signed out, the portal keeps local profiles in IndexedDB and runs the server's own routes in the browser |
 | MUT-185 epic decision 1, "the local web app stays on the mutaba3a.netlify.app origin" (Jira, not an ADR) | ADR-097 | 2026-10-18 | MUT-284: the app lives at the portal's origin; netlify keeps the landing page and the data-handoff bridge (MUT-291) |
+| Minimize-to-core decision 3, "expenses are optional, not core" (MUT-1 intake, not an ADR), for firm profiles only | ADR-099 | 2026-10-19 | MUT-298: on a firm, expenses, vendors and bills are core; personal and freelancer profiles keep expenses optional |
+| MUT-252 decision 5, "the portal does not auto-read receipts" (Jira, not an ADR), for firm profiles | ADR-099 | 2026-10-19 | MUT-298: the portal reads PDF text, QR codes and photos on the user's device; no server or LLM reading |
+| ADR-037 decision 1, "no signup, invite or password-reset route" (the invite part) | ADR-099 | 2026-10-19 | MUT-306: a firm owner invites by email; the link goes only to the invitee, who accepts as that email |
+| ADR-037 MUT-182 amendment, "an owned profile is never granted to or provisioned into another user" | ADR-099 | 2026-10-19 | MUT-300: an operator may convert an owned Business profile into a firm (ownership moves to an OWNER role) |
+| MUT-298 intake decision 6, "the invite always yields a copyable link" (Jira, not an ADR) | ADR-099 | 2026-10-19 | MUT-299 D10: the link goes only to the invited email; the owner never sees it |
 
 ---
 
@@ -3883,6 +3889,85 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **The portal's typed client (`src/hosted/api/schema.d.ts`) is not regenerated here** (eng review D2): regenerating it gives 15 portal type errors, because the portal reuses the local app's 4-currency type and exponent table. MUT-281 regenerates it first (TD-170).
 - **Release order:** the phone with tolerant parsing (MUT-279) is released and adopted first. Then this change and MUT-281 go out in **one** `make release server`: the portal ships inside the API image, and a portal older than MUT-281 would render AED amounts as NaN.
 - The Malafat project import (`import/plan.ts`) accepts the five codes too; KWD and other unknown codes stay `UNSUPPORTED_CURRENCY`.
+
+---
+
+## ADR-099: Firm Books — Firms Are Flagged Organizations With Roles, Approval, Bills and a Month Lock; Receipts Are Read on the Device (Partial Overrides of ADR-037 Decision 1 and Its MUT-182 Amendment, MUT-252 Decision 5, Minimize-to-Core Decision 3)
+
+**Status**: Active (design). MUT-300..314 build it. Basel approved the brief as written, including the design defaults DR1–DR14, on 2026-10-19.
+**Date**: 2026-10-19
+**Context**: Epic MUT-298. Basel turned "receipts sharing via PDF/OCR + a mini accounting ledger for small firms" into six versions over Nov 2026 – Apr 2027 (intake decisions ID1–ID9). Small firms (law and accounting offices, agencies) are the paying audience; freelancers stay on the lean core. Brief: `.claude/designs/firm-books.md`. Plan, eng review (D1–D15) and design review (DR1–DR14): `.claude/designs/mut-299-firm-books-plan.md`. Tests: `.claude/designs/firm-books-tests.md`.
+
+**Decision**:
+1. **A firm is an organization with `firmEnabledAt` set,** enabled by an operator (ID3). The owner asks for it from the portal (MUT-300).
+   - Firm features never key off `ProfileType`.
+   - An owned Business profile becomes a firm only through an operator **conversion**: ownership moves from `ownerUserId` to an OWNER role, `profileType` is cleared with it, and the profile leaves the cap of 6. The built-in personal profile never converts (B1).
+   - Enabling names at least one owner; other existing members become BOOKKEEPER (D4).
+2. **Roles fold into the one permissions derivation (D1).**
+   - `Membership.role` is `OWNER | BOOKKEEPER | SUBMITTER`, and is inert while the flag is off.
+   - `sessionScopesFor(writer, role)` drives `requireScope`, the store guard and `/v1/me` access alike.
+   - The firm role matrix in the brief (between `firm-role-matrix` markers, drift-tested) covers **every session domain** (D6). A submitter creates expenses and receipts, edits their own unapproved rows, reads tagging data, and has none on client money or money summaries.
+   - New action scopes: `expenses:approve`, `close:write`, `members:write`. The submitter's own-row rule is a repository check (O7).
+   - The last owner can't be removed or demoted. A refused role gets the new code `ROLE_NOT_PERMITTED`.
+3. **Approval** (ID7) is a per-firm setting, off by default.
+   - `initialApprovalFor(role, firm)` sets the state on all four expense-creation paths.
+   - Every money total filters `APPROVED`; lists show every state.
+   - A rejected expense can be resubmitted (DR9).
+4. **Bills mirror receivables (ID9, B5).**
+   - A VENDOR bill's payment posts a read-only linked expense (D7).
+   - The bill itself never counts as spend.
+   - A STAFF bill's payment posts nothing.
+   - One receipt files to one record: a DB CHECK on `expenseId`/`billId` (D8).
+5. **VAT on expenses and bills** mirrors the receivable columns, and null means "No VAT recorded".
+   - The VAT summary uses the **invoice basis**: bills by issue date, plus approved expenses not posted by a bill.
+   - A bill's VAT is split across its payments by largest remainder (D9).
+6. **Month close is a watermark, `Organization.closedThroughMonth` (B6).**
+   - A closed month refuses creates, edits, deletes and decisions on expenses, bills, bill payments, receipt approvals and inbox filing, with the new code `PERIOD_CLOSED`. A PATCH checks the old and new dates.
+   - **Corrections need an owner reopen** (reason, audited). There are no negative adjusting expenses (D2; TODOS.md #16 is the upgrade path).
+   - The check runs behind the repository port, inside the write transaction, under `FOR SHARE` on the organization row; close and reopen update that row (D5, O2).
+   - Close is blocked while the month has pending expenses (DR10).
+   - Income, payments, receivables and conversions are not locked, so packs never say "final" (D11).
+7. **Invites (MUT-306).**
+   - An INVITE token is bound to the email, and **the link is mailed only to that address** (D10). The owner gets the same response for every email (D3).
+   - The User row is created on redemption. The membership is pending until accepted.
+   - SETUP and RESET are never minted on an existing account through an invite.
+   - An outbound email provider behind a `Mailer` port (EU region) is required in v3. MUT-306 picks the vendor against the brief's criteria (D14).
+8. **Receipts are read on the device** (ID4): PDF text layer, ZATCA QR, photo OCR (phone, and the portal as WASM). There is no server or LLM reading.
+   - One `ReceiptSuggestion` contract is shared by phone and portal.
+   - The extraction rules are ported to TS and tested against shared fixtures.
+   - JoFotara QR decoding waits for the official ISTD guide (its layout is unconfirmed).
+9. **The copy reads e-invoices and never issues them** (ID5). A phrase-level guard bans compliance claims in firm strings; MUT-315 researches issuing.
+10. **Sequencing**: the brief locks the cross-cutting rules plus full v1 contracts; later children write their own contracts against it (D12). A named pilot firm uses v1–v2 for two weeks before v3–v5 are planned (D13).
+11. **Local mode**: firm features never appear signed out. The ticket that lands second (MUT-284 or the firm ticket) carries the snapshot migration; MUT-305 adds a Membership fingerprint.
+
+**Consequences**:
+- Firms get roles, approval, payables, VAT and a monthly close without a general ledger. Money can't be counted twice by construction (D7, D8, D9), and a closed month can't gain rows (D5).
+- There are two new error codes, `ROLE_NOT_PERMITTED` (403) and `PERIOD_CLOSED` (409), plus `CONFLICT` reasons `LAST_OWNER`, `POSTED_BY_BILL`, `RECEIPT_ALREADY_FILED` and `PENDING_EXPENSES`. Malafat's error mapping must learn them.
+- Every firm expense write becomes transactional and takes a shared row lock.
+- v3 needs an email provider, DNS records and bounce handling.
+- A reopened month's reports can change after the accountant saw them. The audit trail records why.
+
+**Alternatives Considered**:
+- Lifting MUT-182's "owned is never shared" rule (rejected: two kinds of shared organization).
+- A separate role middleware (rejected: a second source of truth).
+- Negative adjusting expenses (deferred: TODOS.md #16).
+- A copyable invite link (rejected: owners could claim accounts in others' names).
+- Counting VAT on bills and on posted expenses (rejected: double count).
+- A double-entry general ledger (rejected, ID9).
+- Cloud or LLM receipt reading (rejected, ID4).
+
+**Override log — minimize-to-core decision 3 (partial)**: *What*: "expenses are optional, not core" (MUT-1 intake, 2026-10-05). *Replaced by*: on firm profiles, expenses, vendors and bills are core; personal and freelancer profiles are unchanged. *Why*: firms are the paying audience (MUT-298). *Date*: 2026-10-19.
+
+**Override log — MUT-252 decision 5 (partial)**: *What*: "the portal does not auto-read receipts in v1". *Replaced by*: on firm profiles the portal reads PDF text, QR codes and photos on the user's device (MUT-301, MUT-304). *Why*: firms upload receipts from desktops; reading stays on the device, so MUT-252's privacy rule holds. *Date*: 2026-10-19.
+
+**Override log — ADR-037 decision 1 (partial)**: *What*: "no signup, invite or password-reset route". *Replaced by*: a firm owner may invite by email (MUT-306), the link reaching only the invitee, who accepts as that email. Public signup is still absent, and `no-self-registration.test.ts` is updated deliberately. *Why*: firms need to add their own staff. *Date*: 2026-10-19.
+
+**Override log — ADR-037, MUT-182 amendment (partial)**: *What*: "an owned profile is … never granted to or provisioned into another user". *Replaced by*: an operator may convert an owned Business profile into a firm, after which it follows firm rules. Unconverted owned profiles are unchanged. *Why*: a freelancer's business grows into a firm without starting a new profile. *Date*: 2026-10-19.
+
+**Override log — MUT-298 intake decision 6 (partial)**: *What*: "the invite always yields a copyable setup link". *Replaced by*: the link goes only to the invited email; the owner never sees it (D10). *Why*: an owner holding the link could set a password on someone else's account and probe which emails exist (outside voice O5). *Date*: 2026-10-19.
+
+---
+
 ## ADR-100: How the Portal Chooses Local or Remote, and Where the Local Backend Shows (MUT-286 Phase C; Amends ADR-097 §9)
 
 **Status**: Active (amends ADR-097 §9 and the brief's "first visit / no hint → LOCAL", `.claude/designs/mut-285-portal-local-mode.md` §2.6)
@@ -3907,4 +3992,3 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
    - **The bundle guard** allows IndexedDB only in the chunk that opens `mut-local` (`indexedDbOutsideLocalBackend`).
 
 **Consequences**: Existing release-QA portal specs model a browser that has used an account (`openSignedInPortal` sets `mut-mode=remote` when absent); `qa/specs/portal/local-mode.spec.ts` covers the signed-out side. The portal's client list now grows from the picker (decision 8 below).
-
