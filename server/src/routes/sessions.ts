@@ -10,6 +10,7 @@ import { StateConflict } from '../repositories/memory.js';
 import type { AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
 import { ChangePasswordRequestSchema, ErrorEnvelopeSchema, MalafatSuggestionsChangeSchema, MalafatSuggestionsSchema, MeSchema, SignInRequestSchema } from '../schemas.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
+import { SUPPORTED_CURRENCIES } from '../money.js';
 import { hostedProfileFor } from '../serializers.js';
 import { MAX_OWNED_PROFILES } from './profiles.js';
 
@@ -247,5 +248,6 @@ export async function buildMe(store: LedgerStore, user: UserRecord) {
     user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale, malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions) },
     profiles,
     limits: { ownedProfiles: await store.organizations.countOwnedBy(user.id), maxOwnedProfiles: MAX_OWNED_PROFILES },
+    currencies: [...SUPPORTED_CURRENCIES],
   };
 }

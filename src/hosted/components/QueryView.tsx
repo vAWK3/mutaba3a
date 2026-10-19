@@ -68,8 +68,8 @@ export function Unreachable({ onRetry }: { onRetry: () => void }) {
 
 const SKELETON_ROWS = 2;
 
-/** Loading: a strip and two table rows of placeholders, never a number. */
-export function Skeleton({ strip = false }: { strip?: boolean }) {
+/** Loading: a strip and two table rows of placeholders (or `rows`), never a number. */
+export function Skeleton({ strip = false, rows = SKELETON_ROWS }: { strip?: boolean; rows?: number }) {
   const t = useT();
   return (
     <div className="hp-skeleton" aria-busy="true" aria-label={t('hosted.states.loading')}>
@@ -80,7 +80,7 @@ export function Skeleton({ strip = false }: { strip?: boolean }) {
           <span />
         </div>
       )}
-      {Array.from({ length: SKELETON_ROWS }, (_, i) => (
+      {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="hp-skeleton-row" />
       ))}
     </div>

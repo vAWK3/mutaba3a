@@ -9,6 +9,7 @@ import {
   MoneyParseError,
   parseMoney,
   subtractMoney,
+  SUPPORTED_CURRENCIES,
 } from '../money.js';
 
 describe('parseMoney', () => {
@@ -91,6 +92,40 @@ describe('currency support', () => {
     expect(currencyExponent('ILS')).toBe(2);
     expect(currencyExponent('USD')).toBe(2);
     expect(currencyExponent('EUR')).toBe(2);
+  });
+
+  it('supports the Gulf currencies, appended after the original four (MUT-280)', () => {
+    expect([...SUPPORTED_CURRENCIES]).toEqual(['ILS', 'USD', 'EUR', 'JOD', 'AED', 'SAR', 'QAR', 'BHD', 'OMR']);
+    expect(Object.fromEntries(SUPPORTED_CURRENCIES.map((c) => [c, currencyExponent(c)]))).toEqual({
+      ILS: 2, USD: 2, EUR: 2, JOD: 3, AED: 2, SAR: 2, QAR: 2, BHD: 3, OMR: 3,
+    });
+  });
+
+  it.each(['KWD', 'GBP', 'aed', ''])('does not support %j', (code) => {
+    expect(isSupportedCurrency(code)).toBe(false);
+  });
+});
+
+describe('Gulf currencies (MUT-280)', () => {
+  it('parses and formats AED, SAR and QAR at 2 decimals', () => {
+    expect(parseMoney('1250.50', 'AED').minor).toBe(125_050n);
+    expect(formatMoney(parseMoney('0.5', 'SAR'))).toBe('0.50');
+    expect(formatMoney(parseMoney('3', 'QAR'))).toBe('3.00');
+  });
+
+  it('parses and formats BHD and OMR at 3 decimals (fils, baisa)', () => {
+    expect(parseMoney('12.345', 'BHD').minor).toBe(12_345n);
+    expect(formatMoney(parseMoney('0.001', 'OMR'))).toBe('0.001');
+  });
+
+  it('refuses more fractional digits than each carries', () => {
+    expect(() => parseMoney('1.234', 'AED')).toThrow(MoneyParseError);
+    expect(() => parseMoney('12.3456', 'BHD')).toThrow(MoneyParseError);
+  });
+
+  it('caps BHD at the same minor-unit bound as JOD', () => {
+    expect(parseMoney('999999999999.999', 'BHD').minor).toBe(MAX_AMOUNT_MINOR);
+    expect(() => parseMoney('1000000000000.000', 'BHD')).toThrow(MoneyParseError);
   });
 });
 

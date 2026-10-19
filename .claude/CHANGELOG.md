@@ -28,6 +28,196 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Android app live: the Play Store link on the landing page and the portal
+
+**Why:** the Android app is in production on Google Play, so the "Android coming soon" rows can become real store links.
+
+### Changed
+- `MOBILE_APP_LINKS.android` (`src/content/download-config.ts`) is now available, with `https://play.google.com/store/apps/details?id=com.barmajiyat.mutaba3a`. Every reader follows from the config:
+  - the landing page's phone chapter links it with `utm_campaign=mutaba3a-landing`;
+  - the portal's account menu shows "Get the Android app" with `utm_campaign=mutaba3a-portal`;
+  - `/hosted` drops its Android "coming soon" chip but still never links a store (MUT-186, 9A).
+- `scripts/bundle-origins.json`: `https://play.google.com` is allowed in the local and hosted bundles.
+- The portal's account-menu unit test and the `@portal.account.get-the-app` spec expect the Android link. The `portal/account` and `web/landing` QA catalogs describe both links.
+
+---
+
+## [Unreleased] - 2026-10-18 — Design: the portal's local mode, one app signed in or out (MUT-285, ADR-097)
+
+**Why:** epic MUT-284 retires the free local web app. One portal works on this device when signed out and is the hosted account when signed in, with the same screens either way. This ticket is the design only; MUT-286..292 build it.
+
+### Added
+- **Brief** `.claude/designs/mut-285-portal-local-mode.md`:
+  - Signed out, `request()` hands each `Request` to an in-page `createLocalApp`: the server's own route modules over `MemoryLedgerStore`, persisted to IndexedDB.
+  - The local backend authenticates as a locally seeded person through an ordinary device session, so no new auth code exists.
+  - It covers all 49 portal calls, an owner module for every rule, persistence (versioned snapshot, migrations, Web Locks, persist() + download/restore), modes and session expiry, offline (PWA), receipts through a browser `AttachmentStorage`, the public FX route, guard changes, QA scenarios and the test strategy.
+- **Plan and eng review** `.claude/designs/mut-285-local-mode-plan.md`, with owner decisions D1 (format version + migrations), D2 (persist() + download/restore) and D3 (anonymous `GET /v1/public/fx-rates`).
+- **ADR-097**, with override log rows for ADR-037 §2 and MUT-185 decision 1, plus an override note inside ADR-037 decision 2.
+
+### Changed
+- `hosted-portal.md` §2, §7.5, §8 and §12 now point to ADR-097 where it supersedes them.
+
+### Technical
+- **Spike** (throwaway, not committed), measured in headless Chromium against the plan's gates:
+  - the local chunk is 135.7 KB gzip;
+  - no server module changed: `node:crypto` and `node:async_hooks` are aliased at build time, and the shim is byte-identical in 10,000 checks;
+  - persist p95 is 23.6 ms at about 9.8k ledger records, once idempotency replay records are kept out of the snapshot (134.5 ms with them);
+  - boot restore takes 40 ms, and the summary read 19.4 ms p95.
+
+  Safari/WebKit was not run.
+
+## [Unreleased] - 2026-10-18 — Server: Gulf currencies and a USD-peg table (MUT-280, ADR-098)
+
+**Why:** epic MUT-278. People who bill in the Gulf can record AED, SAR, QAR, BHD and OMR on the hosted side, with rates from fixed USD pegs and the same single ECB provider. **Release:** after the phone (MUT-279) is out, and together with the portal (MUT-281) in one server release.
+
+### Added
+- **Currencies:** AED, SAR, QAR (2 decimals) and BHD, OMR (3 decimals) on every money endpoint (`server/src/money.ts`), appended after ILS/USD/EUR/JOD. Over-precision stays 422 `VALIDATION_FAILED`. No migration.
+- **`currencies` on `GET /v1/me`, `POST /v1/sessions` and `POST /v1/device-sessions`:** the codes this server accepts, in order (`string[]`, required). The phone offers only these (MUT-279).
+- **`docs/fx/pegs.json`:** the peg table for the web and phone tests, checked against the server's.
+
+### Changed
+- **Rates:** `JOD_PER_USD` became `USD_PEGS` (JOD, AED, SAR, QAR, BHD, OMR), typed so a currency with no rate source fails typecheck. `crossRates` prices every pair through USD; existing rates are unchanged. `derived` is now "either side pegged" (was "exactly one side JOD"), and its OpenAPI description lists every peg.
+- **Analytics contract 1.2.0:** `docs/analytics/events.json` currencies are the nine server codes; new `PINNED_VERSIONS` row (D10).
+- **Malafat project import** plans AED/SAR/QAR/BHD/OMR projects; KWD stays `UNSUPPORTED_CURRENCY`.
+- **Version:** API 1.35.0-mut280. OpenAPI regenerated; the portal's `schema.d.ts` deliberately is not (TD-170, MUT-281).
+
+### Technical
+- Tests: `money.test.ts` (list, exponents, AED/BHD/OMR parsing, over-precision, BHD ceiling, KWD unsupported); `fx-rates.test.ts` (9×9 against a hand-built per-USD table with literal pegs, pegged↔pegged ratios, the `derived` matrix, the peg table, the fixture); `routes-fx-rates.test.ts` (nine ILS rows, base AED/BHD, KWD 422, pegged 503, every peg documented); Me on all three sign-in surfaces; income, expenses, conversions, profiles and import cases; a BHD expense through the Prisma store.
+- CI: `server-ci.yml` also runs on `docs/fx/**`.
+- Tech debt: TD-170.
+
+## [Unreleased] - 2026-10-19 — Portal: Gulf currencies from one list, "(USD peg)" for every pegged currency (MUT-281)
+
+**Why:** epic MUT-278. MUT-280 made the server accept AED/SAR/QAR/BHD/OMR; this is what makes them usable in the hosted portal. **Release:** together with MUT-280 in one server release (the portal ships inside the API image).
+
+### Added
+- **`HOSTED_CURRENCIES`** (`src/hosted/format/currencies.ts`) grows to all nine codes; `INCOME_CURRENCIES`, `FilterControls.tsx`'s and `data/filters.ts`'s own currency lists now derive from it instead of carrying separate hardcoded copies.
+- Income, expense, conversion and profile forms offer every Gulf currency; BHD/OMR accept 3 decimals, AED/SAR/QAR cap at 2 (no code change needed in the drawers themselves — they already read their options and precision generically).
+
+### Fixed
+- **Expense group peg label**: `ExpenseGroupDetail`'s "≈ … (USD peg)" line tested `currency === 'JOD'` literally, so a BHD/OMR/AED/SAR/QAR pair would have shipped with no peg label at all (an ADR-087/098 honesty-rule violation). `convertTotal` now carries the server's own per-rate `derived` flag through each `used[]` line instead of re-deriving it from a hardcoded string.
+
+### Technical
+- **TD-170 resolved**: `npm run hosted:types` regenerated `schema.d.ts`. The resulting type errors forced widening the *shared* `Currency` type (`src/types/index.ts`) and `src/lib/utils.ts`'s exponent/token tables to all nine codes — not just portal-local files — because `src/components/expenses/ExpenseFormFields.tsx` (shared between the local app's and the portal's expense drawers) calls `currencyExponent()` directly; without the widening, BHD/OMR would have silently gotten 2-decimal precision instead of 3 in the portal's own expense form.
+- The local app's own drawers (`ExpenseDrawer`, `IncomeDrawer`, `ConversionDrawer`, `LegacyExpenseEditDrawer`) keep offering only their existing narrower currency sets — Gulf entry there is MUT-282's job — so existing-record values are cast at the read boundary (same pattern as `ExpenseFormFields.tsx`'s pre-existing `currency as Currency` cast).
+- Three local-app-only exhaustive `Record<Currency, …>` literals (`aggregations.ts`, `currencyAmounts.ts`, `ExpensesLedgerPage.tsx`) patched with zero-value entries — compile-only, no feature work, on pages slated for retirement under MUT-284/292. `landingCopy.ts` gets real ar/en Gulf currency names since the landing page survives that retirement (MUT-291).
+- **Follow-up flagged, not resolved here**: MUT-282/283 ("Local web: currency registry", "Local web: any-base conversion") may need re-scoping or cancellation given the local app's planned retirement.
+
+## [Unreleased] - 2026-10-18 — Change an expense's currency together with its amount (MUT-272, ADR-096)
+
+**Why:** logging an expense in the wrong currency meant delete and re-log. This is the server half of MUT-272; the phone's Recent edit sheet (MUT-272 phone half) and the portal (MUT-277) build on it.
+
+### Changed
+- **`PATCH /v1/expenses/{id}`** accepts `currency` together with `amount`:
+  - a currency alone is 422 `AMOUNT_REQUIRED` (`field: amount`), even when unchanged;
+  - the amount is read in the merged currency's digits (JOD 3; "1.234" in USD is refused);
+  - the audit adds `currency {from, to}` and `amount {from, to}` when the currency moved;
+  - a stale If-Match is a 409 before the body's business rules run (schema validation still first), on this route and on `PATCH /v1/inbox/{id}` (pre-landing review: after a JOD → USD move a stale JOD-shaped amount used to answer 422 AMOUNT_INVALID).
+- **Code:** `expensePatch` (`server/src/expenses/compose.ts`), `UpdateExpenseRequestSchema`, and `UpdateExpensePatch.currency` (both stores take it through their generic update).
+- **Docs:** the route description; the inbox PATCH description no longer says an expense's currency is fixed (its own `AMOUNT_INVALID` code stays).
+- **Docs:** `AMOUNT_REQUIRED` and `SAME_CURRENCY` join the published 422 reasons list (conversions already raised both).
+- **Version:** API 1.34.0-mut272. OpenAPI and the portal's `schema.d.ts` are regenerated.
+
+### Technical
+- Tests: a new `server/src/expenses/__tests__/compose.test.ts`; `routes-expenses.test.ts` replaces "never changes a row's currency" with the pair rule, the JOD/USD digits, a stale If-Match, the exact per-version audit, the summary moving to the new currency, the same currency resent (no move audited), another profile's expense (404) and the stale-after-move 409; `inbox-routes.test.ts` gets the same stale-after-move 409; `routes-expense-groups.test.ts` checks a moved member regroups under its new currency (summary, day buckets, `?currency=`).
+- Comments: the inbox request schema and the portal's `ExpenseDrawer` no longer say an expense's currency can't change.
+- Portal: the expense drawer's currency select is disabled on edit (it was live, but the PATCH dropped the pick, so a USD choice silently saved ILS); MUT-277 enables it and sends the pair. Shared `ExpenseFormFields` gains `currencyDisabled`.
+- Tests: a write landing between the read and the update is still a 409 from the store (expenses and inbox), proven to fail with the store-stale mapping removed.
+- Tech debt: TD-169 (audit appended outside the write's transaction).
+
+## [Unreleased] - 2026-10-18 — Portal: trip groups with daily and category spend (MUT-268, ADR-095)
+
+**Why:** epic MUT-266. On MUT-267's API, a person groups a trip's expenses in the portal, prunes them and sees what the trip cost per currency, per day and per category.
+
+### Added
+- **Expenses · Groups** (`SectionTabs`): `/p/:id/expenses/groups` lists groups ongoing → upcoming → past with dates, day count, member count and up to two currency totals (+N); "Still going? Add an end date" after 11 months; "reached a year" once an open group stops collecting.
+- **Group drawer** (`?newGroup=1`, `?editGroup=1`): name, From (today), To (capped at From + 365, required unless "Still going"), notes; edit hint; Delete confirmed in place with the member count. A 422 ends the idempotency attempt (TD-163).
+- **Group page** `/p/:id/expenses/groups/:groupId` (`?currency=`, `?category=uuid|none`): headline per currency with counts, "≈ <profile currency> at today's ECB rate (<date>)" with per-currency rates and the JOD peg (hidden while loading/unavailable, "rate from" when stale), currency tab, per day, hand-built `DayBars` (daily ≤ 31 days, else weekly; sparse before/after bars past a ⋯ gap; keyboard and RTL arrows; jump to the day) and `CategoryBars` (filters the members), members by day oldest first with Kept, Leave out / Remove, Left out with Bring back, category "Leave out all", every 8A state.
+- **Optimistic marks** with Undo/Retry toasts; one save at a time for batches; marks for one expense reach the server in order.
+- **Add from outside these dates** (`?addToGroup=1`): the 30 days before (and after, for a closed group) minus members; partial result with Retry of the failed ones.
+- **ExpenseDrawer "In groups"**: links, Leave out / Remove per group, "Add to group…".
+- `playRowEnter` (`src/lib/motion/rowEnter.ts`): Undo retraces a row's exit.
+- Release-QA: `qa/features/portal/expense-groups.yaml` (9 features) + `qa/specs/portal/expense-groups.spec.ts`; FakeApi learns groups, marks, summaries, paging and FX.
+
+### Changed
+- `Toast` options gain `action` (both tones); hover/focus holds the toast.
+- `Skeleton` takes `rows`. `minorToDecimal` moves to `src/hosted/format/currencies.ts` (re-exported from `incomeForm.ts`). `usePrefersReducedMotion` moves to `src/lib/motion/mediaQuery.ts` (with `useMediaQuery`); `src/hooks/usePrefersReducedMotion.ts` re-exports it.
+- Expense create/update/delete also refresh every group read. `request()` accepts PUT; `api.expenses` takes a signal.
+
+### Fixed
+- **Every portal page scrolled sideways on a phone** (found by the arabic-375 spec): the phone shell column was `1fr`, so the top bar's nav set its minimum width (~611 px). Now `minmax(0, 1fr)`.
+- qa-reconcile and pre-landing review:
+  - Left out retries in place.
+  - Undo slides a row back in.
+  - Day rows are keyed per day, so a later day's rows keep their nodes and focus.
+  - The default currency tab is fixed at first load.
+  - "Leave out all" clears the category before saving, and its Undo runs the two batches in turn with a failure toast.
+  - From is required, and an unknown 422 no longer says "Couldn't reach".
+  - Per day ignores days still to come.
+  - `?newGroup=1` parses as a number too.
+  - A deleted group leaves the cached list before navigation.
+  - StrictMode no longer freezes the bar springs in dev.
+
+## [Unreleased] - 2026-10-18 — Hosted expense groups: trips with per-day and per-category totals (MUT-267, ADR-094)
+
+**Why:** epic MUT-266. A person groups a trip's expenses by date, prunes them, and sees what it cost. This is the API that the portal (MUT-268) and the phone (MUT-269) build on.
+
+### Added
+- **Tables.** `expense_groups` and `expense_group_overrides`, in the purely additive migration `20261018150000_mut267_expense_groups`.
+- **Routes:**
+  - `GET/POST /v1/expense-groups`: the list carries per-currency totals and `memberCount`; `?expenseId=` returns the groups an expense belongs to.
+  - `GET/PATCH/DELETE /v1/expense-groups/{id}`: the detail carries an in-window `excludedCount`; PATCH uses If-Match; DELETE is soft and leaves the expenses alone.
+  - `PUT/DELETE /v1/expense-groups/{id}/expenses/{expenseId}`: keep, leave out, reset.
+  - `GET /v1/expense-groups/{id}/summary`: per currency, by category, client and day, with before/after buckets.
+- **Ledger filter.** `GET /v1/expenses` gains `groupId` and `groupMembership`.
+- **Code:**
+  - `server/src/expenses/groups.ts`: the membership window, `isGroupMember`, series bounds, create/patch validation;
+  - `summarizeGroup` in `summary.ts`;
+  - `ExpenseGroupRepository` and `expenses.totalsByCurrency` on both stores.
+- **Version.** API 1.33.0-mut267, numbered after MUT-270's unmerged 1.32.0. OpenAPI and the portal's `schema.d.ts` are regenerated.
+
+### Changed
+- Writability matrix: the `expenses` row covers `/v1/expense-groups*`, in both the code and the `hosted-portal.md` brief.
+- Store guard: classifies the new methods in the expenses domain.
+- Audit: `EXPENSE_ENTITY_TYPES` gains `expense_group`.
+
+### Fixed (pre-landing review)
+- **Future dates.** Group dates more than ten years ahead are refused (422 DATE_INVALID, bound future). A year-9999 group's summary used to answer 500.
+- **Day loop.** It is a counted walk.
+- **Group cap.** At most 200 live groups per profile (422 GROUP_LIMIT). The count and the insert happen in one transaction under the organization row lock, so parallel creates can't overshoot.
+- **Ledger.** `groupMembership` without `groupId` is 422 GROUP_ID_REQUIRED.
+- **PATCH.** A stale If-Match is a 409 before validation. An unchanged PATCH keeps its version and writes no audit, and the audit lists only changed fields.
+- **Marks.** A repeated identical mark writes no audit.
+- **Migration.** Renamed to `20261018150000_mut267_expense_groups`, so it no longer shares MUT-270's timestamp prefix.
+- **Tests.** Added coverage for:
+  - Malafat's audit feed hiding expense_group rows (mutation-checked);
+  - the audit trail;
+  - 404s on writes;
+  - the totals chunks and summary pages;
+  - groupPatch name branches.
+
+### Technical
+- Prisma's expense list now AND-merges the filter and cursor clauses (Q1).
+- Deferred review items are recorded as TD-161 to TD-165.
+- The shared store contract pins the Prisma `where` to `isGroupMember` on Postgres.
+## [Unreleased] - 2026-10-18 — GET /v1/entries: one newest-first feed across a person's profiles (MUT-270, ADR-093, API 1.32.0-mut270)
+
+**Why:** the phone's Recent (MUT-271) must mirror the portal, not just what the phone itself saved. Brief: `.claude/designs/mut-270-entries-feed.md`.
+
+### Added
+- **`GET /v1/entries`** (`server/src/routes/entries.ts`): session-only, no `X-Mutaba3a-Profile`. Expenses, received payments, Owed (ADJUSTMENT) receivables and conversions, newest logged first, `pagination.ts` cursor, optional repeatable `profileId` (404 outside your memberships), `limit` 1..100 default 20.
+- **`server/src/entries/merge.ts`**: `mergeNewestFirst`, `isBeforeCursor`, `compareNewestFirst`, shared by both stores.
+- **Store:** `entries.list` (memory + Prisma, one typed query per organization and kind) and `expenseReceipts.countReadyByExpenseIds`; store guard `sessionOnly` / `{ read: 'expenses' }`.
+- **Migration `20261018120000_mut270_entries_feed_indexes`:** indexes only.
+- **Review fixes (2026-10-18):** at most 4 feed queries in flight per request; received items carry `settlesOwedId` and `replacesPaymentId`; the route documents that a page is a snapshot; payment origin mapped exhaustively; the connection budget counts both revisions during a deploy.
+- **Tests:** `routes-entries.test.ts` (14), `entries/__tests__/merge.test.ts` (6), `payments/__tests__/allocation-state.test.ts` (2), store contract `store-contract-entries.ts` (4, memory + Postgres), `store-prisma-entries-plan.test.ts` (2, EXPLAIN), `route-security.test.ts` updated.
+
+### Changed
+- **`IncomeStatus`** gains `partial`, `allocated`, `reversed`; `serializeIncomeEntry` reads a received payment's status from the record (`incomeStatusOf`). Fresh captures still read `unallocated`.
+- **Terraform:** `db_pool_size` (10) as `connection_limit` in the DATABASE_URL, `db_max_connections` (50) as an explicit Cloud SQL flag, with a precondition (2 × pool × instances + 10 ≤ max). Adding the flag restarts Cloud SQL: apply the instance on its own first (INFRA.md).
+- **CI:** `terraform test` runs for the GCP module too (`tests/database_pool.tftest.hcl`, mocked providers).
+- `API_VERSION` 1.32.0-mut270; `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+
 ## [Unreleased] - 2026-10-18 — Sentry contract 1.1.0: money keys, multi-line values and messages (MUT-147 convergence review, ADR-091 amendment 4)
 
 **Why:** the fresh review after the merge found values the 1.0.0 rules still let through: money fields such as `grossMinor`, pretty-printed JSON, and the event message and breadcrumb messages, which were never scrubbed. 1.0.0 is merged, so the fixes ship as 1.1.0 and the 1.0.0 pin stays.

@@ -196,6 +196,14 @@ describe('POST /v1/expenses', () => {
     expect((await read(patched)).error.details).toMatchObject({ reason: 'CATEGORY_NOT_FOUND', field: 'categoryId' });
   });
 
+  it('records an OMR expense at 3 decimals and refuses a 4th (MUT-280)', async () => {
+    const { create } = await setup();
+    const res = await create({ amount: '0.385', currency: 'OMR' });
+    expect(res.status).toBe(201);
+    expect(await read(res)).toMatchObject({ amount: '0.385', currency: 'OMR' });
+    expect((await create({ amount: '0.3851', currency: 'OMR' })).status).toBe(422);
+  });
+
   it('refuses an unsupported currency at the schema', async () => {
     const { create } = await setup();
     const res = await create({ currency: 'GBP' });
@@ -283,12 +291,96 @@ describe('PATCH /v1/expenses/{id}', () => {
     expect((await read(stale)).error.details.reason).toBe('VERSION_MISMATCH');
   });
 
-  it('never changes a row’s currency', async () => {
+  it('MUT-272: a currency changes only together with its amount (422 AMOUNT_REQUIRED alone, even unchanged)', async () => {
     const { h, a, p, create } = await setup();
     const e = await read(await create({}));
-    const res = await h.app.request(`/v1/expenses/${e.id}`, json({ currency: 'USD' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
-    expect(res.status).toBe(422);
-    expect((await read(await h.app.request(`/v1/expenses/${e.id}`, { headers: p.as(a.org.id) }))).currency).toBe('ILS');
+    const url = `/v1/expenses/${e.id}`;
+    for (const currency of ['USD', 'ILS']) {
+      const alone = await h.app.request(url, json({ currency }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+      expect(alone.status).toBe(422);
+      expect((await read(alone)).error.details).toEqual({ reason: 'AMOUNT_REQUIRED', field: 'amount' });
+    }
+    const unchanged = await read(await h.app.request(url, { headers: p.as(a.org.id) }));
+    expect(unchanged).toMatchObject({ currency: 'ILS', amount: '120.50', version: 1 });
+  });
+
+  it('MUT-272: moves an expense to another currency, reading the amount in that currency’s digits, and audits from/to', async () => {
+    const { h, a, p, create } = await setup();
+    const e = await read(await create({ notes: 'keep' }));
+    const url = `/v1/expenses/${e.id}`;
+    const tooPrecise = await h.app.request(url, json({ amount: '1.234', currency: 'USD' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(tooPrecise.status).toBe(422);
+    expect((await read(tooPrecise)).error.details.field).toBe('amount');
+    const toJod = await h.app.request(url, json({ amount: '1.234', currency: 'JOD' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(toJod.status).toBe(200);
+    expect(await read(toJod)).toMatchObject({ amount: '1.234', currency: 'JOD', notes: 'keep', version: 2 });
+    const stale = await h.app.request(url, json({ amount: '120.50', currency: 'USD' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(stale.status).toBe(409);
+    const toUsd = await read(await h.app.request(url, json({ amount: '120.50', currency: 'USD' }, { ...p.as(a.org.id), 'if-match': '2' }, 'PATCH')));
+    expect(toUsd).toMatchObject({ amount: '120.50', currency: 'USD', version: 3 });
+    const updates = (await h.store.audit.list(a.org.id, { action: 'expense.updated' }, { limit: 10, cursor: null })).items;
+    const byVersion = (v: number) => updates.find((u) => u.metadata?.version === v)!.metadata;
+    expect(updates).toHaveLength(2);
+    expect(byVersion(2)).toMatchObject({ currency: { from: 'ILS', to: 'JOD' }, amount: { from: '120.50', to: '1.234' } });
+    expect(byVersion(3)).toMatchObject({ currency: { from: 'JOD', to: 'USD' }, amount: { from: '1.234', to: '120.50' } });
+    // Amount-only edits record no currency move.
+    await h.app.request(url, json({ amount: '99.00' }, { ...p.as(a.org.id), 'if-match': '3' }, 'PATCH'));
+    const amountOnly = (await h.store.audit.list(a.org.id, { action: 'expense.updated' }, { limit: 10, cursor: null })).items.find((u) => u.metadata?.version === 4)!;
+    expect(amountOnly.metadata).not.toHaveProperty('currency');
+    expect(amountOnly.metadata).not.toHaveProperty('amount');
+    // The month summary follows the move: the expense now counts under USD only.
+    const summary = await read(await h.app.request('/v1/summaries/expenses?from=2026-10-01&to=2026-10-31', { headers: p.as(a.org.id) }));
+    expect(summary.currencies.map((c: Loose) => [c.currency, c.total])).toEqual([['USD', '99.00']]);
+  });
+
+  it('MUT-272: resending the row’s own currency with an amount is an ordinary edit, with no currency move in the audit', async () => {
+    const { h, a, p, create } = await setup();
+    const e = await read(await create({}));
+    const res = await h.app.request(`/v1/expenses/${e.id}`, json({ amount: '99.00', currency: 'ILS' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(res.status).toBe(200);
+    expect(await read(res)).toMatchObject({ amount: '99.00', currency: 'ILS', version: 2 });
+    const [update] = (await h.store.audit.list(a.org.id, { action: 'expense.updated' }, { limit: 10, cursor: null })).items;
+    expect(update!.metadata).toMatchObject({ version: 2 });
+    expect(update!.metadata).not.toHaveProperty('currency');
+    expect(update!.metadata).not.toHaveProperty('amount');
+  });
+
+  it('MUT-272: a currency move on another profile’s expense is a 404 and changes nothing', async () => {
+    const { h, a, b, p, create } = await setup();
+    const theirs = await read(await create({}, b.org.id));
+    const res = await h.app.request(`/v1/expenses/${theirs.id}`, json({ amount: '1.234', currency: 'JOD' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(res.status).toBe(404);
+    expect(await read(await h.app.request(`/v1/expenses/${theirs.id}`, { headers: p.as(b.org.id) }))).toMatchObject({ amount: '120.50', currency: 'ILS', version: 1 });
+  });
+
+  it('MUT-272: a stale edit is a 409 before its amount is read, even after another device moved the currency to fewer digits', async () => {
+    const { h, a, p, create } = await setup();
+    const e = await read(await create({ amount: '12.345', currency: 'JOD' }));
+    const url = `/v1/expenses/${e.id}`;
+    expect((await h.app.request(url, json({ amount: '12.35', currency: 'USD' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'))).status).toBe(200);
+    // This device still holds v1 (JOD) and edits only the amount, in JOD's three digits.
+    const stale = await h.app.request(url, json({ amount: '13.456' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(stale.status).toBe(409);
+    expect((await read(stale)).error.details).toMatchObject({ reason: 'VERSION_MISMATCH', currentVersion: 2 });
+    expect(await read(await h.app.request(url, { headers: p.as(a.org.id) }))).toMatchObject({ amount: '12.35', currency: 'USD', version: 2 });
+  });
+
+  it('MUT-272: a write that lands between the read and the update is still a 409 from the store, and that write survives', async () => {
+    const { h, a, p, create } = await setup();
+    const e = await read(await create({}));
+    const real = h.store.expenses.update.bind(h.store.expenses);
+    let raced = false;
+    h.store.expenses.update = async (org, id, version, patch, at) => {
+      if (!raced) {
+        raced = true;
+        await real(org, id, version, { notes: 'other device' }, at);
+      }
+      return real(org, id, version, patch, at);
+    };
+    const res = await h.app.request(`/v1/expenses/${e.id}`, json({ amount: '1.234', currency: 'JOD' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'VERSION_MISMATCH', currentVersion: 2 });
+    expect(await read(await h.app.request(`/v1/expenses/${e.id}`, { headers: p.as(a.org.id) }))).toMatchObject({ amount: '120.50', currency: 'ILS', notes: 'other device', version: 2 });
   });
 
   it('keeps an archived category already on the row but refuses choosing it anew', async () => {

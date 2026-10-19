@@ -59,6 +59,13 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       expect(await store.expenses.getById(w.b.id, created.id)).toBeNull();
     });
 
+    it('MUT-280: stores a Gulf currency and its fils exactly, with no migration (VarChar(3))', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const created = await store.expenses.create(w.expense({ currency: 'BHD', amountMinor: 12_345n }), at(1));
+      expect(await store.expenses.getById(w.a.id, created.id)).toMatchObject({ currency: 'BHD', amountMinor: 12_345n });
+    });
+
     it('lists newest first by (occurredOn, id), paginated without gaps or repeats, with every filter', async () => {
       const store = await makeStore();
       const w = await world(store);
@@ -123,6 +130,15 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       expect(stale).toEqual({ kind: 'stale', record: updated.record });
       expect((await store.expenses.getById(w.a.id, e.id))!.amountMinor).toBe(500n);
       expect(await store.expenses.update(w.b.id, e.id, 2, { amountMinor: 1n }, at(2))).toEqual({ kind: 'not_found' });
+    });
+
+    it('MUT-272: moves an expense to another currency together with its amount', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const e = await store.expenses.create(w.expense(), at(0));
+      const moved = await store.expenses.update(w.a.id, e.id, 1, { amountMinor: 1234n, currency: 'JOD' }, at(1));
+      expect(moved).toMatchObject({ kind: 'updated', record: { amountMinor: 1234n, currency: 'JOD', version: 2 } });
+      expect(await store.expenses.getById(w.a.id, e.id)).toMatchObject({ amountMinor: 1234n, currency: 'JOD' });
     });
 
     it('soft-deletes: hidden from get, list and update; a second delete reports unchanged; unknown is null', async () => {

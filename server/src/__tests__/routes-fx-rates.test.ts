@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import pino from 'pino';
 import { createApp } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
-import { CachedFxRates, JOD_PER_USD, type EcbSnapshot, type FxRateSource } from '../fx-rates.js';
+import { CachedFxRates, USD_PEGS, type EcbSnapshot, type FxRateSource } from '../fx-rates.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
@@ -84,6 +84,11 @@ describe('GET /v1/fx-rates', () => {
         { currency: 'USD', rate: 0.322356, derived: false },
         { currency: 'EUR', rate: 0.287613, derived: false },
         { currency: 'JOD', rate: 0.22855, derived: true },
+        { currency: 'AED', rate: 1.183853, derived: true },
+        { currency: 'SAR', rate: 1.208835, derived: true },
+        { currency: 'QAR', rate: 1.173376, derived: true },
+        { currency: 'BHD', rate: 0.121206, derived: true },
+        { currency: 'OMR', rate: 0.123946, derived: true },
       ],
     });
   });
@@ -97,6 +102,25 @@ describe('GET /v1/fx-rates', () => {
     expect((await rates(h, '?base=USD', { ...s.asCookie, 'x-mutaba3a-profile': s.orgId })).status).toBe(200);
   });
 
+  it.each(['AED', 'BHD'])('answers base %s with all nine currencies, every row but the base derived (MUT-280)', async (base) => {
+    const h = harness();
+    const s = await signedIn(h);
+    const res = await rates(h, `?base=${base}`, s.asDevice);
+    expect(res.status).toBe(200);
+    const body = await read(res);
+    expect(body.rates.map((r: Loose) => r.currency)).toEqual(['ILS', 'USD', 'EUR', 'JOD', 'AED', 'SAR', 'QAR', 'BHD', 'OMR']);
+    expect(body.rates.filter((r: Loose) => r.derived).map((r: Loose) => r.currency)).not.toContain(base);
+    expect(body.rates.filter((r: Loose) => r.derived)).toHaveLength(8);
+  });
+
+  it('answers 503 for a pegged base too when the provider is down and nothing is cached (MUT-280)', async () => {
+    const h = harness({ providerDown: true });
+    const s = await signedIn(h);
+    const res = await rates(h, '?base=AED', s.asDevice);
+    expect(res.status).toBe(503);
+    expect((await read(res)).error.code).toBe('FX_RATES_UNAVAILABLE');
+  });
+
   it('asks the provider once for many requests inside the window', async () => {
     const h = harness();
     const s = await signedIn(h);
@@ -106,6 +130,7 @@ describe('GET /v1/fx-rates', () => {
 
   it.each([
     ['an unknown base', '?base=GBP'],
+    ['KWD, which has no fixed USD rate (MUT-280)', '?base=KWD'],
     ['a lower-case base', '?base=ils'],
     ['no base', ''],
   ])('refuses %s with 422 VALIDATION_FAILED', async (_label, query) => {
@@ -146,9 +171,10 @@ describe('GET /v1/fx-rates', () => {
     expect(h.provider.calls).toBe(2);
   });
 
-  it('documents the JOD peg the code uses', async () => {
+  it('documents every USD peg the code uses', async () => {
     const doc = await read(await harness().app.request('/openapi.json'));
-    expect(doc.components.schemas.FxRate.properties.derived.description).toContain(`1 USD = ${JOD_PER_USD} JOD`);
+    const description: string = doc.components.schemas.FxRate.properties.derived.description;
+    for (const [currency, peg] of Object.entries(USD_PEGS)) expect(description).toContain(`${peg} ${currency}`);
   });
 
   it('answers 503 FX_RATES_UNAVAILABLE when the app has no rate source configured', async () => {

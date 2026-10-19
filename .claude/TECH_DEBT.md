@@ -72,6 +72,86 @@
 **Impact**: `GET /admin/v1/users/{id}` shows no "setup pending" or open-link expiry, so when someone says "I never got in", the operator just issues a new link. That is safe (it supersedes the old one) but blind.
 **Fix**: add `passwordSet: boolean` and the open link's `expiresAt` to the admin user detail, plus a `show` CLI command.
 
+### TD-161: An expense group's member query can't use the date index
+**Status**: Open
+**Ticket**: none (MUT-267 pre-landing review, 2026-10-18; owner chose to defer)
+**Added**: 2026-10-18
+**Priority**: Low until profiles hold thousands of expenses
+**Impact**: `expenseGroupWhere` is `(in window AND NOT EXISTS excluded) OR EXISTS included`. The kept branch has no date bound, so Postgres reads the profile's whole ledger (organizationId prefix) for every group aggregate, summary page and `?groupId` page. This costs O(profile expenses) per query, not O(window).
+**Fix**: load the group's kept expense ids first (override PK prefix `groupId`), then query `OR: [(in window AND not excluded), id IN kept]`. That way Postgres can BitmapOr the `(organizationId, occurredOn)` index with the primary key. The store contract already pins the result.
+
+### TD-162: Two identical first marks at the same instant both write an audit row
+**Status**: Accepted
+**Ticket**: none (MUT-267 review cycle 2)
+**Added**: 2026-10-18
+**Priority**: Cosmetic
+**Impact**: Prisma `setOverride` reads the mark, then upserts it. Two concurrent PUTs with the same mode on an unmarked expense both return `changed: true`, so `expense_group.expense_marked` is audited twice for one effective change. The stored mark is correct.
+**Fix**: if exactly-once auditing ever matters, use one raw `INSERT … ON CONFLICT DO UPDATE … WHERE mode IS DISTINCT FROM EXCLUDED.mode RETURNING`.
+
+### TD-163: A refused 201st group is replayed from the idempotency cache
+**Status**: Open
+**Ticket**: check with MUT-268 (the portal's Idempotency-Key policy)
+**Added**: 2026-10-18
+**Priority**: Low
+**Impact**: `idempotency.ts` stores every response below 500, so a 422 `GROUP_LIMIT` becomes that key's outcome. If a client reuses one key across retries of the same form, the user deletes a group, presses Save again, and still gets the cached 422.
+**Fix**: either the portal and phone mint a fresh key per submit (the portal already uses one key per save attempt, MUT-133), or state-dependent 422s are left out of the cache.
+
+### TD-167: "Leave out all" rows leave together, not staggered
+**Status**: Open
+**Ticket**: none (MUT-268 craft spec 2, qa-reconcile)
+**Added**: 2026-10-18
+**Priority**: Low (motion polish; the result is correct and has one Undo)
+**Impact**: the craft spec staggers bulk exits by `--stagger-step` (50 ms, first eight). `captureRowExit` measures followers when it captures and glides them at once, so delaying a copy's play would make the rows below jump and then glide.
+**Fix**: give `captureRowExit` a `delay` that holds the followers' offset until the copy starts, then stagger in `GroupMembers`.
+
+### TD-168: The portal FakeApi answers a few edge cases differently from the API
+**Status**: Open
+**Ticket**: none (MUT-268 pre-landing review)
+**Added**: 2026-10-18
+**Priority**: Low (no spec depends on them)
+**Impact**: `qa/support/portalApi.ts` answers 404 where the API answers 204 (DELETE of a mark for an unknown expense, DELETE of an already-deleted group). It also answers `[]` where the API answers 404 (`?expenseId=` of an unknown expense), and leaves `byCategory` unsorted.
+**Fix**: match the API in each case when a spec first needs them.
+
+### TD-166: Undo of a Leave out on an in-window kept expense drops the keep mark
+**Status**: Open
+**Ticket**: none (MUT-268 eng plan E4)
+**Added**: 2026-10-18
+**Priority**: Low (the mark only matters if that expense's date later moves outside the group)
+**Impact**: member rows from `GET /v1/expenses?groupId=` carry no mark, so the portal can't tell an unmarked in-window member from a kept one. Undo of Leave out sends DELETE, which restores membership but loses a keep mark that would have held the expense in the group after a date change.
+**Fix**: the member listing returns each row's mark (an additive field), and Undo restores it exactly.
+
+### TD-164: Deleted expense groups stay in the list index
+**Status**: Open
+**Ticket**: none
+**Added**: 2026-10-18
+**Priority**: Low (only the owner's own deliberate churn grows it)
+**Impact**: the 200-group cap counts live groups only, so create-and-delete churn grows `expense_groups` without bound. The list index `(organizationId, startOn DESC, id DESC)` includes the dead rows.
+**Fix**: a partial index `WHERE "deletedAt" IS NULL` in place of the full one.
+
+### TD-165: No test pins that groups survive a profile type change
+**Status**: Open
+**Ticket**: none (MUT-267 plan item missed in the build)
+**Added**: 2026-10-18
+**Priority**: Low (no group code reads categories; it holds by construction)
+**Impact**: a profile type change (MUT-182) deletes categories and nulls `categoryId`. Groups and marks are untouched, and the summary shows the spending as uncategorized, but nothing asserts it.
+**Fix**: a store-contract case: create a group with a categorized member, run the type change, and assert the group, its mark and a `null` category bucket.
+
+### TD-170: The portal's typed API client lags the spec until MUT-281
+**Status**: Resolved (MUT-281, 2026-10-19)
+**Ticket**: MUT-281 (MUT-280 eng review D2, 2026-10-18)
+**Added**: 2026-10-18
+**Priority**: Medium (blocks any unrelated `npm run hosted:types` until MUT-281 lands)
+**Impact**: MUT-280 grew the server's `Currency` enum and added `Me.currencies`, but `src/hosted/api/schema.d.ts` was not regenerated, so `npm run hosted:types:check` fails on main (it isn't in CI). Regenerating it gives 15 portal type errors in 8 files: the portal reuses the local app's 4-currency `Currency` type and `src/lib/utils.ts` `CURRENCY_EXPONENT`, and the MUT-183 `coversEveryCurrency` guard fails on purpose. Another session that regenerates the types for an unrelated server change hits the same errors.
+**Fix**: `npm run hosted:types` regenerated, then `src/types/index.ts`'s `Currency` and `src/lib/utils.ts`'s exponent/token tables widened to the API's nine codes (forced by `ExpenseFormFields.tsx`'s shared `currencyExponent()` call, not just the portal). `npm run hosted:types:check` passes.
+
+### TD-169: Audit rows are appended after the write, outside its transaction
+**Status**: Open
+**Ticket**: none (found 2026-10-18, MUT-272 pre-landing adversarial review; numbered after main's MUT-268 TD-166..168)
+**Added**: 2026-10-18
+**Priority**: Low (needs the audit append to fail right after a committed write)
+**Impact**: every route calls `audit(...)` after the store write commits. If the append fails, the client gets a 500 for a write that landed (a retry with the old If-Match then gets a 409), and the audit row is lost. ADR-096 makes this sharper for expenses: the `expense.updated` row with `currency`/`amount` `{from, to}` is the only record of the amount before a currency move.
+**Fix**: a store-level "write + audit" in one transaction (Prisma `$transaction`; the memory store already applies both synchronously), adopted route by route, starting with the money-moving edits.
+
 ### TD-158: Changing your password keeps this device's token rather than issuing a new one
 **Status**: Open
 **Ticket**: MUT-262 (found 2026-10-16, MUT-238 pre-landing adversarial review of MUT-237)

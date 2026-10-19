@@ -354,6 +354,34 @@ describe('PATCH /v1/inbox/{entryId}', () => {
     expect((await h.app.request(`/v1/inbox/${created.id}`, json({ note: 'x' }, u.me(), 'PATCH'))).status).toBe(422);
   });
 
+  it('MUT-272: a stale edit is a 409 before its amount is read, even after another device moved the currency to fewer digits', async () => {
+    const { h, u, capture } = await setup();
+    const created = (await read(await capture({ ...BASE, amount: '12.345', currency: 'JOD' }))) as { id: string };
+    const url = `/v1/inbox/${created.id}`;
+    expect((await h.app.request(url, json({ amount: '12.35', currency: 'USD' }, { ...u.me(), 'if-match': '1' }, 'PATCH'))).status).toBe(200);
+    const stale = await h.app.request(url, json({ amount: '13.456' }, { ...u.me(), 'if-match': '1' }, 'PATCH'));
+    expect(stale.status).toBe(409);
+    expect((await read(stale)).error.details).toMatchObject({ reason: 'VERSION_MISMATCH', currentVersion: 2 });
+  });
+
+  it('MUT-272: a write that lands between the read and the update is still a 409 from the store, and that write survives', async () => {
+    const { h, u, capture, list } = await setup();
+    const created = (await read(await capture())) as { id: string };
+    const real = h.store.inboxEntries.update.bind(h.store.inboxEntries);
+    let raced = false;
+    h.store.inboxEntries.update = async (owner, id, version, patch, at) => {
+      if (!raced) {
+        raced = true;
+        await real(owner, id, version, { note: 'other device' }, at);
+      }
+      return real(owner, id, version, patch, at);
+    };
+    const res = await h.app.request(`/v1/inbox/${created.id}`, json({ amount: '1.234', currency: 'JOD' }, { ...u.me(), 'if-match': '1' }, 'PATCH'));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'VERSION_MISMATCH', currentVersion: 2 });
+    expect((await read(await list())).items).toMatchObject([{ id: created.id, amount: '120.50', currency: 'ILS', note: 'other device', version: 2 }]);
+  });
+
   /** kind is not on the request schema at all, so asking to change it is a plain unknown-field refusal. */
   it('will not change the kind', async () => {
     const { h, u, capture } = await setup();

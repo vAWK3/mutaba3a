@@ -74,6 +74,9 @@ build and `terraform validate`, on every change under `server/`.
 | Conversions (MUT-161) | `src/conversions/__tests__/cursor.test.ts`, `compose.test.ts` | cursor round-trip + rejects a foreign-collection cursor; `conversionDate`/`parseConversionAmount` (positive, currency-aware precision, per-leg field name) / `assertDifferentCurrencies` (SAME_CURRENCY on `toCurrency`) |
 | Storage contract (conversions) | `store-contract-conversions.ts` via memory + Postgres runners | create + read inside one organization, newest-first (occurredOn, id) pagination without gaps/repeats, every filter incl. currency matching either leg |
 | Routes (conversions) | `src/__tests__/routes-conversions.test.ts` | 201 full shape incl. JOD 3-decimal; device-session create (MUT-64); AMOUNT_INVALID per leg with field name; SAME_CURRENCY; future-dated refused / backdated and today accepted (ADR-038); Idempotency-Key replay + reuse-refused; writability (API key 403 `PRINCIPAL_NOT_ACCEPTED` on every operation); list pagination + filters + cross-org isolation; get-by-id 404 cross-org/unknown; regression — a conversion leaves `/v1/summaries/organization` and `/v1/summaries/expenses` byte-identical |
+| Expense groups (MUT-267) | `src/expenses/__tests__/groups.test.ts`, `summary.test.ts` (`summarizeGroup`) | window end (open = start+365, R6), `isGroupMember` table (in/out of range × no mark/excluded/included), series bounds incl. future-start open group (C2), create/patch validation on the merged range (END_BEFORE_START, GROUP_RANGE_TOO_LONG 366/367, floor, unchanged date not re-checked); day buckets zero-filled + sparse before/after, buckets sum to the total per currency |
+| Storage contract (expense groups) | `store-contract-expense-groups.ts` via memory + Postgres runners; `migration-mut267.test.ts` | group CRUD + versioned update + soft delete per organization; one mark per (group, expense), last write wins, clear, per-expense lookup; member filter == `isGroupMember` on a 10-case fixture with cursor paging; excluded = in-window only; group filter AND other filters + inclusive anchor cursor; open group stops at a year; `totalsByCurrency` incl. overlapping groups and deleted expenses; migration from empty matches the schema, mode CHECK |
+| Routes (expense groups) | `src/__tests__/routes-expense-groups.test.ts` | AC1–AC9 one test each; Idempotency-Key replay + If-Match 409; list totals == summary; 6A after bucket; R6; 22A excluded moved out; `?expenseId=`; C4 anchor; cross-profile 404s (A1); API key 403 on all 8 operations |
 
 Malafat's contract test (`features/money/contract/__tests__/mutaba3a-contract.test.ts`)
 pins its client to the vendored `openapi.yaml` (TD-019 resolved). Not covered
@@ -2725,6 +2728,22 @@ Plan: `.claude/designs/mut-165-spacing-guard.md` (Section 3 test review). Each n
 
 **Pre-existing, not MUT-165 (MUT-250):** `@web.brand.layout` at 375px in Arabic, light and dark, fails on unchanged main 1150d40 too, reproduced before any MUT-165 change: Income and the income drawer measure 727px against the 726px `KNOWN_OVERFLOW` cap (TD-083). The cap is left at 726 by decision; MUT-250 fixes or re-measures it.
 
+## MUT-270 — GET /v1/entries (2026-10-18, ADR-093)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `server/src/entries/__tests__/merge.test.ts` (new) | Unit | 6 | branches interleave newest first with the id tie-break; a cursor only when rows exceed the limit, at the last row; empty input; `isBeforeCursor` strictness |
+| `server/src/payments/__tests__/allocation-state.test.ts` (new) | Unit | 2 | `incomeStatusOf`: unallocated / partial / allocated by applied amount; reversed wins |
+| `server/src/__tests__/routes-entries.test.ts` (new) | Route (memory store) | 14 | every kind across profiles newest logged first with its envelope; stable paging while a row lands between pages; no filter = every membership, named / repeated / duplicated `profileId`; 404 alike for another person's, unknown and malformed ids; the profile header ignored; deleted / undone entries out, a Malafat reversal in as `reversed`; `partial` / `allocated` / `origin`; installments out; READY live receipts counted; API key 403, anonymous 401; bad cursor / limit 422; 20 per page by default; a settle links `settlesOwedId` to its Owed and a Malafat correction `replacesPaymentId`; a partial settle links while the Owed reads open; the installment case posts a real installment |
+| `server/src/repositories/__tests__/store-contract-entries.ts` (new; memory + Postgres) | Contract | 5 each | merge across organizations and nothing from others; paging without gaps or repeats across equal instants; exclusions incl. a posted INSTALLMENT; receipt counts scoped to the organizations given; `settledOwedIds` links a one-allocation settle to its Owed, never a split, a bare capture or a payment to a scheduled installment |
+| `server/src/repositories/__tests__/store-prisma-entries-fanout.test.ts` (new) | Unit (fake Prisma) | 1 | at most 4 queries in flight over 10 organizations, all 40 branches still read |
+| `server/src/auth/__tests__/store-guard.test.ts` (changed) | Unit | +1 | `entries.list` is `sessionOnly`: a session on any profile writer, never an API key |
+| `server/src/repositories/__tests__/store-prisma-entries-plan.test.ts` (new; test:db) | Query plan | 2 | on a firm with 2,000 installments, every per-kind query is an ordered index scan on its MUT-270 index (no Seq Scan, Bitmap or Sort), and past a cursor the index range starts at `createdAt <=`; fails with the indexes dropped |
+| `server/src/__tests__/route-security.test.ts` (changed) | Contract | 0 new | `GET /v1/entries` in the session and device surfaces, organization-independent, API key refused |
+| `server/infrastructure/terraform/tests/database_pool.tftest.hcl` (new; `terraform test`, mocked Google + random) | Terraform | 3 | the DATABASE_URL ends `&connection_limit=10` and Cloud SQL has `max_connections` 50; a pool of 20 (2 × 20 + 10 = 50) is accepted and 21 refused by the precondition. CI now runs `terraform test` for this module too |
+
+Unchanged and green: `income-routes.test.ts`, `inbox-filing.test.ts` (fresh payments still `unallocated`), `store-guard.test.ts` (receipt count classified `{ read: 'expenses' }`), `routes-m2/m3/m4/m5/m6/m8.test.ts` (pinned `API_VERSION` bumped to 1.32.0-mut270).
+
 ## MUT-237 — change your own password (2026-10-16, ADR-037 amendment)
 
 | File | Kind | Tests | What it proves |
@@ -3027,3 +3046,38 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
     - Mutation evidence: the 8 new leak cases all leak under the previous rules (7 through the pattern, 1 through missing deny tokens), and a 4,000-object fuzz of Dart and `util.inspect` output finds 0 leaks under the new one (685 under the old).
   - **Third pass.** Leak cases: a quoted key over a `Set(2) {` container, `util.inspect` Map and URLSearchParams `=>` entries, Dart `Invalid argument (key):` and `RangeError (key):`, compound plurals. Untouched: `Invalid argument(s): …`. Each leak case leaks under the second-pass rules (scratch probe, 7 of 7).
 
+## MUT-268 — Portal expense groups (2026-10-18)
+
+| Area | Tests | Covers |
+|---|---|---|
+| Rules | `src/hosted/data/__tests__/expenseGroups.test.ts` (34) | calendar helpers, status/nudges/reached a year, window + action table + inverses, default currency, per day rounding, daily/weekly bars (locale week start, sum = total), other-currency days, category order, picker window, ≈ conversion (exponents, derived, missing rate, stale), optimistic marks (summary + rows, net zero), member filter, day grouping, sequential saves |
+| Queries | `src/hosted/data/__tests__/expenseGroupQueries.test.tsx` | every-page loop at 200 sorted oldest first; per-expense mark order incl. failure; overlay never double-counts when the summary reloads first; refused mark goes back; batch moves at once, saves in order, refetches once; expense edits invalidate groups; FX key outside the root |
+| URL | `filters.test.ts` | `?newGroup`, `?currency`, `?category=uuid|none`, `?editGroup`, `?addToGroup` |
+| Components | `DayBars.test.tsx`, `CategoryBars.test.tsx`, `Toast.test.tsx`, `src/lib/motion/__tests__/rowEnter.test.ts` | keyboard + RTL arrows, tab stop, dot/zero classes; toggles; toast action in both tones; row return LTR/RTL/reduced/no layout |
+| Pages | `src/hosted/pages/__tests__/ExpenseGroups.test.tsx` (23) | tabs aria-current, list order/totals/+N/nudges/error, create defaults + validation + POST/key + landing, GROUP_LIMIT fresh key, headline/≈/tab/chart/per day, members by day + Kept + verbs, optimistic leave out + Undo, category leave-out-all, Uncategorized, every 8A detail state, Arabic default, edit If-Match + delete confirm, picker pool/partial, In groups line |
+| Release-QA | `qa/specs/portal/expense-groups.spec.ts` (9, tagged `@portal.expense-groups.*`) | create, leave-out-undo, add-from-outside, currencies-converted, category-prune, states, in-groups-line, edit-delete, arabic-375 (no sideways scroll) |
+
+### MUT-280 — Gulf currencies on the server (2026-10-18)
+
+| Test | Covers |
+|---|---|
+| `server/src/__tests__/money.test.ts` › currency support, Gulf currencies | nine codes in order, exponents, KWD/GBP/lower-case unsupported, AED/SAR/QAR 2 dp, BHD/OMR 3 dp, over-precision refused, BHD ceiling = `MAX_AMOUNT_MINOR` |
+| `server/src/__tests__/fx-rates.test.ts` › crossRates, peg fixture | 9×9 equals a hand-built per-USD table with literal pegs; AED→SAR 1.021103, BHD→OMR 1.022606, ratio independent of the ECB snapshot; `derived` matrix (AED base: 8, USD base: the 6 pegged); `USD_PEGS` literal; `docs/fx/pegs.json` equals `USD_PEGS` |
+| `server/src/__tests__/routes-fx-rates.test.ts` | ILS base lists nine rows with the Gulf rates; base AED/BHD: nine rows, 8 derived; KWD 422; pegged base 503 with the provider down and nothing cached; every peg in the `derived` description |
+| `server/src/__tests__/routes-sessions.test.ts`, `routes-device-sessions.test.ts` › MUT-280 | `currencies` = `SUPPORTED_CURRENCIES` on POST /v1/sessions, GET /v1/me and POST /v1/device-sessions; bodies parse with `MeSchema` / `DeviceSessionSchema` |
+| `income-routes`, `routes-expenses`, `routes-conversions`, `routes-profiles` › MUT-280 | AED 1250.50 and BHD 12.345 income; BHD 4th / AED 3rd decimal / KWD → 422; OMR 0.385 expense, 4th decimal 422; AED→BHD conversion; SAR profile moved to QAR |
+| `server/src/import/__tests__/plan.test.ts` › MUT-280 | AED project planned as create; KWD → `UNSUPPORTED_CURRENCY` |
+| `server/src/repositories/__tests__/store-contract-expenses.ts` › MUT-280 | BHD 12_345n round-trips in both stores (Postgres via `test:db`) |
+| `scripts/__tests__/analytics-taxonomy.test.ts` | contract 1.2.0 pinned by sha256; its currencies equal the server list |
+
+### MUT-272 — expense currency edit (server half, 2026-10-18)
+
+| Test | Covers |
+|---|---|
+| `server/src/expenses/__tests__/compose.test.ts` › expensePatch currency | currency alone → AMOUNT_REQUIRED (changed or not); amount + currency → both set, read in the new currency's digits (JOD 3, JOD→USD 2); too many digits for the new currency → refused on amount; amount-only keeps the row's currency |
+| `server/src/__tests__/routes-expenses.test.ts` › MUT-272 ×5 | 422 AMOUNT_REQUIRED alone (USD and ILS), row unchanged; USD "1.234" → 422 amount; JOD 1.234 → 200 v2; stale If-Match → 409; USD → 200 v3; exact audit per version (`currency` + `amount` {from,to}), none on an amount-only edit; month summary under USD only; same currency resent → plain edit, no move audited; another profile's expense → 404, unchanged; JOD→USD move then stale JOD-shaped amount → 409 VERSION_MISMATCH (not 422) |
+| `server/src/__tests__/inbox-routes.test.ts` › MUT-272 ×2 | stale edit after a JOD→USD move → 409 before the amount is read; a write landing between read and update → store 409, that write survives |
+| `server/src/__tests__/routes-expenses.test.ts` › MUT-272 race | a write landing between read and update → store 409 with currentVersion 2, the other device's notes survive (fails with the stale mapping removed) |
+| `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` › PATCHes on edit | the currency select is disabled on edit (MUT-272 review; MUT-277 enables it) |
+| `server/src/__tests__/routes-expense-groups.test.ts` › MUT-272 | a moved member sums under JOD only, day buckets add up to the total, `?currency=JOD` lists it and `?currency=ILS` doesn't |
+| `server/src/repositories/__tests__/store-contract-expenses.ts` › MUT-272 | both stores write `currency` with `amountMinor` |

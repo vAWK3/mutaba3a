@@ -22,6 +22,7 @@ import { ApiError, type CreateExpenseRequest, type Expense, type UpdateExpenseRe
 import { HOSTED_CURRENCIES } from '../format/currencies';
 import { BrandLoader } from '../../components/brand/BrandLoader';
 import { trackPortal } from '../analytics/portalAnalytics';
+import { InGroupsLine } from './groups/InGroupsLine';
 
 /**
  * The hosted portal's expense capture (MUT-44). Builds on
@@ -146,8 +147,9 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
   const onSubmit = async (values: HostedExpenseFormValues) => {
     try {
       if (mode === 'edit' && existingExpense) {
-        // UpdateExpenseRequest has no `currency` field at all — the API never
-        // changes it on a PATCH — and its optional fields are `string | null`,
+        // This drawer sends no `currency` on edit (the API takes one only together
+        // with `amount`, ADR-096; a portal currency control is MUT-277), and
+        // UpdateExpenseRequest's optional fields are `string | null`,
         // where `null` clears the field and omission leaves it unchanged. Both
         // differ from CreateExpenseRequest, so this body is built separately
         // rather than sharing one object coerced across the two shapes.
@@ -247,6 +249,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
           errors={formState.errors}
           categories={categories ?? []}
           currencyOptions={HOSTED_CURRENCIES}
+          currencyDisabled={mode === 'edit'}
           amountInputMode="decimalText"
           labels={labels}
           vendorField={
@@ -315,6 +318,8 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
       {mode === 'edit' && existingExpense && (
         <ReceiptUploader profileId={profileId} expenseId={existingExpense.id} receipts={existingExpense.receipts} />
       )}
+      {/* MUT-268 (11A): the groups this expense is in, and Add to group… */}
+      {mode === 'edit' && existingExpense && <InGroupsLine profileId={profileId} expense={existingExpense} />}
     </Drawer>
   );
 }

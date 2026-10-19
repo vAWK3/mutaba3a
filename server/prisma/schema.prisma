@@ -196,10 +196,13 @@ model Organization {
   feeProposals FeeProposal[]
   memberships  Membership[]
 
-  expenses          Expense[]
-  expenseCategories ExpenseCategory[]
-  expenseReceipts   ExpenseReceipt[]
-  conversions       Conversion[]
+  expenses              Expense[]
+  expenseCategories     ExpenseCategory[]
+  expenseReceipts       ExpenseReceipt[]
+  conversions           Conversion[]
+  /// MUT-267: expense groups (trips) and their keep/leave-out marks.
+  expenseGroups         ExpenseGroup[]
+  expenseGroupOverrides ExpenseGroupOverride[]
 
   @@index([ownerUserId])
   @@map("organizations")
@@ -237,38 +240,40 @@ enum UserStatus {
 /// an operator only; there is no signup, invite or self-service reset. Not
 /// organization-scoped: access is the Membership join.
 model User {
-  id                String     @id @default(uuid()) @db.Uuid
+  id                 String     @id @default(uuid()) @db.Uuid
   /// Normalised before storage (trim, NFKC, lower-case), so uniqueness is case-insensitive.
-  email             String     @unique
-  displayName       String
+  email              String     @unique
+  displayName        String
   /// argon2id PHC string. The password itself is never stored.
   /// MUT-235: NULL until the person sets one through their setup link (and after a reset with --lock).
-  passwordHash      String?
+  passwordHash       String?
   /// 'en' | 'ar', validated by the API.
-  locale            String     @db.VarChar(5)
-  status            UserStatus @default(ACTIVE)
+  locale             String     @db.VarChar(5)
+  status             UserStatus @default(ACTIVE)
   /// Written by sign-in (MUT-38).
-  failedSignIns     Int        @default(0)
-  lockedUntil       DateTime?
-  passwordChangedAt DateTime
-  lastSignInAt      DateTime?
+  failedSignIns      Int        @default(0)
+  lockedUntil        DateTime?
+  passwordChangedAt  DateTime
+  lastSignInAt       DateTime?
   /// MUT-191: `{ off, dismissed[] }` for the Malafat suggestions; NULL = on, nothing dismissed.
   malafatSuggestions Json?
-  createdAt         DateTime
-  updatedAt         DateTime
+  createdAt          DateTime
+  updatedAt          DateTime
 
   memberships     Membership[]
   sessions        Session[]
   /// MUT-235: one-time setup links; at most one open at a time.
   setupLinks      AccountSetupToken[]
   /// MUT-120: the organization created with this user as their personal profile.
-  personalProfile Organization?  @relation("PersonalProfile")
+  personalProfile Organization?       @relation("PersonalProfile")
   /// MUT-182: every profile this user owns, the personal one included.
-  ownedProfiles   Organization[] @relation("OwnedProfiles")
+  ownedProfiles   Organization[]      @relation("OwnedProfiles")
 
   expenses            Expense[]
   expenseReceipts     ExpenseReceipt[]
   conversions         Conversion[]
+  /// MUT-267: groups this person created.
+  expenseGroups       ExpenseGroup[]
   /// MUT-65: income captured by this person.
   payments            Payment[]
   /// MUT-66: this person's unsorted captures, owned by them and by no profile.
@@ -742,6 +747,8 @@ model Receivable {
   @@index([organizationId, projectId])
   @@index([organizationId, dueDate])
   @@index([organizationId, createdAt, id])
+  /// MUT-270: the entries feed reads Owed (ADJUSTMENT) rows only, newest logged first.
+  @@index([organizationId, origin, createdAt, id])
   @@map("receivables")
 }
 
@@ -976,7 +983,9 @@ model Expense {
   updatedAt       DateTime
   deletedAt       DateTime?
 
-  receipts ExpenseReceipt[]
+  receipts       ExpenseReceipt[]
+  /// MUT-267: keep/leave-out marks on this expense, one per group at most.
+  groupOverrides ExpenseGroupOverride[]
 
   /// The ledger and the summary: newest first by date within an organization.
   @@index([organizationId, occurredOn(sort: Desc), id(sort: Desc)])
@@ -987,6 +996,8 @@ model Expense {
   @@index([organizationId, categoryId])
   /// MUT-182: a type change deletes categories; ON DELETE SET NULL then probes expenses by categoryId alone.
   @@index([categoryId])
+  /// MUT-270: the entries feed, newest logged first within an organization.
+  @@index([organizationId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("expenses")
 }
 
@@ -1062,5 +1073,53 @@ model Conversion {
 
   /// The ledger: newest first by date within an organization.
   @@index([organizationId, occurredOn(sort: Desc), id(sort: Desc)])
+  /// MUT-270: the entries feed, newest logged first within an organization.
+  @@index([organizationId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("conversions")
+}
+
+/// MUT-267 (ADR-094): a named date range on one profile. Members are worked out
+/// when read — dated inside the window (endOn, or a year after startOn when still
+/// going) and not left out, or kept — never stored.
+model ExpenseGroup {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @db.Uuid
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  name            String       @db.VarChar(120)
+  /// Calendar dates in the organization timezone, YYYY-MM-DD; endOn null = still going.
+  startOn         String       @db.VarChar(10)
+  endOn           String?      @db.VarChar(10)
+  notes           String?
+  createdByUserId String       @db.Uuid
+  createdBy       User         @relation(fields: [createdByUserId], references: [id])
+  version         Int          @default(1)
+  createdAt       DateTime
+  updatedAt       DateTime
+  deletedAt       DateTime?
+
+  overrides ExpenseGroupOverride[]
+
+  /// The groups list: newest start first within an organization.
+  @@index([organizationId, startOn(sort: Desc), id(sort: Desc)])
+  @@map("expense_groups")
+}
+
+/// MUT-267: one keep ('included') or leave-out ('excluded') mark per (group, expense).
+/// Last write wins; deleting the row resets the expense to the date rule.
+model ExpenseGroupOverride {
+  groupId        String       @db.Uuid
+  group          ExpenseGroup @relation(fields: [groupId], references: [id])
+  expenseId      String       @db.Uuid
+  expense        Expense      @relation(fields: [expenseId], references: [id])
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  /// 'excluded' | 'included' (CHECK constraint in the migration).
+  mode           String       @db.VarChar(8)
+  createdAt      DateTime
+  updatedAt      DateTime
+
+  @@id([groupId, expenseId])
+  /// "Which groups is this expense in?" (GET /v1/expense-groups?expenseId=).
+  @@index([expenseId])
+  @@map("expense_group_overrides")
 }

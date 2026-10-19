@@ -129,6 +129,16 @@ describe('owned profiles (MUT-182)', () => {
   });
 });
 
+describe('the entries feed (MUT-270)', () => {
+  it('lets a session read the feed across its own profiles, on any profile writer, and refuses an API key', () => {
+    const access = STORE_ACCESS.entries.list;
+    expect(access).toBe('sessionOnly');
+    expect(storeRefusal('session', null, access)).toBeNull();
+    expect(storeRefusal('session', 'MALAFAT', access)).toBeNull();
+    expect(storeRefusal('apiKey', null, access)?.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+  });
+});
+
 describe('the inbox (MUT-66)', () => {
   it('accepts a session and no other principal for the six session-only methods', () => {
     expect(storeRefusal('session', null, 'sessionOnly')).toBeNull();

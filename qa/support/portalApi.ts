@@ -23,7 +23,7 @@ export const todayInJerusalem = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
 type Json = Record<string, unknown>;
-type Currency = 'ILS' | 'USD' | 'EUR' | 'JOD';
+type Currency = 'ILS' | 'USD' | 'EUR' | 'JOD' | 'AED' | 'SAR' | 'QAR' | 'BHD' | 'OMR';
 
 export interface Logged {
   method: string;
@@ -219,6 +219,48 @@ export function conversion(n: number, c: { amount: string; currency: Currency; t
 }
 export type StubConversion = ReturnType<typeof conversion>;
 
+/** An expense group (MUT-267/268); `windowEnd` follows the API: the end, or a year after the start when open. */
+export function expenseGroup(n: number, g: { name: string; startOn: string; endOn?: string | null; notes?: string | null }) {
+  const endOn = g.endOn ?? null;
+  return {
+    id: uid(0xb, n),
+    name: g.name,
+    startOn: g.startOn,
+    endOn,
+    windowEnd: endOn ?? addDays(g.startOn, 365),
+    notes: g.notes ?? null,
+    createdByUserId: STUB_USER_ID,
+    version: 1,
+    createdAt: STAMP,
+    updatedAt: STAMP,
+  };
+}
+export type StubGroup = ReturnType<typeof expenseGroup>;
+type Mark = 'excluded' | 'included';
+
+const addDays = (day: string, days: number) => {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+const exponent = (currency: string) => (currency === 'JOD' || currency === 'BHD' || currency === 'OMR' ? 3 : 2);
+const minorOf = (amount: string, currency: string) => Math.round(Number(amount) * 10 ** exponent(currency));
+const decimalOf = (minor: number, currency: string) => (minor / 10 ** exponent(currency)).toFixed(exponent(currency));
+
+/** Today's reference rates against ILS, the stub profiles' default currency (MUT-228 shape). */
+export const FX_RATES_ILS = {
+  base: 'ILS',
+  rateDate: '2026-10-17',
+  fetchedAt: '2026-10-18T06:00:00.000Z',
+  source: 'live',
+  rates: [
+    { currency: 'ILS', rate: 1, derived: false },
+    { currency: 'USD', rate: 0.27, derived: false },
+    { currency: 'EUR', rate: 0.25, derived: false },
+    { currency: 'JOD', rate: 0.191428, derived: true },
+  ],
+};
+
 /** A per-currency block of the organization summary (OverviewPage, ClientsPage). */
 export function currencyBlock(
   currency: Currency,
@@ -305,6 +347,13 @@ export interface FakeApiSeed {
   categories?: ReturnType<typeof category>[];
   expenses?: StubExpense[];
   conversions?: StubConversion[];
+  /** Expense groups (MUT-268) and their keep / leave-out marks, keyed `groupId:expenseId`. */
+  groups?: StubGroup[];
+  marks?: Record<string, Mark>;
+  /** The profiles' today (YYYY-MM-DD) for group series; specs fix the browser clock to the same day. */
+  today?: string;
+  /** GET /v1/fx-rates: these rates (default FX_RATES_ILS), or 503 when 'unavailable'. */
+  fxRates?: Json | 'unavailable';
   summary?: ReturnType<typeof currencyBlock>[];
   customerSummaries?: ReturnType<typeof customerSummary>[];
   /** Expenses a type change would leave uncategorized (GET …/type-change). */
@@ -338,6 +387,10 @@ export class FakeApi {
   private readonly categories;
   private readonly expenses;
   private readonly conversions;
+  private readonly groups: StubGroup[];
+  private readonly marks: Map<string, Mark>;
+  private readonly today: string;
+  private readonly fxRates: Json | 'unavailable';
   private readonly summary;
   private readonly customerSummaries;
   private readonly uncategorized: number;
@@ -357,6 +410,10 @@ export class FakeApi {
     this.categories = [...(seed.categories ?? [])];
     this.expenses = [...(seed.expenses ?? [])];
     this.conversions = [...(seed.conversions ?? [])];
+    this.groups = [...(seed.groups ?? [])];
+    this.marks = new Map(Object.entries(seed.marks ?? {}));
+    this.today = seed.today ?? todayInJerusalem();
+    this.fxRates = seed.fxRates ?? FX_RATES_ILS;
     this.summary = seed.summary ?? [];
     this.customerSummaries = new Map((seed.customerSummaries ?? []).map((s) => [s.customerId, s]));
     this.uncategorized = seed.uncategorizedOnTypeChange ?? 0;
@@ -503,6 +560,8 @@ export class FakeApi {
     }
     if (resource === 'expense-categories' && method === 'GET') return json({ items: this.categories });
     if (resource === 'expenses') return this.expenseAnswer(e, id, sub, subId, action);
+    if (resource === 'expense-groups') return this.groupAnswer(e, id, sub, subId);
+    if (resource === 'fx-rates' && method === 'GET') return this.fxRates === 'unavailable' ? json({ error: { code: 'FX_RATES_UNAVAILABLE', message: 'No rates' } }, 503) : json(this.fxRates);
     if (resource === 'conversions') return this.conversionAnswer(e, id);
     return undefined;
   }
@@ -661,11 +720,17 @@ export class FakeApi {
     const q = (key: string) => e.query.get(key) ?? undefined;
     if (!id) {
       if (e.method === 'GET') {
-        return page(
-          this.expenses
-            .filter((x) => (!q('categoryId') || x.categoryId === q('categoryId')) && (!q('customerId') || x.customerId === q('customerId')))
-            .map(listed),
-        );
+        const groupId = q('groupId');
+        const group = groupId ? this.groups.find((g) => g.id === groupId) : undefined;
+        if (groupId && !group) return notFound();
+        const rows = this.expenses
+          .filter((x) => (!q('categoryId') || x.categoryId === q('categoryId')) && (!q('customerId') || x.customerId === q('customerId')))
+          .filter((x) => (!q('from') || x.occurredOn >= q('from')!) && (!q('to') || x.occurredOn <= q('to')!))
+          .filter((x) => !group || (q('groupMembership') === 'excluded' ? this.isLeftOut(group, x) : this.isMember(group, x)))
+          .sort((a, b) => (a.occurredOn === b.occurredOn ? (a.id < b.id ? 1 : -1) : a.occurredOn < b.occurredOn ? 1 : -1))
+          .map(listed);
+        // Group members come back in pages of two, so the portal's every-page loop is exercised (eng R7)
+        return group ? paged(rows, 2, q('cursor')) : page(rows);
       }
       if (e.method === 'POST') {
         const b = e.body as Json;
@@ -713,6 +778,133 @@ export class FakeApi {
     return undefined;
   }
 
+  private mark(group: StubGroup, expenseId: string): Mark | undefined {
+    return this.marks.get(`${group.id}:${expenseId}`);
+  }
+
+  private inWindow(group: StubGroup, day: string) {
+    return day >= group.startOn && day <= group.windowEnd;
+  }
+
+  /** The API's rule (MUT-267 D4): in the window and not left out, or kept. */
+  private isMember(group: StubGroup, x: StubExpense) {
+    const mark = this.mark(group, x.id);
+    return mark === 'included' || (this.inWindow(group, x.occurredOn) && mark !== 'excluded');
+  }
+
+  /** Left out = an excluded mark on an expense dated inside the window (22A). */
+  private isLeftOut(group: StubGroup, x: StubExpense) {
+    return this.mark(group, x.id) === 'excluded' && this.inWindow(group, x.occurredOn);
+  }
+
+  private members(group: StubGroup) {
+    return this.expenses.filter((x) => this.isMember(group, x));
+  }
+
+  private totals(group: StubGroup) {
+    const byCurrency = new Map<string, { currency: string; minor: number; count: number }>();
+    for (const x of this.members(group)) {
+      const t = byCurrency.get(x.currency) ?? { currency: x.currency, minor: 0, count: 0 };
+      t.minor += minorOf(x.amount, x.currency);
+      t.count += 1;
+      byCurrency.set(x.currency, t);
+    }
+    // Alphabetical by currency, as the API orders them
+    return [...byCurrency.values()].sort((a, b) => (a.currency < b.currency ? -1 : 1)).map((t) => ({ currency: t.currency, total: decimalOf(t.minor, t.currency), count: t.count }));
+  }
+
+  private listedGroup(group: StubGroup) {
+    const currencies = this.totals(group);
+    return { ...group, currencies, memberCount: currencies.reduce((n, c) => n + c.count, 0) };
+  }
+
+  /** The summary as the API builds it: series zero-filled per currency, sparse before/after buckets (6A). */
+  private groupSummary(group: StubGroup) {
+    const seriesFrom = group.startOn;
+    const seriesTo = group.endOn ?? (this.today < group.startOn ? group.startOn : this.today < group.windowEnd ? this.today : group.windowEnd);
+    const currencies = this.totals(group).map(({ currency, total, count }) => {
+      const rows = this.members(group).filter((x) => x.currency === currency);
+      const buckets = new Map<string, { date: string; position: string; minor: number; count: number }>();
+      for (let day = seriesFrom; day <= seriesTo; day = addDays(day, 1)) buckets.set(day, { date: day, position: 'in', minor: 0, count: 0 });
+      const categories = new Map<string | null, { minor: number; count: number }>();
+      for (const x of rows) {
+        const position = x.occurredOn < seriesFrom ? 'before' : x.occurredOn > seriesTo ? 'after' : 'in';
+        const b = buckets.get(x.occurredOn) ?? { date: x.occurredOn, position, minor: 0, count: 0 };
+        b.minor += minorOf(x.amount, currency);
+        b.count += 1;
+        buckets.set(x.occurredOn, b);
+        const c = categories.get(x.categoryId) ?? { minor: 0, count: 0 };
+        c.minor += minorOf(x.amount, currency);
+        c.count += 1;
+        categories.set(x.categoryId, c);
+      }
+      return {
+        currency,
+        total,
+        count,
+        byCategory: [...categories.entries()].map(([categoryId, c]) => ({ categoryId, total: decimalOf(c.minor, currency), count: c.count })),
+        byCustomer: [],
+        byDay: [...buckets.values()].sort((a, b) => (a.date < b.date ? -1 : 1)).map((b) => ({ date: b.date, position: b.position, total: decimalOf(b.minor, currency), count: b.count })),
+      };
+    });
+    return { groupId: group.id, seriesFrom, seriesTo, currencies };
+  }
+
+  private groupAnswer(e: Logged, id?: string, sub?: string, subId?: string) {
+    if (!id) {
+      if (e.method === 'GET') {
+        const expenseId = e.query.get('expenseId');
+        const groups = [...this.groups].sort((a, b) => (a.startOn < b.startOn ? 1 : -1));
+        const expense = expenseId ? this.expenses.find((x) => x.id === expenseId) : undefined;
+        return json({ items: groups.filter((g) => !expenseId || (expense && this.isMember(g, expense))).map((g) => this.listedGroup(g)) });
+      }
+      if (e.method === 'POST') {
+        const b = e.body as { name: string; startOn: string; endOn?: string; notes?: string };
+        const made = { ...expenseGroup(this.serial++, b), id: this.nextId(0xb) };
+        this.groups.push(made);
+        return json(this.listedGroup(made), 201);
+      }
+      return undefined;
+    }
+    const group = this.groups.find((g) => g.id === id);
+    if (!group) return notFound();
+    if (!sub) {
+      if (e.method === 'GET') return json({ ...this.listedGroup(group), excludedCount: this.expenses.filter((x) => this.isLeftOut(group, x)).length });
+      if (e.method === 'PATCH') {
+        if (e.headers['if-match'] !== String(group.version)) return conflict('VERSION_MISMATCH');
+        const b = e.body as { name?: string; startOn?: string; endOn?: string | null; notes?: string | null };
+        Object.assign(group, b, { version: group.version + 1 });
+        group.windowEnd = group.endOn ?? addDays(group.startOn, 365);
+        return json(this.listedGroup(group));
+      }
+      if (e.method === 'DELETE') {
+        this.groups.splice(this.groups.indexOf(group), 1);
+        return { status: 204, body: '' };
+      }
+      return undefined;
+    }
+    if (sub === 'summary' && e.method === 'GET') return json(this.groupSummary(group));
+    if (sub === 'expenses' && subId) {
+      if (!this.expenses.some((x) => x.id === subId)) return notFound();
+      const key = `${group.id}:${subId}`;
+      if (e.method === 'PUT') {
+        const mode = (e.body as { mode: Mark }).mode;
+        this.marks.set(key, mode);
+        return json({ groupId: group.id, expenseId: subId, mode, updatedAt: STAMP });
+      }
+      if (e.method === 'DELETE') {
+        this.marks.delete(key);
+        return { status: 204, body: '' };
+      }
+    }
+    return undefined;
+  }
+
+  /** The mark the portal left on an expense for a group, for assertions. */
+  markOf(groupId: string, expenseId: string): Mark | undefined {
+    return this.marks.get(`${groupId}:${expenseId}`);
+  }
+
   private conversionAnswer(e: Logged, id?: string) {
     if (!id) {
       if (e.method === 'GET') return page(this.conversions.filter((c) => !e.query.get('currency') || c.currency === e.query.get('currency') || c.toCurrency === e.query.get('currency')));
@@ -752,6 +944,12 @@ function json(body: unknown, status = 200) {
 }
 function page(items: unknown[]) {
   return json({ items, nextCursor: null });
+}
+/** A cursor list in pages of `size`; the cursor is the next index. */
+function paged(items: unknown[], size: number, cursor?: string) {
+  const start = cursor ? Number(cursor) : 0;
+  const end = start + size;
+  return json({ items: items.slice(start, end), nextCursor: end < items.length ? String(end) : null });
 }
 function notFound() {
   return json({ error: { code: 'NOT_FOUND', message: 'Not found' } }, 404);

@@ -8,8 +8,10 @@ import { endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { assertCategoryChoosable, expenseDate, expenseOccurredOn, expensePatch, MAX_RECEIPTS_PER_EXPENSE, parseExpenseAmount, requestedLinks, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
+import { groupFilter } from '../expenses/groups.js';
 import { summarizeExpenses } from '../expenses/summary.js';
 import { idempotent } from '../idempotency.js';
+import { formatMoney, type Currency } from '../money.js';
 import { ifMatch } from '../if-match.js';
 import type { ExpenseFilter, ExpenseRecord, JsonObject, LedgerStore } from '../repositories/ports.js';
 import {
@@ -98,6 +100,13 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
         ...(q.projectId ? { projectId: q.projectId } : {}),
         ...(q.linked === 'none' ? { unlinked: true } : {}),
       };
+      // MUT-267: a group's members (or its left-out expenses inside its window); 404 for a group this profile does not have.
+      if (q.groupMembership && !q.groupId) throw validationError('GROUP_ID_REQUIRED', '`groupMembership` needs `groupId`', { field: 'groupMembership' });
+      if (q.groupId) {
+        const group = await store.expenseGroups.getById(organization.id, q.groupId);
+        if (!group) throw new ApiError('NOT_FOUND', 'No such expense group');
+        filter.group = groupFilter(group, q.groupMembership ?? 'member');
+      }
       const cursor = await ledgerPageStart(q, decodeExpenseCursor, (id) => store.expenses.getById(organization.id, id), 'No such expense');
       const page = await store.expenses.list(organization.id, filter, { limit: q.limit, cursor });
       return c.json({ items: page.items.map(serializeExpense), nextCursor: page.nextCursor ? encodeExpenseCursor(page.nextCursor) : null }, 200);
@@ -159,7 +168,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       path: '/v1/expenses/{expenseId}',
       tags: ['Expenses'],
       summary: 'Change an expense (optimistic, If-Match)',
-      description: 'Any field but the currency, which never changes. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.',
+      description: 'Any field. A currency changes only together with its amount (422 AMOUNT_REQUIRED), and the amount is read in the merged currency\'s digits. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.',
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write'), ifMatch()] as const,
       request: { params: ExpenseIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateExpenseRequestSchema) },
@@ -169,14 +178,25 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const { organization } = sessionAuth(c);
       const body = c.req.valid('json');
       const existing = await mustGet(organization.id, c.req.valid('param').expenseId);
+      // MUT-272: stale is a 409 before the body's business rules run (zod schema validation still runs first). The
+      // amount is parsed in the row's current currency, which a newer version may have changed (JOD → USD would make a
+      // stale "13.456" look like a bad amount). The store's version check below still covers a write after this read.
+      if (existing.version !== c.get('expectedVersion')) throw versionMismatch(existing.version);
       const patch = expensePatch(existing, todayFor(organization, c.get('now')()), body);
       const links = requestedLinks(existing, body);
       if (links) Object.assign(patch, await resolveLinks(store, organization.id, links));
       if (patch.categoryId && patch.categoryId !== existing.categoryId) await assertCategoryChoosable(store, organization.id, patch.categoryId);
+      // MUT-272: a currency move rewrites the amount too, so the audit keeps both sides of it. Built before the
+      // write, so nothing that can throw runs after it commits.
+      const money = (minor: bigint, currency: string) => formatMoney({ minor, currency: currency as Currency });
+      const currencyMove =
+        patch.currency !== undefined && patch.currency !== existing.currency
+          ? { currency: { from: existing.currency, to: patch.currency }, amount: { from: money(existing.amountMinor, existing.currency), to: money(patch.amountMinor!, patch.currency) } }
+          : {};
       const result = await withCategoryForeignKey(() => store.expenses.update(organization.id, existing.id, c.get('expectedVersion'), patch, c.get('now')()));
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such expense');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
-      await audit(c, 'expense.updated', 'expense', result.record.id, { fields: Object.keys(body), version: result.record.version });
+      await audit(c, 'expense.updated', 'expense', result.record.id, { fields: Object.keys(body), version: result.record.version, ...currencyMove });
       return c.json(serializeExpense(result.record), 200);
     },
   );

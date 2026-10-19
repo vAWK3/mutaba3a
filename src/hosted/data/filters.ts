@@ -1,4 +1,5 @@
 import type { Currency } from '../api/client';
+import { HOSTED_CURRENCIES } from '../format/currencies';
 
 /**
  * One filters object per list view, kept in the URL's search params and updated
@@ -9,8 +10,8 @@ import type { Currency } from '../api/client';
 
 type Raw = Record<string, unknown>;
 
-/** The wire currencies a list can filter by. JOD since MUT-194 (TD-117): the server accepts it on every money field. */
-const CURRENCIES = ['ILS', 'USD', 'EUR', 'JOD'] as const;
+/** The wire currencies a list can filter by -- derives from HOSTED_CURRENCIES (MUT-281) instead of its own copy. */
+const CURRENCIES = HOSTED_CURRENCIES;
 const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -144,6 +145,32 @@ export const parseConversionDrawer = (raw: Raw): ConversionDrawerSearch =>
 /** The /conversions route's full search: the list's own filters plus the drawer's open state. */
 export type ConversionsPageSearch = ConversionFilters & ConversionDrawerSearch;
 export const parseConversionsPage = (raw: Raw): ConversionsPageSearch => ({ ...parseConversions(raw), ...parseConversionDrawer(raw) });
+
+/** Expenses › Groups (MUT-268, 1A): `?newGroup=1` opens New group. */
+export interface GroupsPageSearch {
+  newGroup?: true;
+}
+// TanStack parses `?newGroup=1` to the number 1
+const one = (value: unknown): true | undefined => (value === '1' || value === 1 || value === true ? true : undefined);
+export const parseGroupsPage = (raw: Raw): GroupsPageSearch => compact({ newGroup: one(raw.newGroup) });
+
+/**
+ * One group's page: the currency tab (5A), the category filter (13A; `none` is
+ * Uncategorized, 23A) and its drawers, `?editGroup=1` and `?addToGroup=1`.
+ */
+export interface GroupDetailSearch {
+  currency?: Currency;
+  category?: string;
+  editGroup?: true;
+  addToGroup?: true;
+}
+export const parseGroupDetail = (raw: Raw): GroupDetailSearch =>
+  compact({
+    currency: oneOf(raw.currency, CURRENCIES),
+    category: raw.category === 'none' ? 'none' : id(raw.category),
+    editGroup: one(raw.editGroup),
+    addToGroup: one(raw.addToGroup),
+  });
 
 export const INCOME_KINDS = ['received', 'owed'] as const;
 

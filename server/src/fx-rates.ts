@@ -7,17 +7,38 @@ import { SUPPORTED_CURRENCIES, type Currency } from './money.js';
  * Reference exchange rates for display (MUT-228, ADR-087).
  *
  * The ECB publishes a daily euro reference rate for USD and ILS; Frankfurter
- * serves it as JSON with no key. JOD is not in the ECB set, so it is derived
- * from the Central Bank of Jordan's USD peg. Rates here are a hint for people
- * entering money in another currency: nothing stores them on a record.
+ * serves it as JSON with no key. JOD and the Gulf currencies are not in the
+ * ECB set; each is fixed to the US dollar by its central bank, so its rate
+ * comes from that peg (USD_PEGS, ADR-098). Every pair is priced through USD.
+ * Rates here are a hint for people entering money in another currency:
+ * nothing stores them on a record.
  *
  * The cache is in process, so it is per instance, the same honesty as the
  * rate limiter (TD-017): a new instance that starts while the provider is down
  * has nothing to serve and answers 503 until the provider is back.
  */
 
-/** 1 USD = 0.709 JOD, the Central Bank of Jordan's peg since 1995. A change is a deploy, not an env flip. */
-export const JOD_PER_USD = 0.709;
+/** The currencies the ECB snapshot prices directly. Every other supported currency must have a USD peg. */
+type EcbCurrency = 'USD' | 'EUR' | 'ILS';
+export type PeggedCurrency = Exclude<Currency, EcbCurrency>;
+
+/**
+ * Units per 1 USD, each fixed by its central bank (ADR-087 §3, ADR-098). Keyed by every currency the ECB
+ * doesn't price, so a new code with no rate source fails typecheck. A re-peg is a deploy, not an env flip;
+ * docs/fx/pegs.json mirrors this table for the web and phone tests.
+ */
+export const USD_PEGS: Readonly<Record<PeggedCurrency, number>> = {
+  JOD: 0.709, // Central Bank of Jordan, since 1995
+  AED: 3.6725, // Central Bank of the UAE
+  SAR: 3.75, // Saudi Central Bank
+  QAR: 3.64, // Qatar Central Bank
+  BHD: 0.376, // Central Bank of Bahrain
+  OMR: 0.3845, // Central Bank of Oman
+};
+
+export function isPegged(currency: Currency): currency is PeggedCurrency {
+  return Object.hasOwn(USD_PEGS, currency);
+}
 const RATE_DECIMALS = 6;
 /** After a failed refresh, how long to answer from what we have before asking the provider again. */
 export const DEFAULT_FX_FAILURE_BACKOFF_MS = 60_000;
@@ -35,24 +56,25 @@ export interface EcbSnapshot {
   perEur: { USD: number; ILS: number };
 }
 
-/** Units of `currency` per 1 base. `derived` = the USD peg was used (exactly one side is JOD). */
+/** Units of `currency` per 1 base. `derived` = a USD peg was used (either side is pegged, not base→base). */
 export interface FxRate {
   currency: Currency;
   rate: number;
   derived: boolean;
 }
 
+/** Every pair goes through USD (D3): rate(base → currency) = perUsd[currency] / perUsd[base]. */
 export function crossRates(snapshot: EcbSnapshot, base: Currency): FxRate[] {
-  const perEur: Record<Currency, number> = {
-    EUR: 1,
-    USD: snapshot.perEur.USD,
-    ILS: snapshot.perEur.ILS,
-    JOD: snapshot.perEur.USD * JOD_PER_USD,
+  const perUsd: Record<Currency, number> = {
+    USD: 1,
+    EUR: 1 / snapshot.perEur.USD,
+    ILS: snapshot.perEur.ILS / snapshot.perEur.USD,
+    ...USD_PEGS,
   };
   return SUPPORTED_CURRENCIES.map((currency) => ({
     currency,
-    rate: currency === base ? 1 : Number((perEur[currency] / perEur[base]).toFixed(RATE_DECIMALS)),
-    derived: currency !== base && (currency === 'JOD' || base === 'JOD'),
+    rate: currency === base ? 1 : Number((perUsd[currency] / perUsd[base]).toFixed(RATE_DECIMALS)),
+    derived: currency !== base && (isPegged(currency) || isPegged(base)),
   }));
 }
 

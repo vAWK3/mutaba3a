@@ -26,6 +26,7 @@ const SAME_ORIGIN = { origin: 'http://localhost' };
 const CANARY_VENDOR = 'ZZ-EXPENSE-CANARY';
 const CANARY_AMOUNT = '987.65';
 const CANARY_CATEGORY = 'ZZ-CATEGORY-CANARY';
+const CANARY_GROUP = 'ZZ-GROUP-CANARY';
 const SHARED_KEY = 'shared-idempotency-0001';
 
 const json = (body: unknown, headers: Record<string, string> = {}, method = 'POST') => ({
@@ -76,10 +77,14 @@ beforeAll(async () => {
   storage.put(`org/${org.id}/expense-receipts/${started.receipt.id}`, { sizeBytes: 64, contentType: 'application/pdf' });
   expect((await app.request(`/v1/expenses/${expense.id}/receipts/${started.receipt.id}/complete`, { method: 'POST', headers: session })).status).toBe(200);
   canaryIds.push(expense.id, started.receipt.id, category.id);
+  // MUT-267: a group and a mark on the canary expense, so expense_group audit rows (whose metadata names the expense) exist.
+  const group = await read(await app.request('/v1/expense-groups', json({ name: CANARY_GROUP, startOn: '2026-10-01', endOn: '2026-10-07' }, { ...session, 'idempotency-key': 'group-0000000001' })));
+  expect((await app.request(`/v1/expense-groups/${group.id}/expenses/${expense.id}`, json({ mode: 'excluded' }, session, 'PUT'))).status).toBe(200);
+  canaryIds.push(group.id);
 });
 
 function leaks(text: string): string[] {
-  return [CANARY_VENDOR, CANARY_AMOUNT, CANARY_CATEGORY, 'canary.pdf', ...canaryIds].filter((needle) => text.includes(needle));
+  return [CANARY_VENDOR, CANARY_AMOUNT, CANARY_CATEGORY, CANARY_GROUP, 'canary.pdf', ...canaryIds].filter((needle) => text.includes(needle));
 }
 
 describe('Malafat’s key reads nothing of a hosted profile’s expenses', () => {
@@ -114,6 +119,12 @@ describe('Malafat’s key reads nothing of a hosted profile’s expenses', () =>
     const listed = await read(await app.request('/v1/audit?limit=200', { headers: key }));
     expect(listed.items.filter((e: Loose) => String(e.entityType).startsWith('expense'))).toEqual([]);
     expect(await read(await app.request('/v1/audit?entityType=expense', { headers: key }))).toMatchObject({ items: [] });
+  });
+
+  it('GET /v1/audit lists no expense-group activity (MUT-267), though it is recorded', async () => {
+    const recorded = (await store.audit.list(orgId, {}, { limit: 500, cursor: null })).items.filter((e) => e.entityType === 'expense_group');
+    expect(recorded.map((e) => e.action).sort()).toEqual(['expense_group.created', 'expense_group.expense_marked']);
+    expect(await read(await app.request('/v1/audit?entityType=expense_group', { headers: key }))).toMatchObject({ items: [] });
   });
 
   it('a session’s Idempotency-Key is its own: Malafat can neither look it up nor collide with it', async () => {

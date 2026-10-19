@@ -6323,6 +6323,10 @@ export interface paths {
                     projectId?: string;
                     /** @description `none`: only expenses linked to no client */
                     linked?: "none";
+                    /** @description MUT-267: only this group's members (or, with groupMembership=excluded, its left-out expenses dated inside its window). 404 for a group this profile does not have. */
+                    groupId?: string;
+                    /** @description Requires groupId (422 GROUP_ID_REQUIRED without it). Default `member`. */
+                    groupMembership?: "member" | "excluded";
                 };
                 header?: never;
                 path?: never;
@@ -6610,7 +6614,7 @@ export interface paths {
         head?: never;
         /**
          * Change an expense (optimistic, If-Match)
-         * @description Any field but the currency, which never changes. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.
+         * @description Any field. A currency changes only together with its amount (422 AMOUNT_REQUIRED), and the amount is read in the merged currency's digits. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.
          */
         patch: {
             parameters: {
@@ -7662,6 +7666,642 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/expense-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List expense groups, newest start first, with their totals per currency
+         * @description Unpaged: a profile holds at most 200 live groups. With expenseId, only the groups that expense belongs to (dated in the window and not left out, or kept); 404 for an expense this profile does not have.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Only the groups this expense belongs to (dated in the window and not left out, or kept) */
+                    expenseId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The groups */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseGroupList"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create an expense group
+         * @description Expenses dated from startOn to endOn (or, with no endOn, to a year after startOn) join automatically, including ones logged later. A profile holds at most 200 live groups (422 GROUP_LIMIT).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateExpenseGroupRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseGroup"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/expense-groups/{groupId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An expense group with its totals and how many expenses inside its window are left out */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    groupId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The group */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseGroupDetail"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Delete an expense group (soft; its expenses are untouched)
+         * @description 204 again for a group already deleted; 404 for an id this profile never had.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    groupId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Done */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /**
+         * Change an expense group (optimistic, If-Match)
+         * @description null endOn = still going; null clears the notes. The merged range is checked. Keep and leave-out marks stay when the dates change. A stale If-Match is a 409 before any validation; a PATCH that changes nothing returns the group unchanged (same version, no audit).
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    groupId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateExpenseGroupRequest"];
+                };
+            };
+            responses: {
+                /** @description Changed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseGroup"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/expense-groups/{groupId}/expenses/{expenseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Keep (included) or leave out (excluded) one expense
+         * @description Idempotent; the last mark wins. Any mark is accepted on any expense of the profile, and it stays when the expense's date changes. 404 for a group or expense this profile does not have.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    groupId: string;
+                    expenseId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetExpenseGroupOverrideRequest"];
+                };
+            };
+            responses: {
+                /** @description Marked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseGroupOverride"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /**
+         * Remove a keep or leave-out mark: the expense follows the date rule again
+         * @description 204 whether or not a mark existed; 404 for a group this profile does not have.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    groupId: string;
+                    expenseId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Done */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/expense-groups/{groupId}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A group's spending per currency, by category, by client and by day
+         * @description One block per currency, never summed or converted (ADR-004, ADR-087). byDay zero-fills seriesFrom..seriesTo and adds a bucket for every member dated outside it (position before/after), so each currency's buckets sum to its total.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    groupId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Summary */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseGroupSummary"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/conversions": {
         parameters: {
             query?: never;
@@ -8441,7 +9081,7 @@ export interface paths {
         head?: never;
         /**
          * Fix an unsorted entry (optimistic, If-Match)
-         * @description Anything you captured. Not kind: what an entry is destined to become is fixed at capture, as an expense's currency is. null clears an optional field.
+         * @description Anything you captured. Not kind: what an entry is destined to become is fixed at capture. A changed currency needs the amount again (422 AMOUNT_INVALID), read in that currency's digits. null clears an optional field.
          */
         patch: {
             parameters: {
@@ -8726,6 +9366,97 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your entries across profiles, newest logged first
+         * @description Expenses, received payments, Owed entries and conversions on every profile you belong to (or the profiles you name), ordered by when each was logged. Everything on a profile, whoever logged it, Malafat's payments included; scheduled installments and retainer charges are not entries. No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox. A page is a snapshot: an entry edited or deleted later changes only when that page is read again (a deleted one is simply absent), so cache only the pages you re-read. A settle shows as a received payment with settlesOwedId next to its Owed (settled once paid in full, open before); a Malafat correction as a received payment with replacesPaymentId next to the reversed one.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404. */
+                    profileId?: string[];
+                    /** @description Page size, 1–100. */
+                    limit?: number;
+                    /** @description Opaque `nextCursor` from the previous page. */
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EntryPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9935,6 +10666,21 @@ export interface components {
             };
             profiles: components["schemas"]["HostedProfile"][];
             limits: components["schemas"]["ProfileLimits"];
+            /**
+             * @description Every currency code this server accepts, in its supported order. Clients offer only the codes they also know and ignore the rest. Servers older than MUT-280 omit the field.
+             * @example [
+             *       "ILS",
+             *       "USD",
+             *       "EUR",
+             *       "JOD",
+             *       "AED",
+             *       "SAR",
+             *       "QAR",
+             *       "BHD",
+             *       "OMR"
+             *     ]
+             */
+            currencies: string[];
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
@@ -9965,7 +10711,7 @@ export interface components {
             version: number;
         };
         /** @enum {string} */
-        Currency: "ILS" | "USD" | "EUR" | "JOD";
+        Currency: "ILS" | "USD" | "EUR" | "JOD" | "AED" | "SAR" | "QAR" | "BHD" | "OMR";
         IncomeCaptureRules: {
             received: boolean;
             owed: boolean;
@@ -9979,7 +10725,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE";
+                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -11461,6 +12207,7 @@ export interface components {
             occurredOn?: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount?: string;
+            currency?: components["schemas"]["Currency"] & unknown;
             title?: string | null;
             vendor?: string | null;
             /** Format: uuid */
@@ -11563,7 +12310,7 @@ export interface components {
         /** @enum {string} */
         IncomeKind: "received" | "owed";
         /** @enum {string} */
-        IncomeStatus: "unallocated" | "open" | "settled";
+        IncomeStatus: "unallocated" | "partial" | "allocated" | "reversed" | "open" | "settled";
         CreateIncomeRequest: {
             kind: components["schemas"]["IncomeKind"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
@@ -11585,6 +12332,106 @@ export interface components {
         UpdateIncomeRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             occurredOn: string;
+        };
+        ExpenseGroupList: {
+            items: components["schemas"]["ExpenseGroup"][];
+        };
+        ExpenseGroup: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            startOn: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            endOn: string | null;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            windowEnd: string;
+            notes: string | null;
+            currencies: {
+                currency: components["schemas"]["Currency"];
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                total: string;
+                count: number;
+            }[];
+            memberCount: number;
+            /** Format: uuid */
+            createdByUserId: string;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateExpenseGroupRequest: {
+            /** @description Trimmed; 1–120 characters (422 NAME_REQUIRED when blank) */
+            name: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. */
+            startOn: string;
+            /** @description Absent = still going. Not before startOn (END_BEFORE_START); at most 366 days including both ends (GROUP_RANGE_TOO_LONG) */
+            endOn?: string;
+            notes?: string;
+        };
+        ExpenseGroupDetail: components["schemas"]["ExpenseGroup"] & {
+            excludedCount: number;
+        };
+        UpdateExpenseGroupRequest: {
+            name?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. */
+            startOn?: string;
+            /** @description null = still going. The merged range is checked */
+            endOn?: string | null;
+            notes?: string | null;
+        };
+        ExpenseGroupOverride: {
+            /** Format: uuid */
+            groupId: string;
+            /** Format: uuid */
+            expenseId: string;
+            mode: components["schemas"]["ExpenseGroupOverrideMode"];
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        ExpenseGroupOverrideMode: "excluded" | "included";
+        SetExpenseGroupOverrideRequest: {
+            mode: components["schemas"]["ExpenseGroupOverrideMode"];
+        };
+        ExpenseGroupSummary: {
+            /** Format: uuid */
+            groupId: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            seriesFrom: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            seriesTo: string;
+            currencies: {
+                currency: components["schemas"]["Currency"];
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                total: string;
+                count: number;
+                byCategory: {
+                    /** Format: uuid */
+                    categoryId: string | null;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    total: string;
+                    count: number;
+                }[];
+                byCustomer: {
+                    /** Format: uuid */
+                    customerId: string | null;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    total: string;
+                    count: number;
+                }[];
+                byDay: {
+                    /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                    date: string;
+                    /** @enum {string} */
+                    position: "before" | "in" | "after";
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    total: string;
+                    count: number;
+                }[];
+            }[];
         };
         Conversion: {
             /** Format: uuid */
@@ -11659,7 +12506,7 @@ export interface components {
              * @example 0.322356
              */
             rate: number;
-            /** @description True when exactly one side of the pair is JOD: the ECB publishes no JOD rate, so it comes from the USD peg (1 USD = 0.709 JOD) */
+            /** @description True when either side of the pair is pegged to the US dollar (never base→base): the ECB publishes no rate for it, so the rate comes from its USD peg (1 USD = 0.709 JOD, 3.6725 AED, 3.75 SAR, 3.64 QAR, 0.376 BHD, 0.3845 OMR) */
             derived: boolean;
         };
         InboxEntryPage: {
@@ -11730,6 +12577,60 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             dueDate?: string;
             method?: components["schemas"]["PaymentMethod"];
+        };
+        EntryPage: {
+            items: components["schemas"]["Entry"][];
+            nextCursor: string | null;
+        };
+        Entry: {
+            /** @enum {string} */
+            kind: "expense";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string;
+            expense: components["schemas"]["Expense"] & {
+                /** @description READY receipts attached */
+                receiptCount: number;
+            };
+        } | {
+            /** @enum {string} */
+            kind: "received";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string | null;
+            /** @enum {string} */
+            origin: "capture" | "integration";
+            /** Format: uuid */
+            settlesOwedId: string | null;
+            /** Format: uuid */
+            replacesPaymentId: string | null;
+            income: components["schemas"]["IncomeResponse"];
+        } | {
+            /** @enum {string} */
+            kind: "owed";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string | null;
+            income: components["schemas"]["IncomeResponse"];
+        } | {
+            /** @enum {string} */
+            kind: "conversion";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string;
+            conversion: components["schemas"]["Conversion"];
         };
         CreateProfileRequest: {
             name: string;

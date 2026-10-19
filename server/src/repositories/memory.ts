@@ -117,8 +117,19 @@ import type {
   ProjectRepository,
   UpdateCustomerPatch,
   UpdateProjectPatch,
+  CreateExpenseGroupInput,
+  ExpenseCurrencyTotal,
+  ExpenseGroupFilter,
+  ExpenseGroupOverrideRecord,
+  ExpenseGroupRecord,
+  ExpenseGroupRepository,
+  UpdateExpenseGroupPatch,
+  EntriesRepository,
+  EntryRow,
 } from './ports.js';
+import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON } from './ports.js';
+import { isBeforeCursor, mergeNewestFirst } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import { resolveClaim } from './idempotency-claim.js';
@@ -162,6 +173,9 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly expCats = new Map<string, ExpenseCategoryRecord>();
   private readonly expReceipts = new Map<string, ExpenseReceiptRecord>();
   private readonly convs = new Map<string, ConversionRecord>();
+  private readonly expGroups = new Map<string, ExpenseGroupRecord>();
+  /** Keyed `${groupId}:${expenseId}` — the Postgres primary key. */
+  private readonly groupMarks = new Map<string, ExpenseGroupOverrideRecord>();
   private readonly inbox = new Map<string, InboxEntryRecord>();
 
   readonly organizations: OrganizationRepository = {
@@ -1377,7 +1391,7 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     list: async (organizationId, filter: ExpenseFilter, page) => {
       const rows = [...this.exps.values()]
-        .filter((e) => e.organizationId === organizationId && !e.deletedAt && matchesExpense(e, filter) && (!page.cursor || isBeforeExpenseCursor(e, page.cursor)))
+        .filter((e) => e.organizationId === organizationId && !e.deletedAt && matchesExpense(e, filter) && this.inGroupFilter(e, filter.group) && (!page.cursor || isBeforeExpenseCursor(e, page.cursor)))
         .sort(newestFirst)
         .slice(0, page.limit + 1);
       const items = rows.slice(0, page.limit).map((e) => ({ ...e }));
@@ -1401,6 +1415,79 @@ export class MemoryLedgerStore implements LedgerStore {
       if (changed) e.deletedAt = at;
       return { record: { ...e }, changed };
     },
+    totalsByCurrency: async (organizationId, filter: ExpenseFilter) => {
+      const totals = new Map<string, ExpenseCurrencyTotal>();
+      for (const e of this.exps.values()) {
+        if (e.organizationId !== organizationId || e.deletedAt || !matchesExpense(e, filter) || !this.inGroupFilter(e, filter.group)) continue;
+        const t = totals.get(e.currency) ?? { currency: e.currency, totalMinor: 0n, count: 0 };
+        totals.set(e.currency, { ...t, totalMinor: t.totalMinor + e.amountMinor, count: t.count + 1 });
+      }
+      return [...totals.values()].sort((a, b) => (a.currency < b.currency ? -1 : 1));
+    },
+  };
+
+  /** MUT-267: the group filter through the one membership rule (groups.ts), as Postgres applies it in expenseWhere. */
+  private inGroupFilter(e: ExpenseRecord, group: ExpenseGroupFilter | undefined): boolean {
+    if (!group) return true;
+    const mode = this.groupMarks.get(`${group.groupId}:${e.id}`)?.mode ?? null;
+    const range = { startOn: group.startOn, endOn: group.windowEnd };
+    if (group.membership === 'excluded') return mode === 'excluded' && isGroupMember(e, range, null);
+    return isGroupMember(e, range, mode);
+  }
+
+  // ---- MUT-267: expense groups ----------------------------------------------
+
+  readonly expenseGroups: ExpenseGroupRepository = {
+    create: async (input: CreateExpenseGroupInput, at, maxLive) => {
+      if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('expense_groups.organizationId');
+      // No await between the count and the insert, so concurrent creates serialize here as the Postgres org lock makes them.
+      if (maxLive !== undefined && [...this.expGroups.values()].filter((g) => g.organizationId === input.organizationId && !g.deletedAt).length >= maxLive) throw new InsufficientCapacity(input.organizationId);
+      const record: ExpenseGroupRecord = { id: randomUUID(), ...input, version: 1, createdAt: at, updatedAt: at, deletedAt: null };
+      this.expGroups.set(record.id, record);
+      return { ...record };
+    },
+    getById: async (organizationId, id) => {
+      const g = this.expGroups.get(id);
+      return g && g.organizationId === organizationId && !g.deletedAt ? { ...g } : null;
+    },
+    list: async (organizationId) =>
+      [...this.expGroups.values()]
+        .filter((g) => g.organizationId === organizationId && !g.deletedAt)
+        .sort((a, b) => (a.startOn !== b.startOn ? (a.startOn < b.startOn ? 1 : -1) : a.id < b.id ? 1 : -1))
+        .map((g) => ({ ...g })),
+    update: async (organizationId, id, expectedVersion, patch: UpdateExpenseGroupPatch, at) => {
+      const g = this.expGroups.get(id);
+      if (!g || g.organizationId !== organizationId || g.deletedAt) return { kind: 'not_found' };
+      if (g.version !== expectedVersion) return { kind: 'stale', record: { ...g } };
+      Object.assign(g, definedOnly(patch));
+      g.version += 1;
+      g.updatedAt = at;
+      return { kind: 'updated', record: { ...g } };
+    },
+    softDelete: async (organizationId, id, at) => {
+      const g = this.expGroups.get(id);
+      if (!g || g.organizationId !== organizationId) return null;
+      const changed = !g.deletedAt;
+      if (changed) g.deletedAt = at;
+      return { record: { ...g }, changed };
+    },
+    setOverride: async (organizationId, groupId, expenseId, mode, at) => {
+      if (!this.expGroups.has(groupId)) throw new ForeignKeyViolation('expense_group_overrides_groupId_fkey');
+      if (!this.exps.has(expenseId)) throw new ForeignKeyViolation('expense_group_overrides_expenseId_fkey');
+      const key = `${groupId}:${expenseId}`;
+      const existing = this.groupMarks.get(key);
+      if (existing?.mode === mode) return { record: { ...existing }, changed: false };
+      const record: ExpenseGroupOverrideRecord = { groupId, expenseId, organizationId, mode, createdAt: existing?.createdAt ?? at, updatedAt: at };
+      this.groupMarks.set(key, record);
+      return { record: { ...record }, changed: true };
+    },
+    clearOverride: async (organizationId, groupId, expenseId) => {
+      const key = `${groupId}:${expenseId}`;
+      if (this.groupMarks.get(key)?.organizationId !== organizationId) return false;
+      return this.groupMarks.delete(key);
+    },
+    overridesForExpense: async (organizationId, expenseId) =>
+      [...this.groupMarks.values()].filter((m) => m.expenseId === expenseId && m.organizationId === organizationId).map((m) => ({ ...m })),
   };
 
   // ---- MUT-161: conversions; MUT-194: versioned update and soft delete ------
@@ -1523,6 +1610,42 @@ export class MemoryLedgerStore implements LedgerStore {
       const live = [...this.expReceipts.values()].filter((r) => r.organizationId === organizationId && r.expenseId === expenseId && !r.deletedAt);
       for (const r of live) r.deletedAt = at;
       return live.map((r) => ({ ...r }));
+    },
+    countReadyByExpenseIds: async (organizationIds, expenseIds) => {
+      const counts = new Map<string, number>();
+      for (const r of this.expReceipts.values()) {
+        if (!organizationIds.includes(r.organizationId) || !expenseIds.includes(r.expenseId) || r.status !== 'READY' || r.deletedAt) continue;
+        counts.set(r.expenseId, (counts.get(r.expenseId) ?? 0) + 1);
+      }
+      return counts;
+    },
+  };
+
+  // ---- MUT-270: the entries feed -------------------------------------------
+
+  readonly entries: EntriesRepository = {
+    list: async (organizationIds, page) => {
+      const inScope = (row: { organizationId: string; createdAt: Date; id: string }) => organizationIds.includes(row.organizationId) && (!page.cursor || isBeforeCursor(row, page.cursor));
+      const branches: EntryRow[][] = [
+        [...this.exps.values()].filter((e) => inScope(e) && !e.deletedAt).map((e) => ({ kind: 'expense', record: { ...e } })),
+        [...this.pays.values()].filter((p) => inScope(p) && p.reversalReason !== CAPTURE_UNDO_REASON).map((p) => ({ kind: 'payment', record: { ...p } })),
+        [...this.recs.values()].filter((r) => inScope(r) && r.origin === 'ADJUSTMENT' && !r.deletedAt).map((r) => ({ kind: 'receivable', record: { ...r } })),
+        [...this.convs.values()].filter((c) => inScope(c) && !c.deletedAt).map((c) => ({ kind: 'conversion', record: { ...c } })),
+      ];
+      return mergeNewestFirst(branches, page.limit, (row) => row.record);
+    },
+    settledOwedIds: async (organizationIds, paymentIds) => {
+      const byPayment = new Map<string, AllocationRecord[]>();
+      for (const a of this.allocs.values()) {
+        if (!organizationIds.includes(a.organizationId) || !paymentIds.includes(a.paymentId)) continue;
+        byPayment.set(a.paymentId, [...(byPayment.get(a.paymentId) ?? []), a]);
+      }
+      const links = new Map<string, string>();
+      for (const [paymentId, allocations] of byPayment) {
+        const only = allocations.length === 1 ? allocations[0]! : null;
+        if (only && this.recs.get(only.receivableId)?.origin === 'ADJUSTMENT') links.set(paymentId, only.receivableId);
+      }
+      return links;
     },
   };
 
@@ -1660,7 +1783,7 @@ export class LockConflict extends Error {
   }
 }
 
-/** A receivable (or payment) can no longer absorb an allocation or credit — a race the preview token did not see (M4). */
+/** A receivable (or payment) can no longer absorb an allocation or credit — a race the preview token did not see (M4); since MUT-267 also a profile already at its expense-group cap. */
 export class InsufficientCapacity extends Error {
   constructor(readonly entityId: string) {
     super(`insufficient capacity on ${entityId}`);

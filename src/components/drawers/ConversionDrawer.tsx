@@ -75,9 +75,13 @@ export function ConversionDrawer() {
       reset({
         profileId: existingTx.profileId || '',
         fromAmount: minorToAmountInput(existingTx.amountMinor, existingTx.currency),
-        fromCurrency: existingTx.currency,
+        // MUT-281: existingTx.currency/.toCurrency are the universal (9-code)
+        // Currency; this drawer's own form still only offers the local app's
+        // narrower set (MUT-282 widens it) -- no local record can hold a
+        // Gulf code yet.
+        fromCurrency: existingTx.currency as FormData['fromCurrency'],
         toAmount: minorToAmountInput(existingTx.toAmountMinor, existingTx.toCurrency),
-        toCurrency: existingTx.toCurrency,
+        toCurrency: existingTx.toCurrency as FormData['toCurrency'],
         occurredAt: existingTx.occurredAt.split('T')[0],
         notes: existingTx.notes || '',
       });

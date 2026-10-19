@@ -74,6 +74,22 @@ variable "max_instances" {
   }
 }
 
+variable "db_pool_size" {
+  description = "Prisma connection pool per Cloud Run instance: connection_limit in the DATABASE_URL secret (MUT-270). GET /v1/entries runs 4 queries per profile in parallel."
+  type        = number
+  default     = 10
+  validation {
+    condition     = var.db_pool_size >= 1
+    error_message = "db_pool_size must be at least 1."
+  }
+}
+
+variable "db_max_connections" {
+  description = "Cloud SQL max_connections flag, set explicitly (MUT-270). 50 is db-g1-small's own default; raise it with a bigger tier. Changing it restarts the instance."
+  type        = number
+  default     = 50
+}
+
 variable "rate_limit_per_minute" {
   description = "Per-API-key request budget over a 60 second sliding window."
   type        = number

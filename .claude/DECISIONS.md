@@ -65,6 +65,7 @@
 | ADR-070 | Hosted Conversions Are Their Own Prisma Model, Create + Read Only, Behind New Hosted-Only UI | Active; §2 superseded by ADR-075 (2026-10-14) | 2026-10 |
 | ADR-075 | A Conversion Is Edited With If-Match and Soft-Deleted, Like an Expense; Malafat's Audit Feed Never Lists It (Supersedes ADR-070 §2) | Active | 2026-10 |
 | ADR-088 | Operator-Issued One-Time Setup Links Replace Printed Passwords; the Only Public Account Routes Are Sign-In and Redeeming a Link (Partial Override of ADR-037 §1) | Active | 2026-10 |
+| ADR-097 | One App — Signed Out, the Portal Runs the Server's Own Routes in the Browser over a Persisted MemoryLedgerStore (Partial Override of ADR-037 §2; Overrides MUT-185 Decision 1) | Active | 2026-10 |
 
 ---
 
@@ -667,6 +668,8 @@ The superseded ADRs keep their text in place, so numbers and links stay stable; 
 | ADR-013 Local-Only Sync (LAN + File Bundle) | ADR-053 | 2026-10-12 | Device sync retired product-wide; local↔hosted sync is off the roadmap |
 | ADR-070 §2 (and §5's create-only drawer, no JOD) | ADR-075 | 2026-10-14 | MUT-194: a mistaken conversion is fixed or removed, not reversed with a second entry |
 | ADR-037 §1, "no … password-reset route" and operator-delivered passwords only | ADR-088 | 2026-10-16 | MUT-235: the operator issues a one-time setup link; the person sets their own password through one public route |
+| ADR-037 §2, "no IndexedDB in the portal", no local profiles in the portal, no service worker (brief §2, §7.5) | ADR-097 | 2026-10-18 | MUT-284/285: one app; signed out, the portal keeps local profiles in IndexedDB and runs the server's own routes in the browser |
+| MUT-185 epic decision 1, "the local web app stays on the mutaba3a.netlify.app origin" (Jira, not an ADR) | ADR-097 | 2026-10-18 | MUT-284: the app lives at the portal's origin; netlify keeps the landing page and the data-handoff bridge (MUT-291) |
 
 ---
 
@@ -1666,6 +1669,12 @@ and gives no hosted web login. Full design, cost and test strategy:
    ever emits `hosted`. **Hosted profile data is a separate dataset from local
    profile data**: no shared ids, no hosted row in Dexie, no op in the op-log,
    no IndexedDB in the portal.
+
+   > **Override note (2026-10-18, ADR-097, MUT-284/285).** "No IndexedDB in the
+   > portal" no longer holds: signed out, the portal keeps local profiles in
+   > IndexedDB and runs the server's own routes over a persisted
+   > `MemoryLedgerStore`. Hosted and local data are still separate datasets,
+   > with no shared ids, no hosted row stored locally and no sync.
 3. **Sessions are server-side records behind an httpOnly cookie on the API's
    own origin.** `__Host-mut_session; Secure; HttpOnly; SameSite=Strict;
    Path=/`; a 32-byte random token stored as
@@ -3362,7 +3371,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 **Decision**:
 1. `GET /v1/fx-rates?base=` (sessions and device sessions, no API keys, no `X-Mutaba3a-Profile`) answers every supported currency against `base`: units of that currency per 1 `base`, rounded to 6 decimal places, with the ECB `rateDate`, the instance's `fetchedAt` and `source` `live` | `stale`. `base` is required; a missing or unknown one is 422 `VALIDATION_FAILED` like every other validation failure (the ticket's "400" was amended).
 2. The server reads Frankfurter (`FX_RATES_URL`, base EUR, symbols USD and ILS) with a timeout (`FX_RATES_TIMEOUT_MS`, 3 s) and a strict body check, and crosses the euro rates for any base (`server/src/fx-rates.ts`). `FX_RATES_URL` must be https (plain http only for a localhost stub), and a redirect is a provider failure, not rates to accept.
-3. **JOD** comes from the Central Bank of Jordan's peg, 1 USD = 0.709 JOD, as a constant in code. Every pair with exactly one JOD side is marked `derived`. A re-peg is a deploy.
+3. **JOD** comes from the Central Bank of Jordan's peg, 1 USD = 0.709 JOD, as a constant in code. Every pair with exactly one JOD side is marked `derived`. A re-peg is a deploy. *(Extended by ADR-098, MUT-280: JOD is one of six USD pegs, and `derived` is "either side pegged".)*
 4. **Display only.** No record stores a rate, and no amount is converted on the server.
 5. **Cache in process, per instance**, like the rate limiter (TD-017). A snapshot is fresh for `FX_RATES_TTL_MINUTES` (240). Concurrent misses share one provider call. A failed refresh serves the last snapshot as `stale` and does not call the provider again for 60 s. With nothing cached, the route answers 503 `FX_RATES_UNAVAILABLE`, never a zero rate. So a new instance that starts while the provider is down answers 503 until it is back; the phone keeps its own last copy and shows "as of" (MUT-229). Production runs one instance, so every deploy starts empty: `index.ts` fills the cache once at startup (6b).
 6. The refresh runs inline on the request that finds the snapshot expired (at most `FX_RATES_TIMEOUT_MS`, 3 s by default, once per window per instance): a background refresh is unreliable if Cloud Run throttles CPU between requests. Stale-while-revalidate was considered in the pre-landing review and kept out for the same reason.
@@ -3668,3 +3677,209 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - No session or feature-flag machinery, which ADR-090 turns off anyway.
 - Apple's privacy label lists only what this client sends.
 
+---
+
+## ADR-093: One Newest-First Entries Feed Across a Person's Profiles, Read-Only and Index-Bounded
+
+**Status**: Accepted (2026-10-18, MUT-270; decisions D1–D6 from the eng review, Basel's answers)
+
+**Context**: The phone's Recent showed only what that phone saved plus the Unsorted inbox. Basel wants the phone and the portal always in sync, so Recent must read what each profile holds, whoever logged it. A profile's history was four per-organization lists (`/v1/expenses`, `/v1/payments`, `/v1/receivables`, `/v1/conversions`) with different orders and cursors; merging them on the phone costs 4 requests per profile per page.
+
+**Decision**:
+1. **The route.** `GET /v1/entries` is session-only and organization-independent (no `X-Mutaba3a-Profile`), like `/v1/inbox`. An optional, repeatable `profileId` narrows it; any id outside the person's memberships answers 404 `Profile not found`, the same as `selectProfile`. `limit` 1..100, default 20. Items wrap the existing Expense, IncomeResponse and Conversion objects in `{ kind, profileId, createdAt, createdByUserId }` (plus `origin`, `settlesOwedId` and `replacesPaymentId` on received payments and `receiptCount` on expenses). A page is a snapshot: clients cache only the pages they re-read.
+2. **What an entry is (D2).** Expenses, received payments, Owed receivables of origin ADJUSTMENT, and conversions. Scheduled installments and retainer charges are not entries, and the feed never lazy-posts, so a read never writes. Deleted rows and capture undos are left out; a payment Malafat reversed stays, as `reversed`.
+3. **Order and cursor (D4).** `createdAt desc, id desc` — when each entry was logged — through `pagination.ts`'s (createdAt, id) envelope unchanged. A cross-table UUID collision at the same millisecond on a page boundary would skip one row; accepted.
+4. **Queries (D3).** One typed Prisma `findMany` per organization and kind, `limit + 1` rows each, one organization at a time with its 4 kinds in parallel (at most 4 pooled connections per request), merged by the pure `mergeNewestFirst` (`server/src/entries/merge.ts`), which the memory store shares. No raw SQL. The cursor condition is `createdAt <= t AND (createdAt < t OR id < i)`: the equivalent OR-only form made Postgres sort the organization's rows. New indexes `(organizationId, createdAt desc, id desc)` on expenses and conversions and `(organizationId, origin, createdAt, id)` on receivables; payments reuse `(organizationId, createdAt, id)` backwards. A test:db EXPLAIN test pins every query to an ordered index scan.
+5. **Income status (D5).** `IncomeStatus` widens to `unallocated | partial | allocated | reversed | open | settled`, derived from the record by `incomeStatusOf`; a fresh capture is still `unallocated`.
+6. **Connection pool (D6).** Terraform writes `connection_limit` (`db_pool_size`, 10) into the DATABASE_URL and sets Cloud SQL `max_connections` (`db_max_connections`, 50) explicitly, with a precondition `2 × db_pool_size × max_instances + 10 ≤ db_max_connections` (old and new revisions overlap during a deploy). The secret version is replaced destroy-first (`create_before_destroy` would propagate to the fixed-name instance and secret).
+
+**Alternatives considered**:
+- **Every receivable origin, lazy-posting per organization before the read.** Rejected: writes on a GET across every profile, and scheduled rows crowd out what people typed.
+- **Raw `unnest … CROSS JOIN LATERAL` SQL, 4 queries total.** Rejected: bypasses Prisma's row types; the first raw list query in the repo.
+- **One typed query per kind with `organizationId IN (…)`.** Rejected: Postgres may sort a whole firm's rows per page.
+- **A separate `allocationState` field beside `income.status`.** Rejected: two fields that disagree.
+- **`kind` in the cursor.** Rejected: a new envelope and sort column for a case that will not occur.
+
+**Consequences**:
+- 4 × N small queries per page (N = memberships), at most 4 at once, plus one membership read, one receipt count and, when a capture with money applied is on the page, one allocation read.
+- Adding the flag restarts Cloud SQL, and `deploy.sh` step 0's targeted apply would do it implicitly; apply the instance on its own, first, in a quiet window (INFRA.md).
+- The phone (MUT-271) reads this feed and parses the widened status; the server deploys first.
+- API 1.32.0-mut270.
+
+
+## ADR-094: Expense Groups Are Date Ranges Whose Members Are Computed When Read; Per-Currency Only, No Server Conversion
+
+**Status**: Active
+**Date**: 2026-10-18
+**Context**: MUT-267 (epic MUT-266). A person wants a trip (e.g. to Jordan) as one view: every expense dated while away, minus the ones that don't belong, plus a few from before (the flight). Totals overall, per day and per category. Hosted only (portal MUT-268, phone MUT-269), because the phone, where trip expenses are logged, talks to hosted profiles only. Numbered 094 because MUT-270's unmerged branch holds ADR-093.
+
+**Decision**:
+1. **A group is a named range on one profile.** `expense_groups`: `startOn`, `endOn` (null = still going), notes, versioned, soft-deleted. It lives in the **expenses** writability domain: `expenses:read|write`, session-only, writer of record USER, and audit entity `expense_group` is hidden from Malafat's key.
+2. **Membership is computed when read, never stored.** A member is dated inside the window and not left out, or kept. The window is `startOn..(endOn ?? startOn + 365)`: an open group stops collecting a year after its start (eng re-review R6).
+   - `groups.ts` `isGroupMember` is the one rule.
+   - Prisma's `expenseGroupWhere` is pinned to it by the shared store contract.
+3. **Marks.** `expense_group_overrides` (PK group + expense) holds `excluded` or `included`.
+   - Any mark is accepted on any expense of the profile, and the last write wins (D3/D6).
+   - A mark survives date changes.
+   - "Left out" lists only excluded expenses dated inside the window (design review 22A).
+4. **Ranges** are at most 366 days (`GROUP_RANGE_TOO_LONG`). The merged range is checked on PATCH. Changed dates must be within ten years either side of the profile's today: the MUT-227 floor, plus the `DAYS_IN_FUTURE_LIMIT` bound added at pre-landing review. The future bound keeps `windowEnd` in four-digit years; a year-9999 group summary used to 500.
+   - A profile holds at most **200** live groups (`GROUP_LIMIT`), bounding the list's per-group aggregates.
+   - A PATCH answers 409 on a stale If-Match before validating. A PATCH that changes nothing writes nothing.
+   - A repeated identical mark writes no audit row.
+   - `groupMembership` without `groupId` is 422 `GROUP_ID_REQUIRED`.
+5. **Per currency only.** The summary and the list totals never sum or convert across currencies. ADR-087 #4 stands: the portal and phone convert on the client at today's ECB rate via `/v1/fx-rates`, labelled with its date. Converting at each day's rate is MUT-273, which needs its own override of ADR-087.
+6. **The summary's day buckets reconcile with the total.** Series days are zero-filled. Every member dated outside the series gets a sparse `before`/`after` bucket (design review 6A).
+7. **List totals reuse the filter.** They are one `groupBy(currency)` aggregate per group over the same `where` as the member list, at most 4 groups at a time (re-review D1, A2).
+
+**Override log (client-accounting core, 2026-10-05 scope decision)**:
+- **What it overrides.** That decision keeps expenses optional and outside the three client questions. Expense groups are a deliberate exception that Basel asked for on 2026-10-18.
+- **What replaces it.** The exception is confined to the hosted expenses domain: no new sidebar entry (portal: a tab inside Expenses, MUT-268 1A), and no local-app surface.
+- **Date:** 2026-10-18.
+
+**Alternatives considered**:
+- **Storing membership as rows (a snapshot).** Rejected: expenses logged later would not join.
+- **A server-side converted total at today's rate.** Rejected: it contradicts ADR-087 #4 for a figure the client can label honestly.
+- **One union scan for list totals.** Rejected: it would be a second copy of the membership logic.
+- **Unbounded open groups.** Rejected: a forgotten group would grow every scan forever.
+
+**Consequences**:
+- One new pair of tables (additive migration `20261018150000_mut267_expense_groups`), eight routes, and `groupId`/`groupMembership` on `GET /v1/expenses`.
+- The list makes one small aggregate per group.
+- API 1.33.0-mut267.
+
+## ADR-095: The Portal Derives Group Figures and Mark Verbs Itself; Changes Show at Once and Yield to the Next Load
+
+**Status**: Active
+**Date**: 2026-10-18
+**Context**: MUT-268 (epic MUT-266) builds the portal on MUT-267's API (ADR-094). The design review (1A–23A) fixed the screens; the API returns per-currency buckets, member pages and marks, but not per-day averages, weekly bars, the action a row offers, or a converted total.
+
+**Decision**:
+1. **Derived figures live in one pure module**, `src/hosted/data/expenseGroups.ts`: status, day counts, the in-window test (from the API's `windowEnd`, never re-derived), per day, daily/weekly bars, other-currency days, category rows (Uncategorized last), the picker window, and the ≈ conversion (`rate` = units per 1 base, so divide; minor units rescaled between exponents; rounded half away from zero).
+2. **The action → request table is code**, `verbFor` + `VERB_MARK` + `INVERSE_VERB`: Leave out = PUT excluded (in window), Remove = DELETE (kept, outside), Bring back = DELETE, Add = PUT included; Undo runs the inverse verb. Member rows carry no mark, so Undo of a Leave out on an in-window *kept* expense clears to no mark (TD-166).
+3. **Changes show at once and yield to the next load.** A pending mark overlays the summary, members and Left out until each read *loads again after the mark settled* — TanStack's `dataUpdateCount`, not a clock, so it never counts twice or flickers back. Marks for one expense are chained so they reach the server in order (the API is last-write-wins). A batch moves every row at once, saves one at a time and refetches once.
+4. **One query-key root** (`['p', id, 'expense-groups', …]`) is the whole 8A refetch set; expense writes invalidate it too. FX rates sit outside it.
+5. **The ≈ line** appears only when it adds something (two or more currencies, or one that is not the profile's), is hidden while loading or on 503, and says "rate from <date>" when stale (ADR-087 #4 kept: display only, today's rate).
+
+**Alternatives considered**:
+- **A batch mark endpoint.** Rejected for v1 by design (12A/13A); revisit if bulk leave-out feels slow.
+- **Time-based overlay expiry** (`dataUpdatedAt`). Rejected after the first build: equal timestamps (a fast fake API or a frozen test clock) drop or double a mark.
+- **A chart library.** Rejected (18A): two small hand-built components, no dependency.
+
+**Consequences**:
+- `SectionTabs`, `DayBars`, `CategoryBars`, `GroupMembers`, `GroupDrawer`, `AddToGroupDrawer`, `InGroupsLine`, `playRowEnter` registered; `Toast` gains an action.
+- No API change.
+
+## ADR-096: An Expense's Currency Changes Only Together With Its Amount (the ADR-075 Pair Rule on Expenses)
+
+**Status**: Active
+**Date**: 2026-10-18
+**Context**: MUT-272 (epic MUT-63). Numbered 096 because MUT-268, merged first, holds ADR-095. Logging an expense in the wrong currency used to mean delete and re-log, which loses the receipts, the links and the history. `PATCH /v1/expenses/{id}` said "Any field but the currency, which never changes", while conversions (ADR-075) and the Unsorted inbox already allowed a currency change with its amount. The phone's Recent edit sheet (MUT-272, phone half) and later the portal (MUT-277) need the server to accept it.
+
+**Decision**:
+1. **The pair rule.** `currency` is accepted only with `amount`. A currency alone is 422 `AMOUNT_REQUIRED` (`field: amount`), **even when it equals the stored one** (eng review R1). This is the conversion rule, so one sentence covers both.
+2. **The amount is read in the merged currency's digits.** A JOD amount keeps 3 decimals; "1.234" in USD is 422 on `amount`. Nothing is rounded.
+3. **A stale version is a 409 before the body's business rules run** (pre-landing review; zod schema validation still runs first, so a schema-invalid body is a 422 whatever its version). The amount is parsed in the row's current currency, which a newer version may have changed: after JOD → USD, a stale JOD-shaped "13.456" used to come back as 422 AMOUNT_INVALID instead of 409 VERSION_MISMATCH. Both `PATCH /v1/expenses/{id}` and `PATCH /v1/inbox/{id}` compare the version first, the order expense groups already use (MUT-267); the store's atomic version check still covers a write that lands after the read.
+4. **Audit.** `expense.updated` adds `currency: {from, to}` and `amount: {from, to}` (formatted in each currency) when the currency actually moved, so the original amount is recoverable.
+5. **The inbox keeps its own code.** `PATCH /v1/inbox/{id}` still answers `AMOUNT_INVALID` for a changed currency without an amount (eng review R2: no API change for a working route). Only its description now says so.
+6. **Nothing stored needs fixing.** Summaries and expense groups (ADR-094) total per currency when read, so a moved expense simply counts under its new currency.
+
+**Alternatives considered**:
+- **Refuse only a changed currency** (the inbox's leniency). Rejected: two rules for one money question.
+- **Accept a currency alone and keep the minor units.** Rejected: it silently rescales the money (ILS 120.50 → JOD 12.050).
+- **Rename the inbox code to `AMOUNT_REQUIRED`.** Rejected for now: no user-visible gain, and an API change.
+
+**Consequences**:
+- `UpdateExpenseRequest` gains `currency`; `UpdateExpensePatch` gains `currency` in both stores.
+- API 1.34.0-mut272.
+- Clients must deploy after the server: the request schema is strict, so an older server answers 422 VALIDATION_FAILED (zod issue: unrecognized key `currency`).
+- Clients send `amount`, formatted in the **new** currency's digits, whenever they send `currency`, whatever their changed-fields diff says (ILS 12.50 → USD 12.50 has equal minor units but still needs the amount).
+- `AMOUNT_REQUIRED` and `SAME_CURRENCY` are now in the published 422 reasons list.
+
+---
+
+## ADR-097: One App — Signed Out, the Portal Runs the Server's Own Routes in the Browser over a Persisted MemoryLedgerStore (Partial Override of ADR-037 §2; Overrides MUT-185 Decision 1)
+
+**Status**: Active (design; MUT-286..292 build it) — partial override of ADR-037 §2; overrides MUT-185's epic decision 1
+**Date**: 2026-10-18
+**Context**: Epic MUT-284. The free local web app (Dexie, `mutaba3a.netlify.app/app`) and the hosted portal (`src/hosted`, served by the API) are two apps, so every feature is built twice and the free app can't reach the phone. On 2026-10-18 Basel decided to retire the web app and keep one portal: signed out it works on this device, signed in it is the hosted account, and the screens are the same either way. The one difference, no phone sync, is accented as the hosted + phone upsell. Brief: `.claude/designs/mut-285-portal-local-mode.md`; plan and eng review: `.claude/designs/mut-285-local-mode-plan.md` (owner decisions D1–D3).
+
+**Decision**:
+1. **Signed out, the portal's `request()` sends each `Request` to an in-page local backend instead of `fetch`.** The backend is `createLocalApp`: the **same server route modules** (`PORTAL_ROUTES`) over `MemoryLedgerStore`, loaded as a lazy chunk. Figures match signed in and out by construction, not by a copy kept in step. The old Dexie/Transaction model is not ported.
+2. **No new auth code.** The local backend seeds an ordinary person, a personal profile in the browser's timezone, and a device session in its own store, and sends `Authorization: Bearer mds_…`. The server's `authenticate()`, `requireScope` and writability matrix run unchanged. The per-request store guard (layer 3) is inactive in the browser, because it needs AsyncLocalStorage. That is safe because the only principal owns every local profile.
+3. **Server changes are behaviour-preserving extractions**, landing first:
+   - `createApiShell` (the error, validation and requestId shell);
+   - `meRoutes` (out of `routes/sessions.ts`, whose argon2 import can't run in a browser);
+   - `PORTAL_ROUTES` (one list both apps register, with a coverage test against every portal client path);
+   - `MemoryLedgerStore.snapshot()/restore()`.
+4. **Node APIs are substituted at build time, never edited.** The hosted build aliases `node:crypto` and `node:async_hooks` for the local chunk and installs a `Buffer` shim. A server-suite test holds the shim byte-identical to `node:crypto`/`Buffer` on every shape the routes use. No server module changes.
+5. **Persistence (D1, D2).**
+   - One IndexedDB snapshot `{ formatVersion, stateVersion, savedAt, maps }`, written and committed before a mutating response resolves.
+   - Idempotency replay records, sessions, setup links, audit events and API keys are never persisted.
+   - Ordered migrations upgrade older formats on load. A CI fingerprint of the persisted record types fails an unversioned change. An older tab that finds a newer format refuses to write.
+   - Writes take a Web Lock and reload a stale snapshot first; a BroadcastChannel invalidates other tabs.
+   - `navigator.storage.persist()`, plus "Download my records" and "Restore from file", protect against eviction.
+6. **The app lives at the portal's origin** (MUT-185 decision 1 overridden). `mutaba3a.netlify.app` keeps the landing page and becomes the handoff bridge for existing local data (MUT-291). The web app is retired at least 90 days after the bridge ships (MUT-292).
+7. **Receipts** go through the server's own receipt routes, backed by a browser `AttachmentStorage` (Blobs in IndexedDB, `local-blob:` targets). Downloads only: ADR-028's no-preview rule holds, and the CSP is unchanged. **Documents** stay Malafat uploads, so local profiles have none.
+8. **One public server route (D3)**: `GET /v1/public/fx-rates`, anonymous and rate-limited per IP, returns the cached ECB snapshot. The local backend's `/v1/fx-rates` reads it through `FxRateSource`, so `crossRates` and the JOD peg run unchanged. Offline, the ≈ line hides.
+9. **Modes**:
+   - first visit or sign-out → local; sign-in → remote, with a localStorage hint;
+   - an expired session shows a choice (Sign in / Continue on this device), never a silent switch;
+   - signed in and offline shows an offline state, never local data.
+10. **No telemetry signed out** (ADR-024, ADR-090, ADR-091 carried over to local mode): analytics needs a user id; Sentry stays off.
+
+**Alternatives considered** (the brief, §16, gives one line each):
+- a hand-written local backend, or extracted pure rules plus a hand-written local router;
+- a local-principal middleware;
+- running the backend inside the service worker (UI/backend version skew);
+- porting the Dexie model;
+- a Netlify origin with a proxied API;
+- request-log replay instead of migrations;
+- hiding the ≈ line signed out.
+
+**Consequences**:
+- `MemoryLedgerStore` is now production code for local mode. Its two known differences from Prisma (the expense filter's `unlinked`+`customerId`, receivable `createdAt`) are fixed in MUT-286 with contract cases.
+- Every future `ports.ts` record change needs a local-format migration (D1). The fingerprint test enforces it.
+- The ADR-037 §2 guards are rewritten, not removed:
+  - ESLint portal block and `HOSTED_RULES`: `indexedDB` only in the local chunk, a service worker only for the PWA, Dexie still banned everywhere;
+  - `server/src` may never import `src/`.
+- Spike (2026-10-18), all within the plan's gates:
+  - local chunk 135.7 KB gzip;
+  - persist p95 23.6 ms at about 9.8k ledger records;
+  - boot restore 40 ms;
+  - summary p95 19.4 ms.
+
+  Safari/WebKit was not verified; MUT-286 runs its QA on WebKit.
+
+**Override log — ADR-037 §2 (partial)**: *What*: decision 2 says "no IndexedDB in the portal"; brief §2 rejects local profiles in the portal, and §7.5 says there is no service worker. *Replaced by*: local profiles in the portal when signed out, stored in IndexedDB, plus a PWA service worker (MUT-288). Hosted and local data stay separate datasets: no shared ids, no hosted row stored locally, no sync. *Why*: the owner retired the separate web app (MUT-284). Of §2's reasons against local profiles, two are answered here: the model mapping (the local mode uses the hosted model itself) and Dexie in the bundle (there is none). The third, a shared computer showing local data after sign-out, is accepted: signed-out data is this browser's data, as in the free app, and the marker says so. *Date*: 2026-10-18.
+
+**Override log — MUT-185 decision 1**: *What*: "the local web app stays on the mutaba3a.netlify.app origin", recorded on epic MUT-185 (2026-10-14), not as an ADR. *Replaced by*: the app lives at the portal's origin, and the netlify origin keeps the landing page and the data-handoff bridge (MUT-291). *Why*: one app (MUT-284). The stranded-data risk that motivated decision 1 is handled by the bridge. *Date*: 2026-10-18.
+
+---
+
+## ADR-098: Gulf Currencies Come From Their USD Pegs; Every Currency the ECB Doesn't Price Must Have One
+
+**Status**: Active (extends ADR-087 §3)
+**Date**: 2026-10-18
+**Context**: MUT-280, epic MUT-278 (brief `.claude/designs/gulf-currencies.md`, approved by Basel 2026-10-18; plan `.claude/designs/mut-280-gulf-currencies-server.md`). People who bill in the Gulf couldn't record AED, SAR, QAR, BHD or OMR. Basel kept Frankfurter (ECB) as the only rate provider and left KWD out (its rate follows an undisclosed basket, so there is no fixed USD rate). Numbered 098 because the unmerged MUT-285 branch already wrote ADR-097.
+
+**Decision**:
+1. **Five more currencies.** `SUPPORTED_CURRENCIES` appends AED, SAR, QAR (2 decimals) and BHD, OMR (3 decimals), so existing positions (the OpenAPI enum, `/v1/fx-rates` row order) never move. No migration: every currency column is `VarChar(3)` with no check.
+2. **One peg table.** `USD_PEGS` (`server/src/fx-rates.ts`) replaces `JOD_PER_USD`: JOD 0.709, AED 3.6725, SAR 3.75, QAR 3.64, BHD 0.376, OMR 0.3845, each set by its central bank. It is typed `Record<PeggedCurrency, number>`, where `PeggedCurrency` is every supported currency the ECB fetch doesn't price, so a new code with no rate source fails typecheck. A re-peg is a deploy (ADR-087 §3).
+3. **Every pair goes through USD.** `rate(base → c) = perUsd[c] / perUsd[base]`. The ECB fetch is unchanged (`base=EUR&symbols=USD,ILS`, the raw figures). Existing ILS/USD/EUR/JOD rates are identical to before (pinned tests unchanged).
+4. **`derived` = either side pegged, never base→base.** AED↔JOD has no ECB figure in it and is still derived. Clients show "(USD peg)" on derived rates.
+5. **No peg-only rates without the provider.** With nothing servable cached, every base is 503 `FX_RATES_UNAVAILABLE`, pegged ones included: one source of truth for "rates are available".
+6. **The server lists its currencies.** `currencies: string[]` (each `^[A-Z]{3}$`, required) on `GET /v1/me`, `POST /v1/sessions` and `POST /v1/device-sessions`, equal to `SUPPORTED_CURRENCIES`. It is a plain string list, not the `Currency` enum, so a client built from today's spec never rejects a code a newer server adds (eng review D3). The phone offers only codes in this list (MUT-279 D4); servers older than MUT-280 omit it.
+7. **Peg parity.** `docs/fx/pegs.json` mirrors `USD_PEGS`; a server test checks it both ways, and the web (MUT-282/283) reads it. `server-ci.yml` watches `docs/fx/**`.
+8. **Analytics contract 1.2.0** (Basel D10): `docs/analytics/events.json` currencies equal the server list (the taxonomy test pins them), so the bump lands with this change.
+
+**Alternatives rejected**:
+- KWD from a second, keyed provider: a second source of truth and its own failure modes (epic D1).
+- Fetching `base=USD` from Frankfurter: it divides and rounds before we see the ECB figures.
+- Serving pegged↔pegged rates while the provider is down: two meanings of "rates are available".
+- `currencies` typed as the `Currency` enum: closes the set in the spec (D3).
+
+**Consequences**:
+- API 1.35.0-mut280.
+- **The portal's typed client (`src/hosted/api/schema.d.ts`) is not regenerated here** (eng review D2): regenerating it gives 15 portal type errors, because the portal reuses the local app's 4-currency type and exponent table. MUT-281 regenerates it first (TD-170).
+- **Release order:** the phone with tolerant parsing (MUT-279) is released and adopted first. Then this change and MUT-281 go out in **one** `make release server`: the portal ships inside the API image, and a portal older than MUT-281 would render AED amounts as NaN.
+- The Malafat project import (`import/plan.ts`) accepts the five codes too; KWD and other unknown codes stay `UNSUPPORTED_CURRENCY`.

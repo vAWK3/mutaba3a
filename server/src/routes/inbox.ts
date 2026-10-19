@@ -131,7 +131,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/inbox/{entryId}',
       tags: ['Inbox'],
       summary: 'Fix an unsorted entry (optimistic, If-Match)',
-      description: 'Anything you captured. Not kind: what an entry is destined to become is fixed at capture, as an expense\'s currency is. null clears an optional field.',
+      description: 'Anything you captured. Not kind: what an entry is destined to become is fixed at capture. A changed currency needs the amount again (422 AMOUNT_INVALID), read in that currency\'s digits. null clears an optional field.',
       security: SESSION_ONLY,
       middleware: [ifMatch()] as const,
       request: { params: InboxEntryIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateInboxEntryRequestSchema) },
@@ -141,6 +141,10 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const userId = owner(c);
       const body = c.req.valid('json');
       const existing = await mustGet(userId, c.req.valid('param').entryId);
+      // MUT-272: stale is a 409 before the body's business rules run (zod schema validation still runs first), since
+      // the amount is parsed in a currency a newer version may have changed. The store's version check still covers a
+      // write that lands after this read.
+      if (existing.version !== c.get('expectedVersion')) throw versionMismatch(existing.version);
       // The amount is re-parsed against whichever currency ends up on the row, not the one it had.
       const currency: Currency = body.currency ?? (existing.currency as Currency);
       const patch: UpdateInboxEntryPatch = {

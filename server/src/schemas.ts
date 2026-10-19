@@ -4,9 +4,10 @@ import { SCOPES } from './auth/scopes.js';
 import { ERROR_CODES } from './errors.js';
 import { CONTINGENCY_OUTCOMES, MAX_COMMISSION_RATE_BASIS_POINTS, MIN_COMMISSION_RATE_BASIS_POINTS, UPFRONT_TREATMENTS } from './agreements/contingency.js';
 import { DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT } from './agreements/compose.js';
+import { GROUP_NAME_MAX, MAX_GROUP_SPAN_DAYS } from './expenses/groups.js';
 import { MAX_INSTALLMENTS } from './agreements/schedule.js';
 import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
-import { JOD_PER_USD } from './fx-rates.js';
+import { USD_PEGS } from './fx-rates.js';
 import { IMPORT_MAX_ROWS } from './import/plan.js';
 import { SUPPORTED_CURRENCIES } from './money.js';
 import { ITEM_STATUSES } from './agreements/status.js';
@@ -397,6 +398,17 @@ export const MeSchema = z
     profiles: z.array(HostedProfileSchema),
     /** MUT-182: how many profiles the caller owns (the personal one included) and how many they may. */
     limits: z.object({ ownedProfiles: z.number().int().min(0), maxOwnedProfiles: z.number().int().min(1) }).openapi('ProfileLimits'),
+    /**
+     * MUT-280 (ADR-098): plain three-letter strings, not the Currency enum, so a client built against this spec
+     * never rejects a code a newer server adds.
+     */
+    currencies: z
+      .array(z.string().regex(/^[A-Z]{3}$/))
+      .openapi({
+        description:
+          'Every currency code this server accepts, in its supported order. Clients offer only the codes they also know and ignore the rest. Servers older than MUT-280 omit the field.',
+        example: [...SUPPORTED_CURRENCIES],
+      }),
   })
   .openapi('Me');
 
@@ -837,6 +849,14 @@ export const VALIDATION_REASONS = [
   'COMMISSION_LABEL_REQUIRED',
   // MUT-107: contingency fee proposals
   'SCHEDULE_REQUIRED',
+  // MUT-267: expense groups
+  'NAME_REQUIRED',
+  'GROUP_RANGE_TOO_LONG',
+  'GROUP_LIMIT',
+  'GROUP_ID_REQUIRED',
+  // MUT-194 (ADR-075) / MUT-272 (ADR-096): a currency travels with its amount; a conversion's legs differ
+  'AMOUNT_REQUIRED',
+  'SAME_CURRENCY',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -856,6 +876,9 @@ export const ContingencyTermsSchema = z
   })
   .openapi('ContingencyTerms');
 
+/** "0.709 JOD, 3.6725 AED, …" for the `derived` description (MUT-280, ADR-098). */
+const PEG_LIST = Object.entries(USD_PEGS).map(([currency, peg]) => `${peg} ${currency}`).join(', ');
+
 /** MUT-228 (ADR-087): reference exchange rates for display. Never stored on a record. */
 export const FxRatesQuerySchema = z.object({
   base: CurrencySchema.openapi({ description: 'The currency the rates are quoted against; the phone sends the target profile’s default currency' }),
@@ -864,7 +887,7 @@ export const FxRateSchema = z
   .object({
     currency: CurrencySchema,
     rate: z.number().positive().openapi({ description: 'Units of `currency` per 1 `base`, rounded to 6 decimal places', example: 0.322356 }),
-    derived: z.boolean().openapi({ description: `True when exactly one side of the pair is JOD: the ECB publishes no JOD rate, so it comes from the USD peg (1 USD = ${JOD_PER_USD} JOD)` }),
+    derived: z.boolean().openapi({ description: `True when either side of the pair is pegged to the US dollar (never base→base): the ECB publishes no rate for it, so the rate comes from its USD peg (1 USD = ${PEG_LIST})` }),
   })
   .openapi('FxRate');
 export const FxRatesResponseSchema = z
@@ -1469,7 +1492,12 @@ export const CreditsResponseSchema = z.object({ receivable: ReceivableSchema, cr
 // ---- MUT-65: personal profile income capture (session-only) ----------------
 
 export const IncomeKindSchema = z.enum(['received', 'owed']).openapi('IncomeKind');
-export const IncomeStatusSchema = z.enum(['unallocated', 'open', 'settled']).openapi('IncomeStatus');
+/**
+ * Received: unallocated / partial / allocated (how much of it is applied to receivables: Malafat's doing on a
+ * Malafat-fed profile, a settle's on your own) or reversed. Owed: open / settled.
+ * MUT-270 (D5) added partial, allocated and reversed: a fresh capture is still unallocated.
+ */
+export const IncomeStatusSchema = z.enum(['unallocated', 'partial', 'allocated', 'reversed', 'open', 'settled']).openapi('IncomeStatus');
 
 const incomeText = z.string().trim().min(1).max(200);
 const incomeNotes = z.string().max(2000);
@@ -1835,11 +1863,13 @@ export const CreateExpenseRequestSchema = z
   .strict()
   .openapi('CreateExpenseRequest');
 
-/** No `currency`: a row's currency never changes, so it is never converted. Null clears an optional field. */
+/** MUT-272: `currency` only together with `amount` (ADR-096); the amount is never converted, only re-read in the new currency's digits. Null clears an optional field. */
 export const UpdateExpenseRequestSchema = z
   .object({
     occurredOn: FlooredMoneyDatePatchSchema.optional(),
     amount: AmountSchema.optional(),
+    /** MUT-272: only together with `amount` (422 AMOUNT_REQUIRED alone), which is then read in this currency's digits. */
+    currency: CurrencySchema.optional().openapi({ description: 'Only together with amount (422 AMOUNT_REQUIRED alone), which is then read in this currency\'s digits.' }),
     title: expenseText.nullable().optional(),
     vendor: expenseText.nullable().optional(),
     categoryId: uuid.nullable().optional(),
@@ -1860,6 +1890,8 @@ export const ListExpensesQuerySchema = z.object({
   customerId: uuid.optional(),
   projectId: uuid.optional(),
   linked: z.enum(['none']).optional().openapi({ description: '`none`: only expenses linked to no client' }),
+  groupId: uuid.optional().openapi({ description: 'MUT-267: only this group\'s members (or, with groupMembership=excluded, its left-out expenses dated inside its window). 404 for a group this profile does not have.' }),
+  groupMembership: z.enum(['member', 'excluded']).optional().openapi({ description: 'Requires groupId (422 GROUP_ID_REQUIRED without it). Default `member`.' }),
 });
 
 export const ExpenseIdParamSchema = z.object({ expenseId: uuid });
@@ -1970,6 +2002,92 @@ export const ExpenseSummarySchema = z
   })
   .openapi('ExpenseSummary');
 
+// ---- MUT-267: expense groups (ADR-094) -----------------------------------------
+
+const groupName = z.string().trim().max(GROUP_NAME_MAX);
+const groupNotes = z.string().max(4000);
+const groupDate = IsoDateSchema.openapi({ description: `Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today nor ten years (${DAYS_IN_FUTURE_LIMIT} days) after it: 422 DATE_INVALID with details.bound past or future.` });
+const currencyTotal = z.object({ currency: CurrencySchema, ...expenseBucket });
+
+export const ExpenseGroupSchema = z
+  .object({
+    id: uuid,
+    name: z.string(),
+    startOn: IsoDateSchema,
+    /** Null = still going. */
+    endOn: IsoDateSchema.nullable(),
+    /** The last day the group collects: endOn, or a year after startOn while still going (R6). */
+    windowEnd: IsoDateSchema,
+    notes: z.string().nullable(),
+    /** Members per currency, never summed across currencies (ADR-004). */
+    currencies: z.array(currencyTotal),
+    memberCount: z.number().int(),
+    createdByUserId: uuid,
+    version: z.number().int(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi('ExpenseGroup');
+
+export const ExpenseGroupDetailSchema = ExpenseGroupSchema.extend({
+  /** Left-out expenses dated inside the window (design review 22A). */
+  excludedCount: z.number().int(),
+}).openapi('ExpenseGroupDetail');
+
+export const ExpenseGroupListSchema = z.object({ items: z.array(ExpenseGroupSchema) }).openapi('ExpenseGroupList');
+
+export const ListExpenseGroupsQuerySchema = z.object({
+  expenseId: uuid.optional().openapi({ description: 'Only the groups this expense belongs to (dated in the window and not left out, or kept)' }),
+});
+
+export const CreateExpenseGroupRequestSchema = z
+  .object({
+    name: groupName.openapi({ description: `Trimmed; 1–${GROUP_NAME_MAX} characters (422 NAME_REQUIRED when blank)` }),
+    startOn: groupDate,
+    endOn: groupDate.optional().openapi({ description: `Absent = still going. Not before startOn (END_BEFORE_START); at most ${MAX_GROUP_SPAN_DAYS} days including both ends (GROUP_RANGE_TOO_LONG)` }),
+    notes: groupNotes.optional(),
+  })
+  .strict()
+  .openapi('CreateExpenseGroupRequest');
+
+export const UpdateExpenseGroupRequestSchema = z
+  .object({
+    name: groupName.optional(),
+    startOn: groupDate.optional(),
+    endOn: groupDate.nullable().optional().openapi({ description: 'null = still going. The merged range is checked' }),
+    notes: groupNotes.nullable().optional(),
+  })
+  .strict()
+  .openapi('UpdateExpenseGroupRequest');
+
+export const ExpenseGroupIdParamSchema = z.object({ groupId: uuid });
+export const ExpenseGroupExpenseParamSchema = z.object({ groupId: uuid, expenseId: uuid });
+
+export const ExpenseGroupOverrideModeSchema = z.enum(['excluded', 'included']).openapi('ExpenseGroupOverrideMode');
+export const SetExpenseGroupOverrideRequestSchema = z.object({ mode: ExpenseGroupOverrideModeSchema }).strict().openapi('SetExpenseGroupOverrideRequest');
+export const ExpenseGroupOverrideSchema = z
+  .object({ groupId: uuid, expenseId: uuid, mode: ExpenseGroupOverrideModeSchema, updatedAt: z.string().datetime() })
+  .openapi('ExpenseGroupOverride');
+
+export const ExpenseGroupSummarySchema = z
+  .object({
+    groupId: uuid,
+    /** The zero-filled days (C2): a closed group's range, or an open group's start up to today, within its window. */
+    seriesFrom: IsoDateSchema,
+    seriesTo: IsoDateSchema,
+    currencies: z.array(
+      z.object({
+        currency: CurrencySchema,
+        ...expenseBucket,
+        byCategory: z.array(z.object({ categoryId: uuid.nullable(), ...expenseBucket })),
+        byCustomer: z.array(z.object({ customerId: uuid.nullable(), ...expenseBucket })),
+        /** Every series day, plus a sparse bucket for each member dated outside it, so the buckets sum to the total (6A). */
+        byDay: z.array(z.object({ date: IsoDateSchema, position: z.enum(['before', 'in', 'after']), ...expenseBucket })),
+      }),
+    ),
+  })
+  .openapi('ExpenseGroupSummary');
+
 // ---- MUT-66: the unsorted inbox ---------------------------------------------
 
 export const InboxEntryKindSchema = z.enum(['income', 'expense']).openapi('InboxEntryKind');
@@ -2010,7 +2128,7 @@ export const CreateInboxEntryRequestSchema = z
   .strict()
   .openapi('CreateInboxEntryRequest');
 
-/** No `kind`: what an entry is destined to become is fixed at capture, as an expense's currency is. Null clears an optional field. */
+/** No `kind`: what an entry is destined to become is fixed at capture. A changed currency comes with its amount. Null clears an optional field. */
 export const UpdateInboxEntryRequestSchema = z
   .object({
     amount: AmountSchema.optional(),
@@ -2054,3 +2172,64 @@ export const FileAsIncomeRequestSchema = z
   })
   .strict()
   .openapi('FileAsIncomeRequest');
+
+// ---- MUT-270: the entries feed (session-only, no profile header) ------------
+
+/** A repeated query parameter arrives as an array, a single one as a string: always an array here. */
+const repeatable = <T extends z.ZodTypeAny>(item: T) =>
+  z.preprocess((v) => (v === undefined || Array.isArray(v) ? v : [v]), z.array(item).optional());
+
+export const ListEntriesQuerySchema = z.object({
+  profileId: repeatable(z.string()).openapi({
+    description: 'Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404.',
+    param: { style: 'form', explode: true },
+  }),
+  limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ description: 'Page size, 1–100.' }),
+  cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
+});
+
+/** What every feed item says about itself, whatever it is. */
+const entryEnvelope = {
+  /** The profile (organization) the entry is on. */
+  profileId: uuid,
+  /** When it was logged — the feed's order, newest first. Not the money date (`occurredOn`). */
+  createdAt: z.string().datetime(),
+};
+
+export const EntrySchema = z
+  .discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('expense'),
+      ...entryEnvelope,
+      createdByUserId: uuid,
+      expense: ExpenseSchema.and(z.object({ receiptCount: z.number().int().nonnegative().openapi({ description: 'READY receipts attached' }) })),
+    }),
+    z.object({
+      kind: z.literal('received'),
+      ...entryEnvelope,
+      /** Null for a payment Malafat recorded: no person logged it. */
+      createdByUserId: uuid.nullable(),
+      /** capture: a person recorded it (POST /v1/income, inbox filing or a settle); integration: Malafat did. */
+      origin: z.enum(['capture', 'integration']),
+      /** The one Owed entry this payment paid toward (a settle, full or partial), or null. The Owed reads `settled` once paid in full, `open` before. */
+      settlesOwedId: uuid.nullable(),
+      /** The payment Malafat reversed and replaced with this one, or null. The replaced one reads `reversed`. */
+      replacesPaymentId: uuid.nullable(),
+      income: IncomeResponseSchema,
+    }),
+    z.object({
+      kind: z.literal('owed'),
+      ...entryEnvelope,
+      createdByUserId: uuid.nullable(),
+      income: IncomeResponseSchema,
+    }),
+    z.object({
+      kind: z.literal('conversion'),
+      ...entryEnvelope,
+      createdByUserId: uuid,
+      conversion: ConversionSchema,
+    }),
+  ])
+  .openapi('Entry');
+
+export const EntryPageSchema = z.object({ items: z.array(EntrySchema), nextCursor: z.string().nullable() }).openapi('EntryPage');
