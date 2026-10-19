@@ -80,7 +80,13 @@
         "ios": "iPhone، على App Store",
         "android": "Android، على Google Play"
       },
-      "withAccount": "مع حسابك"
+      "withAccount": "مع حسابك",
+      "devicesCaption": "تسجّله على الهاتف، فتجده في بوابتك.",
+      "platform": {
+        "ios": "iPhone",
+        "android": "Android",
+        "comingSoon": "{platform} قريبًا"
+      }
     },
     "malafat": {
       "title": "مكتب محاماة أو محاسبة على Malafat؟ متابعة يتّصل به.",
