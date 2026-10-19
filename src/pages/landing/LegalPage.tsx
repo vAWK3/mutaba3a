@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import './LandingPage.css';
 import './PrivacyPolicyPage.css';
 import { useT, type Language } from '../../lib/i18n';
-import { getDirection } from '../../lib/i18n/core';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useLandingAnalytics } from './analytics/landingAnalytics';
 import { LandingHeader, LandingFooter } from './components';
@@ -44,7 +43,7 @@ export function LegalPage({ title, updated, loading = false, intro, sections, af
       <main id="main-content" aria-busy={loading}>
         <article className="landing-section privacy-policy" aria-labelledby="legal-page-title">
           <div className="landing-container privacy-policy-container">
-            <div lang={textLanguage} dir={textLanguage && getDirection(textLanguage)}>
+            <InLanguage language={textLanguage}>
               <h1 id="legal-page-title" className="privacy-policy-title">
                 {title}
               </h1>
@@ -59,7 +58,7 @@ export function LegalPage({ title, updated, loading = false, intro, sections, af
                   ))}
                 </section>
               ))}
-            </div>
+            </InLanguage>
 
             {after}
 
@@ -72,4 +71,14 @@ export function LegalPage({ title, updated, loading = false, intro, sections, af
       <LandingFooter />
     </div>
   );
+}
+
+/**
+ * The text in its own language and direction when a /terms?lang link names one other than
+ * the page's (MUT-324 review fix 1). Static dir values, as MUT-109's direction test requires.
+ */
+function InLanguage({ language, children }: { language?: Language; children: ReactNode }) {
+  if (language === 'ar') return <div lang="ar" dir="rtl">{children}</div>;
+  if (language === 'en') return <div lang="en" dir="ltr">{children}</div>;
+  return <div>{children}</div>;
 }
