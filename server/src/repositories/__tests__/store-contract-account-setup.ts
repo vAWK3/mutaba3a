@@ -305,13 +305,12 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       const store = await makeStore();
       const { user, orgIds } = await person(store);
       const audit = auditFor(orgIds.slice(0, 1), user.id, 'user.terms_accepted');
-      const first = await store.users.acceptTerms({ userId: user.id, ...TERMS, at: at(2), audit });
-      expect(first.created).toBe(true);
-      expect(first.acceptance).toMatchObject({ userId: user.id, ...TERMS });
-      const again = await store.users.acceptTerms({ userId: user.id, ...TERMS, locale: 'ar', at: at(3), audit });
-      expect(again.created).toBe(false);
-      expect(again.acceptance).toMatchObject({ locale: 'en' });
-      expect(again.acceptance.acceptedAt.toISOString()).toBe(at(2).toISOString());
+      // Review pass 2: the store answers only whether the row is new; nobody needs the row read back
+      expect(await store.users.acceptTerms({ userId: user.id, ...TERMS, at: at(2), audit })).toEqual({ created: true });
+      expect(await store.users.acceptTerms({ userId: user.id, ...TERMS, locale: 'ar', at: at(3), audit })).toEqual({ created: false });
+      const kept = await store.users.latestTermsAcceptance(user.id);
+      expect(kept).toMatchObject({ userId: user.id, ...TERMS, locale: 'en' });
+      expect(kept?.acceptedAt.toISOString()).toBe(at(2).toISOString());
       expect(await termsAuditCount(store, orgIds[0]!)).toBe(1);
     });
 

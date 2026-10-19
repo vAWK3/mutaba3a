@@ -452,9 +452,9 @@ export class MemoryLedgerStore implements LedgerStore {
         }),
     acceptTerms: async (input) => {
       if (!this.people.has(input.userId)) throw new ForeignKeyViolation('terms_acceptances.userId');
-      const { acceptance, created } = this.recordTermsAcceptance(input.userId, input, input.at);
+      const { created } = this.recordTermsAcceptance(input.userId, input, input.at);
       if (created) for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
-      return { acceptance, created };
+      return { created };
     },
     changePassword: async (input) => {
       const u = this.people.get(input.userId);
