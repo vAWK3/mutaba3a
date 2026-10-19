@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import { localBackend } from '../api/client';
+import { ME_KEY, meQuery } from '../session/me';
 import { isRecordsFileRefused, type PendingRestore } from '../session/localBackendContract';
 import { AlertIcon } from './Icons';
 import { Drawer } from './Drawer';
@@ -78,11 +79,15 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
     setBusy(true);
     try {
       await pending.apply();
-      // Profile ids may differ in the restored records: start again from `/`, with nothing cached.
-      queryClient.removeQueries();
+      // The file's person and profiles replace this device's, ids and all. Go straight to the restored person's
+      // first profile, read from a fresh /v1/me: `/` would redirect once, from whatever answer AuthGate last
+      // rendered, which can still be the old one for a tick, and a redirect doesn't correct itself. The profile
+      // page reads /v1/me on every render, so it does. Leaving the page also closes this drawer.
+      const me = await queryClient.fetchQuery({ ...meQuery, staleTime: 0 });
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== ME_KEY[0] });
+      const first = me.profiles[0];
+      await navigate({ to: first ? `/p/${first.id}` : '/', replace: true });
       toast(t('hosted.local.data.restored'), { tone: 'info' });
-      onClose();
-      void navigate({ to: '/', replace: true });
     } catch {
       setProblem('failed');
       setBusy(false);

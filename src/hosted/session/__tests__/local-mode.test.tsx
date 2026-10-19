@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
-import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
+import { ORG_A, ORG_B, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import { LocalRecordsFileRefused, type PendingRestore } from '../localBackendContract';
 import { MODE_KEY, setMode, setUnhintedMode } from '../mode';
@@ -281,8 +281,13 @@ describe('Your data (D2)', () => {
     expect(backend.exportRecords).toHaveBeenCalledTimes(1);
   });
 
-  it('restores only after a confirm that names the record count, then starts again from /', async () => {
-    const apply = vi.fn(() => Promise.resolve());
+  it('restores only after a confirm that names the record count, then starts again from / on the restored profile', async () => {
+    // The file's person and profile are not this device's: after Replace, /v1/me answers with the file's profile.
+    const restoredProfile = { ...personal, id: ORG_B, name: 'Restored' };
+    const apply = vi.fn(() => {
+      useLocalRoutes({ 'GET /v1/me': () => ok({ ...localMe, profiles: [restoredProfile] }) });
+      return Promise.resolve();
+    });
     backend.readRecordsFile.mockResolvedValue({ recordCount: 12, apply });
     const { user, router } = await openYourData();
 
@@ -294,7 +299,9 @@ describe('Your data (D2)', () => {
 
     await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Records restored.')).toBeInTheDocument();
-    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}`));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByText("This profile isn't available")).toBeNull();
   });
 
   it('Cancel leaves everything as it was', async () => {

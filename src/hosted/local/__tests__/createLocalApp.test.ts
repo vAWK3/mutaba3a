@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MemoryLedgerStore } from '../../../../server/src/repositories/memory.js';
-import { createLocalApp } from '../createLocalApp.js';
+import { consoleLogger, createLocalApp } from '../createLocalApp.js';
 import { mintLocalSession } from '../mintLocalSession.js';
 
 /**
@@ -61,5 +61,15 @@ describe('createLocalApp + mintLocalSession', () => {
 
     const withFreshToken = await restoredApp.fetch(new Request('http://local/v1/me', { headers: { Authorization: `Bearer ${afterRestore.token}` } }));
     expect(withFreshToken.status).toBe(200);
+  });
+
+  it('sends a route failure to the browser console: signed out there is no Sentry and no server log to catch it', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failure = new Error('boom');
+
+    consoleLogger().error({ err: failure, requestId: 'r1' }, 'Unhandled error');
+
+    expect(spy).toHaveBeenCalledWith('[mutaba3a local]', { err: failure, requestId: 'r1' }, 'Unhandled error');
+    spy.mockRestore();
   });
 });

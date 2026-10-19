@@ -31,13 +31,13 @@ const LOCAL_RATE_LIMIT_PER_MINUTE = 10_000;
 
 /**
  * `createApiShell` only ever calls `.error(...)` on this (its `onError`
- * handler, for a 5xx or an unhandled exception). The hosted bundle logs
- * nothing (there is nowhere for it to go), so this is a deliberate minimal
- * stub, not an attempt to implement pino's `Logger` surface — the cast is
- * the point, not a workaround for one.
+ * handler, for a 5xx or an unhandled exception). Signed out there is no
+ * Sentry (ADR-091 carried over) and no server log, so a route failure goes to
+ * the browser console, where the person's own devtools are the only reader.
+ * A minimal stub, not pino's `Logger` surface — the cast is the point.
  */
-function noopLogger(): Logger {
-  return { error: () => {} } as unknown as Logger;
+export function consoleLogger(): Logger {
+  return { error: (...args: unknown[]) => console.error('[mutaba3a local]', ...args) } as unknown as Logger;
 }
 
 /**
@@ -61,7 +61,7 @@ function noopLogger(): Logger {
  */
 export function createLocalApp(options: CreateLocalAppOptions): LocalApp {
   const { store, now } = options;
-  const { app } = createApiShell({ now, logger: noopLogger() });
+  const { app } = createApiShell({ now, logger: consoleLogger() });
 
   const scopedStore = requestScopedStore(store);
   const rateLimiter = new SlidingWindowRateLimiter(LOCAL_RATE_LIMIT_PER_MINUTE);
