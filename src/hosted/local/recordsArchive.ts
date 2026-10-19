@@ -30,18 +30,36 @@ async function loadJsZip() {
   return (await import('jszip')).default;
 }
 
-/** Records plus every live receipt's stored file. Call under the lock, over an up-to-date snapshot. */
-export async function encodeRecordsArchive(snapshot: StoredSnapshot, blobs: IndexedDbBlobStore): Promise<Blob> {
-  const JSZip = await loadJsZip();
-  const zip = new JSZip();
-  zip.file(RECORDS_ENTRY, encodeRecordsFile(snapshot));
+/** What goes in a records file: the records as text and each live file's bytes, read under the lock. */
+export interface RecordsArchiveContents {
+  recordsJson: string;
+  files: Array<{ key: string; bytes: ArrayBuffer }>;
+}
+
+/** Under the lock, over an up-to-date snapshot: copies the records and every live stored file (review D3: the zipping runs after, outside it). */
+export async function collectRecordsArchive(snapshot: StoredSnapshot, blobs: IndexedDbBlobStore): Promise<RecordsArchiveContents> {
+  const files: RecordsArchiveContents['files'] = [];
   for (const key of liveStoredKeys(snapshot.maps)) {
     const file = await blobs.getFile(key);
-    // A view made here: jszip type-checks with instanceof, and a buffer IndexedDB cloned can belong to another realm.
-    // STORE: receipts are PDF/JPEG/PNG, already compressed, so DEFLATE would only cost time.
-    if (file) zip.file(`${RECEIPTS_DIR}${key}`, new Uint8Array(file.bytes), { binary: true, compression: 'STORE' });
+    if (file) files.push({ key, bytes: file.bytes });
   }
+  return { recordsJson: encodeRecordsFile(snapshot), files };
+}
+
+/** No lock needed: the bytes were already copied. */
+export async function zipRecordsArchive(contents: RecordsArchiveContents): Promise<Blob> {
+  const JSZip = await loadJsZip();
+  const zip = new JSZip();
+  zip.file(RECORDS_ENTRY, contents.recordsJson);
+  // A view made here: jszip type-checks with instanceof, and a buffer IndexedDB cloned can belong to another realm.
+  // STORE: receipts are PDF/JPEG/PNG, already compressed, so DEFLATE would only cost time.
+  for (const { key, bytes } of contents.files) zip.file(`${RECEIPTS_DIR}${key}`, new Uint8Array(bytes), { binary: true, compression: 'STORE' });
   return zip.generateAsync({ type: 'blob', mimeType: ZIP_MIME, compression: 'DEFLATE' });
+}
+
+/** Both steps at once (tests, and callers that hold no lock). */
+export async function encodeRecordsArchive(snapshot: StoredSnapshot, blobs: IndexedDbBlobStore): Promise<Blob> {
+  return zipRecordsArchive(await collectRecordsArchive(snapshot, blobs));
 }
 
 /** A zip from this build, or a MUT-286 `.json` records file. Refuses anything else with `LocalRecordsFileRefused`. */

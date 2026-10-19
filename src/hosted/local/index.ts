@@ -9,7 +9,7 @@ import { LocalLock } from './locks.js';
 import { mintLocalSession, type LocalSession } from './mintLocalSession.js';
 import { LOCAL_FORMAT_VERSION } from './migrations/index.js';
 import { IndexedDbPersistence } from './persistence.js';
-import { decodeRecordsArchive, encodeRecordsArchive } from './recordsArchive.js';
+import { collectRecordsArchive, decodeRecordsArchive, zipRecordsArchive } from './recordsArchive.js';
 import { countRecords } from './recordsFile.js';
 import { applyRestore } from './restore.js';
 import { createLocalTransport, LocalFormatTooNewError, reloadFromDisk } from './transport.js';
@@ -63,6 +63,9 @@ async function boot(): Promise<LocalBackend> {
   let persistRequested = false;
 
   async function send(request: Request): Promise<Response> {
+    // Review D2: reference rates read no records, so their network fetch runs here, before the cross-tab lock.
+    // Inside it the route then reads the warm cache (or the failure backoff) and never waits on the network.
+    if (isFxRatesRead(request)) await fxRates.get().catch(() => undefined);
     const authorised = new Request(request, { headers: withBearer(request.headers, session.token) });
     const response = await transport(authorised);
     if (!persistRequested && isWrite(request.method) && response.ok) {
@@ -98,12 +101,15 @@ async function boot(): Promise<LocalBackend> {
     fetch: fetchLocal,
     onRemoteWrite: (handler) => lock.onRemoteWrite(() => handler()),
     // Under the lock, from disk if another tab wrote since: a download must hold every save this device has made.
-    exportRecords: () =>
-      lock.withLock(async ({ stale }) => {
+    exportRecords: async () => {
+      const contents = await lock.withLock(async ({ stale }) => {
         if (stale) await reloadFromDisk(store, persistence);
         const { maps } = store.snapshot();
-        return { result: await encodeRecordsArchive({ formatVersion: LOCAL_FORMAT_VERSION, stateVersion: 0, savedAt: now(), maps }, blobs), wrote: false };
-      }),
+        return { result: await collectRecordsArchive({ formatVersion: LOCAL_FORMAT_VERSION, stateVersion: 0, savedAt: now(), maps }, blobs), wrote: false };
+      });
+      // Review D3: the copy is exact as of the lock; compressing it holds no tab up.
+      return zipRecordsArchive(contents);
+    },
     readRecordsFile,
     putBlob: async (url, file) => blobs.put(localBlobKey(url), file),
     readBlob: async (url) => blobs.get(localBlobKey(url)),
@@ -152,6 +158,13 @@ function withBearer(headers: Headers, token: string): Headers {
   next.set('Authorization', `Bearer ${token}`);
   return next;
 }
+
+function isFxRatesRead(request: Request): boolean {
+  return request.method === 'GET' && new URL(request.url).pathname === FX_RATES_PATH;
+}
+
+/** The local app's own reference-rates route, the one `send` warms outside the lock. */
+const FX_RATES_PATH = '/v1/fx-rates';
 
 function isWrite(method: string): boolean {
   return method !== 'GET' && method !== 'HEAD';
