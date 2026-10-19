@@ -24,7 +24,7 @@ import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } f
 import { accountSetupRoutes } from './routes/account-setup.js';
 import { auditRoutes } from './routes/audit.js';
 import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/profiles.js';
-import { FX_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/fx-rates.js';
+import { FX_ORGANIZATION_INDEPENDENT_ROUTES, PUBLIC_FX_POLICY, publicFxRateRoutes } from './routes/fx-rates.js';
 import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from './inbox/routes-keys.js';
 import { inboxRoutes } from './routes/inbox.js';
 import { ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, entriesRoutes } from './routes/entries.js';
@@ -69,6 +69,8 @@ export interface AppDependencies {
   appAssociation?: AppAssociationConfig | null;
   /** Reference exchange rates (MUT-228), cached per instance. Null or absent = GET /v1/fx-rates answers 503 FX_RATES_UNAVAILABLE. */
   fxRates?: CachedFxRates | null;
+  /** Per-IP budget for the anonymous GET /v1/public/fx-rates (MUT-287). Defaults to PUBLIC_FX_POLICY. */
+  publicFxIpLimiter?: RateLimiter;
   /** MUT-293 minimum app version gate. Null or absent = no platform gated (every floor/recommended undefined, check not disabled). */
   minimumBuild?: MinimumBuildConfig | null;
 }
@@ -119,7 +121,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.36.0-mut293';
+export const API_VERSION = '1.37.0-mut287';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -221,6 +223,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     fxRates: deps.fxRates ?? null,
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
+  // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
+  app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions }));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));

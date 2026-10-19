@@ -1,8 +1,10 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
+import { clientIp } from '../auth/sessions.js';
 import { ApiError } from '../errors.js';
 import { crossRates, MAX_RATE_AGE_DAYS, type CachedFxRates } from '../fx-rates.js';
-import { ErrorEnvelopeSchema, FxRatesQuerySchema, FxRatesResponseSchema } from '../schemas.js';
+import type { RateLimiter } from '../rate-limit.js';
+import { ErrorEnvelopeSchema, FxRatesQuerySchema, FxRatesResponseSchema, PublicFxRatesResponseSchema } from '../schemas.js';
 import { errorResponses, validationResponse } from './shared.js';
 
 /** Reference rates read no organization's data, like GET /v1/me: no X-Mutaba3a-Profile. */
@@ -49,6 +51,57 @@ export function fxRateRoutes(rates: CachedFxRates | null): OpenAPIHono<AppEnv> {
         },
         200,
       );
+    },
+  );
+
+  return app;
+}
+
+/** Per address per minute. A signed-out tab asks at most about once an hour (its own cache), so this only stops a scraper. */
+export const PUBLIC_FX_POLICY = { ipPerMinute: 30 } as const;
+
+export interface PublicFxRateRouteOptions {
+  rates: CachedFxRates | null;
+  ipLimiter: RateLimiter;
+  trustedProxyHops: number;
+}
+
+/**
+ * /v1/public/fx-rates (MUT-287; MUT-285 D3, ADR-097 §7). Anonymous and
+ * profile-free: the cached ECB snapshot itself, so the portal's signed-out
+ * backend feeds it to its own CachedFxRates and runs the same crossRates, JOD
+ * peg and staleness rules as /v1/fx-rates. Never in PORTAL_ROUTES: the portal
+ * client doesn't call it, and the local app must not serve it.
+ */
+export function publicFxRateRoutes(options: PublicFxRateRouteOptions): OpenAPIHono<AppEnv> {
+  const { rates, ipLimiter, trustedProxyHops } = options;
+  const app = new OpenAPIHono<AppEnv>();
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/public/fx-rates',
+      tags: ['Exchange rates'],
+      summary: 'The ECB reference snapshot behind /v1/fx-rates, with no session',
+      description:
+        'Public market data for the portal used signed out, which computes cross rates itself. Same cache, age rules and 503 as /v1/fx-rates; ' +
+        `rate-limited to ${PUBLIC_FX_POLICY.ipPerMinute} requests per minute per address. Display only.`,
+      security: [],
+      responses: {
+        200: { description: 'Snapshot', content: { 'application/json': { schema: PublicFxRatesResponseSchema } } },
+        503: { description: 'No rates to serve, or no rate source configured', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...errorResponses,
+      },
+    }),
+    async (c) => {
+      const ip = await ipLimiter.check(`public-fx:${clientIp((name) => c.req.header(name), trustedProxyHops)}`, c.get('now')());
+      if (!ip.allowed) {
+        c.header('Retry-After', String(ip.retryAfterSeconds));
+        throw new ApiError('RATE_LIMITED', 'Too many requests; try again in a minute', { retryAfterSeconds: ip.retryAfterSeconds });
+      }
+      if (!rates) throw new ApiError('FX_RATES_UNAVAILABLE', 'Exchange rates are not configured on this server');
+      const reading = await rates.get();
+      return c.json({ rateDate: reading.snapshot.rateDate, perEur: reading.snapshot.perEur, fetchedAt: reading.fetchedAt.toISOString(), source: reading.source }, 200);
     },
   );
 
