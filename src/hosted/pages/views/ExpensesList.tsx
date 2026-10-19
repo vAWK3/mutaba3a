@@ -15,6 +15,7 @@ import { useExpenseCategories, useExpenses } from '../../data/expenseQueries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { useProfile } from '../../session/me';
+import { saveFeedbackPreset } from '../../../lib/motion/saveFeedbackPreset';
 import { canAddClient } from '../../data/incomeAffordances';
 import { NoMatch, PageHeader, ShowMore } from './shared';
 import { SectionTabs } from '../../components/SectionTabs';
@@ -154,7 +155,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
           </>
         )}
       </QueryView>
-      <SavedNotice kind="expense" message={t('hosted.savedFlash.expenseSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} listInError={listInError} />
+      <SavedNotice kind="expense" message={t('hosted.savedFlash.expenseSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} listInError={listInError} preset={saveFeedbackPreset(profile)} />
       {(filters.newExpense || filters.expense) && (
         <ExpenseDrawer
           profileId={profile.id}
