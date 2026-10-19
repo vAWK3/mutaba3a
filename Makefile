@@ -253,7 +253,7 @@ release-server: preflight-server
 	  printf '$(C_CYAN)▶ pushing %s so %s is reachable by everyone else$(C_OFF)\n' '$(RELEASE_BRANCH)' "$$sha"; \
 	  git push origin $(RELEASE_BRANCH); \
 	fi; \
-	(cd server && ./scripts/deploy.sh); \
+	(cd server && ./scripts/deploy.sh) && \
 	scripts/tag-release.sh api "$$version" --push
 
 # ---------------------------------------------------------------------------
