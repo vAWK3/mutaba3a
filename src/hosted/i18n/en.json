@@ -237,7 +237,9 @@
         "title": "No clients on this profile yet",
         "body": "Clients recorded for this profile appear here."
       },
-      "noMatch": "No clients match \"{query}\"."
+      "noMatch": "No clients match \"{query}\".",
+      "add": "Add client",
+      "addFailed": "Couldn't add the client. Try again."
     },
     "client": {
       "back": "All clients",
@@ -805,6 +807,42 @@
       },
       "nothingYet": "nothing yet",
       "crumbLabel": "Breadcrumb"
+    },
+    "local": {
+      "continueLead": "Or keep your records in this browser, without an account.",
+      "continue": "Continue on this device",
+      "onThisDevice": "On this device",
+      "signIn": "Sign in",
+      "yourData": "Your data",
+      "tooNew": {
+        "title": "Reload to continue",
+        "body": "Another tab saved the records on this device with a newer version of Mutaba3a. Reload to keep working."
+      },
+      "data": {
+        "title": "Your data",
+        "body": "Your records are saved in this browser only. Download a copy to keep them safe, or restore a copy you saved.",
+        "download": "Download my records",
+        "restore": "Restore from file",
+        "confirm": {
+          "one": "Replace everything on this device with the {count} record in this file?",
+          "other": "Replace everything on this device with the {count} records in this file?"
+        },
+        "replace": "Replace",
+        "restored": "Records restored.",
+        "notAFile": "This isn't a Mutaba3a records file.",
+        "tooNew": "This file was saved by a newer version of Mutaba3a. Reload and try again.",
+        "failed": "Couldn't restore the file. Nothing was changed."
+      },
+      "reload": "Reload",
+      "saveFailed": {
+        "title": "Couldn't save on this device",
+        "body": "This browser stopped saving Mutaba3a's records here, perhaps because it's out of space. Reload to continue. Everything you saw saved before this is safe."
+      },
+      "unavailable": {
+        "title": "This browser won't let Mutaba3a save here",
+        "body": "Private browsing or a storage setting is blocking it. Turn on storage for this site, or sign in to keep your records in your account.",
+        "retry": "Try again"
+      }
     }
   }
 }

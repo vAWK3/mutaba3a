@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { CANVAS_HEX, SCHEMES, bootMarkBox, computedFont, hexToRgb, loadedFaces, watchFontRequests } from '../../support/brand';
+import { MODE_KEY } from '../../support/portal';
 
 /**
  * The hosted portal's sign-in page in Brand v2 (MUT-102). Every /v1 call is
@@ -154,6 +155,8 @@ async function openWithSlowSession(page: Page, ms: number) {
     await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
   });
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [PORTAL_LANGUAGE_KEY, 'en'] as const);
+  // A browser that has used an account here (MUT-286): its 401 means "sign in again". A first visit opens local mode.
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MODE_KEY, 'remote'] as const);
   return () => cspErrors;
 }
 

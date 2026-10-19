@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast';
 import { useT } from '../../lib/i18n/core';
 import { announceSignedOut } from './channel';
 import { endSession } from './endSession';
+import { setMode } from './mode';
 
 /**
  * Sign out (mut-43-auth-states.md E2, S13). The cookie is httpOnly, so only the
@@ -28,6 +29,8 @@ export function useSignOut(): { signOut: () => Promise<void>; signingOut: boolea
       toast(t('hosted.auth.signOutFailed'));
       return;
     }
+    // Signed out, this device is the local app again (MUT-286); another tab reads the same hint.
+    setMode('local');
     announceSignedOut();
     endSession(queryClient, router, { reason: 'signed_out' });
   }, [queryClient, router, toast, t]);

@@ -4,6 +4,7 @@ import { useTp } from '../../lib/i18n/plural';
 import type { HostedProfile } from '../api/client';
 import { canCreateProfile, profileKindKey } from '../data/profileRules';
 import { useMe } from '../session/me';
+import { useIsLocalMode } from '../session/mode';
 import { useProfileDrawers } from './ProfileDrawers';
 import { usePopover } from './usePopover';
 
@@ -22,6 +23,8 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
   const t = useT();
   const tp = useTp();
   const me = useMe();
+  // Signed out every profile is on this device: no "Hosted" chip, no note about the old local app (MUT-286)
+  const local = useIsLocalMode();
   const drawers = useProfileDrawers();
   const canCreate = canCreateProfile(me);
   const navigate = useNavigate();
@@ -57,7 +60,7 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
         onClick={toggle}
       >
         <span className="hp-switcher-name">{active ? active.name : t('hosted.shell.switcher.label')}</span>
-        {active && <span className="hp-chip">{t('hosted.shell.switcher.hosted')}</span>}
+        {active && !local && <span className="hp-chip">{t('hosted.shell.switcher.hosted')}</span>}
         <span className="hp-chevron" aria-hidden="true">
           ▾
         </span>
@@ -81,7 +84,7 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
                 <span className="hp-option-text">
                   <span className="hp-option-line">
                     <span>{profile.name}</span>
-                    <span className="hp-chip">{t('hosted.shell.switcher.hosted')}</span>
+                    {!local && <span className="hp-chip">{t('hosted.shell.switcher.hosted')}</span>}
                   </span>
                   <span className="hp-option-sub">{t(profileKindKey(profile))}</span>
                 </span>
@@ -108,7 +111,7 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
               <span className="hp-option-line">{t('hosted.shell.switcher.manage')}</span>
             </span>
           </button>
-          <p className="hp-popover-foot">{t('hosted.shell.switcher.localFooter')}</p>
+          {!local && <p className="hp-popover-foot">{t('hosted.shell.switcher.localFooter')}</p>}
         </div>
       )}
     </div>

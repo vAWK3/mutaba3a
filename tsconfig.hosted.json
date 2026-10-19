@@ -26,8 +26,16 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+
+    /* MUT-286: the lazy local backend's types, not its code (session/localBackendContract.ts explains the split) */
+    "paths": {
+      "@mut/local-backend": ["./src/hosted/session/localBackendContract.ts"]
+    }
   },
   "include": ["src/hosted", "src/vite-env.d.ts"],
-  "exclude": ["src/**/__tests__/**", "src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**"]
+  // src/hosted/local/** (MUT-286) runs the server's own route modules in the page and is checked separately, under
+  // tsconfig.hosted-local.json, whose settings mirror server/tsconfig.json's strictness instead of this program's
+  // (see that file's comment: checking those files here collapses zod's generic `createRoute` types to `never`).
+  "exclude": ["src/**/__tests__/**", "src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**", "src/hosted/local/**"]
 }

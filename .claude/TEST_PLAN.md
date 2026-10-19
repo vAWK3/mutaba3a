@@ -3089,3 +3089,35 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` › PATCHes on edit | the currency select is disabled on edit (MUT-272 review; MUT-277 enables it) |
 | `server/src/__tests__/routes-expense-groups.test.ts` › MUT-272 | a moved member sums under JOD only, day buckets add up to the total, `?currency=JOD` lists it and `?currency=ILS` doesn't |
 | `server/src/repositories/__tests__/store-contract-expenses.ts` › MUT-272 | both stores write `currency` with `amountMinor` |
+
+## MUT-286 — Use the portal without an account (2026-10-19, ADR-097, ADR-100)
+
+| Test | Covers |
+|---|---|
+| existing server suite, unmodified | `createApiShell` / `routes/me.ts` / `PORTAL_ROUTES` extraction changed no behavior |
+| `server/src/__tests__/portal-routes-coverage.test.ts` | every one of the portal's 49 client calls is answered by `PORTAL_ROUTES` |
+| `server/src/repositories/__tests__/store-contract-snapshot.test.ts` | snapshot → fresh store → restore answers identically |
+| `store-contract-expenses.ts` › unlinked + customerId | memory lets `unlinked` win, like Prisma |
+| `server/src/__tests__/platform-shim.test.ts` (8) | SHA-256, HMAC, base64url/hex/utf8 and the three cursor formats byte-identical to Node across 10,000 seeded inputs |
+| `src/hosted/local/__tests__/createLocalApp.test.ts` (3) | `/v1/me` answers for the minted person; no token → 401; a fresh session every boot, same person, old token dead after restore |
+| `src/hosted/local/__tests__/format-fingerprint.test.ts` (3) | organization/customer/receivable shapes pinned (D1; the other 24 maps are TD-171) |
+| `src/hosted/local/__tests__/locks.test.ts` (3) | two and three tabs racing a write: the later one sees stale, reloads, and no write is lost |
+| `src/hosted/local/__tests__/transport.test.ts` (5) | a 2xx write persists and bumps stateVersion; a read and a refused write write nothing; a restored store answers with what was saved; a newer stored format refuses the request and is never written over |
+| `src/hosted/local/__tests__/parity.test.ts` (2) | AC3: the same records through `createApp` and `createLocalApp` give identical answers (ids normalized, per-side ticking clock); the script hits a part-paid OVERDUE receivable and a 422 |
+| `src/hosted/local/__tests__/no-network.test.ts` | AC4: a whole signed-out session through the portal's `api` with `fetch` booby-trapped: never called |
+| `src/hosted/local/__tests__/boot.test.ts` (9) | first boot answers /v1/me; same person and profile across reloads with nothing entered; records across reloads (AC2); two empty tabs become one person; a write in one tab is in the other's next answer; restore replaces and persists; a tab whose person was replaced re-mints; a non-records file changes nothing; a newer stored format refuses to boot and retries next time |
+| `src/hosted/local/__tests__/recordsFile.test.ts` (6) | Maps/Dates/bigints round-trip; restored store answers; record count; refuses non-JSON, missing maps, newer format |
+| `src/hosted/local/__tests__/createLocalApp.test.ts` › console | a route failure goes to `console.error` |
+| `src/hosted/session/__tests__/mode.test.ts` (5) | no hint → probe; stored modes; junk hint ignored; blocked storage keeps the mode for the page; readers re-render |
+| `src/hosted/api/__tests__/client-mode.test.ts` (11) | remote → fetch only; local → backend with a page-origin Request; sign-in/setup always remote; probe 401 → local saved, 200 → remote saved, 503/offline → nothing saved; a local 401 never ends a session; newer format → `LOCAL_FORMAT_TOO_NEW`; a failed boot retries |
+| `src/hosted/session/__tests__/local-mode.test.tsx` (21) | through the real router: first visit (one request, Arabic, pre-existing session kept); account menu, nav, switcher, Malafat hidden (AC5); cross-tab refresh; reload screen; sign-in "Continue on this device", expired choice, sign-in → remote + local cache dropped, sign-out → local; Your data download, restore lands on the restored profile, cancel, refusals, absent signed in |
+| `scripts/__tests__/hosted-lint.test.ts` › local mode | portal ⊄ server/src; no static `@mut/local-backend`; allowlist admits route list + store, refuses sessions routes, app.ts, prisma; portal bans hold in the local backend |
+| `scripts/__tests__/check-bundles.test.ts` › local backend stays lazy | IndexedDB allowed lazily, flagged in a statically loaded file |
+| `src/hosted/components/__tests__/ClientPicker.test.tsx` › Add «name» (4) | offered only for a name no client has (any case) and only with `canCreate`; picking POSTs `{ name }` with Idempotency-Key and profile header and picks the new client; a refusal keeps the name unpicked with a toast; directory and summaries refetch |
+| `incomeAffordances.test.ts` › canAddClient (3) | owned personal/business yes; Malafat-fed and writer-null firm no |
+| `ExpenseDrawer.test.tsx` › client label | the Client label names the picker; no Add row without `canAddClient` |
+| `no-network.test.ts` › client + owed + part paid | createCustomer → Owed 900 → settle 400 → PARTIALLY_PAID, 500.00 outstanding, no fetch |
+| `portal-routes-coverage.test.ts` | 50 portal calls (MUT-286 adds `POST /v1/customers`) |
+| Review fixes (ADR-100 §9) | `boot.test.ts`: Download includes another tab's save; a refused save rejects and stops the page, reload shows disk; a refused Restore keeps memory; local profiles to the cap of 6. `createLocalApp.test.ts`: clock moved back still signs in. `client-mode.test.ts`: LOCAL_SAVE_FAILED / LOCAL_FORMAT_TOO_NEW call the stop handler; LOCAL_UNAVAILABLE for a backend that can't run; server failures stay NETWORK. `local-mode.test.tsx`: another tab's sign-in / continue-on-device reopens this tab; sign-in page left alone; refused save replaces the route with the reload screen; blocked-storage screen with Sign in; slow earlier Restore pick; post-apply hiccup still says restored. `ClientPicker.test.tsx`: failed add clears the earlier client. `check-bundles.test.ts`: IndexedDB outside the `mut-local` chunk flagged |
+| Release-QA `qa/specs/portal/local-mode.spec.ts` (`@portal.local.*`) | first-visit, received-persists, owed-part-paid (Add client in the picker), two-tabs, download-restore, session-expired — all pass on a preview build |
+| Release-QA `qa/specs/portal/income.spec.ts` › `@portal.income.add-client` | signed in: Add client creates and picks the client, the income goes to it; no Add row on a Malafat-fed profile |

@@ -54,3 +54,51 @@ export function BootUnreachable({ onRetry, retrying }: { onRetry: () => void; re
     </div>
   );
 }
+
+/** Which stop: another tab saved a newer format (D1), or the browser refused a save (storage full). */
+export type LocalStop = 'LOCAL_FORMAT_TOO_NEW' | 'LOCAL_SAVE_FAILED';
+
+const STOP_KEYS: Record<LocalStop, string> = { LOCAL_FORMAT_TOO_NEW: 'hosted.local.tooNew', LOCAL_SAVE_FAILED: 'hosted.local.saveFailed' };
+
+/**
+ * MUT-286: the local backend stopped, and this page's code must not read or
+ * write the device's records again, so the only way on is a reload. At boot
+ * AuthGate shows it; mid-use the root layout shows it in place of the route.
+ */
+export function ReloadToContinue({ stop = 'LOCAL_FORMAT_TOO_NEW' }: { stop?: LocalStop }) {
+  const t = useT();
+  const key = STOP_KEYS[stop];
+  return (
+    <div className="hp-center">
+      <Wordmark />
+      <div className="hp-card hp-boot-card" role="alert">
+        <h2>{t(`${key}.title`)}</h2>
+        <p>{t(`${key}.body`)}</p>
+        <Button onClick={() => window.location.reload()}>{t('hosted.local.reload')}</Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * MUT-286: signed out, the local backend can't run in this browser (storage
+ * blocked, private browsing). Not "can't reach the server": nothing was sent.
+ */
+export function LocalUnavailable({ onRetry, onSignIn }: { onRetry: () => void; onSignIn: () => void }) {
+  const t = useT();
+  return (
+    <div className="hp-center">
+      <Wordmark />
+      <div className="hp-card hp-boot-card" role="alert">
+        <h2>{t('hosted.local.unavailable.title')}</h2>
+        <p>{t('hosted.local.unavailable.body')}</p>
+        <div className="hp-empty-actions">
+          <Button variant="secondary" onClick={onRetry}>
+            {t('hosted.local.unavailable.retry')}
+          </Button>
+          <Button onClick={onSignIn}>{t('hosted.local.signIn')}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}

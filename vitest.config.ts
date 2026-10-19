@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 
 /**
@@ -58,6 +59,11 @@ const COVERAGE_THRESHOLDS = {
 
 export default defineConfig({
   plugins: [react()],
+  // MUT-286: the portal's lazy local backend, as vite.config.ts maps it for the hosted build.
+  // node:crypto / node:async_hooks stay real here: tests run in Node, and platform-shim.test.ts checks the shims.
+  resolve: {
+    alias: { '@mut/local-backend': fileURLToPath(new URL('./src/hosted/local/index.ts', import.meta.url)) },
+  },
   test: {
     globals: true,
     environment: 'jsdom',

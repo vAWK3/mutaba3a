@@ -2488,3 +2488,11 @@ When an endpoint has no If-Match and the last arrival wins, chain each entity's 
 ### Pattern: Batches save one at a time and refetch once
 `runSequential(items, save)` returns `{ done, failed }`; the UI moves every item at once, suppresses per-save invalidation while the batch runs, refetches at the end, and offers Retry for `failed` only.
 
+## Patterns added by MUT-286 (2026-10-19, ADR-097, ADR-100)
+
+### Pattern: A lazy chunk the main program can't type-check is reached through a module alias with a contract file
+When a lazily loaded module can't live in the importer's TypeScript program (the portal can't check `server/src`'s route modules), give it one alias (`@mut/local-backend`). The importer's tsconfig `paths` maps the alias to a small contract file of types plus a `declare const` for the entry. The bundler (and Vitest) maps it to the real module, which implements the same contract type under its own program. ESLint forbids a static import of the alias, so the chunk stays lazy. First instance: `src/hosted/session/localBackendContract.ts`.
+
+### Pattern: After replacing who the person is, navigate to an explicit target read from a fresh answer
+A redirect (`/` → first profile) decides once, from whatever the observer last rendered, and a cache reset reaches observers a tick later. After swapping identity data (Restore), `fetchQuery` the new `/v1/me` and navigate straight to its first profile; pages that read `/v1/me` on every render correct themselves, a redirect doesn't. First instance: `YourDataDrawer.replace`.
+

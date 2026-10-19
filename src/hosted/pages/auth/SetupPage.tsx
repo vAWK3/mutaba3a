@@ -9,6 +9,7 @@ import { LanguageSwitch, Wordmark } from '../../components/Brand';
 import { AlertIcon } from '../../components/Icons';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
 import { ME_KEY, ME_TIMEOUT_MS } from '../../session/me';
+import { setMode } from '../../session/mode';
 import { CheckingSession } from './BootScreens';
 import { NEW_PASSWORD_POLICY, answerWasLost, passwordProblem, redeemFailure, tokenFromHash, type PasswordProblem } from './setupLink';
 
@@ -171,7 +172,8 @@ function SetupForm({ token, email, purpose, onOutcome }: SetupFormProps) {
     setPhase('signingIn');
     try {
       const me = await api.signIn({ email: account, password });
-      // Whoever was signed in on this browser before is not this person.
+      setMode('remote');
+      // Whoever was signed in on this browser before (or the local person, MUT-286) is not this person.
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SETUP_CHECK_KEY[0] });
       queryClient.setQueryData(ME_KEY, me);
       adoptAccountLocale(me.user.locale);

@@ -5,6 +5,8 @@ import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
 import { SetupPage } from './pages/auth/SetupPage';
 import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './session/AuthGate';
 import { SessionBridge } from './session/SessionBridge';
+import { useLocalStop } from './session/localStop';
+import { ReloadToContinue } from './pages/auth/BootScreens';
 import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceivablesPage, pickShellOverlay } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
 import { ClientsPage } from './pages/views/ClientsPage';
@@ -48,10 +50,12 @@ function useReplaceSearch<T extends object>() {
 }
 
 function RootLayout() {
+  // MUT-286 review: a stopped local backend replaces every route until a reload, so no stale record stays usable
+  const stopped = useLocalStop();
   return (
     <>
       <SessionBridge />
-      <Outlet />
+      {stopped ? <ReloadToContinue stop={stopped} /> : <Outlet />}
     </>
   );
 }

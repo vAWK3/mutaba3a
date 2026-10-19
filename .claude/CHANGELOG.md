@@ -28,6 +28,50 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Use the portal without an account: the server's routes run in the page (MUT-286, ADR-097, ADR-100)
+
+**Why:** epic MUT-284's load-bearing ticket. Signed out, the portal runs the server's own route modules in the page over IndexedDB, so the free app and the hosted account are one portal with the same figures.
+
+### Added (Phase C, user-visible)
+- **A first visit opens the app on this device**, in Arabic, on an empty Personal profile, with no sign-in. One `GET /v1/me` decides: 200 keeps a pre-existing session on its account, 401 saves local mode (`session/mode.ts`, ADR-100). After that a signed-out person sends nothing.
+- **Records survive reload and browser restart**, and two tabs see each other's saves (BroadcastChannel → query invalidation in `SessionBridge`).
+- **Sign-in page:** "Continue on this device" under the form, so an expired session offers Sign in or this device, never a silent switch.
+- **Account menu signed out:** "On this device" instead of an email; Sign in and Your data; no sign-out, password, Malafat, usage or store links. Expenses and Conversions are hidden until MUT-287.
+- **Your data drawer** (`?yourData=true`): Download my records (versioned JSON, `mutaba3a-records-<date>.json`) and Restore from file (confirm names the record count; refuses a non-records or newer file; lands on the restored profile). `navigator.storage.persist()` after the first save.
+- **Reload screen** when another tab saved records with a newer build (D1).
+- **Add client from the picker** (both modes, owned profiles): a typed name no client has offers "Add client: «name»", which creates the client (`POST /v1/customers`) and picks it, in the income and expense drawers. Signed out this is how a client first exists, so money owed can be recorded (TD-172 resolved).
+
+### Fixed (Phase C)
+- The expense drawer's Client label now names its field (the picker had no `id`).
+- Restore lands on the restored profile (it redirected from a stale `/v1/me`).
+- Pre-landing review (ADR-100 decision 9):
+  - another tab's sign-in or switch to this device now clears and reopens this tab;
+  - a refused save or a newer format stops the page with a reload screen;
+  - blocked storage has its own screen;
+  - Download includes other tabs' latest saves;
+  - Restore saves before switching memory;
+  - the local session is never older than the person;
+  - a failed Add client clears the previously picked client;
+  - a slow earlier file can't override a later Restore pick;
+  - the IndexedDB bundle rule is held to the `mut-local` chunk.
+
+### Changed (Phase C)
+- `client.ts` `request()` routes by mode through `send()`; sign-in and setup always go to the server; a local 401 never triggers the session-expired handler. The lazy chunk is reached through `@mut/local-backend` (types: `session/localBackendContract.ts`; code: `local/index.ts`).
+- Guards: ESLint (portal ⊄ `server/src`, no static `@mut/local-backend`, `LOCAL_SERVER_ALLOWLIST` for `src/hosted/local`, server ⊄ app `src/`); `HOSTED_RULES` drop `indexedDB`, and `localBackendInEntryGraph` bans it from everything the entry loads statically (local chunk: 112.7 KB gzip).
+- Release-QA: `qa/features/portal/local-mode.yaml` (`portal.local.*`) and its spec; portal openers default to `mut-mode=remote`; the sign-out and slow-session specs updated for local mode.
+
+### Technical
+- **Phase A, server refactor (behavior-preserving):** `server/src/app-shell.ts` `createApiShell`; `GET /v1/me` moved to `routes/me.ts` (sessions.ts keeps argon2, which can't run in a browser); `routes/portal-routes.ts` `PORTAL_ROUTES`, one registration list `createApp` loops over; `MemoryLedgerStore.snapshot()`/`restore()` (27 business maps, the six ephemeral ones left alone).
+- **Phase A fixes:** memory `matchesExpense` now lets `unlinked` win over `customerId`, as Prisma does. A store-contract case locks receivable `createdAt` to the supplied `at`.
+- **Phase B, `src/hosted/local/`:** `createLocalApp` (same shell, same `authenticate()`, `PORTAL_ROUTES`, no `contextStorage()`, attachments and FX null until MUT-287); `mintLocalSession` (finds or creates `local@device.invalid`, mints a fresh `mds_` device session every boot); `persistence.ts` (`mut-local` DB, snapshot + small version record in one transaction, resolves on `oncomplete`, refuses a newer format); `migrations/` (version = `CURRENT_STORE_SNAPSHOT_VERSION`, empty list); `locks.ts` (Web Locks + `BroadcastChannel`, reload when another tab wrote); `transport.ts` (fetch-shaped; only a 2xx mutating request persists).
+- **Browser platform shims:** `platform/crypto.ts` (pure-JS synchronous SHA-256/HMAC, Web Crypto randomness), `buffer-shim.ts`, `async-hooks.ts`. They are aliased for `node:crypto` / `node:async_hooks` in `hostedConfig()` only.
+- **Type checking:** new `tsconfig.hosted-local.json` (server strictness, server's `@types/node`), added to `npm run typecheck`. `tsconfig.hosted.json` excludes `src/hosted/local/**`. `server/tsconfig.json` drops `rootDir` so the shim test can import the shims (build output layout unchanged).
+
+### Tests
+- See TEST_PLAN.md › MUT-286.
+
+---
+
 ## [Unreleased] - 2026-10-19 — Design: firm books brief and ADR-099 (MUT-299, epic MUT-298)
 
 **Why:** small firms (law and accounting offices, agencies) want receipts, vendors, payables and a monthly close. MUT-299 locks the shared rules before any of the 15 build tickets starts.

@@ -6,6 +6,7 @@ import type { HostedProfile } from '../api/client';
 import { Wordmark } from '../components/Brand';
 import { UsagePrompt } from '../components/UsagePrompt';
 import { useMe } from '../session/me';
+import { useIsLocalMode } from '../session/mode';
 import { AccountDrawers } from './AccountDrawers';
 import { ProfileDrawers } from './ProfileDrawers';
 import { ProfileSwitcher } from './ProfileSwitcher';
@@ -30,14 +31,19 @@ const SECTIONS = [
   { path: '/conversions', key: 'conversions', exact: false },
 ] as const;
 
+/** Signed out, until MUT-287 brings receipts and FX to local mode, so nothing half-works (MUT-286 plan). */
+const HOSTED_ONLY_SECTIONS = new Set<string>(['expenses', 'conversions']);
+
 export function HostedShell({ profile, children }: { profile: HostedProfile | null; children: ReactNode }) {
   const t = useT();
   const me = useMe();
   const userId = me.user.id;
-  // MUT-155: another account's choice is reset; a stored "on" starts counting this visit
+  const local = useIsLocalMode();
+  // MUT-155: another account's choice is reset; a stored "on" starts counting this visit. Never signed out (brief §10).
   useEffect(() => {
-    void syncPortalUsage(userId);
-  }, [userId]);
+    if (!local) void syncPortalUsage(userId);
+  }, [userId, local]);
+  const sections = local ? SECTIONS.filter((section) => !HOSTED_ONLY_SECTIONS.has(section.key)) : SECTIONS;
 
   return (
     <div className="hp-shell">
@@ -46,7 +52,7 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
         {me.profiles.length > 0 && <ProfileSwitcher active={profile} />}
         {profile && (
           <nav className="hp-nav" aria-label={t('hosted.shell.sections')}>
-            {SECTIONS.map((section) => (
+            {sections.map((section) => (
               <Link
                 key={section.key}
                 to={`/p/${profile.id}${section.path}`}
@@ -62,7 +68,7 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
         <UserMenu profile={profile} />
       </aside>
       <main className="hp-page">
-        <UsagePrompt />
+        {!local && <UsagePrompt />}
         {children}
       </main>
       {/* MUT-183: New profile / Manage profiles, opened by URL from the switcher or the empty state. */}

@@ -686,3 +686,8 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
   .hp-members .hp-members-table :is(th, td):first-child { padding-inline-start: var(--space-3); }
 }
 [dir='rtl'] .hp-daybar-other::after { translate: 50% 0; }
+
+/* MUT-286: Your data (signed out only) */
+.hp-your-data { display: flex; flex-direction: column; gap: var(--space-4); }
+.hp-your-data p { margin: 0; }
+.hp-your-data-confirm { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); }

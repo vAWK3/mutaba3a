@@ -264,6 +264,9 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
         at(2),
       );
       expect(withMatter).toMatchObject({ origin: 'ADJUSTMENT', agreementId: null, originId: null, projectId: p.id, title: 'Logo design', createdByUserId: CAPTURED_BY, grossMinor: 50000n, status: 'OPEN', dueDate: '2026-11-15', deletedAt: null });
+      // MUT-286: locks the invariant postedAt === at holds at every current call site (memory.ts derives createdAt
+      // from postedAt; Prisma sets it from the separate `at` argument — equal today, so no live discrepancy to fix).
+      expect(withMatter.createdAt).toEqual(at(2));
 
       const noMatter = await store.receivables.createAdjustment(
         { organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', netMinor: 10000n, vatMinor: 0n, grossMinor: 10000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: null, dueDate: '2026-11-15', postingDate: '2026-10-08', postedAt: at(3), createdByUserId: CAPTURED_BY, requestId: null },

@@ -1,8 +1,8 @@
-import { randomBytes, randomUUID } from 'node:crypto';
-import { OpenAPIHono } from '@hono/zod-openapi';
+import { randomBytes } from 'node:crypto';
+import type { OpenAPIHono } from '@hono/zod-openapi';
 import { contextStorage } from 'hono/context-storage';
-import { HTTPException } from 'hono/http-exception';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { createApiShell } from './app-shell.js';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
 import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
 import { requireMinimumBuild, type MinimumBuildConfig } from './auth/minimum-build.js';
@@ -10,7 +10,7 @@ import { DEFAULT_DEVICE_ABSOLUTE_DAYS, DEFAULT_DEVICE_IDLE_DAYS, SIGN_IN_POLICY,
 import { SCOPES } from './auth/scopes.js';
 import { requestScopedStore } from './auth/store-guard.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from './auth/users.js';
-import { ApiError, ERROR_CODES } from './errors.js';
+import { ERROR_CODES } from './errors.js';
 import type { CachedFxRates } from './fx-rates.js';
 import type { Logger } from './logger.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
@@ -19,35 +19,26 @@ import type { AttachmentStorage } from './attachments/storage.js';
 import { adminAuth, adminRoutes } from './routes/admin.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
+import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
 import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
-import { attachmentRoutes } from './routes/attachments.js';
 import { auditRoutes } from './routes/audit.js';
-import { summaryRoutes } from './routes/summaries.js';
-import { expenseCategoryRoutes } from './routes/expense-categories.js';
-import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, profileRoutes } from './routes/profiles.js';
-import { conversionRoutes } from './routes/conversions.js';
-import { FX_ORGANIZATION_INDEPENDENT_ROUTES, fxRateRoutes } from './routes/fx-rates.js';
-import { expenseRoutes } from './routes/expenses.js';
-import { expenseGroupRoutes } from './routes/expense-groups.js';
-import { incomeRoutes } from './routes/income.js';
+import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/profiles.js';
+import { FX_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/fx-rates.js';
 import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from './inbox/routes-keys.js';
 import { inboxRoutes } from './routes/inbox.js';
 import { ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, entriesRoutes } from './routes/entries.js';
 import { agreementRoutes } from './routes/agreements.js';
 import { contingencyRoutes } from './routes/contingency.js';
-import { customerRoutes } from './routes/customers.js';
 import { feeProposalRoutes } from './routes/fee-proposals.js';
 import { installmentRoutes } from './routes/installments.js';
 import { operationRoutes } from './routes/operations.js';
-import { paymentRoutes } from './routes/payments.js';
-import { receivableRoutes } from './routes/receivables.js';
+import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { retainerRoutes } from './routes/retainers.js';
 import { vatRoutes } from './routes/vat.js';
 import { healthRoutes } from './routes/health.js';
 import { importRoutes } from './routes/import.js';
 import { integrationRoutes } from './routes/integration.js';
-import { projectRoutes } from './routes/projects.js';
 import { wellKnownRoutes, type AppAssociationConfig } from './routes/well-known.js';
 import { CaptureSourceSchema, CONFLICT_REASONS, VALIDATION_REASONS } from './schemas.js';
 import { DAYS_IN_PAST_LIMIT } from './agreements/compose.js';
@@ -138,53 +129,20 @@ export const API_VERSION = '1.36.0-mut293';
 export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const now = deps.now ?? (() => new Date());
 
-  const app = new OpenAPIHono<AppEnv>({
-    defaultHook: (result, c) => {
-      if (!result.success) {
-        const err = new ApiError('VALIDATION_FAILED', 'Request validation failed', result.error.issues);
-        return c.json(err.toEnvelope(c.get('requestId')), err.status);
-      }
-      return undefined;
-    },
-  });
+  const { app } = createApiShell({ now, logger: deps.logger });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
   app.use('*', async (c, next) => {
-    const requestId = c.req.header('x-request-id') ?? randomUUID();
-    c.set('requestId', requestId);
-    c.set('now', now);
-    c.header('X-Request-Id', requestId);
+    c.header('X-Request-Id', c.get('requestId'));
     c.header('Cache-Control', 'no-store');
     c.header('Content-Security-Policy', PORTAL_CSP);
     const started = Date.now();
     await next();
     deps.logger.info(
-      { requestId, method: c.req.method, path: c.req.path, status: c.res.status, durationMs: Date.now() - started },
+      { requestId: c.get('requestId'), method: c.req.method, path: c.req.path, status: c.res.status, durationMs: Date.now() - started },
       'request',
     );
-  });
-
-  app.onError((err, c) => {
-    const requestId = c.get('requestId') ?? 'unknown';
-    if (err instanceof ApiError) {
-      if (err.status >= 500) deps.logger.error({ requestId, err }, err.message);
-      return c.json(err.toEnvelope(requestId), err.status);
-    }
-    // TD-148 (MUT-235 review): Hono's validator throws a 400 HTTPException for an unparseable body (e.g. a JSON
-    // content type with no body). That is the client's input, so it is a validation failure, never a 500.
-    if (err instanceof HTTPException && err.status === 400) {
-      const invalid = new ApiError('VALIDATION_FAILED', err.message || 'Request body could not be parsed');
-      return c.json(invalid.toEnvelope(requestId), invalid.status);
-    }
-    deps.logger.error({ requestId, err }, 'unhandled error');
-    const internal = new ApiError('INTERNAL', 'Unexpected server error');
-    return c.json(internal.toEnvelope(requestId), internal.status);
-  });
-
-  app.notFound((c) => {
-    const err = new ApiError('NOT_FOUND', `No route for ${c.req.method} ${c.req.path}`);
-    return c.json(err.toEnvelope(c.get('requestId')), err.status);
   });
 
   const passwordHasher = deps.passwordHasher ?? createArgon2Hasher(ARGON2_MINIMUMS);
@@ -213,7 +171,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       rateLimiter: deps.rateLimiter,
       sessions,
       routeAccess: resolveRouteAccess,
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
@@ -246,8 +204,6 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
   app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle }));
   app.route('/', integrationRoutes(store, deps.version));
-  app.route('/', customerRoutes(store));
-  app.route('/', projectRoutes(store));
   app.route('/', importRoutes(store));
   app.route('/', vatRoutes(store));
   app.route('/', feeProposalRoutes(store));
@@ -255,21 +211,16 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', contingencyRoutes(store));
   app.route('/', installmentRoutes(store));
   app.route('/', retainerRoutes(store));
-  app.route('/', receivableRoutes(store));
-  app.route('/', paymentRoutes(store));
   app.route('/', operationRoutes(store));
-  app.route('/', summaryRoutes(store));
   app.route('/', auditRoutes(store));
-  app.route('/', attachmentRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
-  app.route('/', expenseRoutes(store, { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 }));
-  app.route('/', expenseCategoryRoutes(store));
-  app.route('/', incomeRoutes(store));
-  app.route('/', expenseGroupRoutes(store));
-  app.route('/', conversionRoutes(store));
-  app.route('/', fxRateRoutes(deps.fxRates ?? null));
   app.route('/', inboxRoutes(store));
   app.route('/', entriesRoutes(store));
-  app.route('/', profileRoutes(store));
+  const portalRouteDeps: PortalRouteDependencies = {
+    store,
+    attachments: { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 },
+    fxRates: deps.fxRates ?? null,
+  };
+  for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions }));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));

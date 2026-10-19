@@ -39,6 +39,15 @@ export function incomeAffordancesFor(profile: HostedProfile): IncomeAffordances 
 }
 
 /**
+ * MUT-286: whether the client picker offers Add «name». The same ownership gate as every other portal write: the
+ * server lets a session write customers on any writer-null profile (MUT-65), but a writer-null firm is nobody's own
+ * (ADR-066), and Malafat writes the clients of the profiles it feeds. Every local profile is owned.
+ */
+export function canAddClient(profile: HostedProfile): boolean {
+  return profile.owned && profile.writerOfRecord === null;
+}
+
+/**
  * A row the settle route accepts: captured through POST /v1/income (origin
  * ADJUSTMENT; anything Malafat posted answers 404) and still open.
  */

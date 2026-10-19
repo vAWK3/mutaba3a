@@ -136,6 +136,22 @@
 **Impact**: a profile type change (MUT-182) deletes categories and nulls `categoryId`. Groups and marks are untouched, and the summary shows the spending as uncategorized, but nothing asserts it.
 **Fix**: a store-contract case: create a group with a categorized member, run the type change, and assert the group, its mark and a `null` category bucket.
 
+### TD-173: The animated slow-session release-QA spec fails on a preview build, on main too
+**Status**: Open
+**Ticket**: none (found during MUT-286, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Low (the reduced-motion variant passes; the screen itself works)
+**Impact**: `@portal.signin.boot-slow-session` ("a slow session check … then Still connecting…") never sees "Still connecting…" within its 5 s window on a `vite preview` build; the reduced-motion test of the same screen passes. Reproduced on main 58f68b95 with the same spec, so it predates MUT-286. With two Playwright workers the reduced-motion variant fails the same way too (it passes with one): the 5 s window is tight under load.
+**Fix**: Check whether the bloom loader's slow caption timer restarts when the loader blooms in place (the static mark is swapped for the loader at 400 ms), and fix the timer or the spec's window.
+
+### TD-171: The local snapshot fingerprint covers 3 of 27 record types
+**Status**: Open
+**Ticket**: MUT-286 (2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Medium (a silent shape change in an uncovered record breaks restores of saved local data)
+**Impact**: `src/hosted/local/__tests__/format-fingerprint.test.ts` (D1) only fingerprints organizations, customers and receivables. A field added, removed or retyped on any of the other 24 persisted maps (projects, payments, allocations, expenses, groups…) does not fail CI. A browser holding an older snapshot would then restore records missing the field without a migration.
+**Fix**: add a fingerprint case per persisted map in `LocalSnapshotMaps`, built from a real `MemoryLedgerStore` record. Better still, assert that every key of `LocalSnapshotMaps` has a case, so a new map can't be added uncovered.
+
 ### TD-170: The portal's typed API client lags the spec until MUT-281
 **Status**: Resolved (MUT-281, 2026-10-19)
 **Ticket**: MUT-281 (MUT-280 eng review D2, 2026-10-18)
@@ -1815,6 +1831,15 @@ empty option and list the profiles only), with a drawer test for each.
 ---
 
 ## Resolved Debt
+
+### TD-172: Signed out, a person can't record money owed: the portal can't create a client
+**Status**: Resolved (2026-10-19, MUT-286; Basel chose the picker option)
+**Ticket**: MUT-286 (2026-10-19)
+**Added**: 2026-10-19
+**Priority**: High for MUT-284 (the brief's `local.income-persists` QA scenario can't be met)
+**Impact**: Owed income needs a client, and the portal's `ClientPicker` only lists existing ones. Hosted clients come from the phone app or Malafat; signed out there is neither, so a local person can record money received but never money owed. The API already allows a session to create a customer on an owned profile (`POST /v1/customers`, MUT-65), and it runs locally. The release-QA catalog covers money received (`portal.local.received-persists`) until this is decided.
+**Fix**: Basel to decide where a client is created in the portal (an "Add «name»" option in the picker, a New client drawer on Clients, or both), for both modes, since signed in and signed out are the same portal. Then extend `local-mode.spec.ts` with the brief's owed + part-paid scenario.
+**Resolution**: the client picker offers "Add client: «name»" for a typed name no client has, on a profile the person owns (`canAddClient`: owned and writer-null, so every local profile and no Malafat-fed one), in both the income and the expense drawers, signed in and signed out. Picking it calls `POST /v1/customers` (attempt-scoped Idempotency-Key, `useCreateCustomer`) and picks the new client; a refusal keeps the name unpicked with a toast. Release-QA: `portal.local.owed-part-paid` (signed out, owed + part paid + reload) and `portal.income.add-client` (signed in; none on a Malafat-fed profile).
 
 ### TD-151: A `--lock` that lands mid-change is overwritten by the new password
 **Status**: Resolved (2026-10-16, MUT-237 review fixes from MUT-238's pre-landing review)

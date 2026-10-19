@@ -76,6 +76,14 @@ describe('ExpenseDrawer (hosted)', () => {
     expect(amount.getAttribute('inputmode')).toBe('decimal');
   });
 
+  it('names the client field by its label, and offers Add client only when the profile allows it (MUT-286)', async () => {
+    const user = userEvent.setup();
+    renderDrawer({ canAddClient: false });
+    const client = await screen.findByLabelText('Client');
+    await user.type(client, 'Ramallah Bakery');
+    expect(screen.queryByRole('option', { name: /Add client/ })).toBeNull();
+  });
+
   it('creates an expense with an Idempotency-Key and closes on success', async () => {
     const user = userEvent.setup();
     let createCall: { body: unknown; headers: Headers } | null = null;

@@ -79,9 +79,11 @@ export interface ExpenseDrawerProps {
   timezone?: string;
   /** Called instead of `onClose` after a delete, so the list can drop an anchor on the deleted record (MUT-91). */
   onDeleted?: (expenseId: string) => void;
+  /** The client field offers "Add client: «name»" (`canAddClient(profile)`, MUT-286). */
+  canAddClient?: boolean;
 }
 
-export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted }: ExpenseDrawerProps) {
+export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted, canAddClient = false }: ExpenseDrawerProps) {
   // After-save feedback (R1 via HP1, MUT-91): always from the drawer, the one
   // place that knows a save happened (ADR-057 §4). Delete marks nothing.
   const markSaved = (id: string) => useSavedFlashStore.getState().markSaved({ kind: 'expense', ids: [id], profileId });
@@ -282,10 +284,12 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
                 control={control}
                 render={({ field }) => (
                   <ClientPicker
+                    id="hosted-expense-client"
                     profileId={profileId}
                     value={field.value || ''}
                     onChange={field.onChange}
                     placeholder={t('hosted.expenses.drawer.clientPlaceholder')}
+                    canCreate={canAddClient}
                   />
                 )}
               />

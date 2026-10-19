@@ -2018,3 +2018,20 @@ Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
 ### Toast action — `src/hosted/components/Toast.tsx`
 `show(message, { tone, action: { label, onAction } })`: a `.press` link-button in either tone; using it closes the toast; hover/focus holds the 6 s timer.
 
+## Local mode (portal) — MUT-286
+
+### useMode / useIsLocalMode / setMode — `src/hosted/session/mode.ts`
+**Purpose**: the portal's mode hint (`mut-mode`: `local` | `remote`, ADR-100). `currentMode()` is the hint or the unhinted fallback (`probe` in production, `remote` pinned by `src/test/setup.ts`); `useIsLocalMode()` gates account-only UI. Tests: `session/__tests__/mode.test.ts`.
+
+### localBackend() — `src/hosted/api/client.ts`
+**Purpose**: the memoized lazy local backend (`@mut/local-backend`), for UI that needs it directly (Your data, cross-tab refresh). A failed boot is forgotten so the next call retries. Tests: `api/__tests__/client-mode.test.ts`.
+
+### YourDataDrawer — `src/hosted/components/YourDataDrawer.tsx`
+**Purpose**: Download my records / Restore from file, signed out only, opened by `?yourData=true` from the account menu (`AccountDrawers`). Tests: `session/__tests__/local-mode.test.tsx` › Your data.
+
+### ReloadToContinue — `src/hosted/pages/auth/BootScreens.tsx`
+**Purpose**: the D1 screen when another tab saved this device's records with a newer build (`ApiError` code `LOCAL_FORMAT_TOO_NEW`), shown by `AuthGate`.
+
+### ClientPicker `canCreate` — `src/hosted/components/ClientPicker.tsx` (extended, MUT-286)
+**Purpose**: the portal's client field now offers "Add client: «name»" when `canCreate` (`canAddClient(profile)`, `data/incomeAffordances.ts`) and no client has the typed name; picking creates it through `useCreateCustomer` (`data/customerQueries.ts`) and picks it. Without `canCreate` it is unchanged. Used by IncomeCaptureDrawer and ExpenseDrawer (`canAddClient` prop). Tests: `components/__tests__/ClientPicker.test.tsx`.
+

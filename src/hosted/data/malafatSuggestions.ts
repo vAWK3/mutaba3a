@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type HostedProfile, type MalafatSuggestions, type MalafatSuggestionsChange, type Me } from '../api/client';
 import { ME_KEY, useMe } from '../session/me';
+import { useIsLocalMode } from '../session/mode';
 import type { MalafatMoment } from '../../types';
 
 /**
@@ -34,12 +35,13 @@ export interface PortalMalafatState {
   allowed: boolean;
 }
 
-/** The account's preferences, read from /v1/me. */
+/** The account's preferences, read from /v1/me. Signed out there is no account to hold them: never allowed (MUT-286 AC5). */
 export function usePortalMalafat(): PortalMalafatState {
   const me = useMe();
+  const local = useIsLocalMode();
   // Resolved here too: a server older than 1.25.0-mut191 sends no field, and the portal may ship first
   const stored: Partial<MalafatSuggestions> | undefined = me.user.malafatSuggestions;
-  return { on: stored?.off !== true, dismissed: stored?.dismissed ?? [], allowed: !isMalafatCustomer(me) };
+  return { on: stored?.off !== true, dismissed: stored?.dismissed ?? [], allowed: !local && !isMalafatCustomer(me) };
 }
 
 /** Send one change; the answer is written into the cached /v1/me, so every suggestion re-reads it. */

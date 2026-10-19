@@ -29,6 +29,21 @@ features:
       - Received is chosen and the defaults read "ILS · today · cash"
       - POST /v1/income gets {kind received, amount 1200.00, ILS, today, the client, BANK} with an Idempotency-Key
       - The drawer closes, "Saved · ₪1,200.00 received from Client 1" is announced, the payment is listed, and focus returns to + Add income
+  - id: add-client
+    title: Add income for a client that isn't there yet, with Add client in the picker; a Malafat-fed profile never offers it
+    tier: secondary
+    paths:
+      - src/hosted/data/customerQueries.ts
+      - src/hosted/components/ExpenseDrawer.tsx
+      - src/hosted/pages/views/ExpensesList.tsx
+    steps:
+      - On your own profile's Receivables, choose + Add income, Owed, and type a client name nobody has ("Ramallah Bakery")
+      - Choose "Add client: Ramallah Bakery", type 900, and save
+      - On a Malafat-fed profile, record an expense and type the same name in Client
+    expect:
+      - The client is created on the server with that name and picked in the drawer; the income goes to the server for that client
+      - The entry is listed under Ramallah Bakery
+      - On the Malafat-fed profile the client list offers no Add client row
   - id: date-too-old
     title: Add income dated more than ten years back is refused at the date field with "can't be more than ten years ago", not "later than today", and keeps the entry
     tier: secondary

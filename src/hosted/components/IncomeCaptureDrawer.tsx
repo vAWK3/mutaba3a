@@ -8,7 +8,7 @@ import { useLanguage } from '../../lib/i18n/core';
 import { isolate, isolateAmount } from '../../lib/utils';
 import type { Currency, HostedProfile } from '../api/client';
 import { useAttemptKey } from '../data/attemptKey';
-import { incomeAffordancesFor, type IncomeKind } from '../data/incomeAffordances';
+import { canAddClient, incomeAffordancesFor, type IncomeKind } from '../data/incomeAffordances';
 import { useCreateIncome } from '../data/incomeQueries';
 import { useCustomerDirectory } from '../data/queries';
 import { formatDecimal } from '../format/DecimalAmount';
@@ -216,7 +216,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
               name="customerId"
               control={control}
               render={({ field }) => (
-                <ClientPicker id="hosted-income-client" profileId={profile.id} value={field.value} onChange={field.onChange} placeholder={t('hosted.income.clientPlaceholder')} />
+                <ClientPicker id="hosted-income-client" profileId={profile.id} value={field.value} onChange={field.onChange} placeholder={t('hosted.income.clientPlaceholder')} canCreate={canAddClient(profile)} />
               )}
             />
             {fieldError('customerId')}
