@@ -25,7 +25,7 @@ export function SaveFeedbackIcon({ preset, size = 16 }: SaveFeedbackIconProps) {
   }, [preset, reducedMotion]);
 
   return (
-    <span ref={ref} className="save-feedback-icon">
+    <span ref={ref} className="save-feedback-icon" aria-hidden="true">
       <SuccessIcon size={size} />
     </span>
   );
