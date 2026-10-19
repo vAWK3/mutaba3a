@@ -77,13 +77,11 @@ if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain 2>/dev/null)" && -z "${IMAG
 fi
 
 # MUT-324 (D11): web first. People are asked to accept the terms this release names, so that exact
-# text must already be on the public site. `make release server` checks it in its preflight, before the
-# version bump and push, and says so with TERMS_CHECKED_BY_PREFLIGHT=1; run on its own, this checks here.
+# text must already be on the public site. `make release server` also checks it in its preflight,
+# before the version bump and push; this second check costs one fetch and holds whatever runs this.
 # SKIP_TERMS_CHECK=1 only for an emergency fix that keeps the version.
 if [[ "${SKIP_TERMS_CHECK:-}" == "1" ]]; then
   info "WARNING: skipping the terms check (SKIP_TERMS_CHECK=1)"
-elif [[ "${TERMS_CHECKED_BY_PREFLIGHT:-}" == "1" ]]; then
-  info "terms checked by the release preflight"
 else
   npm --prefix "${SERVER_DIR}" run --silent terms:check-live || die "the terms check failed (above); if the version isn't listed yet, release web first (make release web)"
 fi

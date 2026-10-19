@@ -79,6 +79,7 @@ help:
 	@printf '  $(C_GREEN)make release web$(C_OFF)       deploy the frontend to Netlify (push to $(RELEASE_BRANCH))\n'
 	@printf '  $(C_GREEN)make release server$(C_OFF)    deploy the API + hosted portal to Cloud Run ($(ENVIRONMENT))\n'
 	@printf '  $(C_GREEN)make release full$(C_OFF)      web, then server — each gated and confirmed on its own\n'
+	@printf '  $(C_DIM)  after a terms bump: make release web, wait for Netlify, then make release server$(C_OFF)\n'
 	@printf '\n$(C_BOLD)Checks only — change nothing$(C_OFF)\n'
 	@printf '  make doctor            run every preflight check for both targets\n'
 	@printf '  make preflight-web     release-readiness for the web target\n'
@@ -96,6 +97,7 @@ help:
 	@printf '\n$(C_BOLD)Overrides$(C_OFF) $(C_DIM)(prefix any target)$(C_OFF)\n'
 	@printf '  ALLOW_DIRTY=1 ALLOW_UNMERGED=1 ALLOW_WORKTREES=1 ALLOW_NODE_MAJOR=1\n'
 	@printf '  SKIP_REMOTE=1          offline: do not contact origin or GCP\n'
+	@printf '  SKIP_TERMS_CHECK=1     server: skip the terms-are-live check (an emergency fix that keeps the terms version)\n'
 	@printf '  BUMP=patch|minor|major|keep    skip the version prompt\n'
 	@printf '  AUTO=1                 skip the final "deploy now?" confirmation\n'
 	@printf '  RELEASE_BRANCH=  ENVIRONMENT=  GCP_PROJECT_ID=  TF_STATE_BUCKET=\n'
@@ -253,7 +255,7 @@ release-server: preflight-server
 	  printf '$(C_CYAN)▶ pushing %s so %s is reachable by everyone else$(C_OFF)\n' '$(RELEASE_BRANCH)' "$$sha"; \
 	  git push origin $(RELEASE_BRANCH); \
 	fi; \
-	(cd server && TERMS_CHECKED_BY_PREFLIGHT=1 ./scripts/deploy.sh) && \
+	(cd server && ./scripts/deploy.sh) && \
 	scripts/tag-release.sh api "$$version" --push
 
 # ---------------------------------------------------------------------------

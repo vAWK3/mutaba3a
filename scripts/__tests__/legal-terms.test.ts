@@ -81,10 +81,18 @@ describe('releasing the terms web first (MUT-324)', () => {
     expect(release.indexOf('preflight-server')).toBeLessThan(release.indexOf('bump-version.sh'));
   });
 
-  it('deploy.sh checks again only when run on its own, not after make release server already did', () => {
-    expect(recipe('release-server')).toContain('TERMS_CHECKED_BY_PREFLIGHT=1 ./scripts/deploy.sh');
-    expect(deploySh).toMatch(/TERMS_CHECKED_BY_PREFLIGHT/);
+  it('deploy.sh always checks again: nothing tells it the preflight already did (review pass 2)', () => {
+    expect(makefile).not.toMatch(/TERMS_CHECKED_BY_PREFLIGHT/);
+    expect(deploySh).not.toMatch(/TERMS_CHECKED_BY_PREFLIGHT/);
     expect(deploySh).toContain('terms:check-live');
+  });
+
+  it('only SKIP_TERMS_CHECK skips the terms check; SKIP_REMOTE (offline for origin and GCP) never does', () => {
+    const block = preflight.slice(preflight.indexOf('head_ "Terms of service"'));
+    const terms = block.slice(0, block.indexOf('\n  fi\n'));
+    expect(terms).toContain('SKIP_TERMS_CHECK');
+    expect(terms).not.toContain('SKIP_REMOTE');
+    expect(makefile).toMatch(/SKIP_TERMS_CHECK=1/);
   });
 });
 

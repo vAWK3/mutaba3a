@@ -363,11 +363,10 @@ if [[ "$MODE" == "server" ]]; then
   # MUT-324 (D11): web first. The server asks people to accept CURRENT_TERMS, so the public
   # site must already list that exact text. Checked here, before the version bump and push,
   # so a refusal leaves nothing behind (review fix 3). The script prints what is wrong.
+  # SKIP_REMOTE doesn't skip it: it reads the public site, not origin or GCP (review pass 2).
   head_ "Terms of service"
   if [[ "${SKIP_TERMS_CHECK:-0}" == "1" ]]; then
     warn "terms not checked ${DIM}(SKIP_TERMS_CHECK=1)${NC}"
-  elif [[ "${SKIP_REMOTE:-0}" == "1" ]]; then
-    warn "terms not checked ${DIM}(SKIP_REMOTE=1)${NC}"
   elif TERMS_OUT="$(npm --prefix server run --silent terms:check-live 2>&1)"; then
     ok "${TERMS_OUT#\[terms\] }"
   else
