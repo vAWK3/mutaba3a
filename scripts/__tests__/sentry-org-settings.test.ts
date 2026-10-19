@@ -195,6 +195,19 @@ describe('syncOrgSettings', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it('accepts a single page: Sentry always sends a next link, with results="false" (convergence review)', async () => {
+    const single = new Response(JSON.stringify(mutaba3aProjects), {
+      status: 200,
+      headers: {
+        link:
+          '<https://de.sentry.io/api/0/organizations/mutaba3a/projects/?&cursor=0:0:1>; rel="previous"; results="false"; cursor="0:0:1", ' +
+          '<https://de.sentry.io/api/0/organizations/mutaba3a/projects/?&cursor=0:100:0>; rel="next"; results="false"; cursor="0:100:0"',
+      },
+    });
+    const fetch = respond(okResponse(euOrg(desired)), single);
+    await expect(syncOrgSettings({ ...args, mode: 'check' }, desired, EU, fetch)).resolves.toEqual([]);
+  });
+
   it('accepts an empty org, for the first run before Terraform has created the projects (D16)', async () => {
     const fetch = respond(okResponse(euOrg(desired)), okResponse([]));
     await expect(syncOrgSettings({ ...args, mode: 'check' }, desired, EU, fetch)).resolves.toEqual([]);

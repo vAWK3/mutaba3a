@@ -234,6 +234,39 @@
 - **CI:** `terraform test` runs for the GCP module too (`tests/database_pool.tftest.hcl`, mocked providers).
 - `API_VERSION` 1.32.0-mut270; `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
 
+## [Unreleased] - 2026-10-18 — Sentry contract 1.1.0: money keys, multi-line values and messages (MUT-147 convergence review, ADR-091 amendment 4)
+
+**Why:** the fresh review after the merge found values the 1.0.0 rules still let through: money fields such as `grossMinor`, pretty-printed JSON, and the event message and breadcrumb messages, which were never scrubbed. 1.0.0 is merged, so the fixes ship as 1.1.0 and the 1.0.0 pin stays.
+
+### Changed
+- `docs/observability/sentry-rules.json` 1.1.0:
+  - new deny tokens `minor`, `reference`, `label`, `metadata`, and plurals beside their singulars;
+  - keys split at letter–digit boundaries (`email2`, `address2Line`);
+  - a container value under a sensitive key runs on through the indented lines below it;
+  - `messageDropFields` (`params`), and `^FormatException` keeps its first line only.
+- `sentry-fixtures.json` 1.1.0: a pretty-printed JSON message (api), and a structured message with a dirty breadcrumb message (capture-app).
+- `server/infrastructure/sentry`: the spike alert defaults to 10 an hour, and Terraform rejects a threshold at or above the smallest daily key cap, which could never fire. `backend.hcl.example` names the real bucket shape.
+- `server/DEPLOYMENT.md` §1.5 step 4: `terraform init -backend-config=backend.production.hcl`, instead of a `TF_STATE_BUCKET` that step never sets.
+- `docs/observability/README.md` rules 3 and 7, ADR-091 amendment 4, INFRA alert row.
+
+### Changed by the second review pass (still 1.1.0, re-pinned before merge)
+- **Bare-key containers.** One-line nesting under a bare key (Dart's `Map.toString`, single-line `util.inspect`) stopped at the first `}` and leaked later siblings, and `util.inspect` containers with a prefix (`Set(2) {`, `Client {`, `[Object: null prototype] {`) weren't seen as containers. Both now run to the end of the line and through the indented lines below. A 4,000-object fuzz went from about 700 leaks to none.
+- **`==` is not a label**, so Flutter and JS assertion text is left alone.
+- **First line only** also matches the start of the value: an obfuscated Flutter build renames `FormatException`.
+- **Contexts.** `flutter_error_details.context` and `.information` are always dropped.
+- **Plurals** `references`, `labels`, `ibans`, `mobiles`, `usernames`.
+- **Fixtures.** A portal `logentry` with `params`; the capture-app fixture gains an obfuscated `FormatException` and `flutter_error_details`.
+- **Tests.** Every message shape on an event is checked, not just the first; a `breadcrumbList` helper replaces four copies.
+- **Docs.** README rules 3, 4 and 7 (including a new known limit: `;` inside an unquoted Dart map value), and DEPLOYMENT's tools list now says Terraform `>= 1.9`.
+
+### Changed by the third review pass (still 1.1.0; the last fix cycle)
+- **Pattern.** Quoted keys accept `=>` (`util.inspect` Map and URLSearchParams) and the `util.inspect` container prefixes; a bare key may be followed by `)`, for Dart's `Invalid argument (amountMinor): …` and `RangeError (amountMinor): …`. Before, all of these passed unchanged.
+- **Deny tokens.** Plurals of the lowercase compounds (`phonenumbers`, `apikeys`, `emailaddresses`, …); before, `{"apikeys":["mut_live_x"]}` passed unchanged.
+- **Docs.** README forms covered, both branches, the plurals sentence and a new known limit (bracketed form keys). ADR wording on the Terraform version. The capture-app fixture's `flutter_error_details.context` starts with `thrown`, as sentry_flutter writes it.
+
+### Technical
+- `sentry-rules.test.ts`: new leak cases (money keys, pretty JSON, `util.inspect`, digit keys, plurals); messages and breadcrumb messages go through the same checks and reproduction as exception values. `sentry-org-settings.test.ts`: a realistic single-page `Link` header passes.
+
 ## [Unreleased] - 2026-10-17 — The phone app asks first, then sends anonymous activation events (MUT-157, ADR-090, ADR-092)
 
 **Why:** epic MUT-152's activation funnel on iOS and Android. Built in the Flutter repo on `feature/mut-157-phone-analytics` (its brief: `.claude/designs/mut-157-phone-analytics.md` there).

@@ -109,8 +109,8 @@ run "three_email_alerts_per_project" {
   }
 
   assert {
-    condition     = alltrue([for alert in sentry_issue_alert.spike : alert.conditions_v2[0].event_frequency.value == 50 && alert.conditions_v2[0].event_frequency.interval == "1h"])
-    error_message = "The spike alert fires above the default 50 events of one issue per hour."
+    condition     = alltrue([for alert in sentry_issue_alert.spike : alert.conditions_v2[0].event_frequency.value == 10 && alert.conditions_v2[0].event_frequency.interval == "1h"])
+    error_message = "The spike alert fires above the default 10 events of one issue per hour."
   }
 }
 
@@ -193,4 +193,15 @@ run "rejects_daily_caps_that_overrun_the_monthly_quota" {
   }
 
   expect_failures = [var.key_rate_limit_per_day]
+}
+
+run "rejects_a_spike_threshold_the_daily_caps_never_reach" {
+  command = plan
+
+  # Convergence review: portal and landing keys drop everything past 20 a day, so 50 an hour can never happen there.
+  variables {
+    spike_threshold_per_hour = 50
+  }
+
+  expect_failures = [var.spike_threshold_per_hour]
 }

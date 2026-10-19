@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "marker": "MUT147-SENTRY-FIXTURE-DO-NOT-BUNDLE",
   "fixtures": [
     {
@@ -544,6 +544,110 @@
               }
             }
           ]
+        }
+      }
+    },
+    {
+      "name": "api-message-pretty-printed-json",
+      "surface": "api",
+      "input": {
+        "level": "error",
+        "platform": "node",
+        "release": "mutaba3a-api@0.3.9+abc1234",
+        "environment": "production",
+        "tags": { "surface": "api", "request_id": "req_c41d", "route": "/v1/income" },
+        "message": "Upstream rejected payload {\n  \"grossMinor\": 12000,\n  \"emails\": [\n    \"visitor@example.test\",\n    \"second@example.test\"\n  ],\n  \"status\": \"draft\"\n}"
+      },
+      "expected": {
+        "level": "error",
+        "platform": "node",
+        "release": "mutaba3a-api@0.3.9+abc1234",
+        "environment": "production",
+        "tags": { "surface": "api", "request_id": "req_c41d", "route": "/v1/income" },
+        "message": "Upstream rejected payload {\n  \"grossMinor\": [Filtered],\n  \"emails\": [Filtered]\n}"
+      }
+    },
+    {
+      "name": "capture-app-structured-message-and-breadcrumb-message",
+      "surface": "capture-app",
+      "input": {
+        "level": "error",
+        "platform": "other",
+        "release": "capture-app@1.4.0+57",
+        "environment": "production",
+        "tags": { "surface": "capture-app", "app_build": "57", "locale": "ar" },
+        "message": {
+          "formatted": "Sync failed grossMinor=12000 for https://api.example.test/v1/income?client=acme",
+          "template": "Sync failed grossMinor=%s for %s",
+          "params": ["12000", "https://api.example.test/v1/income?client=acme"]
+        },
+        "exception": {
+          "values": [
+            { "type": "Ab", "value": "FormatException: Invalid radix-10 number (at character 1)\nJohn Smith\n^" }
+          ]
+        },
+        "contexts": {
+          "flutter_error_details": {
+            "library": "widgets library",
+            "context": "thrown building ClientTile(name: John Smith)",
+            "information": "The relevant error-causing widget was: ClientTile(note: owes 1,200 for the Haifa job)"
+          }
+        },
+        "breadcrumbs": {
+          "values": [
+            { "category": "sync", "message": "Retry GET https://api.example.test/v1/clients?q=acme failed: note: late" },
+            { "category": "navigation", "data": { "from": "/capture", "to": "/recent" } }
+          ]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "other",
+        "release": "capture-app@1.4.0+57",
+        "environment": "production",
+        "tags": { "surface": "capture-app", "app_build": "57", "locale": "ar" },
+        "message": {
+          "formatted": "Sync failed grossMinor=[Filtered]",
+          "template": "Sync failed grossMinor=%s for %s"
+        },
+        "exception": {
+          "values": [{ "type": "Ab", "value": "FormatException: Invalid radix-10 number (at character 1)" }]
+        },
+        "contexts": {
+          "flutter_error_details": { "library": "widgets library" }
+        },
+        "breadcrumbs": {
+          "values": [
+            { "category": "sync", "message": "Retry GET https://api.example.test/v1/clients failed: note: [Filtered]" },
+            { "category": "navigation", "data": { "from": "/capture", "to": "/recent" } }
+          ]
+        }
+      }
+    },
+    {
+      "name": "portal-logentry-with-params",
+      "surface": "portal",
+      "input": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "mutaba3a-portal@0.3.9+abc1234",
+        "environment": "production",
+        "tags": { "surface": "portal", "route": "/clients/:clientId", "locale": "ar" },
+        "logentry": {
+          "formatted": "Save failed: {\"label\":\"Deposit from John Smith\",\"paidMinor\":5000} at https://portal.example.test/clients?search=smith",
+          "message": "Save failed: %s at %s",
+          "params": ["{\"label\":\"Deposit from John Smith\",\"paidMinor\":5000}", "https://portal.example.test/clients?search=smith"]
+        }
+      },
+      "expected": {
+        "level": "error",
+        "platform": "javascript",
+        "release": "mutaba3a-portal@0.3.9+abc1234",
+        "environment": "production",
+        "tags": { "surface": "portal", "route": "/clients/:clientId", "locale": "ar" },
+        "logentry": {
+          "formatted": "Save failed: {\"label\":\"[Filtered]\",\"paidMinor\":[Filtered]} at https://portal.example.test/clients",
+          "message": "Save failed: %s at %s"
         }
       }
     }

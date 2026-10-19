@@ -65,7 +65,14 @@ function comparable(config: UserConfig) {
 
 describe('vite.config', () => {
   it.each(['web', 'desktop'])('leaves the %s build exactly as it was', (mode) => {
-    expect(comparable(resolve(mode))).toMatchSnapshot();
+    // deploy.env/the shell may export a real MUTABA3A_POSTHOG_KEY (Makefile line 51, MUT-155)
+    // for an actual release build; pin it so the snapshot never depends on that ambient state.
+    vi.stubEnv('MUTABA3A_POSTHOG_KEY', '');
+    try {
+      expect(comparable(resolve(mode))).toMatchSnapshot();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   describe('brand fonts (MUT-102)', () => {
