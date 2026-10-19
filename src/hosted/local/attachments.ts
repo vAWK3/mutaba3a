@@ -85,9 +85,15 @@ export function liveStoredKeys(maps: LocalSnapshotMaps, now: Date): Set<string> 
   return keys;
 }
 
-/** The files a records file carries: only those a person can see (READY), never a half-finished upload. */
+/**
+ * The files a records file carries: READY receipts, the ones a person can
+ * see, never a half-finished upload. Receipts only, because Restore reads
+ * back receipts only; documents can't be uploaded signed out.
+ */
 export function backedUpKeys(maps: LocalSnapshotMaps): Set<string> {
-  return new Set(storedRecords(maps).filter((r) => r.status === 'READY').map((r) => r.storageKey as string));
+  const keys = new Set<string>();
+  for (const r of maps.expReceipts.values()) if (!r.deletedAt && r.status === 'READY' && typeof r.storageKey === 'string' && r.storageKey) keys.add(r.storageKey);
+  return keys;
 }
 
 /** Deletes every stored file `live` doesn't name; returns how many. Run under the lock, over an up-to-date store. */

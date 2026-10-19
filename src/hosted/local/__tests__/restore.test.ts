@@ -75,4 +75,18 @@ describe('applyRestore', () => {
     expect(await (await new IndexedDbBlobStore().get(mine.key))?.text()).toBe(PDF);
     expect(await new IndexedDbBlobStore().get(other.key)).toBeNull();
   });
+
+  it('on a refused save, deletes only the files it added, never one another tab saved meanwhile (re-review)', async () => {
+    const { archive, mine, persistence, lock } = await backupThenThisDevice();
+    // Another tab's receipt: saved to disk and to the blob store after this tab last loaded, so this tab's memory doesn't name it.
+    await new IndexedDbBlobStore().put('org/x/expense-receipts/other-tab', new Blob(['%PDF other tab'], { type: 'application/pdf' }));
+    persistence.save = async () => {
+      throw new DOMException('full', 'QuotaExceededError');
+    };
+
+    const decoded = await decodeRecordsArchive(archive);
+    await expect(applyRestore({ lock, persistence, store: mine.store, blobs: mine.blobs, now: NOW }, decoded.snapshot, (await decoded.readFiles()).files)).rejects.toThrow();
+
+    expect(await (await new IndexedDbBlobStore().get('org/x/expense-receipts/other-tab'))?.text()).toBe('%PDF other tab');
+  });
 });

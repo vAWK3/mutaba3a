@@ -42,12 +42,18 @@ export class LocalDatabase {
     if (this.superseded) return Promise.reject(new LocalDatabaseSupersededError(this.name));
     if (!this.dbPromise) {
       const opening = new Promise<IDBDatabase>((resolve, reject) => {
+        let gaveUp = false;
         const request = indexedDB.open(this.name, this.version);
         request.onupgradeneeded = () => {
           for (const store of this.stores) if (!request.result.objectStoreNames.contains(store)) request.result.createObjectStore(store);
         };
         request.onsuccess = () => {
           const db = request.result;
+          // A blocked open that was already refused can still succeed once the other tab lets go: nobody holds it, so release it.
+          if (gaveUp) {
+            db.close();
+            return;
+          }
           db.onversionchange = () => {
             db.close();
             this.superseded = true;
@@ -56,7 +62,10 @@ export class LocalDatabase {
           resolve(db);
         };
         request.onerror = () => reject(request.error ?? new Error(`Failed to open the ${this.name} database`));
-        request.onblocked = () => reject(new LocalDatabaseBlockedError(this.name));
+        request.onblocked = () => {
+          gaveUp = true;
+          reject(new LocalDatabaseBlockedError(this.name));
+        };
       });
       this.dbPromise = opening;
       opening.catch(() => {

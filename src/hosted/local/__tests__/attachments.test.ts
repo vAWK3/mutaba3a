@@ -99,8 +99,8 @@ describe('which stored files are live (review D6)', () => {
     expect([...liveStoredKeys(maps, new Date(NOW_MS))].sort()).toEqual(['doc', 'ready', 'uploading']);
   });
 
-  it('backs up only files a person can see: READY receipts and documents', () => {
-    expect([...backedUpKeys(maps)].sort()).toEqual(['doc', 'ready']);
+  it('backs up only receipts a person can see (READY): what Restore reads back', () => {
+    expect([...backedUpKeys(maps)].sort()).toEqual(['ready']);
   });
 });
 

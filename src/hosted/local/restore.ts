@@ -4,6 +4,7 @@ import type { IndexedDbBlobStore, StoredFile } from './blobStore.js';
 import type { LocalLock } from './locks.js';
 import { LOCAL_FORMAT_VERSION, type StoredSnapshot } from './migrations/index.js';
 import type { IndexedDbPersistence } from './persistence.js';
+import { reloadFromDisk } from './transport.js';
 
 export interface RestoreDependencies {
   lock: LocalLock;
@@ -27,13 +28,17 @@ export interface RestoreDependencies {
  */
 export async function applyRestore(deps: RestoreDependencies, snapshot: Omit<StoredSnapshot, 'stateVersion'>, files: ReadonlyArray<{ key: string } & StoredFile>): Promise<void> {
   const { lock, persistence, store, blobs, now } = deps;
-  await lock.withLock(async ({ onDiskVersion }) => {
+  await lock.withLock(async ({ stale, onDiskVersion }) => {
+    // Another tab may have saved since this one loaded: its records name files this tab's memory doesn't.
+    if (stale) await reloadFromDisk(store, persistence);
     await blobs.putFiles(files);
     try {
       await persistence.save({ ...snapshot, formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now() });
     } catch (error) {
-      // The save was refused (often storage full, which the files just added make likelier): drop what step 1 added, keeping this device's own files.
-      await sweepBlobs(blobs, liveStoredKeys(store.snapshot().maps, now())).catch(() => undefined);
+      // The save was refused (often storage full, which the files just added make likelier). Delete only what
+      // step 1 added that this device's own records don't name; nothing else is this call's to delete.
+      const live = liveStoredKeys(store.snapshot().maps, now());
+      await blobs.delete(files.map((f) => f.key).filter((key) => !live.has(key))).catch(() => undefined);
       throw error;
     }
     store.restore(snapshot);

@@ -1,7 +1,8 @@
 import { LocalDatabase } from './idb.js';
 
 export const BLOBS_DB_NAME = 'mut-local-blobs';
-const DB_VERSION = 1;
+/** 2: the `meta` store (review D11). Version 1 only ever existed in builds of this branch before it, never in a release. */
+const DB_VERSION = 2;
 const STORE_NAME = 'blobs';
 /** `{ type, size }` per key, so a size/type check never loads a file's bytes (review D11). Written with the file in one transaction. */
 const META_STORE = 'meta';
