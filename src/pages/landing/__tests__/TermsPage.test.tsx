@@ -59,12 +59,20 @@ describe('TermsPage (MUT-324)', () => {
     expect(screen.getByRole('link', { name: /current terms/i })).toHaveAttribute('href', '/terms');
   });
 
-  it('says the English text prevails and names the governing law, in both languages', async () => {
+  it('says the English text prevails and names the governing law', async () => {
     renderPage('en');
     await loaded(en);
     const text = document.querySelector('main')?.textContent ?? '';
     expect(text).toContain('English text prevails');
     expect(text).toContain('England and Wales');
+  });
+
+  it('says the same in Arabic: the law of England and Wales, and the English text prevails', async () => {
+    renderPage('ar');
+    await loaded(ar);
+    const text = document.querySelector('main')?.textContent ?? '';
+    expect(text).toContain('قانون إنجلترا وويلز');
+    expect(text).toContain('يسود النص الإنجليزي');
   });
 
   it('is busy only while the text loads, including when the version does not exist', async () => {

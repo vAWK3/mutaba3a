@@ -148,6 +148,16 @@ interface SetupFormProps {
   onOutcome: (outcome: Outcome) => void;
 }
 
+/** MUT-324: the terms version the link's check names now; null when it can't be asked. */
+async function linkTermsVersion(token: string): Promise<string | null> {
+  try {
+    const link = await api.checkSetupLink(token, requestTimeout());
+    return link.state === 'valid' ? link.termsVersion : null;
+  } catch {
+    return null;
+  }
+}
+
 function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, onOutcome }: SetupFormProps) {
   const t = useT();
   const tp = useTp();
@@ -213,12 +223,14 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
       const failure = redeemFailure(error, answerLost.current);
       if (answerWasLost(error)) answerLost.current = true;
       if (failure.kind === 'trySignIn') return void (await signIn(email, { kind: 'usedAfterRetry' }));
+      // A 409 that doesn't name the new version: ask the link, or the retry would resend the stale one
+      const changedTo = failure.kind === 'termsChanged' ? (failure.current ?? (await linkTermsVersion(token))) : null;
       setPhase('idle');
       if (failure.kind === 'refused') onOutcome({ kind: 'refused', state: failure.state });
       else if (failure.kind === 'policy') refuseInline('rule');
       else if (failure.kind === 'termsChanged') {
         // MUT-324: what was ticked is no longer what would be recorded, so the person reads and ticks again.
-        if (failure.current) setTermsVersion(failure.current);
+        if (changedTo) setTermsVersion(changedTo);
         setAgreed(false);
         setTermsProblem('changed');
         termsRef.current?.focus();

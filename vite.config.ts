@@ -267,7 +267,7 @@ function hostedOfferHtml(): Plugin {
 
 /**
  * MUT-324 (D11): `/legal/terms-versions.json`, every released terms version and the sha256 of its EN and AR
- * text, which `server/scripts/deploy.sh` checks before a server naming a new version is released. Web only.
+ * text, which the server release preflight checks before a server naming a new version is released. Web only.
  */
 function legalTermsManifest(): Plugin {
   const dir = fileURLToPath(new URL("./src/content/legal/terms/", import.meta.url));

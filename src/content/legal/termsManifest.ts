@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 /**
  * MUT-324 (D11): the public list of released terms versions and their text
  * fingerprints, emitted by the web build as `/legal/terms-versions.json`.
- * `server/scripts/deploy.sh` reads it before releasing a server whose
+ * The server release preflight reads it before releasing a server whose
  * CURRENT_TERMS names a version: Netlify answers every path with the app
  * shell, so `/terms/<version>` itself can't prove the version is live.
  *
@@ -20,7 +20,8 @@ export interface TermsManifest {
 
 export function termsManifest(files: ReadonlyArray<{ name: string; bytes: Uint8Array }>): TermsManifest {
   const byVersion = new Map<string, Partial<Record<(typeof LOCALES)[number], string>>>();
-  for (const { name, bytes } of files) {
+  // Only JSON files are texts; anything else in the folder (.DS_Store, notes) is not ours to judge
+  for (const { name, bytes } of files.filter((file) => file.name.endsWith('.json'))) {
     const match = TERMS_FILE.exec(name);
     if (!match) throw new Error(`terms: ${name} is not <YYYY-MM-DD>.<en|ar>.json`);
     const [, version, locale] = match as unknown as [string, string, (typeof LOCALES)[number]];

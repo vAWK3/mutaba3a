@@ -16,7 +16,23 @@ import { LATEST_TERMS_VERSION, TERMS_VERSIONS } from '../../src/content/legal/te
 const DIR = join(__dirname, '../../src/content/legal/terms');
 const manifest = termsManifest(readdirSync(DIR).map((name) => ({ name, bytes: readFileSync(join(DIR, name)) })));
 
+/**
+ * Every released version's text fingerprints, frozen: a released file is never edited
+ * (ADR-102). A new version adds a row; CURRENT_TERMS moves on, the old rows stay.
+ */
+const RELEASED_TERMS: Readonly<Record<string, { en: string; ar: string }>> = {
+  '2026-10-19': {
+    en: '92c4ede3d4dee929c66205d7c90f83883c5677f12ced4e2bd45b1c43355377f1',
+    ar: '61b3bafe15f604819e55cdcc1f5ecf22d965eec43e6493369bfec2d741be042f',
+  },
+};
+
 describe('legal terms (MUT-324)', () => {
+  it('every version has a frozen row, and its text still matches it', () => {
+    expect(manifest.versions.map((v) => v.version).sort()).toEqual(Object.keys(RELEASED_TERMS).sort());
+    for (const { version, sha256 } of manifest.versions) expect(sha256).toEqual(RELEASED_TERMS[version]);
+  });
+
   it('the server’s current version is the landing’s latest, with the same text fingerprints', () => {
     expect(LATEST_TERMS_VERSION).toBe(CURRENT_TERMS.version);
     expect(manifest.versions[0]).toEqual({ version: CURRENT_TERMS.version, sha256: CURRENT_TERMS.sha256 });
