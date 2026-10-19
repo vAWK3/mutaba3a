@@ -2,7 +2,7 @@
 
 **Epic:** MUT-284 (one app). **Blocked by:** MUT-286, merged to local main 5e174786 (In Review). Gate clear.
 **Authoritative design:** `.claude/designs/mut-285-portal-local-mode.md` §2.3.5, §6, §7, §12; ADR-097, ADR-100.
-**Status:** plan, 2026-10-19. Nothing built.
+**Status:** built 2026-10-19 on `feature/mut-287-local-expenses` (eng review D1–D4 applied; see ADR-100 decision 11).
 
 ## 0. What already exists (from MUT-286 / MUT-318)
 

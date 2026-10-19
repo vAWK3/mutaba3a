@@ -28,6 +28,31 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Signed out: expenses, groups, conversions, receipts and documents on this device (MUT-287, ADR-100 decision 11, TD-171 resolved)
+
+**Why:** MUT-286 brought core records to the signed-out portal but hid Expenses and Conversions, because receipts and exchange rates had no place to go without a server. Epic MUT-284 decision 4: both modes are the same app.
+
+### Added
+- **`GET /v1/public/fx-rates`** (server, MUT-285 D3): the cached ECB snapshot `{ rateDate, perEur, fetchedAt, source }`, anonymous, no profile header, 30 per minute per address (`PUBLIC_FX_POLICY`, 429 + Retry-After), same `CachedFxRates` instance as `/v1/fx-rates`. Registered outside `PORTAL_ROUTES`. API `1.37.0-mut287`.
+- **Receipt files on this device:** `LocalAttachmentStorage` runs the server's own receipt and attachment routes in the page over a new IndexedDB database, `mut-local-blobs` (`IndexedDbBlobStore`, `{ type, bytes }` per file). Uploads and downloads are signed `local-blob:<key>`; the portal's `putToSignedUrl` and `downloadNavigator.open(url, filename)` branch on it (`localFiles.put`/`read`, object URL + `<a download>`, no preview).
+- **Exchange rates signed out:** `PublicFxRateSource` feeds the server's `CachedFxRates` (one fetch per page per hour, no credentials), so the expense-group ≈ line works online and hides offline.
+- **"Download my records" is a zip:** `records.json` (the MUT-286 file, unchanged) plus `receipts/<key>` binary entries; jszip loads only on Download/Restore. Restore reads a zip or a MUT-286 `.json`.
+- Release-QA `portal.local.expense-receipt` (core), `fx-line`, `conversion`, `documents-empty`.
+
+### Changed
+- The nav shows the same sections signed in and out: Expenses (with Groups) and Conversions are back signed out.
+- Documents signed out shows its empty state instead of an error (`GET /v1/attachments` needed storage).
+- Restore is crash-safe by order across the two databases: add the backup's files, save the records, then delete files no receipt names. A receipt file is deleted only after its request's snapshot saved; boot sweeps orphans.
+- The server modules' `Buffer` is bound per module at build time (`scopeServerBufferShim`), no longer installed on `globalThis`.
+
+### Fixed
+- "Download my records" crashed in real browsers once jszip loaded: it saw the global partial `Buffer`, took its Node path and broke in its compressor. Caught by release-QA, invisible to unit tests on Node's real `Buffer`.
+
+### Technical
+- `format-fingerprint.test.ts` covers all 27 snapshot maps from `helpers/everyRecord.ts` (TD-171 resolved).
+- `check-bundles`: jszip must not be statically reachable from the portal's entry (`jszipInEntryGraph`); `stuk.github.io` (a jszip doc link) joins the hosted origins. Local chunk 115.7 KB gzip, jszip chunk 30.1 KB gzip.
+- Files: `server/src/routes/fx-rates.ts`, `server/src/schemas.ts`, `server/src/app.ts`, `src/hosted/local/{blobStore,attachments,fxSource,recordsArchive,restore}.ts`, `src/hosted/local/{index,transport,createLocalApp}.ts`, `src/hosted/session/localBackendContract.ts`, `src/hosted/data/{download,expenseQueries}.ts`, `src/hosted/components/{ReceiptUploader,YourDataDrawer}.tsx`, `src/hosted/pages/views/DocumentsList.tsx`, `src/hosted/shell/HostedShell.tsx`, `vite.config.ts`, `eslint.config.js`, `scripts/{bundle-rules,check-bundles}.ts`, `scripts/bundle-origins.json`.
+
 ## [Unreleased] - 2026-10-19 — Direction comes from `<html dir>` and the `dir` attribute only (MUT-109, ADR-101, TD-048 resolved)
 
 **Why:** `theme.css` set `direction` on every `:lang()` element, which beat the `dir` attribute: every `dir="ltr"` was ignored in Arabic, and every `dir="rtl"`/`"auto"` in English. Last open child of Brand v2 (MUT-101).

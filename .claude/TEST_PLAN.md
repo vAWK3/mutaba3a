@@ -3175,3 +3175,28 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Release-QA `@portal.income.add-matter` | signed in: hint with no client; Add matter POST body + headers; income names it; nothing offered on a Malafat-fed profile |
 | Release-QA `@portal.income.matter-fills-client` | client chips; picking Client 2's Retainer fills Client 2; switching to Client 1 empties Matter |
 | Reconcile additions (2026-10-19) | `EntityTypeahead.test.tsx`: no second pick while one saves (list shut on ArrowDown/refocus); cascade flash comes off after its span and replays. `useClientProjectCascade.test.tsx`: `onAutoFill` with the default owner, not when the client already owns it. `IncomeCaptureDrawer.test.tsx`: Save held while a matter is added; Enter held still saves once it lands; CURRENCY_MISMATCH under Matter; Malafat no-Add check now waits for the open list (was vacuous). `ExpenseDrawer.test.tsx`: Save held while a matter is added; picking a matter fills the client, changing the client empties it. `incomeApiErrors.test.ts`: CURRENCY_MISMATCH → `matterCurrency` with the matter's currency. Release-QA `@portal.income.add-matter`: the Malafat step waits for the open list before asserting no Add row |
+
+## MUT-287 — Signed out: expenses, groups, conversions, receipts and documents on this device (2026-10-19, ADR-100 decision 11)
+
+| Test | Covers |
+|---|---|
+| `server/src/__tests__/routes-fx-rates.test.ts` › public (5) | 200 with no session or profile header, the raw snapshot; same cache as `/v1/fx-rates` (one provider call); 503 with no source / provider down; 429 + Retry-After past the per-address limit, other addresses unaffected |
+| `route-security.test.ts`, `no-self-registration.test.ts` | `GET /v1/public/fx-rates` is the one new public operation |
+| `src/hosted/local/__tests__/blobStore.test.ts` (4) | type and size kept; keys/delete; survives a new connection; its own `mut-local-blobs` database, never `mut-local` |
+| `attachments.test.ts` (7) | `local-blob:` upload/download URLs; head size/type (untyped → null); removal staged until flush, forgotten on discard; sweep deletes only unnamed files |
+| `receipts.test.ts` (8) | start → putBlob → complete READY → reload → same bytes; UPLOAD_INCOMPLETE / UPLOAD_MISMATCH; deleting the expense removes the file after the save; non-local URLs refused; boot sweep keeps a pending upload; Documents lists an empty page (AC3); export zip → cleared device → restore → receipt downloads |
+| `transport.test.ts` › staged removals (3) | flush after a saved write; discard on a refused write; discard and no flush when the save fails |
+| `fxSource.test.ts` (8) | no credentials, no redirects; non-2xx / bad body / offline fail; local `/v1/fx-rates` runs `crossRates`; offline → 503; one fetch per cache window; the local app never serves the public route |
+| `no-network.test.ts` (+3) | expense + receipt + documents + categories, and group + mark + conversion, with no fetch (AC1, AC4); reference rates: exactly one fetch, to `/v1/public/fx-rates`, `credentials: 'omit'` (D3) |
+| `recordsArchive.test.ts` (6) | zip of `records.json` + binary receipt entries; round trip typed from the receipt; MUT-286 `.json` restores; missing receipt entry named, records restored; unnamed entries ignored; refusals |
+| `restore.test.ts` (2) | backup replaces records and files and sweeps the old; a refused save leaves this device's records and files intact (R1) |
+| `format-fingerprint.test.ts` (29) | every snapshot map has a case and a record; per-map field kinds (TD-171) |
+| `src/hosted/data/__tests__/download.test.ts` (2) | local-blob download via object URL + `<a download>` named after the file, released later; missing file rejects |
+| `ReceiptUploader.test.tsx` (+2, 1 changed) | local-blob upload goes to `localFiles.put`, never fetched; a refused store shows the upload-failed toast; download passes the filename |
+| `local-mode.test.tsx`, `views.test.tsx` | nav shows Expenses and Conversions signed out; Your data downloads a `.zip`; Documents download passes the filename |
+| `scripts/__tests__/check-bundles.test.ts` (+2) | jszip only in a lazy chunk |
+| Release-QA `@portal.local.expense-receipt` (core) | record, attach a PDF, reload, download by name, same bytes; only the first-visit request |
+| Release-QA `@portal.local.fx-line` | USD + ILS group shows the ≈ line with the ECB date; offline it hides; only `/v1/me` and `/v1/public/fx-rates` |
+| Release-QA `@portal.local.conversion`, `@portal.local.documents-empty` | log, reload, edit a conversion; Documents empty state with no error |
+| Release-QA `@portal.local.download-restore` (extended) | zip with `records.json` and the receipt as its own file; after Restore the receipt downloads again byte for byte |
+

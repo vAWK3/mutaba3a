@@ -2524,3 +2524,12 @@ A hint that appears while typing ("Choose a client first to add a matter.") is r
 
 ### Pattern: A drawer holds Save while a picker is still adding (MUT-318 reconcile)
 A picker that creates on pick (Add «name») reports `onCreatingChange(true/false)` around its mutation (`finally`). The drawer's `usePendingPicks()` counts them: `pending` drives Save's look, `guard(handleSubmit(onSubmit))` drops a submit while any is in flight, before validation. The guard reads a ref, not state, because the picker reports done just before EntityTypeahead submits for an Enter held during the save, ahead of React's re-render. First instance: the hosted IncomeCaptureDrawer and ExpenseDrawer; the local IncomeDrawer's `clientCreating` is the same idea.
+
+## Patterns added by MUT-287 (2026-10-19, ADR-100 decision 11)
+
+### Pattern: Two local databases are kept consistent by order, not by one transaction
+When records (`mut-local`) and their files (`mut-local-blobs`) live apart, never delete a file before the records that stop naming it are saved: stage removals during the request and flush them inside the same lock right after the save; on Restore add the new files, save, then sweep files no live record names; sweep on boot for whatever a crash left. A crash at any step leaves records whose files all exist. First instance: `LocalAttachmentStorage` + `transport.ts`, `restore.ts` `applyRestore`.
+
+### Pattern: A Node stand-in for server modules is bound per module, never on `globalThis`
+Server code that runs in the page (`server/src` in the local chunk) gets its Node globals as module bindings injected at build time (`scopeServerBufferShim`, like the `node:crypto` alias), not as a global: libraries sniff `typeof Buffer` and take a Node path a partial stand-in can't serve (jszip did). Verify such paths in a real browser (release-QA): unit tests run on Node's real globals and can't see the difference.
+
