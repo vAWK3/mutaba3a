@@ -2061,3 +2061,22 @@ Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
 ### ClientPicker `canCreate` — `src/hosted/components/ClientPicker.tsx` (extended, MUT-286)
 **Purpose**: the portal's client field now offers "Add client: «name»" when `canCreate` (`canAddClient(profile)`, `data/incomeAffordances.ts`) and no client has the typed name; picking creates it through `useCreateCustomer` (`data/customerQueries.ts`) and picks it. Without `canCreate` it is unchanged. Used by IncomeCaptureDrawer and ExpenseDrawer (`canAddClient` prop). Tests: `components/__tests__/ClientPicker.test.tsx`.
 
+## Terms of service — MUT-324 (ADR-102)
+
+### LegalPage — `src/pages/landing/LegalPage.tsx` (new, extracted from PrivacyPolicyPage)
+Landing chrome plus a dated, titled-sections legal document. `sections: { title, paragraphs[] }[]`, optional `updated`/`intro`, `after` slot. Used by `PrivacyPolicyPage` and `TermsPage`. Usage: `<LegalPage title={…} updated={…} intro={…} sections={…} />`. Tests: `PrivacyPolicyPage.test.tsx`, `TermsPage.test.tsx`.
+
+### TermsPage — `src/pages/landing/TermsPage.tsx`
+`/terms` (latest) and `/terms/<version>`: loads the frozen text for the page language through `src/content/legal/terms.ts` (`loadTerms`, `TERMS_VERSIONS`, `LATEST_TERMS_VERSION`, `termsVersionOf`). An unknown version says so and links `/terms`.
+
+### termsManifest — `src/content/legal/termsManifest.ts` (Node only)
+Builds `/legal/terms-versions.json` (version + sha256 per language) for the web build's `legalTermsManifest()` Vite plugin and the pin test. Never import it from page code.
+
+### TermsUpdatePage — `src/hosted/pages/auth/TermsUpdatePage.tsx`
+The portal's "We've updated our terms" step, rendered by `AuthGate` when `Me.terms.accepted === false`: read the version (new tab), I agree (`api.acceptTerms`), Sign out, and the support line.
+
+### termsHref / SUPPORT_EMAIL — `src/hosted/terms.ts`
+`termsHref(version?)` reads the `__TERMS_URL__` build define (ADR-076 typeof guard; '' when unset). Used by SetupPage, TermsUpdatePage, UserMenu and SignInPage.
+
+### termsAcceptanceOf / termsAcceptedAudit — `server/src/terms-acceptance.ts`
+The acceptance row for the current terms (sha256 by locale, surface from `Session.kind`), and its `user.terms_accepted` audit on owned profiles only. Shared by the setup redeem and `POST /v1/me/terms-acceptance`.

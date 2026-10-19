@@ -222,7 +222,7 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
         {t(`${T}.form.${sending ? 'sending' : status === 'error' ? 'retry' : 'send'}`)}
       </button>
       <p className="hosted-notice">
-        {t(`${T}.form.notice`)} <a href="/privacy">{t(`${T}.form.privacyLink`)}</a>
+        {t(`${T}.form.notice`)} <a href="/privacy">{t(`${T}.form.privacyLink`)}</a> · <a href="/terms">{t(`${T}.form.termsLink`)}</a>
       </p>
     </form>
   );

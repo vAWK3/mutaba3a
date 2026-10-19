@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
 import { PrivacyPolicyPage } from '../PrivacyPolicyPage';
@@ -137,5 +137,19 @@ describe('PrivacyPolicyPage', () => {
   ] as const)('names the tab in the active language (%s, MUT-77)', (language, title) => {
     renderPage(language);
     expect(document.title).toBe(title);
+  });
+
+  it('says where hosted records live, how they are backed up and processed, and when they are deleted (MUT-324)', () => {
+    renderPage('en');
+    const heading = screen.getByRole('heading', { level: 2, name: /Hosted accounts/ });
+    const section = heading.parentElement?.textContent ?? '';
+    for (const fact of ['me-west1', 'Tel Aviv', '14 days', 'Sentry', 'PostHog', 'only if you agree', '30 days', 'terms of service']) {
+      expect(section).toContain(fact);
+    }
+  });
+
+  it('links the terms of service from the footer (MUT-324)', () => {
+    renderPage('en');
+    expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');
   });
 });

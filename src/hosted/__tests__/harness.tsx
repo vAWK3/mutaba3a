@@ -59,6 +59,8 @@ export function me(profiles: HostedProfile[] = [profile()], locale: 'en' | 'ar' 
     user: { id: '99999999-9999-4999-8999-999999999999', email: 'nour@firm.ps', displayName: 'Nour Haddad', locale, malafatSuggestions: { off: false, dismissed: [] } },
     profiles,
     limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },
+    // MUT-324: a signed-in test person has accepted the current terms unless a test says otherwise.
+    terms: { version: '2026-10-19', accepted: true },
   };
 }
 

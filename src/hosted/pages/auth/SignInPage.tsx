@@ -9,6 +9,7 @@ import { ME_KEY, meQuery } from '../../session/me';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
 import { safeNext } from '../../session/safeNext';
 import { setMode, useMode } from '../../session/mode';
+import { termsHref } from '../../terms';
 import { CheckingSession } from './BootScreens';
 import { AlertIcon, InfoIcon } from '../../components/Icons';
 
@@ -124,6 +125,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
 
   const pending = signIn.isPending;
   const offerUrl = hostedOfferHref();
+  const termsLink = termsHref();
   const bannerId = `${ids}-banner`;
   const describedBy = (field: string, error?: FieldError) =>
     [error ? `${ids}-${field}-error` : null, banner ? bannerId : null].filter(Boolean).join(' ') || undefined;
@@ -224,6 +226,13 @@ function SignInForm({ next, reason }: SignInPageProps) {
         {offerUrl && (
           <p className="hp-help">
             {t('hosted.auth.request.lead')} <a href={offerUrl}>{t('hosted.auth.request.link')}</a>
+          </p>
+        )}
+        {termsLink && (
+          <p className="hp-help">
+            <a href={termsLink} target="_blank" rel="noopener">
+              {t('hosted.terms.link')}
+            </a>
           </p>
         )}
         <p className="hp-help">

@@ -62,6 +62,15 @@ const PrivacyPolicyPage =
       )
     : null;
 
+const TermsPage =
+  __BUILD_MODE__ === "web"
+    ? lazy(() =>
+        import("./pages/landing/TermsPage").then((m) => ({
+          default: m.TermsPage,
+        })),
+      )
+    : null;
+
 const HostedOfferPage =
   __BUILD_MODE__ === "web"
     ? lazy(() =>
@@ -103,6 +112,17 @@ function App() {
         <LandingProviders>
           <Suspense fallback={<BootSplash />}>
             <PrivacyPolicyPage />
+          </Suspense>
+        </LandingProviders>
+      );
+    }
+
+    // MUT-324: /terms is the latest terms, /terms/<version> each released version, frozen
+    if ((path === "/terms" || path.startsWith("/terms/")) && TermsPage) {
+      return (
+        <LandingProviders>
+          <Suspense fallback={<BootSplash />}>
+            <TermsPage path={path} />
           </Suspense>
         </LandingProviders>
       );

@@ -283,6 +283,85 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/me/terms-acceptance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept the current terms of service (MUT-324)
+         * @description Records that the signed-in person accepted `version`, read in `locale`, from the portal or the phone. Idempotent per version: accepting again changes nothing and writes no second audit row. The person accepts for themselves and, as owner, for their own profiles, so `user.terms_accepted` is audited on each profile they own.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TermsAcceptanceRequest"];
+                };
+            };
+            responses: {
+                /** @description The terms status after accepting */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TermsStatus"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TERMS_VERSION_STALE — `version` is not the current terms; details.current names it */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Invalid body */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/password": {
         parameters: {
             query?: never;
@@ -562,6 +641,15 @@ export interface paths {
                 };
                 /** @description CROSS_SITE_REQUEST */
                 403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TERMS_VERSION_STALE — acceptedTermsVersion is missing or not the current terms; details.current names it */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -10245,6 +10333,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/terms-acceptance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every user and the terms version they last accepted (MUT-324)
+         * @description For the operator to see who has not yet accepted the current terms, for example someone who only uses the phone app.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The terms report */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TermsReport"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/users/{userId}": {
         parameters: {
             query?: never;
@@ -10738,6 +10874,7 @@ export interface components {
              *     ]
              */
             currencies: string[];
+            terms: components["schemas"]["TermsStatus"];
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
@@ -10779,10 +10916,16 @@ export interface components {
             ownedProfiles: number;
             maxOwnedProfiles: number;
         };
+        TermsStatus: {
+            version: components["schemas"]["TermsVersion"];
+            accepted: boolean;
+        } | null;
+        /** @example 2026-10-19 */
+        TermsVersion: string;
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
+                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -10795,6 +10938,10 @@ export interface components {
         MalafatSuggestionsChange: {
             off?: boolean;
             dismiss?: components["schemas"]["MalafatMoment"][];
+        };
+        TermsAcceptanceRequest: {
+            version: components["schemas"]["TermsVersion"];
+            locale: components["schemas"]["UserLocale"];
         };
         ChangePasswordRequest: {
             currentPassword: string;
@@ -10813,6 +10960,7 @@ export interface components {
             purpose: components["schemas"]["SetupLinkPurpose"];
             /** Format: date-time */
             expiresAt: string;
+            termsVersion: components["schemas"]["TermsVersion"];
         } | {
             /** @enum {string} */
             state: "expired" | "used" | "superseded" | "invalid";
@@ -10828,6 +10976,8 @@ export interface components {
         SetupLinkRedeemRequest: {
             token: string;
             password: components["schemas"]["NewPassword"];
+            acceptedTermsVersion?: components["schemas"]["TermsVersion"];
+            termsLocale?: components["schemas"]["UserLocale"];
         };
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];
@@ -12817,6 +12967,18 @@ export interface components {
         };
         UserList: {
             users: components["schemas"]["UserSummary"][];
+        };
+        TermsReport: {
+            current: components["schemas"]["TermsVersion"];
+            users: {
+                /** Format: uuid */
+                id: string;
+                email: string;
+                /** @enum {string} */
+                status: "ACTIVE" | "DISABLED";
+                latestVersion: components["schemas"]["TermsVersion"] & unknown;
+                accepted: boolean;
+            }[];
         };
         UserDetail: {
             user: components["schemas"]["UserSummary"];

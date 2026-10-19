@@ -5,9 +5,12 @@ import { categoryNameKey } from '../expenses/names.js';
 import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
+import type { TermsLocale } from '../legal.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import type {
+  TermsAcceptanceInput,
+  TermsAcceptanceRecord,
   AccountSetupRepository,
   AccountSetupTokenRecord,
   AttachmentFilter,
@@ -258,6 +261,24 @@ export class PrismaLedgerStore implements LedgerStore {
         const next = applyMalafatChange(locked.malafatSuggestions, change);
         return toUser(await tx.user.update({ where: { id }, data: { malafatSuggestions: next as unknown as Prisma.InputJsonValue, updatedAt: at } }));
       }),
+    latestTermsAcceptance: async (userId) =>
+      mapNullable(await this.prisma.termsAcceptance.findFirst({ where: { userId }, orderBy: { version: 'desc' } }), toTermsAcceptance),
+    listLatestTermsVersions: async () =>
+      (
+        await this.prisma.user.findMany({
+          orderBy: { email: 'asc' },
+          select: { id: true, email: true, status: true, termsAcceptances: { orderBy: { version: 'desc' }, take: 1, select: { version: true } } },
+        })
+      ).map((u) => ({ userId: u.id, email: u.email, status: u.status, latestVersion: u.termsAcceptances[0]?.version ?? null })),
+    acceptTerms: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const created = await insertTermsAcceptance(tx, input.userId, input, input.at);
+          if (created && input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          const row = await tx.termsAcceptance.findUniqueOrThrow({ where: { userId_version: { userId: input.userId, version: input.version } } });
+          return { acceptance: toTermsAcceptance(row), created };
+        }),
+      ),
     // MUT-237: the same NO KEY UPDATE lock accountSetup.redeem takes, so a sign-in racing this call either
     // commits first (then gets revoked below, unless it is the excepted session) or sees the new hash and refuses.
     changePassword: (input) =>
@@ -371,6 +392,9 @@ export class PrismaLedgerStore implements LedgerStore {
           });
           await tx.session.updateMany({ where: { userId: link.userId, revokedAt: null }, data: { revokedAt: input.at, revokedReason: 'password_set' } });
           if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          // MUT-324: an operator reset after acceptance must still set the password, so an existing acceptance is kept.
+          const accepted = await insertTermsAcceptance(tx, link.userId, input.terms, input.at);
+          if (accepted && input.termsAudit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.termsAudit, input.at) });
           return toUser(user);
         }),
       ),
@@ -1914,6 +1938,24 @@ function toApiKey(row: PrismaApiKey): ApiKeyRecord {
     expiresAt: row.expiresAt,
     revokedAt: row.revokedAt,
     revokedReason: row.revokedReason,
+  };
+}
+
+/** MUT-324: the (userId, version) unique key; true when this call wrote the row, false when it already existed. */
+async function insertTermsAcceptance(tx: Prisma.TransactionClient, userId: string, terms: TermsAcceptanceInput, at: Date): Promise<boolean> {
+  const { version, locale, textSha256, surface } = terms;
+  const { count } = await tx.termsAcceptance.createMany({ data: [{ userId, version, locale, textSha256, surface, acceptedAt: at }], skipDuplicates: true });
+  return count === 1;
+}
+
+function toTermsAcceptance(row: Prisma.TermsAcceptanceGetPayload<object>): TermsAcceptanceRecord {
+  return {
+    userId: row.userId,
+    version: row.version,
+    locale: row.locale as TermsLocale,
+    textSha256: row.textSha256,
+    surface: row.surface,
+    acceptedAt: row.acceptedAt,
   };
 }
 

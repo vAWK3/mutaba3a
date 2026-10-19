@@ -10,6 +10,7 @@ import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
 import { USD_PEGS } from './fx-rates.js';
 import { IMPORT_MAX_ROWS } from './import/plan.js';
 import { SUPPORTED_CURRENCIES } from './money.js';
+import { TERMS_VERSION_PATTERN } from './legal.js';
 import { ITEM_STATUSES } from './agreements/status.js';
 import { MAX_BILLING_DAY } from './retainers/schedule.js';
 import { PRICING_BASES, VAT_TREATMENTS } from './vat.js';
@@ -214,6 +215,9 @@ export const AuditListSchema = z.object({ events: z.array(AuditEventSchema) }).o
 
 export const UserLocaleSchema = z.enum(['en', 'ar']).openapi('UserLocale');
 
+/** MUT-324: a terms version, named by its ISO date (server/src/legal.ts). */
+export const TermsVersionSchema = z.string().regex(TERMS_VERSION_PATTERN, 'must be a terms version (YYYY-MM-DD)').openapi('TermsVersion', { example: '2026-10-19' });
+
 /** Never includes the password hash. */
 export const UserSummarySchema = z
   .object({
@@ -384,6 +388,29 @@ export const MalafatSuggestionsChangeSchema = z
   // The generated spec says what the refinements enforce, so a client built from it sends nothing the server refuses
   .openapi('MalafatSuggestionsChange', { minProperties: 1 });
 
+/** MUT-324 T1: GET /admin/v1/terms-acceptance — every user and the terms version they last accepted. */
+export const TermsReportSchema = z
+  .object({
+    current: TermsVersionSchema,
+    users: z.array(
+      z.object({
+        id: z.string().uuid(),
+        email: z.string(),
+        status: z.enum(['ACTIVE', 'DISABLED']),
+        latestVersion: TermsVersionSchema.nullable(),
+        /** The latest accepted version is the current one or newer. */
+        accepted: z.boolean(),
+      }),
+    ),
+  })
+  .openapi('TermsReport');
+
+/** MUT-324: whether the signed-in person has accepted the current terms (latest accepted version ≥ current). */
+export const TermsStatusSchema = z.object({ version: TermsVersionSchema, accepted: z.boolean() }).openapi('TermsStatus');
+
+/** MUT-324: POST /v1/me/terms-acceptance — the version the person agreed to, and the language they read it in. */
+export const TermsAcceptanceRequestSchema = z.object({ version: TermsVersionSchema, locale: UserLocaleSchema }).strict().openapi('TermsAcceptanceRequest');
+
 export const MeSchema = z
   .object({
     user: z.object({
@@ -409,6 +436,11 @@ export const MeSchema = z
           'Every currency code this server accepts, in its supported order. Clients offer only the codes they also know and ignore the rest. Servers older than MUT-280 omit the field.',
         example: [...SUPPORTED_CURRENCIES],
       }),
+    /**
+     * MUT-324: the current terms and whether this person accepted them. Null where no terms apply (the portal's
+     * signed-out mode). Servers older than MUT-324 omit the field; clients treat that like null.
+     */
+    terms: TermsStatusSchema.nullable(),
   })
   .openapi('Me');
 
@@ -501,12 +533,26 @@ export const SetupLinkCheckResponseSchema = z
       locale: UserLocaleSchema,
       purpose: SetupLinkPurposeSchema,
       expiresAt: z.string().datetime(),
+      /** MUT-324: the terms version the setup page shows and sends back as `acceptedTermsVersion`. */
+      termsVersion: TermsVersionSchema,
     }),
     z.object({ state: z.enum(['expired', 'used', 'superseded', 'invalid']) }),
   ])
   .openapi('SetupLinkCheckResponse');
 
-export const SetupLinkRedeemRequestSchema = z.object({ token: SetupTokenSchema, password: NewPasswordSchema }).openapi('SetupLinkRedeemRequest');
+export const SetupLinkRedeemRequestSchema = z
+  .object({
+    token: SetupTokenSchema,
+    password: NewPasswordSchema,
+    /**
+     * MUT-324: the terms version the person ticked "I agree" to (the check's `termsVersion`). Optional in the schema
+     * so a page opened before the terms existed gets 409 TERMS_VERSION_STALE, not a password-policy 422.
+     */
+    acceptedTermsVersion: TermsVersionSchema.optional(),
+    /** The language of the terms text the person read; the account's language when omitted. */
+    termsLocale: UserLocaleSchema.optional(),
+  })
+  .openapi('SetupLinkRedeemRequest');
 
 /** The portal signs in with this email and the password just set, through POST /v1/sessions. */
 export const SetupLinkRedeemResponseSchema = z.object({ email: z.string() }).openapi('SetupLinkRedeemResponse');

@@ -9,6 +9,7 @@ import configFn, {
   HOSTED_OFFER_PAGE,
   HOSTED_OFFER_TITLE,
   hostedOfferUrl,
+  termsUrl,
   PWA_INCLUDE_ASSETS,
   PWA_MANIFEST,
   PWA_WORKBOX,
@@ -240,6 +241,13 @@ describe('vite.config', () => {
       expect(resolve('hosted').define?.__HOSTED_OFFER_URL__).toBe(JSON.stringify(`${DEFAULT_PUBLIC_ORIGIN}/hosted`));
       expect(resolve('web').define).not.toHaveProperty('__HOSTED_OFFER_URL__');
       expect(resolve('desktop').define).not.toHaveProperty('__HOSTED_OFFER_URL__');
+    });
+
+    it('links the portal to the landing terms, in the hosted build only (MUT-324)', () => {
+      expect(resolve('hosted').define?.__TERMS_URL__).toBe(JSON.stringify(`${DEFAULT_PUBLIC_ORIGIN}/terms`));
+      expect(resolve('web').define).not.toHaveProperty('__TERMS_URL__');
+      expect(termsUrl('https://staging.example/')).toBe('https://staging.example/terms');
+      expect(() => termsUrl('http://x.example')).toThrow();
     });
 
     it('defaults to the Netlify origin until the custom domain has DNS (MUT-112)', () => {

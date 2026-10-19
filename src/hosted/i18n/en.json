@@ -117,7 +117,23 @@
       "saved": {
         "title": "Your password is saved",
         "body": "Sign in with it to continue."
+      },
+      "terms": {
+        "agree": "I agree to the",
+        "link": "terms of service",
+        "required": "Tick to agree to the terms before you continue.",
+        "changed": "The terms changed while this page was open. Read the new version, then tick again."
       }
+    },
+    "terms": {
+      "title": "We've updated our terms",
+      "lead": "Read the new terms of service. Accept them to keep using your hosted account.",
+      "read": "Read the terms",
+      "agree": "I agree",
+      "agreeing": "Saving…",
+      "failed": "Couldn't save. Check your connection and try again.",
+      "decline": "Don't agree? Email {email}. We'll help you download your records or close your account.",
+      "link": "Terms of service"
     },
     "shell": {
       "sections": "Sections",

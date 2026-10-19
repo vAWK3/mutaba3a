@@ -5,6 +5,7 @@ import { sessionDigest } from '../../auth/sessions.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher } from '../../auth/users.js';
 import { SlidingWindowRateLimiter } from '../../rate-limit.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
+import { CURRENT_TERMS } from '../../legal.js';
 import { runUsersCommand } from '../users.js';
 
 const TOKEN = 'cli-admin-token-with-at-least-32-characters';
@@ -162,5 +163,46 @@ describe('users CLI (npm run provision:user and friends)', () => {
     const h = harness();
     expect(await h.run(['delete', '--email', 'x@y.z'])).not.toBe(0);
     expect(h.err.join('\n')).toMatch(/usage/i);
+  });
+});
+
+describe('users terms (MUT-324 T1)', () => {
+  it('lists every user with the terms version they last accepted, and flags who is behind', async () => {
+    const h = harness();
+    const o = await org(h.store, 'Terms Firm');
+    const ahead = await h.store.users.create({
+      email: 'accepted@firm.ps',
+      displayName: 'Accepted',
+      passwordHash: null,
+      locale: 'en',
+      organizationId: o.id,
+      personal: { name: 'A', slug: 'a-personal', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
+      at: new Date('2026-10-20T09:00:00Z'),
+    });
+    await h.store.users.create({
+      email: 'never@firm.ps',
+      displayName: 'Never',
+      passwordHash: null,
+      locale: 'ar',
+      organizationId: o.id,
+      personal: { name: 'B', slug: 'b-personal', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
+      at: new Date('2026-10-20T09:00:00Z'),
+    });
+    await h.store.users.acceptTerms({
+      userId: ahead.user.id,
+      version: CURRENT_TERMS.version,
+      locale: 'en',
+      textSha256: CURRENT_TERMS.sha256.en,
+      surface: 'portal',
+      at: new Date('2026-10-20T10:00:00Z'),
+      audit: [],
+    });
+
+    expect(await h.run(['terms'])).toBe(0);
+    const text = h.out.join('\n');
+    expect(text).toContain(`current terms ${CURRENT_TERMS.version}`);
+    expect(h.out.find((l) => l.startsWith('accepted@firm.ps'))).toMatch(new RegExp(`${CURRENT_TERMS.version}.*ok$`));
+    expect(h.out.find((l) => l.startsWith('never@firm.ps'))).toMatch(/never.*BEHIND$/);
+    expect(text).toContain('1 of 2 active users behind the current terms');
   });
 });

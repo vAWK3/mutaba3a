@@ -29,6 +29,7 @@ const CLIENT_CALLS: readonly ClientCall[] = [
   { method: 'POST', path: '/v1/account-setup/check', local: false }, // 5 — remote only (/setup is a public server page)
   { method: 'POST', path: '/v1/account-setup', local: false }, // 6 — remote only
   { method: 'PATCH', path: '/v1/me/malafat-suggestions', local: false }, // 7 — not served locally; Malafat surfaces are hidden on local profiles
+  { method: 'POST', path: '/v1/me/terms-acceptance', local: false }, // 7a — remote only (MUT-324): signed out, /v1/me says terms: null and nothing asks
   { method: 'GET', path: '/v1/summaries/organization', local: true }, // 8
   { method: 'GET', path: '/v1/summaries/customers/:customerId', local: true }, // 9
   { method: 'GET', path: '/v1/customers', local: true }, // 10
@@ -81,6 +82,7 @@ function servedPaths(): ReadonlySet<string> {
     store: new MemoryLedgerStore(),
     attachments: { storage: null, urlTtlSeconds: 900 },
     fxRates: null,
+    terms: null,
   };
   const served = new Set<string>();
   for (const factory of PORTAL_ROUTES) {
@@ -96,8 +98,8 @@ describe('PORTAL_ROUTES coverage (MUT-286)', () => {
     expect(missing).toEqual([]);
   });
 
-  it('matches the brief §3 table plus the client and matter creates (MUT-286, MUT-318): 51 calls, 6 remote-only', () => {
-    expect(CLIENT_CALLS.filter((call) => call.path !== '/v1/summaries/expenses')).toHaveLength(51);
-    expect(CLIENT_CALLS.filter((call) => !call.local)).toHaveLength(6);
+  it('matches the brief §3 table plus the client and matter creates (MUT-286, MUT-318) and the terms acceptance (MUT-324): 52 calls, 7 remote-only', () => {
+    expect(CLIENT_CALLS.filter((call) => call.path !== '/v1/summaries/expenses')).toHaveLength(52);
+    expect(CLIENT_CALLS.filter((call) => !call.local)).toHaveLength(7);
   });
 });

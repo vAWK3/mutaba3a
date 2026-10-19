@@ -11,6 +11,7 @@ import { SCOPES } from './auth/scopes.js';
 import { requestScopedStore } from './auth/store-guard.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from './auth/users.js';
 import { ERROR_CODES } from './errors.js';
+import { CURRENT_TERMS, type CurrentTerms } from './legal.js';
 import type { CachedFxRates } from './fx-rates.js';
 import type { Logger } from './logger.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
@@ -57,6 +58,8 @@ export interface AppDependencies {
   attachmentUrlTtlSeconds?: number;
   /** argon2id hasher for user passwords (MUT-37). Defaults to the OWASP minimum profile; production passes the configured one. */
   passwordHasher?: PasswordHasher;
+  /** MUT-324: the terms people accept. Defaults to CURRENT_TERMS; a test passes a later version to act out a release that bumps them. */
+  terms?: CurrentTerms;
   /** Browser sessions (MUT-38). Production passes the configured pepper and limits; tests get a random pepper and the defaults. */
   sessions?: SessionSettings;
   /** Sign-in lockout state (in process, one instance until TD-017). */
@@ -121,7 +124,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.37.0-mut287';
+export const API_VERSION = '1.38.0-mut324';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -148,6 +151,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   });
 
   const passwordHasher = deps.passwordHasher ?? createArgon2Hasher(ARGON2_MINIMUMS);
+  const terms = deps.terms ?? CURRENT_TERMS;
   // Every route reaches the ledger through the guard authenticate() sets (ADR-037 decision 7); authenticate itself reads the base store.
   const store = requestScopedStore(deps.store);
   const sessions = deps.sessions ?? defaultSessionSettings();
@@ -191,6 +195,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       settings: sessions,
       throttle: signInThrottle,
       ipLimiter: signInIpLimiter,
+      terms,
     }),
   );
   app.route(
@@ -201,10 +206,11 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       settings: sessions,
       throttle: signInThrottle,
       ipLimiter: signInIpLimiter,
+      terms,
     }),
   );
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
-  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle }));
+  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms }));
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', importRoutes(store));
   app.route('/', vatRoutes(store));
@@ -221,12 +227,13 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     store,
     attachments: { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 },
     fxRates: deps.fxRates ?? null,
+    terms,
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
-  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions }));
+  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms }));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {

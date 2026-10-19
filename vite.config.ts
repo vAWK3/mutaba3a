@@ -1,6 +1,7 @@
 import { defineConfig, type HtmlTagDescriptor, type Plugin, type UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA, type ManifestOptions, type VitePWAOptions } from "vite-plugin-pwa";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json";
 import ar from "./src/lib/i18n/translations/ar";
@@ -12,6 +13,7 @@ import {
   NETLIFY_FORMS_FILE,
 } from "./src/pages/landing/hostedRequest";
 import { HOSTED_OFFER_FILE, HOSTED_OFFER_URL } from "./src/content/download-config";
+import { TERMS_MANIFEST_FILE, termsManifest } from "./src/content/legal/termsManifest";
 
 /** Dev-only default for where `vite --mode hosted` proxies `/v1`; override with MUTABA3A_API_ORIGIN. */
 const DEFAULT_DEV_API_ORIGIN = "http://127.0.0.1:8787";
@@ -96,6 +98,11 @@ export function posthogKey(override: string | undefined): string {
 /** The portal origin the web build links to; a bad MUTABA3A_PORTAL_URL fails the build (MUT-187). */
 export function portalUrl(override: string | undefined): string {
   return assertHttpsOrigin("MUTABA3A_PORTAL_URL", override ?? DEFAULT_PORTAL_URL);
+}
+
+/** MUT-324: the landing's /terms, which the portal links to (versioned as /terms/<version>); a bad origin fails the build. */
+export function termsUrl(override: string | undefined): string {
+  return `${assertHttpsOrigin("MUTABA3A_PUBLIC_ORIGIN", override ?? DEFAULT_PUBLIC_ORIGIN)}/terms`;
 }
 
 /** The public /hosted page the portal's sign-in links to; a bad MUTABA3A_PUBLIC_ORIGIN fails the build (MUT-188). */
@@ -258,6 +265,21 @@ function hostedOfferHtml(): Plugin {
   };
 }
 
+/**
+ * MUT-324 (D11): `/legal/terms-versions.json`, every released terms version and the sha256 of its EN and AR
+ * text, which `server/scripts/deploy.sh` checks before a server naming a new version is released. Web only.
+ */
+function legalTermsManifest(): Plugin {
+  const dir = fileURLToPath(new URL("./src/content/legal/terms/", import.meta.url));
+  return {
+    name: "mutaba3a:legal-terms-manifest",
+    generateBundle() {
+      const files = readdirSync(dir).map((name) => ({ name, bytes: readFileSync(`${dir}${name}`) }));
+      this.emitFile({ type: "asset", fileName: TERMS_MANIFEST_FILE, source: `${JSON.stringify(termsManifest(files), null, 2)}\n` });
+    },
+  };
+}
+
 /** Emits the form twin at the path the page posts to. Web build only: Netlify serves only the web build. */
 function netlifyForms(): Plugin {
   return {
@@ -398,6 +420,8 @@ function hostedConfig(): UserConfig {
       __BUILD_MODE__: JSON.stringify("hosted"),
       // The sign-in page's "No account? Request one" link (MUT-188): the landing's /hosted page
       __HOSTED_OFFER_URL__: JSON.stringify(hostedOfferUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
+      // The terms the setup page, the Updated-terms step and the account menu link to (MUT-324)
+      __TERMS_URL__: JSON.stringify(termsUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
       // Opt-in, anonymous usage counts (MUT-155, ADR-090); "" turns analytics off
       __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
     },
@@ -447,7 +471,7 @@ export default defineConfig(({ mode }) => {
     },
   plugins: [
     react(),
-    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), hostedOfferDevRoute(), hostedOfferHtml()] : []),
+    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), legalTermsManifest(), hostedOfferDevRoute(), hostedOfferHtml()] : []),
     VitePWA({
       disable: isTauri, // Disable PWA for desktop builds
       registerType: "autoUpdate",

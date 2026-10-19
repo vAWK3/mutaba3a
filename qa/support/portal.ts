@@ -71,11 +71,20 @@ export interface PortalStub {
 }
 
 /** The signed-in person's `/v1/me` answer for these profiles (the shape openSignedInPortal serves). */
-export function meBody(profiles: StubProfile[], language: 'en' | 'ar' = 'en', suggestions = { off: false, dismissed: [] as string[] }) {
+/** MUT-324: the terms version the QA fake reports, and the one the setup page is asked to accept. */
+export const QA_TERMS_VERSION = '2026-10-19';
+
+export function meBody(
+  profiles: StubProfile[],
+  language: 'en' | 'ar' = 'en',
+  suggestions = { off: false, dismissed: [] as string[] },
+  terms: { version: string; accepted: boolean } | null = { version: QA_TERMS_VERSION, accepted: true },
+) {
   return {
     user: { id: '99999999-9999-4999-8999-999999999999', email: 'nour@office.ps', displayName: 'Nour Haddad', locale: language, malafatSuggestions: suggestions },
     profiles: profiles.map(hostedProfile),
     limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },
+    terms,
   };
 }
 

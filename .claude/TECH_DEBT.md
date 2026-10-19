@@ -152,6 +152,16 @@
 **Impact**: the client directory includes archived clients, and POST /v1/projects refuses them (`CUSTOMER_ARCHIVED`); a name over 200 characters fails validation. Both end in "Couldn't add the matter. Try again." The same holds for Add client.
 **Fix**: map `CUSTOMER_ARCHIVED` and the name-length refusal to their own messages, cap the input at 200, and offer no Add row under an archived client.
 
+### TD-180: Terms acceptance is enforced on the portal only; a phone-only person can keep saving without accepting
+**Status**: Open
+**Ticket**: MUT-344 (phone: Terms link + Updated-terms step); the enforcement question stays open after it
+**Added**: 2026-10-19
+**Priority**: Medium (pilot users all accept at their setup link; this bites only accounts that predate the terms, or a later version bump)
+**Impact**:
+- ADR-102 decision 7 (D7): the server never refuses a write for missing acceptance, so installed phone builds don't break.
+- An account that predates the terms and only uses the phone isn't asked until MUT-344 ships. After a bump, a phone user who never opens the portal keeps saving under the old version.
+- `npm --prefix server run terms:report` makes them visible; nothing stops them.
+**Fix**: ship MUT-344. Then decide whether writes from a session behind on the terms answer 409 (gated on MUT-293's minimum app version so old builds are told to update first).
 ### TD-179: "Download my records" holds the whole zip in memory
 **Status**: Open
 **Ticket**: MUT-287 (2026-10-19, eng review R2)

@@ -2525,6 +2525,13 @@ A hint that appears while typing ("Choose a client first to add a matter.") is r
 ### Pattern: A drawer holds Save while a picker is still adding (MUT-318 reconcile)
 A picker that creates on pick (Add «name») reports `onCreatingChange(true/false)` around its mutation (`finally`). The drawer's `usePendingPicks()` counts them: `pending` drives Save's look, `guard(handleSubmit(onSubmit))` drops a submit while any is in flight, before validation. The guard reads a ref, not state, because the picker reports done just before EntityTypeahead submits for an Enter held during the save, ahead of React's re-render. First instance: the hosted IncomeCaptureDrawer and ExpenseDrawer; the local IncomeDrawer's `clientCreating` is the same idea.
 
+## Patterns added by MUT-324 (2026-10-19, ADR-102)
+
+### Pattern: A legal text people accept is a frozen, versioned file, fingerprinted where it's accepted
+Each version is its own content file, never edited once released. The side that records acceptance (the server) pins the version and the sha256 of each language's file, and stores the hash with every acceptance. A root test keeps the pin and the files in step, so a changed text that kept its version fails CI.
+
+### Pattern: Prove a static file is live with a build-emitted manifest, not a page fetch
+Netlify's SPA fallback answers 200 for every path, so a release guard can't fetch a page to learn whether it exists. The web build emits a small JSON manifest (`legal/terms-versions.json`), like `__forms.html`. The guard (`server/src/scripts/check-terms-live.ts`, run by `deploy.sh`) reads that file and compares it to what the release is about to name.
 ## Patterns added by MUT-287 (2026-10-19, ADR-100 decision 11)
 
 ### Pattern: Two local databases are kept consistent by order, not by one transaction

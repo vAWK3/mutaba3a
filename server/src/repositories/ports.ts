@@ -1,6 +1,7 @@
 import type { ApiKeyEnvironment } from '../auth/api-key.js';
 import type { KeyScope } from '../auth/scopes.js';
 import type { SessionKind } from '../auth/sessions.js';
+import type { TermsLocale, TermsSurface } from '../legal.js';
 import type { IsoDate, IsoMonth, PaymentTerms } from '../dates.js';
 import type { ContingencyOutcome, UpfrontTreatment } from '../agreements/contingency.js';
 import type { PricingBasis, VatTreatment } from '../vat.js';
@@ -1221,6 +1222,43 @@ export interface UserRepository {
    * session: another change (or an operator lock) committed first (MUT-238 review).
    */
   changePassword(input: ChangePasswordInput): Promise<UserRecord | null>;
+  /** MUT-324: the person's acceptance of the highest terms version they accepted; null if they never accepted any. */
+  latestTermsAcceptance(userId: string): Promise<TermsAcceptanceRecord | null>;
+  /**
+   * MUT-324: idempotent on (userId, version): an existing acceptance is returned unchanged with `created: false`
+   * and `audit` is not written; otherwise the row and `audit` are written in one transaction.
+   * ForeignKeyViolation on an unknown user.
+   */
+  acceptTerms(input: AcceptTermsInput): Promise<{ acceptance: TermsAcceptanceRecord; created: boolean }>;
+  /** MUT-324 T1 (operator only): every user, ordered by email, with the highest terms version they accepted (null if none). */
+  listLatestTermsVersions(): Promise<Array<{ userId: string; email: string; status: UserStatus; latestVersion: string | null }>>;
+}
+
+/** MUT-324 (ADR-102): one person's acceptance of one terms version, tied to the exact text by its sha256. */
+export interface TermsAcceptanceRecord {
+  userId: string;
+  /** An ISO date: the version's name and its release order. */
+  version: string;
+  /** The language of the text the person read. */
+  locale: TermsLocale;
+  /** sha256 of that language's frozen content file (server/src/legal.ts). */
+  textSha256: string;
+  surface: TermsSurface;
+  acceptedAt: Date;
+}
+
+export interface TermsAcceptanceInput {
+  version: string;
+  locale: TermsLocale;
+  textSha256: string;
+  surface: TermsSurface;
+}
+
+export interface AcceptTermsInput extends TermsAcceptanceInput {
+  userId: string;
+  at: Date;
+  /** Written in the same transaction, only when the acceptance is new. */
+  audit: AuditEventInput[];
 }
 
 export interface ChangePasswordInput {
@@ -1334,6 +1372,13 @@ export interface RedeemSetupLinkInput {
   at: Date;
   /** Written in the same transaction, only when the claim wins. */
   audit: AuditEventInput[];
+  /**
+   * MUT-324: the terms the person accepted on the setup page, recorded in the same transaction as the password.
+   * Idempotent like `users.acceptTerms` (a reset link after acceptance must still work); `termsAudit` is written
+   * only when the acceptance is new.
+   */
+  terms: TermsAcceptanceInput;
+  termsAudit: AuditEventInput[];
 }
 
 export interface AccountSetupRepository {

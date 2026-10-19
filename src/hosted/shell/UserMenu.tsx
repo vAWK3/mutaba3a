@@ -7,6 +7,7 @@ import { useSignOut } from '../session/useSignOut';
 import { usePopover } from './usePopover';
 import { useAccountDrawers } from './AccountDrawers';
 import { MalafatMenuItems } from '../components/MalafatPortal';
+import { termsHref } from '../terms';
 import { AppDownloadMenuItems } from '../components/AppDownloadMenuItems';
 import { UsageMenuItem } from '../components/UsageMenuItem';
 import type { HostedProfile } from '../api/client';
@@ -34,6 +35,7 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
   const { user } = useMe();
   const local = useIsLocalMode();
   const { signOut, signingOut } = useSignOut();
+  const termsLink = termsHref();
   const { open, close, toggle, buttonRef, panelRef } = usePopover();
   const accountDrawers = useAccountDrawers();
   const navigate = useNavigate();
@@ -101,6 +103,12 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
               {/* MUT-155: the anonymous-usage switch; no telemetry signed out (brief §10) */}
               <UsageMenuItem />
             </>
+          )}
+          {/* MUT-324: the terms, in either mode; before the app downloads, which stay last */}
+          {termsLink && (
+            <a role="menuitem" className="hp-menu-item press" href={termsLink} target="_blank" rel="noopener">
+              {t('hosted.terms.link')}
+            </a>
           )}
           {/* Last item (MUT-261). Not signed out: the phone app can't see this device's records, and signed-out
               screens carry no store links (MUT-285 brief §11, MUT-186 9A). */}

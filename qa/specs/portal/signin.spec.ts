@@ -22,6 +22,7 @@ type AuthCopy = { hosted: { auth: { title: string; checking: string; connectingS
 const auth = (language: 'en' | 'ar') => (JSON.parse(fs.readFileSync(path.join(portalI18n, `${language}.json`), 'utf8')) as AuthCopy).hosted.auth;
 const AUTH = { en: auth('en'), ar: auth('ar') } as const;
 const HEADING = { en: AUTH.en.title, ar: AUTH.ar.title } as const;
+const TERMS_LINK = { en: 'Terms of service', ar: 'شروط الخدمة' } as const;
 const REQUEST = { en: AUTH.en.request, ar: AUTH.ar.request } as const;
 const AUTH_CHECKING = { en: AUTH.en.checking, ar: AUTH.ar.checking } as const;
 const AUTH_CONNECTING_SLOW = { en: AUTH.en.connectingSlow, ar: AUTH.ar.connectingSlow } as const;
@@ -91,13 +92,15 @@ for (const language of ['en', 'ar'] as const) {
         await openSignIn(page, language);
       });
 
-      await step('One outward link, same tab, under the help line', async () => {
+      await step('One outward link to /hosted, same tab, under the help line; the only other is the terms (MUT-324)', async () => {
         const link = page.getByRole('link', { name: REQUEST[language].link });
         await expect(link).toBeVisible();
         await expect(link).toHaveAttribute('href', /^https:\/\/[^/]+\/hosted$/);
         await expect(link).not.toHaveAttribute('target', /./);
         await expect(page.getByText(REQUEST[language].lead)).toBeVisible();
-        await expect(page.getByRole('link')).toHaveCount(1);
+        // No self-service door: besides /hosted, the page links only the terms of service
+        await expect(page.getByRole('link')).toHaveCount(2);
+        await expect(page.getByRole('link', { name: TERMS_LINK[language] })).toHaveAttribute('href', /^https:\/\/[^/]+\/terms$/);
       });
 
       await step('Still accessible', async () => {

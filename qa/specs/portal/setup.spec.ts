@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
-import { OFFICE_A, office } from '../../support/portal';
+import { OFFICE_A, QA_TERMS_VERSION, office } from '../../support/portal';
 import { FakeApi, type SetupLinkState, type StubSetupLink } from '../../support/portalApi';
 
 /**
@@ -29,6 +29,8 @@ const LABELS = { en: { password: 'New password', submit: 'Save and sign in' }, a
 
 async function typeAndSave(page: Page, password: string, language: 'en' | 'ar' = 'en') {
   await page.getByLabel(LABELS[language].password).fill(password);
+  // MUT-324: saving needs the terms ticked (check() leaves an already-ticked box alone)
+  await page.getByRole('checkbox', { name: /terms of service|شروط الخدمة/ }).check();
   await page.getByRole('button', { name: LABELS[language].submit }).click();
 }
 
@@ -61,7 +63,8 @@ test('A valid setup link opens in the account’s language, sets the password an
   await step('Signed in with it, on the first profile’s Overview', async () => {
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
     await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
-    expect(api.last('POST', REDEEM)?.body).toEqual({ token: TOKEN, password: PASSWORD });
+    // MUT-324: the terms version the check named, in the page's language, travel with the password
+    expect(api.last('POST', REDEEM)?.body).toEqual({ token: TOKEN, password: PASSWORD, acceptedTermsVersion: QA_TERMS_VERSION, termsLocale: 'en' });
     expect(api.last('POST', /^\/v1\/sessions$/)?.body).toEqual({ email: EMAIL, password: PASSWORD });
   });
 });
