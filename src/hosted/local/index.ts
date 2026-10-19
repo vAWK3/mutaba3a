@@ -10,7 +10,9 @@ import { mintLocalSession, type LocalSession } from './mintLocalSession.js';
 import { LOCAL_FORMAT_VERSION } from './migrations/index.js';
 import { IndexedDbPersistence } from './persistence.js';
 import { installBufferShim } from './platform/buffer-shim.js';
-import { countRecords, decodeRecordsFile, encodeRecordsFile } from './recordsFile.js';
+import { decodeRecordsArchive, encodeRecordsArchive } from './recordsArchive.js';
+import { countRecords } from './recordsFile.js';
+import { applyRestore } from './restore.js';
 import { createLocalTransport, LocalFormatTooNewError, reloadFromDisk } from './transport.js';
 
 /**
@@ -80,18 +82,12 @@ async function boot(): Promise<LocalBackend> {
   }
 
   async function readRecordsFile(file: Blob): Promise<PendingRestore> {
-    const decoded = decodeRecordsFile(await file.text());
+    const decoded = await decodeRecordsArchive(file);
     return {
-      recordCount: countRecords(decoded.maps),
+      recordCount: countRecords(decoded.snapshot.maps),
       apply: async () => {
-        await lock.withLock(async ({ onDiskVersion }) => {
-          // Disk first: if the browser refuses the save, memory still holds this device's records, not the file's.
-          await persistence.save({ ...decoded, formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now() });
-          store.restore(decoded);
-          // After the save (eng review R1): until then, the records being replaced still had their files.
-          await sweepBlobs(blobs, liveReceiptKeys(store.snapshot().maps)).catch(() => undefined);
-          return { result: undefined, wrote: true };
-        });
+        if (decoded.missing.length > 0) console.warn('[mutaba3a local] the records file has no copy of', decoded.missing.length, 'receipt file(s); those receipts restore without one');
+        await applyRestore({ lock, persistence, store, blobs, now }, decoded);
         session = await mintLocalSession(store, now, 'ar');
       },
     };
@@ -105,8 +101,7 @@ async function boot(): Promise<LocalBackend> {
       lock.withLock(async ({ stale }) => {
         if (stale) await reloadFromDisk(store, persistence);
         const { maps } = store.snapshot();
-        const text = encodeRecordsFile({ formatVersion: LOCAL_FORMAT_VERSION, stateVersion: 0, savedAt: now(), maps });
-        return { result: new Blob([text], { type: 'application/json' }), wrote: false };
+        return { result: await encodeRecordsArchive({ formatVersion: LOCAL_FORMAT_VERSION, stateVersion: 0, savedAt: now(), maps }, blobs), wrote: false };
       }),
     readRecordsFile,
     putBlob: async (url, file) => blobs.put(localBlobKey(url), file),

@@ -14,8 +14,9 @@ import { useToast } from './Toast';
 /**
  * Settings › Your data (D2, MUT-286 brief §2.5, §8), signed out only: the
  * portal has no Settings page, so it is the account menu's drawer, beside
- * Change password. Download writes everything on this device to one versioned
- * file; Restore reads one back, names how many records it holds, and replaces
+ * Change password. Download writes everything on this device, receipt files
+ * included, to one versioned zip (MUT-287); Restore reads one back (or a
+ * MUT-286 .json), names how many records it holds, and replaces
  * local data only after that confirm. A refused file changes nothing.
  */
 
@@ -27,7 +28,7 @@ function problemFor(error: unknown): Problem {
 }
 
 function recordsFileName(today: Date): string {
-  return `mutaba3a-records-${today.toISOString().slice(0, 10)}.json`;
+  return `mutaba3a-records-${today.toISOString().slice(0, 10)}.zip`;
 }
 
 function saveBlob(blob: Blob, name: string): void {
@@ -131,7 +132,7 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
           <input
             ref={fileRef}
             type="file"
-            accept="application/json,.json"
+            accept="application/zip,.zip,application/json,.json"
             className="sr-only"
             tabIndex={-1}
             aria-hidden="true"

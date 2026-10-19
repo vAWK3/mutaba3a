@@ -145,6 +145,33 @@ describe('receipts signed out (AC2)', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
   });
 });
 
+describe('Your data with receipts (eng review R2)', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
+  beforeEach(() => {
+    globalThis.indexedDB = new IDBFactory();
+    Object.defineProperty(globalThis.navigator, 'locks', { value: new FakeLockManager(), configurable: true });
+  });
+
+  it('downloads the records with the receipt file, and a cleared device gets both back from it', async () => {
+    const page = await openPage();
+    const profileId = await profileOf(page);
+    const expenseId = await anExpense(page, profileId);
+    const { receipt, upload } = await startReceipt(page, profileId, expenseId);
+    await page.putBlob(upload.url, new Blob([PDF], { type: 'application/pdf' }));
+    await call(page, profileId, 'POST', `/v1/expenses/${expenseId}/receipts/${receipt.id}/complete`);
+    const archive = await page.exportRecords();
+
+    globalThis.indexedDB = new IDBFactory();
+    const cleared = await openPage();
+    const pending = await cleared.readRecordsFile(archive);
+    await pending.apply();
+
+    expect(pending.recordCount).toBe(1);
+    const download = await call(cleared, profileId, 'GET', `/v1/expenses/${expenseId}/receipts/${receipt.id}/download`);
+    expect(download.status).toBe(200);
+    expect(await (await cleared.readBlob(((await download.json()) as { url: string }).url))?.text()).toBe(PDF);
+  });
+});
+
 describe('documents signed out (AC3)', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
   beforeEach(() => {
     globalThis.indexedDB = new IDBFactory();

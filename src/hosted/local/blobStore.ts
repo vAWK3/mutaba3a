@@ -12,7 +12,7 @@ const STORE_NAME = 'blobs';
  * engine, where a stored `Blob` has had engine bugs (older Safari) and doesn't
  * survive the test environment's clone.
  */
-interface StoredFile {
+export interface StoredFile {
   type: string;
   bytes: ArrayBuffer;
 }
@@ -50,14 +50,25 @@ export class IndexedDbBlobStore {
   }
 
   async get(key: string): Promise<Blob | null> {
+    const file = await this.getFile(key);
+    return file ? new Blob([file.bytes], { type: file.type }) : null;
+  }
+
+  /** The stored bytes as they are, for the records archive (no Blob round-trip). */
+  async getFile(key: string): Promise<StoredFile | null> {
     const db = await this.openDb();
     return new Promise((resolve, reject) => {
       const request = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(key);
-      request.onsuccess = () => {
-        const file = request.result as StoredFile | undefined;
-        resolve(file ? new Blob([file.bytes], { type: file.type }) : null);
-      };
+      request.onsuccess = () => resolve((request.result as StoredFile | undefined) ?? null);
       request.onerror = () => reject(request.error ?? new Error('Failed to read a stored file'));
+    });
+  }
+
+  /** Several files in one transaction (Restore). */
+  async putFiles(files: ReadonlyArray<{ key: string } & StoredFile>): Promise<void> {
+    if (files.length === 0) return;
+    await this.write((store) => {
+      for (const { key, type, bytes } of files) store.put({ type, bytes } satisfies StoredFile, key);
     });
   }
 
@@ -92,7 +103,7 @@ export class IndexedDbBlobStore {
 }
 
 /** `Blob.arrayBuffer` where the engine has it; `FileReader` otherwise (older engines, and the jsdom test environment). */
-function readBytes(blob: Blob): Promise<ArrayBuffer> {
+export function readBytes(blob: Blob): Promise<ArrayBuffer> {
   if (typeof blob.arrayBuffer === 'function') return blob.arrayBuffer();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
