@@ -204,9 +204,16 @@ components:
             - BHD
             - OMR
         terms:
-          allOf:
-            - $ref: "#/components/schemas/TermsStatus"
-            - nullable: true
+          type: object
+          nullable: true
+          properties:
+            version:
+              $ref: "#/components/schemas/TermsVersion"
+            accepted:
+              type: boolean
+          required:
+            - version
+            - accepted
       required:
         - user
         - profiles

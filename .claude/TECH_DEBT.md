@@ -152,6 +152,17 @@
 **Impact**: the client directory includes archived clients, and POST /v1/projects refuses them (`CUSTOMER_ARCHIVED`); a name over 200 characters fails validation. Both end in "Couldn't add the matter. Try again." The same holds for Add client.
 **Fix**: map `CUSTOMER_ARCHIVED` and the name-length refusal to their own messages, cap the input at 200, and offer no Add row under an archived client.
 
+### TD-181: The OpenAPI document says 3.1.0 but is written in 3.0's `nullable` style, and a nullable `$ref` reads as never null
+**Status**: Open
+**Ticket**: none yet (found in MUT-324 review pass 2, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Low (the runtime is right; only the published contract and the portal's generated types are wrong)
+**Impact**:
+- `server/src/app.ts` publishes `openapi: '3.1.0'`, but the generator writes `nullable: true` (157 places), which 3.1 has no keyword for, so a strict 3.1 validator or client generator reads those fields as non-null.
+- Where the nullable field is a registered schema, the generator writes `allOf: [$ref, {nullable: true}]`, and openapi-typescript makes it `X & unknown`: the portal's type loses the null. On main that hits VatRate `current`, Currency and PaymentTerms fields (about 18 `& unknown` sites in `src/hosted/api/schema.d.ts`).
+- MUT-324 avoided it for `Me.terms` by making that field an inline object (pinned by `server/src/__tests__/terms.test.ts` and a type assertion in `src/hosted/api/client.ts`).
+**Fix**: generate with the 3.1 generator (`doc31` / `OpenApiGeneratorV31`), so null is `type: [..., 'null']` / `oneOf` with `{type: 'null'}`, regenerate `schema.d.ts`, and fix any caller the restored nulls expose.
+
 ### TD-180: Terms acceptance is enforced on the portal only; a phone-only person can keep saving without accepting
 **Status**: Open
 **Ticket**: MUT-344 (phone: Terms link + Updated-terms step); the enforcement question stays open after it

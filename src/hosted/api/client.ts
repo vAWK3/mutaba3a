@@ -14,6 +14,9 @@ import { currentMode, setMode } from '../session/mode';
 
 export type Schemas = components['schemas'];
 export type Me = Schemas['Me'];
+/** MUT-324: Me.terms is null where no terms apply (signed out); the generated type must keep that null, or callers lose the check. */
+export type MeTermsMayBeNull = AssertTrue<null extends Me['terms'] ? true : false>;
+type AssertTrue<T extends true> = T;
 export type HostedProfile = Schemas['HostedProfile'];
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];

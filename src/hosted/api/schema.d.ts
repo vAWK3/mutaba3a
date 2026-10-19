@@ -10880,7 +10880,10 @@ export interface components {
              *     ]
              */
             currencies: string[];
-            terms: components["schemas"]["TermsStatus"] & unknown;
+            terms: {
+                version: components["schemas"]["TermsVersion"];
+                accepted: boolean;
+            } | null;
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
