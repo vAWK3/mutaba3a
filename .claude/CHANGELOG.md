@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Design: firm books brief and ADR-099 (MUT-299, epic MUT-298)
+
+**Why:** small firms (law and accounting offices, agencies) want receipts, vendors, payables and a monthly close. MUT-299 locks the shared rules before any of the 15 build tickets starts.
+
+### Added
+- `.claude/designs/firm-books.md`: the brief. It covers:
+  - the firm flag and the conversion of an owned profile;
+  - the firm role matrix between `firm-role-matrix` markers;
+  - approval, payables, VAT (invoice basis), month close and invites;
+  - the `ReceiptSuggestion` contract;
+  - full v1 contracts for MUT-300 and MUT-301, and names, shapes and error codes for v2–v5;
+  - QA scenarios, build order and the pilot gate.
+- `.claude/designs/firm-books-tests.md`: cross-cutting contract tests and the minimum tests for each child.
+- `.claude/designs/mut-299-firm-books-plan.md`: the eng review (D1–D15, Basel) and the design review (DR1–DR14, recommended defaults pending his approval).
+- `.claude/designs/mut-299-firm-books-wireframe.html`: the RTL wireframe of six screens.
+- ADR-099, with override-log rows: minimize-to-core decision 3 (firms only), MUT-252 decision 5, ADR-037 decision 1 (invites), the ADR-037 MUT-182 amendment (conversion), and MUT-298 intake decision 6 (copyable link).
+- TODOS.md #16: adjusting entries, the upgrade path from "reopen to correct".
+
+### Technical
+- No code changes. The new error codes `ROLE_NOT_PERMITTED` and `PERIOD_CLOSED` are specified; they're added by the ticket that first raises each one.
+
+---
+
 ## [Unreleased] - 2026-10-19 — Android app live: the Play Store link on the landing page and the portal
 
 **Why:** the Android app is in production on Google Play, so the "Android coming soon" rows can become real store links.

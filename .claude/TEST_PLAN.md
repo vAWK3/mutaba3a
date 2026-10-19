@@ -120,6 +120,14 @@ New harness: `src/test/legacyDexie.ts` (`schemaAt(n)`, `createDatabaseAt(name, n
 
 Unreachable branches left uncovered on purpose: `if (table)` in migration-safety's two loops over a hand-kept list of existing tables (TD-074), and v14's `amountMinor || 0` (v18 rewrites it).
 
+## Firm books (epic MUT-298, planned 2026-10-19)
+
+The test plan for MUT-300..314 is `.claude/designs/firm-books-tests.md`. It covers:
+- the cross-cutting contract tests: role matrix drift, the role refusal table, approval in totals, the period lock and close race, no double count, the VAT split and the compliance copy guard;
+- the minimum tests for each child.
+
+Every money rule runs on both stores (memory and `test:db`).
+
 ## Current Test Coverage
 
 ### Landing header and motion (MUT-77, added 2026-10-14)
