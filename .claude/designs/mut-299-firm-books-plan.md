@@ -1053,6 +1053,8 @@ None in this review. B1–B12 (as amended) await Basel's approval of the brief i
 
 # Design review (plan-design-review, 2026-10-19)
 
+> **Approved 2026-10-19:** Basel approved the brief as written, including DR1–DR14. Every "pending" below now reads as approved.
+
 Target: this plan's user-facing surfaces (portal `src/hosted`, phone app). Reviewer: Claude (native), gstack v1.91.143.0.
 **How this review ran:** Basel declined the focus and outside-voice questions and said "continue". So every design call below is my **recommended default (DR1–DR14), written into the plan as pending**. None is approved until Basel approves the brief. The brief carries them as "proposed design rules" for that approval.
 

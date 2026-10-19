@@ -66,7 +66,7 @@
 | ADR-075 | A Conversion Is Edited With If-Match and Soft-Deleted, Like an Expense; Malafat's Audit Feed Never Lists It (Supersedes ADR-070 §2) | Active | 2026-10 |
 | ADR-088 | Operator-Issued One-Time Setup Links Replace Printed Passwords; the Only Public Account Routes Are Sign-In and Redeeming a Link (Partial Override of ADR-037 §1) | Active | 2026-10 |
 | ADR-097 | One App — Signed Out, the Portal Runs the Server's Own Routes in the Browser over a Persisted MemoryLedgerStore (Partial Override of ADR-037 §2; Overrides MUT-185 Decision 1) | Active | 2026-10 |
-| ADR-099 | Firm Books — Firms Are Flagged Organizations With Roles, Approval, Bills and a Month Lock; Receipts Are Read on the Device (Partial Overrides of ADR-037 Decision 1 and Its MUT-182 Amendment, MUT-252 Decision 5, Minimize-to-Core Decision 3) | Active (design) | 2026-10 |
+| ADR-099 | Firm Books — Firms Are Flagged Organizations With Roles, Approval, Bills and a Month Lock; Receipts Are Read on the Device (Partial Overrides of ADR-037 Decision 1 and Its MUT-182 Amendment, MUT-252 Decision 5, Minimize-to-Core Decision 3) | Active | 2026-10 |
 
 ---
 
@@ -3894,7 +3894,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 ## ADR-099: Firm Books — Firms Are Flagged Organizations With Roles, Approval, Bills and a Month Lock; Receipts Are Read on the Device (Partial Overrides of ADR-037 Decision 1 and Its MUT-182 Amendment, MUT-252 Decision 5, Minimize-to-Core Decision 3)
 
-**Status**: Active (design). MUT-300..314 build it. The design defaults DR1–DR14 in the brief are pending Basel's approval of the brief.
+**Status**: Active (design). MUT-300..314 build it. Basel approved the brief as written, including the design defaults DR1–DR14, on 2026-10-19.
 **Date**: 2026-10-19
 **Context**: Epic MUT-298. Basel turned "receipts sharing via PDF/OCR + a mini accounting ledger for small firms" into six versions over Nov 2026 – Apr 2027 (intake decisions ID1–ID9). Small firms (law and accounting offices, agencies) are the paying audience; freelancers stay on the lean core. Brief: `.claude/designs/firm-books.md`. Plan, eng review (D1–D15) and design review (DR1–DR14): `.claude/designs/mut-299-firm-books-plan.md`. Tests: `.claude/designs/firm-books-tests.md`.
 
@@ -3912,7 +3912,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 3. **Approval** (ID7) is a per-firm setting, off by default.
    - `initialApprovalFor(role, firm)` sets the state on all four expense-creation paths.
    - Every money total filters `APPROVED`; lists show every state.
-   - A rejected expense can be resubmitted (DR9, pending).
+   - A rejected expense can be resubmitted (DR9).
 4. **Bills mirror receivables (ID9, B5).**
    - A VENDOR bill's payment posts a read-only linked expense (D7).
    - The bill itself never counts as spend.
@@ -3925,7 +3925,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
    - A closed month refuses creates, edits, deletes and decisions on expenses, bills, bill payments, receipt approvals and inbox filing, with the new code `PERIOD_CLOSED`. A PATCH checks the old and new dates.
    - **Corrections need an owner reopen** (reason, audited). There are no negative adjusting expenses (D2; TODOS.md #16 is the upgrade path).
    - The check runs behind the repository port, inside the write transaction, under `FOR SHARE` on the organization row; close and reopen update that row (D5, O2).
-   - Close is blocked while the month has pending expenses (DR10, pending).
+   - Close is blocked while the month has pending expenses (DR10).
    - Income, payments, receivables and conversions are not locked, so packs never say "final" (D11).
 7. **Invites (MUT-306).**
    - An INVITE token is bound to the email, and **the link is mailed only to that address** (D10). The owner gets the same response for every email (D3).

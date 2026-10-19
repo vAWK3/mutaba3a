@@ -1,12 +1,12 @@
 # Firm books — design brief (MUT-299, epic MUT-298)
 
-Status: **draft, awaiting Basel's approval** (MUT-299 AC 5).
+Status: **approved by Basel, 2026-10-19**, as written, including DR1–DR14 (MUT-299 AC 5).
 Plan and reviews: `.claude/designs/mut-299-firm-books-plan.md` (eng decisions D1–D15, design defaults DR1–DR14). Intake: `.claude/designs/firm-books-intake-drafts.md` (intake decisions ID1–ID9). ADR: **ADR-099** in `.claude/DECISIONS.md`. Tests: `.claude/designs/firm-books-tests.md`. Wireframe: `.claude/designs/mut-299-firm-books-wireframe.html`.
 
 Naming in this brief:
 - **ID1–ID9:** the intake decisions (the plan file and the intake drafts call them D1–D9; they're renamed here so they can't be confused with the eng decisions).
 - **D1–D15:** the eng-review decisions, all approved by Basel.
-- **DR1–DR14:** the design defaults, still **pending**; this brief proposes them, and approving the brief approves them.
+- **DR1–DR14:** the design defaults, **approved with this brief** (Basel, 2026-10-19).
 - **B1–B12:** the plan's own proposals; approving the brief approves them as amended here.
 
 ---
@@ -31,7 +31,7 @@ Naming in this brief:
 2. ADR-099 logs every override (§20).
 3. The firm role matrix is written between drift-test markers (§4.2).
 4. The email-provider **requirement and criteria** are recorded (§10.3). MUT-306 picks the vendor.
-5. Basel approves this brief, including DR1–DR14.
+5. Basel approves this brief, including DR1–DR14. **Done 2026-10-19.**
 
 ---
 
@@ -164,7 +164,7 @@ Lists default to all states. Row counts stay unfiltered: the category count (`pr
 
 - Approve or reject: `POST /v1/expenses/{id}/decision` `{ decision: APPROVED | REJECTED, reason? }`. `reason` is required for REJECTED. The route needs `expenses:approve` and an If-Match header.
 - A decision on a row dated in a closed month is refused: 409 `PERIOD_CLOSED` (O6).
-- **DR9 (pending): resubmit.** A submitter may edit a REJECTED expense; saving puts it back to PENDING and clears the reason. The submitter may also delete it.
+- **DR9 (approved): resubmit.** A submitter may edit a REJECTED expense; saving puts it back to PENDING and clears the reason. The submitter may also delete it.
 - Turning `requireApproval` off leaves existing PENDING rows pending until someone decides them. Nothing is approved silently.
 
 ---
@@ -204,7 +204,7 @@ The extraction rules are written in Dart on the phone and **ported** to TypeScri
 
 `ExpenseReceipt` gets an optional `billId`, plus a CHECK that at most one of `expenseId` and `billId` is set. Filing it a second time gets 409 `CONFLICT`, `details.reason: RECEIPT_ALREADY_FILED`. Deleting the record frees the receipt.
 
-### 6.4 How a read field is shown (DR6, pending)
+### 6.4 How a read field is shown (DR6, approved)
 
 - A one-line caption sits under the field: "From the QR code" · "Read from the PDF" · "Read from the photo; check it".
 - The caption disappears once the field is edited.
@@ -220,7 +220,7 @@ The extraction rules are written in Dart on the phone and **ported** to TypeScri
 - **VAT summary basis: invoice (D9).** Input VAT is VAT on bills, dated by the bill's issue date, plus VAT on APPROVED expenses that **don't** carry a `billPaymentId`.
 - Posted expenses show their VAT share but are left out of the summary.
 - **Split across payments (D9):** a bill's VAT is split across its payments by largest remainder, so the shares add up exactly to the bill's VAT. The last payment absorbs the remainder.
-- **DR14 (pending):** on firm profiles the ExpenseDrawer shows a collapsed "VAT" row reading "No VAT recorded". Expanding it shows the treatment (Select) and rate, with net and VAT computed read-only. Non-firm profiles see no new required field.
+- **DR14 (approved):** on firm profiles the ExpenseDrawer shows a collapsed "VAT" row reading "No VAT recorded". Expanding it shows the treatment (Select) and rate, with net and VAT computed read-only. Non-firm profiles see no new required field.
 
 ---
 
@@ -297,11 +297,11 @@ Refusal: 409 `PERIOD_CLOSED`, `details: { month: "2027-09", closedThrough: "2027
 - The stateless `assertNotTooOld` call sites stay as they are.
 - Firm expense create, update and soft-delete become transactional in MUT-312.
 
-### 9.4 Closing with pending rows (DR10, pending)
+### 9.4 Closing with pending rows (DR10, approved)
 
 Close is **blocked** while that month has PENDING expenses: 409 `CONFLICT`, `details: { reason: PENDING_EXPENSES, count, ids[≤50] }`. The Close tab lists them with Review links.
 
-### 9.5 Refusal UX (DR4, pending)
+### 9.5 Refusal UX (DR4, approved)
 
 - The drawer stays open with an inline `.hp-banner-error`: "September 2027 is closed. Ask an owner to reopen it."
 - An owner's banner also links to "Reopen September".
@@ -341,7 +341,7 @@ Selection criteria: EU data region; DKIM/SPF on our sending domain; bounce and c
 
 Candidates: Amazon SES, Postmark, Resend. **MUT-306's planning picks one**, with setup cost.
 
-### 10.4 Accept step (DR12, pending)
+### 10.4 Accept step (DR12, approved)
 
 - **Portal:** after sign-in, a full-page "Join {firm}?" step comes before the app (Accept / Decline).
 - **Phone:** the same step as a sheet.
@@ -440,7 +440,7 @@ The new error codes, `ROLE_NOT_PERMITTED` and `PERIOD_CLOSED`, go into `ERROR_CO
 
 ---
 
-## 15. Design rules (DR1–DR14, pending Basel's approval with this brief)
+## 15. Design rules (DR1–DR14, approved with this brief on 2026-10-19)
 
 These are summarised here. The full text, the state table and the storyboard are in the plan file's design review, and the wireframe shows them.
 
