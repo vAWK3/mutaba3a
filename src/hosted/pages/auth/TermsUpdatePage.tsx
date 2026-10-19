@@ -13,17 +13,29 @@ import { SUPPORT_EMAIL, termsHref } from '../../terms';
  * latest acceptance is older than the current terms. They read the exact
  * version (a new tab), then agree, or leave: signing out, or writing to us to
  * take their records or close the account. Nobody is held away from their data.
- * If the terms change again while the step is open, the server refuses the old
- * version (409 TERMS_VERSION_STALE): /v1/me is fetched again, so the step names
- * the new version and the next I agree accepts it.
+ * If the terms change while the step is open, it names the new version and says
+ * so before anyone agrees: whether a /v1/me refetch brings it (returning from the
+ * Read tab) or the server refuses the old one (409 TERMS_VERSION_STALE names it,
+ * so a failed refetch can't leave the step resending the stale version).
  */
-export function TermsUpdatePage({ version }: { version: string }) {
+export function TermsUpdatePage({ version: current }: { version: string }) {
   const t = useT();
   const { language } = useLanguage();
   const queryClient = useQueryClient();
   const { signOut, signingOut } = useSignOut();
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<'failed' | 'changed' | null>(null);
+  // The version this step shows and accepts. A different one from /v1/me is a change the person
+  // must be told about, adjusted during render (not in an effect, react-hooks v7).
+  const [version, setVersion] = useState(current);
+  const [seen, setSeen] = useState(current);
+  if (current !== seen) {
+    setSeen(current);
+    if (current !== version) {
+      setVersion(current);
+      setProblem('changed');
+    }
+  }
   const link = termsHref(language, version);
   // The address is a link inside the sentence, so the sentence is split at its {email}
   const [beforeEmail, afterEmail = ''] = t('hosted.terms.decline').split('{email}');
@@ -39,7 +51,11 @@ export function TermsUpdatePage({ version }: { version: string }) {
       queryClient.setQueryData<Me>(ME_KEY, (current) => current && { ...current, terms });
     } catch (error) {
       const changed = error instanceof ApiError && error.code === 'TERMS_VERSION_STALE';
-      if (changed) await queryClient.invalidateQueries({ queryKey: ME_KEY });
+      if (changed) {
+        const named = (error.details as { current?: unknown } | null)?.current;
+        if (typeof named === 'string') setVersion(named);
+        await queryClient.invalidateQueries({ queryKey: ME_KEY });
+      }
       setProblem(changed ? 'changed' : 'failed');
       setSaving(false);
     }

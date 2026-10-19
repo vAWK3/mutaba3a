@@ -101,6 +101,64 @@ describe('the Updated terms step (MUT-324)', () => {
     ]);
   });
 
+  it('when a refetch of /v1/me names newer terms with no 409, says the terms changed before I agree (review pass 2)', async () => {
+    vi.stubGlobal('__TERMS_URL__', TERMS_URL);
+    const NEWER = '2027-02-01';
+    let current = CURRENT;
+    const api = stubApi(routes({ 'GET /v1/me': () => ok({ ...me(), terms: { version: current, accepted: false } }), [ACCEPT]: () => ok({ version: NEWER, accepted: true }) }));
+    const { user, queryClient } = renderPortal('/');
+    await screen.findByRole('button', { name: 'I agree' });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    current = NEWER;
+    await queryClient.invalidateQueries({ queryKey: ['me'] });
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Read the terms' })).toHaveAttribute('href', `${TERMS_URL}/${NEWER}?lang=en`));
+    expect(screen.getByRole('alert')).toHaveTextContent('The terms changed while this page was open');
+    await user.click(screen.getByRole('button', { name: 'I agree' }));
+    await waitFor(() => expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === ACCEPT)?.body).toEqual({ version: NEWER, locale: 'en' }));
+  });
+
+  it('a /v1/me asked before I agree cannot bring the step back once the answer arrives (review pass 2)', async () => {
+    let calls = 0;
+    let release: () => void = () => {};
+    stubApi(
+      routes({
+        'GET /v1/me': async () => {
+          if (++calls > 1) await new Promise<void>((resolve) => (release = resolve));
+          return ok(behind());
+        },
+      }),
+    );
+    const { user, router, queryClient } = renderPortal('/');
+    await screen.findByRole('button', { name: 'I agree' });
+    void queryClient.invalidateQueries({ queryKey: ['me'] });
+    await waitFor(() => expect(calls).toBe(2));
+    await user.click(screen.getByRole('button', { name: 'I agree' }));
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByRole('heading', { level: 1, name: "We've updated our terms" })).not.toBeInTheDocument();
+  });
+
+  it('on a 409 it takes the new version from the answer, so a failed refetch never loops on the stale one (review pass 2)', async () => {
+    vi.stubGlobal('__TERMS_URL__', TERMS_URL);
+    const NEWER = '2027-03-01';
+    let meCalls = 0;
+    const api = stubApi(
+      routes({
+        'GET /v1/me': () => (++meCalls === 1 ? ok(behind()) : fail(503, 'INTERNAL')),
+        [ACCEPT]: (call) =>
+          (call.body as { version: string }).version === NEWER ? ok({ version: NEWER, accepted: true }) : fail(409, 'TERMS_VERSION_STALE', { current: NEWER }),
+      }),
+    );
+    const { user, router } = renderPortal('/');
+    await user.click(await screen.findByRole('button', { name: 'I agree' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The terms changed while this page was open');
+    expect(screen.getByRole('link', { name: 'Read the terms' })).toHaveAttribute('href', `${TERMS_URL}/${NEWER}?lang=en`);
+    await user.click(screen.getByRole('button', { name: 'I agree' }));
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
+    expect(api.calls.filter((c) => `${c.method} ${c.url.pathname}` === ACCEPT).map((c) => (c.body as { version: string }).version)).toEqual([CURRENT, NEWER]);
+  });
+
   it('Sign out on the step signs out and opens sign-in', async () => {
     const api = stubApi(routes());
     const { user, router } = renderPortal('/');
