@@ -142,9 +142,11 @@ features:
       - Record 40.00 USD and 120.00 ILS today
       - Create a group from today, Amman trip, and land on it
       - Go offline and reload
+      - Forget this device's saved rates and reload, still offline
     expect:
       - The headline keeps $40.00 and ₪120.00 apart, and the ≈ line names today's ECB rate date
-      - Offline the ≈ line is gone and the totals stay
+      - Offline after a reload the ≈ line stays, from the rates this device remembers for an hour (review D8)
+      - With no saved rates offline, the ≈ line is gone and the totals stay
       - The only requests to the server are the first-visit check and GET /v1/public/fx-rates (D3)
   - id: conversion
     title: Signed out, log a conversion, reload, and edit it
@@ -166,3 +168,16 @@ features:
       - Open Documents signed out
     expect:
       - It says there are no documents on this profile yet, and shows no error
+  - id: restore-missing-receipts
+    title: Restore an older backup without receipt files, and the confirm says which receipts will have no file
+    tier: secondary
+    paths:
+      - src/hosted/local/recordsArchive.ts
+      - src/hosted/local/restore.ts
+    steps:
+      - Record an expense with a PDF receipt signed out
+      - Keep only records.json from Download my records, as an older .json backup
+      - Clear the site's data and restore that .json
+    expect:
+      - Before Replace, the confirm says "1 receipt file isn't in this file. That receipt will be restored without its file." (review D4)
+      - After Replace the expense and its receipt are back, and downloading it says it couldn't be prepared

@@ -69,7 +69,11 @@ async function clearSiteData(page: Page) {
 }
 
 /** PUBLIC_FX_PATH (src/hosted/local/fxSource.ts): the one request signed-out mode sends for the ≈ line. */
+/** hosted.expenses.drawer.receipts.downloadFailed (src/hosted/i18n/en.json). */
+const DOWNLOAD_FAILED = "Couldn't prepare the download. Try again.";
 const PUBLIC_FX = '**/v1/public/fx-rates';
+/** FX_MEMORY_KEY (src/hosted/local/fxSource.ts): the last public snapshot this device read, reused for an hour. */
+const FX_MEMORY_KEY = 'mut-local-fx';
 const PUBLIC_FX_SNAPSHOT = { rateDate: '2026-10-17', perEur: { USD: 1.1208, ILS: 3.4769 }, fetchedAt: '2026-10-19T08:00:00.000Z', source: 'live' };
 
 async function openSection(page: Page, name: string, heading = name) {
@@ -428,8 +432,15 @@ test('Signed out and online, a trip group in two currencies shows the ≈ line; 
     await expect(page.getByText(/at today's ECB rate \(Oct 17, 2026\)/)).toBeVisible();
   });
 
-  await step('Go offline and reload: the ≈ line hides, the totals stay', async () => {
+  await step('Go offline and reload: the ≈ line stays, from the rates this device remembers', async () => {
     online = false;
+    await page.reload();
+    await expect(page.getByRole('group', { name: 'Total spent' })).toContainText('$40.00');
+    await expect(page.getByText(/at today's ECB rate \(Oct 17, 2026\)/)).toBeVisible();
+  });
+
+  await step('On a device that remembers no rates, offline: the ≈ line hides and the totals stay', async () => {
+    await page.evaluate((key) => localStorage.removeItem(key), FX_MEMORY_KEY);
     await page.reload();
     await expect(page.getByRole('group', { name: 'Total spent' })).toContainText('$40.00');
     await expect(page.getByText(/at today's ECB rate/)).toHaveCount(0);
@@ -488,3 +499,54 @@ test('Signed out, Documents opens on its empty state, not an error', { tag: '@po
     expect(server.requests).toEqual(['GET /v1/me']);
   });
 });
+
+test('Restore an older backup without receipt files: the confirm says which receipts will have no file', { tag: '@portal.local.restore-missing-receipts' }, async ({ page, step }) => {
+  await signedOutServer(page);
+  let file = '';
+
+  await step('Record an expense, Ink, with a PDF receipt', async () => {
+    await page.goto('/');
+    await openSection(page, 'Expenses');
+    await recordExpense(page, { amount: '30.00', title: 'Ink' });
+    await page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /Ink/ }).click();
+    const drawer = page.getByRole('dialog', { name: 'Edit expense' });
+    await drawer.locator('input[type="file"]').setInputFiles({ name: 'ink.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 ink') });
+    await expect(drawer.getByRole('listitem').filter({ hasText: 'ink.pdf' })).toBeVisible();
+    await drawer.getByRole('button', { name: 'Close' }).click();
+  });
+
+  await step('Keep only records.json from the download, as an older .json backup holds no receipt files', async () => {
+    await page.getByRole('button', { name: /^Account/ }).click();
+    await page.getByRole('menuitem', { name: 'Your data' }).click();
+    const downloading = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download my records' }).click();
+    const zip = await JSZip.loadAsync(fs.readFileSync(await (await downloading).path()));
+    file = `${await (await downloading).path()}.json`;
+    fs.writeFileSync(file, await zip.file('records.json')!.async('string'));
+  });
+
+  await step('Clear this site\'s data and restore that .json', async () => {
+    await clearSiteData(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: /^Account/ }).click();
+    await page.getByRole('menuitem', { name: 'Your data' }).click();
+    await page.getByTestId('your-data-file').setInputFiles(file);
+  });
+
+  await step('Before anything is replaced, the confirm says the receipt file is missing', async () => {
+    const confirm = page.getByRole('alertdialog');
+    await expect(confirm).toContainText("1 receipt file isn't in this file. That receipt will be restored without its file.");
+    await confirm.getByRole('button', { name: 'Replace' }).click();
+    await expect(page.getByText('Records restored.')).toBeVisible();
+  });
+
+  await step('The expense and its receipt are back; the receipt has no file to download', async () => {
+    await openSection(page, 'Expenses');
+    await page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /Ink/ }).click();
+    const drawer = page.getByRole('dialog', { name: 'Edit expense' });
+    await expect(drawer.getByRole('listitem').filter({ hasText: 'ink.pdf' })).toBeVisible();
+    await drawer.getByRole('button', { name: 'Download' }).click();
+    await expect(page.getByText(DOWNLOAD_FAILED)).toBeVisible();
+  });
+});
+
