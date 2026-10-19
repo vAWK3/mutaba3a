@@ -319,6 +319,9 @@ npm run tauri build      # macOS/Windows bundles
 
 ## 6. Security & Privacy Model
 
+### Terms of service (MUT-324, ADR-102)
+Hosted accounts are covered by terms of service at `/terms/<version>`. The texts are frozen and versioned, governed by the law of England & Wales, with English prevailing. A person accepts at their setup link, and again in the portal's Updated-terms step after a version bump. Each acceptance records the version, the language, the text's sha256 and the surface. Signed out, no terms apply.
+
 ### Data Residency
 - **All data stored locally** in browser IndexedDB or Tauri app storage
 - **No server-side database** — user owns their data completely

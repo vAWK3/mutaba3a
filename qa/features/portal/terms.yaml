@@ -1,0 +1,49 @@
+app: portal
+area: terms
+title: Accepting the terms of service on the portal
+tier: core
+paths:
+  - src/hosted/pages/auth/TermsUpdatePage.tsx
+  - src/hosted/terms.ts
+features:
+  - id: setup-requires-accept
+    title: A setup link can't be finished without ticking "I agree to the terms of service"; the tick links the exact version and the save records it (MUT-324)
+    tier: core
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/pages/auth/SetupPage.tsx
+      - src/hosted/pages/auth/setupLink.ts
+    steps:
+      - Open a valid setup link, type a password and press Save and sign in without ticking the terms
+      - Tick "I agree to the terms of service" and save again
+    expect:
+      - Without the tick the page asks to agree and sends nothing
+      - The terms link opens the version being accepted in a new tab
+      - Saving sends that version and the page language, and the person lands signed in on Overview
+  - id: updated-terms-step
+    title: A signed-in person behind on the terms sees the Updated-terms step before the portal, agrees once, and is not asked again (MUT-324)
+    tier: core
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/session/AuthGate.tsx
+      - src/hosted/api/client.ts
+    steps:
+      - Open the portal signed in as someone who accepted an older version of the terms
+      - Press I agree
+      - Reload the page
+    expect:
+      - The step shows before any navigation, with Read the terms, I agree, Sign out and the support email
+      - Agreeing records the version in the page language and opens Overview
+      - After reloading, the step doesn't come back
+  - id: links
+    title: The account menu and the sign-in page link the terms of service (MUT-324)
+    tier: secondary
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/pages/auth/SignInPage.tsx
+    steps:
+      - Open the account menu while signed in
+      - Open the sign-in page
+    expect:
+      - Both link the terms of service in a new tab

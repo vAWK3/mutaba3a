@@ -1,7 +1,10 @@
+// @vitest-environment node
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { CURRENT_TERMS } from '../../server/src/legal';
+import { DEFAULT_PUBLIC_ORIGIN as DEPLOY_CHECK_ORIGIN } from '../../server/src/scripts/check-terms-live';
+import { DEFAULT_PUBLIC_ORIGIN } from '../../vite.config';
 import { termsManifest } from '../../src/content/legal/termsManifest';
 import { LATEST_TERMS_VERSION, TERMS_VERSIONS } from '../../src/content/legal/terms';
 
@@ -29,5 +32,9 @@ describe('legal terms (MUT-324)', () => {
         expect(JSON.parse(readFileSync(join(DIR, `${version}.${locale}.json`), 'utf8')).version).toBe(version);
       }
     }
+  });
+
+  it('the deploy check reads the same public site the landing is built for', () => {
+    expect(DEPLOY_CHECK_ORIGIN).toBe(DEFAULT_PUBLIC_ORIGIN);
   });
 });

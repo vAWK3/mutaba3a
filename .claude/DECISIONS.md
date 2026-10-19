@@ -4011,3 +4011,31 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 6. **Every `dir` site is classified** in `src/styles/__tests__/direction.test.ts` (45 on 2026-10-19), and a new one fails until classified.
 
 **Consequences**: The `dir` attribute is the single source of truth, and new LTR content needs no CSS. Arabic before/after on preview builds showed 0 changed pixels on the ticket's eight screens. English `dir="rtl"`/`"auto"` now work: the Arabic business-name input is RTL in the English UI, and a user-typed name takes its own direction. The app still shows two amount orders: standalone (RTL, point 2) and in-sentence (LRI, MUT-110). Picking one is a product follow-up, not this ADR.
+
+## ADR-102: Terms of Service Are Frozen, Versioned Texts; Acceptance Is Recorded at Setup and Re-asked on the Portal (MUT-324)
+
+**Status**: Active (amends ADR-088: a setup-link redeem also records the terms the person accepted)
+**Date**: 2026-10-19
+**Context**: The pilot (epic MUT-322) needs terms of service that a paying person accepts. The terms text ships with the landing page (Netlify, web build) and the version people must accept ships with the API image, two separate deploys. Accounts are operator-issued, so everyone passes a setup link once. Accounts that already have passwords never pass one again. Plan `.claude/designs/mut-324-terms-plan.md` §0 records Basel's answers D1–D12 (2026-10-19).
+
+**Decision**:
+1. **Each terms version is a frozen file per language**, `src/content/legal/terms/<YYYY-MM-DD>.<en|ar>.json`. A released file is never edited; a new text is a new version.
+   - `/terms` shows the latest; `/terms/<version>` shows that version forever.
+   - The English text prevails over the Arabic (D4, the terms say so). The governing law is England & Wales; the contracting party is Barmajiyat Ltd.
+2. **The server owns which version people accept**: `server/src/legal.ts` `CURRENT_TERMS`, with the sha256 of the EN and AR files. `scripts/__tests__/legal-terms.test.ts` pins it to the files and to the landing's latest version.
+3. **An acceptance is a row**: `terms_acceptances (userId, version, locale, textSha256, surface portal|phone, acceptedAt)`, unique on (userId, version).
+   - It is written idempotently: an operator reset after acceptance still works.
+   - It **cascades with the person** (D3, the schema's one cascade). Closing an account (MUT-333) removes the record of its agreement.
+4. **"Accepted" means the latest accepted version is ≥ the current one** (D10, ISO-date string order). An API rollback, or two revisions answering side by side, never asks again.
+5. **Acceptance happens in two places**:
+   - The setup redeem requires `acceptedTermsVersion` equal to the current version. The check comes after the link-state check and before hashing; the answer is 409 `TERMS_VERSION_STALE` with `details.current`. The acceptance is recorded in the redeem's transaction.
+   - `POST /v1/me/terms-acceptance` (cookie or device session, organization-independent) covers people who are behind. `Me.terms {version, accepted}` drives the portal's Updated-terms step. That step offers a way out (D6): sign out, or write to support to take your records or close the account.
+6. **Each person accepts for themselves and, as owner, for the profiles they own** (D2). `user.terms_accepted` is audited on owned profiles only, never on a firm the person is merely a member of.
+7. **Only the portal enforces acceptance** (D7). The server does not refuse writes, so installed phone builds keep working (TD-180). The phone's link and update step are MUT-344.
+8. **Web first, checked at release** (D11). The web build emits `/legal/terms-versions.json` (version + sha256 per language). `server/scripts/deploy.sh` runs `terms:check-live` and refuses to release a server whose `CURRENT_TERMS` the public site doesn't list with the same fingerprints. Netlify answers every path with the app shell, so a page fetch can't prove the version is live.
+9. **The signed-out portal has no terms.** `PortalRouteDependencies.terms` is null, `Me.terms` is null and nothing asks. Acceptances are kept out of `MemoryLedgerStore.snapshot()`, so the shipped local format is unchanged.
+
+**Consequences**:
+- Every acceptance can be tied to the exact words accepted, in the language read.
+- Bumping the terms means three steps: add the new files and update `CURRENT_TERMS` and its hashes (the pin test fails until they match); release web; then release the server.
+- `npm --prefix server run terms:report` (GET /admin/v1/terms-acceptance) lists who is behind, which covers phone-only users until MUT-344 ships.

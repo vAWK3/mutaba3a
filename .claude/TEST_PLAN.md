@@ -3175,3 +3175,15 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Release-QA `@portal.income.add-matter` | signed in: hint with no client; Add matter POST body + headers; income names it; nothing offered on a Malafat-fed profile |
 | Release-QA `@portal.income.matter-fills-client` | client chips; picking Client 2's Retainer fills Client 2; switching to Client 1 empties Matter |
 | Reconcile additions (2026-10-19) | `EntityTypeahead.test.tsx`: no second pick while one saves (list shut on ArrowDown/refocus); cascade flash comes off after its span and replays. `useClientProjectCascade.test.tsx`: `onAutoFill` with the default owner, not when the client already owns it. `IncomeCaptureDrawer.test.tsx`: Save held while a matter is added; Enter held still saves once it lands; CURRENCY_MISMATCH under Matter; Malafat no-Add check now waits for the open list (was vacuous). `ExpenseDrawer.test.tsx`: Save held while a matter is added; picking a matter fills the client, changing the client empties it. `incomeApiErrors.test.ts`: CURRENCY_MISMATCH → `matterCurrency` with the matter's currency. Release-QA `@portal.income.add-matter`: the Malafat step waits for the open list before asserting no Add row |
+
+## MUT-324 — Terms of service, accepted at setup (2026-10-19, ADR-102)
+
+- **Server:**
+  - `server/src/__tests__/terms.test.ts`: the version in the check; a missing or stale version is refused before hashing; a dead link says why first; version, locale, sha256 and surface are recorded; audit on owned profiles only; a reset after acceptance; `Me.terms` on every sign-in surface; a bump asks again; null signed out; the accept route is idempotent, phone surface, stale, 401.
+  - `store-contract-account-setup.ts` (memory + Postgres): idempotent accept, the latest by version, FK, redeem + reset keep one row, and a refused redeem records nothing.
+  - `check-terms-live.test.ts`, the `users-cli` terms report, route-security lists, the store-guard operator list.
+- **Landing:** `TermsPage.test.tsx` (EN/AR, versions, unknown version, English prevails); `PrivacyPolicyPage.test.tsx` (hosted-accounts section, footer link); `HostedOfferPage.test.tsx` (terms link); `termsManifest.test.ts`; `scripts/__tests__/legal-terms.test.ts` (server pin = files = landing latest; deploy-check origin = Vite's).
+- **Portal:**
+  - `SetupPage.test.tsx`: the tick is required, sends the version and the language, links the exact version, terms changed. The existing setup behaviours are kept (R5); `save()` ticks.
+  - `setupLink.test.ts` (termsChanged), `TermsUpdatePage.test.tsx`, `UserMenu.terms.test.tsx`.
+- **Release-QA:** `qa/features/web/legal.yaml` (terms-page, links, terms-manifest) and `qa/features/portal/terms.yaml` (setup-requires-accept, updated-terms-step, links); specs in `qa/specs/{web/legal,portal/terms}.spec.ts`. `setup.spec.ts` now ticks the terms.

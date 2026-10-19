@@ -28,6 +28,36 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Terms of service, accepted at setup and on the portal (MUT-324, ADR-102, TD-180)
+
+**Why:** a paying pilot (MUT-322) needs terms people accept, and a privacy policy that says where hosted records live. Basel's D1–D12 are in `.claude/designs/mut-324-terms-plan.md` §0.
+
+### Added
+- **Landing:**
+  - `/terms` and `/terms/<version>`, with frozen EN/AR texts in `src/content/legal/terms/`. The governing law is England & Wales, and English prevails.
+  - A hosted-accounts section in the privacy policy.
+  - Terms links in the footer and under the /hosted form.
+  - `/legal/terms-versions.json`, emitted by the web build.
+- **Server:**
+  - `terms_acceptances` (version, locale, sha256, surface), cascade-deleted with the person.
+  - `CURRENT_TERMS` in `legal.ts`.
+  - The setup check names `termsVersion`; the redeem requires it (409 `TERMS_VERSION_STALE`).
+  - `Me.terms`, and `POST /v1/me/terms-acceptance`.
+  - The admin `GET /admin/v1/terms-acceptance` and `npm run terms:report`.
+  - `deploy.sh` checks that the terms are live (`terms:check-live`). API 1.37.0-mut324.
+- **Portal:**
+  - A required "I agree" tick on the setup page, linking the exact version.
+  - The Updated-terms step for anyone behind on the terms.
+  - Terms links in the account menu and on the sign-in page.
+
+### Changed
+- `PrivacyPolicyPage` renders through the new shared `LegalPage`.
+- The QA fake API, the setup spec, the test `provision` helper and the demo-seed script all accept the terms.
+
+### Technical
+- Acceptances are kept out of the local-mode snapshot; signed out, `Me.terms` is null.
+- TD-180: acceptance is enforced on the portal only (the phone part is MUT-344).
+
 ## [Unreleased] - 2026-10-19 — Direction comes from `<html dir>` and the `dir` attribute only (MUT-109, ADR-101, TD-048 resolved)
 
 **Why:** `theme.css` set `direction` on every `:lang()` element, which beat the `dir` attribute: every `dir="ltr"` was ignored in Arabic, and every `dir="rtl"`/`"auto"` in English. Last open child of Brand v2 (MUT-101).

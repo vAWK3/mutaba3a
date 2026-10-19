@@ -364,6 +364,17 @@ Sequential implementation; there's no parallelization opportunity. The server co
 - **Parallelization:** 1 lane, sequential.
 - **Lake Score:** 11/11. Every answer scored for completeness picked the most complete option, except D3, which you decided on privacy grounds rather than coverage.
 
+## Build notes (/eng-build, 2026-10-19)
+
+Deviations from §0, each needed to make the approved behaviour work:
+- **One error code.** Both a missing and a stale version answer 409 `TERMS_VERSION_STALE` (`details.current`); there's no separate `TERMS_VERSION_REQUIRED`. The page shows the same "terms changed" state either way, and a page opened before the terms existed is exactly that case.
+- **`Me.terms` is `{ version, accepted }` with no `textUrl`.** The server doesn't know the landing origin. The portal builds the URL from `__TERMS_URL__` + version; the phone (MUT-344) uses its own config.
+- **The current terms are injected.** `createApp({ terms })` defaults to `CURRENT_TERMS`, so tests can act out a version bump. `PortalRouteDependencies.terms` (null in local mode) replaces the planned `buildMe` option.
+- **The operator report** is `npm --prefix server run terms:report`, backed by a new admin route `GET /admin/v1/terms-acceptance` and an operator-only `users.listLatestTermsVersions`. No "list users" route existed.
+- **The first terms version is `2026-10-19`.** The plan's example was `2026-11-01`. If Basel edits the text before release, the hashes in `legal.ts` change with it (the pin test says so). Once released, a change means a new version.
+- **The terms contact address is `info@malafat.app`**, the same as the privacy policy. Change both together if the support inbox changes.
+- **The deploy guard** is a separate script (`server/src/scripts/check-terms-live.ts`) called by `deploy.sh`, with `SKIP_TERMS_CHECK=1` for emergencies.
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |

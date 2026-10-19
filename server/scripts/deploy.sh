@@ -76,6 +76,14 @@ if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain 2>/dev/null)" && -z "${IMAG
   die "the repo has uncommitted changes; commit first so the image tag names what you deploy (or pass IMAGE_TAG=)"
 fi
 
+# MUT-324 (D11): web first. People are asked to accept the terms this release names, so that exact
+# text must already be on the public site. SKIP_TERMS_CHECK=1 only for an emergency fix that keeps the version.
+if [[ "${SKIP_TERMS_CHECK:-}" == "1" ]]; then
+  info "WARNING: skipping the terms check (SKIP_TERMS_CHECK=1)"
+else
+  npm --prefix "${SERVER_DIR}" run --silent terms:check-live || die "the terms this release names are not live yet; release web first (make release web)"
+fi
+
 info "environment=${ENVIRONMENT} project=${GCP_PROJECT_ID} region=${GCP_REGION} tag=${SHORT_SHA}"
 
 # ---------------------------------------------------------------------------
