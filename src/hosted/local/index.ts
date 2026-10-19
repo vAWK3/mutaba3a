@@ -9,7 +9,6 @@ import { LocalLock } from './locks.js';
 import { mintLocalSession, type LocalSession } from './mintLocalSession.js';
 import { LOCAL_FORMAT_VERSION } from './migrations/index.js';
 import { IndexedDbPersistence } from './persistence.js';
-import { installBufferShim } from './platform/buffer-shim.js';
 import { decodeRecordsArchive, encodeRecordsArchive } from './recordsArchive.js';
 import { countRecords } from './recordsFile.js';
 import { applyRestore } from './restore.js';
@@ -38,7 +37,6 @@ const now = () => new Date();
 const LOCAL_FX_TTL_MS = 60 * 60 * 1000;
 
 async function boot(): Promise<LocalBackend> {
-  installBufferShim();
   const store = new MemoryLedgerStore();
   const persistence = new IndexedDbPersistence();
   const lock = new LocalLock(persistence);

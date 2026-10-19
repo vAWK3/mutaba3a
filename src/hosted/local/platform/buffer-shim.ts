@@ -9,13 +9,14 @@
  * (see that file's comment) so `server/src/**`'s bare `Buffer` references
  * type-check the same way they do under `server`'s own `tsc` — which means
  * the *type* `Buffer` here is still Node's real, ~70-method interface.
- * `BufferShim` only ever reaches `globalThis.Buffer` through an explicit
- * `as unknown as typeof Buffer` cast (`installBufferShim`, below): it does
- * not — and structurally cannot — `implements Buffer`, and does not
- * override `Uint8Array`'s own static `from` (a subclass may not narrow it
- * without breaking the static side's Liskov substitution; `BufferShim.encode`
- * is the string-decoding factory instead, used internally and by the
- * `globalThis.Buffer.from` shim exported below).
+ * `bufferShim` (below) reaches those modules as their `Buffer`, bound per
+ * module at build time (`scopeServerBufferShim` in vite.config.ts), never
+ * through `globalThis` (MUT-287: a global partial Buffer sent jszip down its
+ * Node path). `BufferShim` does not — and structurally cannot — `implements
+ * Buffer`, and does not override `Uint8Array`'s own static `from` (a subclass
+ * may not narrow it without breaking the static side's Liskov substitution;
+ * `BufferShim.encode` is the string-decoding factory instead, used
+ * internally and by `bufferShim.from`).
  */
 
 export type ShimBufferEncoding = 'utf8' | 'hex' | 'base64url';
@@ -86,10 +87,3 @@ export const bufferShim = {
     return typeof data === 'string' ? BufferShim.encode(data, encoding ?? 'utf8') : new BufferShim(data as ArrayLike<number>);
   },
 };
-
-/** Idempotent: safe to call more than once (e.g. hot reload in dev). */
-export function installBufferShim(): void {
-  if (typeof globalThis.Buffer === 'undefined') {
-    globalThis.Buffer = bufferShim as unknown as typeof Buffer;
-  }
-}

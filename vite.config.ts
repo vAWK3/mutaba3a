@@ -345,6 +345,27 @@ export const PWA_MANIFEST = {
  * cache can ever hold firm figures. Same-origin with the API in dev through the
  * proxy, like the API service will serve it in production.
  */
+/**
+ * The server's route modules call `Buffer.from(…)` as a Node global (MUT-286).
+ * In the portal's local chunk that name is bound, per module, to the slice of
+ * Buffer they use (`src/hosted/local/platform/buffer-shim.ts`), never set on
+ * `globalThis` (MUT-287): a global partial Buffer makes any library that
+ * sniffs `typeof Buffer` take its Node path (jszip's did, and its records zip
+ * broke in the browser). Runs after TypeScript is stripped, so only value
+ * references to `Buffer` remain to be bound.
+ */
+export function scopeServerBufferShim(): Plugin {
+  const shim = fileURLToPath(new URL("./src/hosted/local/platform/buffer-shim.ts", import.meta.url));
+  return {
+    name: "mut-scope-server-buffer-shim",
+    enforce: "post",
+    transform(code, id) {
+      if (!id.includes("/server/src/") || id.includes("/node_modules/") || !/\bBuffer\b/.test(code)) return null;
+      return { code: `import { bufferShim as Buffer } from ${JSON.stringify(shim)};\n${code}`, map: null };
+    },
+  };
+}
+
 function hostedConfig(): UserConfig {
   return {
     base: "/",
@@ -378,7 +399,7 @@ function hostedConfig(): UserConfig {
       // Opt-in, anonymous usage counts (MUT-155, ADR-090); "" turns analytics off
       __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
     },
-    plugins: [react(), emitHostedEntryAsIndex()],
+    plugins: [react(), emitHostedEntryAsIndex(), scopeServerBufferShim()],
     clearScreen: false,
     server: {
       port: HOSTED_DEV_PORT,
