@@ -107,6 +107,20 @@ components:
         - widget
         - quick_action
         - share
+    TermsStatus:
+      type: object
+      properties:
+        version:
+          $ref: "#/components/schemas/TermsVersion"
+        accepted:
+          type: boolean
+      required:
+        - version
+        - accepted
+    TermsVersion:
+      type: string
+      pattern: ^\d{4}-\d{2}-\d{2}$
+      example: 2026-10-19
     Health:
       type: object
       properties:
@@ -190,7 +204,16 @@ components:
             - BHD
             - OMR
         terms:
-          $ref: "#/components/schemas/TermsStatus"
+          type: object
+          nullable: true
+          properties:
+            version:
+              $ref: "#/components/schemas/TermsVersion"
+            accepted:
+              type: boolean
+          required:
+            - version
+            - accepted
       required:
         - user
         - profiles
@@ -319,21 +342,6 @@ components:
       required:
         - ownedProfiles
         - maxOwnedProfiles
-    TermsStatus:
-      type: object
-      nullable: true
-      properties:
-        version:
-          $ref: "#/components/schemas/TermsVersion"
-        accepted:
-          type: boolean
-      required:
-        - version
-        - accepted
-    TermsVersion:
-      type: string
-      pattern: ^\d{4}-\d{2}-\d{2}$
-      example: 2026-10-19
     ErrorEnvelope:
       type: object
       properties:

@@ -251,4 +251,42 @@ describe('POST /v1/me/terms-acceptance (MUT-324)', () => {
     const { h } = await bumped();
     expect((await accept(h, {}, { version: BUMPED.version, locale: 'en' })).status).toBe(401);
   });
+
+  it('is refused cross-site for a cookie session, and records nothing', async () => {
+    const { h, p } = await bumped();
+    const { cookie } = await signIn(h, p.email);
+    for (const headers of [{ origin: 'https://evil.example' }, { origin: 'http://localhost', 'sec-fetch-site': 'cross-site' }]) {
+      const res = await h.app.request('/v1/me/terms-acceptance', json({ version: BUMPED.version, locale: 'en' }, { ...headers, ...cookie }));
+      expect(res.status).toBe(403);
+      expect((await read(res)).error.code).toBe('CROSS_SITE_REQUEST');
+    }
+    expect(await h.store.users.latestTermsAcceptance(p.id)).toMatchObject({ version: CURRENT_TERMS.version });
+  });
+
+  it('refuses a malformed body with 422, and records nothing', async () => {
+    const { h, p } = await bumped();
+    const { cookie } = await signIn(h, p.email);
+    for (const body of [{}, { version: BUMPED.version }, { version: BUMPED.version, locale: 'fr' }, { version: 'next week', locale: 'en' }]) {
+      expect((await accept(h, cookie, body)).status).toBe(422);
+    }
+    expect(await h.store.users.latestTermsAcceptance(p.id)).toMatchObject({ version: CURRENT_TERMS.version });
+  });
+});
+
+/**
+ * Review pass 2: a `$ref` made nullable comes out as `allOf: [$ref, {nullable}]`, which openapi-typescript reads
+ * as never null, so the portal lost Me.terms' null. Inline, the property itself is nullable (TD-181: the document
+ * says 3.1.0 but is written in 3.0's `nullable` style, repo-wide).
+ */
+describe('the terms in the OpenAPI document (MUT-324)', () => {
+  it('the shared TermsStatus is never null; Me.terms is a nullable object of the same shape', async () => {
+    const h = harness();
+    const doc = await read(await h.app.request('/openapi.json'));
+    const component = doc.components.schemas.TermsStatus;
+    expect(component.nullable).toBeUndefined();
+    const terms = doc.components.schemas.Me.properties.terms;
+    expect(terms).toMatchObject({ type: 'object', nullable: true, required: component.required });
+    expect(Object.keys(terms.properties)).toEqual(Object.keys(component.properties));
+    expect(terms.allOf).toBeUndefined();
+  });
 });

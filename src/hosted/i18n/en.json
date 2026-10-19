@@ -132,6 +132,7 @@
       "agree": "I agree",
       "agreeing": "Saving…",
       "failed": "Couldn't save. Check your connection and try again.",
+      "changed": "The terms changed while this page was open. Read the new version, then agree.",
       "decline": "Don't agree? Email {email}. We'll help you download your records or close your account.",
       "link": "Terms of service"
     },

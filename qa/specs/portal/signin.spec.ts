@@ -100,7 +100,7 @@ for (const language of ['en', 'ar'] as const) {
         await expect(page.getByText(REQUEST[language].lead)).toBeVisible();
         // No self-service door: besides /hosted, the page links only the terms of service
         await expect(page.getByRole('link')).toHaveCount(2);
-        await expect(page.getByRole('link', { name: TERMS_LINK[language] })).toHaveAttribute('href', /^https:\/\/[^/]+\/terms$/);
+        await expect(page.getByRole('link', { name: TERMS_LINK[language] })).toHaveAttribute('href', new RegExp(`^https://[^/]+/terms\\?lang=${language}$`));
       });
 
       await step('Still accessible', async () => {

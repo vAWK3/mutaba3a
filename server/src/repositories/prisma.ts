@@ -275,8 +275,7 @@ export class PrismaLedgerStore implements LedgerStore {
         this.prisma.$transaction(async (tx) => {
           const created = await insertTermsAcceptance(tx, input.userId, input, input.at);
           if (created && input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
-          const row = await tx.termsAcceptance.findUniqueOrThrow({ where: { userId_version: { userId: input.userId, version: input.version } } });
-          return { acceptance: toTermsAcceptance(row), created };
+          return { created };
         }),
       ),
     // MUT-237: the same NO KEY UPDATE lock accountSetup.redeem takes, so a sign-in racing this call either

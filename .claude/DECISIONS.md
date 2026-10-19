@@ -51,7 +51,7 @@
 | ADR-040 | Local Queries and Saves Run Offline (networkMode 'always'); Only Network-Bound Queries Wait for a Connection | Active | 2026-10 |
 | ADR-041 | The Landing Page Claims Only What Ships: Free During Early Access, Platform Claims Gated on the Release, Capability Copy Built From Code | Active | 2026-10 |
 | ADR-042 | A Visitor Sample Session Seeds Only an Empty Database and Leaves Nothing Behind | Active | 2026-10 |
-| ADR-043 | Deploys Go Through `make`, Which Refuses to Release From a Tree That Does Not Describe Itself | Active | 2026-10 |
+| ADR-043 | Deploys Go Through `make`, Which Refuses to Release From a Tree That Does Not Describe Itself | Active; 2026-10-12 server-first addendum overridden by ADR-102 (2026-10-19) | 2026-10 |
 | ADR-044 | Drawers Move on Springs; a Close Is Immediate and Its Exit Is a Snapshot; `motion` Is a Dependency | Active | 2026-10 |
 | ADR-047 | The Record Payment Drawer Has One Action, and It Closes the Drawer; Mark Fully Paid Is Removed (Supersedes ADR-038 §5) | Active | 2026-10 |
 | ADR-048 | The Unsorted Inbox Is Owned by the User, and Filing Is One Cross-Repository Transaction | Active | 2026-10 |
@@ -2175,6 +2175,8 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 
 **Addendum (2026-10-12)**: Added `make release full`, a third entry point that runs `release-server` then `release-web` as two ordinary prerequisites — server first, so the API a release ships is already live before the frontend that calls it goes out. It reimplements nothing: each half keeps its own preflight, gates, version bump and confirmation, and declining one does not block the other. Desktop stays excluded, per the decision above — raised and confirmed with Basel when `full` was requested, not reopened.
 
+**Overridden (2026-10-19, ADR-102 override log)**: `make release full` now runs `release-web` then `release-server`; web ships the terms text the server release checks for.
+
 **Alternatives Considered**: npm scripts instead of a Makefile (rejected: `package.json` is the frontend's, and the server deploy is not a frontend concern); extend `deploy.sh`'s menu (rejected: its `git add .` and fixed patch bump are the behaviour being replaced, and the file already carries the desktop pipeline); checks inside each `deploy.sh` (rejected: the two would drift, and the checks are most useful before `make` even starts a build).
 
 ---
@@ -4041,10 +4043,16 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
    - `POST /v1/me/terms-acceptance` (cookie or device session, organization-independent) covers people who are behind. `Me.terms {version, accepted}` drives the portal's Updated-terms step. That step offers a way out (D6): sign out, or write to support to take your records or close the account.
 6. **Each person accepts for themselves and, as owner, for the profiles they own** (D2). `user.terms_accepted` is audited on owned profiles only, never on a firm the person is merely a member of.
 7. **Only the portal enforces acceptance** (D7). The server does not refuse writes, so installed phone builds keep working (TD-180). The phone's link and update step are MUT-344.
-8. **Web first, checked at release** (D11). The web build emits `/legal/terms-versions.json` (version + sha256 per language). `server/scripts/deploy.sh` runs `terms:check-live` and refuses to release a server whose `CURRENT_TERMS` the public site doesn't list with the same fingerprints. Netlify answers every path with the app shell, so a page fetch can't prove the version is live.
+8. **Web first, checked at release** (D11). The web build emits `/legal/terms-versions.json` (version + sha256 per language). The server release refuses a server whose `CURRENT_TERMS` the public site doesn't list with the same fingerprints. Netlify answers every path with the app shell, so a page fetch can't prove the version is live.
+   - **Where it runs** (review fix 3, 2026-10-19): `scripts/preflight.sh server` runs `terms:check-live`, so `make release server` refuses before the version bump, commit and push. `server/scripts/deploy.sh` checks again every time (one fetch), so nothing a caller passes can turn the guard off. Only `SKIP_TERMS_CHECK=1` skips it; `SKIP_REMOTE=1` does not (review pass 2). A failure names the HTTP status or the fetch error; only a reachable manifest that lacks the version says "release web first".
 9. **The signed-out portal has no terms.** `PortalRouteDependencies.terms` is null, `Me.terms` is null and nothing asks. Acceptances are kept out of `MemoryLedgerStore.snapshot()`, so the shipped local format is unchanged.
 
 **Consequences**:
 - Every acceptance can be tied to the exact words accepted, in the language read.
 - Bumping the terms means three steps: add the new files and update `CURRENT_TERMS` and its hashes (the pin test fails until they match); release web; then release the server.
 - `npm --prefix server run terms:report` (GET /admin/v1/terms-acceptance) lists who is behind, which covers phone-only users until MUT-344 ships.
+
+**Override log (2026-10-19, MUT-324 review fix 2)**: this ADR overrides **ADR-043's 2026-10-12 addendum** ("`make release full` runs `release-server` then `release-web` … server first"). `make release full` is now `release-web release-server`.
+- **Why:** server first could never pass decision 8: the server leg refused whenever the terms changed, and web never ran. The server-first reason (the API is live before the frontend that calls it) no longer holds for this split: the portal ships inside the server image, and the web build (landing + local web app) calls no API a server release adds.
+- **What replaces it:** web, then server. After a terms bump Netlify must finish building before the server preflight passes, so the server half refuses cleanly (before its bump) and is rerun once the build is live.
+- Decided by Basel through the review's must-fix list.

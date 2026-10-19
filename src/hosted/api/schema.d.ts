@@ -10833,6 +10833,12 @@ export interface components {
     schemas: {
         /** @enum {string} */
         CaptureSource: "app" | "siri" | "widget" | "quick_action" | "share";
+        TermsStatus: {
+            version: components["schemas"]["TermsVersion"];
+            accepted: boolean;
+        };
+        /** @example 2026-10-19 */
+        TermsVersion: string;
         Health: {
             /** @enum {string} */
             status: "ok";
@@ -10874,7 +10880,10 @@ export interface components {
              *     ]
              */
             currencies: string[];
-            terms: components["schemas"]["TermsStatus"];
+            terms: {
+                version: components["schemas"]["TermsVersion"];
+                accepted: boolean;
+            } | null;
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
@@ -10916,12 +10925,6 @@ export interface components {
             ownedProfiles: number;
             maxOwnedProfiles: number;
         };
-        TermsStatus: {
-            version: components["schemas"]["TermsVersion"];
-            accepted: boolean;
-        } | null;
-        /** @example 2026-10-19 */
-        TermsVersion: string;
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */

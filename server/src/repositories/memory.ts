@@ -452,9 +452,9 @@ export class MemoryLedgerStore implements LedgerStore {
         }),
     acceptTerms: async (input) => {
       if (!this.people.has(input.userId)) throw new ForeignKeyViolation('terms_acceptances.userId');
-      const { acceptance, created } = this.recordTermsAcceptance(input.userId, input, input.at);
+      const { created } = this.recordTermsAcceptance(input.userId, input, input.at);
       if (created) for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
-      return { acceptance, created };
+      return { created };
     },
     changePassword: async (input) => {
       const u = this.people.get(input.userId);
@@ -1821,13 +1821,6 @@ export class MemoryLedgerStore implements LedgerStore {
     return this.events.filter((e) => e.organizationId === organizationId).length;
     }
 
-  /**
-   * The business-data half of this store (MUT-286): every field in
-   * `LocalSnapshotMaps`, by reference. Safe to pass by reference because the
-   * only caller outside tests — the portal's local-mode persistence layer
-   * (Phase B) — structured-clones it into IndexedDB immediately, rather than
-   * holding the live Maps.
-   */
   /** MUT-324: the (userId, version) unique key; an existing acceptance is kept as it is. */
   private recordTermsAcceptance(userId: string, terms: TermsAcceptanceInput, at: Date): { acceptance: TermsAcceptanceRecord; created: boolean } {
     const key = `${userId}:${terms.version}`;
@@ -1839,6 +1832,13 @@ export class MemoryLedgerStore implements LedgerStore {
     return { acceptance: { ...acceptance }, created: true };
   }
 
+  /**
+   * The business-data half of this store (MUT-286): every field in
+   * `LocalSnapshotMaps`, by reference. Safe to pass by reference because the
+   * only caller outside tests — the portal's local-mode persistence layer
+   * (Phase B) — structured-clones it into IndexedDB immediately, rather than
+   * holding the live Maps.
+   */
   snapshot(): LocalSnapshot {
     return {
       formatVersion: CURRENT_STORE_SNAPSHOT_VERSION,

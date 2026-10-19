@@ -267,14 +267,17 @@ function hostedOfferHtml(): Plugin {
 
 /**
  * MUT-324 (D11): `/legal/terms-versions.json`, every released terms version and the sha256 of its EN and AR
- * text, which `server/scripts/deploy.sh` checks before a server naming a new version is released. Web only.
+ * text, which the server release preflight checks before a server naming a new version is released. Web only.
  */
 function legalTermsManifest(): Plugin {
   const dir = fileURLToPath(new URL("./src/content/legal/terms/", import.meta.url));
   return {
     name: "mutaba3a:legal-terms-manifest",
     generateBundle() {
-      const files = readdirSync(dir).map((name) => ({ name, bytes: readFileSync(`${dir}${name}`) }));
+      // Files only: a folder in there (drafts/) is not a released text
+      const files = readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map(({ name }) => ({ name, bytes: readFileSync(`${dir}${name}`) }));
       this.emitFile({ type: "asset", fileName: TERMS_MANIFEST_FILE, source: `${JSON.stringify(termsManifest(files), null, 2)}\n` });
     },
   };

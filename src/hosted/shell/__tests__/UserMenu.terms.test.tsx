@@ -15,7 +15,7 @@ describe('Terms links (MUT-324)', () => {
     await user.click(await screen.findByRole('button', { name: /Account/ }));
     const menu = screen.getByRole('menu', { name: 'Account' });
     const terms = within(menu).getByRole('menuitem', { name: 'Terms of service' });
-    expect(terms).toHaveAttribute('href', TERMS_URL);
+    expect(terms).toHaveAttribute('href', `${TERMS_URL}?lang=en`);
     expect(terms).toHaveAttribute('target', '_blank');
     const items = [...menu.querySelectorAll('[role^="menuitem"]')];
     expect(items.indexOf(terms)).toBeLessThan(items.findIndex((i) => /Get the iPhone app/.test(i.textContent ?? '')));
@@ -25,6 +25,6 @@ describe('Terms links (MUT-324)', () => {
     vi.stubGlobal('__TERMS_URL__', TERMS_URL);
     stubApi({ 'GET /v1/me': () => fail(401, 'UNAUTHENTICATED') });
     renderPortal('/sign-in');
-    expect(await screen.findByRole('link', { name: 'Terms of service' })).toHaveAttribute('href', TERMS_URL);
+    expect(await screen.findByRole('link', { name: 'Terms of service' })).toHaveAttribute('href', `${TERMS_URL}?lang=en`);
   });
 });

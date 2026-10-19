@@ -406,7 +406,8 @@ export const TermsReportSchema = z
   .openapi('TermsReport');
 
 /** MUT-324: whether the signed-in person has accepted the current terms (latest accepted version ≥ current). */
-export const TermsStatusSchema = z.object({ version: TermsVersionSchema, accepted: z.boolean() }).openapi('TermsStatus');
+const TERMS_STATUS_SHAPE = { version: TermsVersionSchema, accepted: z.boolean() };
+export const TermsStatusSchema = z.object(TERMS_STATUS_SHAPE).openapi('TermsStatus');
 
 /** MUT-324: POST /v1/me/terms-acceptance — the version the person agreed to, and the language they read it in. */
 export const TermsAcceptanceRequestSchema = z.object({ version: TermsVersionSchema, locale: UserLocaleSchema }).strict().openapi('TermsAcceptanceRequest');
@@ -440,7 +441,9 @@ export const MeSchema = z
      * MUT-324: the current terms and whether this person accepted them. Null where no terms apply (the portal's
      * signed-out mode). Servers older than MUT-324 omit the field; clients treat that like null.
      */
-    terms: TermsStatusSchema.nullable(),
+    // Inline, not the TermsStatus ref: the generator writes a ref's null as `nullable`, which OpenAPI 3.1 ignores,
+    // so the portal's generated type lost the null (review pass 2). Inline, it is `type: [object, null]`.
+    terms: z.object(TERMS_STATUS_SHAPE).nullable(),
   })
   .openapi('Me');
 

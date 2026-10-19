@@ -57,6 +57,25 @@ test('/terms shows the frozen terms in English and Arabic, each version at its o
   });
 });
 
+test('a portal link opens the terms in the language the portal records, without changing the site language', { tag: '@web.legal.terms-linked-language' }, async ({ page, step }) => {
+  await step('With the site in Arabic, open /terms/2026-10-19?lang=en: the English text, left to right', async () => {
+    await preferLanguage(page, 'ar');
+    await page.goto('/terms/2026-10-19?lang=en');
+    const title = page.getByRole('heading', { level: 1, name: en.title });
+    await expect(title).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: en.sections[0]!.title })).toBeVisible();
+    const text = title.locator('xpath=..');
+    await expect(text).toHaveAttribute('lang', 'en');
+    await expect(text).toHaveAttribute('dir', 'ltr');
+  });
+
+  await step('Open /terms without ?lang: the site is still in Arabic', async () => {
+    await page.goto('/terms');
+    await expect(page.getByRole('heading', { level: 1, name: ar.title })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  });
+});
+
 test('the terms are linked from the footer and the /hosted form, and the privacy policy explains hosted accounts', { tag: '@web.legal.links' }, async ({ page, step }) => {
   await step('The privacy policy has a hosted-accounts section and its footer links the terms', async () => {
     await preferLanguage(page, 'en');
@@ -64,7 +83,7 @@ test('the terms are linked from the footer and the /hosted form, and the privacy
     const heading = page.getByRole('heading', { level: 2, name: /Hosted accounts/ });
     await expect(heading).toBeVisible();
     const section = page.locator('section', { has: heading });
-    for (const fact of ['me-west1', '14 days', 'Sentry', 'PostHog', '30 days']) await expect(section).toContainText(fact);
+    for (const fact of ['me-west1', '14 days', 'the last 7 days', 'Sentry', 'PostHog', '30 days']) await expect(section).toContainText(fact);
     await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');
   });
 

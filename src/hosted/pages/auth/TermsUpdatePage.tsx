@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLanguage, useT } from '../../../lib/i18n/core';
-import { api, type Me } from '../../api/client';
+import { ApiError, api, type Me } from '../../api/client';
 import { LanguageSwitch, Wordmark } from '../../components/Brand';
 import { AlertIcon } from '../../components/Icons';
 import { ME_KEY } from '../../session/me';
@@ -13,25 +13,50 @@ import { SUPPORT_EMAIL, termsHref } from '../../terms';
  * latest acceptance is older than the current terms. They read the exact
  * version (a new tab), then agree, or leave: signing out, or writing to us to
  * take their records or close the account. Nobody is held away from their data.
+ * If the terms change while the step is open, it names the new version and says
+ * so before anyone agrees: whether a /v1/me refetch brings it (returning from the
+ * Read tab) or the server refuses the old one (409 TERMS_VERSION_STALE names it,
+ * so a failed refetch can't leave the step resending the stale version).
  */
-export function TermsUpdatePage({ me, version }: { me: Me; version: string }) {
+export function TermsUpdatePage({ version: current }: { version: string }) {
   const t = useT();
   const { language } = useLanguage();
   const queryClient = useQueryClient();
   const { signOut, signingOut } = useSignOut();
   const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const link = termsHref(version);
+  const [problem, setProblem] = useState<'failed' | 'changed' | null>(null);
+  // The version this step shows and accepts. A different one from /v1/me is a change the person
+  // must be told about, adjusted during render (not in an effect, react-hooks v7).
+  const [version, setVersion] = useState(current);
+  const [seen, setSeen] = useState(current);
+  if (current !== seen) {
+    setSeen(current);
+    if (current !== version) {
+      setVersion(current);
+      setProblem('changed');
+    }
+  }
+  const link = termsHref(language, version);
+  // The address is a link inside the sentence, so the sentence is split at its {email}
+  const [beforeEmail, afterEmail = ''] = t('hosted.terms.decline').split('{email}');
 
   async function agree() {
     if (saving) return;
     setSaving(true);
-    setFailed(false);
+    setProblem(null);
     try {
-      const terms = await api.acceptTerms({ version, locale: language === 'ar' ? 'ar' : 'en' });
-      queryClient.setQueryData<Me>(ME_KEY, { ...me, terms });
-    } catch {
-      setFailed(true);
+      const terms = await api.acceptTerms({ version, locale: language });
+      // A /v1/me already in flight was asked before this acceptance; it must not undo it
+      await queryClient.cancelQueries({ queryKey: ME_KEY });
+      queryClient.setQueryData<Me>(ME_KEY, (current) => current && { ...current, terms });
+    } catch (error) {
+      const changed = error instanceof ApiError && error.code === 'TERMS_VERSION_STALE';
+      if (changed) {
+        const named = (error.details as { current?: unknown } | null)?.current;
+        if (typeof named === 'string') setVersion(named);
+        await queryClient.invalidateQueries({ queryKey: ME_KEY });
+      }
+      setProblem(changed ? 'changed' : 'failed');
       setSaving(false);
     }
   }
@@ -46,10 +71,10 @@ export function TermsUpdatePage({ me, version }: { me: Me; version: string }) {
         <div className="hp-card hp-signin-card">
           <h1>{t('hosted.terms.title')}</h1>
           <p className="hp-setup-lead">{t('hosted.terms.lead')}</p>
-          {failed && (
+          {problem && (
             <div className="hp-banner hp-banner-error" role="alert">
               <AlertIcon />
-              <span>{t('hosted.terms.failed')}</span>
+              <span>{t(problem === 'changed' ? 'hosted.terms.changed' : 'hosted.terms.failed')}</span>
             </div>
           )}
           {link && (
@@ -66,7 +91,13 @@ export function TermsUpdatePage({ me, version }: { me: Me; version: string }) {
           <button type="button" className="btn btn-secondary btn-md hp-block" disabled={saving || signingOut} onClick={() => void signOut()}>
             {t('hosted.auth.signOut')}
           </button>
-          <p className="hp-field-hint">{t('hosted.terms.decline', { email: SUPPORT_EMAIL })}</p>
+          <p className="hp-field-hint">
+            {beforeEmail}
+            <a href={`mailto:${SUPPORT_EMAIL}`}>
+              <bdi>{SUPPORT_EMAIL}</bdi>
+            </a>
+            {afterEmail}
+          </p>
         </div>
       </main>
     </div>

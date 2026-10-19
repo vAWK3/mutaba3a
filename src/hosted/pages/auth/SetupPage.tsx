@@ -148,6 +148,18 @@ interface SetupFormProps {
   onOutcome: (outcome: Outcome) => void;
 }
 
+/** MUT-324: what the link's check says now, when a 409 didn't name the new terms version. */
+type RecheckedTerms = { kind: 'version'; version: string } | { kind: 'refused'; state: SetupLinkRefusal } | { kind: 'unreachable' };
+
+async function recheckTermsVersion(token: string): Promise<RecheckedTerms> {
+  try {
+    const link = await api.checkSetupLink(token, requestTimeout());
+    return link.state === 'valid' ? { kind: 'version', version: link.termsVersion } : { kind: 'refused', state: link.state };
+  } catch {
+    return { kind: 'unreachable' };
+  }
+}
+
 function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, onOutcome }: SetupFormProps) {
   const t = useT();
   const tp = useTp();
@@ -169,6 +181,12 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
   const [termsVersion, setTermsVersion] = useState(checkedTermsVersion);
   const [agreed, setAgreed] = useState(false);
   const [termsProblem, setTermsProblem] = useState<'required' | 'changed' | null>(null);
+  // A tick is for the text read in the page's language, the one recorded: a language switch clears it (review pass 2)
+  const [tickedIn, setTickedIn] = useState(language);
+  if (language !== tickedIn) {
+    setTickedIn(language);
+    setAgreed(false);
+  }
 
   function refuseInline(error: FieldError) {
     setFieldError(error);
@@ -213,12 +231,17 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
       const failure = redeemFailure(error, answerLost.current);
       if (answerWasLost(error)) answerLost.current = true;
       if (failure.kind === 'trySignIn') return void (await signIn(email, { kind: 'usedAfterRetry' }));
+      // A 409 that doesn't name the new version: ask the link, or the retry would resend the stale one
+      const rechecked: RecheckedTerms | null =
+        failure.kind !== 'termsChanged' ? null : failure.current ? { kind: 'version', version: failure.current } : await recheckTermsVersion(token);
       setPhase('idle');
       if (failure.kind === 'refused') onOutcome({ kind: 'refused', state: failure.state });
+      else if (rechecked?.kind === 'refused') onOutcome({ kind: 'refused', state: rechecked.state });
       else if (failure.kind === 'policy') refuseInline('rule');
       else if (failure.kind === 'termsChanged') {
         // MUT-324: what was ticked is no longer what would be recorded, so the person reads and ticks again.
-        if (failure.current) setTermsVersion(failure.current);
+        if (rechecked?.kind === 'version') setTermsVersion(rechecked.version);
+        else setBanner({ kind: 'unreachable' });
         setAgreed(false);
         setTermsProblem('changed');
         termsRef.current?.focus();
@@ -232,7 +255,7 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
   const ruleId = `${ids}-rule`;
   const errorId = `${ids}-error`;
   const termsErrorId = `${ids}-terms-error`;
-  const termsLink = termsHref(termsVersion);
+  const termsLink = termsHref(language, termsVersion);
   const variant = purpose === 'RESET' ? 'reset' : 'setup';
 
   return (

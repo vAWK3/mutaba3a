@@ -1225,11 +1225,12 @@ export interface UserRepository {
   /** MUT-324: the person's acceptance of the highest terms version they accepted; null if they never accepted any. */
   latestTermsAcceptance(userId: string): Promise<TermsAcceptanceRecord | null>;
   /**
-   * MUT-324: idempotent on (userId, version): an existing acceptance is returned unchanged with `created: false`
-   * and `audit` is not written; otherwise the row and `audit` are written in one transaction.
+   * MUT-324: idempotent on (userId, version): an existing acceptance is kept unchanged (`created: false`) and
+   * `audit` is not written; otherwise the row and `audit` are written in one transaction. It answers only whether
+   * the row is new: nobody reads the row back (review pass 2; `latestTermsAcceptance` reads it).
    * ForeignKeyViolation on an unknown user.
    */
-  acceptTerms(input: AcceptTermsInput): Promise<{ acceptance: TermsAcceptanceRecord; created: boolean }>;
+  acceptTerms(input: AcceptTermsInput): Promise<{ created: boolean }>;
   /** MUT-324 T1 (operator only): every user, ordered by email, with the highest terms version they accepted (null if none). */
   listLatestTermsVersions(): Promise<Array<{ userId: string; email: string; status: UserStatus; latestVersion: string | null }>>;
 }

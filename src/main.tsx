@@ -117,12 +117,13 @@ function App() {
       );
     }
 
-    // MUT-324: /terms is the latest terms, /terms/<version> each released version, frozen
+    // MUT-324: /terms is the latest terms, /terms/<version> each released version, frozen;
+    // ?lang is the language the portal records for the reader
     if ((path === "/terms" || path.startsWith("/terms/")) && TermsPage) {
       return (
         <LandingProviders>
           <Suspense fallback={<BootSplash />}>
-            <TermsPage path={path} />
+            <TermsPage path={path} search={window.location.search} />
           </Suspense>
         </LandingProviders>
       );

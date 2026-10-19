@@ -2064,19 +2064,19 @@ Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
 ## Terms of service — MUT-324 (ADR-102)
 
 ### LegalPage — `src/pages/landing/LegalPage.tsx` (new, extracted from PrivacyPolicyPage)
-Landing chrome plus a dated, titled-sections legal document. `sections: { title, paragraphs[] }[]`, optional `updated`/`intro`, `after` slot. Used by `PrivacyPolicyPage` and `TermsPage`. Usage: `<LegalPage title={…} updated={…} intro={…} sections={…} />`. Tests: `PrivacyPolicyPage.test.tsx`, `TermsPage.test.tsx`.
+Landing chrome plus a dated, titled-sections legal document. `sections: { title, paragraphs[] }[]`, optional `updated`/`intro`, `after` slot, `loading` (sets `aria-busy`), and `textLanguage` (sets lang/dir on the text when it differs from the page's, as in /terms?lang; MUT-324 review). Used by `PrivacyPolicyPage` and `TermsPage`. Usage: `<LegalPage title={…} updated={…} intro={…} sections={…} />`. Tests: `PrivacyPolicyPage.test.tsx`, `TermsPage.test.tsx`.
 
 ### TermsPage — `src/pages/landing/TermsPage.tsx`
-`/terms` (latest) and `/terms/<version>`: loads the frozen text for the page language through `src/content/legal/terms.ts` (`loadTerms`, `TERMS_VERSIONS`, `LATEST_TERMS_VERSION`, `termsVersionOf`). An unknown version says so and links `/terms`.
+`/terms` (latest) and `/terms/<version>`: loads the frozen text through `src/content/legal/terms.ts` (`loadTerms`, `TERMS_VERSIONS`, `LATEST_TERMS_VERSION`, `termsVersionOf`, `termsLanguageOf`), in the page language unless a portal link names one (`?lang=en|ar`). That language applies to the text only (LegalPage `textLanguage`) and is never stored. An unknown version says so and links `/terms`, keeping `?lang`.
 
 ### termsManifest — `src/content/legal/termsManifest.ts` (Node only)
 Builds `/legal/terms-versions.json` (version + sha256 per language) for the web build's `legalTermsManifest()` Vite plugin and the pin test. Never import it from page code.
 
 ### TermsUpdatePage — `src/hosted/pages/auth/TermsUpdatePage.tsx`
-The portal's "We've updated our terms" step, rendered by `AuthGate` when `Me.terms.accepted === false`: read the version (new tab), I agree (`api.acceptTerms`), Sign out, and the support line.
+The portal's "We've updated our terms" step, rendered by `AuthGate` (prop `version` only) when `Me.terms.accepted === false`: read the version (new tab, `?lang` = page language), I agree (`api.acceptTerms`), Sign out, and the support line (a mailto link). It keeps the version it showed: a different one from a /v1/me refetch, or named by a 409 `TERMS_VERSION_STALE`, replaces it and shows "the terms changed". A success cancels in-flight /v1/me fetches and writes through an updater.
 
 ### termsHref / SUPPORT_EMAIL — `src/hosted/terms.ts`
-`termsHref(version?)` reads the `__TERMS_URL__` build define (ADR-076 typeof guard; '' when unset). Used by SetupPage, TermsUpdatePage, UserMenu and SignInPage.
+`termsHref(language, version?)` reads the `__TERMS_URL__` build define (ADR-076 typeof guard; '' when unset) and always adds `?lang=<language>`, the language the acceptance records. Used by SetupPage, TermsUpdatePage, UserMenu and SignInPage.
 
 ### termsAcceptanceOf / termsAcceptedAudit — `server/src/terms-acceptance.ts`
 The acceptance row for the current terms (sha256 by locale, surface from `Session.kind`), and its `user.terms_accepted` audit on owned profiles only. Shared by the setup redeem and `POST /v1/me/terms-acceptance`.

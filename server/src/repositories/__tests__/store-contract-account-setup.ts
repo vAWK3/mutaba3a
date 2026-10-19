@@ -305,13 +305,12 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       const store = await makeStore();
       const { user, orgIds } = await person(store);
       const audit = auditFor(orgIds.slice(0, 1), user.id, 'user.terms_accepted');
-      const first = await store.users.acceptTerms({ userId: user.id, ...TERMS, at: at(2), audit });
-      expect(first.created).toBe(true);
-      expect(first.acceptance).toMatchObject({ userId: user.id, ...TERMS });
-      const again = await store.users.acceptTerms({ userId: user.id, ...TERMS, locale: 'ar', at: at(3), audit });
-      expect(again.created).toBe(false);
-      expect(again.acceptance).toMatchObject({ locale: 'en' });
-      expect(again.acceptance.acceptedAt.toISOString()).toBe(at(2).toISOString());
+      // Review pass 2: the store answers only whether the row is new; nobody needs the row read back
+      expect(await store.users.acceptTerms({ userId: user.id, ...TERMS, at: at(2), audit })).toEqual({ created: true });
+      expect(await store.users.acceptTerms({ userId: user.id, ...TERMS, locale: 'ar', at: at(3), audit })).toEqual({ created: false });
+      const kept = await store.users.latestTermsAcceptance(user.id);
+      expect(kept).toMatchObject({ userId: user.id, ...TERMS, locale: 'en' });
+      expect(kept?.acceptedAt.toISOString()).toBe(at(2).toISOString());
       expect(await termsAuditCount(store, orgIds[0]!)).toBe(1);
     });
 
@@ -322,6 +321,20 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       await store.users.acceptTerms({ userId: user.id, ...TERMS, version: '2026-12-01', at: at(2), audit: [] });
       await store.users.acceptTerms({ userId: user.id, ...TERMS, version: '2026-10-19', at: at(3), audit: [] });
       expect((await store.users.latestTermsAcceptance(user.id))?.version).toBe('2026-12-01');
+    });
+
+    it('lists every person by email with their latest accepted version, null for someone who accepted none', async () => {
+      const store = await makeStore();
+      const { user: behind } = await person(store);
+      const { user: never } = await person(store);
+      await store.users.acceptTerms({ userId: behind.id, ...TERMS, version: '2026-10-19', at: at(2), audit: [] });
+      await store.users.acceptTerms({ userId: behind.id, ...TERMS, version: '2026-12-01', at: at(3), audit: [] });
+      const rows = (await store.users.listLatestTermsVersions()).filter((r) => r.userId === behind.id || r.userId === never.id);
+      const expected = [
+        { userId: behind.id, email: behind.email, status: behind.status, latestVersion: '2026-12-01' },
+        { userId: never.id, email: never.email, status: never.status, latestVersion: null },
+      ].sort((a, b) => (a.email < b.email ? -1 : 1));
+      expect(rows).toEqual(expected);
     });
 
     it('refuses an acceptance for an unknown user', async () => {

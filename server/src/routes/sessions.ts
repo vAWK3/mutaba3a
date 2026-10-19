@@ -19,10 +19,9 @@ import {
   TermsAcceptanceRequestSchema,
   TermsStatusSchema,
 } from '../schemas.js';
-import { termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
-import { staleTerms } from './account-setup.js';
+import { staleTerms, termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
-import { buildMe, termsStatus } from './me.js';
+import { buildMe } from './me.js';
 
 /**
  * Sign-in, sign-out and the signed-in person (MUT-38, hosted-portal.md §4, §6).
@@ -169,7 +168,8 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       const acceptance = termsAcceptanceOf(terms, locale, session.kind);
       const audit = await termsAcceptedAudit(store, user, acceptance, c.get('requestId'));
       await store.users.acceptTerms({ userId: user.id, ...acceptance, at: c.get('now')(), audit });
-      return c.json(await termsStatus(store, user.id, terms), 200);
+      // The version is the current one, so the person's latest now covers it (D10): no need to read it back
+      return c.json({ version: terms.version, accepted: true }, 200);
     },
   );
 

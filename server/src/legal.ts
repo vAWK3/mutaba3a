@@ -8,8 +8,8 @@ import type { SessionKind } from './auth/sessions.js';
  * and never edited once released: a new text is a new version. These are its
  * sha256 fingerprints, pinned to the files by `scripts/__tests__/legal-terms.test.ts`,
  * so an acceptance can always be tied to the exact words it accepted.
- * `server/scripts/deploy.sh` refuses to release a version the public site does not
- * yet list in `/legal/terms-versions.json` (web first).
+ * The server release (`scripts/preflight.sh server`, then `server/scripts/deploy.sh`) refuses
+ * a version the public site does not yet list in `/legal/terms-versions.json` (web first).
  *
  * Versions are ISO dates, so comparing them as strings orders them by release.
  */
@@ -24,8 +24,8 @@ export interface CurrentTerms {
 export const CURRENT_TERMS: CurrentTerms = {
   version: '2026-10-19',
   sha256: {
-    en: '89d899d48ff91c99e0b8887ef304b64f2a890ccee353e3b08b78719e6df1efc9',
-    ar: '3f4274ef88f4f88074f7d507de4672469d700c91df2075e0477710e13f27ded4',
+    en: '2ed299dc133d011452175ef182ae3701ab126dc8a316d0c3befe49c4833c864c',
+    ar: '7f997e6b13e6a7ed0259f71523c8c2e5b0a8ead0ed9a405be6851753b77272cc',
   },
 };
 

@@ -2,7 +2,9 @@ import { pathToFileURL } from 'node:url';
 import { CURRENT_TERMS, TERMS_LOCALES, type CurrentTerms } from '../legal.js';
 
 /**
- * MUT-324 (D11): `server/scripts/deploy.sh` runs this before releasing. The
+ * MUT-324 (D11): the server release preflight (`scripts/preflight.sh server`)
+ * runs this before the version bump, and `server/scripts/deploy.sh` again when
+ * it is run on its own. The
  * server asks people to accept CURRENT_TERMS, so that exact text must already
  * be readable on the public site: release web first. Netlify answers every path
  * with the app shell, so the check reads the build's manifest
@@ -28,17 +30,31 @@ export function termsLiveProblem(manifest: unknown, terms: CurrentTerms): string
   return null;
 }
 
+/**
+ * Null when `url`'s manifest lists `terms`; otherwise what is wrong. A fetch that fails says
+ * how (the HTTP status or the error), so an outage never reads as "release web first".
+ */
+export async function checkTermsLive(url: string, terms: CurrentTerms, fetchImpl: typeof fetch = fetch): Promise<string | null> {
+  let res: Response;
+  try {
+    res = await fetchImpl(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+  } catch (error) {
+    return `could not fetch the terms manifest: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  if (!res.ok) return `the public site answered HTTP ${res.status} for the terms manifest`;
+  let manifest: unknown;
+  try {
+    manifest = await res.json();
+  } catch {
+    return 'the public site answered with something that is not JSON, so not a terms manifest';
+  }
+  return termsLiveProblem(manifest, terms);
+}
+
 async function main(): Promise<number> {
   const origin = (process.env.MUTABA3A_PUBLIC_ORIGIN ?? DEFAULT_PUBLIC_ORIGIN).replace(/\/$/, '');
   const url = `${origin}${MANIFEST_PATH}`;
-  let manifest: unknown;
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-    manifest = res.ok ? await res.json() : null;
-  } catch {
-    manifest = null;
-  }
-  const problem = termsLiveProblem(manifest, CURRENT_TERMS);
+  const problem = await checkTermsLive(url, CURRENT_TERMS);
   if (problem) {
     console.error(`[terms] ${problem} (${url})`);
     return 1;
