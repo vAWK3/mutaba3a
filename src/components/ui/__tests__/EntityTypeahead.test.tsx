@@ -588,6 +588,93 @@ describe('EntityTypeahead', () => {
     });
   });
 
+  // MUT-318 Apple design review (A1–A3) and design review 5A
+  describe('saving and cues (MUT-318)', () => {
+    function Saving(props: { onSelect: (option: TypeaheadOption) => Promise<unknown>; flashSignal?: number; describedBy?: string }) {
+      const [value, setValue] = useState('');
+      return (
+        <EntityTypeahead
+          options={[{ id: 'new', label: 'Newco', isNew: true }]}
+          inputValue={value}
+          onInputChange={setValue}
+          onSelect={(option) => {
+            setValue(option.label);
+            return props.onSelect(option);
+          }}
+          flashSignal={props.flashSignal}
+          describedBy={props.describedBy}
+        />
+      );
+    }
+
+    function deferred<T>() {
+      let settle!: (value: T) => void;
+      const promise = new Promise<T>((resolve) => {
+        settle = resolve;
+      });
+      return { promise, settle };
+    }
+
+    it('keeps the input focused and read-only while a pick is saving, not disabled (A1)', async () => {
+      const save = deferred<void>();
+      render(<Saving onSelect={() => save.promise} />);
+      const input = screen.getByRole('combobox');
+      input.focus();
+      fireEvent.change(input, { target: { value: 'Newco' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      expect(input).toHaveAttribute('readonly');
+      expect(input).not.toBeDisabled();
+      expect(document.activeElement).toBe(input);
+
+      await act(async () => {
+        save.settle();
+        await save.promise;
+      });
+      expect(input).not.toHaveAttribute('readonly');
+      expect(document.activeElement).toBe(input);
+    });
+
+    it('pulses the border once a create is saved, and not when it fails (A2)', async () => {
+      const ok = deferred<void>();
+      const { container, unmount } = render(<Saving onSelect={() => ok.promise} />);
+      let input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'Newco' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(container.querySelector('.entity-typeahead')).not.toHaveClass('create-success');
+      await act(async () => {
+        ok.settle();
+        await ok.promise;
+      });
+      expect(container.querySelector('.entity-typeahead')).toHaveClass('create-success');
+      unmount();
+
+      const refused = deferred<boolean>();
+      const second = render(<Saving onSelect={() => refused.promise} />);
+      input = screen.getByRole('combobox');
+      fireEvent.change(input, { target: { value: 'Newco' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await act(async () => {
+        refused.settle(false);
+        await refused.promise;
+      });
+      expect(second.container.querySelector('.entity-typeahead')).not.toHaveClass('create-success');
+    });
+
+    it('plays the cascade flash when flashSignal changes, never on mount (A3)', () => {
+      const { container, rerender } = render(<Saving onSelect={() => Promise.resolve()} flashSignal={0} />);
+      const root = container.querySelector('.entity-typeahead');
+      expect(root).not.toHaveClass('cascade-flash');
+      rerender(<Saving onSelect={() => Promise.resolve()} flashSignal={1} />);
+      expect(root).toHaveClass('cascade-flash');
+    });
+
+    it('points aria-describedby at the hint it is given (5A)', () => {
+      render(<Saving onSelect={() => Promise.resolve()} describedBy="matter-hint" />);
+      expect(screen.getByRole('combobox')).toHaveAttribute('aria-describedby', 'matter-hint');
+    });
+  });
+
   describe('mouse interaction', () => {
     it('highlights option on mouse enter', () => {
       renderTypeahead();

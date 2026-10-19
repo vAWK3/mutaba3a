@@ -29,11 +29,13 @@ export interface ClientPickerProps {
   id?: string;
   /** Offer "Add client: «name»" for a name no client has (MUT-286). */
   canCreate?: boolean;
+  /** Flash the field when another one filled it, e.g. from a picked matter (MUT-318 A3). */
+  flashSignal?: number;
 }
 
 const NEW_OPTION_ID = 'new';
 
-export function ClientPicker({ profileId, value, onChange, placeholder, disabled, id, canCreate = false }: ClientPickerProps) {
+export function ClientPicker({ profileId, value, onChange, placeholder, disabled, id, canCreate = false, flashSignal }: ClientPickerProps) {
   const t = useT();
   const toast = useToast();
   const { data: customers } = useCustomerDirectory(profileId);
@@ -101,9 +103,10 @@ export function ClientPicker({ profileId, value, onChange, placeholder, disabled
       }}
       onSelect={select}
       placeholder={placeholder}
-      disabled={disabled || createCustomer.isPending}
+      disabled={disabled}
       createLabel={t('hosted.clients.add')}
       id={id}
+      flashSignal={flashSignal}
     />
   );
 }

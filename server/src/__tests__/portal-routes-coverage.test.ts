@@ -4,7 +4,7 @@ import { PORTAL_ROUTES, type PortalRouteDependencies } from '../routes/portal-ro
 
 /**
  * One entry per call `src/hosted/api/client.ts` makes (mut-285 brief §3, the
- * "49 of 49" table, plus MUT-286's 50th: Add «name» in the client picker),
+ * "49 of 49" table, plus MUT-286's 50th and MUT-318's 51st: Add «name» in the client and matter pickers),
  * hand-maintained rather than parsed from the client file
  * (MUT-286 Phase A item 4 — simpler, at the cost of staying in sync by hand:
  * a future portal call that isn't added here won't be caught, but a future
@@ -72,6 +72,7 @@ const CLIENT_CALLS: readonly ClientCall[] = [
   { method: 'DELETE', path: '/v1/expense-groups/:groupId/expenses/:expenseId', local: true }, // 48
   { method: 'GET', path: '/v1/fx-rates', local: true }, // 49
   { method: 'POST', path: '/v1/customers', local: true }, // 50 — MUT-286: the client picker's Add «name», both modes
+  { method: 'POST', path: '/v1/projects', local: true }, // 51 — MUT-318: the matter picker's Add «name», both modes
   { method: 'GET', path: '/v1/summaries/expenses', local: true }, // defined in client.ts, unused by any screen yet (brief §3's "– , free" row)
 ];
 
@@ -95,8 +96,8 @@ describe('PORTAL_ROUTES coverage (MUT-286)', () => {
     expect(missing).toEqual([]);
   });
 
-  it('matches the brief §3 table plus MUT-286\'s client create: 50 calls, 6 remote-only', () => {
-    expect(CLIENT_CALLS.filter((call) => call.path !== '/v1/summaries/expenses')).toHaveLength(50);
+  it('matches the brief §3 table plus the client and matter creates (MUT-286, MUT-318): 51 calls, 6 remote-only', () => {
+    expect(CLIENT_CALLS.filter((call) => call.path !== '/v1/summaries/expenses')).toHaveLength(51);
     expect(CLIENT_CALLS.filter((call) => !call.local)).toHaveLength(6);
   });
 });

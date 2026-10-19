@@ -13,6 +13,7 @@ import { useToast } from './Toast';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { ClientPicker } from './ClientPicker';
 import { ProjectPicker } from './ProjectPicker';
+import { useMatterCascade } from './useMatterCascade';
 import { ReceiptUploader } from './ReceiptUploader';
 import { Drawer } from './Drawer';
 import { applyExpenseApiError } from './expenseApiErrors';
@@ -104,7 +105,8 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
     defaultValues: emptyValues(timezone),
   });
   const { control, handleSubmit, reset, setError, formState } = form;
-  const selectedClientId = useWatch({ control, name: 'clientId' });
+  const [selectedClientId, selectedCurrency] = useWatch({ control, name: ['clientId', 'currency'] });
+  const clientFlash = useMatterCascade(form, profileId, 'clientId');
 
   // (Re)fill the form when a genuinely new version arrives: the first load, or
   // the refetch after a 409 (MUT-221, as ConversionDrawer's D6). Keyed on id and
@@ -290,6 +292,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
                     onChange={field.onChange}
                     placeholder={t('hosted.expenses.drawer.clientPlaceholder')}
                     canCreate={canAddClient}
+                    flashSignal={clientFlash}
                   />
                 )}
               />
@@ -306,11 +309,14 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
                 control={control}
                 render={({ field }) => (
                   <ProjectPicker
+                    id="hosted-expense-matter"
                     profileId={profileId}
                     customerId={selectedClientId || undefined}
                     value={field.value || ''}
                     onChange={field.onChange}
                     placeholder={t('hosted.expenses.drawer.matterPlaceholder')}
+                    canCreate={canAddClient}
+                    currency={selectedCurrency}
                   />
                 )}
               />

@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Add a matter from the portal's matter picker, signed in or out (MUT-318, ADR-100 decision 10)
+
+**Why:** MUT-286's reconcile gap. Hosted matters came only from the phone app or Malafat, so signed out nobody could ever have one. The matter picker now adds matters the way the client picker adds clients.
+
+### Added
+- **"Add matter: «name»"** in the matter picker (income drawer's More details, expense drawer), on a profile the person owns (`canAddClient`), both modes: creates the matter under the chosen client in the drawer's currency (`POST /v1/projects`, attempt-scoped Idempotency-Key, `useCreateProject`) and picks it. The portal's 51st API call.
+- **No client chosen:** no Add row; "Choose a client first to add a matter." under the field, the input's `aria-describedby`, in an always-mounted polite live region (design 5A).
+- **Whose matter:** with no client chosen, each matter row names its client (EntityTypeahead `secondary`, design 1A).
+- **Client ↔ matter cascade in the portal** (design 2A, 3A): picking a matter with no client fills the client; changing or clearing the client empties a matter of another client, silently, as in the local app.
+- **Cues (Apple design review A2, A3):** the field's border pulses once when a create succeeds; the client field flashes when a picked matter fills it, in the portal and the local app. Reduced motion gets a still tint for the same span.
+
+### Changed
+- `useClientProjectCascade` moved from `src/hooks/` to `src/lib/forms/` (the portal may not import `src/hooks/`), generic over the project type with `ownerOf` and `onAutoFill`; local drawers' imports follow, behaviour unchanged.
+- Income drawer's Arabic matter label «الملف (اختياري)» → «القضية (اختياري)», placeholder «اختر ملفاً» → «اختر قضية»: «ملف» means profile everywhere else (design 4A).
+
+### Fixed
+- **Saving a picked "Add …" no longer drops keyboard focus** (Apple design review A1): ClientPicker disabled its own focused input while creating, which blurred it (HTML focus fixup) and defeated "Enter held while saving submits". EntityTypeahead now makes the input read-only while a pick saves; neither picker disables on `isPending`.
+- The expense drawer's Matter label now names its field (the picker had no `id`).
+
+### Tests
+- See TEST_PLAN.md › MUT-318.
+
+---
+
 ## [Unreleased] - 2026-10-19 — Use the portal without an account: the server's routes run in the page (MUT-286, ADR-097, ADR-100)
 
 **Why:** epic MUT-284's load-bearing ticket. Signed out, the portal runs the server's own route modules in the page over IndexedDB, so the free app and the hosted account are one portal with the same figures.

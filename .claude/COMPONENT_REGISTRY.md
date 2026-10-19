@@ -2032,6 +2032,18 @@ Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
 ### ReloadToContinue — `src/hosted/pages/auth/BootScreens.tsx`
 **Purpose**: the D1 screen when another tab saved this device's records with a newer build (`ApiError` code `LOCAL_FORMAT_TOO_NEW`), shown by `AuthGate`.
 
+### ProjectPicker `canCreate` / `currency` — `src/hosted/components/ProjectPicker.tsx` (extended, MUT-318)
+**Purpose**: the portal's matter field offers "Add matter: «name»" when `canCreate` (`canAddClient(profile)`), a client is chosen (`customerId`) and the client has no matter of that name; picking creates it in `currency` through `useCreateProject` (`data/projectQueries.ts`) and picks it. With no client chosen: no Add row, a polite hint (`describedBy`), and each row names its client. Used by IncomeCaptureDrawer and ExpenseDrawer. Tests: `components/__tests__/ProjectPicker.test.tsx`.
+
+### useMatterCascade — `src/hosted/components/useMatterCascade.ts` (new, MUT-318)
+**Purpose**: the hosted drawers' wiring of `useClientProjectCascade` over every client's matters (`ownerOf: customerId`); returns the client field's `flashSignal`. Tests: drawer tests (`IncomeCaptureDrawer.test.tsx` › matters).
+
+### useClientProjectCascade — `src/lib/forms/useClientProjectCascade.ts` (moved from `src/hooks/`, MUT-318)
+**Purpose**: client ↔ project cascade for any react-hook-form form; generic project type, `ownerOf` (default `clientId`), `onAutoFill`. Used by the local Income/Expense drawers and the portal's (via useMatterCascade). Tests: `src/lib/forms/__tests__/useClientProjectCascade.test.tsx`.
+
+### EntityTypeahead `describedBy` / `flashSignal` (extended, MUT-318)
+**Purpose**: `describedBy` sets the input's `aria-describedby`; `flashSignal` plays the cascade flash when it changes. Internally: read-only (never disabled) while an async pick saves, and the `create-success` pulse when a create resolves picked. ClientTypeahead (local) and ClientPicker (portal) pass `flashSignal` through. Tests: `EntityTypeahead.test.tsx` › saving and cues.
+
 ### ClientPicker `canCreate` — `src/hosted/components/ClientPicker.tsx` (extended, MUT-286)
 **Purpose**: the portal's client field now offers "Add client: «name»" when `canCreate` (`canAddClient(profile)`, `data/incomeAffordances.ts`) and no client has the typed name; picking creates it through `useCreateCustomer` (`data/customerQueries.ts`) and picks it. Without `canCreate` it is unchanged. Used by IncomeCaptureDrawer and ExpenseDrawer (`canAddClient` prop). Tests: `components/__tests__/ClientPicker.test.tsx`.
 

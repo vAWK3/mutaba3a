@@ -31,7 +31,18 @@ export interface EntityTypeaheadProps<T = unknown> {
   autoHighlight?: (options: TypeaheadOption<T>[], typed: string) => number;
   /** The input's id, so a `<label htmlFor>` names it. */
   id?: string;
+  /** The id of a hint that describes the input (`aria-describedby`), e.g. why no Add row is offered (MUT-318). */
+  describedBy?: string;
+  /**
+   * Plays the cascade flash on the input each time this value changes (never on mount): the field was filled by
+   * another one, e.g. the client from a picked matter (MUT-318, Apple design review A3).
+   */
+  flashSignal?: number;
 }
+
+// The cues' lengths; EntityTypeahead.css animates over the same spans (--cascade-flash-duration, --create-success-duration).
+const CASCADE_FLASH_MS = 500;
+const CREATE_SUCCESS_MS = 200;
 
 export function EntityTypeahead<T = unknown>({
   options,
@@ -45,7 +56,10 @@ export function EntityTypeahead<T = unknown>({
   onBlur,
   autoHighlight = defaultAutoHighlight,
   id,
+  describedBy,
+  flashSignal,
 }: EntityTypeaheadProps<T>) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -78,6 +92,30 @@ export function EntityTypeahead<T = unknown>({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // A cue is a class on the root, restarted on each play and taken off after its span. Toggled on the DOM, not held in
+  // state, so playing one never re-renders (and a reduced-motion tint, which never fires animationend, still ends).
+  const cueTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const playCue = useCallback((cue: string, ms: number) => {
+    const root = rootRef.current;
+    if (!root) return;
+    clearTimeout(cueTimers.current.get(cue));
+    root.classList.remove(cue);
+    void root.offsetWidth; // restart the animation if it is still running
+    root.classList.add(cue);
+    cueTimers.current.set(cue, setTimeout(() => root.classList.remove(cue), ms));
+  }, []);
+  useEffect(() => {
+    const timers = cueTimers.current;
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  const lastFlash = useRef(flashSignal);
+  useEffect(() => {
+    if (lastFlash.current === flashSignal) return;
+    lastFlash.current = flashSignal;
+    playCue('cascade-flash', CASCADE_FLASH_MS);
+  }, [flashSignal, playCue]);
 
   // The list is only "open" for the keyboard when something is actually shown.
   const isListVisible = isOpen && options.length > 0;
@@ -119,6 +157,7 @@ export function EntityTypeahead<T = unknown>({
           setHighlight('auto');
           return;
         }
+        if (option.isNew) playCue('create-success', CREATE_SUCCESS_MS);
         const input = inputRef.current;
         if (enterHeld && input && document.activeElement === input) {
           input.form?.requestSubmit();
@@ -129,7 +168,7 @@ export function EntityTypeahead<T = unknown>({
         () => settle(false)
       );
     },
-    [onSelect]
+    [onSelect, playCue]
   );
 
   // Enter picks the highlighted option. Otherwise it is held while a pick is
@@ -212,7 +251,7 @@ export function EntityTypeahead<T = unknown>({
   };
 
   return (
-    <div className={cn('entity-typeahead', className)}>
+    <div ref={rootRef} className={cn('entity-typeahead', className)}>
       <input
         ref={inputRef}
         id={id}
@@ -225,6 +264,8 @@ export function EntityTypeahead<T = unknown>({
         onBlur={handleBlur}
         placeholder={placeholder}
         disabled={disabled}
+        // Saving a pick keeps focus (and Enter-held submit) on the input: read-only, never disabled (MUT-318 A1)
+        readOnly={selecting}
         autoComplete="off"
         role="combobox"
         aria-expanded={isListVisible}
@@ -235,6 +276,7 @@ export function EntityTypeahead<T = unknown>({
           isListVisible && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined
         }
         aria-busy={selecting || undefined}
+        aria-describedby={describedBy}
       />
 
       {isListVisible && (

@@ -24,7 +24,7 @@ features:
     tier: secondary
     paths:
       - src/components/ui/ProjectTypeahead.tsx
-      - src/hooks/useClientProjectCascade.ts
+      - src/lib/forms/useClientProjectCascade.ts
     steps:
       - Turn on Projects, add a client and a project for it
       - + Add › Income, type a title and $1,200, open More details, pick the project in the project field
@@ -39,7 +39,7 @@ features:
       - src/pages/projects/ProjectDetailPage.tsx
       - src/components/filters/StatusSegment.tsx
       - src/components/ui/ProjectTypeahead.tsx
-      - src/hooks/useClientProjectCascade.ts
+      - src/lib/forms/useClientProjectCascade.ts
     steps:
       - Turn on Projects, create a project for a client, log $800 of income against it
       - Open the project from the Projects index

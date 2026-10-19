@@ -20,6 +20,7 @@ export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];
 export type Currency = Schemas['Currency'];
 export type Customer = Schemas['Customer'];
 export type CreateCustomerRequest = Schemas['CreateCustomerRequest'];
+export type CreateProjectRequest = Schemas['CreateProjectRequest'];
 export type Project = Schemas['Project'];
 export type Receivable = Schemas['Receivable'];
 export type Payment = Schemas['Payment'];
@@ -363,6 +364,9 @@ export const api = {
     request<Get<'/v1/customers/{customerId}'>>('GET', `/v1/customers/${encodeURIComponent(customerId)}`, { profileId }),
   projects: (profileId: string, query: Query<'/v1/projects'> = {}) =>
     request<Get<'/v1/projects'>>('GET', '/v1/projects', { profileId, query }),
+  /** MUT-318: the matter picker's Add «name», on a profile the person owns (session `projects:write`, MUT-65). */
+  createProject: (profileId: string, body: CreateProjectRequest, idempotencyKey: string) =>
+    request<Project>('POST', '/v1/projects', { profileId, body, idempotencyKey }),
   receivables: (profileId: string, query: Query<'/v1/receivables'> = {}) =>
     request<Get<'/v1/receivables'>>('GET', '/v1/receivables', { profileId, query }),
   receivable: (profileId: string, receivableId: string) =>

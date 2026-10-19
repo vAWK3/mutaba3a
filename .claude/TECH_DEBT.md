@@ -136,6 +136,14 @@
 **Impact**: a profile type change (MUT-182) deletes categories and nulls `categoryId`. Groups and marks are untouched, and the summary shows the spending as uncategorized, but nothing asserts it.
 **Fix**: a store-contract case: create a group with a categorized member, run the type change, and assert the group, its mark and a `null` category bucket.
 
+### TD-174: Clicking a typeahead option drops focus to the page
+**Status**: Open
+**Ticket**: none (found during MUT-318, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Low (keyboard picks keep focus; a mouse user rarely needs it)
+**Impact**: EntityTypeahead's options are `<button>`s: a click moves focus to the option, and the list then unmounts it, so focus lands on `<body>`. After a mouse pick, Tab starts from the top of the drawer and a screen reader on a touch device loses its place. Seen while writing `@portal.local.matter-owed` (the spec now picks by Enter, the path A1 covers).
+**Fix**: `onMouseDown={(e) => e.preventDefault()}` on options (focus never leaves the input), or return focus to the input after a pick; add a test for both mouse and keyboard picks.
+
 ### TD-173: The animated slow-session release-QA spec fails on a preview build, on main too
 **Status**: Open
 **Ticket**: none (found during MUT-286, 2026-10-19)

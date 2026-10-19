@@ -95,3 +95,16 @@
 .entity-typeahead.create-success .input {
   animation: create-success var(--create-success-duration, 200ms) ease-out;
 }
+
+/* Reduced motion: the same cues as a still tint for their span (EntityTypeahead takes the class off), no animation (MUT-318) */
+@media (prefers-reduced-motion: reduce) {
+  .entity-typeahead.cascade-flash .input {
+    animation: none;
+    background-color: color-mix(in oklab, var(--accent) 8%, var(--surface));
+  }
+
+  .entity-typeahead.create-success .input {
+    animation: none;
+    border-color: var(--success);
+  }
+}

@@ -17,6 +17,7 @@ import { ClientPicker } from './ClientPicker';
 import { Drawer } from './Drawer';
 import { ProjectPicker } from './ProjectPicker';
 import { useToast } from './Toast';
+import { useMatterCascade } from './useMatterCascade';
 import { mapIncomeError } from './incomeApiErrors';
 import { trackPortal } from '../analytics/portalAnalytics';
 import {
@@ -85,6 +86,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
     },
   });
   const { control, handleSubmit, setError, formState } = form;
+  const clientFlash = useMatterCascade(form, profile.id, 'customerId');
   const [kind, currency, occurredOn, customerId, dueDate, method, amount] = useWatch({
     control,
     name: ['kind', 'currency', 'occurredOn', 'customerId', 'dueDate', 'method', 'amount'],
@@ -216,7 +218,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
               name="customerId"
               control={control}
               render={({ field }) => (
-                <ClientPicker id="hosted-income-client" profileId={profile.id} value={field.value} onChange={field.onChange} placeholder={t('hosted.income.clientPlaceholder')} canCreate={canAddClient(profile)} />
+                <ClientPicker id="hosted-income-client" profileId={profile.id} value={field.value} onChange={field.onChange} placeholder={t('hosted.income.clientPlaceholder')} canCreate={canAddClient(profile)} flashSignal={clientFlash} />
               )}
             />
             {fieldError('customerId')}
@@ -337,6 +339,8 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
                       value={field.value}
                       onChange={field.onChange}
                       placeholder={t('hosted.income.matterPlaceholder')}
+                      canCreate={canAddClient(profile)}
+                      currency={currency}
                     />
                   )}
                 />

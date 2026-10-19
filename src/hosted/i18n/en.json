@@ -271,6 +271,11 @@
       },
       "noMatters": "No matters with fees on this client yet."
     },
+    "matters": {
+      "add": "Add matter",
+      "addFailed": "Couldn't add the matter. Try again.",
+      "needsClient": "Choose a client first to add a matter."
+    },
     "receivables": {
       "title": "Receivables",
       "columns": {

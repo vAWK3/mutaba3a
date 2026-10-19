@@ -548,6 +548,13 @@ export class FakeApi {
       const found = this.customers.find((c) => c.id === id);
       return found ? json(found) : notFound();
     }
+    if (resource === 'projects' && method === 'POST' && !id) {
+      // MUT-318: the matter picker's Add «name». The new matter joins every matter list the next GET returns.
+      const b = (e.body ?? {}) as { customerId?: string; name?: string; currency?: Currency };
+      const created = project(this.projects.length + 900, b.customerId ?? '', b.name ?? '', b.currency ?? 'ILS');
+      this.projects.push(created);
+      return json(created, 201);
+    }
     if (resource === 'projects' && method === 'GET') {
       const customerId = q('customerId');
       return page(this.projects.filter((p) => !customerId || p.customerId === customerId));
@@ -673,12 +680,14 @@ export class FakeApi {
   }
 
   private income(body: Json) {
-    const b = body as { kind: 'received' | 'owed'; amount: string; currency: Currency; occurredOn: string; customerId?: string; title?: string; dueDate?: string; method?: 'CASH' | 'BANK'; notes?: string };
+    const b = body as { kind: 'received' | 'owed'; amount: string; currency: Currency; occurredOn: string; customerId?: string; projectId?: string; title?: string; dueDate?: string; method?: 'CASH' | 'BANK'; notes?: string };
     const n = this.serial++;
     if (b.kind === 'owed') {
-      const made = receivable(n, { customerId: b.customerId ?? '', gross: b.amount, currency: b.currency, dueDate: b.dueDate, postingDate: b.occurredOn, title: b.title ?? null });
+      // As the server: a matter names its client when none was sent (MUT-318)
+      const customerId = b.customerId ?? this.projects.find((p) => p.id === b.projectId)?.customerId ?? '';
+      const made = receivable(n, { customerId, projectId: b.projectId ?? null, gross: b.amount, currency: b.currency, dueDate: b.dueDate, postingDate: b.occurredOn, title: b.title ?? null });
       this.receivables.unshift(made);
-      return json({ id: made.id, kind: 'owed', amount: b.amount, currency: b.currency, occurredOn: b.occurredOn, customerId: b.customerId ?? null, projectId: null, title: b.title ?? null, notes: b.notes ?? null, dueDate: made.dueDate, status: 'open' }, 201);
+      return json({ id: made.id, kind: 'owed', amount: b.amount, currency: b.currency, occurredOn: b.occurredOn, customerId, projectId: b.projectId ?? null, title: b.title ?? null, notes: b.notes ?? null, dueDate: made.dueDate, status: 'open' }, 201);
     }
     const made = payment(n, { customerId: b.customerId ?? null, amount: b.amount, currency: b.currency, receivedOn: b.occurredOn, method: b.method, mine: true });
     this.payments.unshift(made);

@@ -64,4 +64,20 @@ describe('signed out: no network (AC4)', () => {
     expect(receivable.outstanding).toBe('500.00');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('adds a client, then a matter for them, then money owed on that matter, all on this device (MUT-318)', async () => {
+    const me = await api.me();
+    const profileId = me.profiles[0]!.id;
+
+    const client = await api.createCustomer(profileId, { name: 'Ramallah Bakery' }, 'no-network-client-2');
+    const matter = await api.createProject(profileId, { customerId: client.id, name: 'Menu design', currency: 'ILS' }, 'no-network-matter-1');
+    const owed = await api.createIncome(profileId, { kind: 'owed', amount: '900.00', currency: 'ILS', occurredOn: '2026-10-01', projectId: matter.id, title: 'Menu design' }, 'no-network-owed-2');
+    const matters = await api.projects(profileId, { customerId: client.id });
+    const receivable = await api.receivable(profileId, owed.id);
+
+    expect(matters.items.map((p) => p.name)).toEqual(['Menu design']);
+    expect(receivable.customerId).toBe(client.id);
+    expect(receivable.projectId).toBe(matter.id);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });

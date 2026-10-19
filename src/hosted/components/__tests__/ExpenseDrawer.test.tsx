@@ -84,6 +84,34 @@ describe('ExpenseDrawer (hosted)', () => {
     expect(screen.queryByRole('option', { name: /Add client/ })).toBeNull();
   });
 
+  it('adds a matter for the chosen client in the expense currency, and names the field by its label (MUT-318)', async () => {
+    const user = userEvent.setup();
+    const created: unknown[] = [];
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok({ items: [{ id: 'c1', name: 'Haddad & Partners' }], nextCursor: null }),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'POST /v1/projects': ({ body }) => {
+        created.push(body);
+        return ok({ id: 'p9', ...(body as object) }, 201);
+      },
+    });
+    renderDrawer({ canAddClient: true });
+    const matter = await screen.findByLabelText('Matter');
+    await user.type(matter, 'Lease dispute');
+    expect(screen.queryByRole('option', { name: /Add matter/ })).toBeNull();
+    expect(screen.getByText('Choose a client first to add a matter.')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Client'), 'Haddad');
+    await user.click(await screen.findByRole('option', { name: 'Haddad & Partners' }));
+    await user.clear(matter);
+    await user.type(matter, 'Lease dispute');
+    await user.click(await screen.findByRole('option', { name: /Add matter.*Lease dispute/ }));
+
+    await waitFor(() => expect(created).toEqual([{ customerId: 'c1', name: 'Lease dispute', currency: 'USD' }]));
+    expect(matter).toHaveValue('Lease dispute');
+  });
+
   it('creates an expense with an Idempotency-Key and closes on success', async () => {
     const user = userEvent.setup();
     let createCall: { body: unknown; headers: Headers } | null = null;

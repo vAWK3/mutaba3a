@@ -44,6 +44,36 @@ features:
       - The client is created on the server with that name and picked in the drawer; the income goes to the server for that client
       - The entry is listed under Ramallah Bakery
       - On the Malafat-fed profile the client list offers no Add client row
+  - id: add-matter
+    title: Add income on a matter that isn't there yet; a hint until a client is chosen, then Add matter; a Malafat-fed profile never offers it
+    tier: secondary
+    paths:
+      - src/hosted/data/projectQueries.ts
+      - src/hosted/components/ExpenseDrawer.tsx
+    steps:
+      - On your own profile's Receivables, choose + Add income, Owed, open More details and type a matter nobody has ("Lease dispute") with no client chosen
+      - Pick Client 2, then choose "Add matter: Lease dispute"
+      - Type 900 and save
+      - On a Malafat-fed profile, record an expense and type the same name in Matter
+    expect:
+      - With no client, "Choose a client first to add a matter." shows and there is no Add matter row
+      - POST /v1/projects gets {customerId of Client 2, Lease dispute, ILS} with an Idempotency-Key, and the matter is picked
+      - The income names the new matter, and the entry is listed with it
+      - On the Malafat-fed profile there is no Add matter row and no hint
+  - id: matter-fills-client
+    title: Picking a matter with no client fills the client, each matter names its client, and changing the client empties a matter of another one
+    tier: secondary
+    paths:
+      - src/hosted/components/useMatterCascade.ts
+      - src/lib/forms/useClientProjectCascade.ts
+    steps:
+      - Choose + Add income, Owed, open More details and open Matter with no client chosen
+      - Pick Client 2's Retainer
+      - Change Client to Client 1
+    expect:
+      - The two Retainer rows read "Retainer · Client 1" and "Retainer · Client 2"
+      - Client fills with Client 2
+      - Changing the client to Client 1 empties Matter
   - id: date-too-old
     title: Add income dated more than ten years back is refused at the date field with "can't be more than ten years ago", not "later than today", and keeps the entry
     tier: secondary

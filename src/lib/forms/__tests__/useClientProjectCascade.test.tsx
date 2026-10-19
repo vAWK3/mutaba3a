@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, act } from '@testing-library/react';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useClientProjectCascade } from '../useClientProjectCascade';
-import type { Project } from '../../types';
+import type { Project } from '../../../types';
 
 // Test helper: renders a component that uses the cascade hook and exposes form methods
 function createTestHarness(projectsData: Project[]) {
@@ -151,5 +151,77 @@ describe('useClientProjectCascade', () => {
     });
 
     expect(form.getValues('clientId')).toBe('client-b');
+  });
+
+  // MUT-318: the hosted drawers use the same hook (a hosted matter's owner is `customerId`) and the client field flashes
+  // when the hook fills it (Apple design review A3).
+  describe('hosted matters and the auto-fill cue (MUT-318)', () => {
+    interface HostedMatter {
+      id: string;
+      customerId: string;
+    }
+
+    function hostedHarness(matters: HostedMatter[], onAutoFill: () => void) {
+      const formRef: { current: ReturnType<typeof useForm<{ customerId: string; projectId: string }>> | null } = { current: null };
+      function TestComponent() {
+        const form = useForm({ defaultValues: { customerId: '', projectId: '' } });
+        useClientProjectCascade({
+          form,
+          projectsData: matters,
+          ownerOf: (matter) => matter.customerId,
+          clientFieldName: 'customerId',
+          onAutoFill,
+        });
+        useEffect(() => {
+          formRef.current = form;
+        });
+        return null;
+      }
+      render(<TestComponent />);
+      return formRef.current!;
+    }
+
+    const matters: HostedMatter[] = [
+      { id: 'm1', customerId: 'c1' },
+      { id: 'm2', customerId: 'c2' },
+    ];
+
+    it('fills the client from the matter through ownerOf, and reports the fill', () => {
+      const onAutoFill = vi.fn();
+      const form = hostedHarness(matters, onAutoFill);
+      act(() => {
+        form.setValue('projectId', 'm2');
+      });
+      expect(form.getValues('customerId')).toBe('c2');
+      expect(onAutoFill).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears a matter of another client when the client changes, without reporting a fill', () => {
+      const onAutoFill = vi.fn();
+      const form = hostedHarness(matters, onAutoFill);
+      act(() => {
+        form.setValue('customerId', 'c1');
+      });
+      act(() => {
+        form.setValue('projectId', 'm1');
+      });
+      act(() => {
+        form.setValue('customerId', 'c2');
+      });
+      expect(form.getValues('projectId')).toBe('');
+      expect(onAutoFill).not.toHaveBeenCalled();
+    });
+
+    it('keeps a matter it cannot find yet (just created, list not refetched)', () => {
+      const form = hostedHarness(matters, vi.fn());
+      act(() => {
+        form.setValue('customerId', 'c1');
+      });
+      act(() => {
+        form.setValue('projectId', 'm-new');
+      });
+      expect(form.getValues('customerId')).toBe('c1');
+      expect(form.getValues('projectId')).toBe('m-new');
+    });
   });
 });

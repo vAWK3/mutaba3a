@@ -142,6 +142,26 @@ describe('ClientPicker', () => {
       expect(input).toHaveValue('Beta Studio');
     });
 
+    it('keeps the input enabled and focused while the client is being added (MUT-318 A1)', async () => {
+      let answer!: (response: Response) => void;
+      fetchMock.mockImplementation((_input: RequestInfo | URL, init: RequestInit = {}) => {
+        if ((init.method ?? 'GET') === 'POST') return new Promise<Response>((resolve) => (answer = resolve));
+        return Promise.resolve(ok({ items: [{ id: 'c1', name: 'Haddad & Partners' }], nextCursor: null }));
+      });
+      const user = userEvent.setup();
+      renderPicker('', true);
+      const input = await screen.findByPlaceholderText('Search client...');
+      await user.click(input);
+      await user.type(input, 'Ramallah Bakery');
+      await user.keyboard('{Enter}');
+
+      await waitFor(() => expect(posts()).toHaveLength(1));
+      expect(input).not.toBeDisabled();
+      expect(document.activeElement).toBe(input);
+      answer(new Response(JSON.stringify({ id: 'c9', name: 'Ramallah Bakery' }), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+      await waitFor(() => expect(input).not.toHaveAttribute('readonly'));
+    });
+
     it('a new client is in the directory for the next pick, and in the Clients summaries', async () => {
       routeFetch(() => new Response(JSON.stringify({ id: 'c9', name: 'Ramallah Bakery' }), { status: 201, headers: { 'Content-Type': 'application/json' } }));
       const user = userEvent.setup();

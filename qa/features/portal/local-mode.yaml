@@ -57,6 +57,21 @@ features:
       - After the payment the entry is Partly paid with 500.00 still owed
       - After the reload it is still Partly paid with 500.00 owed, and Clients lists Ramallah Bakery
       - No request reached the server after the first-visit check
+  - id: matter-owed
+    title: Signed out, add a client and a matter from the pickers, record money owed on the matter, reload, and both are there
+    tier: secondary
+    paths:
+      - src/hosted/components/ProjectPicker.tsx
+      - src/hosted/data/projectQueries.ts
+    steps:
+      - Open Receivables signed out, in English
+      - Add income, Owed, 900.00, choosing "Add client: Ramallah Bakery"
+      - Under More details, type a matter nobody has and press Enter on "Add matter: Menu design"
+      - Save, then reload the page
+    expect:
+      - The new matter is picked in the drawer and the keyboard stays on the field
+      - The entry is listed under Ramallah Bakery and Menu design, before and after the reload
+      - No request reached the server after the first-visit check
   - id: two-tabs
     title: Two tabs on this device see each other's saves
     tier: secondary

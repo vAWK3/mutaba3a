@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Drawer } from './Drawer';
@@ -21,7 +21,7 @@ import { Select } from '../ui';
 import { ClientTypeahead } from '../ui/ClientTypeahead';
 import { ProjectTypeahead } from '../ui/ProjectTypeahead';
 import { useFeatureEnabled } from '../../lib/features/useFeatures';
-import { useClientProjectCascade } from '../../hooks/useClientProjectCascade';
+import { useClientProjectCascade } from '../../lib/forms/useClientProjectCascade';
 import { cn, currencyExponent, parseAmountToMinor, todayISO } from '../../lib/utils';
 import { useT, useLanguage } from '../../lib/i18n';
 import { useToast } from '../../lib/toastStore';
@@ -91,7 +91,10 @@ export function ExpenseDrawer() {
   const { data: projectsData = [] } = useProjects();
 
   // Bi-directional cascade between client and project fields
-  useClientProjectCascade({ form, projectsData });
+  // The client field flashes when picking a project fills it (MUT-318 A3)
+  const [clientFlash, setClientFlash] = useState(0);
+  const flashClient = useCallback(() => setClientFlash((n) => n + 1), []);
+  useClientProjectCascade({ form, projectsData, onAutoFill: flashClient });
 
   // Use ALL_CATEGORIES as fallback when profile has no categories
   const fallbackCategories = useMemo(() =>
@@ -475,6 +478,7 @@ export function ExpenseDrawer() {
                     onChange={field.onChange}
                     placeholder={t('drawer.expense.clientPlaceholder')}
                     disabled={!selectedProfileId}
+                    flashSignal={clientFlash}
                   />
                 )}
               />
