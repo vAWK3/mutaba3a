@@ -1,6 +1,10 @@
+import { LocalDatabase } from './idb.js';
+
 export const BLOBS_DB_NAME = 'mut-local-blobs';
 const DB_VERSION = 1;
 const STORE_NAME = 'blobs';
+/** `{ type, size }` per key, so a size/type check never loads a file's bytes (review D11). Written with the file in one transaction. */
+const META_STORE = 'meta';
 
 /**
  * Receipt files on this device (MUT-287, eng review R1). A database of its
@@ -17,36 +21,25 @@ export interface StoredFile {
   bytes: ArrayBuffer;
 }
 
+export interface StoredFileStat {
+  type: string;
+  size: number;
+}
+
 export class IndexedDbBlobStore {
-  private readonly dbName: string;
-  private dbPromise: Promise<IDBDatabase> | null = null;
+  private readonly db: LocalDatabase;
 
   constructor(dbName: string = BLOBS_DB_NAME) {
-    this.dbName = dbName;
+    this.db = new LocalDatabase(dbName, DB_VERSION, [STORE_NAME, META_STORE]);
   }
 
   private openDb(): Promise<IDBDatabase> {
-    if (!this.dbPromise) {
-      this.dbPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(this.dbName, DB_VERSION);
-        request.onupgradeneeded = () => {
-          if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME);
-        };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error ?? new Error(`Failed to open the ${this.dbName} database`));
-      });
-      // A failed open is forgotten, so the next call tries again instead of replaying the same rejection.
-      this.dbPromise.catch(() => {
-        this.dbPromise = null;
-      });
-    }
-    return this.dbPromise;
+    return this.db.open();
   }
 
   /** Resolves on the transaction's `oncomplete`: the bytes are on disk, not just queued. Rejects with the browser's error (e.g. `QuotaExceededError`). */
   async put(key: string, blob: Blob): Promise<void> {
-    const file: StoredFile = { type: blob.type, bytes: await readBytes(blob) };
-    await this.write((store) => store.put(file, key));
+    await this.putFiles([{ key, type: blob.type, bytes: await readBytes(blob) }]);
   }
 
   async get(key: string): Promise<Blob | null> {
@@ -64,11 +57,24 @@ export class IndexedDbBlobStore {
     });
   }
 
-  /** Several files in one transaction (Restore). */
+  /** Several files in one transaction (Restore), each with its `{ type, size }`. */
   async putFiles(files: ReadonlyArray<{ key: string } & StoredFile>): Promise<void> {
     if (files.length === 0) return;
-    await this.write((store) => {
-      for (const { key, type, bytes } of files) store.put({ type, bytes } satisfies StoredFile, key);
+    await this.write((blobs, meta) => {
+      for (const { key, type, bytes } of files) {
+        blobs.put({ type, bytes } satisfies StoredFile, key);
+        meta.put({ type, size: bytes.byteLength } satisfies StoredFileStat, key);
+      }
+    });
+  }
+
+  /** A file's type and size, without reading its bytes; `null` when there is none. */
+  async stat(key: string): Promise<StoredFileStat | null> {
+    const db = await this.openDb();
+    return new Promise((resolve, reject) => {
+      const request = db.transaction(META_STORE, 'readonly').objectStore(META_STORE).get(key);
+      request.onsuccess = () => resolve((request.result as StoredFileStat | undefined) ?? null);
+      request.onerror = () => reject(request.error ?? new Error('Failed to read a stored file\'s size'));
     });
   }
 
@@ -76,8 +82,11 @@ export class IndexedDbBlobStore {
   async delete(keys: Iterable<string>): Promise<void> {
     const list = [...keys];
     if (list.length === 0) return;
-    await this.write((store) => {
-      for (const key of list) store.delete(key);
+    await this.write((blobs, meta) => {
+      for (const key of list) {
+        blobs.delete(key);
+        meta.delete(key);
+      }
     });
   }
 
@@ -90,11 +99,16 @@ export class IndexedDbBlobStore {
     });
   }
 
-  private async write(apply: (store: IDBObjectStore) => void): Promise<void> {
+  /** Releases the connection (tests). */
+  async close(): Promise<void> {
+    await this.db.close();
+  }
+
+  private async write(apply: (blobs: IDBObjectStore, meta: IDBObjectStore) => void): Promise<void> {
     const db = await this.openDb();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      apply(tx.objectStore(STORE_NAME));
+      const tx = db.transaction([STORE_NAME, META_STORE], 'readwrite');
+      apply(tx.objectStore(STORE_NAME), tx.objectStore(META_STORE));
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error ?? new Error('Failed to write a stored file'));
       tx.onabort = () => reject(tx.error ?? new Error('Writing a stored file was aborted'));

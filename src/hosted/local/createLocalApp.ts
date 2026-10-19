@@ -10,6 +10,7 @@ import { FX_ORGANIZATION_INDEPENDENT_ROUTES } from '../../../server/src/routes/f
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from '../../../server/src/routes/me.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from '../../../server/src/routes/portal-routes.js';
 import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from '../../../server/src/routes/profiles.js';
+import { LOCAL_URL_TTL_SECONDS } from './attachments.js';
 import { LOCAL_PEPPER } from './mintLocalSession.js';
 
 export interface CreateLocalAppOptions {
@@ -35,8 +36,6 @@ type LocalApp = ReturnType<typeof createApiShell>['app'];
 /** No rate limit meaningfully applies to one local person's one tab; generous enough that normal use never trips it. Present only because `authenticate()`'s options require a `RateLimiter`. */
 const LOCAL_RATE_LIMIT_PER_MINUTE = 10_000;
 
-/** A `local-blob:` URL never expires in practice; the routes still need a TTL to stamp `expiresAt`. Same as the server's default. */
-const LOCAL_URL_TTL_SECONDS = 900;
 
 /**
  * `createApiShell` only ever calls `.error(...)` on this (its `onError`

@@ -1,6 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { LocalAttachmentStorage, sweepBlobs } from '../attachments.js';
+import type { LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
+import { backedUpKeys, LocalAttachmentStorage, liveStoredKeys, sweepBlobs } from '../attachments.js';
 import { IndexedDbBlobStore } from '../blobStore.js';
 
 /**
@@ -85,3 +86,21 @@ describe('sweepBlobs', () => {
     expect(await blobs.keys()).toEqual(['live']);
   });
 });
+
+describe('which stored files are live (review D6)', () => {
+  const NOW_MS = Date.parse('2026-10-19T10:00:00Z');
+  const receipt = (key: string, status: string, minutesAgo: number, deletedAt: Date | null = null) => [key, { storageKey: key, status, deletedAt, createdAt: new Date(NOW_MS - minutesAgo * 60_000) }] as const;
+  const maps = {
+    expReceipts: new Map([receipt('ready', 'READY', 600), receipt('uploading', 'PENDING_UPLOAD', 14), receipt('abandoned', 'PENDING_UPLOAD', 16), receipt('deleted', 'READY', 600, new Date(NOW_MS))]),
+    files: new Map([['doc', { storageKey: 'doc', status: 'READY', deletedAt: null, createdAt: new Date(NOW_MS) }]]),
+  } as unknown as LocalSnapshotMaps;
+
+  it('keeps an upload in flight only while its 15-minute upload link is valid, and every document', () => {
+    expect([...liveStoredKeys(maps, new Date(NOW_MS))].sort()).toEqual(['doc', 'ready', 'uploading']);
+  });
+
+  it('backs up only files a person can see: READY receipts and documents', () => {
+    expect([...backedUpKeys(maps)].sort()).toEqual(['doc', 'ready']);
+  });
+});
+

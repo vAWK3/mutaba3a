@@ -136,6 +136,8 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
         {pending && (
           <div className="hp-card hp-your-data-confirm" role="alertdialog" aria-labelledby="your-data-confirm">
             <p id="your-data-confirm">{tp('hosted.local.data.confirm', pending.recordCount)}</p>
+            {/* MUT-287 review D4: said before Replace, while the person can still cancel. */}
+            {pending.missingReceiptFiles > 0 && <p className="hp-your-data-missing">{tp('hosted.local.data.missingReceipts', pending.missingReceiptFiles)}</p>}
             <div className="hp-empty-actions">
               <Button variant="danger" onClick={() => void replace()} disabled={busy} aria-busy={busy}>
                 {t('hosted.local.data.replace')}

@@ -28,9 +28,10 @@ export class LocalAttachmentStorage implements AttachmentStorage {
     return { url: localBlobUrl(key), expiresAt: expiry(input) };
   }
 
+  /** From the stored `{ type, size }` alone: the bytes are never loaded to answer it (review D11). */
   async head(key: string): Promise<StoredObject | null> {
-    const blob = await this.blobs.get(key);
-    return blob ? { sizeBytes: blob.size, contentType: blob.type || null } : null;
+    const stat = await this.blobs.stat(key);
+    return stat ? { sizeBytes: stat.size, contentType: stat.type || null } : null;
   }
 
   async remove(key: string): Promise<void> {
@@ -53,17 +54,40 @@ function expiry(input: { ttlSeconds: number; now: Date }): Date {
   return new Date(input.now.getTime() + input.ttlSeconds * 1000);
 }
 
+/** A `local-blob:` URL's lifetime, and how long a pending upload's file is kept for it (review D6). Same as the server's default. */
+export const LOCAL_URL_TTL_SECONDS = 900;
+
+interface StoredRecord {
+  storageKey: unknown;
+  status: string;
+  deletedAt: Date | null;
+  createdAt: Date;
+}
+
+function storedRecords(maps: LocalSnapshotMaps): StoredRecord[] {
+  return [...maps.expReceipts.values(), ...maps.files.values()].filter((r) => !r.deletedAt && typeof r.storageKey === 'string' && r.storageKey !== '');
+}
+
 /**
- * Every file a live record still needs: receipts (READY and PENDING_UPLOAD
- * alike, so an upload in flight in another tab is never swept) and documents,
- * which share this storage (`attachmentRoutes`) even though none can be
- * uploaded signed out today.
+ * Every file a live record still needs, for the sweeps: READY receipts and
+ * documents (which share this storage through `attachmentRoutes`, though none
+ * can be uploaded signed out today), and a pending upload's file while its
+ * upload link is still valid, so another tab's upload in flight is never
+ * swept, and an abandoned one is (review D6).
  */
-export function liveStoredKeys(maps: LocalSnapshotMaps): Set<string> {
+export function liveStoredKeys(maps: LocalSnapshotMaps, now: Date): Set<string> {
+  const pendingSince = now.getTime() - LOCAL_URL_TTL_SECONDS * 1000;
   const keys = new Set<string>();
-  for (const receipt of maps.expReceipts.values()) if (!receipt.deletedAt && typeof receipt.storageKey === 'string' && receipt.storageKey) keys.add(receipt.storageKey);
-  for (const file of maps.files.values()) if (!file.deletedAt && typeof file.storageKey === 'string' && file.storageKey) keys.add(file.storageKey);
+  for (const record of storedRecords(maps)) {
+    if (record.status !== 'READY' && record.createdAt.getTime() < pendingSince) continue;
+    keys.add(record.storageKey as string);
+  }
   return keys;
+}
+
+/** The files a records file carries: only those a person can see (READY), never a half-finished upload. */
+export function backedUpKeys(maps: LocalSnapshotMaps): Set<string> {
+  return new Set(storedRecords(maps).filter((r) => r.status === 'READY').map((r) => r.storageKey as string));
 }
 
 /** Deletes every stored file `live` doesn't name; returns how many. Run under the lock, over an up-to-date store. */

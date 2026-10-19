@@ -89,9 +89,12 @@ async function boot(): Promise<LocalBackend> {
     const decoded = await decodeRecordsArchive(file);
     return {
       recordCount: countRecords(decoded.snapshot.maps),
+      missingReceiptFiles: decoded.missing.length,
       apply: async () => {
-        if (decoded.missing.length > 0) console.warn('[mutaba3a local] the records file has no copy of', decoded.missing.length, 'receipt file(s); those receipts restore without one');
-        await applyRestore({ lock, persistence, store, blobs, now }, decoded);
+        // Unpacked only now, outside the lock; the lock covers just the add, save and sweep (restore.ts).
+        const { files, missing } = await decoded.readFiles();
+        if (missing.length > decoded.missing.length) console.warn('[mutaba3a local]', missing.length - decoded.missing.length, 'receipt file(s) in the records file did not match their receipt and were left out');
+        await applyRestore({ lock, persistence, store, blobs, now }, decoded.snapshot, files);
         session = await mintLocalSession(store, now, 'ar');
       },
     };
@@ -126,7 +129,7 @@ async function sweepUnusedBlobs(lock: LocalLock, persistence: IndexedDbPersisten
   await lock
     .withLock(async ({ stale }) => {
       if (stale) await reloadFromDisk(store, persistence);
-      await sweepBlobs(blobs, liveStoredKeys(store.snapshot().maps));
+      await sweepBlobs(blobs, liveStoredKeys(store.snapshot().maps, now()));
       return { result: undefined, wrote: false };
     })
     .catch(() => undefined);

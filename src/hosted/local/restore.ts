@@ -1,10 +1,9 @@
 import type { MemoryLedgerStore } from '../../../server/src/repositories/memory.js';
 import { liveStoredKeys, sweepBlobs } from './attachments.js';
-import type { IndexedDbBlobStore } from './blobStore.js';
+import type { IndexedDbBlobStore, StoredFile } from './blobStore.js';
 import type { LocalLock } from './locks.js';
-import { LOCAL_FORMAT_VERSION } from './migrations/index.js';
+import { LOCAL_FORMAT_VERSION, type StoredSnapshot } from './migrations/index.js';
 import type { IndexedDbPersistence } from './persistence.js';
-import type { DecodedRecordsArchive } from './recordsArchive.js';
 
 export interface RestoreDependencies {
   lock: LocalLock;
@@ -26,19 +25,19 @@ export interface RestoreDependencies {
  *
  * A crash after 1 leaves extra files, which the next boot sweeps.
  */
-export async function applyRestore(deps: RestoreDependencies, decoded: DecodedRecordsArchive): Promise<void> {
+export async function applyRestore(deps: RestoreDependencies, snapshot: Omit<StoredSnapshot, 'stateVersion'>, files: ReadonlyArray<{ key: string } & StoredFile>): Promise<void> {
   const { lock, persistence, store, blobs, now } = deps;
   await lock.withLock(async ({ onDiskVersion }) => {
-    await blobs.putFiles(decoded.files);
+    await blobs.putFiles(files);
     try {
-      await persistence.save({ ...decoded.snapshot, formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now() });
+      await persistence.save({ ...snapshot, formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now() });
     } catch (error) {
       // The save was refused (often storage full, which the files just added make likelier): drop what step 1 added, keeping this device's own files.
-      await sweepBlobs(blobs, liveStoredKeys(store.snapshot().maps)).catch(() => undefined);
+      await sweepBlobs(blobs, liveStoredKeys(store.snapshot().maps, now())).catch(() => undefined);
       throw error;
     }
-    store.restore(decoded.snapshot);
-    await sweepBlobs(blobs, liveStoredKeys(store.snapshot().maps)).catch(() => undefined);
+    store.restore(snapshot);
+    await sweepBlobs(blobs, liveStoredKeys(store.snapshot().maps, now())).catch(() => undefined);
     return { result: undefined, wrote: true };
   });
 }

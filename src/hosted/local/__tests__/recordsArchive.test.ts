@@ -34,23 +34,61 @@ describe('records archive', () => {
     const { blobs, key, snapshot } = await deviceWithReceipt();
 
     const decoded = await decodeRecordsArchive(await encodeRecordsArchive(snapshot, blobs));
+    const { files, missing } = await decoded.readFiles();
 
     expect(decoded.snapshot.maps.exps.size).toBe(1);
     expect(decoded.snapshot.maps.expReceipts.size).toBe(1);
-    expect(decoded.files.map((f) => f.key)).toEqual([key]);
-    expect(decoded.files[0]!.type).toBe('application/pdf');
-    expect(new TextDecoder().decode(decoded.files[0]!.bytes)).toBe(PDF);
     expect(decoded.missing).toEqual([]);
+    expect(files.map((f) => f.key)).toEqual([key]);
+    expect(files[0]!.type).toBe('application/pdf');
+    expect(new TextDecoder().decode(files[0]!.bytes)).toBe(PDF);
+    expect(missing).toEqual([]);
   });
 
-  it('still restores a MUT-286 .json records file, with no receipt files', async () => {
-    const { snapshot } = await deviceWithReceipt();
+  it('still restores a MUT-286 .json records file, and names every receipt whose file it cannot carry (review D4)', async () => {
+    const { key, snapshot } = await deviceWithReceipt();
     const legacy = new Blob([encodeRecordsFile(snapshot)], { type: 'application/json' });
 
     const decoded = await decodeRecordsArchive(legacy);
 
     expect(decoded.snapshot.maps.exps.size).toBe(1);
-    expect(decoded.files).toEqual([]);
+    expect(decoded.missing).toEqual([key]);
+    expect((await decoded.readFiles()).files).toEqual([]);
+  });
+
+  it('restores a zip someone re-made from the folder Safari extracted it into (review D4)', async () => {
+    const { blobs, key, snapshot } = await deviceWithReceipt();
+    const original = await JSZip.loadAsync(await readBytes(await encodeRecordsArchive(snapshot, blobs)));
+    const remade = new JSZip();
+    const folder = 'mutaba3a-records-2026-10-19/';
+    remade.file(`${folder}records.json`, await original.file('records.json')!.async('string'));
+    remade.file(`${folder}receipts/${key}`, await original.file(`receipts/${key}`)!.async('uint8array'));
+
+    const decoded = await decodeRecordsArchive(await remade.generateAsync({ type: 'blob' }));
+
+    expect(decoded.missing).toEqual([]);
+    expect((await decoded.readFiles()).files.map((f) => f.key)).toEqual([key]);
+  });
+
+  it('refuses a zip holding records.json in more than one folder, rather than guess', async () => {
+    const zip = new JSZip();
+    zip.file('a/records.json', '{}');
+    zip.file('b/records.json', '{}');
+
+    const refused = await decodeRecordsArchive(await zip.generateAsync({ type: 'blob' })).catch((error: unknown) => error);
+
+    expect(isRecordsFileRefused(refused)).toBe(true);
+  });
+
+  it('holds restored receipt files to the upload rules: the declared size and type, at most 10 MB (review D5)', async () => {
+    const { blobs, key, snapshot } = await deviceWithReceipt();
+    const zip = await JSZip.loadAsync(await readBytes(await encodeRecordsArchive(snapshot, blobs)));
+    zip.file(`receipts/${key}`, 'a different length than the receipt declares');
+
+    const decoded = await decodeRecordsArchive(await zip.generateAsync({ type: 'blob' }));
+
+    expect(decoded.missing).toEqual([key]);
+    expect((await decoded.readFiles()).files).toEqual([]);
   });
 
   it('restores the records when a receipt file is missing from the zip, and names the gap', async () => {
@@ -62,8 +100,8 @@ describe('records archive', () => {
     const decoded = await decodeRecordsArchive(trimmed);
 
     expect(decoded.snapshot.maps.expReceipts.size).toBe(1);
-    expect(decoded.files).toEqual([]);
     expect(decoded.missing).toEqual([key]);
+    expect((await decoded.readFiles()).files).toEqual([]);
   });
 
   it('ignores a zip entry no receipt names', async () => {
@@ -73,7 +111,7 @@ describe('records archive', () => {
 
     const decoded = await decodeRecordsArchive(await zip.generateAsync({ type: 'blob' }));
 
-    expect(decoded.files.map((f) => f.key)).not.toContain('org/x/expense-receipts/stranger');
+    expect((await decoded.readFiles()).files.map((f) => f.key)).not.toContain('org/x/expense-receipts/stranger');
   });
 
   it('refuses a damaged zip (an interrupted download) as not a records file', async () => {

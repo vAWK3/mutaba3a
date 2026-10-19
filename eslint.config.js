@@ -68,6 +68,7 @@ const PORTAL_DECIMAL_SYNTAX = [
 /** The server modules src/hosted/local may import (ADR-097 §9). Everything they import in turn is the server's business. */
 const LOCAL_SERVER_ALLOWLIST = [
   'app-shell',
+  'attachments/rules',
   'attachments/storage',
   'auth/middleware',
   'auth/sessions',

@@ -137,7 +137,7 @@ describe('createLocalTransport', () => {
 
       expect((await createCustomer(h, 'Ramallah Bakery', 'staged-1')).status).toBe(201);
 
-      expect(removals.events).toEqual(['saved', 'flush']);
+      expect(removals.events).toEqual(['saved', 'flush', 'discard']);
     });
 
     it('forgets them when the write was refused', async () => {

@@ -47,7 +47,8 @@ describe('applyRestore', () => {
   it('replaces the records and their files with the backup, and drops files the new records never name', async () => {
     const { archive, other, mine, persistence, lock } = await backupThenThisDevice();
 
-    await applyRestore({ lock, persistence, store: mine.store, blobs: mine.blobs, now: NOW }, await decodeRecordsArchive(archive));
+    const decoded = await decodeRecordsArchive(archive);
+    await applyRestore({ lock, persistence, store: mine.store, blobs: mine.blobs, now: NOW }, decoded.snapshot, (await decoded.readFiles()).files);
 
     const loaded = await persistence.load();
     expect(loaded.kind).toBe('ok');
@@ -64,7 +65,8 @@ describe('applyRestore', () => {
       throw new DOMException('full', 'QuotaExceededError');
     };
 
-    await expect(applyRestore({ lock, persistence, store: mine.store, blobs: mine.blobs, now: NOW }, await decodeRecordsArchive(archive))).rejects.toThrow();
+    const decoded = await decodeRecordsArchive(archive);
+    await expect(applyRestore({ lock, persistence, store: mine.store, blobs: mine.blobs, now: NOW }, decoded.snapshot, (await decoded.readFiles()).files)).rejects.toThrow();
 
     const loaded = await new IndexedDbPersistence().load();
     const receipts = loaded.kind === 'ok' ? [...loaded.snapshot.maps.expReceipts.values()].map((r) => r.storageKey) : [];

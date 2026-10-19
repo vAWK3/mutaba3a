@@ -34,6 +34,16 @@ describe('IndexedDbBlobStore', () => {
     expect(await blobs.keys()).toEqual(['k2']);
   });
 
+  it('answers a file\'s type and size from its own small record, and forgets it with the file (review D11)', async () => {
+    const blobs = new IndexedDbBlobStore();
+    await blobs.putFiles([{ key: 'k', type: 'image/png', bytes: new Uint8Array([1, 2, 3]).buffer }]);
+
+    expect(await blobs.stat('k')).toEqual({ type: 'image/png', size: 3 });
+    await blobs.delete(['k']);
+    expect(await blobs.stat('k')).toBeNull();
+    expect(await blobs.stat('never')).toBeNull();
+  });
+
   it('survives a new connection, as a reload opens one', async () => {
     await new IndexedDbBlobStore().put('k', new Blob(['kept'], { type: 'image/png' }));
 

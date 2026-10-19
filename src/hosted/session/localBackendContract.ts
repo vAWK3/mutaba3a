@@ -21,6 +21,8 @@ export type LocalFetch = (request: Request) => Promise<Response>;
 export interface PendingRestore {
   /** Clients, projects, income, payments, expenses and conversions in the file, for the confirm step. */
   recordCount: number;
+  /** Visible receipts whose file the records file can't supply; they restore without one. The confirm says so (MUT-287 review D4). */
+  missingReceiptFiles: number;
   /** Replaces every local record with the file's. Resolves once the new data is saved on this device. */
   apply(): Promise<void>;
 }

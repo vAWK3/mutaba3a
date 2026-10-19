@@ -97,32 +97,29 @@ export function createLocalTransport(options: LocalTransportOptions): LocalTrans
   return (request: Request): Promise<Response> => {
     if (stopped) return Promise.reject(stopped);
     return lock.withLock(async ({ stale, onDiskVersion }) => {
-      if (stale) await reloadFromDisk(store, persistence);
-
-      let response: Response;
       try {
-        response = await app.fetch(request);
-      } catch (error) {
-        removals?.discardRemovals();
-        throw error;
-      }
+        if (stale) await reloadFromDisk(store, persistence);
 
-      const wrote = MUTATING_METHODS.has(request.method) && response.status >= 200 && response.status < 300;
-      if (!wrote) removals?.discardRemovals();
-      if (wrote) {
-        const { maps } = store.snapshot();
-        try {
-          await persistence.save({ formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now(), maps });
-        } catch (cause) {
-          removals?.discardRemovals();
-          stopped = new LocalSaveFailedError(cause);
-          throw stopped;
+        const response = await app.fetch(request);
+
+        const wrote = MUTATING_METHODS.has(request.method) && response.status >= 200 && response.status < 300;
+        if (wrote) {
+          const { maps } = store.snapshot();
+          try {
+            await persistence.save({ formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now(), maps });
+          } catch (cause) {
+            stopped = new LocalSaveFailedError(cause);
+            throw stopped;
+          }
+          // Still under the lock: no other tab's Restore or sweep can run between this save and the deletes it allows.
+          await removals?.flushRemovals();
         }
-        // Still under the lock: no other tab's Restore or sweep can run between this save and the deletes it allows.
-        await removals?.flushRemovals();
-      }
 
-      return { result: response, wrote };
+        return { result: response, wrote };
+      } finally {
+        // Whatever this request staged and did not get to delete (refused, failed, or not saved) is forgotten; after a flush this is a no-op.
+        removals?.discardRemovals();
+      }
     });
   };
 }
