@@ -28,6 +28,16 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — /privacy opens at the hero's height (MUT-251, epic MUT-101)
+
+**Why:** `/privacy` left 160px above its heading (120px at ≤640px), room for a landing bar that floated over the page. MUT-77 moved the sticky bar into the flow, and the hero's top room dropped to `--space-16` (64px; `--space-10` at ≤640px). `/privacy` didn't follow: its heading sat 160px below the bar at 1280px and 120px at 375px, against the hero's 88px and 40px.
+
+### Changed
+- `--landing-page-top` is `var(--space-16)` and `--landing-page-top-compact` is `var(--space-10)` (`src/styles/theme.css`), the hero's own steps. Measured after: the heading sits 64px below the bar at 1280px and 40px at 375px, in English and Arabic. The values change only through the tokens (ADR-089); `PrivacyPolicyPage.css` is untouched.
+- Before/after screenshots at 375 and 1280, EN and AR, beside the hero's, are attached to MUT-251 for sign-off.
+
+---
+
 ## [Unreleased] - 2026-10-19 — Counts read right in English and Arabic (MUT-179, epic MUT-74)
 
 **Why:** counted strings dropped a number into fixed text, giving English "1 clients" and "receipt(s)", and one Arabic noun form for every count ("متأخر 3 يوم", "مستحق خلال 34 يوم"). The landing page opens in Arabic (ADR-077), and its mocks showed 3, 34, 158 and 227 days, all in the wrong form. MUT-74's last open child.
