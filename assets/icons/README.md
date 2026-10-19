@@ -17,8 +17,9 @@ repo's copy is a pointer (`.claude/designs/mut-335-icon-inventory.md`).
    `src/components/icons/generated/`, including the barrel (`index.ts`) and the
    shared `types.ts` — never hand-edit anything in that directory, the next
    regenerate overwrites it.
-4. **Regenerate Flutter's half** (its own codegen step, in that repo — not
-   built by MUT-336's web half).
+4. **Regenerate Flutter's half**: `dart run tool/generate_icons.dart` in
+   `mutaba3a-flutter/mutaba3a` (its own pure-Dart codegen, mirroring this
+   pipeline's shape — see that repo's `assets/icons/README.md`).
 5. `npm run icons:check` fails if a source and its generated output have
    drifted (missing, stale, or orphaned) — run it before committing.
 
