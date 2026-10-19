@@ -48,6 +48,11 @@
 ### Fixed
 - "Download my records" crashed in real browsers once jszip loaded: it saw the global partial `Buffer`, took its Node path and broke in its compressor. Caught by release-QA, invisible to unit tests on Node's real `Buffer`.
 
+### Review (pre-landing /review + qa-reconcile, Basel D1–D13, 2026-10-19)
+- **Server:** the public FX limiter is built in `index.ts` and pruned each minute (it grew per address without bound); 120/min per address; `EcbSnapshot.upstream` relays a cached source's staleness; the route documents only 429/503.
+- **Local backend:** FX fetched before the cross-tab lock and remembered on the device for an hour (`mut-local-fx`); the records zip is copied under the lock and zipped after, receipts STOREd; Restore names missing receipt files in the confirm (new en/ar copy), accepts a zip re-made from Safari's extracted folder, unpacks files only on Replace under the upload rules, and cleans up after a refused save; pending uploads' files expire with their 15-minute link; `head()` reads a `{ type, size }` record; both databases open through `LocalDatabase` (step aside for a newer build's upgrade, reject a blocked one); one `saveBlobAs` for every in-hand download (URL released after 60 s).
+- **Tests:** parity for expenses, receipts, groups and conversions; fingerprint fills every nullable field; the Buffer plugin is tested; release-QA `restore-missing-receipts` added, `fx-line` updated.
+
 ### Technical
 - `format-fingerprint.test.ts` covers all 27 snapshot maps from `helpers/everyRecord.ts` (TD-171 resolved).
 - `check-bundles`: jszip must not be statically reachable from the portal's entry (`jszipInEntryGraph`); `stuk.github.io` (a jszip doc link) joins the hosted origins. Local chunk 115.7 KB gzip, jszip chunk 30.1 KB gzip.

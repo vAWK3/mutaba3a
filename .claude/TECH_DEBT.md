@@ -161,7 +161,7 @@
 **Fix**: stream the zip (jszip `generateInternalStream`, or a streaming writer) into the download, and read entries one at a time on Restore, writing each to `mut-local-blobs` before the next.
 
 ### TD-178: Signed out, a stale FX answer reads as live
-**Status**: Open
+**Status**: Resolved (MUT-287 pre-landing review D7, 2026-10-19: `EcbSnapshot.upstream` relays the server's source and fetch time)
 **Ticket**: MUT-287 (2026-10-19, plan §1c)
 **Added**: 2026-10-19
 **Priority**: Low (the rate date shown is still the true ECB date)

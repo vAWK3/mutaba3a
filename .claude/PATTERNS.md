@@ -2533,3 +2533,6 @@ When records (`mut-local`) and their files (`mut-local-blobs`) live apart, never
 ### Pattern: A Node stand-in for server modules is bound per module, never on `globalThis`
 Server code that runs in the page (`server/src` in the local chunk) gets its Node globals as module bindings injected at build time (`scopeServerBufferShim`, like the `node:crypto` alias), not as a global: libraries sniff `typeof Buffer` and take a Node path a partial stand-in can't serve (jszip did). Verify such paths in a real browser (release-QA): unit tests run on Node's real globals and can't see the difference.
 
+### Pattern: Every local IndexedDB database opens through `LocalDatabase` (MUT-287 review D12)
+A database the page owns must let go when a newer build upgrades it (`onversionchange`: close, then refuse further use so the reload screen shows) and must not hang when an older tab won't (`onblocked` rejects). Both rules live in `src/hosted/local/idb.ts`; `persistence.ts` and `blobStore.ts` use it, and so must any later local database. Tabs running a build are the old tabs of the next one.
+
