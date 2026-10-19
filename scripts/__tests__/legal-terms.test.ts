@@ -71,3 +71,24 @@ describe('releasing the terms web first (MUT-324)', () => {
     expect(deploySh).toContain('terms:check-live');
   });
 });
+
+/** Review fix 5: the privacy policy promises only the recovery the database is configured for. */
+describe('the privacy policy’s backup promise (MUT-324)', () => {
+  const ROOT = join(__dirname, '../..');
+  const terraform = readFileSync(join(ROOT, 'server/infrastructure/terraform/main.tf'), 'utf8');
+  const setting = (name: string) => Number(new RegExp(`${name}\\s*=\\s*(\\d+)`).exec(terraform)?.[1]);
+  const hosted = (language: 'en' | 'ar') =>
+    (JSON.parse(readFileSync(join(ROOT, `src/lib/i18n/translations/${language}/landing.json`), 'utf8')) as {
+      landing: { privacyPolicy: { hostedAccounts: { body: string } } };
+    }).landing.privacyPolicy.hostedAccounts.body;
+
+  it('names the daily backups’ retention and the shorter point-in-time window, in both languages', () => {
+    const backups = setting('retained_backups');
+    const pointInTime = setting('transaction_log_retention_days');
+    expect([backups, pointInTime]).toEqual([14, 7]);
+    expect(hosted('en')).toContain(`keep each backup for ${backups} days`);
+    expect(hosted('en')).toContain(`any moment in the last ${pointInTime} days`);
+    expect(hosted('en')).not.toMatch(/any point in that time/);
+    expect(hosted('ar')).toContain(`آخر ${pointInTime} أيام`);
+  });
+});

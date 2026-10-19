@@ -151,7 +151,7 @@
       },
       "hostedAccounts": {
         "title": "Hosted accounts: where your records live",
-        "body": "A hosted account (the web portal, and the iPhone and Android apps when you're signed in) keeps your records on Mutaba3a's servers in Google Cloud's Tel Aviv region (me-west1). We back them up every day and keep each backup for 14 days, so we can restore your records to any point in that time. When something breaks, an error report goes to Sentry in the EU with the content of your records removed. Usage counts go to PostHog in the EU only if you agree. Our team opens your records only when you ask us to help, to fix a fault, or when the law requires it. When you close your account, we delete it and its records after 30 days, including the record that you accepted our terms, and our backups clear 14 days later. Hosted accounts are also covered by our terms of service."
+        "body": "A hosted account (the web portal, and the iPhone and Android apps when you're signed in) keeps your records on Mutaba3a's servers in Google Cloud's Tel Aviv region (me-west1). We back them up every day and keep each backup for 14 days, and we can restore your records to any moment in the last 7 days. When something breaks, an error report goes to Sentry in the EU with the content of your records removed. Usage counts go to PostHog in the EU only if you agree. Our team opens your records only when you ask us to help, to fix a fault, or when the law requires it. When you close your account, we delete it and its records after 30 days, including the record that you accepted our terms, and our backups clear 14 days later. Hosted accounts are also covered by our terms of service."
       },
       "whatYouEnter": {
         "title": "What you enter",

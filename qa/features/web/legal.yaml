@@ -44,7 +44,7 @@ features:
     expect:
       - The footer links Terms to /terms
       - The request form's notice links the terms of service
-      - The privacy policy has a hosted-accounts section naming me-west1, 14-day backups, Sentry and PostHog in the EU, and deletion after 30 days
+      - The privacy policy has a hosted-accounts section naming me-west1, 14-day backups with recovery to any moment in the last 7 days, Sentry and PostHog in the EU, and deletion after 30 days
   - id: terms-manifest
     title: The website publishes /legal/terms-versions.json, the list the server release checks before naming a new version (MUT-324 D11)
     tier: secondary

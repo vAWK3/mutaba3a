@@ -83,7 +83,7 @@ test('the terms are linked from the footer and the /hosted form, and the privacy
     const heading = page.getByRole('heading', { level: 2, name: /Hosted accounts/ });
     await expect(heading).toBeVisible();
     const section = page.locator('section', { has: heading });
-    for (const fact of ['me-west1', '14 days', 'Sentry', 'PostHog', '30 days']) await expect(section).toContainText(fact);
+    for (const fact of ['me-west1', '14 days', 'the last 7 days', 'Sentry', 'PostHog', '30 days']) await expect(section).toContainText(fact);
     await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');
   });
 
