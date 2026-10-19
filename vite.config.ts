@@ -349,6 +349,22 @@ function hostedConfig(): UserConfig {
   return {
     base: "/",
     publicDir: "src/hosted/public",
+    resolve: {
+      // Local mode (MUT-286) runs the server's own route modules in the page:
+      // they touch exactly two Node built-ins (`node:crypto`'s synchronous
+      // surface and `node:async_hooks`'s `AsyncLocalStorage`, the latter only
+      // because `hono/context-storage` imports it). Aliased here, not in the
+      // app's own `vite.config.ts` branch below, so the web/desktop builds and
+      // the server's own `tsc` build never see this redirection.
+      alias: {
+        "node:crypto": fileURLToPath(
+          new URL("./src/hosted/local/platform/crypto.ts", import.meta.url),
+        ),
+        "node:async_hooks": fileURLToPath(
+          new URL("./src/hosted/local/platform/async-hooks.ts", import.meta.url),
+        ),
+      },
+    },
     define: {
       __APP_VERSION__: JSON.stringify(appVersion(process.env.MUTABA3A_APP_VERSION)),
       __BUILD_MODE__: JSON.stringify("hosted"),
