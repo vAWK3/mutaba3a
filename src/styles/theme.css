@@ -99,8 +99,10 @@
   --landing-section-pad: 112px;
   --landing-section-pad-compact: 80px;
   --landing-hero-pad-end: 96px;
-  --landing-page-top: 160px;
-  --landing-page-top-compact: 120px;
+  /* /privacy's top room matches the hero's (MUT-251): the sticky bar sits in the flow since MUT-77,
+     so the old 160/120 made room for a bar that no longer floats over the page */
+  --landing-page-top: var(--space-16);
+  --landing-page-top-compact: var(--space-10);
 }
 
 /* ============================================
