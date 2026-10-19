@@ -136,6 +136,14 @@
 **Impact**: a profile type change (MUT-182) deletes categories and nulls `categoryId`. Groups and marks are untouched, and the summary shows the spending as uncategorized, but nothing asserts it.
 **Fix**: a store-contract case: create a group with a categorized member, run the type change, and assert the group, its mark and a `null` category bucket.
 
+### TD-171: The local snapshot fingerprint covers 3 of 27 record types
+**Status**: Open
+**Ticket**: MUT-286 (2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Medium (a silent shape change in an uncovered record breaks restores of saved local data)
+**Impact**: `src/hosted/local/__tests__/format-fingerprint.test.ts` (D1) only fingerprints organizations, customers and receivables. A field added, removed or retyped on any of the other 24 persisted maps (projects, payments, allocations, expenses, groups…) does not fail CI. A browser holding an older snapshot would then restore records missing the field without a migration.
+**Fix**: add a fingerprint case per persisted map in `LocalSnapshotMaps`, built from a real `MemoryLedgerStore` record. Better still, assert that every key of `LocalSnapshotMaps` has a case, so a new map can't be added uncovered.
+
 ### TD-170: The portal's typed API client lags the spec until MUT-281
 **Status**: Open
 **Ticket**: MUT-281 (MUT-280 eng review D2, 2026-10-18)

@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — The portal's local backend, server refactor + in-page backend (MUT-286, phases A–B of C, ADR-097)
+
+**Why:** epic MUT-284's load-bearing ticket. Signed out, the portal runs the server's own route modules in the page over IndexedDB. Phase C (client wiring, guards, release-QA) is not built yet, so nothing is user-visible.
+
+### Technical
+- **Phase A, server refactor (behavior-preserving):** `server/src/app-shell.ts` `createApiShell`; `GET /v1/me` moved to `routes/me.ts` (sessions.ts keeps argon2, which can't run in a browser); `routes/portal-routes.ts` `PORTAL_ROUTES`, one registration list `createApp` loops over; `MemoryLedgerStore.snapshot()`/`restore()` (27 business maps, the six ephemeral ones left alone).
+- **Phase A fixes:** memory `matchesExpense` now lets `unlinked` win over `customerId`, as Prisma does. A store-contract case locks receivable `createdAt` to the supplied `at`.
+- **Phase B, `src/hosted/local/`:** `createLocalApp` (same shell, same `authenticate()`, `PORTAL_ROUTES`, no `contextStorage()`, attachments and FX null until MUT-287); `mintLocalSession` (finds or creates `local@device.invalid`, mints a fresh `mds_` device session every boot); `persistence.ts` (`mut-local` DB, snapshot + small version record in one transaction, resolves on `oncomplete`, refuses a newer format); `migrations/` (version = `CURRENT_STORE_SNAPSHOT_VERSION`, empty list); `locks.ts` (Web Locks + `BroadcastChannel`, reload when another tab wrote); `transport.ts` (fetch-shaped; only a 2xx mutating request persists).
+- **Browser platform shims:** `platform/crypto.ts` (pure-JS synchronous SHA-256/HMAC, Web Crypto randomness), `buffer-shim.ts`, `async-hooks.ts`. They are aliased for `node:crypto` / `node:async_hooks` in `hostedConfig()` only.
+- **Type checking:** new `tsconfig.hosted-local.json` (server strictness, server's `@types/node`), added to `npm run typecheck`. `tsconfig.hosted.json` excludes `src/hosted/local/**`. `server/tsconfig.json` drops `rootDir` so the shim test can import the shims (build output layout unchanged).
+
+### Tests
+- See TEST_PLAN.md › MUT-286.
+
+---
+
 ## [Unreleased] - 2026-10-18 — Design: the portal's local mode, one app signed in or out (MUT-285, ADR-097)
 
 **Why:** epic MUT-284 retires the free local web app. One portal works on this device when signed out and is the hosted account when signed in, with the same screens either way. This ticket is the design only; MUT-286..292 build it.

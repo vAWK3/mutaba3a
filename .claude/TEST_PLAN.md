@@ -3066,3 +3066,18 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` › PATCHes on edit | the currency select is disabled on edit (MUT-272 review; MUT-277 enables it) |
 | `server/src/__tests__/routes-expense-groups.test.ts` › MUT-272 | a moved member sums under JOD only, day buckets add up to the total, `?currency=JOD` lists it and `?currency=ILS` doesn't |
 | `server/src/repositories/__tests__/store-contract-expenses.ts` › MUT-272 | both stores write `currency` with `amountMinor` |
+
+## MUT-286 — Portal local backend, phases A–B (2026-10-19, ADR-097)
+
+| Test | Covers |
+|---|---|
+| existing server suite, unmodified | `createApiShell` / `routes/me.ts` / `PORTAL_ROUTES` extraction changed no behavior |
+| `server/src/__tests__/portal-routes-coverage.test.ts` | every one of the portal's 49 client calls is answered by `PORTAL_ROUTES` |
+| `server/src/repositories/__tests__/store-contract-snapshot.test.ts` | snapshot → fresh store → restore answers identically |
+| `store-contract-expenses.ts` › unlinked + customerId | memory lets `unlinked` win, like Prisma |
+| `server/src/__tests__/platform-shim.test.ts` (8) | SHA-256, HMAC, base64url/hex/utf8 and the three cursor formats byte-identical to Node across 10,000 seeded inputs |
+| `src/hosted/local/__tests__/createLocalApp.test.ts` (3) | `/v1/me` answers for the minted person; no token → 401; a fresh session every boot, same person, old token dead after restore |
+| `src/hosted/local/__tests__/format-fingerprint.test.ts` (3) | organization/customer/receivable shapes pinned (D1; the other 24 maps are TD-171) |
+| `src/hosted/local/__tests__/locks.test.ts` (3) | two and three tabs racing a write: the later one sees stale, reloads, and no write is lost |
+| `src/hosted/local/__tests__/transport.test.ts` (5) | a 2xx write persists and bumps stateVersion; a read and a refused write write nothing; a restored store answers with what was saved; a newer stored format refuses the request and is never written over |
+| Not yet | parity test (AC3), no-network test (AC4), session-expired / Settings › Your data components, release-QA `qa/features/portal/local-mode.yaml`: all Phase C |
