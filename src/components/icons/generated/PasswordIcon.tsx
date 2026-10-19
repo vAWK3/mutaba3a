@@ -1,0 +1,20 @@
+import type { IconProps } from './types';
+
+export function PasswordIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+    width={size}
+    height={size}
+    viewBox={"0 0 24 24"}
+    fill={"none"}
+    stroke={"currentColor"}
+    strokeWidth={2}
+    strokeLinecap={"round"}
+    strokeLinejoin={"round"}
+    className={className}
+    >
+    <path d={"M5 10v4M3.3 11l3.4 2M3.3 13l3.4-2M12 10v4M10.3 11l3.4 2M10.3 13l3.4-2"} />
+    <circle cx={"19"} cy={"12"} r={"1.8"} fill={"currentColor"} stroke={"none"} data-part="nuqta" />
+    </svg>
+  );
+}

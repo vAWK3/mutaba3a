@@ -1696,6 +1696,30 @@ import {
 <IconButton icon={<CloseIcon />} label="Close" />
 ```
 
+### Generated icons (MUT-336)
+
+**Location**: `src/components/icons/generated/` — a second, separate barrel.
+Every file in it, including `index.ts` and `types.ts`, is produced by
+`npm run icons:generate` from `assets/icons/source/*.svg` (the MUT-335
+canonical set) and overwritten on every run — never hand-edit anything here.
+`npm run icons:check` fails on missing/stale/orphaned drift between source and
+generated output. Full flow: `assets/icons/README.md`. Logic:
+`scripts/icon-set.ts` (tested directly, `scripts/__tests__/icon-set.test.ts`).
+
+These are **not yet consumed anywhere except one pilot** (`LanguageIcon` in
+`SettingsPage.tsx`) — migrating the 16 hand-written components above, or the
+scattered inline SVGs (`XIcon`, `MoreIcon`, `PlusIcon` duplicates, etc.), to
+the generated set is explicitly out of MUT-336's scope.
+
+```tsx
+import { LanguageIcon } from '../../components/icons/generated';
+<LanguageIcon size={16} className="settings-label-icon" />
+```
+
+A named sub-part survives codegen as `data-part="<name>"` (never a raw `id` —
+collides across repeated instances of the same icon on one page), for
+MUT-337's future animation runtime to target.
+
 ---
 
 ## Component Ownership
