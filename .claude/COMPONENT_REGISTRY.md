@@ -1598,7 +1598,7 @@ The parts always add up to `total`. It takes entries and clients rather than a b
 
 ### CurrencyAmounts
 **Location**: `src/components/ui/CurrencyAmounts.tsx` (+ `.css`); entries from `orderCurrencyAmounts` in `src/lib/currencyAmounts.ts`
-**Purpose**: Amounts in several currencies side by side, one `<bdi dir="ltr">` per currency, never converted or combined (ADR-004), like Owed now but without its label and overdue lines (MUT-87). `orderCurrencyAmounts(totals)` keeps the non-zero currencies in USD → ILS → EUR order; its order is a `Record<Currency, number>`, so a new currency without a place fails to compile.
+**Purpose**: Amounts in several currencies side by side, one `<bdi dir="ltr">` per currency (left to right in Arabic too, kept by MUT-109 D2), never converted or combined (ADR-004), like Owed now but without its label and overdue lines (MUT-87). `orderCurrencyAmounts(totals)` keeps the non-zero currencies in USD → ILS → EUR order; its order is a `Record<Currency, number>`, so a new currency without a place fails to compile.
 
 ```tsx
 <CurrencyAmounts amounts={orderCurrencyAmounts({ USD: 24000, ILS: 350000 })} />
@@ -1741,7 +1741,7 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `src/lib/i18n/plural.ts` (**shared**) | `tp` via `useTp()`, `createPluralTranslator`, `pluralKey` (CLDR forms through `Intl.PluralRules`) | portal (`hosted.auth.rateLimited`); available to the app |
 | `src/components/expenses/` (**shared**, MUT-44; `RecurringAttentionList` and `recurringAttention` there are app-only, MUT-87) | `ExpenseFormFields<T>` (presentational: amount/currency/date/title/category/notes, vendor/client/project as host-supplied slots, `amountInputMode: 'number' \| 'decimalText'`), `expenseFormFieldsSchema`, `DECIMAL_AMOUNT` | local `ExpenseDrawer`, hosted `ExpenseDrawer` |
 | `api/client.ts` | `api.*` (one function per operation, now incl. expense CRUD + categories + summary + receipt start/complete/download/delete), `request` (GET/POST/PATCH/DELETE, `idempotencyKey`/`ifMatchVersion` options), `ApiError` (`status`, `code`, `details`, `retryAfterSeconds`), `setUnauthorisedHandler`, schema type aliases | every portal hook and page |
-| `format/DecimalAmount.tsx` | `DecimalAmount` (`<bdi dir="ltr">`), `formatDecimal(value, currency, language)`, `isZeroDecimal` | every money cell and strip |
+| `format/DecimalAmount.tsx` | `DecimalAmount` (a plain `<bdi>`, MUT-109), `formatDecimal(value, currency, language)`, `isZeroDecimal` | every money cell and strip |
 | `format/dates.ts` | `formatDay` (calendar date, never shifted), `formatInstant` (in the organization's zone), `formatSize`, `todayLocalISO` (MUT-44, browser-local calendar date — the expense drawer's default `occurredOn`) | views |
 | `components/QueryView.tsx` | `QueryView` (loading / empty / error / populated; a view in error renders no data; a 404 re-checks `/v1/me`), `Unreachable`, `Skeleton`, `Empty` (now takes `action`) | every view |
 | `components/HostedTable.tsx` | `HostedTable<Row>` (`columns`, pre-shaped `rows`, `rowKey`, `label`, optional `detail` row, optional `onRowClick` — MUT-44, opt-in, reuses `Table.css`'s `.clickable`). MUT-194 (D8/D11): with `onRowClick` the first cell's content sits in a `<button type="button" class="row-link press">` (Tab, Enter/Space; `stopPropagation` so the row's mouse click never double-fires); the `<tr>` gets no role or tabIndex. `.row-link` in `hosted.css` reads as plain cell text with the `--focus-ring` | every list; clickable in `ExpensesList`, `ConversionsList` |

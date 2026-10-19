@@ -11,7 +11,7 @@ An author rule beats the `dir` attribute, so today:
 
 - every `dir="ltr"` in the app is ignored in Arabic, and every `dir="rtl"` / `dir="auto"` is ignored in English (and `auto` in Arabic);
 - five CSS files carry workarounds whose only job is to out-rank `:lang(ar)`;
-- some content that must read left to right is silently reversed in Arabic. Example: an invoice number `INV-2024-001` in an RTL isolate renders as `2024-001-INV`.
+- content that must read left to right gets right-to-left behaviour in Arabic. Typed fields are hit hardest: caret, selection and mixed text follow RTL. *(Build note: an invoice number such as `INV-2026-007` measured in order even before, so for B9/B10 the change is in the mechanism, not the pixels.)*
 
 MUT-79 tried to scope the rule to the root and reverted. Three amount spans flipped, because their `dir="ltr"` started to work (TD-048).
 
@@ -75,8 +75,8 @@ On top of those come 5 CSS workarounds and 2 theme rules. Sort-order `dir: 'asc'
 | B6 | `hosted/components/ProfilesManageDrawer.tsx:131` | currency code |
 | B7 | `hosted/components/ProfileEditForm.tsx:218` | IANA timezone |
 | B8 | `hosted/components/ProfileCreateDrawer.tsx:223` | IANA timezone |
-| B9 | `hosted/pages/views/DocumentsList.tsx:85` | invoice number (**fix**: `INV-2024-001` stops reversing) |
-| B10 | `hosted/pages/views/PaymentsList.tsx:114` | payment number (same fix) |
+| B9 | `hosted/pages/views/DocumentsList.tsx:85` | invoice number (read in order before too; now `ltr` by the attribute) |
+| B10 | `hosted/pages/views/PaymentsList.tsx:114` | payment number (same) |
 
 **B-in. LTR inputs: keep `dir="ltr"`.** These render RTL today and switch to LTR. Typed text reads in the right order; alignment is decided in D3.
 
@@ -95,7 +95,7 @@ On top of those come 5 CSS workarounds and 2 theme rules. Sort-order `dir: 'asc'
 |---|---|---|
 | C1 | `components/drawers/IncomeDrawer.tsx:532` (`income-amount-group`) | already LTR via `div.input-with-prefix` CSS, **no change** |
 | C2 | `components/drawers/PartialPaymentDrawer.tsx:482` | already LTR via the same CSS, **no change** |
-| C3 | `components/expenses/ExpenseFormFields.tsx:143` (local and portal expense drawers) | RTL → LTR |
+| C3 | `components/expenses/ExpenseFormFields.tsx:143`: the text-mode input, which only the portal expense drawer uses (local uses `type="number"`, already LTR) | RTL → LTR |
 | C4–5 | `components/drawers/ConversionDrawer.tsx:200, 229` | RTL → LTR |
 | C6 | `hosted/components/IncomeCaptureDrawer.tsx:199` | RTL → LTR |
 | C7–8 | `hosted/components/ConversionDrawer.tsx:222, 264` | RTL → LTR |
@@ -134,7 +134,7 @@ On top of those come 5 CSS workarounds and 2 theme rules. Sort-order `dir: 'asc'
   - Alternative: let them go left-aligned. That is visible on five drawers and the sign-in page.
 
   The `<Select>` (B18) is checked in the after-screenshots. If its chevron side flips, it gets the same treatment.
-- **D4 — The ADR.** One ADR, numbered at build time to avoid collisions: "`direction` comes from `<html dir>` and the `dir` attribute only; no author rule sets `direction` on `:lang()`. A locale-formatted amount is a plain `<bdi>`; `dir="ltr"` is for content that must read LTR in any language." It supersedes the MUT-110 doc line that calls `<bdi dir="ltr">` the standalone-amount convention.
+- **D4 — The ADR.** One ADR, numbered at build time to avoid collisions (built as **ADR-101**): "`direction` comes from `<html dir>` and the `dir` attribute only; no author rule sets `direction` on `:lang()`. A locale-formatted amount is a plain `<bdi>`; `dir="ltr"` is for content that must read LTR in any language." It supersedes the MUT-110 doc line that calls `<bdi dir="ltr">` the standalone-amount convention.
 
 ## 5. Implementation plan
 
@@ -158,12 +158,12 @@ Each spec asserts **computed** `direction` (the thing jsdom can't see) and, for 
 
 | id | app / area | Steps (as the user says them) | Expect |
 |---|---|---|---|
-| `direction-amounts` | `web/brand` (core) | Log two clients' income, one partly paid and overdue. In Arabic, open Home, Clients and a client profile. | Every amount's visual order is the same as today's (number right, currency left, e.g. `₪ 2,400`). Computed direction `rtl`; no `dir` attribute. |
-| `direction-ltr-content` | `web/brand` | In Arabic, open the FX readout, a client's contact items and What's new. | Each reads LTR (computed `ltr`); the FX formula is unchanged. |
-| `direction-amount-inputs` | `web/brand` | In Arabic, open the income drawer, the payment drawer and the expense form, and type `1,200`. | The income and payment fields look unchanged. The expense amount is `ltr`, right-aligned (D3), and keeps the typed order. |
-| `direction-english` | `web/brand` | In English, open the same surfaces and the business-profile drawer. | Nothing that was LTR changes. The Arabic business-name input is `rtl`. |
-| `direction-signin` | `portal/signin` | In Arabic, open sign-in and type an email. | Email and password are `ltr` and right-aligned; the typed email reads in order. |
-| `direction-amounts` | `portal/ledger` | In Arabic, open a client with invoices and payments. | Amounts keep today's visual order. Invoice and payment numbers read `INV-…` left to right. |
+| `amounts` | `web/direction` (core) | Log two clients' income, one partly paid and overdue. In Arabic, open Home, Clients and a client profile. | Every amount's visual order is the same as today's (number right, currency left, e.g. `₪ 2,400`). Computed direction `rtl`; no `dir` attribute. |
+| `ltr-content` | `web/direction` | In Arabic, open the FX readout, a client's contact items and What's new. | Each reads LTR (computed `ltr`); the FX formula is unchanged. |
+| `amount-inputs` | `web/direction` | In Arabic, open the income drawer, the payment drawer and the expense form, and type `1,200`. | The income and payment fields look unchanged. The expense amount is `ltr`, right-aligned (D3), and keeps the typed order. |
+| `english` | `web/direction` | In English, open the same surfaces and the business-profile drawer. | Nothing that was LTR changes. The Arabic business-name input is `rtl`. |
+| `signin` | `portal/direction` (core) | In Arabic, open sign-in and type an email. | Email and password are `ltr` and right-aligned; the typed email reads in order. |
+| `ledger` (+ `amount-input`: the portal expense amount) | `portal/direction` | In Arabic, open a client with invoices and payments. | Amounts keep today's visual order. Invoice and payment numbers read `INV-…` left to right. |
 
 The yaml `paths` cover `src/styles/theme.css`, every file in §3.2 and §3.3, and `src/hosted/format/**`.
 
@@ -190,3 +190,11 @@ This plan got a focused adversarial pass during drafting: the measurements in §
 - Arabic users (the default language) get correctly ordered invoice and payment numbers, emails and typed amounts. Every amount they see today stays exactly where it is.
 - It closes the last open child of Brand v2 (MUT-101), so the epic can close.
 - Low risk: one CSS rule plus attribute edits, proven by before/after pixel diffs. It removes five CSS workarounds that every new `dir` site would otherwise need.
+
+## 10. Build outcome (2026-10-19)
+
+- Built on `fix/mut-109-rtl-direction` as designed; ADR-101; TD-048 resolved.
+- The QA areas are `web/direction` and `portal/direction` (their own yaml and spec files) rather than additions to `brand`/`signin`/`ledger`. `ltr-content` covers the FX formula and a client's email; What's new keeps its existing pin (`@web.whats-new.reopen-arabic`).
+- The specs were red on main and green on the branch, on preview builds.
+- Before/after in Arabic on preview builds (income and payment drawers, local and portal expense forms, portal sign-in, Home, Clients, client profile): **0 changed pixels**. The client profile differed by 3 px on the Add button's edge, and two captures of main differ there too.
+- D3 extended to `select` (the portal timezone select), so its text stays on the right as well.
