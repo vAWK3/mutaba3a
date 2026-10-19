@@ -3,7 +3,8 @@
  *
  * Amounts in several currencies side by side, one per currency, never
  * converted or combined (ADR-004), like Owed now. Each amount is its own
- * left-to-right island, so "$240 ₪3,500" reads the same inside Arabic.
+ * left-to-right island (dir="ltr", MUT-109 brief D2), so "$240 ₪3,500" reads
+ * the same inside Arabic.
  * Presentational: pass entries from `orderCurrencyAmounts` (non-zero, in
  * USD → ILS → EUR order).
  *

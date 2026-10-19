@@ -106,6 +106,13 @@ describe('ConversionDrawer', () => {
     expect(await screen.findByText(/Rate: 1 JOD = 1\.4090 USD/)).toBeInTheDocument();
   });
 
+  it('MUT-109: both amounts are typed left to right in either language', async () => {
+    renderDrawer();
+    await screen.findByText('Log Conversion');
+    expect(fromAmountInput()).toHaveAttribute('dir', 'ltr');
+    expect(toAmountInput()).toHaveAttribute('dir', 'ltr');
+  });
+
   it('rejects converting a currency to itself', async () => {
     const user = userEvent.setup();
     renderDrawer();

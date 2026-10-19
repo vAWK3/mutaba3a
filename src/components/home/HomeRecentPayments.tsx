@@ -72,7 +72,7 @@ export function HomeRecentPayments({ profileId, businesses }: HomeRecentPayments
                   </td>
                   <td className="home-row-date">{formatPaymentDate(payment.paidAt, locale)}</td>
                   <td className="amount-cell amount-positive">
-                    <bdi dir="ltr">{formatAmount(payment.amountMinor, payment.currency, locale)}</bdi>
+                    <bdi>{formatAmount(payment.amountMinor, payment.currency, locale)}</bdi>
                   </td>
                 </tr>
               ))}

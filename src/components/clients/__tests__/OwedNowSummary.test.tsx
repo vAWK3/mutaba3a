@@ -67,7 +67,9 @@ describe('OwedNowSummary', () => {
   it('keeps the overdue amount whole inside a sentence of either direction', () => {
     render(<OwedNowSummary owed={[{ currency: 'USD', owedMinor: 150000, overdueMinor: 50000 }]} />);
 
-    expect(screen.getByTestId('owed-now-amount')).toHaveAttribute('dir', 'ltr');
+    // MUT-109: a plain <bdi>, so an Arabic amount resolves from its own leading RLM, as it always rendered
+    expect(screen.getByTestId('owed-now-amount').tagName).toBe('BDI');
+    expect(screen.getByTestId('owed-now-amount')).not.toHaveAttribute('dir');
     // The overdue sentence isolates its amount with isolateAmount() (U+2066
     // LRI / U+2069 PDI, MUT-110) -- not the shared isolate()'s U+2068 FSI
     // MUT-81 wrongly moved this to (it resolves right-to-left in Arabic,

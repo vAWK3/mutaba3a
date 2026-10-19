@@ -389,6 +389,10 @@ describe('ClientDetailPage', () => {
       const partial = rowOf(workSection(), 'Homepage');
       expect(partial).toHaveTextContent('Partial (40%)');
       expect(within(partial).getByText(/^Remaining/)).toHaveTextContent('Remaining: $300');
+      // MUT-109: a plain <bdi>, so an Arabic amount resolves from its own leading RLM
+      const remaining = within(within(partial).getByText(/^Remaining/)).getByText('$300');
+      expect(remaining.tagName).toBe('BDI');
+      expect(remaining).not.toHaveAttribute('dir');
       expect(partial).toHaveTextContent('Due in 9d');
 
       expect(within(rowOf(workSection(), 'Design sprint')).queryByText(/^Remaining/)).toBeNull();

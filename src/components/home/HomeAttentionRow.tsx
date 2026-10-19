@@ -99,7 +99,7 @@ export function HomeAttentionRow({
         )}
       </td>
       <td className="amount-cell">
-        <bdi dir="ltr">{formatAmount(row.tx.remainingAmountMinor ?? row.amountMinor, row.currency, locale)}</bdi>
+        <bdi>{formatAmount(row.tx.remainingAmountMinor ?? row.amountMinor, row.currency, locale)}</bdi>
         {row.overdueDays !== undefined ? (
           <span className="home-row-status text-danger">
             {tp('transactions.status.overdue', row.overdueDays)}
