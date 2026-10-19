@@ -557,6 +557,107 @@ In MUT-308 planning, check whether expense edits could update the bill payment i
 D) Defer this proposed change only
 Leave this row unresolved and visible; B5 stays as drafted. Effort: none now. Risk: MUT-308 ships unprotected. Maintenance: an open item.
 
+State: approved
+Actual answer: A) Apply this change (Basel, D7, 2026-10-19)
+Accepted scope: The brief specifies: an expense with a `billPaymentId` is read-only through `/v1/expenses`; PATCH and DELETE are refused with 409 naming the bill; to change it, reverse the bill payment and record it again; portal and phone label it "From bill …" (MUT-308/309/310). Receipt exclusivity (R8) stays pending.
+History: none
+
+### R8: One receipt, one record
+Finding: Outside voice O3 (second half), High, confidence 8/10, MUT-309 (approved as drafted) "Create a bill from a To-review receipt or by hand" and MUT-255 approve route "creates the expense and links the receipt", reviewer Claude subagent.
+Plan baseline: MUT-255 (approved): a receipt is approved into an expense. MUT-309 (approved): a receipt can become a bill. Nothing says a receipt can't do both.
+Runtime evidence: `ExpenseReceipt.expenseId` is required today (`schema.prisma:1030`); MUT-255 makes it optional; no bill link exists yet.
+Comparison grid:
+| Choice | Current | A | B | C | D |
+|---|---|---|---|---|---|
+| R8 receipt targets | unspecified | A receipt is filed into exactly one record: an expense or a bill, never both. Enforced by a database CHECK (at most one of `expenseId`, `billId` set) and a 409 on the second filing. Unlinking (deleting the record) frees it | Keep unspecified: one receipt could back an expense and a bill, counting the purchase twice | Investigate: bounded check in MUT-309 planning whether a firm ever needs one receipt on two records; nothing else changes | Defer this proposal only |
+| R7 posted expenses read-only | approved (D7) | approved (unchanged) | approved (unchanged) | approved (unchanged) | approved (unchanged) |
+Question D8:
+D8 — Can one receipt be filed as both an expense and a bill?
+Project/branch/task: main, MUT-299 brief for epic MUT-298 (firm books).
+ELI10: A receipt in the To-review queue can be turned into an expense (MUT-255) or into a vendor bill (MUT-309). If nothing stops it, the same receipt can be turned into both, and the purchase is counted twice: once as the expense and again when the bill is paid. A database rule that a receipt points to at most one of the two closes that.
+Stakes if we pick wrong: one shared receipt doubles a purchase in every report.
+Recommendation: A because a single database check makes the double count impossible, and no real firm files one purchase as both a paid expense and an unpaid bill.
+Note: options differ in kind, not coverage — no completeness score.
+Pros / cons:
+A) Apply this change (recommended)
+  ✅ The database itself refuses the second filing, so no code path can double count
+  ✅ Deleting the expense or bill frees the receipt to be filed again
+  ❌ One more CHECK and a 409 path in MUT-255/309 (human: ~2 hours / CC: ~10 min)
+B) Keep this row's current value
+  ✅ No extra constraint to build or test
+  ✅ Maximum flexibility for odd cases
+  ❌ A receipt filed twice doubles the purchase silently
+C) Investigate before choosing
+  ✅ Confirms with real firm usage before forbidding anything
+  ✅ Bounded to MUT-309 planning; nothing else changes
+  ❌ The double-count hole stays open while the brief is approved
+D) Defer this proposed change only
+  ✅ Keeps the brief moving with the row visible
+  ✅ No other plan change
+  ❌ MUT-309 may ship without the rule
+Net: one CHECK constraint versus a silent double count.
+Header: Receipt filing
+Options:
+A) Apply this change (recommended)
+A receipt is filed into exactly one record, an expense or a bill, never both. A database CHECK allows at most one of expenseId and billId, and a second filing gets 409. Deleting the record frees the receipt. Effort: human ~2 hours / CC ~10 min in MUT-255/309. Risk: low. Maintenance: none.
+B) Keep this row's current value
+Nothing stops a receipt from backing both an expense and a bill. Effort: none. Risk: high, silent double count. Maintenance: none.
+C) Investigate before choosing
+In MUT-309 planning, check whether any firm needs one receipt on two records; this row stays pending. Effort: one planning pass. Risk: hole open meanwhile. Maintenance: none.
+D) Defer this proposed change only
+Leave this row unresolved and visible. Effort: none now. Risk: MUT-309 ships without the rule. Maintenance: an open item.
+
+State: approved
+Actual answer: A) Apply this change (Basel, D8, 2026-10-19)
+Accepted scope: The brief specifies: a receipt is filed into exactly one record, an expense or a bill, never both; a database CHECK allows at most one of `expenseId` and `billId`; a second filing gets 409; deleting the record frees the receipt (MUT-255 and MUT-309; Jira comments with the brief).
+History: none
+
+### R9: Which VAT counts in the VAT summary
+Finding: Outside voice O4, High, confidence 9/10, plan §1 B5 "category and VAT share copied from the bill" and MUT-313 (approved as drafted) "VAT on approved expenses and bills (input)", reviewer Claude subagent.
+Plan baseline: B5 (pending): the posted expense carries the bill's VAT share. MUT-313 (approved): input VAT = VAT on approved expenses and bills.
+Runtime evidence: no expense VAT exists yet (MUT-302 adds it); `computeVat` / `roundHalfUpDiv` (`server/src/vat.ts:39,45-59`) round half-up per amount, so splitting a bill's VAT across partial payments by rounding each part can miss the total by a minor unit.
+Comparison grid:
+| Choice | Current | A | B | C | D |
+|---|---|---|---|---|---|
+| R9 VAT summary basis | expenses and bills both count (double for a paid bill) | Invoice basis: input VAT = VAT on bills (by bill issue date) + VAT on approved expenses that did not come from a bill. Posted expenses still show their VAT share but are excluded from the summary. A bill's VAT is split across its payments by largest remainder so the shares add up to the bill's VAT exactly | Keep as drafted: input VAT = VAT on approved expenses and on bills; a paid bill's VAT counts twice; no split rule | Investigate: ask one accountant per market (IL, PS, JO, SA) which basis their filings use (invoice or payment), bounded to before MUT-313; nothing else changes | Defer this proposal only |
+| Summary labelled "for your accountant, not a return" (MUT-313) | approved | approved (unchanged) | approved (unchanged) | approved (unchanged) | approved (unchanged) |
+| R7 posted expenses read-only | approved (D7) | approved (unchanged) | approved (unchanged) | approved (unchanged) | approved (unchanged) |
+Question D9:
+D9 — When a vendor bill is paid, which record's VAT goes into the VAT summary?
+Project/branch/task: main, MUT-299 brief for epic MUT-298 (firm books).
+ELI10: A paid bill shows up twice in the data: the bill itself, and the expense its payment created. Both carry the same VAT, so the summary as drafted counts it twice. We have to pick one. Invoice basis counts the bill's VAT on the bill's date, which is how VAT invoices are usually claimed. Payment basis counts it when the money actually leaves. Either way, a bill paid in parts must split its VAT so the parts add up to the exact total.
+Stakes if we pick wrong: the accountant gets an input-VAT figure that's too high (double counted) or in the wrong month.
+Recommendation: A because input VAT is normally claimed from the tax invoice's date, and the bill is that invoice; this is my reading of common practice in these markets, not checked with an accountant, so C is a reasonable choice if you want it confirmed first.
+Note: options differ in kind, not coverage — no completeness score.
+Pros / cons:
+A) Apply: invoice basis (recommended)
+  ✅ A paid bill's VAT counts once, in the month of the tax invoice
+  ✅ Unpaid bills still count, matching how an input-VAT claim usually works
+  ❌ The summary and the spending view use different dates for the same purchase, which needs one line of copy (human: ~half day / CC: ~15 min in MUT-302/313)
+B) Keep this row's current value
+  ✅ No change to the drafted MUT-313 text
+  ✅ Nothing new to explain
+  ❌ Every paid bill's VAT is counted twice
+C) Investigate before choosing
+  ✅ An accountant per market confirms the basis before it's built
+  ✅ Bounded to before MUT-313 starts (v5, April); nothing else changes
+  ❌ The double count stays in the approved text until then
+D) Defer this proposed change only
+  ✅ Keeps the brief moving with the row visible
+  ✅ MUT-313 is five months away
+  ❌ The drafted rule double counts if built as written
+Net: pick one basis now to kill the double count; invoice basis is the usual one, an accountant can confirm.
+Header: VAT basis
+Options:
+A) Apply: invoice basis (recommended)
+Input VAT = VAT on bills, dated by the bill's issue date, plus VAT on approved expenses that did not come from a bill. Expenses posted by bill payments still show their VAT share but are left out of the summary. A bill's VAT is split across its payments by largest remainder so the shares add up exactly. MUT-313's AC is reworded. Effort: human ~half day / CC ~15 min. Risk: low. Maintenance: low.
+B) Keep this row's current value
+Input VAT = VAT on approved expenses and on bills, as drafted; a paid bill's VAT is counted twice. Effort: none. Risk: high, wrong figure. Maintenance: none.
+C) Investigate before choosing
+Before MUT-313, ask one accountant per market (IL, PS, JO, SA) which basis their filings use; this row stays pending. Effort: a few conversations. Risk: wrong text stays until then. Maintenance: none.
+D) Defer this proposed change only
+Leave this row unresolved and visible; MUT-313 stays as drafted. Effort: none now. Risk: double count if built as written. Maintenance: an open item.
+
 State: pending
 Actual answer: unanswered
 Accepted scope: none
