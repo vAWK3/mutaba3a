@@ -350,6 +350,8 @@ export const api = {
     request<OkJson<'/v1/account-setup', 'post'>>('POST', '/v1/account-setup', { body, signal }),
   /** MUT-191: off replaces; dismissals are added to what the account holds. */
   changeMalafatSuggestions: (body: MalafatSuggestionsChange) => request<MalafatSuggestions>('PATCH', '/v1/me/malafat-suggestions', { body }),
+  /** MUT-324: the signed-in person accepts the current terms, read in `locale`. Idempotent per version. */
+  acceptTerms: (body: Schemas['TermsAcceptanceRequest']) => request<Schemas['TermsStatus']>('POST', '/v1/me/terms-acceptance', { body }),
 
   organizationSummary: (profileId: string, query: Query<'/v1/summaries/organization'> = {}) =>
     request<Get<'/v1/summaries/organization'>>('GET', '/v1/summaries/organization', { profileId, query }),

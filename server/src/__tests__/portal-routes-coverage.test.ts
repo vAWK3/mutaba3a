@@ -29,6 +29,7 @@ const CLIENT_CALLS: readonly ClientCall[] = [
   { method: 'POST', path: '/v1/account-setup/check', local: false }, // 5 — remote only (/setup is a public server page)
   { method: 'POST', path: '/v1/account-setup', local: false }, // 6 — remote only
   { method: 'PATCH', path: '/v1/me/malafat-suggestions', local: false }, // 7 — not served locally; Malafat surfaces are hidden on local profiles
+  { method: 'POST', path: '/v1/me/terms-acceptance', local: false }, // 7a — remote only (MUT-324): signed out, /v1/me says terms: null and nothing asks
   { method: 'GET', path: '/v1/summaries/organization', local: true }, // 8
   { method: 'GET', path: '/v1/summaries/customers/:customerId', local: true }, // 9
   { method: 'GET', path: '/v1/customers', local: true }, // 10

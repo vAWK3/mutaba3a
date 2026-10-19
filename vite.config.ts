@@ -100,6 +100,11 @@ export function portalUrl(override: string | undefined): string {
   return assertHttpsOrigin("MUTABA3A_PORTAL_URL", override ?? DEFAULT_PORTAL_URL);
 }
 
+/** MUT-324: the landing's /terms, which the portal links to (versioned as /terms/<version>); a bad origin fails the build. */
+export function termsUrl(override: string | undefined): string {
+  return `${assertHttpsOrigin("MUTABA3A_PUBLIC_ORIGIN", override ?? DEFAULT_PUBLIC_ORIGIN)}/terms`;
+}
+
 /** The public /hosted page the portal's sign-in links to; a bad MUTABA3A_PUBLIC_ORIGIN fails the build (MUT-188). */
 export function hostedOfferUrl(override: string | undefined): string {
   return `${assertHttpsOrigin("MUTABA3A_PUBLIC_ORIGIN", override ?? DEFAULT_PUBLIC_ORIGIN)}${HOSTED_OFFER_URL}`;
@@ -392,6 +397,8 @@ function hostedConfig(): UserConfig {
       __BUILD_MODE__: JSON.stringify("hosted"),
       // The sign-in page's "No account? Request one" link (MUT-188): the landing's /hosted page
       __HOSTED_OFFER_URL__: JSON.stringify(hostedOfferUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
+      // The terms the setup page, the Updated-terms step and the account menu link to (MUT-324)
+      __TERMS_URL__: JSON.stringify(termsUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
       // Opt-in, anonymous usage counts (MUT-155, ADR-090); "" turns analytics off
       __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
     },

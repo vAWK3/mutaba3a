@@ -16,8 +16,17 @@ const SIGN_IN = 'POST /v1/sessions';
 /** The ADR-037 bundle rule (auth-states.test.tsx): no self-service account door, in either language. */
 const BANNED = /sign ?up|create account|forgot|reset password|invite|إنشاء حساب|نسيت|إعادة تعيين|دعوة|اشترك/i;
 
+const TERMS_VERSION = '2026-10-19';
+const TERMS_URL = 'https://mutaba3a.example/terms';
 const valid = (overrides: { locale?: 'en' | 'ar'; purpose?: 'SETUP' | 'RESET' } = {}) => () =>
-  ok({ state: 'valid', email: EMAIL, locale: overrides.locale ?? 'en', purpose: overrides.purpose ?? 'SETUP', expiresAt: '2026-10-19T09:00:00.000Z' });
+  ok({
+    state: 'valid',
+    email: EMAIL,
+    locale: overrides.locale ?? 'en',
+    purpose: overrides.purpose ?? 'SETUP',
+    expiresAt: '2026-10-19T09:00:00.000Z',
+    termsVersion: TERMS_VERSION,
+  });
 const unusable = (state: string) => () => fail(410, 'SETUP_LINK_UNUSABLE', { state });
 
 function routes(extra: Record<string, Handler> = {}): Record<string, Handler> {
@@ -40,11 +49,16 @@ async function openForm(extra: Record<string, Handler> = {}) {
   return { ...view, api, password };
 }
 
-async function save(user: ReturnType<typeof renderPortal>['user'], password: HTMLElement, value = PASSWORD) {
+/** MUT-324: saving needs the terms ticked; every save below agrees unless a test says otherwise. */
+async function save(user: ReturnType<typeof renderPortal>['user'], password: HTMLElement, value = PASSWORD, agree = true) {
   await user.clear(password);
   await user.type(password, value);
+  const terms = screen.getByRole('checkbox', { name: /terms of service/ });
+  if (agree && !(terms as HTMLInputElement).checked) await user.click(terms);
   await user.click(screen.getByRole('button', { name: 'Save and sign in' }));
 }
+
+const redeems = (api: { calls: Array<{ method: string; url: URL; body: unknown }> }) => api.calls.filter((c) => `${c.method} ${c.url.pathname}` === REDEEM);
 
 beforeEach(() => localStorage.clear());
 afterEach(() => {
@@ -125,7 +139,12 @@ describe('saving', () => {
     const { api, user, password, router } = await openForm();
     await save(user, password);
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
-    expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === REDEEM)?.body).toEqual({ token: TOKEN, password: PASSWORD });
+    expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === REDEEM)?.body).toEqual({
+      token: TOKEN,
+      password: PASSWORD,
+      acceptedTermsVersion: TERMS_VERSION,
+      termsLocale: 'en',
+    });
     expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === SIGN_IN)?.body).toEqual({ email: EMAIL, password: PASSWORD });
   });
 
@@ -192,6 +211,44 @@ describe('saving', () => {
     await save(user, password);
     expect(await screen.findByRole('heading', { level: 1, name: 'Your password is saved' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Go to sign in' })).toHaveAttribute('href', '/sign-in');
+  });
+});
+
+describe('the terms (MUT-324)', () => {
+  it('refuses to save until the terms are ticked, says why, and sends nothing', async () => {
+    const { api, user, password } = await openForm();
+    await save(user, password, PASSWORD, false);
+    expect(await screen.findByText('Tick to agree to the terms before you continue.')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /terms of service/ })).toHaveFocus();
+    expect(redeems(api)).toHaveLength(0);
+  });
+
+  it('sends the version the check named and the language the page is in', async () => {
+    const { api, user, password } = await openForm();
+    await save(user, password);
+    await waitFor(() => expect(redeems(api)).toHaveLength(1));
+    expect(redeems(api)[0]?.body).toEqual({ token: TOKEN, password: PASSWORD, acceptedTermsVersion: TERMS_VERSION, termsLocale: 'en' });
+  });
+
+  it('links the exact version being accepted, in a new tab', async () => {
+    vi.stubGlobal('__TERMS_URL__', TERMS_URL);
+    await openForm();
+    const link = screen.getByRole('link', { name: 'terms of service' });
+    expect(link).toHaveAttribute('href', `${TERMS_URL}/${TERMS_VERSION}`);
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
+  it('when the terms changed while the page was open, asks to read the new version and tick again', async () => {
+    vi.stubGlobal('__TERMS_URL__', TERMS_URL);
+    const { api, user, password } = await openForm({ [REDEEM]: () => fail(409, 'TERMS_VERSION_STALE', { current: '2027-01-01' }) });
+    await save(user, password);
+    expect(await screen.findByText(/The terms changed while this page was open/)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /terms of service/ })).not.toBeChecked();
+    expect(screen.getByRole('link', { name: 'terms of service' })).toHaveAttribute('href', `${TERMS_URL}/2027-01-01`);
+    expect(screen.queryByText('Use 12 to 128 characters.', { selector: '.hp-field-error' })).not.toBeInTheDocument();
+    await save(user, password);
+    await waitFor(() => expect(redeems(api)).toHaveLength(2));
+    expect((redeems(api)[1]?.body as { acceptedTermsVersion: string }).acceptedTermsVersion).toBe('2027-01-01');
   });
 });
 

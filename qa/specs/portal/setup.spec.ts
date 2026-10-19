@@ -29,6 +29,8 @@ const LABELS = { en: { password: 'New password', submit: 'Save and sign in' }, a
 
 async function typeAndSave(page: Page, password: string, language: 'en' | 'ar' = 'en') {
   await page.getByLabel(LABELS[language].password).fill(password);
+  // MUT-324: saving needs the terms ticked (check() leaves an already-ticked box alone)
+  await page.getByRole('checkbox', { name: /terms of service|شروط الخدمة/ }).check();
   await page.getByRole('button', { name: LABELS[language].submit }).click();
 }
 
