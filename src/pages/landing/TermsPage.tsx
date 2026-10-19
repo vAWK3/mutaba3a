@@ -1,0 +1,72 @@
+import { useEffect, useState } from 'react';
+import { useLanguage, useT } from '../../lib/i18n';
+import { LATEST_TERMS_VERSION, TERMS_VERSIONS, loadTerms, termsVersionOf, type TermsText } from '../../content/legal/terms';
+import { LegalPage } from './LegalPage';
+
+type Shown = { status: 'loading' } | { status: 'found'; text: TermsText } | { status: 'missing' };
+
+/**
+ * /terms and /terms/<version> (MUT-324, ADR-102): the frozen terms text in the
+ * page language. Every released version keeps its own address, so a person can
+ * always read exactly what they agreed to; /terms is the latest.
+ */
+export function TermsPage({ path }: { path: string }) {
+  const t = useT();
+  const { language } = useLanguage();
+  const version = termsVersionOf(path);
+  const [shown, setShown] = useState<{ key: string; value: Shown }>({ key: '', value: { status: 'loading' } });
+  const key = `${version}:${language}`;
+
+  useEffect(() => {
+    let live = true;
+    void (version ? loadTerms(version, language === 'ar' ? 'ar' : 'en') : Promise.resolve(null)).then((text) => {
+      if (live) setShown({ key, value: text ? { status: 'found', text } : { status: 'missing' } });
+    });
+    return () => {
+      live = false;
+    };
+  }, [key, version, language]);
+
+  const current = shown.key === key ? shown.value : ({ status: 'loading' } as const);
+
+  if (current.status === 'missing') {
+    return (
+      <LegalPage
+        title={t('landing.terms.missingTitle')}
+        updated=""
+        sections={[]}
+        after={
+          <p className="privacy-policy-intro">
+            {t('landing.terms.missingBody')} <a href="/terms">{t('landing.terms.currentLink')}</a>
+          </p>
+        }
+      />
+    );
+  }
+  if (current.status === 'loading') return <LegalPage title={t('landing.terms.title')} sections={[]} />;
+
+  const { text } = current;
+  const others = TERMS_VERSIONS.filter((v) => v !== text.version);
+  return (
+    <LegalPage
+      title={text.title}
+      updated={text.updated}
+      intro={text.intro}
+      sections={text.sections.map((s) => ({ title: s.title, paragraphs: s.body }))}
+      after={
+        others.length > 0 && (
+          <section className="privacy-policy-section" aria-labelledby="terms-other-versions">
+            <h2 id="terms-other-versions">{t('landing.terms.otherVersions')}</h2>
+            <ul>
+              {others.map((v) => (
+                <li key={v}>
+                  <a href={v === LATEST_TERMS_VERSION ? '/terms' : `/terms/${v}`}>{v}</a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+    />
+  );
+}

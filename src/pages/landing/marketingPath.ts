@@ -5,7 +5,7 @@ const HOSTED_OFFER_ALIASES = new Set([`/${HOSTED_OFFER_FILE}`, `/${HOSTED_OFFER_
 
 /**
  * The path `src/main.tsx` matches the marketing pages (`/`, `/download`,
- * `/privacy`, `/hosted`) against: one trailing slash dropped, so a link that
+ * `/privacy`, `/terms`, `/hosted`) against: one trailing slash dropped, so a link that
  * gained one from a shortener or a paste still opens its page, and the
  * /hosted page copy's own file address reads as /hosted (MUT-186).
  */

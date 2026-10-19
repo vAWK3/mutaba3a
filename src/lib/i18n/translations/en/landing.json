@@ -128,12 +128,13 @@
     "footer": {
       "copyright": "Mutaba3a",
       "privacy": "Privacy",
+      "terms": "Terms",
       "buyMeACoffee": "Buy Me a Coffee",
       "kofi": "Ko-fi"
     },
     "privacyPolicy": {
       "title": "Privacy Policy",
-      "updated": "Last updated October 17, 2026",
+      "updated": "Last updated October 19, 2026",
       "intro": "This policy covers Mutaba3a's apps for Mac, Windows, the browser, iPhone, and Android, and the hosted portal you sign in to in a browser. They handle your data in different ways, so we explain each one. It does not cover any other product.",
       "backLink": "Back to the homepage",
       "scope": {
@@ -147,6 +148,10 @@
       "mobile": {
         "title": "iPhone and Android: your account and our servers",
         "body": "The mobile apps need an account, which your organization or we set up for you. There's no public sign-up. When you sign in, we keep your email address, display name, language, and which business profiles you can use. What you enter is stored on Mutaba3a's servers, and a copy is kept on your phone so the app works offline. Entries you make while offline are saved on your phone and uploaded once you're back online. Signing out ends your session on our servers. Entries that haven't uploaded yet stay on the phone and upload after you sign in again."
+      },
+      "hostedAccounts": {
+        "title": "Hosted accounts: where your records live",
+        "body": "A hosted account (the web portal, and the iPhone and Android apps when you're signed in) keeps your records on Mutaba3a's servers in Google Cloud's Tel Aviv region (me-west1). We back them up every day and keep each backup for 14 days, so we can restore your records to any point in that time. When something breaks, an error report goes to Sentry in the EU with the content of your records removed. Usage counts go to PostHog in the EU only if you agree. Our team opens your records only when you ask us to help, to fix a fault, or when the law requires it. When you close your account, we delete it and its records after 30 days, including the record that you accepted our terms, and our backups clear 14 days later. Hosted accounts are also covered by our terms of service."
       },
       "whatYouEnter": {
         "title": "What you enter",
@@ -196,6 +201,13 @@
         "title": "Contact",
         "body": "Questions about this policy can be sent to info@malafat.app. Mutaba3a is made by Barmajiyat Ltd."
       }
+    },
+    "terms": {
+      "title": "Terms of service",
+      "missingTitle": "This version of the terms doesn't exist",
+      "missingBody": "Check the address, or read",
+      "currentLink": "the current terms",
+      "otherVersions": "Other versions"
     },
     "hostedOffer": {
       "meta": {
@@ -293,7 +305,8 @@
         "errTooLong": "Use {max} characters or fewer.",
         "errorAlert": "Couldn't send. Check your connection and try again. Your answers are still here.",
         "notice": "We use these details only to reply with an offer.",
-        "privacyLink": "Privacy policy"
+        "privacyLink": "Privacy policy",
+        "termsLink": "Terms of service"
       },
       "success": {
         "title": "Request sent.",

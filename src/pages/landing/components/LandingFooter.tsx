@@ -10,6 +10,7 @@ export function LandingFooter() {
           <span className="landing-footer-brand">{t('landing.footer.copyright')}</span>
           <div className="landing-footer-links">
             <a href="/privacy">{t('landing.footer.privacy')}</a>
+            <a href="/terms">{t('landing.footer.terms')}</a>
             <a
               href="https://buymeacoffee.com/elmokhtbr"
               target="_blank"

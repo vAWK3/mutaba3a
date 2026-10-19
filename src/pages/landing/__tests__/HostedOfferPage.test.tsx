@@ -208,6 +208,8 @@ describe('HostedRequestForm', () => {
     renderPage();
     const notice = screen.getByText(/We use these details only to reply with an offer\./);
     expect(within(notice).getByRole('link', { name: 'Privacy policy' })).toHaveAttribute('href', '/privacy');
+    // MUT-324: the offer this form leads to is under the terms of service
+    expect(within(notice).getByRole('link', { name: 'Terms of service' })).toHaveAttribute('href', '/terms');
   });
 
   it('stops an empty request, marks both required fields and moves focus to the first', () => {
