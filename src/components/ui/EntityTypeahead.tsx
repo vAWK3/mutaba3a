@@ -198,9 +198,14 @@ export function EntityTypeahead<T = unknown>({
 
   const handleBlur = () => {
     onBlur?.();
-    // Delay to allow click on dropdown option
+    // Delay to allow click on dropdown option. Focus may have already moved
+    // back to the input by the time this fires (e.g. a quick blur/refocus
+    // elsewhere in the form) — don't close a dropdown that reopened since.
     setTimeout(() => {
-      if (!dropdownRef.current?.contains(document.activeElement)) {
+      if (
+        document.activeElement !== inputRef.current &&
+        !dropdownRef.current?.contains(document.activeElement)
+      ) {
         setIsOpen(false);
       }
     }, 150);

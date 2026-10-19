@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,10 @@ import { join, resolve } from 'node:path';
  * every feature in scope. These tests pin how scripts/tag-release.sh writes
  * the tags, and that the Makefile and qa/qa.config.mjs agree on their names.
  */
+
+// Each test spawns many real git/node subprocesses; under full-suite
+// parallel load that chain can outrun the 5s default (TD-158-adjacent flake).
+vi.setConfig({ testTimeout: 15_000 });
 
 const ROOT = process.cwd();
 const SCRIPT = resolve(ROOT, 'scripts/tag-release.sh');
