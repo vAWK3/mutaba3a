@@ -58,12 +58,13 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
   // the caller created (MUT-182), then the caller's personal profile last. The portal opens profiles[0].
   const rank = (p: { isPersonalDefault: boolean; owned: boolean }) => (p.isPersonalDefault ? 2 : p.owned ? 1 : 0);
   profiles.sort((a, b) => rank(a) - rank(b));
+  const [ownedProfiles, termsNow] = await Promise.all([store.organizations.countOwnedBy(user.id), terms && termsStatus(store, user.id, terms)]);
   return {
     user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale, malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions) },
     profiles,
-    limits: { ownedProfiles: await store.organizations.countOwnedBy(user.id), maxOwnedProfiles: MAX_OWNED_PROFILES },
+    limits: { ownedProfiles, maxOwnedProfiles: MAX_OWNED_PROFILES },
     currencies: [...SUPPORTED_CURRENCIES],
-    terms: terms && (await termsStatus(store, user.id, terms)),
+    terms: termsNow,
   };
 }
 

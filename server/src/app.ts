@@ -41,7 +41,7 @@ import { healthRoutes } from './routes/health.js';
 import { importRoutes } from './routes/import.js';
 import { integrationRoutes } from './routes/integration.js';
 import { wellKnownRoutes, type AppAssociationConfig } from './routes/well-known.js';
-import { CaptureSourceSchema, CONFLICT_REASONS, VALIDATION_REASONS } from './schemas.js';
+import { CaptureSourceSchema, CONFLICT_REASONS, TermsStatusSchema, VALIDATION_REASONS } from './schemas.js';
 import { DAYS_IN_PAST_LIMIT } from './agreements/compose.js';
 
 export interface AppDependencies {
@@ -186,6 +186,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // use it meets as the component; Payment's nullable response field made the shared component nullable, and every
   // request body that $refs it (income, settle, expense, inbox) advertised a null the server rejects.
   app.openAPIRegistry.register('CaptureSource', CaptureSourceSchema);
+  // MUT-324 review: the same for TermsStatus. Me.terms is nullable; the accept route's 200 is not.
+  app.openAPIRegistry.register('TermsStatus', TermsStatusSchema);
   app.route('/', healthRoutes(store, deps.version));
   app.route(
     '/',

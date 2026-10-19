@@ -15,7 +15,7 @@ import {
   SetupLinkRedeemRequestSchema,
   SetupLinkRedeemResponseSchema,
 } from '../schemas.js';
-import { termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
+import { staleTerms, termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
 
 /**
  * The two public routes a setup link reaches (MUT-235, ADR-088). They are the
@@ -161,11 +161,6 @@ type SetupLinkRefusal = Exclude<SetupLinkState, 'valid'>;
 /** A 'valid' state reaching a refusal means its link or person vanished between reads: treat it as unknown. */
 function refusalOf(state: SetupLinkState): SetupLinkRefusal {
   return state === 'valid' ? 'invalid' : state;
-}
-
-/** MUT-324: the shared refusal for a missing or outdated terms version, here and on POST /v1/me/terms-acceptance. */
-export function staleTerms(terms: CurrentTerms): ApiError {
-  return new ApiError('TERMS_VERSION_STALE', 'The terms changed; read the current version and accept it', { current: terms.version });
 }
 
 function unusable(state: SetupLinkRefusal): ApiError {

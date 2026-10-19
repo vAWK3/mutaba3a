@@ -324,6 +324,20 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       expect((await store.users.latestTermsAcceptance(user.id))?.version).toBe('2026-12-01');
     });
 
+    it('lists every person by email with their latest accepted version, null for someone who accepted none', async () => {
+      const store = await makeStore();
+      const { user: behind } = await person(store);
+      const { user: never } = await person(store);
+      await store.users.acceptTerms({ userId: behind.id, ...TERMS, version: '2026-10-19', at: at(2), audit: [] });
+      await store.users.acceptTerms({ userId: behind.id, ...TERMS, version: '2026-12-01', at: at(3), audit: [] });
+      const rows = (await store.users.listLatestTermsVersions()).filter((r) => r.userId === behind.id || r.userId === never.id);
+      const expected = [
+        { userId: behind.id, email: behind.email, status: behind.status, latestVersion: '2026-12-01' },
+        { userId: never.id, email: never.email, status: never.status, latestVersion: null },
+      ].sort((a, b) => (a.email < b.email ? -1 : 1));
+      expect(rows).toEqual(expected);
+    });
+
     it('refuses an acceptance for an unknown user', async () => {
       const store = await makeStore();
       await expect(store.users.acceptTerms({ userId: '00000000-0000-4000-8000-000000000000', ...TERMS, at: at(2), audit: [] })).rejects.toBeInstanceOf(
