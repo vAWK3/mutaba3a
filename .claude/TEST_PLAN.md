@@ -3220,3 +3220,12 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Release-QA `@portal.local.download-restore` (extended) | zip with `records.json` and the receipt as its own file; after Restore the receipt downloads again byte for byte |
 | Review (2026-10-19) | `routes-fx-rates.test.ts` default limiter at 120/min; `fx-rates.test.ts` relayed upstream staleness; `fx-outside-lock.test.ts` a save never waits on a stuck FX fetch; `fxSource.test.ts` relay + device memory (1 h) + unreadable storage; `idb.test.ts` superseded and blocked upgrades; `blobStore.test.ts` `stat`; `attachments.test.ts` live vs backed-up keys (pending expiry); `recordsArchive.test.ts` damaged zip, Safari-folder zip, two folders refused, upload-rule refusal, `.json` missing count; `restore.test.ts` refused save leaves no backup files; `parity.test.ts` expense/receipt/group/conversion script; `format-fingerprint.test.ts` no null-only field; `vite-config.test.ts` Buffer plugin; `local-mode.test.tsx` missing-receipts confirm line; release-QA `@portal.local.restore-missing-receipts`, `fx-line` remembered rates |
 
+
+## MUT-336 — SVG → React icon codegen pipeline (2026-10-19)
+
+| Test | Covers |
+|---|---|
+| `scripts/__tests__/icon-set.test.ts` (21) | `kebabToComponentName` (single-word, hyphenated, 3-part); `parseSvg` (simple path children, nested `<g>` groups, throws on unrecognized element/attribute naming the file, throws on unclosed tag); `generateComponent` (imports shared `IconProps`, injects `size`/`className`/drops `xmlns`, numeric `strokeWidth`, `id` → `data-part` never raw `id`, nested groups preserved, a quote/backslash in an attribute value round-trips as a safe JS expression); `generateBarrel` (sorted, one line per name); `ICON_PROPS_MODULE`; `findIconSetProblems` (clean, missing, stale, orphaned, ignores `index.ts`/`types.ts`) |
+| `src/pages/settings/__tests__/SettingsPage.icons.test.tsx` | Pilot (AC #3): the generated `LanguageIcon` renders next to the language setting, asserted via its `data-part="nuqta"` sub-element |
+| Existing `src/pages/settings/__tests__/*` (116 tests) | Re-run unchanged after the pilot edit — no regression |
+| Manual: `npm run icons:generate` then `npm run icons:check` | 61/61 source icons generate; validator reports clean |

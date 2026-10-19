@@ -3125,6 +3125,12 @@ a.project-tag:hover {
   font-weight: var(--weight-medium);
 }
 
+.settings-label-icon {
+  margin-inline-end: var(--space-2);
+  vertical-align: -3px;
+  color: var(--text-secondary);
+}
+
 .settings-description {
   font-size: var(--text-label);
   color: var(--muted);

@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — MUT-336: SVG → React icon codegen pipeline (web half)
+
+**Why:** MUT-336 turns the MUT-335 canonical icon set (`assets/icons/source/*.svg`) into usable platform code instead of hand-copying each icon. This is mini-crm's half (React); the Flutter half is its own ticket slice in that repo.
+
+### Added
+- `scripts/icon-set.ts` — pure SVG parser/codegen/drift-detection logic (`scripts/__tests__/icon-set.test.ts`, 21 tests).
+- `scripts/generate-icons.ts` (`npm run icons:generate`) and `scripts/validate-icon-set.ts` (`npm run icons:check`) — thin CLI wrappers.
+- `src/components/icons/generated/*.tsx` — all 61 icons, regenerated from source; a named sub-part (`id="nuqta"`) becomes `data-part="nuqta"`, never a raw `id`, so MUT-337's animation runtime can target one instance without a DOM-id collision across repeated icons on a page.
+- `assets/icons/README.md` — the add/update flow end to end (AC #2).
+- Pilot (AC #3): `LanguageIcon` (generated) rendered next to the language setting in `SettingsPage.tsx` — a new addition, not a migration of any existing icon call site.
+
+### Technical
+- Generation fails the whole run (nothing written) on any source file that doesn't parse — a partial regenerate must not look like a pass.
+- Call-site migration of the 16 hand-written `src/components/icons/*` components, or the scattered inline SVG duplicates, is explicitly out of MUT-336's scope.
+
 ## [Unreleased] - 2026-10-19 — MUT-335: mini-crm's half of the canonical icon mirror is complete
 
 **Why:** MUT-335 designs one canonical, animatable icon set across mini-crm and mutaba3a-flutter in a shared Claude Design project; mini-crm keeps a byte-identical copy of the source SVGs so MUT-336's web codegen step doesn't need to read across repos.

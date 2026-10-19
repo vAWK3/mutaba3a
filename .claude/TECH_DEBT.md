@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-182: `scripts/*.ts` are never type-checked by any npm script
+**Status**: Open
+**Ticket**: none (found 2026-10-19, MUT-336)
+**Added**: 2026-10-19
+**Priority**: Low. Pre-existing across every file in `scripts/` (release.ts, check-bundles.ts, i18n-keys.ts, the new icon-set.ts, …), not introduced by MUT-336 — noted while building MUT-336's codegen scripts.
+**Impact**: `npm run typecheck` only checks `tsconfig.app.json`/`tsconfig.hosted.json`/`tsconfig.hosted-local.json`. `tsconfig.node.json` (the only config with `types: ["node"]`, which `scripts/` would need) includes only `vite.config.ts`. `npm run build`'s `tsc -b` builds every referenced project, but `tsconfig.node.json`'s narrow include means it still never typechecks `scripts/`. `vitest` transpiles via esbuild without type-checking. A type error in any `scripts/*.ts` file (including this ticket's `icon-set.ts`/`generate-icons.ts`/`validate-icon-set.ts`) would only surface as a runtime failure the next time someone runs that script, not in CI.
+**Fix**: add `"scripts"` (or `"scripts/**/*.ts"`, excluding `__tests__`) to `tsconfig.node.json`'s `include`, confirm it builds clean, then add `tsconfig.node.json` to `npm run typecheck`'s chain.
+
 ### TD-159: The Sentry alerts use the deprecated `sentry_issue_alert` resource
 **Status**: Open
 **Ticket**: none (MUT-147, 2026-10-17)

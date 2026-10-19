@@ -2543,3 +2543,14 @@ Server code that runs in the page (`server/src` in the local chunk) gets its Nod
 ### Pattern: Every local IndexedDB database opens through `LocalDatabase` (MUT-287 review D12)
 A database the page owns must let go when a newer build upgrades it (`onversionchange`: close, then refuse further use so the reload screen shows) and must not hang when an older tab won't (`onblocked` rejects). Both rules live in `src/hosted/local/idb.ts`; `persistence.ts` and `blobStore.ts` use it, and so must any later local database. Tabs running a build are the old tabs of the next one.
 
+## Patterns added by MUT-336 (2026-10-19)
+
+### Pattern: Generated output is pure logic + a thin fs wrapper, named `<name>.ts` / `check-<name>.ts`
+Following `scripts/i18n-keys.ts` + `scripts/check-i18n-keys.ts`: the logic (parsing, naming, codegen, drift-detection) takes and returns plain data — strings, `Record<string, string>` — never touches `node:fs` itself, so `scripts/__tests__/*.test.ts` exercises the exact logic the real run uses, with vitest picking the test up automatically (it only globs `scripts/**/*.test.ts`, not `.mjs` — `validate_illustrations.mjs`'s sibling `.test.mjs` predates this and isn't wired into any script, a pre-existing gap, not a convention to copy). The CLI file does only `readdirSync`/`readFileSync`/`writeFileSync` and exits non-zero on error. First instance: `scripts/icon-set.ts` + `scripts/generate-icons.ts` / `scripts/validate-icon-set.ts` (MUT-336).
+
+### Pattern: A generated directory is wholly owned — nothing in it is hand-edited, ever
+`src/components/icons/generated/` (barrel, shared types module, every component) is rewritten in full by its generator every run; the validator (`icons:check`) regenerates each source in memory and diffs it against what's on disk to catch hand-edited-then-forgotten-to-regenerate drift, plus orphaned generated files with no matching source. The generator itself computes and validates everything before writing anything — one bad input fails the whole run with nothing written, never a silent partial regenerate. First instance: MUT-336's icon codegen.
+
+### Pattern: A named sub-part survives codegen as `data-part`, never a raw `id`
+A source asset's named sub-element (`id="nuqta"`) exists for something downstream to target one part of it later (an animation runtime, in this case). Emitting it as a raw DOM `id` breaks the instant the same generated component renders twice on one page — two elements can't share an `id`, and a global `id` selector would just find the first. Emit `data-part="<name>"` instead and scope the lookup to one instance's root (`rootRef.current.querySelector('[data-part="nuqta"]')`). First instance: the icon codegen pipeline (MUT-336); applies to any future SVG/asset codegen with named internal parts.
+
