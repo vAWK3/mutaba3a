@@ -180,6 +180,7 @@ Every money rule runs on both stores (memory and `test:db`).
 | `src/components/home/__tests__/HomeAttentionRow.plurals.test.tsx` (new) | Component (real dictionaries) | "Due in 1d" in EN; 3 and 11 days overdue in the AR few/many forms |
 | `src/pages/landing/__tests__/landingMockPlurals.test.tsx` (new) | Component (real dictionaries) | AR Clients mock 3/227/158 days and profile badge 34 days in their forms; no "{n} يوم" past 2; EN stays "oldest 3d" |
 | `src/components/expenses/__tests__/RecurringAttentionList.test.tsx` › MUT-179 | Component | AR lateness −3, −11, +3 in few/many forms (/expenses) |
+| `src/components/ui/__tests__/RecurringOccurrenceCard.test.tsx` (new, qa-reconcile) | Component (real dictionaries) | Due/overdue in EN one form and AR few/many/two; these branches are unreachable from the ledger today (it passes only projected occurrences) |
 | `src/pages/projects/__tests__/ProjectsPage.searchEmpty.test.tsx` › summary strip | Component (real dictionaries) | One project reads "1 project" |
 | `YourDataSection`, `OrphanedRecordsBanner`, `OrphanedRecordsDrawer`, `ClientsPage`, `ClientDetailPage`, `ProjectDetailPage`, `IncomePage` tests | Updated | Pick the CLDR form via `pluralKey` instead of the Singular/Plural keys; the "label: {count}" Arabic workaround test now asserts few ≠ many; i18n mocks also mock `plural` |
 | QA `@web.home.attention-day-plurals`, `@web.clients.count-plurals`, `@web.landing.arabic-day-counts` | Browser (Playwright) | EN and AR on Home, Clients and the landing page with real day counts |
