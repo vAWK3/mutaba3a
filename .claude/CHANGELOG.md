@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — MUT-338: animated save-feedback wired into every web save surface (ADR-153)
+
+**Why:** MUT-337 proved the animation mechanism headlessly; nothing used it. This is the first real consumer — the epic's (MUT-334) highest-priority mechanic — across all five save surfaces that exist on the web side (legacy app: income, expense; portal: income, expense, conversion). Flutter is a separate ticket (MUT-351, filed during planning) in its own repo.
+
+### Added
+- `src/lib/motion/saveFeedbackPreset.ts` — resolves playful/restrained from a profile's `type` (always playful for the legacy app, which has no firm concept per MUT-299 B11).
+- `src/components/icons/SaveFeedbackIcon.tsx` — wraps the generated `SuccessIcon` in a plain `<span>` ref, wires `playIconFeedback` on mount, respects `prefers-reduced-motion` itself.
+- Toast icon override: `toastStore.ts`'s `Toast.icon` and hosted `Toast.tsx`'s `ToastOptions.icon` (both default to the existing tone icon when absent — no other caller changes).
+- Legacy `ExpenseDrawer.tsx` gains a save-success toast — it had none before (create/update produced no confirmation at all; only delete did). New i18n keys `expenses.saveSuccess`/`expenses.recurringSaveSuccess` (en/ar).
+- release-qa: a `save-feedback-animation` scenario in `qa/features/{web,portal}/{income,expenses}.yaml` and `portal/conversions.yaml`, with passing-locally specs in `qa/specs/{web,portal}/*.spec.ts` (live run blocked by an unrelated pre-existing landing-content bug — see Technical).
+
+### Changed
+- `SavedFlashAnnouncer.tsx` (legacy income): the claimed-save path was a permanent `sr-only` span; now a brief (`FLASH_MS`) visible "Saved" toast carrying the icon, same surface as the unclaimed path — decided with Basel over inventing new floating UI with no pinned-down position.
+- `SavedNotice.tsx` (portal expense/conversion): same change, via a render-time state adjustment (not `setState`-in-effect) for the brief flash; gained a required `preset` prop, resolved once by `ExpensesList.tsx`/`ConversionsList.tsx` (which already hold the full profile via `useProfile()` — no new `useMe()` lookup needed in the leaf components).
+- `IncomeCaptureDrawer.tsx` (portal income): its existing `tone: 'info'` toast now also carries the icon, preset from its own `profile` prop.
+
+### Technical
+- `src/hosted/pages/__tests__/afterSave.test.tsx` updated (it also asserted the old `.sr-only` claimed-path text — a second integration test for the same behavior `SavedNotice.test.tsx` covers at the unit level).
+- Full suite verified clean twice (`npm run test:run`): 9 pre-existing failing files (`scripts/__tests__/{i18n-keys,legal-terms,vite-config}.test.ts`, 6 `src/pages/landing/__tests__/*`), all a pre-existing, unrelated landing-content gap (`ar/landing.json` missing `hostedOffer`, crashing `vite.config.ts`'s social-preview step) — confirmed present before this branch's commits and independent of every file this ticket touched. The same bug also blocked bringing up a live `release-qa` env to actually execute the new specs; they're written and `release-qa lint`-clean but unexecuted pending that unrelated fix.
+- ADR-153 (`.claude/DECISIONS.md`): reuse existing Toast/SavedNotice surfaces for the claimed-save path rather than invent new floating UI.
+
 ## [Unreleased] - 2026-10-19 — MUT-337: icon save-feedback animation runtime decision + web prototype (ADR-152)
 
 **Why:** MUT-338/339/340 (the epic's actual gamification features, the first marked highest-priority) are all blocked until an animation runtime is chosen for the MUT-335/336 icon system. This ticket decides and proves the mechanism; MUT-338 wires it into a real trigger.

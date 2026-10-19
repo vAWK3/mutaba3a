@@ -1453,6 +1453,13 @@ toast.info('Syncing...');
 - `useToast` selects only the two store actions, so a component that shows toasts doesn't re-render when one comes or goes.
 - Tests: `src/components/ui/__tests__/ToastContainer.test.tsx`, `src/lib/__tests__/toastStore.test.ts`.
 
+**MUT-338 addition**: `showToast(message, { icon })` renders `icon` (e.g.
+`<SaveFeedbackIcon preset={...} />`) inside `.toast-icon`, ahead of the
+message; absent by default, every other caller unaffected. The hosted
+`src/hosted/components/Toast.tsx` has the same `icon?: ReactNode` override on
+its `ToastOptions`, replacing that tone's default icon (`InfoIcon`/`AlertIcon`)
+when supplied.
+
 ---
 
 ### SavedFlash (store + hook + announcer) — MUT-81, ADR-057
@@ -1706,10 +1713,11 @@ canonical set) and overwritten on every run — never hand-edit anything here.
 generated output. Full flow: `assets/icons/README.md`. Logic:
 `scripts/icon-set.ts` (tested directly, `scripts/__tests__/icon-set.test.ts`).
 
-These are **not yet consumed anywhere except one pilot** (`LanguageIcon` in
-`SettingsPage.tsx`) — migrating the 16 hand-written components above, or the
-scattered inline SVGs (`XIcon`, `MoreIcon`, `PlusIcon` duplicates, etc.), to
-the generated set is explicitly out of MUT-336's scope.
+These are consumed at two call sites: the `LanguageIcon` pilot in
+`SettingsPage.tsx`, and `SuccessIcon` via `SaveFeedbackIcon` below. Migrating
+the 16 hand-written components above, or the scattered inline SVGs (`XIcon`,
+`MoreIcon`, `PlusIcon` duplicates, etc.), to the generated set is still out of
+scope — nothing has swept them.
 
 ```tsx
 import { LanguageIcon } from '../../components/icons/generated';
@@ -1718,7 +1726,35 @@ import { LanguageIcon } from '../../components/icons/generated';
 
 A named sub-part survives codegen as `data-part="<name>"` (never a raw `id` —
 collides across repeated instances of the same icon on one page), for
-MUT-337's future animation runtime to target.
+`playIconFeedback` (MUT-337) to target.
+
+### SaveFeedbackIcon (MUT-338)
+
+**Location**: `src/components/icons/SaveFeedbackIcon.tsx`.
+**Purpose**: The only call site that plays MUT-337's `playIconFeedback` against a
+real icon. Wraps the generated `SuccessIcon` in a plain `<span>` carrying the
+ref — the ref belongs on the caller's container, per MUT-337's own contract,
+never on the generated icon itself (no codegen/forwardRef change needed).
+Resolves `prefers-reduced-motion` itself via `useMediaQuery`, so every call
+site gets the fallback for free.
+
+```tsx
+import { SaveFeedbackIcon } from '../../components/icons/SaveFeedbackIcon';
+import { saveFeedbackPreset } from '../../lib/motion/saveFeedbackPreset';
+
+<SaveFeedbackIcon preset={saveFeedbackPreset(profile)} />
+```
+
+`saveFeedbackPreset` (`src/lib/motion/saveFeedbackPreset.ts`) is the one
+source of truth for playful-vs-restrained: `profile?.type === 'BUSINESS'` →
+restrained, everything else (including `undefined` — the legacy app, which has
+no firm concept, MUT-299 B11) → playful. Five call sites wire it today:
+`SavedFlashAnnouncer.tsx` and `ExpenseDrawer.tsx` (legacy, always playful),
+`IncomeCaptureDrawer.tsx`, `Toast.tsx`'s icon override, and `SavedNotice.tsx`
+(portal, resolved by the page via `useProfile()`).
+
+- Tests: `src/components/icons/__tests__/SaveFeedbackIcon.test.tsx`,
+  `src/lib/motion/__tests__/saveFeedbackPreset.test.ts`.
 
 ---
 

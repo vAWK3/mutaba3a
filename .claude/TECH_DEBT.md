@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-183: `vite.config.ts`'s social-preview step crashes the dev server — `ar/landing.json` is missing `hostedOffer`
+**Status**: Open
+**Ticket**: none (found 2026-10-19/20, building MUT-338)
+**Added**: 2026-10-20
+**Priority**: High — blocks every local `npm run dev`/`dev:hosted` and any `release-qa env up` on the current local `main`, not just this ticket's worktree.
+**Impact**: `vite.config.ts:130` reads `ar.landing.hostedOffer.hero.title`/`.sub` to build social-preview meta tags; `src/lib/i18n/translations/ar/landing.json`'s `landing.hostedOffer` key doesn't exist on local `main` right now (a parallel, uncommitted landing rewrite in progress elsewhere left it out), so both dev servers throw `TypeError: Cannot read properties of undefined (reading 'hero')` at startup and never come up. The same gap shows up as `npm run i18n:check`'s ~66 "orphaned landing.requestAccount.*" keys and several pre-existing `src/pages/landing/__tests__/*` + `scripts/__tests__/{i18n-keys,legal-terms,vite-config}.test.ts` failures (confirmed present on a clean MUT-338 worktree branched from local `main`, before any of this ticket's commits — not caused by this ticket). It blocked actually executing MUT-338's new `release-qa` specs (written and `release-qa lint`-clean, unexecuted).
+**Fix**: finish or roll back the in-progress landing content rewrite so `ar/landing.json` (and whichever other locale files feed `vite.config.ts`'s meta-tag builder) match what the code reads; `npm run i18n:check` clean and `npm run dev`/`dev:hosted` both booting are the exit criteria.
+
 ### TD-182: `scripts/*.ts` are never type-checked by any npm script
 **Status**: Open
 **Ticket**: none (found 2026-10-19, MUT-336)
