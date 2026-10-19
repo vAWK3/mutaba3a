@@ -107,3 +107,12 @@ test('the real MOMENTS manifest matches the brief: 5 target files total', () => 
   const totalFiles = MOMENTS.flatMap(expectedFilenames).length;
   assert.equal(totalFiles, 5);
 });
+
+test('MUT-350: every moment is classified grand or minimal', () => {
+  for (const moment of MOMENTS) {
+    assert.ok(
+      ['grand', 'minimal'].includes(moment.tier),
+      `${moment.name} has no valid tier (got ${JSON.stringify(moment.tier)})`,
+    );
+  }
+});

@@ -15,11 +15,16 @@ export const ASSETS_DIR = path.join(REPO_ROOT, 'assets/illustrations/source');
 // The 5-file target from mutaba3a-flutter's .claude/designs/mut-345-illustration-brief.md.
 // `pair: true` means personal/firm variants are both required; otherwise one
 // shared file covers every consuming surface.
+// `tier` (MUT-350): 'minimal' for moments that fire constantly in daily use
+// (fast/subtle so they don't compete for attention every time), 'grand' for
+// rare/special moments (slow/big/elaborate is earned by scarcity). See the
+// "Weight tiers" section of mutaba3a-flutter's mut-345-animation-spec.md for
+// the full rule.
 export const MOMENTS = [
-  { name: 'empty-state', pair: false },
-  { name: 'destructive-confirmation', pair: false },
-  { name: 'onboarding', pair: false },
-  { name: 'milestone', pair: true },
+  { name: 'empty-state', pair: false, tier: 'minimal' },
+  { name: 'destructive-confirmation', pair: false, tier: 'minimal' },
+  { name: 'onboarding', pair: false, tier: 'grand' },
+  { name: 'milestone', pair: true, tier: 'grand' },
 ];
 
 // Mirrors the `color` block in this repo's src/styles/brand/mutaba3a.tokens.json.
