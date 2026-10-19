@@ -22,6 +22,7 @@ import { useDrawerStore } from '../../lib/stores';
 import { formatAmount, formatDate, getDateRangePreset, cn } from '../../lib/utils';
 import { todayLocalISO } from '../../lib/dates';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
+import { useTp } from '../../lib/i18n/plural';
 import { toWorkRow, type WorkRow } from './clientProfileRows';
 import type { TxStatus } from '../../types';
 import { BrandLoader } from '../brand/BrandLoader';
@@ -47,6 +48,7 @@ const isDefault = (filters: WorkFilters) =>
 
 export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
   const t = useT();
+  const tp = useTp();
   const { language } = useLanguage();
   const locale = getLocale(language);
   const { openIncomeDrawer, openProjectDrawer, openPartialPaymentDrawer } = useDrawerStore();
@@ -221,14 +223,14 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
                         />
                         {row.overdueDays !== undefined && (
                           <div className="client-work-subline text-danger">
-                            {t('transactions.status.overdue', { days: row.overdueDays })}
+                            {tp('transactions.status.overdue', row.overdueDays)}
                           </div>
                         )}
                         {row.dueInDays !== undefined && (
                           <div className="client-work-subline">
                             {row.dueInDays === 0
                               ? t('transactions.status.dueToday')
-                              : t('transactions.status.dueIn', { days: row.dueInDays })}
+                              : tp('transactions.status.dueIn', row.dueInDays)}
                           </div>
                         )}
                       </td>

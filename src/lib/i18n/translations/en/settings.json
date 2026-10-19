@@ -135,13 +135,21 @@
     "integrityCheckRunning": "Checking...",
     "backupDone": "Backup downloaded",
     "backupFailed": "Backup failed",
-    "importBackupDoneSingular": "Restored {count} record from backup (v{version})",
-    "importBackupDonePlural": "Restored {count} records from backup (v{version})",
+    "importBackupDone": {
+      "one": "Restored {count} record from backup (v{version})",
+      "other": "Restored {count} records from backup (v{version})"
+    },
     "exportReceipts": "Export receipts",
-    "exportReceiptsDesc": "{count} uploaded receipt files, as a ZIP with one folder per profile and month",
+    "exportReceiptsDesc": {
+      "one": "{count} uploaded receipt file, as a ZIP with one folder per profile and month",
+      "other": "{count} uploaded receipt files, as a ZIP with one folder per profile and month"
+    },
     "exportReceiptsNone": "No uploaded receipts in this database",
     "exportReceiptsBtn": "Download ZIP",
-    "exportReceiptsDone": "{count} receipts exported",
+    "exportReceiptsDone": {
+      "one": "{count} receipt exported",
+      "other": "{count} receipts exported"
+    },
     "exportReceiptsFailed": "Receipts export failed",
     "desktopApp": {
       "download": "Download Desktop App",

@@ -216,7 +216,7 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
       <div className="client-index-lines text-danger">
         {overdue.map((o) => amount(o.amountMinor, o.currency, o.currency))}
         {oldestOverdueDays !== undefined && (
-          <span className="client-index-subline">{t('clients.index.oldestOverdue', { days: oldestOverdueDays })}</span>
+          <span className="client-index-subline">{tp('clients.index.oldestOverdue', oldestOverdueDays)}</span>
         )}
       </div>
     );
@@ -246,7 +246,7 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
             {crossProfileStats.get(row.id)!.map((stat) => (
               <span key={stat.profileId} className="cross-profile-badge" title={stat.profileName}>
                 <span className="cross-profile-badge-initial">{stat.profileName.charAt(0).toUpperCase()}</span>
-                {t('clients.crossProfileTxCount', { count: stat.txCount })}
+                {tp('clients.crossProfileTxCount', stat.txCount)}
               </span>
             ))}
           </div>
@@ -347,7 +347,7 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
           title={isSearchMiss ? t('clients.emptyFiltered') : t('clients.empty')}
           description={
             isSearchMiss
-              ? t('clients.emptyFilteredCount', { count: allClients.length })
+              ? tp('clients.emptyFilteredCount', allClients.length)
               : search
                 ? t('clients.emptySearch')
                 : t('clients.emptyHint')
@@ -366,9 +366,7 @@ export function ClientsPage({ openClientId, onWalk, onEnterProfile }: ClientsPag
           )}
           <div className="card clients-index-summary">
             <div className="clients-summary-count">
-              {rows.length === 1
-                ? t('clients.summary.clientsCountOne')
-                : t('clients.summary.clientsCount', { count: rows.length })}
+              {tp('clients.summary.clientsCount', rows.length)}
             </div>
             <OwedNowSummary owed={totalOwed} />
           </div>

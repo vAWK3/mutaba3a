@@ -70,8 +70,8 @@ vi.mock('../../../lib/i18n', () => {
     'transactions.status.paid': 'Paid',
     'transactions.status.unpaid': 'Unpaid',
     'transactions.status.partial': 'Partial ({percent}%)',
-    'transactions.status.overdue': '{days}d overdue',
-    'transactions.status.dueIn': 'Due in {days}d',
+    'transactions.status.overdue': '{count}d overdue',
+    'transactions.status.dueIn': 'Due in {count}d',
     'transactions.status.dueToday': 'Due today',
     'transactions.partialPayment.recordPayment': 'Record Payment',
     'transactions.partialPayment.remaining': 'Remaining',
@@ -92,6 +92,17 @@ vi.mock('../../../lib/i18n', () => {
     useLanguage: () => ({ language: 'en' }),
     useDirection: () => 'ltr',
     getLocale: () => 'en-US',
+  };
+});
+
+// MUT-179: counted strings go through tp(); route them through the mocked t() above
+vi.mock('../../../lib/i18n/plural', async () => {
+  const { useT } = await import('../../../lib/i18n');
+  return {
+    useTp: () => {
+      const t = useT();
+      return (key: string, count: number, vars?: Record<string, string | number>) => t(key, { ...vars, count });
+    },
   };
 });
 

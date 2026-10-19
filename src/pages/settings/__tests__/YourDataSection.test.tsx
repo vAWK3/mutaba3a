@@ -8,6 +8,7 @@ import { takePendingImport } from '../../../lib/dataFiles';
 import { useToastStore, type Toast } from '../../../lib/toastStore';
 import en from '../../../lib/i18n/translations/en';
 import ar from '../../../lib/i18n/translations/ar';
+import { pluralKey } from '../../../lib/i18n/plural';
 import { YourDataSection } from '../YourDataSection';
 
 /**
@@ -52,6 +53,12 @@ function section(locale: Dict, name: string): Copy {
 
 function sub(copy: Copy, name: string): Copy {
   return (copy as unknown as Record<string, Copy>)[name];
+}
+
+/** The CLDR form tp() picks for `count` (MUT-179). */
+function form(plural: unknown, language: 'en' | 'ar', count: number): string | undefined {
+  const forms = plural as Record<string, string> | undefined;
+  return forms?.[pluralKey(language, count)] ?? forms?.other;
 }
 
 function fill(template: string | undefined, vars: Record<string, string | number>): string {
@@ -186,7 +193,6 @@ describe('YourDataSection', () => {
       [8, 4, 120],
     ])('reports %i orphaned + %i broken references across %i records', async (orphans, broken, total) => {
       const count = orphans + broken;
-      const plurality = count === 1 ? 'Singular' : 'Plural';
       runIntegrityCheck.mockResolvedValue(integrityResult(orphans, broken, total));
       renderWithProviders(<YourDataSection />);
 
@@ -194,10 +200,10 @@ describe('YourDataSection', () => {
 
       expect(toast).toMatchObject({
         type: 'error',
-        message: fill(integrity[`toastIssues${plurality}`], { count }),
+        message: fill(form(integrity.toastIssues, language, count), { count }),
       });
       expect(rowOf(settings.integrityCheck)).toHaveTextContent(
-        fill(integrity[`checkIssues${plurality}`], { count, total })
+        fill(form(integrity.checkIssues, language, count), { count, total })
       );
       expect(rowOf(settings.integrityCheck).textContent).not.toMatch(RAW_COPY);
       expect(toast.message).not.toMatch(RAW_COPY);
@@ -255,9 +261,8 @@ describe('YourDataSection', () => {
       await restoreFullBackup(settings);
       const toast = await nextToast();
 
-      const key = count === 1 ? 'importBackupDoneSingular' : 'importBackupDonePlural';
       expect(restoreFromBackup).toHaveBeenCalledWith(FULL_BACKUP);
-      expect(toast).toMatchObject({ type: 'success', message: fill(settings[key], { count, version: 20 }) });
+      expect(toast).toMatchObject({ type: 'success', message: fill(form(settings.importBackupDone, language, count), { count, version: 20 }) });
       expect(toast.message).not.toMatch(RAW_COPY);
     });
 
@@ -350,16 +355,14 @@ describe('YourDataSection', () => {
     }
   });
 
-  it('phrases Arabic plurals as "label: {count}", which reads right for 2, 3–10 and 11+', () => {
+  it('words Arabic counts in their CLDR forms, so 3–10 and 11+ each read right (MUT-179)', () => {
     const arIntegrity = section(ar as Dict, 'integrity');
     const arSettings = section(ar as Dict, 'settings');
 
-    for (const template of [
-      arIntegrity.checkIssuesPlural,
-      arIntegrity.toastIssuesPlural,
-      arSettings.importBackupDonePlural,
-    ]) {
-      expect(template).toMatch(/:\s*\{count\}/);
+    for (const plural of [arIntegrity.checkIssues, arIntegrity.toastIssues, arSettings.importBackupDone]) {
+      expect(form(plural, 'ar', 3)).toContain('{count}');
+      expect(form(plural, 'ar', 11)).toContain('{count}');
+      expect(form(plural, 'ar', 3)).not.toBe(form(plural, 'ar', 11));
     }
   });
 });

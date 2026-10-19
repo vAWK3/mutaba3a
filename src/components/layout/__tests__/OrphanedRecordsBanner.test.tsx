@@ -5,6 +5,7 @@ import type { IntegrityResult } from '../../../db/integrityCheck';
 import { useDrawerStore } from '../../../lib/stores';
 import en from '../../../lib/i18n/translations/en';
 import ar from '../../../lib/i18n/translations/ar';
+import { pluralKey } from '../../../lib/i18n/plural';
 import { OrphanedRecordsBanner } from '../OrphanedRecordsBanner';
 
 const { runIntegrityCheck } = vi.hoisted(() => ({ runIntegrityCheck: vi.fn() }));
@@ -19,6 +20,12 @@ const LOCALES = [
 
 function integrityCopy(locale: Dict): Record<string, string> {
   return (locale.integrity ?? {}) as Record<string, string>;
+}
+
+/** The banner's sentence in the CLDR form tp() picks for `count` (MUT-179). */
+function orphanedRecordCopy(locale: Dict, language: 'en' | 'ar', count: number): string | undefined {
+  const forms = (locale.integrity as Record<string, Record<string, string>> | undefined)?.orphanedRecord;
+  return forms?.[pluralKey(language, count)] ?? forms?.other;
 }
 
 function orphans(count: number): IntegrityResult {
@@ -46,7 +53,7 @@ describe('OrphanedRecordsBanner', () => {
       runIntegrityCheck.mockResolvedValue(orphans(count));
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const copy = integrityCopy(locale);
-      const message = count === 1 ? copy.orphanedRecordSingular : copy.orphanedRecordPlural;
+      const message = orphanedRecordCopy(locale, language, count);
 
       renderWithProviders(<OrphanedRecordsBanner />);
 

@@ -19,6 +19,7 @@ import { RecordPaymentButton } from '../ui';
 import { BusinessTags } from '../ui/ProfileBadge';
 import { formatAmount, cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
+import { useTp } from '../../lib/i18n/plural';
 import type { WorkRow } from '../clients/clientProfileRows';
 import type { BusinessProfile } from '../../types';
 
@@ -51,6 +52,7 @@ export function HomeAttentionRow({
   onLeave,
 }: HomeAttentionRowProps) {
   const t = useT();
+  const tp = useTp();
   const rowRef = useRef<HTMLTableRowElement>(null);
   const handlers = useRef({ onArrive, onLeave });
   useLayoutEffect(() => {
@@ -100,14 +102,14 @@ export function HomeAttentionRow({
         <bdi dir="ltr">{formatAmount(row.tx.remainingAmountMinor ?? row.amountMinor, row.currency, locale)}</bdi>
         {row.overdueDays !== undefined ? (
           <span className="home-row-status text-danger">
-            {t('transactions.status.overdue', { days: row.overdueDays })}
+            {tp('transactions.status.overdue', row.overdueDays)}
           </span>
         ) : (
           row.dueInDays !== undefined && (
             <span className="home-row-status">
               {row.dueInDays === 0
                 ? t('transactions.status.dueToday')
-                : t('transactions.status.dueIn', { days: row.dueInDays })}
+                : tp('transactions.status.dueIn', row.dueInDays)}
             </span>
           )
         )}

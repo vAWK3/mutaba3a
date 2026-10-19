@@ -17,7 +17,7 @@ import { MoreIcon } from '../icons';
 import { CurrencyAmounts } from '../ui/CurrencyAmounts';
 import { formatAmount, isolateAmount } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
-import { useTp } from '../../lib/i18n/plural';
+import { useTp, type PluralTranslate } from '../../lib/i18n/plural';
 import { currencyTotals, formatMonthList, formatMonthShortYear, type RecurringAttentionGroup } from './recurringAttention';
 import './RecurringAttentionList.css';
 
@@ -109,7 +109,7 @@ function RecurringAttentionRow({ group, onMarkPaid, onSkipAll, onSnoozeAll, onEd
           {formatAmount(group.totalMinor, group.currency, locale)}
         </bdi>
         <span className={oldest.isOverdue ? 'recurring-attention-status text-danger' : 'recurring-attention-status'}>
-          {lateness(oldest.daysUntilDue, t)}
+          {lateness(oldest.daysUntilDue, t, tp)}
         </span>
       </div>
 
@@ -151,8 +151,8 @@ function RecurringAttentionRow({ group, onMarkPaid, onSkipAll, onSnoozeAll, onEd
 }
 
 /** "68d overdue" / "Due today" / "Due in 3d", as Home's Needs attention says it */
-function lateness(daysUntilDue: number, t: ReturnType<typeof useT>): string {
-  if (daysUntilDue < 0) return t('transactions.status.overdue', { days: -daysUntilDue });
+function lateness(daysUntilDue: number, t: ReturnType<typeof useT>, tp: PluralTranslate): string {
+  if (daysUntilDue < 0) return tp('transactions.status.overdue', -daysUntilDue);
   if (daysUntilDue === 0) return t('transactions.status.dueToday');
-  return t('transactions.status.dueIn', { days: daysUntilDue });
+  return tp('transactions.status.dueIn', daysUntilDue);
 }

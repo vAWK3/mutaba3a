@@ -148,9 +148,7 @@ export function ProjectsPage() {
             {/* Summary strip */}
             <div className="projects-summary-strip">
               <div className="projects-summary-count">
-                {projects.length === 1
-                  ? t('projects.summary.projectsCountOne')
-                  : t('projects.summary.projectsCount', { count: projects.length })}
+                {tp('projects.summary.projectsCount', projects.length)}
               </div>
               <div className="projects-summary-item">
                 <span className="projects-summary-label">{t('projects.summary.totalReceived')}</span>

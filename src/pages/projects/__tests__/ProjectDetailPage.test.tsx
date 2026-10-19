@@ -48,9 +48,9 @@ vi.mock('../../../lib/i18n', () => ({
       'transactions.type.expense': 'Expense',
       'transactions.type.receivable': 'Receivable',
       'transactions.status.paid': 'Paid',
-      'transactions.status.overdue': `${params?.days || 0} days overdue`,
+      'transactions.status.overdue': `${params?.count || 0} days overdue`,
       'transactions.status.dueToday': 'Due today',
-      'transactions.status.dueIn': `Due in ${params?.days || 0} days`,
+      'transactions.status.dueIn': `Due in ${params?.count || 0} days`,
       'transactions.partialPayment.recordPayment': 'Record Payment',
       'transactions.partialPayment.remaining': 'Remaining',
     };
@@ -60,6 +60,17 @@ vi.mock('../../../lib/i18n', () => ({
   useDirection: () => 'ltr',
   getLocale: () => 'en-US',
 }));
+
+// MUT-179: counted strings go through tp(); route them through the mocked t() above
+vi.mock('../../../lib/i18n/plural', async () => {
+  const { useT } = await import('../../../lib/i18n');
+  return {
+    useTp: () => {
+      const t = useT();
+      return (key: string, count: number, vars?: Record<string, string | number>) => t(key, { ...vars, count });
+    },
+  };
+});
 
 // SearchInput imports useT from core directly (MUT-43: the hosted bundle must
 // never carry the app's full translation dictionary), so it isn't covered by

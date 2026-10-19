@@ -88,19 +88,14 @@ vi.mock('../../../lib/i18n', () => {
     'clients.emptyHint': 'Add your first client',
     'clients.addClient': 'Add Client',
     'clients.emptyFiltered': 'No clients match your search',
-    'clients.emptyFilteredCount': '{count} clients in total.',
     'clients.clearSearch': 'Clear search',
-    'clients.crossProfileTxCount': '{count} entries',
     'clients.columns.client': 'Client',
     'clients.columns.owedNow': 'Owed now',
     'clients.columns.overdue': 'Overdue',
     'clients.columns.lastPayment': 'Last payment',
     'clients.columns.lastActivity': 'Last activity',
-    'clients.summary.clientsCount': '{count} clients',
-    'clients.summary.clientsCountOne': '1 client',
     'clients.index.settled': 'Settled',
     'clients.index.neverPaid': 'Never paid',
-    'clients.index.oldestOverdue': 'oldest {days}d',
     'clients.index.owedOrderHint': "Ordered by today's exchange rate",
     'clients.profile.owedNow': 'Owed now',
     'clients.profile.nothingOwed': 'Nothing owed',
@@ -116,6 +111,10 @@ vi.mock('../../../lib/i18n/plural', () => {
   const plurals: Record<string, Record<'one' | 'other', string>> = {
     'clients.index.bucket.noClient': { one: 'No client · 1 entry', other: 'No client · {count} entries' },
     'clients.index.bucket.archivedClients': { one: 'Archived clients · 1', other: 'Archived clients · {count}' },
+    'clients.emptyFilteredCount': { one: '{count} client in total.', other: '{count} clients in total.' },
+    'clients.crossProfileTxCount': { one: '{count} entry', other: '{count} entries' },
+    'clients.summary.clientsCount': { one: '{count} client', other: '{count} clients' },
+    'clients.index.oldestOverdue': { one: 'oldest {count}d', other: 'oldest {count}d' },
   };
   return {
     useTp: () => (key: string, count: number) =>
