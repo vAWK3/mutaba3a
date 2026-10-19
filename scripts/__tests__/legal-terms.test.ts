@@ -38,3 +38,36 @@ describe('legal terms (MUT-324)', () => {
     expect(DEPLOY_CHECK_ORIGIN).toBe(DEFAULT_PUBLIC_ORIGIN);
   });
 });
+
+/**
+ * Review fixes 2 and 3: web ships the terms text, the server names it, so web goes
+ * first; and the check refuses before the version bump, commit and push, never after.
+ */
+describe('releasing the terms web first (MUT-324)', () => {
+  const ROOT = join(__dirname, '../..');
+  const makefile = readFileSync(join(ROOT, 'Makefile'), 'utf8');
+  const preflight = readFileSync(join(ROOT, 'scripts/preflight.sh'), 'utf8');
+  const deploySh = readFileSync(join(ROOT, 'server/scripts/deploy.sh'), 'utf8');
+  const recipe = (target: string) => {
+    const start = makefile.indexOf(`\n${target}:`);
+    return makefile.slice(start, makefile.indexOf('\n\n', start + 1));
+  };
+
+  it('make release full releases web before the server', () => {
+    expect(makefile).toMatch(/^release-full: release-web release-server$/m);
+  });
+
+  it('the server preflight checks the terms are live, so make release server refuses before bump-version', () => {
+    const serverSection = preflight.slice(preflight.indexOf('if [[ "$MODE" == "server" ]]; then\n  head_'));
+    expect(serverSection).toContain('terms:check-live');
+    const release = recipe('release-server');
+    expect(release.indexOf('preflight-server')).toBeGreaterThan(-1);
+    expect(release.indexOf('preflight-server')).toBeLessThan(release.indexOf('bump-version.sh'));
+  });
+
+  it('deploy.sh checks again only when run on its own, not after make release server already did', () => {
+    expect(recipe('release-server')).toContain('TERMS_CHECKED_BY_PREFLIGHT=1 ./scripts/deploy.sh');
+    expect(deploySh).toMatch(/TERMS_CHECKED_BY_PREFLIGHT/);
+    expect(deploySh).toContain('terms:check-live');
+  });
+});
