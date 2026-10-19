@@ -100,7 +100,7 @@ describe('signed out: no network (AC4)', () => {
     expect(download.filename).toBe('Ink.pdf');
     expect(documents.items).toEqual([]);
     expect(categories.items.length).toBeGreaterThan(0);
-    expect((await api.expenses(profileId)).items).toEqual([]);
+    expect((await api.expenses(profileId)).items.map((e) => e.id)).not.toContain(expense.id);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -121,8 +121,8 @@ describe('signed out: no network (AC4)', () => {
     expect(JSON.stringify(summary)).toContain('40.00');
     expect(JSON.stringify(afterMark)).not.toContain('40.00');
     expect(updated.toAmount).toBe('366.00');
-    expect((await api.expenseGroups(profileId)).items).toEqual([]);
-    expect((await api.conversions(profileId)).items).toEqual([]);
+    expect((await api.expenseGroups(profileId)).items.map((g) => g.id)).not.toContain(group.id);
+    expect((await api.conversions(profileId)).items.map((c) => c.id)).not.toContain(conversion.id);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

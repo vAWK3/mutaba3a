@@ -76,6 +76,15 @@ describe('records archive', () => {
     expect(decoded.files.map((f) => f.key)).not.toContain('org/x/expense-receipts/stranger');
   });
 
+  it('refuses a damaged zip (an interrupted download) as not a records file', async () => {
+    const { blobs, snapshot } = await deviceWithReceipt();
+    const bytes = new Uint8Array(await readBytes(await encodeRecordsArchive(snapshot, blobs)));
+
+    const refused = await decodeRecordsArchive(new Blob([bytes.slice(0, Math.floor(bytes.length / 2))])).catch((error: unknown) => error);
+
+    expect(isRecordsFileRefused(refused)).toBe(true);
+  });
+
   it('refuses a zip without records.json, and a file that is neither zip nor records JSON', async () => {
     const empty = new JSZip();
     empty.file('photo.png', 'x');

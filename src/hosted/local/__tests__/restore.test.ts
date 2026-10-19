@@ -58,8 +58,8 @@ describe('applyRestore', () => {
     expect(await (await new IndexedDbBlobStore().get(other.key))?.text()).toBe(PDF);
   });
 
-  it('keeps this device whole when the save fails: old records, and their receipt files still there', async () => {
-    const { archive, mine, persistence, lock } = await backupThenThisDevice();
+  it('keeps this device whole when the save fails: old records, their receipt files, and none of the backup\'s files left behind', async () => {
+    const { archive, other, mine, persistence, lock } = await backupThenThisDevice();
     persistence.save = async () => {
       throw new DOMException('full', 'QuotaExceededError');
     };
@@ -71,5 +71,6 @@ describe('applyRestore', () => {
     expect(receipts).toEqual([mine.key]);
     expect([...mine.store.snapshot().maps.expReceipts.values()].map((r) => r.storageKey)).toEqual([mine.key]);
     expect(await (await new IndexedDbBlobStore().get(mine.key))?.text()).toBe(PDF);
+    expect(await new IndexedDbBlobStore().get(other.key)).toBeNull();
   });
 });

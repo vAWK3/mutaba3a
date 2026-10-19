@@ -74,13 +74,13 @@ export class BufferShim extends Uint8Array {
 }
 
 /**
- * The one static method `server/src/**` actually calls on the global
- * `Buffer`; everything else of Node's real interface is never touched
- * (confirmed by grep — see this file's docblock and `crypto.ts`'s). Exported
- * as a standalone object, not only installed, so
- * `server/src/__tests__/platform-shim.test.ts` can swap it in for a direct
- * comparison against the real `Buffer` without needing `globalThis.Buffer` to
- * start out `undefined` (it never is under Node/Vitest).
+ * The one static method `server/src/**` calls on `Buffer`; nothing else of
+ * Node's real interface is touched (confirmed by grep — see this file's
+ * docblock and `crypto.ts`'s). In the hosted build this object *is* each
+ * server module's `Buffer`, imported by `scopeServerBufferShim`
+ * (vite.config.ts) and never set on `globalThis` (MUT-287).
+ * `server/src/__tests__/platform-shim.test.ts` swaps it in for the real
+ * `Buffer` to compare the two byte for byte.
  */
 export const bufferShim = {
   from(data: string | ArrayLike<number> | ArrayBufferLike, encoding?: ShimBufferEncoding): BufferShim {

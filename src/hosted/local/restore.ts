@@ -1,5 +1,5 @@
 import type { MemoryLedgerStore } from '../../../server/src/repositories/memory.js';
-import { liveReceiptKeys, sweepBlobs } from './attachments.js';
+import { liveStoredKeys, sweepBlobs } from './attachments.js';
 import type { IndexedDbBlobStore } from './blobStore.js';
 import type { LocalLock } from './locks.js';
 import { LOCAL_FORMAT_VERSION } from './migrations/index.js';
@@ -30,9 +30,15 @@ export async function applyRestore(deps: RestoreDependencies, decoded: DecodedRe
   const { lock, persistence, store, blobs, now } = deps;
   await lock.withLock(async ({ onDiskVersion }) => {
     await blobs.putFiles(decoded.files);
-    await persistence.save({ ...decoded.snapshot, formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now() });
+    try {
+      await persistence.save({ ...decoded.snapshot, formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now() });
+    } catch (error) {
+      // The save was refused (often storage full, which the files just added make likelier): drop what step 1 added, keeping this device's own files.
+      await sweepBlobs(blobs, liveStoredKeys(store.snapshot().maps)).catch(() => undefined);
+      throw error;
+    }
     store.restore(decoded.snapshot);
-    await sweepBlobs(blobs, liveReceiptKeys(store.snapshot().maps)).catch(() => undefined);
+    await sweepBlobs(blobs, liveStoredKeys(store.snapshot().maps)).catch(() => undefined);
     return { result: undefined, wrote: true };
   });
 }

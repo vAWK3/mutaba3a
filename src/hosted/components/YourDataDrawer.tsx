@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import { localBackend } from '../api/client';
+import { saveBlobAs } from '../data/download';
 import { ME_KEY, meQuery } from '../session/me';
 import { isRecordsFileRefused, type PendingRestore } from '../session/localBackendContract';
 import { AlertIcon } from './Icons';
@@ -31,15 +32,6 @@ function recordsFileName(today: Date): string {
   return `mutaba3a-records-${today.toISOString().slice(0, 10)}.zip`;
 }
 
-function saveBlob(blob: Blob, name: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 export function YourDataDrawer({ onClose }: { onClose: () => void }) {
   const t = useT();
   const tp = useTp();
@@ -57,7 +49,7 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
     setProblem(null);
     try {
       const backend = await localBackend();
-      saveBlob(await backend.exportRecords(), recordsFileName(new Date()));
+      saveBlobAs(await backend.exportRecords(), recordsFileName(new Date()));
     } catch {
       setProblem('failed');
     }

@@ -16,8 +16,33 @@ export const localFiles = {
   },
 };
 
-/** Long enough for the browser to start the download from the object URL before it is released. */
-const OBJECT_URL_RELEASE_MS = 1_000;
+/**
+ * How long a download's object URL stays valid. Generous on purpose: Safari
+ * (iOS above all, behind its "Download?" prompt) reads the URL only once the
+ * person accepts, and a URL revoked before then fails the download.
+ */
+const OBJECT_URL_RELEASE_MS = 60_000;
+
+/**
+ * Saves a Blob as a file named `filename`: a hidden `<a download>` on a
+ * temporary object URL, clicked from the document and released later. Never a
+ * navigation or a preview (ADR-028). Used by every portal download that has
+ * the bytes in hand: local receipts and Your data's records file.
+ */
+export function saveBlobAs(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  link.hidden = true;
+  document.body.append(link);
+  try {
+    link.click();
+  } finally {
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), OBJECT_URL_RELEASE_MS);
+  }
+}
 
 /**
  * Documents and receipts download, never render inside the portal (ADR-028;
@@ -36,17 +61,6 @@ export const downloadNavigator = {
     }
     const blob = await localFiles.read(url);
     if (!blob) throw new Error('This file is no longer on this device');
-    const objectUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = objectUrl;
-    link.download = filename;
-    link.hidden = true;
-    document.body.append(link);
-    try {
-      link.click();
-    } finally {
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(objectUrl), OBJECT_URL_RELEASE_MS);
-    }
+    saveBlobAs(blob, filename);
   },
 };

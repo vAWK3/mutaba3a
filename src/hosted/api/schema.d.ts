@@ -9782,25 +9782,7 @@ export interface paths {
                         "application/json": components["schemas"]["PublicFxRatesResponse"];
                     };
                 };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
+                /** @description Too many requests from this address; `Retry-After` and `details.retryAfterSeconds` say when to try again */
                 429: {
                     headers: {
                         [name: string]: unknown;

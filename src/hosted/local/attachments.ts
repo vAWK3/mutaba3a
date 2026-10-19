@@ -53,10 +53,16 @@ function expiry(input: { ttlSeconds: number; now: Date }): Date {
   return new Date(input.now.getTime() + input.ttlSeconds * 1000);
 }
 
-/** Every file a receipt still needs: READY and PENDING_UPLOAD ones alike, so an upload in flight in another tab is never swept. */
-export function liveReceiptKeys(maps: LocalSnapshotMaps): Set<string> {
+/**
+ * Every file a live record still needs: receipts (READY and PENDING_UPLOAD
+ * alike, so an upload in flight in another tab is never swept) and documents,
+ * which share this storage (`attachmentRoutes`) even though none can be
+ * uploaded signed out today.
+ */
+export function liveStoredKeys(maps: LocalSnapshotMaps): Set<string> {
   const keys = new Set<string>();
-  for (const receipt of maps.expReceipts.values()) if (!receipt.deletedAt && receipt.storageKey) keys.add(receipt.storageKey);
+  for (const receipt of maps.expReceipts.values()) if (!receipt.deletedAt && typeof receipt.storageKey === 'string' && receipt.storageKey) keys.add(receipt.storageKey);
+  for (const file of maps.files.values()) if (!file.deletedAt && typeof file.storageKey === 'string' && file.storageKey) keys.add(file.storageKey);
   return keys;
 }
 

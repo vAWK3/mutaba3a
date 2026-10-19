@@ -1,5 +1,5 @@
 import { LocalRecordsFileRefused } from '../session/localBackendContract.js';
-import { liveReceiptKeys } from './attachments.js';
+import { liveStoredKeys } from './attachments.js';
 import { readBytes, type IndexedDbBlobStore, type StoredFile } from './blobStore.js';
 import type { StoredSnapshot } from './migrations/index.js';
 import { decodeRecordsFile, encodeRecordsFile } from './recordsFile.js';
@@ -35,10 +35,11 @@ export async function encodeRecordsArchive(snapshot: StoredSnapshot, blobs: Inde
   const JSZip = await loadJsZip();
   const zip = new JSZip();
   zip.file(RECORDS_ENTRY, encodeRecordsFile(snapshot));
-  for (const key of liveReceiptKeys(snapshot.maps)) {
+  for (const key of liveStoredKeys(snapshot.maps)) {
     const file = await blobs.getFile(key);
     // A view made here: jszip type-checks with instanceof, and a buffer IndexedDB cloned can belong to another realm.
-    if (file) zip.file(`${RECEIPTS_DIR}${key}`, new Uint8Array(file.bytes), { binary: true });
+    // STORE: receipts are PDF/JPEG/PNG, already compressed, so DEFLATE would only cost time.
+    if (file) zip.file(`${RECEIPTS_DIR}${key}`, new Uint8Array(file.bytes), { binary: true, compression: 'STORE' });
   }
   return zip.generateAsync({ type: 'blob', mimeType: ZIP_MIME, compression: 'DEFLATE' });
 }
@@ -59,7 +60,7 @@ export async function decodeRecordsArchive(file: Blob): Promise<DecodedRecordsAr
   const files: DecodedRecordsArchive['files'] = [];
   const missing: string[] = [];
   for (const receipt of snapshot.maps.expReceipts.values()) {
-    if (receipt.deletedAt || !receipt.storageKey) continue;
+    if (receipt.deletedAt || typeof receipt.storageKey !== 'string' || !receipt.storageKey) continue;
     const entry = zip.file(`${RECEIPTS_DIR}${receipt.storageKey}`);
     if (entry) files.push({ key: receipt.storageKey, type: receipt.mimeType, bytes: await entry.async('arraybuffer') });
     else missing.push(receipt.storageKey);

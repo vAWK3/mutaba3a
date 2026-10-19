@@ -1,8 +1,9 @@
 import type { EcbSnapshot, FxRateSource } from '../../../server/src/fx-rates.js';
+import { PUBLIC_FX_RATES_PATH } from '../../../server/src/routes/fx-rates.js';
 import { PublicFxRatesResponseSchema } from '../../../server/src/schemas.js';
 
-/** The server's anonymous snapshot route (MUT-287). The one request signed-out mode ever sends past the first-visit check (D3). */
-export const PUBLIC_FX_PATH = '/v1/public/fx-rates';
+/** The server's anonymous snapshot route (MUT-287), named once on the server. The one request signed-out mode ever sends past the first-visit check (D3). */
+export const PUBLIC_FX_PATH = PUBLIC_FX_RATES_PATH;
 
 /** Long enough that a stuck network never holds the ≈ line's request for long; it hides on failure. */
 const FETCH_TIMEOUT_MS = 8_000;
@@ -35,6 +36,10 @@ export class PublicFxRateSource implements FxRateSource {
   }
 }
 
-function timeoutSignal(): AbortSignal | null {
-  return typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(FETCH_TIMEOUT_MS) : null;
+/** `AbortSignal.timeout` where the engine has it; an AbortController on a timer otherwise (iOS 15 Safari), so a stuck request always ends. */
+function timeoutSignal(): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(FETCH_TIMEOUT_MS);
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  return controller.signal;
 }

@@ -1,7 +1,7 @@
 import { CachedFxRates } from '../../../server/src/fx-rates.js';
 import { MemoryLedgerStore } from '../../../server/src/repositories/memory.js';
 import { localBlobKey, type BootLocalBackend, type LocalBackend, type PendingRestore } from '../session/localBackendContract.js';
-import { LocalAttachmentStorage, liveReceiptKeys, sweepBlobs } from './attachments.js';
+import { LocalAttachmentStorage, liveStoredKeys, sweepBlobs } from './attachments.js';
 import { IndexedDbBlobStore } from './blobStore.js';
 import { createLocalApp } from './createLocalApp.js';
 import { PublicFxRateSource } from './fxSource.js';
@@ -23,7 +23,10 @@ import { createLocalTransport, LocalFormatTooNewError, reloadFromDisk } from './
  *  2. find or create the local person and mint this page's device session;
  *  3. on a first-ever boot, save at once (under the lock), so the personal
  *     profile's id, and every `/p/<id>` URL, survives a reload with nothing
- *     entered yet.
+ *     entered yet;
+ *  4. delete stored files no live record names (best effort, under the lock;
+ *     MUT-287), then wire receipt files (`mut-local-blobs`) and reference rates
+ *     (`GET /v1/public/fx-rates`, cached in the page) into the local app.
  *
  * Every request then goes through `transport.ts` with the session's bearer
  * token attached. A 401 means another tab replaced the records (Restore) and
@@ -117,7 +120,7 @@ async function sweepUnusedBlobs(lock: LocalLock, persistence: IndexedDbPersisten
   await lock
     .withLock(async ({ stale }) => {
       if (stale) await reloadFromDisk(store, persistence);
-      await sweepBlobs(blobs, liveReceiptKeys(store.snapshot().maps));
+      await sweepBlobs(blobs, liveStoredKeys(store.snapshot().maps));
       return { result: undefined, wrote: false };
     })
     .catch(() => undefined);

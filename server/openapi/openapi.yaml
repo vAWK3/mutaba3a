@@ -12736,20 +12736,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PublicFxRatesResponse"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
         "429":
-          description: Rate limited
+          description: Too many requests from this address; `Retry-After` and `details.retryAfterSeconds` say when to try again
           content:
             application/json:
               schema:

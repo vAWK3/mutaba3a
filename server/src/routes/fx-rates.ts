@@ -57,6 +57,9 @@ export function fxRateRoutes(rates: CachedFxRates | null): OpenAPIHono<AppEnv> {
   return app;
 }
 
+/** The anonymous snapshot route; the portal's signed-out FX source (`src/hosted/local/fxSource.ts`) fetches exactly this path. */
+export const PUBLIC_FX_RATES_PATH = '/v1/public/fx-rates';
+
 /** Per address per minute. A signed-out tab asks at most about once an hour (its own cache), so this only stops a scraper. */
 export const PUBLIC_FX_POLICY = { ipPerMinute: 30 } as const;
 
@@ -80,7 +83,7 @@ export function publicFxRateRoutes(options: PublicFxRateRouteOptions): OpenAPIHo
   app.openapi(
     createRoute({
       method: 'get',
-      path: '/v1/public/fx-rates',
+      path: PUBLIC_FX_RATES_PATH,
       tags: ['Exchange rates'],
       summary: 'The ECB reference snapshot behind /v1/fx-rates, with no session',
       description:
@@ -89,8 +92,9 @@ export function publicFxRateRoutes(options: PublicFxRateRouteOptions): OpenAPIHo
       security: [],
       responses: {
         200: { description: 'Snapshot', content: { 'application/json': { schema: PublicFxRatesResponseSchema } } },
+        // Public: no 401/403. Only the per-address limit and the shared no-rates answer.
+        429: { description: 'Too many requests from this address; `Retry-After` and `details.retryAfterSeconds` say when to try again', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         503: { description: 'No rates to serve, or no rate source configured', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
-        ...errorResponses,
       },
     }),
     async (c) => {
