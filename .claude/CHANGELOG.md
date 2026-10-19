@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — MUT-337: icon save-feedback animation runtime decision + web prototype (ADR-152)
+
+**Why:** MUT-338/339/340 (the epic's actual gamification features, the first marked highest-priority) are all blocked until an animation runtime is chosen for the MUT-335/336 icon system. This ticket decides and proves the mechanism; MUT-338 wires it into a real trigger.
+
+### Added
+- `src/lib/motion/iconMotion.ts` — `playIconFeedback(targets, { preset, reducedMotion })`: one scale(0→1) transform played through `ICON_OVERSHOOT_EASE` (playful) or `ICON_RESTRAINED_EASE` (restrained) — the exact same cubic-bezier control points as Flutter's `MMotion.overshoot`/`.spring`. Re-triggering mid-flight stops the prior play and restarts from its live value; reduced motion skips straight to the end state.
+- `src/lib/motion/__tests__/iconMotion.test.ts` (7 tests) — including an assertion that the playful preset's live value genuinely exceeds 1 mid-flight (not just "which constant was passed").
+- ADR-152 (`.claude/DECISIONS.md`): adopts `motion` + shared easing curves; rejects Rive (new runtime/CSP grant/asset pipeline for capability not needed) and CSS keyframes (loses interruptibility).
+- `.claude/designs/mut-337-icon-animation-runtime.md` — the full candidate comparison (AC #1).
+
+### Technical
+- No new dependency on either platform. No new UI ships — this is a headless, unit-tested library function; MUT-338 is where it becomes visible.
+- Flutter half (wiring `MMotion.overshoot`/`.spring` through an `AnimationController`) not built in this session — needs its own mutaba3a-flutter worktree.
+
 ## [Unreleased] - 2026-10-19 — MUT-336: SVG → React icon codegen pipeline (web half)
 
 **Why:** MUT-336 turns the MUT-335 canonical icon set (`assets/icons/source/*.svg`) into usable platform code instead of hand-copying each icon. This is mini-crm's half (React); the Flutter half is its own ticket slice in that repo.

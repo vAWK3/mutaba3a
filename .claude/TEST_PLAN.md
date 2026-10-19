@@ -3229,3 +3229,10 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `src/pages/settings/__tests__/SettingsPage.icons.test.tsx` | Pilot (AC #3): the generated `LanguageIcon` renders next to the language setting, asserted via its `data-part="nuqta"` sub-element |
 | Existing `src/pages/settings/__tests__/*` (116 tests) | Re-run unchanged after the pilot edit — no regression |
 | Manual: `npm run icons:generate` then `npm run icons:check` | 61/61 source icons generate; validator reports clean |
+
+## MUT-337 — Icon save-feedback animation runtime decision + web prototype (2026-10-19, ADR-152)
+
+| Test | Covers |
+|---|---|
+| `src/lib/motion/__tests__/iconMotion.test.ts` (7) | `ICON_OVERSHOOT_EASE`/`ICON_RESTRAINED_EASE` match `MMotion.overshoot`/`.spring` exactly; playful and restrained both settle at scale(1); the playful preset's live value exceeds 1 mid-flight (the actual "bounce," not just which constant was selected); reduced motion jumps straight to scale(1) on either preset; every target in a list animates; re-triggering mid-flight doesn't throw and still settles cleanly |
+| Manual | No dev-server CSP check performed — the mechanism writes `element.style.transform` directly via JS, the same pattern `playRowEnter`/`playRowExit` already use under the portal's CSP (ADR-044), so it's CSP-safe by construction, not by inspection |
