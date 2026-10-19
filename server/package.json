@@ -30,6 +30,7 @@
     "provision": "tsx src/scripts/provision.ts",
     "provision:user": "tsx src/scripts/users.ts create",
     "grant:user": "tsx src/scripts/users.ts grant",
+    "terms:report": "tsx src/scripts/users.ts terms",
     "revoke:user": "tsx src/scripts/users.ts revoke",
     "rotate:password": "tsx src/scripts/users.ts rotate",
     "disable:user": "tsx src/scripts/users.ts disable",

@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
+import { termsAccepted, type CurrentTerms } from '../legal.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { SUPPORTED_CURRENCIES } from '../money.js';
 import type { LedgerStore, UserRecord } from '../repositories/ports.js';
@@ -18,7 +19,7 @@ const errorResponse = (description: string) => ({ description, content: { 'appli
  * portal's local-mode backend can register it without pulling in sign-in,
  * which needs argon2 and never applies there.
  */
-export function meRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
+export function meRoutes(store: LedgerStore, terms: CurrentTerms | null): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
   app.openapi(
@@ -34,14 +35,17 @@ export function meRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         403: errorResponse('PRINCIPAL_NOT_ACCEPTED'),
       },
     }),
-    async (c) => c.json(await buildMe(store, c.get('identity').user), 200),
+    async (c) => c.json(await buildMe(store, c.get('identity').user, terms), 200),
   );
 
   return app;
 }
 
-/** Exported for routes/device-sessions.ts (MUT-64): both sign-in surfaces return the same Me shape. */
-export async function buildMe(store: LedgerStore, user: UserRecord) {
+/**
+ * Exported for routes/device-sessions.ts (MUT-64): both sign-in surfaces return the same Me shape.
+ * `terms` is null where no terms apply (MUT-324: the portal's signed-out mode).
+ */
+export async function buildMe(store: LedgerStore, user: UserRecord, terms: CurrentTerms | null) {
   const profiles = [];
   for (const membership of await store.memberships.listByUser(user.id)) {
     const organization = await store.organizations.getById(membership.organizationId);
@@ -59,5 +63,12 @@ export async function buildMe(store: LedgerStore, user: UserRecord) {
     profiles,
     limits: { ownedProfiles: await store.organizations.countOwnedBy(user.id), maxOwnedProfiles: MAX_OWNED_PROFILES },
     currencies: [...SUPPORTED_CURRENCIES],
+    terms: terms && (await termsStatus(store, user.id, terms)),
   };
+}
+
+/** MUT-324: the current version, and whether the person's latest acceptance covers it (D10). */
+export async function termsStatus(store: LedgerStore, userId: string, terms: CurrentTerms) {
+  const latest = await store.users.latestTermsAcceptance(userId);
+  return { version: terms.version, accepted: termsAccepted(latest?.version ?? null, terms.version) };
 }

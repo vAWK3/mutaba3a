@@ -31,6 +31,8 @@ export const ERROR_CODES = {
   ORGANIZATION_MISMATCH: 409,
   CONFLICT: 409,
   OPERATION_IN_PROGRESS: 409,
+  /** MUT-324: the terms version the client accepted (or none) is not the current one; `details.current` names it. */
+  TERMS_VERSION_STALE: 409,
   /** MUT-235: a setup link that can no longer set a password; `details.state` is expired | used | superseded | invalid. */
   SETUP_LINK_UNUSABLE: 410,
   VALIDATION_FAILED: 422,

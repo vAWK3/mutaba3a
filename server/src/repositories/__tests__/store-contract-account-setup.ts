@@ -42,6 +42,10 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
     ...overrides,
   });
 
+  const TERMS = { version: '2026-10-19', locale: 'en' as const, textSha256: 'f'.repeat(64), surface: 'portal' as const };
+  /** Redeems that are about the link, not the terms: an acceptance with no audit rows. */
+  const NO_NEW_TERMS = { terms: TERMS, termsAudit: [] as AuditEventInput[] };
+
   async function openSession(store: LedgerStore, userId: string) {
     return store.sessions.create({ userId, tokenDigest: digest(), kind: 'cookie', at: at(1), idleExpiresAt: at(2), absoluteExpiresAt: at(9), userAgent: null });
   }
@@ -84,7 +88,7 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       const store = await makeStore();
       const { user } = await person(store);
       const first = await store.accountSetup.issue(issueInput(user.id));
-      await store.accountSetup.redeem({ tokenDigest: first.tokenDigest, passwordHash: NEW_HASH, at: at(2), audit: [] });
+      await store.accountSetup.redeem({ ...NO_NEW_TERMS, tokenDigest: first.tokenDigest, passwordHash: NEW_HASH, at: at(2), audit: [] });
       await store.accountSetup.issue(issueInput(user.id, { at: at(3) }));
       const after = await store.accountSetup.findByDigest(first.tokenDigest);
       expect(after?.usedAt?.toISOString()).toBe(at(2).toISOString());
@@ -127,6 +131,7 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       const session = await openSession(store, user.id);
       const link = await store.accountSetup.issue(issueInput(user.id, { purpose: 'RESET' }));
       const redeemed = await store.accountSetup.redeem({
+        ...NO_NEW_TERMS,
         tokenDigest: link.tokenDigest,
         passwordHash: NEW_HASH,
         at: at(3),
@@ -152,7 +157,7 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
         const session = await openSession(store, user.id);
         const before = await store.users.getById(user.id);
         const auditBefore = await Promise.all(orgIds.map((orgId) => store.audit.listByOrganization(orgId, 50)));
-        const result = await store.accountSetup.redeem({ tokenDigest, passwordHash: NEW_HASH, at: when, audit: auditFor(orgIds, user.id, 'user.password_set') });
+        const result = await store.accountSetup.redeem({ ...NO_NEW_TERMS, tokenDigest, passwordHash: NEW_HASH, at: when, audit: auditFor(orgIds, user.id, 'user.password_set') });
         expect(result).toBeNull();
         expect((await store.users.getById(user.id))?.passwordHash).toBe(before?.passwordHash);
         expect((await store.sessions.findByDigest(session.tokenDigest))?.revokedAt).toBeNull();
@@ -163,7 +168,7 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       it('a second use', () =>
         refused(async (store, user) => {
           const link = await store.accountSetup.issue(issueInput(user.id));
-          await store.accountSetup.redeem({ tokenDigest: link.tokenDigest, passwordHash: HASH, at: at(2), audit: [] });
+          await store.accountSetup.redeem({ ...NO_NEW_TERMS, tokenDigest: link.tokenDigest, passwordHash: HASH, at: at(2), audit: [] });
           return { tokenDigest: link.tokenDigest, at: at(3) };
         }));
 
@@ -197,7 +202,7 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       await store.users.setStatus(user.id, 'DISABLED', at(2));
       expect((await store.accountSetup.findByDigest(link.tokenDigest))?.cancelledAt?.toISOString()).toBe(at(2).toISOString());
       await store.users.setStatus(user.id, 'ACTIVE', at(3));
-      expect(await store.accountSetup.redeem({ tokenDigest: link.tokenDigest, passwordHash: NEW_HASH, at: at(4), audit: [] })).toBeNull();
+      expect(await store.accountSetup.redeem({ ...NO_NEW_TERMS, tokenDigest: link.tokenDigest, passwordHash: NEW_HASH, at: at(4), audit: [] })).toBeNull();
     });
 
     it('a user created with a setup link gets it in the same transaction', async () => {
@@ -243,7 +248,7 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       await store.accountSetup.issue(issueInput(user.id, { purpose: 'RESET', lock: true, at: at(2) }));
       await expect(session({ verifiedPasswordHash: HASH })).rejects.toBeInstanceOf(StateConflict);
       const link = await store.accountSetup.issue(issueInput(user.id, { at: at(3) }));
-      await store.accountSetup.redeem({ tokenDigest: link.tokenDigest, passwordHash: NEW_HASH, at: at(4), audit: [] });
+      await store.accountSetup.redeem({ ...NO_NEW_TERMS, tokenDigest: link.tokenDigest, passwordHash: NEW_HASH, at: at(4), audit: [] });
       await expect(session({ verifiedPasswordHash: HASH })).rejects.toBeInstanceOf(StateConflict);
       await store.users.setStatus(user.id, 'DISABLED', at(5));
       await expect(session({ verifiedPasswordHash: NEW_HASH })).rejects.toBeInstanceOf(StateConflict);
@@ -263,7 +268,7 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       const { user } = await person(store);
       const link = await store.accountSetup.issue(issueInput(user.id));
       const justBefore = new Date(at(73).getTime() - 1);
-      expect(await store.accountSetup.redeem({ tokenDigest: link.tokenDigest, passwordHash: NEW_HASH, at: justBefore, audit: [] })).not.toBeNull();
+      expect(await store.accountSetup.redeem({ ...NO_NEW_TERMS, tokenDigest: link.tokenDigest, passwordHash: NEW_HASH, at: justBefore, audit: [] })).not.toBeNull();
     });
 
     it('of two concurrent redeems of one link, exactly one wins', async () => {
@@ -271,8 +276,8 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       const { user } = await person(store);
       const link = await store.accountSetup.issue(issueInput(user.id));
       const results = await Promise.all([
-        store.accountSetup.redeem({ tokenDigest: link.tokenDigest, passwordHash: HASH, at: at(2), audit: [] }),
-        store.accountSetup.redeem({ tokenDigest: link.tokenDigest, passwordHash: NEW_HASH, at: at(2), audit: [] }),
+        store.accountSetup.redeem({ ...NO_NEW_TERMS, tokenDigest: link.tokenDigest, passwordHash: HASH, at: at(2), audit: [] }),
+        store.accountSetup.redeem({ ...NO_NEW_TERMS, tokenDigest: link.tokenDigest, passwordHash: NEW_HASH, at: at(2), audit: [] }),
       ]);
       expect(results.filter((r) => r !== null)).toHaveLength(1);
       const winner = results.find((r) => r !== null);
@@ -289,6 +294,62 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
         if (found && found.cancelledAt === null && found.usedAt === null) open.push(found);
       }
       expect(open).toHaveLength(1);
+    });
+  });
+
+  describe(`${name} LedgerStore terms acceptance contract (MUT-324)`, () => {
+    const termsAuditCount = async (store: LedgerStore, orgId: string) =>
+      (await store.audit.list(orgId, { action: 'user.terms_accepted' }, { limit: 50, cursor: null })).items.length;
+
+    it('accepts once per version: a repeat keeps the first row and writes no second audit', async () => {
+      const store = await makeStore();
+      const { user, orgIds } = await person(store);
+      const audit = auditFor(orgIds.slice(0, 1), user.id, 'user.terms_accepted');
+      const first = await store.users.acceptTerms({ userId: user.id, ...TERMS, at: at(2), audit });
+      expect(first.created).toBe(true);
+      expect(first.acceptance).toMatchObject({ userId: user.id, ...TERMS });
+      const again = await store.users.acceptTerms({ userId: user.id, ...TERMS, locale: 'ar', at: at(3), audit });
+      expect(again.created).toBe(false);
+      expect(again.acceptance).toMatchObject({ locale: 'en' });
+      expect(again.acceptance.acceptedAt.toISOString()).toBe(at(2).toISOString());
+      expect(await termsAuditCount(store, orgIds[0]!)).toBe(1);
+    });
+
+    it('the latest acceptance is the highest version, and null before any', async () => {
+      const store = await makeStore();
+      const { user } = await person(store);
+      expect(await store.users.latestTermsAcceptance(user.id)).toBeNull();
+      await store.users.acceptTerms({ userId: user.id, ...TERMS, version: '2026-12-01', at: at(2), audit: [] });
+      await store.users.acceptTerms({ userId: user.id, ...TERMS, version: '2026-10-19', at: at(3), audit: [] });
+      expect((await store.users.latestTermsAcceptance(user.id))?.version).toBe('2026-12-01');
+    });
+
+    it('refuses an acceptance for an unknown user', async () => {
+      const store = await makeStore();
+      await expect(store.users.acceptTerms({ userId: '00000000-0000-4000-8000-000000000000', ...TERMS, at: at(2), audit: [] })).rejects.toBeInstanceOf(
+        ForeignKeyViolation,
+      );
+    });
+
+    it('a redeem records the acceptance with the password; a reset redeem afterwards keeps it and writes no second audit', async () => {
+      const store = await makeStore();
+      const { user, orgIds } = await person(store);
+      const termsAudit = auditFor(orgIds.slice(0, 1), user.id, 'user.terms_accepted');
+      const setup = await store.accountSetup.issue(issueInput(user.id));
+      expect(await store.accountSetup.redeem({ tokenDigest: setup.tokenDigest, passwordHash: HASH, at: at(2), audit: [], terms: TERMS, termsAudit })).not.toBeNull();
+      const reset = await store.accountSetup.issue(issueInput(user.id, { purpose: 'RESET', at: at(3) }));
+      expect(await store.accountSetup.redeem({ tokenDigest: reset.tokenDigest, passwordHash: NEW_HASH, at: at(4), audit: [], terms: TERMS, termsAudit })).not.toBeNull();
+      expect((await store.users.getById(user.id))?.passwordHash).toBe(NEW_HASH);
+      expect((await store.users.latestTermsAcceptance(user.id))?.acceptedAt.toISOString()).toBe(at(2).toISOString());
+      expect(await termsAuditCount(store, orgIds[0]!)).toBe(1);
+    });
+
+    it('a refused redeem records no acceptance', async () => {
+      const store = await makeStore();
+      const { user } = await person(store);
+      const link = await store.accountSetup.issue(issueInput(user.id));
+      expect(await store.accountSetup.redeem({ tokenDigest: link.tokenDigest, passwordHash: HASH, at: at(80), audit: [], terms: TERMS, termsAudit: [] })).toBeNull();
+      expect(await store.users.latestTermsAcceptance(user.id)).toBeNull();
     });
   });
 }

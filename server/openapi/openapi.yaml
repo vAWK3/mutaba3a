@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.36.0-mut293
+  version: 1.37.0-mut324
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CURRENT_PASSWORD_WRONG, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CURRENT_PASSWORD_WRONG, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -189,11 +189,14 @@ components:
             - QAR
             - BHD
             - OMR
+        terms:
+          $ref: "#/components/schemas/TermsStatus"
       required:
         - user
         - profiles
         - limits
         - currencies
+        - terms
     UserLocale:
       type: string
       enum:
@@ -316,6 +319,21 @@ components:
       required:
         - ownedProfiles
         - maxOwnedProfiles
+    TermsStatus:
+      type: object
+      nullable: true
+      properties:
+        version:
+          $ref: "#/components/schemas/TermsVersion"
+        accepted:
+          type: boolean
+      required:
+        - version
+        - accepted
+    TermsVersion:
+      type: string
+      pattern: ^\d{4}-\d{2}-\d{2}$
+      example: 2026-10-19
     ErrorEnvelope:
       type: object
       properties:
@@ -342,6 +360,7 @@ components:
                 - ORGANIZATION_MISMATCH
                 - CONFLICT
                 - OPERATION_IN_PROGRESS
+                - TERMS_VERSION_STALE
                 - SETUP_LINK_UNUSABLE
                 - VALIDATION_FAILED
                 - IDEMPOTENCY_KEY_REUSED
@@ -391,6 +410,17 @@ components:
           uniqueItems: true
       additionalProperties: false
       minProperties: 1
+    TermsAcceptanceRequest:
+      type: object
+      properties:
+        version:
+          $ref: "#/components/schemas/TermsVersion"
+        locale:
+          $ref: "#/components/schemas/UserLocale"
+      required:
+        - version
+        - locale
+      additionalProperties: false
     ChangePasswordRequest:
       type: object
       properties:
@@ -433,12 +463,15 @@ components:
             expiresAt:
               type: string
               format: date-time
+            termsVersion:
+              $ref: "#/components/schemas/TermsVersion"
           required:
             - state
             - email
             - locale
             - purpose
             - expiresAt
+            - termsVersion
         - type: object
           properties:
             state:
@@ -478,6 +511,10 @@ components:
           pattern: ^[A-Za-z0-9_-]{43}$
         password:
           $ref: "#/components/schemas/NewPassword"
+        acceptedTermsVersion:
+          $ref: "#/components/schemas/TermsVersion"
+        termsLocale:
+          $ref: "#/components/schemas/UserLocale"
       required:
         - token
         - password
@@ -5686,6 +5723,41 @@ components:
             $ref: "#/components/schemas/UserSummary"
       required:
         - users
+    TermsReport:
+      type: object
+      properties:
+        current:
+          $ref: "#/components/schemas/TermsVersion"
+        users:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              email:
+                type: string
+              status:
+                type: string
+                enum:
+                  - ACTIVE
+                  - DISABLED
+              latestVersion:
+                allOf:
+                  - $ref: "#/components/schemas/TermsVersion"
+                  - nullable: true
+              accepted:
+                type: boolean
+            required:
+              - id
+              - email
+              - status
+              - latestVersion
+              - accepted
+      required:
+        - current
+        - users
     UserDetail:
       type: object
       properties:
@@ -5901,6 +5973,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/me/terms-acceptance:
+    post:
+      tags:
+        - Sessions
+      summary: Accept the current terms of service (MUT-324)
+      description: "Records that the signed-in person accepted `version`, read in `locale`, from the portal or the phone. Idempotent per version: accepting again changes nothing and writes no second audit row. The person accepts for themselves and, as owner, for their own profiles, so `user.terms_accepted` is audited on each profile they own."
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TermsAcceptanceRequest"
+      responses:
+        "200":
+          description: The terms status after accepting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TermsStatus"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: TERMS_VERSION_STALE — `version` is not the current terms; details.current names it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Invalid body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/me/password:
     post:
       tags:
@@ -6048,6 +6166,12 @@ paths:
                 $ref: "#/components/schemas/SetupLinkRedeemResponse"
         "403":
           description: CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: TERMS_VERSION_STALE — acceptedTermsVersion is missing or not the current terms; details.current names it
           content:
             application/json:
               schema:
@@ -12959,6 +13083,27 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/terms-acceptance:
+    get:
+      tags:
+        - Admin
+      summary: Every user and the terms version they last accepted (MUT-324)
+      description: For the operator to see who has not yet accepted the current terms, for example someone who only uses the phone app.
+      security:
+        - adminToken: []
+      responses:
+        "200":
+          description: The terms report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TermsReport"
+        "401":
+          description: Missing or invalid admin token
           content:
             application/json:
               schema:

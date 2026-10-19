@@ -5,6 +5,8 @@ import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import type {
   AccountSetupRepository,
   AccountSetupTokenRecord,
+  TermsAcceptanceInput,
+  TermsAcceptanceRecord,
   AttachmentFilter,
   AttachmentRecord,
   AttachmentRepository,
@@ -216,6 +218,11 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly members = new Map<string, MembershipRecord>();
   private readonly sessionsById = new Map<string, SessionRecord>();
   private readonly setupLinks = new Map<string, AccountSetupTokenRecord>();
+  /**
+   * MUT-324, keyed `${userId}:${version}`. Deliberately not in snapshot()/restore(): the portal's signed-out mode
+   * has no terms (its /v1/me says `terms: null`), and a new snapshot map would change the shipped local format.
+   */
+  private readonly termsAcceptances = new Map<string, TermsAcceptanceRecord>();
   private readonly exps = new Map<string, ExpenseRecord>();
   private readonly expCats = new Map<string, ExpenseCategoryRecord>();
   private readonly expReceipts = new Map<string, ExpenseReceiptRecord>();
@@ -430,6 +437,25 @@ export class MemoryLedgerStore implements LedgerStore {
       Object.assign(u, { malafatSuggestions: applyMalafatChange(u.malafatSuggestions, change), updatedAt: at });
       return { ...u, malafatSuggestions: u.malafatSuggestions && { ...u.malafatSuggestions, dismissed: [...u.malafatSuggestions.dismissed] } };
     },
+    latestTermsAcceptance: async (userId) => {
+      let latest: TermsAcceptanceRecord | undefined;
+      for (const a of this.termsAcceptances.values()) if (a.userId === userId && (!latest || a.version > latest.version)) latest = a;
+      return latest ? { ...latest } : null;
+    },
+    listLatestTermsVersions: async () =>
+      [...this.people.values()]
+        .sort((a, b) => (a.email < b.email ? -1 : a.email > b.email ? 1 : 0))
+        .map((u) => {
+          let latestVersion: string | null = null;
+          for (const a of this.termsAcceptances.values()) if (a.userId === u.id && (latestVersion === null || a.version > latestVersion)) latestVersion = a.version;
+          return { userId: u.id, email: u.email, status: u.status, latestVersion };
+        }),
+    acceptTerms: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('terms_acceptances.userId');
+      const { acceptance, created } = this.recordTermsAcceptance(input.userId, input, input.at);
+      if (created) for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return { acceptance, created };
+    },
     changePassword: async (input) => {
       const u = this.people.get(input.userId);
       if (!u) return null;
@@ -546,6 +572,9 @@ export class MemoryLedgerStore implements LedgerStore {
       Object.assign(person, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
       this.revokeSessionsOf(person.id, 'password_set', input.at);
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      if (this.recordTermsAcceptance(person.id, input.terms, input.at).created) {
+        for (const event of input.termsAudit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      }
       return { ...person };
     },
   };
@@ -1799,6 +1828,17 @@ export class MemoryLedgerStore implements LedgerStore {
    * (Phase B) — structured-clones it into IndexedDB immediately, rather than
    * holding the live Maps.
    */
+  /** MUT-324: the (userId, version) unique key; an existing acceptance is kept as it is. */
+  private recordTermsAcceptance(userId: string, terms: TermsAcceptanceInput, at: Date): { acceptance: TermsAcceptanceRecord; created: boolean } {
+    const key = `${userId}:${terms.version}`;
+    const existing = this.termsAcceptances.get(key);
+    if (existing) return { acceptance: { ...existing }, created: false };
+    const { version, locale, textSha256, surface } = terms;
+    const acceptance: TermsAcceptanceRecord = { userId, version, locale, textSha256, surface, acceptedAt: at };
+    this.termsAcceptances.set(key, acceptance);
+    return { acceptance: { ...acceptance }, created: true };
+  }
+
   snapshot(): LocalSnapshot {
     return {
       formatVersion: CURRENT_STORE_SNAPSHOT_VERSION,

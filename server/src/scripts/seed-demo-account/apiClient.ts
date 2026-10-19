@@ -92,7 +92,10 @@ export async function signIn(deps: ApiClientDeps, email: string, password: strin
  */
 export async function redeemSetupLink(deps: ApiClientDeps, setupLinkUrl: string, password: string): Promise<void> {
   const token = new URL(setupLinkUrl).hash.slice(1);
-  await request(deps, 'POST', '/v1/account-setup', { token, password }, { 'sec-fetch-site': 'same-origin' });
+  // MUT-324: the demo person accepts the terms the target server names, whatever build it runs.
+  const checked = await request(deps, 'POST', '/v1/account-setup/check', { token }, { 'sec-fetch-site': 'same-origin' });
+  const acceptedTermsVersion = typeof checked.body.termsVersion === 'string' ? checked.body.termsVersion : undefined;
+  await request(deps, 'POST', '/v1/account-setup', { token, password, acceptedTermsVersion }, { 'sec-fetch-site': 'same-origin' });
 }
 
 export function clientFor(deps: ApiClientDeps, session: SignInResult): SeedApiClient {

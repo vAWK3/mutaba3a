@@ -86,7 +86,8 @@ export function createLocalApp(options: CreateLocalAppOptions): LocalApp {
     }),
   );
 
-  const deps: PortalRouteDependencies = { store: scopedStore, attachments: { storage: null, urlTtlSeconds: 900 }, fxRates: null };
+  // MUT-324: no terms apply signed out, so /v1/me reports `terms: null` and the portal never asks.
+  const deps: PortalRouteDependencies = { store: scopedStore, attachments: { storage: null, urlTtlSeconds: 900 }, fxRates: null, terms: null };
   for (const route of PORTAL_ROUTES) app.route('/', route(deps));
 
   return app;

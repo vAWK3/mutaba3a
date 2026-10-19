@@ -10,6 +10,7 @@ import { expenseGroupRoutes } from './expense-groups.js';
 import { expenseRoutes } from './expenses.js';
 import { fxRateRoutes } from './fx-rates.js';
 import { incomeRoutes } from './income.js';
+import type { CurrentTerms } from '../legal.js';
 import { meRoutes } from './me.js';
 import { customerRoutes } from './customers.js';
 import { paymentRoutes } from './payments.js';
@@ -33,6 +34,8 @@ export interface PortalRouteDependencies {
   store: LedgerStore;
   attachments: { storage: AttachmentStorage | null; urlTtlSeconds: number };
   fxRates: CachedFxRates | null;
+  /** MUT-324: the terms /v1/me reports; null where none apply (the portal's signed-out mode). */
+  terms: CurrentTerms | null;
 }
 
 export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => OpenAPIHono<AppEnv>> = [
@@ -49,5 +52,5 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => conversionRoutes(deps.store),
   (deps) => fxRateRoutes(deps.fxRates),
   (deps) => profileRoutes(deps.store),
-  (deps) => meRoutes(deps.store),
+  (deps) => meRoutes(deps.store, deps.terms),
 ];

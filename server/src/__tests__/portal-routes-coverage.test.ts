@@ -81,6 +81,7 @@ function servedPaths(): ReadonlySet<string> {
     store: new MemoryLedgerStore(),
     attachments: { storage: null, urlTtlSeconds: 900 },
     fxRates: null,
+    terms: null,
   };
   const served = new Set<string>();
   for (const factory of PORTAL_ROUTES) {

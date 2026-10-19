@@ -5,12 +5,24 @@ import { signIn, warmDummyHash } from '../auth/sign-in.js';
 import { clientIp, isSameOriginRequest, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
 import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
+import type { CurrentTerms } from '../legal.js';
 import type { RateLimiter } from '../rate-limit.js';
 import { StateConflict } from '../repositories/memory.js';
 import type { AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
-import { ChangePasswordRequestSchema, ErrorEnvelopeSchema, MalafatSuggestionsChangeSchema, MalafatSuggestionsSchema, MeSchema, SignInRequestSchema } from '../schemas.js';
+import {
+  ChangePasswordRequestSchema,
+  ErrorEnvelopeSchema,
+  MalafatSuggestionsChangeSchema,
+  MalafatSuggestionsSchema,
+  MeSchema,
+  SignInRequestSchema,
+  TermsAcceptanceRequestSchema,
+  TermsStatusSchema,
+} from '../schemas.js';
+import { termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
+import { staleTerms } from './account-setup.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
-import { buildMe } from './me.js';
+import { buildMe, termsStatus } from './me.js';
 
 /**
  * Sign-in, sign-out and the signed-in person (MUT-38, hosted-portal.md §4, §6).
@@ -26,11 +38,14 @@ export interface SessionRouteOptions {
   settings: SessionSettings;
   throttle: SignInThrottle;
   ipLimiter: RateLimiter;
+  /** MUT-324: the current terms, reported by sign-in's Me and accepted through POST /v1/me/terms-acceptance. */
+  terms: CurrentTerms;
 }
 
 /** Session routes that act on the person rather than an organization: no X-Mutaba3a-Profile. */
 export const ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
   'PATCH /v1/me/malafat-suggestions',
+  'POST /v1/me/terms-acceptance',
   'DELETE /v1/sessions/current',
   'POST /v1/me/password',
 ]);
@@ -38,7 +53,7 @@ export const ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv> {
-  const { store, passwordHasher, settings, throttle, ipLimiter } = options;
+  const { store, passwordHasher, settings, throttle, ipLimiter, terms } = options;
   const app = new OpenAPIHono<AppEnv>();
   const cookieName = sessionCookieName(settings.secureCookie);
   const cookieOptions = { path: '/', httpOnly: true, secure: settings.secureCookie, sameSite: 'Strict' } as const;
@@ -80,7 +95,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         { idleMs: settings.idleMinutes * 60_000, absoluteMs: settings.absoluteHours * 3_600_000 },
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user), 201);
+      return c.json(await buildMe(store, user, terms), 201);
     },
   );
 
@@ -126,6 +141,35 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       const change = { ...(body.off === undefined ? {} : { off: body.off }), ...(body.dismiss === undefined ? {} : { dismiss: body.dismiss }) };
       const user = await store.users.updateMalafatSuggestions(c.get('identity').user.id, change, c.get('now')());
       return c.json(resolveMalafatSuggestions(user?.malafatSuggestions ?? null), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/me/terms-acceptance',
+      tags: ['Sessions'],
+      summary: 'Accept the current terms of service (MUT-324)',
+      description:
+        'Records that the signed-in person accepted `version`, read in `locale`, from the portal or the phone. Idempotent per version: accepting again changes nothing and writes no second audit row. The person accepts for themselves and, as owner, for their own profiles, so `user.terms_accepted` is audited on each profile they own.',
+      security: [{ session: [] }, { deviceSession: [] }],
+      request: { body: { required: true, content: { 'application/json': { schema: TermsAcceptanceRequestSchema } } } },
+      responses: {
+        200: { description: 'The terms status after accepting', content: { 'application/json': { schema: TermsStatusSchema } } },
+        409: errorResponse('TERMS_VERSION_STALE — `version` is not the current terms; details.current names it'),
+        422: errorResponse('Invalid body'),
+        401: errorResponse('No valid session'),
+        403: errorResponse('PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST'),
+      },
+    }),
+    async (c) => {
+      const { version, locale } = c.req.valid('json');
+      if (version !== terms.version) throw staleTerms(terms);
+      const { user, session } = c.get('identity');
+      const acceptance = termsAcceptanceOf(terms, locale, session.kind);
+      const audit = await termsAcceptedAudit(store, user, acceptance, c.get('requestId'));
+      await store.users.acceptTerms({ userId: user.id, ...acceptance, at: c.get('now')(), audit });
+      return c.json(await termsStatus(store, user.id, terms), 200);
     },
   );
 
