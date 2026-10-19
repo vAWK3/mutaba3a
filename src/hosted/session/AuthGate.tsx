@@ -32,7 +32,7 @@ export function AuthGate() {
   }, [locale, adoptAccountLocale]);
 
   // MUT-324: someone behind on the terms reads and accepts them before anything else; null (signed out) never asks
-  if (me.data?.terms?.accepted === false) return <TermsUpdatePage me={me.data} version={me.data.terms.version} />;
+  if (me.data?.terms?.accepted === false) return <TermsUpdatePage version={me.data.terms.version} />;
   if (me.data) {
     return (
       <MeProvider me={me.data}>
