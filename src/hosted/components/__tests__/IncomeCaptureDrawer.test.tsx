@@ -34,7 +34,14 @@ function fail(status: number, code: string, details?: unknown) {
 
 type Responder = (request: StubRequest) => Response | Promise<Response>;
 
-function stub(onIncome: Responder) {
+interface StubMatter {
+  id: string;
+  name: string;
+  customerId: string;
+  currency: string;
+}
+
+function stub(onIncome: Responder, matters: StubMatter[] = [], projectPosts: StubRequest[] = [], projectGate?: Promise<void>) {
   const posts: StubRequest[] = [];
   vi.stubGlobal(
     'fetch',
@@ -45,7 +52,17 @@ function stub(onIncome: Responder) {
       if (method === 'GET' && url.pathname === '/v1/customers') {
         return json({ items: [{ id: C1, name: 'Nour Studio', status: 'ACTIVE' }], nextCursor: null });
       }
-      if (method === 'GET' && url.pathname === '/v1/projects') return json({ items: [], nextCursor: null });
+      if (method === 'GET' && url.pathname === '/v1/projects') {
+        const customerId = url.searchParams.get('customerId');
+        return json({ items: matters.filter((m) => !customerId || m.customerId === customerId), nextCursor: null });
+      }
+      if (method === 'POST' && url.pathname === '/v1/projects') {
+        projectPosts.push(request);
+        if (projectGate) await projectGate;
+        const made = { id: 'm-new', ...(request.body as object) } as StubMatter;
+        matters.push(made);
+        return json(made, 201);
+      }
       if (method === 'POST' && url.pathname === '/v1/income') {
         posts.push(request);
         return onIncome(request);
@@ -252,3 +269,130 @@ describe('IncomeCaptureDrawer (MUT-133)', () => {
     expect(screen.getByRole('radiogroup', { name: 'النوع' })).toBeInTheDocument();
   });
 });
+
+describe('IncomeCaptureDrawer matters (MUT-318)', () => {
+  const RETAINER = { id: 'm1', name: 'Retainer', customerId: C1, currency: 'ILS' };
+
+  it('adds a matter for the chosen client, in the drawer currency, and saves Owed on it', async () => {
+    const projectPosts: StubRequest[] = [];
+    const posts = stub((r) => created(r.body), [], projectPosts);
+    const { user, onClose } = renderDrawer({ defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '900');
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    await user.selectOptions(screen.getByLabelText('Currency'), 'USD');
+    await user.type(screen.getByLabelText('Matter (optional)'), 'Menu design');
+    await user.click(await screen.findByRole('option', { name: /Add matter.*Menu design/ }));
+    await waitFor(() => expect(projectPosts).toHaveLength(1));
+    expect(projectPosts[0].body).toEqual({ customerId: C1, name: 'Menu design', currency: 'USD' });
+
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(posts[0].body).toMatchObject({ kind: 'owed', customerId: C1, projectId: 'm-new', currency: 'USD' });
+  });
+
+  it('holds Save while the matter is being added, so the income never saves without it (review D1)', async () => {
+    let land!: () => void;
+    const gate = new Promise<void>((resolve) => (land = resolve));
+    const projectPosts: StubRequest[] = [];
+    const posts = stub((r) => created(r.body), [], projectPosts, gate);
+    const { user, onClose } = renderDrawer({ defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '900');
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    await user.type(screen.getByLabelText('Matter (optional)'), 'Menu design');
+    await user.click(await screen.findByRole('option', { name: /Add matter.*Menu design/ }));
+    await waitFor(() => expect(projectPosts).toHaveLength(1));
+
+    const save = screen.getByRole('button', { name: 'Save income' });
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    await user.click(save);
+    expect(posts).toHaveLength(0);
+
+    land();
+    await waitFor(() => expect(save).not.toHaveAttribute('aria-disabled'));
+    await user.click(save);
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(posts).toHaveLength(1);
+    expect(posts[0].body).toMatchObject({ projectId: 'm-new' });
+  });
+
+  it('Enter held in the matter field while it is being added still saves once it lands (A1 with the Save hold)', async () => {
+    let land!: () => void;
+    const gate = new Promise<void>((resolve) => (land = resolve));
+    const posts = stub((r) => created(r.body), [], [], gate);
+    const { user, onClose } = renderDrawer({ defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '900');
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    const matter = screen.getByLabelText('Matter (optional)');
+    await user.type(matter, 'Menu design');
+    await screen.findByRole('option', { name: /Add matter.*Menu design/ });
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(matter).toHaveAttribute('readonly'));
+    await user.keyboard('{Enter}');
+    expect(posts).toHaveLength(0);
+
+    land();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(posts).toHaveLength(1);
+    expect(posts[0].body).toMatchObject({ projectId: 'm-new' });
+  });
+
+  it('picking a matter with no client fills the client, so Owed saves (2A)', async () => {
+    const posts = stub((r) => created(r.body), [RETAINER]);
+    const { user, onClose } = renderDrawer();
+    await user.type(screen.getByLabelText('Amount'), '500');
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    await user.click(screen.getByLabelText('Matter (optional)'));
+    await user.click(await screen.findByRole('option', { name: /Retainer/ }));
+
+    await waitFor(() => expect(screen.getByLabelText('Client')).toHaveValue('Nour Studio'));
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(posts[0].body).toMatchObject({ customerId: C1, projectId: 'm1' });
+  });
+
+  it('clearing the chosen client clears its matter, as the local app does (2A, 3A)', async () => {
+    stub((r) => created(r.body), [RETAINER]);
+    const { user } = renderDrawer({ defaultCustomerId: C1 });
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    const matter = screen.getByLabelText('Matter (optional)');
+    await user.click(matter);
+    await user.click(await screen.findByRole('option', { name: 'Retainer' }));
+    expect(matter).toHaveValue('Retainer');
+
+    await user.clear(screen.getByLabelText('Client'));
+    await waitFor(() => expect(matter).toHaveValue(''));
+  });
+
+  it('says under the matter that a Malafat capture must be in the matter\'s currency (review D2)', async () => {
+    const posts = stub(() => fail(422, 'VALIDATION_FAILED', { reason: 'CURRENCY_MISMATCH', field: 'currency', projectCurrency: 'USD' }), [RETAINER]);
+    const malafat = profile({ ...PERSONAL, writerOfRecord: 'MALAFAT', owned: false });
+    const { user, onClose } = renderDrawer({ profile: { ...malafat, owned: true }, defaultCustomerId: C1, initialKind: 'received' });
+    await user.type(screen.getByLabelText('Amount'), '500');
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    await user.click(screen.getByLabelText('Matter (optional)'));
+    await user.click(await screen.findByRole('option', { name: 'Retainer' }));
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    await waitFor(() =>
+      expect([...document.querySelectorAll('.form-error')].map((p) => strip(p.textContent))).toContain(
+        'This matter is in USD. Record it in USD, or choose another matter.',
+      ),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('offers no Add matter on a Malafat-fed profile', async () => {
+    stub((r) => created(r.body), [{ id: 'm1', name: 'Menu design', customerId: C1, currency: 'ILS' }]);
+    const malafat = profile({ ...PERSONAL, writerOfRecord: 'MALAFAT', owned: false });
+    const { user } = renderDrawer({ profile: { ...malafat, owned: true }, defaultCustomerId: C1, initialKind: 'received' });
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    await user.type(screen.getByLabelText('Matter (optional)'), 'Menu');
+    // The list is open (so an Add row would show), and a name the client has no matter for still gets none
+    expect(await screen.findByRole('option', { name: 'Menu design' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Matter (optional)'), ' review');
+    await waitFor(() => expect(screen.queryByRole('option', { name: 'Menu design' })).toBeNull());
+    expect(screen.queryByRole('option', { name: /Add matter/ })).toBeNull();
+    expect(screen.queryByText('Choose a client first to add a matter.')).toBeNull();
+  });
+});
+

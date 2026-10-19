@@ -2504,3 +2504,19 @@ When a lazily loaded module can't live in the importer's TypeScript program (the
 ### Pattern: After replacing who the person is, navigate to an explicit target read from a fresh answer
 A redirect (`/` → first profile) decides once, from whatever the observer last rendered, and a cache reset reaches observers a tick later. After swapping identity data (Restore), `fetchQuery` the new `/v1/me` and navigate straight to its first profile; pages that read `/v1/me` on every render correct themselves, a redirect doesn't. First instance: `YourDataDrawer.replace`.
 
+## Patterns added by MUT-318 (2026-10-19, ADR-100 decision 10)
+
+### Pattern: A typeahead saving a pick is read-only, never disabled
+A focused input that becomes `disabled` loses focus (HTML focus fixup): the keyboard drops to `<body>` and anything that checks `activeElement` (EntityTypeahead's "Enter held while saving submits once saved") silently stops working. While an async `onSelect` runs, EntityTypeahead sets `readOnly` beside `aria-busy`; callers must not pass their mutation's `isPending` into `disabled`. First instance: `EntityTypeahead` (`selecting`), ClientPicker/ProjectPicker.
+
+### Pattern: One-shot field cues are a class toggled on the DOM, restarted by a signal
+A cue (a field filled by another, a record just created) is a class on the typeahead root: removed, reflowed, re-added, and taken off by a timer after its span, so it never touches React state and a reduced-motion still tint (which fires no `animationend`) still ends. Callers bump a number (`flashSignal`) to play it; never on mount. Durations live beside the keyframes (`CASCADE_FLASH_MS`/`CREATE_SUCCESS_MS` ↔ the CSS vars). First instance: `EntityTypeahead` `playCue`.
+
+### Pattern: A form-only hook both apps need lives in `src/lib/forms/`
+The portal's lint bans `src/hooks/` (Dexie-backed hooks live there). A hook that only reads a react-hook-form `form` and plain arrays moves to `src/lib/forms/` and takes the app-specific shape through options (`ownerOf`), so the local app and the portal run one rule. First instance: `useClientProjectCascade` (local drawers; portal via `src/hosted/components/useMatterCascade.ts`).
+
+### Pattern: A conditional field hint is an always-mounted polite region the input describes
+A hint that appears while typing ("Choose a client first to add a matter.") is rendered always, empty when it doesn't apply, with `aria-live="polite"` and the input's `aria-describedby` (EntityTypeahead `describedBy`): a live region must exist before its text changes to be announced, and the description is read on focus. Collapse its margin while empty. First instance: ProjectPicker.
+
+### Pattern: A drawer holds Save while a picker is still adding (MUT-318 reconcile)
+A picker that creates on pick (Add «name») reports `onCreatingChange(true/false)` around its mutation (`finally`). The drawer's `usePendingPicks()` counts them: `pending` drives Save's look, `guard(handleSubmit(onSubmit))` drops a submit while any is in flight, before validation. The guard reads a ref, not state, because the picker reports done just before EntityTypeahead submits for an Enter held during the save, ahead of React's re-render. First instance: the hosted IncomeCaptureDrawer and ExpenseDrawer; the local IncomeDrawer's `clientCreating` is the same idea.

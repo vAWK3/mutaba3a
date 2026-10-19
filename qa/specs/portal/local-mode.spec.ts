@@ -151,6 +151,59 @@ test('Signed out, add a client from the picker, record money owed and part of it
   });
 });
 
+test('Signed out, add a client and a matter from the pickers, record money owed on the matter, reload, and both are there', { tag: '@portal.local.matter-owed' }, async ({ page, step }) => {
+  const server = await signedOutServer(page);
+  const table = page.getByRole('table', { name: 'Receivables' });
+  const row = () => table.getByRole('row', { name: /Ramallah Bakery/ });
+
+  await step('Open Receivables signed out', async () => {
+    await page.goto('/');
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Receivables' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Receivables' })).toBeVisible();
+  });
+
+  await step('Add income, Owed, 900.00, Add client: Ramallah Bakery', async () => {
+    await page.getByRole('button', { name: '+ Add income' }).first().click();
+    const drawer = page.getByRole('dialog', { name: 'New income' });
+    await drawer.getByRole('radio', { name: 'Owed' }).click();
+    await drawer.getByLabel('Amount').fill('900');
+    const client = drawer.getByLabel('Client');
+    await client.fill('Ramallah Bakery');
+    await drawer.getByRole('option', { name: /Add client.*Ramallah Bakery/ }).click();
+    await expect(client).toHaveValue('Ramallah Bakery');
+  });
+
+  await step('Under More details, type a matter nobody has and press Enter on Add matter: Menu design', async () => {
+    const drawer = page.getByRole('dialog', { name: 'New income' });
+    await drawer.getByRole('button', { name: /More details/ }).click();
+    const matter = drawer.getByLabel('Matter (optional)');
+    await matter.fill('Menu design');
+    await expect(drawer.getByRole('option', { name: /Add matter.*Menu design/ })).toHaveAttribute('aria-selected', 'true');
+    await matter.press('Enter');
+    await expect(matter).toHaveValue('Menu design');
+    // Saving the pick keeps the keyboard on the field (Apple design review A1)
+    await expect(matter).toBeFocused();
+  });
+
+  await step('Save: the entry is listed under the client and the matter', async () => {
+    const drawer = page.getByRole('dialog', { name: 'New income' });
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer).toBeHidden();
+    await expect(row()).toContainText('900.00');
+    await expect(row()).toContainText('Menu design');
+  });
+
+  await step('Reload: the entry still names the client and the matter', async () => {
+    await page.reload();
+    await expect(row()).toContainText('Menu design');
+    await expect(row()).toContainText('900.00');
+  });
+
+  await step('Nothing reached the server after the first-visit check', async () => {
+    expect(server.requests).toEqual(['GET /v1/me']);
+  });
+});
+
 test('Two tabs on this device see each other\'s saves', { tag: '@portal.local.two-tabs' }, async ({ page, step }) => {
   await signedOutServer(page);
   const other = await page.context().newPage();

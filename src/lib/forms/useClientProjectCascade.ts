@@ -1,14 +1,19 @@
 import { useEffect, useRef } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import type { Project } from '../types';
 
-interface UseClientProjectCascadeOptions {
+interface UseClientProjectCascadeOptions<P extends { id: string }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<any>;
-  projectsData: Project[];
+  projectsData: readonly P[];
+  /** Whose project it is: `clientId` by default (the local app); the portal's matters name `customerId` (MUT-318). */
+  ownerOf?: (project: P) => string | null | undefined;
   clientFieldName?: string;
   projectFieldName?: string;
+  /** Called each time the client is filled from a picked project, so the client field can show it (MUT-318 A3). */
+  onAutoFill?: () => void;
 }
+
+const clientIdOf = (project: { clientId?: string | null }) => project.clientId;
 
 /**
  * Bi-directional cascade between client and project form fields.
@@ -21,13 +26,18 @@ interface UseClientProjectCascadeOptions {
  *    - If auto-filled -> do NOT clear project (project was the explicit choice)
  *    - If explicit -> clear project if it belonged to that client
  * 5. Project cleared -> do NOT clear client (client is higher-level context)
+ *
+ * Shared by the local drawers and the portal's (MUT-318): it lives in lib/forms because the portal may not import
+ * src/hooks/. A project not in `projectsData` (one just created, before its list refetches) is left alone.
  */
-export function useClientProjectCascade({
+export function useClientProjectCascade<P extends { id: string }>({
   form,
   projectsData,
+  ownerOf = clientIdOf as (project: P) => string | null | undefined,
   clientFieldName = 'clientId',
   projectFieldName = 'projectId',
-}: UseClientProjectCascadeOptions) {
+  onAutoFill,
+}: UseClientProjectCascadeOptions<P>) {
   const { watch, setValue } = form;
   const clientWasAutoFilled = useRef(false);
   const isAutoFilling = useRef(false); // guard: true while project effect is auto-filling client
@@ -61,7 +71,7 @@ export function useClientProjectCascade({
       // Client was explicitly set -> clear project if it belonged to that client
       if (projectId) {
         const project = projectsData.find((p) => p.id === projectId);
-        if (project && project.clientId && project.clientId === prevClient) {
+        if (project && ownerOf(project) === prevClient) {
           setValue(projectFieldName, '');
         }
       }
@@ -71,14 +81,14 @@ export function useClientProjectCascade({
     // Client changed to a new value -> clear mismatched project
     if (projectId) {
       const project = projectsData.find((p) => p.id === projectId);
-      if (project && project.clientId && project.clientId !== clientId) {
+      if (project && ownerOf(project) && ownerOf(project) !== clientId) {
         setValue(projectFieldName, '');
       }
     }
 
     // Explicit client selection resets auto-fill tracking
     clientWasAutoFilled.current = false;
-  }, [clientId, projectId, projectsData, setValue, projectFieldName]);
+  }, [clientId, projectId, projectsData, setValue, projectFieldName, ownerOf]);
 
   // Track project changes and cascade to client (auto-fill)
   useEffect(() => {
@@ -93,14 +103,14 @@ export function useClientProjectCascade({
 
     // Project selected -> auto-fill client if project has a clientId
     const project = projectsData.find((p) => p.id === projectId);
-    if (project?.clientId) {
-      if (project.clientId !== clientId) {
-        clientWasAutoFilled.current = true;
-        isAutoFilling.current = true;
-        setValue(clientFieldName, project.clientId);
-      }
+    const owner = project ? ownerOf(project) : null;
+    if (owner && owner !== clientId) {
+      clientWasAutoFilled.current = true;
+      isAutoFilling.current = true;
+      setValue(clientFieldName, owner);
+      onAutoFill?.();
     }
-  }, [projectId, clientId, projectsData, setValue, clientFieldName]);
+  }, [projectId, clientId, projectsData, setValue, clientFieldName, ownerOf, onAutoFill]);
 
   return { clientWasAutoFilled };
 }

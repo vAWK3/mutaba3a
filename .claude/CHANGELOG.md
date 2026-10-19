@@ -28,6 +28,38 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Add a matter from the portal's matter picker, signed in or out (MUT-318, ADR-100 decision 10)
+
+**Why:** MUT-286's reconcile gap. Hosted matters came only from the phone app or Malafat, so signed out nobody could ever have one. The matter picker now adds matters the way the client picker adds clients.
+
+### Added
+- **"Add matter: «name»"** in the matter picker (income drawer's More details, expense drawer), on a profile the person owns (`canAddClient`), both modes: creates the matter under the chosen client in the drawer's currency (`POST /v1/projects`, attempt-scoped Idempotency-Key, `useCreateProject`) and picks it. The portal's 51st API call.
+- **No client chosen:** no Add row; "Choose a client first to add a matter." under the field, the input's `aria-describedby`, in an always-mounted polite live region (design 5A).
+- **Whose matter:** with no client chosen, each matter row names its client (EntityTypeahead `secondary`, design 1A).
+- **Client ↔ matter cascade in the portal** (design 2A, 3A): picking a matter with no client fills the client; changing or clearing the client empties a matter of another client, silently, as in the local app.
+- **Cues (Apple design review A2, A3):** the field's border pulses once when a create succeeds; the client field flashes when a picked matter fills it, in the portal and the local app. Reduced motion gets a still tint for the same span.
+
+### Changed
+- `useClientProjectCascade` moved from `src/hooks/` to `src/lib/forms/` (the portal may not import `src/hooks/`), generic over the project type with `ownerOf` and `onAutoFill`; local drawers' imports follow, behaviour unchanged.
+- Income drawer's Arabic matter label «الملف (اختياري)» → «القضية (اختياري)», placeholder «اختر ملفاً» → «اختر قضية»: «ملف» means profile everywhere else (design 4A).
+
+### Fixed
+- **Saving a picked "Add …" no longer drops keyboard focus** (Apple design review A1): ClientPicker disabled its own focused input while creating, which blurred it (HTML focus fixup) and defeated "Enter held while saving submits". EntityTypeahead now makes the input read-only while a pick saves; neither picker disables on `isPending`.
+- The expense drawer's Matter label now names its field (the picker had no `id`).
+
+### Fixed in /qa-reconcile (2026-10-19)
+- **No second pick while one is saving.** A1 kept the input focused, so ArrowDown or a refocus could reopen the list mid-save, and the first create, landing later, overwrote the second pick (the record saved under a client or matter the person had replaced). EntityTypeahead now keeps the list shut and ignores a pick while one is saving, as `disabled` did before A1.
+- **Save waits for an «Add …» in flight** (Basel D1). Saving meanwhile stored the income or expense without the client or matter being added and left it unlinked. Both hosted drawers hold Save (`usePendingPicks`) until the pickers report the create settled; Enter held in the field still saves once it lands.
+- **A Malafat capture in another currency than its matter** now says so under Matter («This matter is in {currency}…», Basel D2) instead of a generic "couldn't save" toast.
+- **Arabic option names sit on the right.** An old `[dir=rtl] … text-align: end` rule put them on the left (`start` already follows the direction); a long client chip truncates on one line instead of wrapping the row.
+- **«القضية» in the income drawer's matter errors** too (design 4A): «هذا الملف…» → «هذه القضية…».
+- Expense drawer default currency (USD whatever the profile's) filed as MUT-319 (Basel D2).
+
+### Tests
+- See TEST_PLAN.md › MUT-318.
+
+---
+
 ## [Unreleased] - 2026-10-19 — A compact table's dates are one width on every day (MUT-250, epic MUT-101)
 
 **Why:** `@web.brand.layout` failed on unchanged main on some days and passed on others. Income at 375px in Arabic measured 718–736px depending on today's date. The compact date column (`12/10/2026`) takes its width from its widest date, and Thmanyah's digits are proportional (`1` is narrow, `0` and `8` are wide), so the 726px cap held on 12/10 and failed on 19/10.

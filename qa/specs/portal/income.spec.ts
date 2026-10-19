@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { FIRM, OFFICE_A, customer, malafatFirm, office } from '../../support/portal';
-import { FakeApi, allocation, apiError, customerSummary, payment, receivable, todayInJerusalem } from '../../support/portalApi';
+import { FakeApi, allocation, apiError, customerSummary, payment, project, receivable, todayInJerusalem } from '../../support/portalApi';
 
 /**
  * Income on an owned hosted profile (MUT-133): Add income (Received or Owed)
@@ -490,5 +490,84 @@ test('Add income for a client that isn\'t there yet, with Add client in the pick
     const expense = page.getByRole('dialog', { name: 'Record expense' });
     await expense.getByLabel('Client').fill('Ramallah Bakery');
     await expect(expense.getByRole('option', { name: /Add client/ })).toHaveCount(0);
+  });
+});
+
+test('Add income on a matter that isn\'t there yet: a hint until a client is chosen, then Add matter; a Malafat-fed profile never offers it', { tag: '@portal.income.add-matter' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio'), malafatFirm()], clients: 2 });
+  const drawer = page.getByRole('dialog', { name: 'New income' });
+  const matter = drawer.getByLabel('Matter (optional)');
+
+  await step('On your own profile, + Add income, Owed, More details, and type a matter with no client chosen', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.getByRole('button', { name: '+ Add income' }).first().click();
+    await drawer.getByRole('radio', { name: 'Owed' }).click();
+    await drawer.getByRole('button', { name: /More details/ }).click();
+    await matter.fill('Lease dispute');
+    await expect(drawer.getByText('Choose a client first to add a matter.')).toBeVisible();
+    await expect(drawer.getByRole('option', { name: /Add matter/ })).toHaveCount(0);
+  });
+
+  await step('Pick Client 2, then choose Add matter: Lease dispute', async () => {
+    await pickClient(page, 'Client', 'Client 2');
+    await matter.fill('Lease dispute');
+    await drawer.getByRole('option', { name: /Add matter.*Lease dispute/ }).click();
+    await expect(matter).toHaveValue('Lease dispute');
+    const created = api.last('POST', /^\/v1\/projects$/);
+    expect(created?.body).toEqual({ customerId: C2, name: 'Lease dispute', currency: 'ILS' });
+    expect(created?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
+    expect(created?.headers['x-mutaba3a-profile']).toBe(OFFICE_A);
+  });
+
+  await step('Type 900 and save: the income names the new matter', async () => {
+    await drawer.getByLabel('Amount').fill('900');
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer).toHaveCount(0);
+    const income = api.last('POST', /^\/v1\/income$/);
+    expect((income?.body as { projectId?: string }).projectId).toBeTruthy();
+    await expect(page.getByRole('table', { name: 'Receivables' }).getByRole('row', { name: /Client 2/ })).toContainText('Lease dispute');
+  });
+
+  await step('On the Malafat-fed profile, the expense drawer\'s matter list offers no Add matter', async () => {
+    await page.goto(`/p/${FIRM}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    const expense = page.getByRole('dialog', { name: 'Record expense' });
+    const matterField = expense.getByLabel('Matter');
+    // The list opens on the matters already there (so an Add row would show), then a new name gets none
+    await matterField.fill('Lease');
+    await expect(expense.getByRole('option', { name: /Lease dispute/ })).toBeVisible();
+    await matterField.fill('Lease appeal');
+    await expect(expense.getByRole('option', { name: /Lease dispute/ })).toHaveCount(0);
+    await expect(expense.getByRole('option', { name: /Add matter/ })).toHaveCount(0);
+    await expect(expense.getByText('Choose a client first to add a matter.')).toHaveCount(0);
+  });
+});
+
+test('Picking a matter with no client fills the client, and each matter names its client', { tag: '@portal.income.matter-fills-client' }, async ({ page, step }) => {
+  const api = new FakeApi({
+    profiles: [office(OFFICE_A, 'Nour Studio')],
+    clients: 2,
+    projects: [project(1, C1, 'Retainer'), project(2, C2, 'Retainer')],
+  });
+  const drawer = page.getByRole('dialog', { name: 'New income' });
+
+  await step('+ Add income, Owed, More details, open Matter with no client chosen', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.getByRole('button', { name: '+ Add income' }).first().click();
+    await drawer.getByRole('radio', { name: 'Owed' }).click();
+    await drawer.getByRole('button', { name: /More details/ }).click();
+    await drawer.getByLabel('Matter (optional)').click();
+    await expect(drawer.getByRole('option', { name: /Retainer/ })).toHaveText(['RetainerClient 1', 'RetainerClient 2']);
+  });
+
+  await step('Pick Client 2\'s Retainer: Client fills with Client 2', async () => {
+    await drawer.getByRole('option', { name: /Retainer.*Client 2/ }).click();
+    await expect(drawer.getByLabel('Client')).toHaveValue('Client 2');
+    await expect(drawer.getByLabel('Matter (optional)')).toHaveValue('Retainer');
+  });
+
+  await step('Change Client to Client 1: Client 2\'s matter empties', async () => {
+    await pickClient(page, 'Client', 'Client 1');
+    await expect(drawer.getByLabel('Matter (optional)')).toHaveValue('');
   });
 });

@@ -271,6 +271,11 @@
       },
       "noMatters": "No matters with fees on this client yet."
     },
+    "matters": {
+      "add": "Add matter",
+      "addFailed": "Couldn't add the matter. Try again.",
+      "needsClient": "Choose a client first to add a matter."
+    },
     "receivables": {
       "title": "Receivables",
       "columns": {
@@ -493,6 +498,7 @@
         "clientNotFound": "This client isn't on this profile",
         "matterNotFound": "This matter isn't on this profile",
         "matterMismatch": "This matter belongs to another client",
+        "matterCurrency": "This matter is in {currency}. Record it in {currency}, or choose another matter.",
         "saveFailed": "Couldn't save this entry. Try again.",
         "network": "Couldn't reach the server. Try again."
       }
