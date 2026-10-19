@@ -343,19 +343,9 @@ html:lang(en) {
   font-family: var(--font-en);
 }
 
-/* Direction still matches every element, and so still beats a dir attribute in Arabic. Twenty
-   dir="ltr" sites depend on that today; MUT-109 scopes it to the root (TD-048, direction half). */
-html:lang(ar),
-html:lang(ar) body,
-:lang(ar) {
-  direction: rtl;
-}
-
-html:lang(en),
-html:lang(en) body,
-:lang(en) {
-  direction: ltr;
-}
+/* No direction rule here: <html dir> (I18nProvider) sets it and every element inherits it, so a
+   dir attribute works in both languages (MUT-109, TD-048 direction half). A :lang() rule would
+   match every element and beat the attribute. */
 
 /* Headings: Thmanyah Serif Display 700 */
 h1, h2, h3, h4, h5, h6,

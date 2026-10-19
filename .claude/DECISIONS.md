@@ -3993,3 +3993,21 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 10. **The matter picker adds matters** (MUT-318, Basel, 2026-10-19; brief `.claude/designs/mut-318-add-matter.md`): a typed name the chosen client has no matter for gets "Add matter: «name»", gated by the same `canAddClient(profile)` (`projects` is profile-dependent exactly like `customers` in `writability.ts`), in both modes; the 51st portal call (`POST /v1/projects`, already in `PORTAL_ROUTES`). A matter needs a client: with none chosen there is no Add row and a hint says why. A new matter opens in the drawer's currency. The portal reuses the local app's client ↔ matter cascade (moved to `src/lib/forms/`), so a picked matter fills its client and a client change empties a matter of another client. Picker inputs are never disabled while a pick saves (read-only, so focus and Enter-held submit survive); the list stays shut meanwhile, so no second pick can race the first. Reconcile (Basel, 2026-10-19): **D1** a hosted drawer holds Save while a picker's Add is in flight (`usePendingPicks`); **D2** a CURRENCY_MISMATCH (Malafat capture vs its matter) is said under Matter, and the expense drawer's USD default is MUT-319, not this ticket.
 
 **Consequences**: Existing release-QA portal specs model a browser that has used an account (`openSignedInPortal` sets `mut-mode=remote` when absent); `qa/specs/portal/local-mode.spec.ts` covers the signed-out side. The portal's client list now grows from the picker (decision 8 below).
+
+---
+
+## ADR-101: Direction Comes From `<html dir>` and the `dir` Attribute Only; a Locale-Formatted Amount Is a Plain `<bdi>` (MUT-109)
+
+**Status**: Active (amends MUT-110's note that a standalone amount uses `<bdi dir="ltr">`)
+**Date**: 2026-10-19
+**Context**: TD-048's direction half. `theme.css` set `direction` on every `:lang(ar)` and `:lang(en)` element. An author rule beats the `dir` attribute, so every `dir="ltr"` was ignored in Arabic and every `dir="rtl"`/`"auto"` in English. Five CSS files out-ranked `:lang(ar)` to get LTR back. MUT-79 scoped the rule to the root and reverted, because three amount spans flipped: their `dir="ltr"` started working. Brief `.claude/designs/mut-109-rtl-direction.md`, approved by Basel 2026-10-19 with D1–D4.
+
+**Decision**:
+1. **No CSS rule sets `direction` on a `:lang()` selector** (both languages, D1). `I18nProvider` sets `<html lang dir>`; direction is inherited.
+2. **A locale-formatted amount is a plain `<bdi>`** (`dir=auto`). The Arabic `Intl` currency string starts with RLM, so it resolves right to left, which is the order those amounts already had on screen (`$US 1,300`, `₪ 1,500.00`). This was measured in Chromium before the change.
+3. **`dir="ltr"` means content that reads left to right in any language**: emails, passwords, dates, version, invoice and payment numbers, the FX formula, amount inputs and their currency groups.
+4. **Expenses' two amounts that were LTR through CSS** (`CurrencyAmounts`, `RecurringAttentionList`) keep `dir="ltr"`, and their CSS workaround goes (D2: zero visible change).
+5. **A `dir="ltr"` input or select in the Arabic UI keeps its text on the right** (`:where([dir="rtl"]) :is(input, select)[dir="ltr"]`, 0,1,1, under the income and payment drawers' left-aligned groups), so only the typing order changes (D3).
+6. **Every `dir` site is classified** in `src/styles/__tests__/direction.test.ts` (45 on 2026-10-19), and a new one fails until classified.
+
+**Consequences**: The `dir` attribute is the single source of truth, and new LTR content needs no CSS. Arabic before/after on preview builds showed 0 changed pixels on the ticket's eight screens. English `dir="rtl"`/`"auto"` now work: the Arabic business-name input is RTL in the English UI, and a user-typed name takes its own direction. The app still shows two amount orders: standalone (RTL, point 2) and in-sentence (LRI, MUT-110). Picking one is a product follow-up, not this ADR.

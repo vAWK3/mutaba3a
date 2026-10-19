@@ -706,6 +706,17 @@ test.describe('Transaction Management', () => {
 | MUT-43 (AC3) | `src/hosted/session/__tests__/auth-states.test.tsx` | unchanged byte-for-byte, green |
 | Browser | throwaway Playwright on preview builds | toggle 0.96 with translate kept; app Button 0.96; AR hidden save (1.6s refetch) → notice → Show → anchored, tinted, rail on the right |
 
+## MUT-109 — direction from `<html dir>` and the `dir` attribute (added 2026-10-19)
+
+| Area | Tests | Proves |
+|---|---|---|
+| CSS guard | `src/styles/__tests__/direction.test.ts` | no rule in any `src/**/*.css` declares `direction` on a `:lang()` selector |
+| Site ratchet | same file | every `dir="ltr|rtl|auto"` in `src/**/*.tsx` matches `DIR_SITES` (45 on 2026-10-19, by file and count); no `dir={…}`; the seven amount files wrap the amount in a plain `<bdi>` |
+| Amount markup | `OwedNowSummary`, `format` (DecimalAmount), `ClientsPage`, `ClientDetailPage`, `HomeAttentionRow.plurals`, `OrphanedRecordsDrawer` tests | the amount is a `<bdi>` with no `dir`; the Arabic string starts with RLM |
+| Field markup | `ConversionDrawer`, `PartialPaymentDrawer`, `RecordPaymentDrawer` tests (+ existing pins in `IncomeDrawer`, `ExpenseFormFields`, hosted `ExpenseDrawer`, `ConversionDrawer`, `IncomeCaptureDrawer`, `SetupPage`, `HostedOfferPage`) | amount and LTR inputs carry `dir="ltr"` |
+| Browser | `qa/specs/web/direction.spec.ts` (`@web.direction.*`), `qa/specs/portal/direction.spec.ts` (`@portal.direction.*`) | Arabic amounts read `$US 1,300` / `₪ 1,500.00` on screen with no `dir`; the FX formula, emails, payment and invoice numbers compute `ltr`; LTR fields sit on the right in Arabic; English unchanged; the Arabic business name is `rtl` in English. Red on main, green on the branch (preview builds) |
+| Before/after | throwaway capture on preview builds of main and the branch | 0 changed pixels on the income and payment drawers, the local and portal expense forms, portal sign-in, Home, Clients and the client profile (a 3 px Add-button edge also differs between two runs of main) |
+
 ## Critical Test Scenarios
 
 ### Must-Have Coverage (Updated 2026-02-09)

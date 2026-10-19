@@ -266,6 +266,14 @@ describe('ClientsPage', () => {
       expect(within(owedCell).getAllByTestId('client-amount').map((e) => e.textContent)).toEqual(['$1,300', '₪4,200']);
     });
 
+    it('MUT-109: each amount is a plain <bdi>, so an Arabic amount resolves from its own leading RLM', () => {
+      renderPage();
+      for (const amount of within(rowFor('Acme')).getAllByTestId('client-amount')) {
+        expect(amount.tagName).toBe('BDI');
+        expect(amount).not.toHaveAttribute('dir');
+      }
+    });
+
     it('shows overdue per currency with the age of the oldest overdue item', () => {
       renderPage();
       const overdueCell = within(rowFor('Gamma')).getByTestId('client-overdue');

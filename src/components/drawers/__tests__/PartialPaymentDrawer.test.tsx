@@ -177,6 +177,12 @@ describe('PartialPaymentDrawer', () => {
       expect(amountStatus()).toBe('Paid in full');
     });
 
+    it('MUT-109: the currency and amount group reads left to right in either language', () => {
+      renderDrawer();
+
+      expect(amountInput().closest('.pay-drawer-amount-field')).toHaveAttribute('dir', 'ltr');
+    });
+
     // The field always writes cents as two digits. The title uses the app's
     // shared formatAmount, which drops a trailing zero ("$887.5", TD-062).
     it('writes a balance with cents to two decimals in the field', () => {

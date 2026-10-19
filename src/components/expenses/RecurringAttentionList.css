@@ -75,10 +75,9 @@
   white-space: nowrap;
 }
 
+/* Left to right in Arabic too: the markup's dir="ltr" (MUT-109, brief D2) */
 .recurring-attention-amount {
   font-family: var(--font-mono);
-  direction: ltr;
-  unicode-bidi: isolate;
   font-weight: var(--weight-medium);
   font-variant-numeric: tabular-nums;
 }

@@ -201,6 +201,8 @@ describe('RecordPaymentDrawer (MUT-133)', () => {
     const error = await screen.findByText(/more than what's left now/);
     expect(strip(error.textContent)).toBe("That's more than what's left now (₪700.00)");
     expect(screen.getByLabelText('Amount (ILS)')).toHaveValue('800');
+    // MUT-109: typed left to right in either language
+    expect(screen.getByLabelText('Amount (ILS)')).toHaveAttribute('dir', 'ltr');
     expect(strip(amountLine()!.textContent)).toBe("Exceeds what's left (₪700.00)");
     expect(save()).toBeDisabled();
   });

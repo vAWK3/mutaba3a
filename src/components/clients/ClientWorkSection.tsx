@@ -211,7 +211,7 @@ export function ClientWorkSection({ clientId }: ClientWorkSectionProps) {
                         {row.remainingMinor !== undefined && (
                           <div className="client-work-subline">
                             {t('transactions.partialPayment.remaining')}:{' '}
-                            <bdi dir="ltr">{formatAmount(row.remainingMinor, row.currency, locale)}</bdi>
+                            <bdi>{formatAmount(row.remainingMinor, row.currency, locale)}</bdi>
                           </div>
                         )}
                       </td>

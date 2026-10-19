@@ -126,6 +126,10 @@ describe('OrphanedRecordsDrawer', () => {
     expect(incomeRow).toHaveTextContent('Acme');
     expect(incomeRow).toHaveTextContent('Oct 1, 2026');
     expect(incomeRow).toHaveTextContent('$100');
+    // MUT-109: a plain <bdi>, so an Arabic amount resolves from its own leading RLM
+    const amount = within(incomeRow).getByText('$100');
+    expect(amount.tagName).toBe('BDI');
+    expect(amount).not.toHaveAttribute('dir');
   });
 
   describe('with one profile', () => {

@@ -29,9 +29,8 @@
   box-shadow: var(--focus-ring);
 }
 
-/* The formula reads left to right in Arabic too. theme.css sets direction on
-   every :lang(ar) element, which beats the dir attribute (TD-048), so state it
-   with a selector that outranks :lang(ar). */
+/* The formula reads left to right in Arabic too. The markup's dir="ltr" does it
+   since MUT-109; this rule only restates it. */
 .fx-formula[dir='ltr'] {
   direction: ltr;
 }

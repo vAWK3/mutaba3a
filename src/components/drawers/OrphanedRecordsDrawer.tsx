@@ -254,7 +254,7 @@ function RowDetail({ row, locale }: { row: OrphanRow; locale: string }) {
   const parts: ReactNode[] = [];
   if (row.clientName) parts.push(row.clientName);
   if (row.date) parts.push(formatDate(row.date, locale));
-  if (row.amount) parts.push(<bdi dir="ltr">{formatAmount(row.amount.minor, row.amount.currency, locale)}</bdi>);
+  if (row.amount) parts.push(<bdi>{formatAmount(row.amount.minor, row.amount.currency, locale)}</bdi>);
   if (parts.length === 0) return null;
 
   return (

@@ -69,3 +69,13 @@ describe('HomeAttentionRow counts (MUT-179)', () => {
     expect(screen.getByText(text)).toBeInTheDocument();
   });
 });
+
+describe('HomeAttentionRow amount (MUT-109)', () => {
+  it('is a plain <bdi> in Arabic, which the formatted string\'s leading RLM resolves right to left', () => {
+    renderRow(workRow({ overdueDays: 3 }), 'ar');
+    const amount = screen.getByText(/US\$/);
+    expect(amount.tagName).toBe('BDI');
+    expect(amount).not.toHaveAttribute('dir');
+    expect(amount.textContent?.startsWith('\u200F')).toBe(true);
+  });
+});

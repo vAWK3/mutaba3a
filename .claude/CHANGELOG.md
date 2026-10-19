@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Direction comes from `<html dir>` and the `dir` attribute only (MUT-109, ADR-101, TD-048 resolved)
+
+**Why:** `theme.css` set `direction` on every `:lang()` element, which beat the `dir` attribute: every `dir="ltr"` was ignored in Arabic, and every `dir="rtl"`/`"auto"` in English. Last open child of Brand v2 (MUT-101).
+
+### Changed
+- `src/styles/theme.css`: both `:lang()` direction rules removed; `<html dir>` (I18nProvider) is inherited.
+- Seven locale-formatted amounts are a plain `<bdi>` (no `dir`): `OwedNowSummary`, `ClientWorkSection`, `ClientsPage`, `HomeRecentPayments`, `HomeAttentionRow`, `OrphanedRecordsDrawer`, portal `DecimalAmount`. Arabic amounts render exactly as before (measured: `$US 1,300`).
+- `CurrencyAmounts.css`, `RecurringAttentionList.css`: `direction: ltr` workaround removed; the markup's `dir="ltr"` does it (D2). Comments in `index.css`, `FxRateReadout.css`, `TruncatedTitle.css` and `utils.ts` (`isolateAmount`) no longer cite `:lang(ar)`.
+- `index.css`: `:where([dir="rtl"]) :is(input, select)[dir="ltr"] { text-align: right }`. The amount, email, password, date and timezone fields that now type left to right keep their text on the right in Arabic (D3).
+
+### Fixed
+- In Arabic, these now type left to right: portal sign-in, setup and change-password fields, the portal's date filter, the portal's income, payment, conversion and expense amounts, the local conversion drawer and the landing request form's email and phone. They used to render right to left despite `dir="ltr"`.
+- In English, the Arabic business-name input is right to left, and user-typed names (`dir="auto"`) take their own direction.
+
+### Tests
+- `src/styles/__tests__/direction.test.ts`: no `:lang()` direction rule in any CSS; all 45 `dir` sites classified (ratchet); no computed `dir={…}`; the seven amount files use a plain `<bdi>`.
+- Updated `OwedNowSummary.test.tsx`, `format.test.tsx`. Added amount and field assertions in `ClientsPage`, `ClientDetailPage`, `HomeAttentionRow.plurals`, `OrphanedRecordsDrawer`, `ConversionDrawer`, `PartialPaymentDrawer` and `RecordPaymentDrawer` tests.
+- Release QA: `qa/features/{web,portal}/direction.yaml`, `qa/specs/{web,portal}/direction.spec.ts`, `qa/support/bidi.ts` (`readBidi`/`readField`: on-screen character order and computed direction). The specs were red on main and green on the branch, on preview builds.
+
 ## [Unreleased] - 2026-10-19 — Add a matter from the portal's matter picker, signed in or out (MUT-318, ADR-100 decision 10)
 
 **Why:** MUT-286's reconcile gap. Hosted matters came only from the phone app or Malafat, so signed out nobody could ever have one. The matter picker now adds matters the way the client picker adds clients.

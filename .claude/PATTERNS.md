@@ -1403,14 +1403,18 @@ that can compare something currency-free (days late, dates, names) do that
 instead. Every comparator ends with a name-then-id tie-break so equal rows
 never reshuffle.
 
-### Amounts stay LTR inside RTL text (MUT-3)
-A standalone amount renders in `<bdi dir="ltr">` (or a cell the RTL rules
-already isolate, like `.amount-cell`). An amount *inside a translated sentence*
+### Amounts stay LTR inside RTL text (MUT-3; standalone amounts amended by MUT-109)
+A standalone locale-formatted amount renders in a **plain `<bdi>`** (MUT-109,
+ADR-101): the Arabic `Intl` string starts with RLM, so `dir=auto` resolves it
+right to left, the order Arabic amounts have always had on screen
+(`$US 1,300`). Never `<bdi dir="ltr">` around `formatAmount`/`formatDecimal`;
+`direction.test.ts` refuses it. An amount *inside a translated sentence*
 ("{amount} overdue") is passed to `t()` wrapped in U+2066 … U+2069 (LEFT-TO-RIGHT
 ISOLATE … POP DIRECTIONAL ISOLATE), so translators keep control of word order
 and the number still reads left to right in Arabic. Tests that assert the
-sentence strip `[\u2066-\u2069]` first. Phone numbers and e-mail addresses in
-an RTL header get the same `<bdi dir="ltr">`.
+sentence strip `[\u2066-\u2069]` first. Phone numbers, e-mail addresses,
+version and invoice numbers get `<bdi dir="ltr">`: text that reads left to
+right in any language.
 
 ### Operator CLIs are functions over an injected fetch (MUT-37)
 `smoke.ts` started it; `scripts/users.ts` makes it the rule. The script exports
@@ -1712,8 +1716,8 @@ Dexie's `table.update(id, changes)` deletes a key whose value is `undefined`, an
 - Unit-test the contract instead: Enter is not `defaultPrevented`.
 - Cover the real path with a Playwright spec (`qa/specs/web/income.spec.ts`, `@web.income.fast-path`).
 
-### Amounts stay left-to-right inside Arabic; set it in CSS, not only with `dir`
-theme.css sets `:lang(ar) { direction: rtl }` on every element, which out-ranks a `dir="ltr"` attribute. An LTR island (an amount with its currency prefix) needs `direction: ltr` from a selector that out-ranks `:lang(ar)` (`div.input-with-prefix`, `.input-with-prefix > .input`; see also `.num-input`). A summary line that mixes LTR codes and Arabic text wraps each part in `<bdi>`.
+### Direction comes from `<html dir>` and the `dir` attribute (MUT-109, ADR-101)
+No CSS rule sets `direction` on `:lang()`: such a rule matches every element and beats the `dir` attribute (TD-048, how every `dir="ltr"` came to be ignored in Arabic). `I18nProvider` sets `<html lang dir>`; every element inherits it. Use the attribute for intent: `dir="ltr"` on an LTR island (an amount input or its currency-prefix group, an email, a password, a date), `dir="auto"` for user text, a plain `<bdi>` for a locale-formatted amount (above). A `dir="ltr"` input or select in the Arabic UI keeps its text on the right (`:where([dir="rtl"]) :is(input, select)[dir="ltr"]` in index.css), so only typing order differs. A new `dir` site must be classified in `src/styles/__tests__/direction.test.ts` (`DIR_SITES`). A summary line that mixes LTR codes and Arabic text wraps each part in `<bdi>`. Rendering is proved in a browser (`qa/support/bidi.ts` `readBidi`/`readField`), never in jsdom, which runs no cascade.
 
 ### Typeahead Enter: pick, hold, or submit (MUT-5)
 In `EntityTypeahead`, Enter does one of three things:
