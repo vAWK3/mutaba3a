@@ -44,6 +44,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Android app live: the Play Store link on the landing page and the portal
+
+**Why:** the Android app is in production on Google Play, so the "Android coming soon" rows can become real store links.
+
+### Changed
+- `MOBILE_APP_LINKS.android` (`src/content/download-config.ts`) is now available, with `https://play.google.com/store/apps/details?id=com.barmajiyat.mutaba3a`. Every reader follows from the config:
+  - the landing page's phone chapter links it with `utm_campaign=mutaba3a-landing`;
+  - the portal's account menu shows "Get the Android app" with `utm_campaign=mutaba3a-portal`;
+  - `/hosted` drops its Android "coming soon" chip but still never links a store (MUT-186, 9A).
+- `scripts/bundle-origins.json`: `https://play.google.com` is allowed in the local and hosted bundles.
+- The portal's account-menu unit test and the `@portal.account.get-the-app` spec expect the Android link. The `portal/account` and `web/landing` QA catalogs describe both links.
+
+---
+
 ## [Unreleased] - 2026-10-18 — Design: the portal's local mode, one app signed in or out (MUT-285, ADR-097)
 
 **Why:** epic MUT-284 retires the free local web app. One portal works on this device when signed out and is the hosted account when signed in, with the same screens either way. This ticket is the design only; MUT-286..292 build it.
@@ -87,6 +101,23 @@
 - Tests: `money.test.ts` (list, exponents, AED/BHD/OMR parsing, over-precision, BHD ceiling, KWD unsupported); `fx-rates.test.ts` (9×9 against a hand-built per-USD table with literal pegs, pegged↔pegged ratios, the `derived` matrix, the peg table, the fixture); `routes-fx-rates.test.ts` (nine ILS rows, base AED/BHD, KWD 422, pegged 503, every peg documented); Me on all three sign-in surfaces; income, expenses, conversions, profiles and import cases; a BHD expense through the Prisma store.
 - CI: `server-ci.yml` also runs on `docs/fx/**`.
 - Tech debt: TD-170.
+
+## [Unreleased] - 2026-10-19 — Portal: Gulf currencies from one list, "(USD peg)" for every pegged currency (MUT-281)
+
+**Why:** epic MUT-278. MUT-280 made the server accept AED/SAR/QAR/BHD/OMR; this is what makes them usable in the hosted portal. **Release:** together with MUT-280 in one server release (the portal ships inside the API image).
+
+### Added
+- **`HOSTED_CURRENCIES`** (`src/hosted/format/currencies.ts`) grows to all nine codes; `INCOME_CURRENCIES`, `FilterControls.tsx`'s and `data/filters.ts`'s own currency lists now derive from it instead of carrying separate hardcoded copies.
+- Income, expense, conversion and profile forms offer every Gulf currency; BHD/OMR accept 3 decimals, AED/SAR/QAR cap at 2 (no code change needed in the drawers themselves — they already read their options and precision generically).
+
+### Fixed
+- **Expense group peg label**: `ExpenseGroupDetail`'s "≈ … (USD peg)" line tested `currency === 'JOD'` literally, so a BHD/OMR/AED/SAR/QAR pair would have shipped with no peg label at all (an ADR-087/098 honesty-rule violation). `convertTotal` now carries the server's own per-rate `derived` flag through each `used[]` line instead of re-deriving it from a hardcoded string.
+
+### Technical
+- **TD-170 resolved**: `npm run hosted:types` regenerated `schema.d.ts`. The resulting type errors forced widening the *shared* `Currency` type (`src/types/index.ts`) and `src/lib/utils.ts`'s exponent/token tables to all nine codes — not just portal-local files — because `src/components/expenses/ExpenseFormFields.tsx` (shared between the local app's and the portal's expense drawers) calls `currencyExponent()` directly; without the widening, BHD/OMR would have silently gotten 2-decimal precision instead of 3 in the portal's own expense form.
+- The local app's own drawers (`ExpenseDrawer`, `IncomeDrawer`, `ConversionDrawer`, `LegacyExpenseEditDrawer`) keep offering only their existing narrower currency sets — Gulf entry there is MUT-282's job — so existing-record values are cast at the read boundary (same pattern as `ExpenseFormFields.tsx`'s pre-existing `currency as Currency` cast).
+- Three local-app-only exhaustive `Record<Currency, …>` literals (`aggregations.ts`, `currencyAmounts.ts`, `ExpensesLedgerPage.tsx`) patched with zero-value entries — compile-only, no feature work, on pages slated for retirement under MUT-284/292. `landingCopy.ts` gets real ar/en Gulf currency names since the landing page survives that retirement (MUT-291).
+- **Follow-up flagged, not resolved here**: MUT-282/283 ("Local web: currency registry", "Local web: any-base conversion") may need re-scoping or cancellation given the local app's planned retirement.
 
 ## [Unreleased] - 2026-10-18 — Change an expense's currency together with its amount (MUT-272, ADR-096)
 

@@ -2,14 +2,15 @@ import { useId, useMemo, type ReactNode } from 'react';
 import { useLanguage, useT } from '../../lib/i18n/core';
 import { Select } from '../../components/ui/Input';
 import type { Customer, Project } from '../api/client';
+import { HOSTED_CURRENCIES } from '../format/currencies';
 
 /**
  * Labelled filter controls for the list views. Each reports a single change;
  * the view folds it into its one filters object (house rule).
  */
 
-/** JOD since MUT-194 (TD-117), matching data/filters.ts. */
-const CURRENCIES = ['ILS', 'USD', 'EUR', 'JOD'] as const;
+/** Derives from HOSTED_CURRENCIES (MUT-281) instead of its own copy, matching data/filters.ts. */
+const CURRENCIES = HOSTED_CURRENCIES;
 
 function Labelled({ label, children }: { label: string; children: (id: string) => ReactNode }) {
   const id = useId();

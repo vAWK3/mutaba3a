@@ -79,6 +79,14 @@ describe('utils', () => {
       expect(currencyExponent('EUR')).toBe(2);
       expect(currencyExponent('JOD')).toBe(3);
     });
+
+    it('returns 2 for the Gulf dirham/riyal currencies and 3 for the Gulf dinars (MUT-281)', () => {
+      expect(currencyExponent('AED')).toBe(2);
+      expect(currencyExponent('SAR')).toBe(2);
+      expect(currencyExponent('QAR')).toBe(2);
+      expect(currencyExponent('BHD')).toBe(3);
+      expect(currencyExponent('OMR')).toBe(3);
+    });
   });
 
   describe('formatAmount', () => {
@@ -270,6 +278,17 @@ describe('utils', () => {
       expect(parseAmountInput('100.9995', { currency: 'JOD', maxDecimals: Infinity })).toBe(101000);
       expect(parseAmountInput('100.0001', { currency: 'JOD', maxDecimals: Infinity })).toBe(100000);
     });
+
+    it('accepts up to 3 decimals for BHD/OMR and rejects a 4th, where AED/SAR/QAR cap at 2 (MUT-281)', () => {
+      expect(parseAmountInput('12.345', { currency: 'BHD' })).toBe(12345);
+      expect(parseAmountInput('12.3456', { currency: 'BHD' })).toBeNull();
+      expect(parseAmountInput('12.345', { currency: 'OMR' })).toBe(12345);
+      expect(parseAmountInput('12.3456', { currency: 'OMR' })).toBeNull();
+      expect(parseAmountInput('100.50', { currency: 'AED' })).toBe(10050);
+      expect(parseAmountInput('100.505', { currency: 'AED' })).toBeNull();
+      expect(parseAmountInput('100.50', { currency: 'SAR' })).toBe(10050);
+      expect(parseAmountInput('100.50', { currency: 'QAR' })).toBe(10050);
+    });
   });
 
   describe('amountInputCurrency', () => {
@@ -284,6 +303,12 @@ describe('utils', () => {
       ['5 EUR', 'EUR'],
       ['5 JOD', 'JOD'],
       ['jod 5', 'JOD'],
+      ['5 AED', 'AED'],
+      ['aed 5', 'AED'],
+      ['5 SAR', 'SAR'],
+      ['5 QAR', 'QAR'],
+      ['5 BHD', 'BHD'],
+      ['5 OMR', 'OMR'],
     ])('reads the currency %j names as %s', (input, currency) => {
       expect(amountInputCurrency(input)).toBe(currency);
     });

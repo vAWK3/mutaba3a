@@ -34,7 +34,7 @@ features:
     expect:
       - The field says "Use at least 12 characters."; nothing reaches the server
   - id: get-the-app
-    title: The account menu ends with Get the app; the iPhone link names the portal as its source, Android says coming soon
+    title: The account menu ends with Get the app; the iPhone and Android links name the portal as their source
     tier: tertiary
     paths:
       - src/hosted/components/AppDownloadMenuItems.tsx
@@ -42,4 +42,4 @@ features:
     steps:
       - Open the account menu
     expect:
-      - '"Get the iPhone app" links to the App Store in a new tab with ct=mutaba3a-portal (MUT-155), and "Android — coming soon" is the last, non-interactive row'
+      - '"Get the iPhone app" links to the App Store in a new tab with ct=mutaba3a-portal (MUT-155), and "Get the Android app", the last row, links to the Play Store listing in a new tab with utm_campaign=mutaba3a-portal'

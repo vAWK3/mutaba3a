@@ -145,12 +145,12 @@
 **Fix**: add a fingerprint case per persisted map in `LocalSnapshotMaps`, built from a real `MemoryLedgerStore` record. Better still, assert that every key of `LocalSnapshotMaps` has a case, so a new map can't be added uncovered.
 
 ### TD-170: The portal's typed API client lags the spec until MUT-281
-**Status**: Open
+**Status**: Resolved (MUT-281, 2026-10-19)
 **Ticket**: MUT-281 (MUT-280 eng review D2, 2026-10-18)
 **Added**: 2026-10-18
 **Priority**: Medium (blocks any unrelated `npm run hosted:types` until MUT-281 lands)
 **Impact**: MUT-280 grew the server's `Currency` enum and added `Me.currencies`, but `src/hosted/api/schema.d.ts` was not regenerated, so `npm run hosted:types:check` fails on main (it isn't in CI). Regenerating it gives 15 portal type errors in 8 files: the portal reuses the local app's 4-currency `Currency` type and `src/lib/utils.ts` `CURRENCY_EXPONENT`, and the MUT-183 `coversEveryCurrency` guard fails on purpose. Another session that regenerates the types for an unrelated server change hits the same errors.
-**Fix**: MUT-281's first step: `npm run hosted:types`, then make the portal's currency list and exponents cover the API's nine codes. MUT-280 and MUT-281 ship in one server release.
+**Fix**: `npm run hosted:types` regenerated, then `src/types/index.ts`'s `Currency` and `src/lib/utils.ts`'s exponent/token tables widened to the API's nine codes (forced by `ExpenseFormFields.tsx`'s shared `currencyExponent()` call, not just the portal). `npm run hosted:types:check` passes.
 
 ### TD-169: Audit rows are appended after the write, outside its transaction
 **Status**: Open

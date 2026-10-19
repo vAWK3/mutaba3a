@@ -416,3 +416,41 @@ test('A Malafat-fed profile offers no date change on Receivables or Payments, ev
   });
 });
 
+test('Add income in QAR from Receivables; it saves, shows QAR, and the currency filter finds it (MUT-281)', { tag: '@portal.income.currency-qar' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 2 });
+  const drawer = page.getByRole('dialog', { name: 'New income' });
+  const table = page.getByRole('table', { name: 'Receivables' });
+
+  await step('Open Receivables and choose + Add income', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.locator('[data-income-add]').click();
+    await expect(drawer).toBeVisible();
+  });
+
+  await step('Open More details, choose QAR, type 1,250.50, and pick Client 1', async () => {
+    await drawer.getByRole('button', { name: /More details/ }).click();
+    await drawer.getByLabel('Currency').selectOption('QAR');
+    await drawer.getByLabel('Amount').fill('1,250.50');
+    await pickClient(page, 'Client', 'Client 1');
+  });
+
+  await step('Save income', async () => {
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer).toHaveCount(0);
+    const post = api.last('POST', /^\/v1\/income$/);
+    expect(post?.body).toMatchObject({ currency: 'QAR', amount: '1250.50' });
+  });
+
+  await step('The row shows QAR, and the currency filter finds it', async () => {
+    await expect(table.getByRole('row', { name: /Client 1/ })).toContainText('1,250.50');
+    await page.getByLabel('Currency').selectOption('QAR');
+    await expect(page).toHaveURL(/currency=QAR/);
+    await expect(table.getByRole('row', { name: /Client 1/ })).toBeVisible();
+  });
+
+  await step('Filtering by a different currency hides it', async () => {
+    await page.getByLabel('Currency').selectOption('USD');
+    await expect(page.getByText('Nothing matches these filters.')).toBeVisible();
+  });
+});
+

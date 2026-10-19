@@ -7,7 +7,7 @@ import { currencyExponent } from '../../lib/utils';
  * day the API's `Currency` grows, so no picker can silently miss a currency
  * (JOD nearly did, MUT-140).
  */
-export const HOSTED_CURRENCIES = ['USD', 'ILS', 'EUR', 'JOD'] as const satisfies readonly Currency[];
+export const HOSTED_CURRENCIES = ['USD', 'ILS', 'EUR', 'JOD', 'AED', 'SAR', 'QAR', 'BHD', 'OMR'] as const satisfies readonly Currency[];
 
 export type HostedCurrency = (typeof HOSTED_CURRENCIES)[number];
 

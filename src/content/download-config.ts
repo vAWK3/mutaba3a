@@ -55,7 +55,7 @@ export interface MobileAppLink {
  */
 export const MOBILE_APP_LINKS: Record<'ios' | 'android', MobileAppLink> = {
   ios: { available: true, url: 'https://apps.apple.com/us/app/متابعة-مالية/id6821813829' },
-  android: { available: false, url: null },
+  android: { available: true, url: 'https://play.google.com/store/apps/details?id=com.barmajiyat.mutaba3a' },
 };
 
 /**

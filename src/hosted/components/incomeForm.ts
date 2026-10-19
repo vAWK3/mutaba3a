@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { amountInputCurrency, parseAmountInput } from '../../lib/utils';
 import type { CreateIncomeRequest, Currency, PaymentMethod } from '../api/client';
 import type { IncomeKind } from '../data/incomeAffordances';
-import { minorToDecimal } from '../format/currencies';
+import { HOSTED_CURRENCIES, minorToDecimal } from '../format/currencies';
 
 /** Moved to format/currencies.ts (MUT-268: expense groups use it too); re-exported for this module's callers. */
 export { minorToDecimal };
@@ -21,7 +21,7 @@ export { minorToDecimal };
  * Validation messages are i18n keys, resolved with `t()` where they render.
  */
 
-export const INCOME_CURRENCIES = ['USD', 'ILS', 'EUR', 'JOD'] as const satisfies readonly Currency[];
+export const INCOME_CURRENCIES = HOSTED_CURRENCIES;
 export const PAYMENT_METHODS = ['CASH', 'BANK'] as const satisfies readonly PaymentMethod[];
 
 export type AmountParse =

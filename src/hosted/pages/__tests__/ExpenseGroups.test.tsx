@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { ORG_A, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
 import type { Expense, ExpenseGroup, ExpenseGroupSummary } from '../../api/client';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
+import { currencyExponent } from '../../../lib/utils';
 
 /** MUT-268: Expenses › Groups, a group's page, its drawers, and "In groups" on an expense. */
 
@@ -49,7 +50,7 @@ function expense(id: string, over: Partial<Expense> = {}): Expense {
 type Block = ExpenseGroupSummary['currencies'][number];
 function summaryOf(rows: Expense[], seriesFrom = '2026-10-03', seriesTo = '2026-10-07'): ExpenseGroupSummary {
   const currencies = new Map<string, Block>();
-  const exp = (c: string) => (c === 'JOD' ? 3 : 2);
+  const exp = (c: string) => currencyExponent(c as Parameters<typeof currencyExponent>[0]);
   const add = (a: string, b: string, c: string) => ((Math.round(Number(a) * 10 ** exp(c)) + Math.round(Number(b) * 10 ** exp(c))) / 10 ** exp(c)).toFixed(exp(c));
   for (const row of rows) {
     const block = currencies.get(row.currency) ?? { currency: row.currency, total: (0).toFixed(exp(row.currency)), count: 0, byCategory: [], byCustomer: [], byDay: [] };
@@ -238,6 +239,21 @@ describe('Group page (2A, 4A, 5A, 6A, 7A)', () => {
     expect(within(chart).getByRole('button', { name: /Wed, Oct 7, no JOD/ })).toBeInTheDocument();
     // Per day: 114.000 in the dates over 5 days; the kept flight doesn't count
     expect(screen.getByText('Per day').parentElement).toHaveTextContent('JOD 22.800');
+  });
+
+  it('shows the (USD peg) label for a Gulf currency, not just JOD (MUT-281)', async () => {
+    const omrExpense = expense('omr-dinner', { occurredOn: '2026-10-05', amount: '9.500', currency: 'OMR', title: 'Dinner' });
+    portal(`${BASE}/${G1}`, {
+      members: [omrExpense],
+      routes: {
+        'GET /v1/fx-rates': () =>
+          ok({ ...rates, rates: [...rates.rates, { currency: 'OMR', rate: 0.104, derived: true }] }),
+      },
+    });
+    const headline = await screen.findByRole('group', { name: 'Total spent' });
+    expect(headline).toHaveTextContent('OMR 9.500');
+    expect(await screen.findByText(/at today's ECB rate \(Oct 17, 2026\)/)).toBeInTheDocument();
+    expect(screen.getByText(/1 OMR = .+ ILS \(USD peg\)/)).toBeInTheDocument();
   });
 
   it('lists members by day, oldest first, the kept flight under "before the trip"', async () => {

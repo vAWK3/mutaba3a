@@ -76,6 +76,20 @@ describe('Edit pane (MUT-183)', () => {
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${STUDIO}?manageProfiles=true`));
   });
 
+  it('MUT-281: the currency picker offers every Gulf currency and sends the one chosen', async () => {
+    const { user, api } = portal(`/p/${STUDIO}?manageProfiles=true`, { [`PATCH /v1/profiles/${STUDIO}`]: () => saved({ ...studio, defaultCurrency: 'QAR' }) });
+    await user.click(await screen.findByRole('button', { name: /^Nour Studio/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Nour Studio' });
+    const currencySelect = within(dialog).getByRole('combobox', { name: 'Currency' });
+    for (const code of ['AED', 'SAR', 'QAR', 'BHD', 'OMR']) {
+      expect(within(currencySelect).getByRole('option', { name: code })).toBeInTheDocument();
+    }
+    await user.selectOptions(currencySelect, 'QAR');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(patches(api.calls)).toHaveLength(1));
+    expect(patches(api.calls)[0].body).toMatchObject({ defaultCurrency: 'QAR' });
+  });
+
   it('MG4: a newer version arriving mid-edit is not sent; the conflict offers Reload, which re-reads', async () => {
     let current = studio;
     const { user, api, queryClient } = portal(`/p/${STUDIO}?editProfile=${STUDIO}`, {

@@ -1,6 +1,6 @@
 import { test, expect } from '../../support/qa';
 import { OFFICE_A, office } from '../../support/portal';
-import { FakeApi, apiError, category, expense, expenseGroup, todayInJerusalem, uid } from '../../support/portalApi';
+import { FX_RATES_ILS, FakeApi, apiError, category, expense, expenseGroup, todayInJerusalem, uid } from '../../support/portalApi';
 
 /**
  * Expense groups in the portal (MUT-268, on MUT-267's API): Expenses › Groups,
@@ -32,6 +32,8 @@ const flight = expense(6, { amount: '120.000', currency: 'JOD', title: 'Flight t
 const lunch = expense(7, { amount: '50.00', title: 'Lunch at home', occurredOn: day(-3) });
 
 const jordan = expenseGroup(1, { name: 'Jordan trip', startOn: START, endOn: END });
+const muscat = expenseGroup(8, { name: 'Muscat trip', startOn: START, endOn: END });
+const dinner = expense(8, { amount: '9.500', currency: 'OMR', title: 'Dinner', occurredOn: day(-13) });
 const groupPath = (id: string) => `/p/${OFFICE_A}/expenses/groups/${id}`;
 
 function world(extra: Partial<ConstructorParameters<typeof FakeApi>[0]> = {}) {
@@ -294,5 +296,23 @@ test('In Arabic on a 375 px phone the group page reads right to left without sid
     const table = page.getByRole('table', { name: 'المصاريف في هذه المجموعة' });
     await expect(table.getByRole('columnheader', { name: 'التصنيف' })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
+test('An OMR expense in a group on an ILS profile shows the (USD peg) label, not just JOD (MUT-281)', { tag: '@portal.expense-groups.gulf-peg-label' }, async ({ page, step }) => {
+  const api = new FakeApi({
+    profiles: [office(OFFICE_A, 'Nour Studio')],
+    categories: [rentCat, travelCat],
+    expenses: [dinner],
+    groups: [muscat],
+    fxRates: { ...FX_RATES_ILS, rates: [...FX_RATES_ILS.rates, { currency: 'OMR', rate: 0.104, derived: true }] },
+  });
+  const headline = page.getByRole('group', { name: 'Total spent' });
+
+  await step('Open a group with an OMR expense', async () => {
+    await api.open(page, groupPath(muscat.id));
+    await expect(headline).toContainText('OMR 9.500');
+    await expect(page.getByText(/at today's ECB rate \(Oct 17, 2026\)/)).toBeVisible();
+    await expect(page.getByText(/1 OMR = .+ ILS \(USD peg\)/)).toBeVisible();
   });
 });

@@ -6,12 +6,11 @@ const business = profile({ id: ORG_A, name: 'Nour Studio', writerOfRecord: null,
 
 /**
  * MUT-261: the account menu's last item is "get the app", reading the same
- * MOBILE_APP_LINKS config as the landing page (MUT-173) — iOS links out
- * (its App Store URL is set), Android stays a named, non-interactive
- * "coming soon" row until Basel has that listing.
+ * MOBILE_APP_LINKS config as the landing page (MUT-173) — both phone
+ * apps link out to their store listings.
  */
 describe('Account menu, app download (MUT-261)', () => {
-  it('links the iPhone app and shows Android as coming soon, after Sign out', async () => {
+  it('links the iPhone and Android apps, after Sign out', async () => {
     stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me([business])) });
     const { user } = renderPortal(`/p/${ORG_A}`);
     await user.click(await screen.findByRole('button', { name: /Account/ }));
@@ -26,14 +25,19 @@ describe('Account menu, app download (MUT-261)', () => {
     expect(iosLink).toHaveAttribute('target', '_blank');
     expect(iosLink.getAttribute('rel')).toContain('noopener');
 
-    const androidItem = within(menu).getByText('Android — coming soon');
-    expect(androidItem.tagName).toBe('SPAN');
-    expect(androidItem).toHaveAttribute('aria-disabled', 'true');
-    expect(androidItem).not.toHaveAttribute('href');
+    const androidLink = within(menu).getByRole('menuitem', { name: /Get the Android app/ });
+    expect(androidLink.tagName).toBe('A');
+    const androidHref = new URL(androidLink.getAttribute('href')!);
+    expect(`${androidHref.origin}${androidHref.pathname}`).toBe('https://play.google.com/store/apps/details');
+    expect(androidHref.searchParams.get('id')).toBe('com.barmajiyat.mutaba3a');
+    expect(androidHref.searchParams.get('referrer')).toContain('utm_campaign=mutaba3a-portal');
+    expect(androidLink).toHaveAttribute('target', '_blank');
+    expect(androidLink.getAttribute('rel')).toContain('noopener');
+    expect(within(menu).queryByText(/coming soon/)).toBeNull();
 
     const items = menu.querySelectorAll('[role^="menuitem"]');
     expect(items[0]).toHaveTextContent('Sign out');
     expect(items[items.length - 2]).toBe(iosLink);
-    expect(items[items.length - 1]).toBe(androidItem);
+    expect(items[items.length - 1]).toBe(androidLink);
   });
 });
