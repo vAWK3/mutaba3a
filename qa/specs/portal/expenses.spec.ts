@@ -13,6 +13,28 @@ const C1 = customer(0).id;
 const office_ = category(1, 'Office supplies');
 const travel = category(2, 'Travel');
 
+test('a successful expense save shows the animated save-feedback icon in the saved notice', { tag: '@portal.expenses.save-feedback-animation' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, categories: [office_] });
+  const drawer = page.getByRole('dialog', { name: 'Record expense' });
+
+  await step('Open Expenses and add a new expense', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await expect(drawer).toBeVisible();
+  });
+
+  await step('Save it', async () => {
+    await drawer.getByLabel('Amount').fill('12.50');
+    await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  const notice = page.getByRole('status');
+  await expect(notice).toBeVisible();
+  await expect(notice.locator('[data-part]').first()).toBeVisible();
+});
+
 test('Record an expense: the drawer says what is missing, a currency’s own decimals are accepted, and the expense is listed', { tag: '@portal.expenses.create' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, categories: [office_, travel] });
   const drawer = page.getByRole('dialog', { name: 'Record expense' });

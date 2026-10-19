@@ -389,3 +389,21 @@ test(
     });
   },
 );
+
+test(
+  'a successful expense save shows a success toast with the animated icon',
+  { tag: '@web.expenses.save-feedback-animation' },
+  async ({ page, step }) => {
+    await step('Turn on Expenses in Settings → Advanced features', async () => {
+      await turnOnExpenses(page);
+    });
+
+    await step('Log an expense', async () => {
+      await logExpense(page, { amount: '42', title: 'Office supplies', category: 'Office Supplies' });
+    });
+
+    const toast = page.locator('.toast', { hasText: 'Expense saved successfully' });
+    await expect(toast).toBeVisible();
+    await expect(toast.locator('.toast-icon [data-part]').first()).toBeVisible();
+  },
+);

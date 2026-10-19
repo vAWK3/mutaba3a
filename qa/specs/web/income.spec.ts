@@ -1,5 +1,5 @@
 import { test, expect } from '../../support/qa';
-import { openFreshApp, openNewIncomeDrawer } from '../../support/app';
+import { logIncome, openFreshApp, openNewIncomeDrawer } from '../../support/app';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 
 // MUT-5: logging work is title, Tab, amount, Tab, client, Enter, keyboard only.
@@ -147,5 +147,21 @@ test(
       const input = await group.locator('input').boundingBox();
       expect(prefix && input && prefix.x < input.x).toBe(true);
     });
+  },
+);
+
+test(
+  'a successful save shows the animated save-feedback icon in its toast',
+  { tag: '@web.income.save-feedback-animation' },
+  async ({ page, step }) => {
+    await step('Open a fresh install at /income', async () => {
+      await openFreshApp(page, '/income');
+    });
+
+    await step('Log an income entry for a new client', async () => {
+      await logIncome(page, { title: 'Logo redesign', amount: '100', client: 'Acme Studio' });
+    });
+
+    await expect(page.locator('.toast-icon [data-part]').first()).toBeVisible();
   },
 );
