@@ -72,4 +72,17 @@ describe('createLocalApp + mintLocalSession', () => {
     expect(spy).toHaveBeenCalledWith('[mutaba3a local]', { err: failure, requestId: 'r1' }, 'Unhandled error');
     spy.mockRestore();
   });
+
+  it('still signs the local person in when the clock is now earlier than when they were created (review)', async () => {
+    const store = new MemoryLedgerStore();
+    const later = () => new Date('2027-01-01T00:00:00.000Z');
+    const earlier = () => new Date('2026-01-01T00:00:00.000Z');
+    await mintLocalSession(store, later); // created while the clock ran ahead, or restored from such a device
+    const { token } = await mintLocalSession(store, earlier);
+    const app = createLocalApp({ store, now: earlier });
+
+    const response = await app.fetch(new Request('http://local/v1/me', { headers: { Authorization: `Bearer ${token}` } }));
+
+    expect(response.status).toBe(200);
+  });
 });

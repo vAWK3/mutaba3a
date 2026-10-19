@@ -9,7 +9,7 @@ import { currentMode, setMode } from '../session/mode';
  * hosted profile travels as `X-Mutaba3a-Profile`; the identity routes carry none.
  *
  * Signed out (MUT-286, ADR-097), the same requests go to the local backend, the
- * server's own routes running in this page: see `send()` below.
+ * server's own routes running in this page: see `goesRemote()` and `sendLocal()` below.
  */
 
 export type Schemas = components['schemas'];
@@ -68,8 +68,14 @@ export type SetupLinkCheck = Schemas['SetupLinkCheckResponse'];
 export type SetupLinkRefusal = Exclude<SetupLinkCheck['state'], 'valid'>;
 
 type ServerErrorCode = Schemas['ErrorEnvelope']['error']['code'];
-/** `LOCAL_FORMAT_TOO_NEW`: another tab saved this device's records with a newer build; this one must reload (D1). */
-export type ApiErrorCode = ServerErrorCode | 'NETWORK' | 'UNKNOWN' | 'LOCAL_FORMAT_TOO_NEW';
+/**
+ * Signed out (MUT-286), the local backend's own failures, never dressed up as NETWORK:
+ * - `LOCAL_FORMAT_TOO_NEW`: another tab saved this device's records with a newer build; reload (D1);
+ * - `LOCAL_SAVE_FAILED`: the browser refused a save (storage full); this page stops until a reload;
+ * - `LOCAL_UNAVAILABLE`: the local backend can't run here (storage blocked, private browsing).
+ */
+export type LocalStopCode = 'LOCAL_FORMAT_TOO_NEW' | 'LOCAL_SAVE_FAILED';
+export type ApiErrorCode = ServerErrorCode | 'NETWORK' | 'UNKNOWN' | LocalStopCode | 'LOCAL_UNAVAILABLE';
 
 type Query<P extends keyof paths> = paths[P] extends { get: { parameters: { query?: infer Q } } } ? NonNullable<Q> : never;
 type OkJson<P extends keyof paths, M extends 'get' | 'post'> = paths[P][M] extends {
@@ -156,8 +162,32 @@ interface RequestOptions {
 const SIGN_IN_PATH = '/v1/sessions';
 /** Signing in and redeeming a setup link always talk to the server, whatever the mode (brief §2.6). */
 const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup)(\/|\?|$)/;
-/** `transport.ts`'s refusal when another tab saved a newer format; matched by name, since the class lives in the lazy chunk. */
-const LOCAL_FORMAT_TOO_NEW_ERROR = 'LocalFormatTooNewError';
+/** The local backend's errors that stop the page, by class name: the classes live in the lazy chunk (transport.ts). */
+const LOCAL_STOPS: Readonly<Record<string, LocalStopCode>> = {
+  LocalFormatTooNewError: 'LOCAL_FORMAT_TOO_NEW',
+  LocalSaveFailedError: 'LOCAL_SAVE_FAILED',
+};
+
+type LocalStopHandler = (code: LocalStopCode) => void;
+let localStopHandler: LocalStopHandler | null = null;
+
+/** Registers the one place a stopped local backend is shown (SessionBridge); returns the unregister function. */
+export function setLocalStopHandler(handler: LocalStopHandler): () => void {
+  localStopHandler = handler;
+  return () => {
+    if (localStopHandler === handler) localStopHandler = null;
+  };
+}
+
+/** What a thrown local-backend error means to the portal. */
+function localFailure(cause: unknown): ApiError {
+  const code = cause instanceof Error ? LOCAL_STOPS[cause.name] : undefined;
+  if (code) {
+    localStopHandler?.(code);
+    return new ApiError(0, code, cause instanceof Error ? cause.message : code);
+  }
+  return new ApiError(0, 'LOCAL_UNAVAILABLE', 'The records on this device could not be opened');
+}
 
 let localBackendPromise: Promise<LocalBackend> | null = null;
 
@@ -197,13 +227,20 @@ function probeRemote(): Promise<boolean> {
   return unhintedProbe;
 }
 
-/** Where a request goes: the server (cookie) or the local backend (this page), by mode. */
-async function send(url: string, init: RequestInit): Promise<{ response: Response; remote: boolean }> {
+/**
+ * Whether a request goes to the server (cookie) or to the local backend (this page), by mode. Decided at once
+ * whenever the mode is known, so a request starts in the same tick it always did; a promise only during the
+ * first-visit check, which rejects when that check can't reach the server.
+ */
+function goesRemote(url: string): boolean | Promise<boolean> {
   const mode = currentMode();
-  const remote = ALWAYS_REMOTE.test(url) || mode === 'remote' || (mode === 'probe' && (await probeRemote()));
-  if (remote) return { response: await fetch(url, init), remote: true };
+  if (ALWAYS_REMOTE.test(url) || mode === 'remote') return true;
+  return mode === 'probe' ? probeRemote() : false;
+}
+
+async function sendLocal(url: string, init: RequestInit): Promise<Response> {
   const backend = await localBackend();
-  return { response: await backend.fetch(new Request(new URL(url, window.location.origin), init)), remote: false };
+  return backend.fetch(new Request(new URL(url, window.location.origin), init));
 }
 
 function withQuery(path: string, query?: Record<string, QueryValue>): string {
@@ -253,22 +290,36 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DEL
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
   if (options.ifMatchVersion) headers['If-Match'] = options.ifMatchVersion;
 
-  let response: Response;
+  const url = withQuery(path, options.query);
+  const init: RequestInit = {
+    method,
+    credentials: 'same-origin',
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    signal: options.signal,
+  };
+  const isAbort = (cause: unknown) => cause instanceof DOMException && cause.name === 'AbortError';
+  const unreachable = () => new ApiError(0, 'NETWORK', 'The request did not reach the server');
+
+  const decided = goesRemote(url);
   let wentRemote: boolean;
-  try {
-    ({ response, remote: wentRemote } = await send(withQuery(path, options.query), {
-      method,
-      credentials: 'same-origin',
-      headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: options.signal,
-    }));
-  } catch (cause) {
-    if (cause instanceof DOMException && cause.name === 'AbortError') throw cause;
-    if (cause instanceof Error && cause.name === LOCAL_FORMAT_TOO_NEW_ERROR) {
-      throw new ApiError(0, 'LOCAL_FORMAT_TOO_NEW', 'This device has records saved by a newer version. Reload to continue.');
+  if (typeof decided === 'boolean') {
+    wentRemote = decided;
+  } else {
+    try {
+      wentRemote = await decided;
+    } catch (cause) {
+      if (isAbort(cause)) throw cause;
+      throw unreachable();
     }
-    throw new ApiError(0, 'NETWORK', 'The request did not reach the server');
+  }
+
+  let response: Response;
+  try {
+    response = await (wentRemote ? fetch(url, init) : sendLocal(url, init));
+  } catch (cause) {
+    if (isAbort(cause)) throw cause;
+    throw wentRemote ? unreachable() : localFailure(cause);
   }
 
   if (!response.ok) {

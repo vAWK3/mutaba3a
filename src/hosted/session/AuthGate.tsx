@@ -5,7 +5,7 @@ import { useT } from '../../lib/i18n/core';
 import { Button } from '../../components/ui/Button';
 import { ApiError } from '../api/client';
 import { useAdoptAccountLocale } from '../i18n/HostedLanguageProvider';
-import { BootUnreachable, CheckingSession, ReloadToContinue } from '../pages/auth/BootScreens';
+import { BootUnreachable, CheckingSession, LocalUnavailable, ReloadToContinue } from '../pages/auth/BootScreens';
 import { HostedShell } from '../shell/HostedShell';
 import { useProfileDrawers } from '../shell/ProfileDrawers';
 import { MeProvider, ProfileProvider, meQuery, useMe } from './me';
@@ -19,6 +19,7 @@ import { useSignOut } from './useSignOut';
  */
 export function AuthGate() {
   const me = useQuery(meQuery);
+  const navigate = useNavigate();
   const adoptAccountLocale = useAdoptAccountLocale();
   // Signed out there is no account to take a language from: a choice here, else Arabic (MUT-286 AC1)
   const local = useIsLocalMode();
@@ -38,7 +39,12 @@ export function AuthGate() {
   }
   if (me.isPending) return <CheckingSession />;
   if (me.error instanceof ApiError && me.error.status === 401) return <RedirectToSignIn />;
-  if (me.error instanceof ApiError && me.error.code === 'LOCAL_FORMAT_TOO_NEW') return <ReloadToContinue />;
+  if (me.error instanceof ApiError && (me.error.code === 'LOCAL_FORMAT_TOO_NEW' || me.error.code === 'LOCAL_SAVE_FAILED')) {
+    return <ReloadToContinue stop={me.error.code} />;
+  }
+  if (me.error instanceof ApiError && me.error.code === 'LOCAL_UNAVAILABLE') {
+    return <LocalUnavailable onRetry={() => void me.refetch()} onSignIn={() => void navigate({ to: '/sign-in' })} />;
+  }
   return <BootUnreachable onRetry={() => void me.refetch()} retrying={me.isFetching} />;
 }
 

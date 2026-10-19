@@ -46,8 +46,8 @@ export interface LocalBackend {
   fetch: LocalFetch;
   /** Another tab saved; returns the unsubscribe function. */
   onRemoteWrite(handler: () => void): () => void;
-  /** Everything on this device as one versioned file (Your data › Download my records). */
-  exportRecords(): Blob;
+  /** Everything on this device, including other tabs' latest saves, as one versioned file (Your data › Download my records). */
+  exportRecords(): Promise<Blob>;
   /** Reads and migrates a records file; rejects with `LocalRecordsFileRefused`. Nothing changes until `apply()`. */
   readRecordsFile(file: Blob): Promise<PendingRestore>;
 }

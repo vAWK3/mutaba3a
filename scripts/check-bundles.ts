@@ -25,6 +25,7 @@ import {
   extractOrigins,
   findForbidden,
   localBackendInEntryGraph,
+  indexedDbOutsideLocalBackend,
   fontProblems,
   newOrigins,
   posthogInEntryGraph,
@@ -126,9 +127,16 @@ function checkLocalBackendLazy(): string[] {
   const dir = 'dist-hosted';
   if (!existsSync(dir)) return [];
   const read = (path: string) => (existsSync(join(dir, path)) ? readFileSync(join(dir, path), 'utf8') : '');
-  return ENTRY_HTML[dir].flatMap((name) =>
-    localBackendInEntryGraph(read(name), read).map((path) => `${dir}/${path}: IndexedDB is statically reachable from ${name}; only the lazy local backend may open it (ADR-097)`),
-  );
+  const outside = indexedDbOutsideLocalBackend(
+    files(dir).filter((file) => file.endsWith('.js')).map((file) => file.slice(dir.length + 1)),
+    read,
+  ).map((path) => `${dir}/${path}: touches IndexedDB but is not the local backend (no mut-local database); only it may (ADR-100)`);
+  return [
+    ...ENTRY_HTML[dir].flatMap((name) =>
+      localBackendInEntryGraph(read(name), read).map((path) => `${dir}/${path}: IndexedDB is statically reachable from ${name}; only the lazy local backend may open it (ADR-097)`),
+    ),
+    ...outside,
+  ];
 }
 
 function check(dir: string, rules: Rule[], origins: string[]): string[] {

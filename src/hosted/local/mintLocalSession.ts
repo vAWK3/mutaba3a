@@ -48,8 +48,10 @@ export interface LocalSession {
  * server to special-case.
  */
 export async function mintLocalSession(store: LedgerStore, now: () => Date, locale: UserLocale = 'ar'): Promise<LocalSession> {
-  const at = now();
-  const user = (await store.users.findByEmail(LOCAL_PERSON_EMAIL)) ?? (await createLocalPerson(store, locale, at));
+  const user = (await store.users.findByEmail(LOCAL_PERSON_EMAIL)) ?? (await createLocalPerson(store, locale, now()));
+  // Never older than the person: `authenticate()` revokes a session verified before `passwordChangedAt`, so a clock
+  // that has since moved back (or a records file from a device whose clock ran ahead) would lock them out for good.
+  const at = new Date(Math.max(now().getTime(), user.passwordChangedAt.getTime()));
 
   const token = generateDeviceSessionToken();
   await store.sessions.create({

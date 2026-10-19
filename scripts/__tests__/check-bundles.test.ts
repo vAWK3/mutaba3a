@@ -12,6 +12,7 @@ import {
   newOrigins,
   posthogInEntryGraph,
   localBackendInEntryGraph,
+  indexedDbOutsideLocalBackend,
   posthogPrecached,
   precachedUrls,
   staticGraph,
@@ -251,6 +252,11 @@ describe('PostHog stays out of the local app (ADR-090, MUT-154)', () => {
     it('passes when IndexedDB is opened only from a lazily loaded chunk', () => {
       const lazy = { ...files, 'assets/LandingPage-e5.js': 'const r=indexedDB.open("mut-local",1);' };
       expect(localBackendInEntryGraph(lazy['index.html'], reader(lazy))).toEqual([]);
+    });
+
+    it('fails when any other lazy chunk opens IndexedDB: only the local backend (its mut-local database) may (review)', () => {
+      const files = { 'assets/local-a1.js': 'indexedDB.open("mut-local",1)', 'assets/other-b2.js': 'indexedDB.open("cache",1)', 'assets/plain-c3.js': 'x' };
+      expect(indexedDbOutsideLocalBackend(Object.keys(files), (path) => files[path as keyof typeof files])).toEqual(['assets/other-b2.js']);
     });
 
     it('fails when a statically loaded file opens IndexedDB', () => {

@@ -44,6 +44,16 @@
 ### Fixed (Phase C)
 - The expense drawer's Client label now names its field (the picker had no `id`).
 - Restore lands on the restored profile (it redirected from a stale `/v1/me`).
+- Pre-landing review (ADR-100 decision 9):
+  - another tab's sign-in or switch to this device now clears and reopens this tab;
+  - a refused save or a newer format stops the page with a reload screen;
+  - blocked storage has its own screen;
+  - Download includes other tabs' latest saves;
+  - Restore saves before switching memory;
+  - the local session is never older than the person;
+  - a failed Add client clears the previously picked client;
+  - a slow earlier file can't override a later Restore pick;
+  - the IndexedDB bundle rule is held to the `mut-local` chunk.
 
 ### Changed (Phase C)
 - `client.ts` `request()` routes by mode through `send()`; sign-in and setup always go to the server; a local 401 never triggers the session-expired handler. The lazy chunk is reached through `@mut/local-backend` (types: `session/localBackendContract.ts`; code: `local/index.ts`).

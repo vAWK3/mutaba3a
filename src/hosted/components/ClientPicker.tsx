@@ -81,8 +81,11 @@ export function ClientPicker({ profileId, value, onChange, placeholder, disabled
       onChange(created.id);
       return true;
     } catch {
-      // Keep the name in the box, unpicked, so the form still refuses to save without a client.
+      // Keep the name in the box, unpicked, and drop any client picked before it: the form must not save under an
+      // earlier client while the box shows this name. The sync effect mustn't then clear the box (prevValue).
       setInputValue(option.label);
+      prevValue.current = '';
+      onChange('');
       toast(t('hosted.clients.addFailed'));
       return false;
     }

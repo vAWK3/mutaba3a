@@ -3898,6 +3898,13 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 6. **Bundle guard:** `indexedDB` is no longer banned in all of `dist-hosted`. It is banned in every file the entry loads statically (`localBackendInEntryGraph`), which proves both that only the lazy local chunk opens IndexedDB and that signed-in pages never download it. Measured 112.7 KB gzip.
 7. **Local route failures go to the browser console** (`consoleLogger`); signed out there is no Sentry or server log.
 8. **The client picker adds clients** (Basel, 2026-10-19, resolving TD-172): a typed name no client has gets "Add client: «name»" on a profile the person owns (`canAddClient`), in both modes, so a signed-out person can record money owed. It is the portal's 50th API call (`POST /v1/customers`, already in `PORTAL_ROUTES`).
+9. **Pre-landing review fixes** (Basel approved all, 2026-10-19):
+   - **Another tab's mode change** (it signed in, or continued on this device) clears this tab's cache and reopens it at `/`, so account and device data never share a screen (`onModeChangedElsewhere`). A tab on sign-in or setup is left alone.
+   - **Stop states.** A save the browser refuses (`LOCAL_SAVE_FAILED`) or another tab's newer format (`LOCAL_FORMAT_TOO_NEW`) stops the page: every later request rejects, and the root layout shows "reload to continue" in place of the route. A reload rebuilds memory from disk, so a write that never reached disk can't replay as saved. Restore saves to disk before switching memory.
+   - **`LOCAL_UNAVAILABLE`.** A local backend that can't run (storage blocked) gets its own screen with Try again and Sign in, never "Can't reach Mutaba3a".
+   - **Download** takes the lock and reloads first if another tab wrote, so the file holds every save on this device.
+   - **The minted session is never older than the person**, so a clock that moved back can't lock them out.
+   - **The bundle guard** allows IndexedDB only in the chunk that opens `mut-local` (`indexedDbOutsideLocalBackend`).
 
 **Consequences**: Existing release-QA portal specs model a browser that has used an account (`openSignedInPortal` sets `mut-mode=remote` when absent); `qa/specs/portal/local-mode.spec.ts` covers the signed-out side. The portal's client list now grows from the picker (decision 8 below).
 

@@ -34,6 +34,33 @@ export class LocalFormatTooNewError extends Error {
 }
 
 /**
+ * The browser refused to save (storage full, or storage taken away): this
+ * page's memory may now hold a write the disk doesn't, and its idempotency
+ * records would replay it as saved. So the page stops: every request after it
+ * rejects with this, and Phase C shows "reload to continue". A reload rebuilds
+ * memory from disk, where nothing unsaved was ever recorded.
+ */
+export class LocalSaveFailedError extends Error {
+  constructor(cause: unknown) {
+    super('This browser refused to save the records on this device. Reload to continue.', { cause });
+    this.name = 'LocalSaveFailedError';
+  }
+}
+
+/**
+ * Another tab wrote since this one last knew: make this tab's in-memory store
+ * the on-disk snapshot before reading or writing anything (call under the
+ * lock). Refuses a newer format (D1). An 'empty' result would mean another
+ * tab's write vanished between its version bump and this read, which can't
+ * happen (both land in one IndexedDB transaction), so memory stays as it is.
+ */
+export async function reloadFromDisk(store: MemoryLedgerStore, persistence: IndexedDbPersistence): Promise<void> {
+  const loaded = await persistence.load();
+  if (loaded.kind === 'too-new') throw new LocalFormatTooNewError(loaded.storedFormatVersion);
+  if (loaded.kind === 'ok') store.restore(loaded.snapshot);
+}
+
+/**
  * `(req: Request) => Promise<Response>`, matching `fetch`'s own shape so it
  * drops into `client.ts`'s transport seam (Phase C) in place of same-origin
  * `fetch`. Implements the durability sequence from the plan (§2.5, §13.4):
@@ -58,25 +85,27 @@ export class LocalFormatTooNewError extends Error {
 export function createLocalTransport(options: LocalTransportOptions): LocalTransport {
   const { app, store, persistence, lock, now } = options;
 
-  return (request: Request): Promise<Response> =>
-    lock.withLock(async ({ stale, onDiskVersion }) => {
-      if (stale) {
-        const loaded = await persistence.load();
-        if (loaded.kind === 'too-new') throw new LocalFormatTooNewError(loaded.storedFormatVersion);
-        if (loaded.kind === 'ok') store.restore(loaded.snapshot);
-        // 'empty' here would mean another tab's write somehow vanished between the version bump and this read —
-        // not a reachable state in practice (the two happen in the same IndexedDB transaction) — so there is
-        // nothing to restore and this tab's current in-memory data is simply what there is.
-      }
+  let stopped: LocalSaveFailedError | null = null;
+
+  return (request: Request): Promise<Response> => {
+    if (stopped) return Promise.reject(stopped);
+    return lock.withLock(async ({ stale, onDiskVersion }) => {
+      if (stale) await reloadFromDisk(store, persistence);
 
       const response = await app.fetch(request);
 
       const wrote = MUTATING_METHODS.has(request.method) && response.status >= 200 && response.status < 300;
       if (wrote) {
         const { maps } = store.snapshot();
-        await persistence.save({ formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now(), maps });
+        try {
+          await persistence.save({ formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now(), maps });
+        } catch (cause) {
+          stopped = new LocalSaveFailedError(cause);
+          throw stopped;
+        }
       }
 
       return { result: response, wrote };
     });
+  };
 }

@@ -68,6 +68,23 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+/**
+ * Another tab changed the mode (MUT-286 review): it signed in, or continued
+ * on this device. This tab's requests follow the hint at once, so its screen
+ * must too; returns the unsubscribe function. A `storage` event only ever
+ * reaches the *other* tabs, never the one that wrote.
+ */
+export function onModeChangedElsewhere(handler: (mode: PortalMode) => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== MODE_KEY || event.newValue === event.oldValue || !isMode(event.newValue)) return;
+    listeners.forEach((listener) => listener());
+    handler(event.newValue);
+  };
+  window.addEventListener('storage', onStorage);
+  return () => window.removeEventListener('storage', onStorage);
+}
+
 /** The mode, re-read when it changes in this tab. */
 export function useMode(): UnhintedMode {
   return useSyncExternalStore(subscribe, currentMode, currentMode);

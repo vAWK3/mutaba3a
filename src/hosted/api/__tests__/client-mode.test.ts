@@ -29,7 +29,7 @@ describe('request() by mode', () => {
     fetchSpy.mockReset();
     localFetch.mockReset();
     boot.mockReset();
-    boot.mockResolvedValue({ fetch: localFetch, onRemoteWrite: () => () => {}, exportRecords: () => new Blob(), readRecordsFile: vi.fn() });
+    boot.mockResolvedValue({ fetch: localFetch, onRemoteWrite: () => () => {}, exportRecords: () => Promise.resolve(new Blob()), readRecordsFile: vi.fn() });
     vi.stubGlobal('fetch', fetchSpy);
   });
 
@@ -142,23 +142,40 @@ describe('request() by mode', () => {
     expect(onUnauthorised).not.toHaveBeenCalled();
   });
 
-  it('a newer format saved by another tab is its own error, not "offline" (D1)', async () => {
-    const { api } = await freshClient();
+  it.each([
+    ['LocalFormatTooNewError', 'LOCAL_FORMAT_TOO_NEW'],
+    ['LocalSaveFailedError', 'LOCAL_SAVE_FAILED'],
+  ])('%s stops the page: its own error, and the stop handler hears it (D1, review)', async (name, code) => {
+    const { api, setLocalStopHandler } = await freshClient();
     setMode('local');
-    const tooNew = new Error('newer');
-    tooNew.name = 'LocalFormatTooNewError';
-    boot.mockRejectedValue(tooNew);
+    const onStop = vi.fn();
+    setLocalStopHandler(onStop);
+    const stop = new Error('stop');
+    stop.name = name;
+    localFetch.mockRejectedValue(stop);
 
-    await expect(api.me()).rejects.toMatchObject({ code: 'LOCAL_FORMAT_TOO_NEW' });
+    await expect(api.customers('p')).rejects.toMatchObject({ code });
+    expect(onStop).toHaveBeenCalledWith(code);
   });
 
-  it('a failed boot is retried on the next call', async () => {
+  it('a server that can\'t be reached is still NETWORK, and never stops the page', async () => {
+    const { api, setLocalStopHandler } = await freshClient();
+    setMode('remote');
+    const onStop = vi.fn();
+    setLocalStopHandler(onStop);
+    fetchSpy.mockRejectedValue(new TypeError('offline'));
+
+    await expect(api.me()).rejects.toMatchObject({ code: 'NETWORK' });
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  it('a local backend that can\'t run is its own error, not "offline", and is retried on the next call (review)', async () => {
     const { api } = await freshClient();
     setMode('local');
     boot.mockRejectedValueOnce(new Error('IndexedDB blocked'));
     localFetch.mockImplementation(() => Promise.resolve(json(200, ME)));
 
-    await expect(api.me()).rejects.toMatchObject({ code: 'NETWORK' });
+    await expect(api.me()).rejects.toMatchObject({ code: 'LOCAL_UNAVAILABLE' });
     await expect(api.me()).resolves.toEqual(ME);
     expect(boot).toHaveBeenCalledTimes(2);
   });

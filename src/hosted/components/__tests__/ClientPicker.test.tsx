@@ -126,6 +126,22 @@ describe('ClientPicker', () => {
       expect(input).toHaveValue('Ramallah Bakery');
     });
 
+    it('a refused create clears a client picked earlier, so the form can\'t save under the old one (review)', async () => {
+      routeFetch(() => new Response(JSON.stringify({ error: { code: 'VALIDATION_FAILED', message: 'nope' } }), { status: 422, headers: { 'Content-Type': 'application/json' } }));
+      const user = userEvent.setup();
+      const { onChange } = renderPicker('c1', true);
+      const input = await screen.findByDisplayValue('Haddad & Partners');
+      await user.clear(input);
+      onChange.mockClear();
+      await user.type(input, 'Beta Studio');
+
+      await user.click(await screen.findByRole('option', { name: /Add client.*Beta Studio/ }));
+
+      await screen.findByRole('alert');
+      expect(onChange).toHaveBeenLastCalledWith('');
+      expect(input).toHaveValue('Beta Studio');
+    });
+
     it('a new client is in the directory for the next pick, and in the Clients summaries', async () => {
       routeFetch(() => new Response(JSON.stringify({ id: 'c9', name: 'Ramallah Bakery' }), { status: 201, headers: { 'Content-Type': 'application/json' } }));
       const user = userEvent.setup();

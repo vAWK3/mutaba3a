@@ -7,7 +7,7 @@ import { LOCAL_FORMAT_VERSION } from './migrations/index.js';
 import { IndexedDbPersistence } from './persistence.js';
 import { installBufferShim } from './platform/buffer-shim.js';
 import { countRecords, decodeRecordsFile, encodeRecordsFile } from './recordsFile.js';
-import { createLocalTransport, LocalFormatTooNewError } from './transport.js';
+import { createLocalTransport, LocalFormatTooNewError, reloadFromDisk } from './transport.js';
 
 /**
  * The lazy local-mode chunk's one entry (MUT-286 Phase C; brief §2.1, §2.7),
@@ -73,8 +73,9 @@ async function boot(): Promise<LocalBackend> {
       recordCount: countRecords(decoded.maps),
       apply: async () => {
         await lock.withLock(async ({ onDiskVersion }) => {
-          store.restore(decoded);
+          // Disk first: if the browser refuses the save, memory still holds this device's records, not the file's.
           await persistence.save({ ...decoded, formatVersion: LOCAL_FORMAT_VERSION, stateVersion: onDiskVersion + 1, savedAt: now() });
+          store.restore(decoded);
           return { result: undefined, wrote: true };
         });
         session = await mintLocalSession(store, now, 'ar');
@@ -85,11 +86,14 @@ async function boot(): Promise<LocalBackend> {
   return {
     fetch: fetchLocal,
     onRemoteWrite: (handler) => lock.onRemoteWrite(() => handler()),
-    exportRecords: () => {
-      const { maps } = store.snapshot();
-      const text = encodeRecordsFile({ formatVersion: LOCAL_FORMAT_VERSION, stateVersion: 0, savedAt: now(), maps });
-      return new Blob([text], { type: 'application/json' });
-    },
+    // Under the lock, from disk if another tab wrote since: a download must hold every save this device has made.
+    exportRecords: () =>
+      lock.withLock(async ({ stale }) => {
+        if (stale) await reloadFromDisk(store, persistence);
+        const { maps } = store.snapshot();
+        const text = encodeRecordsFile({ formatVersion: LOCAL_FORMAT_VERSION, stateVersion: 0, savedAt: now(), maps });
+        return { result: new Blob([text], { type: 'application/json' }), wrote: false };
+      }),
     readRecordsFile,
   };
 }

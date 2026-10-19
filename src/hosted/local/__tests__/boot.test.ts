@@ -1,5 +1,5 @@
 import { IDBFactory } from 'fake-indexeddb';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LocalBackend } from '../../session/localBackendContract.js';
 
 /**
@@ -156,7 +156,7 @@ describe('bootLocalBackend', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
     const page = await openPage();
     const profileId = (await me(page)).body.profiles[0]!.id;
     await receive(page, profileId, '50.00');
-    const file = page.exportRecords();
+    const file = await page.exportRecords();
     await receive(page, profileId, '75.00');
 
     const pending = await page.readRecordsFile(file);
@@ -173,7 +173,7 @@ describe('bootLocalBackend', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
     globalThis.indexedDB = elsewhere;
     const otherDevice = await openPage();
     const otherPerson = (await me(otherDevice)).body.user.id;
-    const file = otherDevice.exportRecords();
+    const file = await otherDevice.exportRecords();
     globalThis.indexedDB = home;
 
     const pageA = await openPage();
@@ -184,6 +184,54 @@ describe('bootLocalBackend', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
     const after = await me(pageA);
     expect(after.status).toBe(200);
     expect(after.body.user.id).toBe(otherPerson);
+  });
+
+  it('Download my records includes another tab\'s latest save, even before this tab has made a request (review)', async () => {
+    const pageA = await openPage();
+    const pageB = await openPage();
+    const profileId = (await me(pageA)).body.profiles[0]!.id;
+    await receive(pageB, profileId, '42.00');
+
+    const file = await pageA.exportRecords();
+
+    expect((await pageA.readRecordsFile(file)).recordCount).toBe(1);
+  });
+
+  describe('a save the browser refuses (storage full) (review)', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    function refuseSaves() {
+      vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      });
+    }
+
+    it('is never reported saved, stops this page, and a reload shows what is on disk', async () => {
+      const page = await openPage();
+      const profileId = (await me(page)).body.profiles[0]!.id;
+      await receive(page, profileId, '10.00');
+      refuseSaves();
+
+      await expect(receive(page, profileId, '99.00')).rejects.toMatchObject({ name: 'LocalSaveFailedError' });
+      await expect(page.fetch(new Request('http://localhost/v1/me'))).rejects.toMatchObject({ name: 'LocalSaveFailedError' });
+
+      vi.restoreAllMocks();
+      expect(await paymentAmounts(await openPage(), profileId)).toEqual(['10.00']);
+    });
+
+    it('a Restore that can\'t be saved leaves this device\'s records as they were', async () => {
+      const page = await openPage();
+      const profileId = (await me(page)).body.profiles[0]!.id;
+      await receive(page, profileId, '10.00');
+      const pending = await page.readRecordsFile(await page.exportRecords());
+      await receive(page, profileId, '20.00');
+      refuseSaves();
+
+      await expect(pending.apply()).rejects.toBeDefined();
+
+      vi.restoreAllMocks();
+      expect(await paymentAmounts(page, profileId)).toEqual(['10.00', '20.00']);
+    });
   });
 
   it('refuses a file that is not a records file, changing nothing', async () => {

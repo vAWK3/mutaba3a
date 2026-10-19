@@ -49,12 +49,14 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
   const [pending, setPending] = useState<PendingRestore | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [busy, setBusy] = useState(false);
+  // Which pick is current: a slow earlier file must not replace a later one's confirm.
+  const latestPick = useRef(0);
 
   async function download() {
     setProblem(null);
     try {
       const backend = await localBackend();
-      saveBlob(backend.exportRecords(), recordsFileName(new Date()));
+      saveBlob(await backend.exportRecords(), recordsFileName(new Date()));
     } catch {
       setProblem('failed');
     }
@@ -64,13 +66,15 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    const pick = ++latestPick.current;
     setProblem(null);
     setPending(null);
     try {
       const backend = await localBackend();
-      setPending(await backend.readRecordsFile(file));
+      const read = await backend.readRecordsFile(file);
+      if (pick === latestPick.current) setPending(read);
     } catch (error) {
-      setProblem(problemFor(error));
+      if (pick === latestPick.current) setProblem(problemFor(error));
     }
   }
 
@@ -79,18 +83,31 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
     setBusy(true);
     try {
       await pending.apply();
-      // The file's person and profiles replace this device's, ids and all. Go straight to the restored person's
-      // first profile, read from a fresh /v1/me: `/` would redirect once, from whatever answer AuthGate last
-      // rendered, which can still be the old one for a tick, and a redirect doesn't correct itself. The profile
-      // page reads /v1/me on every render, so it does. Leaving the page also closes this drawer.
-      const me = await queryClient.fetchQuery({ ...meQuery, staleTime: 0 });
-      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== ME_KEY[0] });
-      const first = me.profiles[0];
-      await navigate({ to: first ? `/p/${first.id}` : '/', replace: true });
-      toast(t('hosted.local.data.restored'), { tone: 'info' });
     } catch {
       setProblem('failed');
       setBusy(false);
+      return;
+    }
+    // From here the records are replaced: whatever happens next, the person is told so, never "nothing was changed".
+    toast(t('hosted.local.data.restored'), { tone: 'info' });
+    await navigate({ to: await restoredHome(), replace: true });
+  }
+
+  /**
+   * The restored person's first profile, from a fresh /v1/me. `/` would redirect once, from whatever answer
+   * AuthGate last rendered, which can still be the old one for a tick, and a redirect doesn't correct itself;
+   * the profile page reads /v1/me on every render, so it does. `/` when /v1/me can't be read now. Leaving the
+   * page also closes this drawer.
+   */
+  async function restoredHome(): Promise<string> {
+    try {
+      const me = await queryClient.fetchQuery({ ...meQuery, staleTime: 0 });
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== ME_KEY[0] });
+      const first = me.profiles[0];
+      return first ? `/p/${first.id}` : '/';
+    } catch {
+      void queryClient.resetQueries();
+      return '/';
     }
   }
 

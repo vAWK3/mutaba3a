@@ -272,6 +272,22 @@ export function localBackendInEntryGraph(html: string, read: (path: string) => s
   return staticGraph(html, read).filter((path) => LOCAL_BACKEND_MARKER.test(read(path)));
 }
 
+/** The local backend's own database name (src/hosted/local/persistence.ts): what marks its chunk. */
+export const LOCAL_BACKEND_DATABASE = 'mut-local';
+
+/**
+ * Built files that touch IndexedDB but are not the local backend: only the
+ * chunk that opens its own `mut-local` database may (ADR-100). With
+ * `localBackendInEntryGraph`, this holds the whole promise: IndexedDB in one
+ * lazy chunk, and nowhere else in the portal. Empty when clean.
+ */
+export function indexedDbOutsideLocalBackend(paths: readonly string[], read: (path: string) => string): string[] {
+  return paths.filter((path) => {
+    const text = read(path);
+    return LOCAL_BACKEND_MARKER.test(text) && !text.includes(LOCAL_BACKEND_DATABASE);
+  });
+}
+
 /** The files a Workbox `sw.js` precaches, from its `{url:"…"}` entries (minified or JSON-quoted). */
 export function precachedUrls(sw: string): string[] {
   return [...sw.matchAll(/\{\s*"?url"?\s*:\s*"([^"]+)"/g)].map((match) => match[1]);

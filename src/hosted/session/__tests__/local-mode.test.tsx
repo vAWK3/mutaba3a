@@ -32,7 +32,7 @@ const backend = {
       remoteWriteHandler = null;
     };
   }),
-  exportRecords: vi.fn(() => new Blob(['{}'], { type: 'application/json' })),
+  exportRecords: vi.fn(() => Promise.resolve(new Blob(['{}'], { type: 'application/json' }))),
   readRecordsFile: vi.fn<(file: Blob) => Promise<PendingRestore>>(),
 };
 const boot = vi.fn(() => Promise.resolve(backend));
@@ -178,6 +178,41 @@ describe('the shell signed out', () => {
     await waitFor(() => expect(payments).toBeGreaterThan(before));
   });
 
+  it('a save this browser refuses stops the page with a reload screen, whatever page it happened on (review)', async () => {
+    const refused = new Error('quota');
+    refused.name = 'LocalSaveFailedError';
+    useLocalRoutes({
+      'GET /v1/payments': () => {
+        throw refused;
+      },
+    });
+    stubApi({});
+
+    renderPortal(`/p/${ORG_A}/payments`);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't save on this device");
+    expect(within(alert).getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Sections' })).toBeNull();
+  });
+
+  it('a browser that won\'t let the app save here says so, with Try again and Sign in (review)', async () => {
+    useLocalRoutes({
+      'GET /v1/me': () => {
+        throw new Error('IndexedDB blocked');
+      },
+    });
+    stubApi({});
+
+    const { router, user } = renderPortal('/');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("This browser won't let Mutaba3a save here");
+    expect(alert).not.toHaveTextContent("Can't reach Mutaba3a");
+    await user.click(within(alert).getByRole('button', { name: 'Sign in' }));
+    await waitFor(() => expect(locationOf(router)).toBe('/sign-in'));
+  });
+
   it('records saved by a newer version in another tab ask for a reload (D1)', async () => {
     const tooNew = new Error('newer');
     tooNew.name = 'LocalFormatTooNewError';
@@ -220,6 +255,51 @@ describe('moving between modes', () => {
     expect(screen.getByRole('button', { name: 'Continue on this device' })).toBeInTheDocument();
     expect(localStorage.getItem(MODE_KEY)).toBe('remote');
     expect(boot).not.toHaveBeenCalled();
+  });
+
+  function otherTabSets(mode: 'local' | 'remote') {
+    const oldValue = localStorage.getItem(MODE_KEY);
+    act(() => {
+      localStorage.setItem(MODE_KEY, mode);
+      window.dispatchEvent(new StorageEvent('storage', { key: MODE_KEY, oldValue, newValue: mode }));
+    });
+  }
+
+  it('another tab signing in moves this tab to the account, with nothing of this device left on screen (review)', async () => {
+    setMode('local');
+    stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
+    const { queryClient } = renderPortal(`/p/${ORG_A}`);
+    expect(await screen.findByRole('button', { name: /Account/ })).toHaveTextContent('On this device');
+    queryClient.setQueryData(['p', 'device-profile', 'payments'], { items: [] });
+
+    otherTabSets('remote');
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Account/ })).toHaveTextContent('Nour Haddad'));
+    expect(queryClient.getQueryData(['p', 'device-profile', 'payments'])).toBeUndefined();
+  });
+
+  it('another tab continuing on this device drops the account\'s figures from this tab (review)', async () => {
+    setMode('remote');
+    stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
+    renderPortal(`/p/${ORG_A}`);
+    expect(await screen.findByRole('button', { name: /Account/ })).toHaveTextContent('Nour Haddad');
+
+    otherTabSets('local');
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Account/ })).toHaveTextContent('On this device'));
+    expect(screen.queryByText('Nour Haddad')).toBeNull();
+  });
+
+  it('someone typing on the sign-in page is left alone when another tab continues on this device', async () => {
+    setMode('remote');
+    stubApi({ 'GET /v1/me': () => fail(401, 'UNAUTHENTICATED') });
+    const { router, user } = renderPortal('/sign-in');
+    await user.type(await screen.findByLabelText('Email'), 'nour@firm.ps');
+
+    otherTabSets('local');
+
+    expect(locationOf(router)).toBe('/sign-in');
+    expect(screen.getByLabelText('Email')).toHaveValue('nour@firm.ps');
   });
 
   it('signing in switches to the account and drops what was cached locally', async () => {
@@ -302,6 +382,36 @@ describe('Your data (D2)', () => {
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}`));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByText("This profile isn't available")).toBeNull();
+  });
+
+  it('a slow earlier file never replaces a later pick (review)', async () => {
+    let finishFirst: (value: PendingRestore) => void = () => {};
+    backend.readRecordsFile
+      .mockImplementationOnce(() => new Promise<PendingRestore>((resolve) => { finishFirst = resolve; }))
+      .mockResolvedValueOnce({ recordCount: 2, apply: vi.fn(() => Promise.resolve()) });
+    await openYourData();
+
+    chooseFile('first.json');
+    chooseFile('second.json');
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('the 2 records');
+    await act(async () => finishFirst({ recordCount: 1, apply: vi.fn(() => Promise.resolve()) }));
+
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('the 2 records');
+  });
+
+  it('once the records are replaced, a later hiccup still says restored, never "nothing was changed" (review)', async () => {
+    const apply = vi.fn(() => {
+      useLocalRoutes({ 'GET /v1/me': () => fail(500, 'INTERNAL') });
+      return Promise.resolve();
+    });
+    backend.readRecordsFile.mockResolvedValue({ recordCount: 3, apply });
+    const { user } = await openYourData();
+
+    chooseFile();
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Replace' }));
+
+    expect(await screen.findByText('Records restored.')).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't restore the file. Nothing was changed.")).toBeNull();
   });
 
   it('Cancel leaves everything as it was', async () => {

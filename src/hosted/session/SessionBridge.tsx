@@ -5,7 +5,7 @@ import { localBackend, setUnauthorisedHandler } from '../api/client';
 import { onSignedOutElsewhere } from './channel';
 import { endSession } from './endSession';
 import { ME_KEY } from './me';
-import { useIsLocalMode } from './mode';
+import { onModeChangedElsewhere, useIsLocalMode } from './mode';
 
 /**
  * The one place the session ends (mut-43-auth-states.md E1, E3). The query
@@ -24,6 +24,19 @@ export function SessionBridge() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const local = useIsLocalMode();
+
+  // MUT-286 review: another tab signed in, or continued on this device. This tab's next request already goes the
+  // new way, so nothing cached from the old one may stay on screen: drop it all and reopen from `/`, where AuthGate
+  // asks the right backend. Sign-in and setup are left alone: whoever is there is mid-way through choosing.
+  useEffect(
+    () =>
+      onModeChangedElsewhere(() => {
+        if (SIGNED_OUT_PAGES.has(router.state.location.pathname)) return;
+        queryClient.clear();
+        void router.navigate({ to: '/', replace: true });
+      }),
+    [queryClient, router],
+  );
 
   useEffect(() => {
     if (!local) return;
