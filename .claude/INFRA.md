@@ -127,6 +127,7 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 | Admin token, DB password | Terraform state + Secret Manager | generated; read with `gcloud secrets versions access`; `terraform output -raw local_database_url` for the proxy |
 | Firm API keys | shown once by `npm run provision`; stored hashed in `api_keys` | Malafat stores the secret encrypted per tenant |
 | Malafat's `malafat-web-mutaba3a-api-url` | Malafat's Secret Manager | the service URL; created by the operator after the first deploy |
+| Stripe: **Mutaba3a** account | Barmajiyat Ltd (UK) Stripe Organization. Malafat has its own account in the same Organization (MAL-30). | Pilot: Products Freelancer / Firm, priced in ILS + USD, monthly and yearly. Subscriptions are created by hand in the dashboard and collected by emailed invoice (`docs/commercial/pilot-offer.md` §5). Statement descriptor `MUTABA3A`. No keys are in code until MUT-332. |
 | Custom domain `api.mutaba3a.app` | not set up | Cloud Run domain mapping unavailable in `me-west1`; Cloudflare CNAME or external LB later |
 
 ### Deployed

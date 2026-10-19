@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-19 — Pilot offer and the /hosted reply template (MUT-323, epic MUT-322)
+
+**Why:** /hosted promises an offer by email within 2 working days, but no price or reply existed. These docs are internal. No price reaches the site: MUT-171/185 hold that rule until billing exists (MUT-332).
+
+### Added
+- `docs/commercial/pilot-offer.md` (EN + AR) covers:
+  - founder prices, excluding VAT: Freelancer ₪39 / $10 a month, Firm ₪299 / $80 a month per firm, billed in ILS in Israel and USD elsewhere, locked 12 months, yearly at 10× monthly;
+  - what each tier includes (shipped features only);
+  - the pilot's promises: email support within 2 working days, read-only + export when a payment lapses, 30 days before a closed account is deleted;
+  - pilot invoicing through the Barmajiyat Ltd **Mutaba3a** Stripe account from the dashboard, with no code. The subscriptions carry over to MUT-332.
+- `docs/commercial/hosted-request-reply.md`: the reply to a /hosted request, in EN and AR. It has blocks for freelancers, firms and Malafat firms (who are sent to the Malafat add-on, MAL-870), and a checklist to go through before sending.
+
+### Changed
+- `.claude/INFRA.md`: operator-held row for the Mutaba3a Stripe account.
+
 ## [Unreleased] - 2026-10-19 — Direction comes from `<html dir>` and the `dir` attribute only (MUT-109, ADR-101, TD-048 resolved)
 
 **Why:** `theme.css` set `direction` on every `:lang()` element, which beat the `dir` attribute: every `dir="ltr"` was ignored in Arabic, and every `dir="rtl"`/`"auto"` in English. Last open child of Brand v2 (MUT-101).
