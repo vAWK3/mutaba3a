@@ -50,7 +50,8 @@ describe('no self-registration route exists (MUT-37)', () => {
    * are signing in and redeeming an operator-issued setup link. A new public
    * operation — a signup, an invite, a "forgot password" — fails this test.
    */
-  it('the public operations are exactly sign-in and the setup-link pair', async () => {
+  // MUT-287 (MUT-285 D3, ADR-097 §7): GET /v1/public/fx-rates is public market data for the signed-out portal, read-only and rate-limited; it creates no account.
+  it('the public operations are exactly sign-in, the setup-link pair and the public FX snapshot', async () => {
     const doc = (await (await inventory().request('/openapi.json')).json()) as {
       paths: Record<string, Record<string, { security?: unknown[] }>>;
     };
@@ -60,6 +61,6 @@ describe('no self-registration route exists (MUT-37)', () => {
       .filter((op) => Array.isArray(op.security) && op.security.length === 0)
       .map((op) => op.key)
       .sort();
-    expect(publicOperations).toEqual(['POST /v1/account-setup', 'POST /v1/account-setup/check', 'POST /v1/device-sessions', 'POST /v1/sessions']);
+    expect(publicOperations).toEqual(['GET /v1/public/fx-rates', 'POST /v1/account-setup', 'POST /v1/account-setup/check', 'POST /v1/device-sessions', 'POST /v1/sessions']);
   });
 });

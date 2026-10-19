@@ -208,6 +208,19 @@ describe('CachedFxRates', () => {
     await expect(h.cache.get()).resolves.toEqual({ snapshot: SNAPSHOT, fetchedAt: new Date('2026-10-15T12:00:00Z'), source: 'stale' });
   });
 
+  it('relays a source that is itself a cache: its staleness and fetch time are reported, while this cache\'s window runs on its own fetch (MUT-287)', async () => {
+    const h = harness();
+    const upstreamFetchedAt = new Date('2026-10-15T08:00:00Z');
+    h.state.snapshot = { ...SNAPSHOT, upstream: { fetchedAt: upstreamFetchedAt, stale: true } };
+    await expect(h.cache.get()).resolves.toMatchObject({ fetchedAt: upstreamFetchedAt, source: 'stale', snapshot: { rateDate: '2026-10-15' } });
+    h.advance(TTL - 1);
+    await expect(h.cache.get()).resolves.toMatchObject({ source: 'stale' });
+    expect(h.state.calls).toBe(1);
+    h.advance(1);
+    h.state.snapshot = { ...SNAPSHOT, upstream: { fetchedAt: new Date('2026-10-15T16:00:00Z'), stale: false } };
+    await expect(h.cache.get()).resolves.toMatchObject({ fetchedAt: new Date('2026-10-15T16:00:00Z'), source: 'live' });
+  });
+
   it('refuses with FX_RATES_UNAVAILABLE when nothing is cached and the provider fails', async () => {
     const h = harness();
     h.state.fail = true;

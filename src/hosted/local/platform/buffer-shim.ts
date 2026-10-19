@@ -9,13 +9,14 @@
  * (see that file's comment) so `server/src/**`'s bare `Buffer` references
  * type-check the same way they do under `server`'s own `tsc` — which means
  * the *type* `Buffer` here is still Node's real, ~70-method interface.
- * `BufferShim` only ever reaches `globalThis.Buffer` through an explicit
- * `as unknown as typeof Buffer` cast (`installBufferShim`, below): it does
- * not — and structurally cannot — `implements Buffer`, and does not
- * override `Uint8Array`'s own static `from` (a subclass may not narrow it
- * without breaking the static side's Liskov substitution; `BufferShim.encode`
- * is the string-decoding factory instead, used internally and by the
- * `globalThis.Buffer.from` shim exported below).
+ * `bufferShim` (below) reaches those modules as their `Buffer`, bound per
+ * module at build time (`scopeServerBufferShim` in vite.config.ts), never
+ * through `globalThis` (MUT-287: a global partial Buffer sent jszip down its
+ * Node path). `BufferShim` does not — and structurally cannot — `implements
+ * Buffer`, and does not override `Uint8Array`'s own static `from` (a subclass
+ * may not narrow it without breaking the static side's Liskov substitution;
+ * `BufferShim.encode` is the string-decoding factory instead, used
+ * internally and by `bufferShim.from`).
  */
 
 export type ShimBufferEncoding = 'utf8' | 'hex' | 'base64url';
@@ -73,23 +74,16 @@ export class BufferShim extends Uint8Array {
 }
 
 /**
- * The one static method `server/src/**` actually calls on the global
- * `Buffer`; everything else of Node's real interface is never touched
- * (confirmed by grep — see this file's docblock and `crypto.ts`'s). Exported
- * as a standalone object, not only installed, so
- * `server/src/__tests__/platform-shim.test.ts` can swap it in for a direct
- * comparison against the real `Buffer` without needing `globalThis.Buffer` to
- * start out `undefined` (it never is under Node/Vitest).
+ * The one static method `server/src/**` calls on `Buffer`; nothing else of
+ * Node's real interface is touched (confirmed by grep — see this file's
+ * docblock and `crypto.ts`'s). In the hosted build this object *is* each
+ * server module's `Buffer`, imported by `scopeServerBufferShim`
+ * (vite.config.ts) and never set on `globalThis` (MUT-287).
+ * `server/src/__tests__/platform-shim.test.ts` swaps it in for the real
+ * `Buffer` to compare the two byte for byte.
  */
 export const bufferShim = {
   from(data: string | ArrayLike<number> | ArrayBufferLike, encoding?: ShimBufferEncoding): BufferShim {
     return typeof data === 'string' ? BufferShim.encode(data, encoding ?? 'utf8') : new BufferShim(data as ArrayLike<number>);
   },
 };
-
-/** Idempotent: safe to call more than once (e.g. hot reload in dev). */
-export function installBufferShim(): void {
-  if (typeof globalThis.Buffer === 'undefined') {
-    globalThis.Buffer = bufferShim as unknown as typeof Buffer;
-  }
-}

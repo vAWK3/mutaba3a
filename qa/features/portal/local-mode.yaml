@@ -4,7 +4,8 @@ title: The portal signed out, on this device
 tier: secondary
 # MUT-286 (epic MUT-284, ADR-097): signed out, the portal runs the server's own routes in the page over IndexedDB.
 # The brief's local.income-persists is owed-part-paid below; the client it needs is added from the picker (TD-172).
-# local.expense-receipt, local.offline, local.marker-upsell, local.fx-line, local.move-on-sign-in belong to MUT-287..290.
+# MUT-287 adds expense-receipt, fx-line, conversion and documents-empty. local.offline, local.marker-upsell and
+# local.move-on-sign-in belong to MUT-288..290.
 paths:
   - src/hosted/local/**
   - src/hosted/session/mode.ts
@@ -25,7 +26,7 @@ features:
     expect:
       - The Personal profile's Overview opens in Arabic, right to left, with no sign-in form
       - The account reads "على هذا الجهاز" (On this device); the menu offers Sign in and Your data, and no sign-out, password, Malafat or store link
-      - The nav has no Expenses or Conversions (MUT-287)
+      - The nav has the same sections as signed in, Expenses and Conversions included (MUT-287)
       - Exactly one request reached the server, the first-visit check of /v1/me
   - id: received-persists
     title: Money received signed out is still there after a reload, and nothing is sent
@@ -85,7 +86,7 @@ features:
       - The second tab lists the first tab's payment without a reload
       - Both tabs list both payments; payment numbers follow on (PAY-…-0001, then 0002)
   - id: download-restore
-    title: Download my records, clear the site's data, restore the file, and every record is back
+    title: Download my records, clear the site's data, restore the file, and every record and receipt is back
     tier: secondary
     paths:
       - src/hosted/components/YourDataDrawer.tsx
@@ -93,13 +94,15 @@ features:
       - src/hosted/data/filters.ts
     steps:
       - Add money received signed out
+      - Record an expense with a PDF receipt (MUT-287)
       - Open Your data from the account menu and download my records
       - Clear this site's data, then open the portal again
       - Open Your data, restore the downloaded file, and replace
     expect:
-      - The download is a mutaba3a-records-<date>.json file
+      - The download is a mutaba3a-records-<date>.zip holding records.json (MUT-287)
       - After clearing, the payment is gone
       - The confirm names how many records the file holds; after Replace, "Records restored." shows and the payment is back
+      - The receipt is inside the zip as its own file, and after Replace it downloads again with the same bytes (MUT-287)
   - id: session-expired
     title: When a signed-in session ends, the portal offers Sign in or Continue on this device, and never switches by itself
     tier: secondary
@@ -114,3 +117,67 @@ features:
     expect:
       - Sign-in says "You've been signed out. Sign in again to continue." and offers both Sign in and Continue on this device
       - Continuing opens this device's own app, with none of the account's figures
+  - id: expense-receipt
+    title: Signed out, record an expense, attach a PDF receipt, reload, and download it by its name
+    tier: core # receipts are the reason most people record expenses at all
+    paths:
+      - src/hosted/data/download.ts
+      - src/hosted/data/expenseQueries.ts
+      - src/hosted/components/ReceiptUploader.tsx
+      - src/hosted/shell/HostedShell.tsx
+    steps:
+      - Open Expenses signed out, in English, and record 45.00, Taxi to court
+      - Open it and attach taxi-receipt.pdf
+      - Reload, open the expense again, and download the receipt
+    expect:
+      - The receipt is listed on the expense before and after the reload
+      - The download is taxi-receipt.pdf with the same bytes that were attached
+      - No request reached the server after the first-visit check
+  - id: fx-line
+    title: Signed out and online, a trip group in two currencies shows the ≈ line; offline it hides
+    tier: secondary
+    paths:
+      - src/hosted/local/fxSource.ts
+    steps:
+      - Record 40.00 USD and 120.00 ILS today
+      - Create a group from today, Amman trip, and land on it
+      - Go offline and reload
+      - Forget this device's saved rates and reload, still offline
+    expect:
+      - The headline keeps $40.00 and ₪120.00 apart, and the ≈ line names today's ECB rate date
+      - Offline after a reload the ≈ line stays, from the rates this device remembers for an hour (review D8)
+      - With no saved rates offline, the ≈ line is gone and the totals stay
+      - The only requests to the server are the first-visit check and GET /v1/public/fx-rates (D3)
+  - id: conversion
+    title: Signed out, log a conversion, reload, and edit it
+    tier: secondary
+    paths:
+      - src/hosted/components/ConversionDrawer.tsx
+    steps:
+      - Open Conversions signed out and log 1000 USD to 3700 ILS, Rent transfer
+      - Reload, open it, change the to amount to 3650 and save
+    expect:
+      - The conversion is listed before and after the reload, and the edit saves
+      - No request reached the server after the first-visit check
+  - id: documents-empty
+    title: Signed out, Documents opens on its empty state, not an error
+    tier: secondary
+    paths:
+      - src/hosted/pages/views/DocumentsList.tsx
+    steps:
+      - Open Documents signed out
+    expect:
+      - It says there are no documents on this profile yet, and shows no error
+  - id: restore-missing-receipts
+    title: Restore an older backup without receipt files, and the confirm says which receipts will have no file
+    tier: secondary
+    paths:
+      - src/hosted/local/recordsArchive.ts
+      - src/hosted/local/restore.ts
+    steps:
+      - Record an expense with a PDF receipt signed out
+      - Keep only records.json from Download my records, as an older .json backup
+      - Clear the site's data and restore that .json
+    expect:
+      - Before Replace, the confirm says "1 receipt file isn't in this file. That receipt will be restored without its file." (review D4)
+      - After Replace the expense and its receipt are back, and downloading it says it couldn't be prepared

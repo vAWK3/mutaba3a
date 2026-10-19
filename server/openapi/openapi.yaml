@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.36.0-mut293
+  version: 1.37.0-mut287
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -5474,6 +5474,44 @@ components:
         - uncategorizedExpenses
         - deletedCategories
         - preset
+    PublicFxRatesResponse:
+      type: object
+      properties:
+        rateDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: The ECB reference date (its last business day), YYYY-MM-DD
+          example: 2026-10-15
+        perEur:
+          type: object
+          properties:
+            USD:
+              type: number
+              minimum: 0
+              exclusiveMinimum: true
+            ILS:
+              type: number
+              minimum: 0
+              exclusiveMinimum: true
+          required:
+            - USD
+            - ILS
+          description: Units of each currency per 1 EUR, as the ECB publishes them. Every other supported currency derives from these and the USD pegs.
+        fetchedAt:
+          type: string
+          format: date-time
+          description: When this server instance read the rates from the provider
+        source:
+          type: string
+          enum:
+            - live
+            - stale
+          description: live = inside the cache window; stale = the last refresh failed and these are the last good rates
+      required:
+        - rateDate
+        - perEur
+        - fetchedAt
+        - source
     CreateOrganizationRequest:
       type: object
       properties:
@@ -12680,6 +12718,32 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/public/fx-rates:
+    get:
+      tags:
+        - Exchange rates
+      summary: The ECB reference snapshot behind /v1/fx-rates, with no session
+      description: Public market data for the portal used signed out, which computes cross rates itself. Same cache, age rules and 503 as /v1/fx-rates; rate-limited to 120 requests per minute per address. Display only.
+      security: []
+      responses:
+        "200":
+          description: Snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicFxRatesResponse"
+        "429":
+          description: Too many requests from this address; `Retry-After` and `details.retryAfterSeconds` say when to try again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No rates to serve, or no rate source configured
           content:
             application/json:
               schema:

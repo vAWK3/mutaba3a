@@ -57,8 +57,8 @@ export function DocumentsList({ filters, setFilters, fixedCustomerId }: Document
     async (row: DocumentRow) => {
       setPreparing(row.id);
       try {
-        const { url } = await api.attachmentDownload(profile.id, row.id);
-        downloadNavigator.open(url);
+        const { url, filename } = await api.attachmentDownload(profile.id, row.id);
+        await downloadNavigator.open(url, filename);
       } catch {
         toast(t('hosted.documents.downloadFailed'));
       } finally {

@@ -1,5 +1,5 @@
 {
-  "$comment": "Origins each build may reference (hosted-portal.md §8; MUT-43). Most are library error links, XML namespaces and the app's own known services. A new origin fails `npm run test:bundles` until it is reviewed and added here. The *.posthog.com, sentry.io and yandex.com entries are strings inside posthog-js (MUT-154/155): the landing's lazy chunk and the portal only ever send to eu.i.posthog.com, external script loading is off, and check-bundles separately proves PostHog is never statically reachable from the local app's entry.",
+  "$comment": "Origins each build may reference (hosted-portal.md §8; MUT-43). Most are library error links, XML namespaces and the app's own known services. A new origin fails `npm run test:bundles` until it is reviewed and added here. The *.posthog.com, sentry.io and yandex.com entries are strings inside posthog-js (MUT-154/155): the landing's lazy chunk and the portal only ever send to eu.i.posthog.com, external script loading is off, and check-bundles separately proves PostHog is never statically reachable from the local app's entry. stuk.github.io is a jszip documentation link inside an error message; the portal loads jszip only for Your data's records zip (MUT-287).",
   "local": [
     "http://127.0.0.1:14100",
     "http://127.0.0.1:14101",
@@ -61,6 +61,7 @@
     "https://posthog.com",
     "https://react.dev",
     "https://sentry.io",
+    "https://stuk.github.io",
     "https://tanstack.com",
     "https://us.i.posthog.com",
     "https://us.posthog.com"

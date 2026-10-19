@@ -166,6 +166,8 @@ const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup)(\/|\?|$)/;
 /** The local backend's errors that stop the page, by class name: the classes live in the lazy chunk (transport.ts). */
 const LOCAL_STOPS: Readonly<Record<string, LocalStopCode>> = {
   LocalFormatTooNewError: 'LOCAL_FORMAT_TOO_NEW',
+  // MUT-287 review D12: a newer build upgraded a local database under this page (src/hosted/local/idb.ts); same screen.
+  LocalDatabaseSupersededError: 'LOCAL_FORMAT_TOO_NEW',
   LocalSaveFailedError: 'LOCAL_SAVE_FAILED',
 };
 

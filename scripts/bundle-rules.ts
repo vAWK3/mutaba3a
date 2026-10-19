@@ -272,6 +272,19 @@ export function localBackendInEntryGraph(html: string, read: (path: string) => s
   return staticGraph(html, read).filter((path) => LOCAL_BACKEND_MARKER.test(read(path)));
 }
 
+/** jszip's own documentation link, inside its minified error messages: what marks its chunk. */
+export const JSZIP_MARKER = /stuk\.github\.io\/jszip/;
+
+/**
+ * The statically loaded portal files that carry jszip. The portal loads it
+ * only when someone presses Download or Restore in Your data (MUT-287, eng
+ * review R2): a hit means every page load would download ~30 KB gzip for a
+ * button almost nobody presses. Empty when clean.
+ */
+export function jszipInEntryGraph(html: string, read: (path: string) => string): string[] {
+  return staticGraph(html, read).filter((path) => JSZIP_MARKER.test(read(path)));
+}
+
 /** The local backend's own database name (src/hosted/local/persistence.ts): what marks its chunk. */
 export const LOCAL_BACKEND_DATABASE = 'mut-local';
 
