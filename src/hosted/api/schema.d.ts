@@ -9762,7 +9762,7 @@ export interface paths {
         };
         /**
          * The ECB reference snapshot behind /v1/fx-rates, with no session
-         * @description Public market data for the portal used signed out, which computes cross rates itself. Same cache, age rules and 503 as /v1/fx-rates; rate-limited to 30 requests per minute per address. Display only.
+         * @description Public market data for the portal used signed out, which computes cross rates itself. Same cache, age rules and 503 as /v1/fx-rates; rate-limited to 120 requests per minute per address. Display only.
          */
         get: {
             parameters: {

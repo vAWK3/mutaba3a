@@ -60,8 +60,13 @@ export function fxRateRoutes(rates: CachedFxRates | null): OpenAPIHono<AppEnv> {
 /** The anonymous snapshot route; the portal's signed-out FX source (`src/hosted/local/fxSource.ts`) fetches exactly this path. */
 export const PUBLIC_FX_RATES_PATH = '/v1/public/fx-rates';
 
-/** Per address per minute. A signed-out tab asks at most about once an hour (its own cache), so this only stops a scraper. */
-export const PUBLIC_FX_POLICY = { ipPerMinute: 30 } as const;
+/**
+ * Per address per minute. A signed-out device asks about once an hour (its
+ * page cache, seeded from the snapshot it last saved), but many people can
+ * share one address (mobile carriers, offices): roomy enough for them, still
+ * a wall for a scraper (MUT-287 review D8).
+ */
+export const PUBLIC_FX_POLICY = { ipPerMinute: 120 } as const;
 
 export interface PublicFxRateRouteOptions {
   rates: CachedFxRates | null;
