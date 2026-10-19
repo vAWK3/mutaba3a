@@ -1,14 +1,17 @@
+import type { Language } from '../lib/i18n/types';
+
 /**
  * MUT-324 (ADR-102): where the portal shows the terms. A build-time value read
  * through a typeof guard (ADR-076): the test runner defines none, so a test
  * stubs the global, and an unset build links nowhere rather than somewhere wrong.
- * With a version, the address is that version's frozen text, so what a person
- * reads is exactly what their acceptance records.
+ * With a version, the address is that version's frozen text, and `?lang` is the
+ * portal's language: the landing opens in its own stored language otherwise, so
+ * what a person reads is exactly what their acceptance records (version and locale).
  */
-export function termsHref(version?: string): string {
+export function termsHref(language: Language, version?: string): string {
   const base = typeof __TERMS_URL__ !== 'undefined' ? __TERMS_URL__ : '';
   if (!base) return '';
-  return version ? `${base}/${version}` : base;
+  return `${version ? `${base}/${version}` : base}?lang=${language}`;
 }
 
 /** The address people write to for help, and to close their account (the pilot's support promise, MUT-323). */

@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
-import { useT } from '../../lib/i18n/core';
+import { useLanguage, useT } from '../../lib/i18n/core';
 import { LanguageSwitch } from '../components/Brand';
 import { useMe } from '../session/me';
 import { useIsLocalMode } from '../session/mode';
@@ -32,10 +32,11 @@ function initialsOf(name: string): string {
  */
 export function UserMenu({ profile = null }: { profile?: HostedProfile | null }) {
   const t = useT();
+  const { language } = useLanguage();
   const { user } = useMe();
   const local = useIsLocalMode();
   const { signOut, signingOut } = useSignOut();
-  const termsLink = termsHref();
+  const termsLink = termsHref(language);
   const { open, close, toggle, buttonRef, panelRef } = usePopover();
   const accountDrawers = useAccountDrawers();
   const navigate = useNavigate();

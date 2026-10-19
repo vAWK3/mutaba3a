@@ -230,11 +230,11 @@ describe('the terms (MUT-324)', () => {
     expect(redeems(api)[0]?.body).toEqual({ token: TOKEN, password: PASSWORD, acceptedTermsVersion: TERMS_VERSION, termsLocale: 'en' });
   });
 
-  it('links the exact version being accepted, in a new tab', async () => {
+  it('links the exact version being accepted, in the language recorded, in a new tab', async () => {
     vi.stubGlobal('__TERMS_URL__', TERMS_URL);
     await openForm();
     const link = screen.getByRole('link', { name: 'terms of service' });
-    expect(link).toHaveAttribute('href', `${TERMS_URL}/${TERMS_VERSION}`);
+    expect(link).toHaveAttribute('href', `${TERMS_URL}/${TERMS_VERSION}?lang=en`);
     expect(link).toHaveAttribute('target', '_blank');
   });
 
@@ -244,7 +244,7 @@ describe('the terms (MUT-324)', () => {
     await save(user, password);
     expect(await screen.findByText(/The terms changed while this page was open/)).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: /terms of service/ })).not.toBeChecked();
-    expect(screen.getByRole('link', { name: 'terms of service' })).toHaveAttribute('href', `${TERMS_URL}/2027-01-01`);
+    expect(screen.getByRole('link', { name: 'terms of service' })).toHaveAttribute('href', `${TERMS_URL}/2027-01-01?lang=en`);
     expect(screen.queryByText('Use 12 to 128 characters.', { selector: '.hp-field-error' })).not.toBeInTheDocument();
     await save(user, password);
     await waitFor(() => expect(redeems(api)).toHaveLength(2));

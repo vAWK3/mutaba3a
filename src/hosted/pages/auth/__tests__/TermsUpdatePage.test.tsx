@@ -38,7 +38,7 @@ describe('the Updated terms step (MUT-324)', () => {
     renderPortal('/');
     expect(await screen.findByRole('heading', { level: 1, name: "We've updated our terms" })).toBeInTheDocument();
     const read = screen.getByRole('link', { name: 'Read the terms' });
-    expect(read).toHaveAttribute('href', `${TERMS_URL}/${CURRENT}`);
+    expect(read).toHaveAttribute('href', `${TERMS_URL}/${CURRENT}?lang=en`);
     expect(read).toHaveAttribute('target', '_blank');
     expect(screen.getByText(/info@malafat\.app/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
@@ -54,10 +54,12 @@ describe('the Updated terms step (MUT-324)', () => {
     expect(screen.queryByRole('heading', { level: 1, name: "We've updated our terms" })).not.toBeInTheDocument();
   });
 
-  it('records Arabic when the page is in Arabic', async () => {
+  it('records Arabic when the page is in Arabic, and links the Arabic text', async () => {
+    vi.stubGlobal('__TERMS_URL__', TERMS_URL);
     localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
     const api = stubApi(routes({ 'GET /v1/me': () => ok({ ...behind(), user: { ...behind().user, locale: 'ar' } }) }));
     const { user } = renderPortal('/');
+    expect(await screen.findByRole('link', { name: 'اقرأ الشروط' })).toHaveAttribute('href', `${TERMS_URL}/${CURRENT}?lang=ar`);
     await user.click(await screen.findByRole('button', { name: 'أوافق' }));
     await waitFor(() => expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === ACCEPT)?.body).toEqual({ version: CURRENT, locale: 'ar' }));
   });

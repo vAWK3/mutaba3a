@@ -20,6 +20,16 @@ features:
       - The Arabic page reads right to left, and nothing scrolls sideways at 375px
       - The version's own address shows the same text
       - An unknown version says it doesn't exist and links to the current terms
+  - id: terms-linked-language
+    title: A portal link (/terms/<version>?lang=en|ar) opens the terms in the language the portal records, without changing the site's language (MUT-324 review fix 1)
+    tier: secondary
+    legacy: [MUT-324]
+    steps:
+      - With the site in Arabic, open /terms/2026-10-19?lang=en
+      - Then open /terms with no language in the address
+    expect:
+      - The English text shows, reading left to right
+      - Without ?lang the site is still in Arabic
   - id: links
     title: The terms are linked from the landing footer and under the /hosted request form, and the privacy policy explains hosted accounts (MUT-324)
     tier: secondary

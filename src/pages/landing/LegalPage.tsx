@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import './LandingPage.css';
 import './PrivacyPolicyPage.css';
-import { useT } from '../../lib/i18n';
+import { useT, type Language } from '../../lib/i18n';
+import { getDirection } from '../../lib/i18n/core';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useLandingAnalytics } from './analytics/landingAnalytics';
 import { LandingHeader, LandingFooter } from './components';
@@ -19,13 +20,15 @@ interface LegalPageProps {
   sections: readonly LegalSection[];
   /** Below the sections, before the way back home: e.g. links to other versions. */
   after?: ReactNode;
+  /** The text's own language when it may differ from the page's (a /terms?lang link), so it reads in its direction. */
+  textLanguage?: Language;
 }
 
 /**
  * The layout shared by /privacy and /terms (MUT-324): landing chrome, one
  * heading, a dated intro, then titled sections. Mounted outside the router.
  */
-export function LegalPage({ title, updated, intro, sections, after }: LegalPageProps) {
+export function LegalPage({ title, updated, intro, sections, after, textLanguage }: LegalPageProps) {
   const t = useT();
   useDocumentTitle(t('common.pageTitle', { page: title }));
   useLandingAnalytics();
@@ -39,20 +42,22 @@ export function LegalPage({ title, updated, intro, sections, after }: LegalPageP
       <main id="main-content" aria-busy={updated === undefined}>
         <article className="landing-section privacy-policy" aria-labelledby="legal-page-title">
           <div className="landing-container privacy-policy-container">
-            <h1 id="legal-page-title" className="privacy-policy-title">
-              {title}
-            </h1>
-            {updated && <p className="privacy-policy-updated">{updated}</p>}
-            {intro && <p className="privacy-policy-intro">{intro}</p>}
+            <div lang={textLanguage} dir={textLanguage && getDirection(textLanguage)}>
+              <h1 id="legal-page-title" className="privacy-policy-title">
+                {title}
+              </h1>
+              {updated && <p className="privacy-policy-updated">{updated}</p>}
+              {intro && <p className="privacy-policy-intro">{intro}</p>}
 
-            {sections.map((section) => (
-              <section key={section.title} className="privacy-policy-section">
-                <h2>{section.title}</h2>
-                {section.paragraphs.map((paragraph) => (
-                  <p key={paragraph}>{paragraph}</p>
-                ))}
-              </section>
-            ))}
+              {sections.map((section) => (
+                <section key={section.title} className="privacy-policy-section">
+                  <h2>{section.title}</h2>
+                  {section.paragraphs.map((paragraph) => (
+                    <p key={paragraph}>{paragraph}</p>
+                  ))}
+                </section>
+              ))}
+            </div>
 
             {after}
 

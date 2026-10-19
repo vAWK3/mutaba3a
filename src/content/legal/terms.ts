@@ -15,6 +15,8 @@ export interface TermsText {
 
 export type TermsLanguage = 'en' | 'ar';
 
+const TERMS_LANGUAGES: readonly TermsLanguage[] = ['en', 'ar'];
+
 const FILES = import.meta.glob<{ default: TermsText }>('./terms/*.json');
 const FILE_OF = (version: string, language: TermsLanguage) => `./terms/${version}.${language}.json`;
 
@@ -37,4 +39,13 @@ export function termsVersionOf(path: string): string | null {
   if (path === '/terms') return LATEST_TERMS_VERSION;
   const match = /^\/terms\/([^/]+)$/.exec(path);
   return match ? match[1]! : null;
+}
+
+/**
+ * The `?lang` a portal link names (MUT-324 review fix 1): the language the reader's
+ * acceptance records. Null when absent or not a language the terms are written in.
+ */
+export function termsLanguageOf(search: string): TermsLanguage | null {
+  const lang = new URLSearchParams(search).get('lang');
+  return TERMS_LANGUAGES.find((l) => l === lang) ?? null;
 }

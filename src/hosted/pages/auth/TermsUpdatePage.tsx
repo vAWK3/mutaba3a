@@ -21,7 +21,7 @@ export function TermsUpdatePage({ me, version }: { me: Me; version: string }) {
   const { signOut, signingOut } = useSignOut();
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
-  const link = termsHref(version);
+  const link = termsHref(language, version);
 
   async function agree() {
     if (saving) return;

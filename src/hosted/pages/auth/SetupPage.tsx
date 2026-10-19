@@ -232,7 +232,7 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
   const ruleId = `${ids}-rule`;
   const errorId = `${ids}-error`;
   const termsErrorId = `${ids}-terms-error`;
-  const termsLink = termsHref(termsVersion);
+  const termsLink = termsHref(language, termsVersion);
   const variant = purpose === 'RESET' ? 'reset' : 'setup';
 
   return (
