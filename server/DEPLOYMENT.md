@@ -379,6 +379,16 @@ npm run provision:user -- --url "$URL" --email nour@firm.ps --name "Nour Haddad"
   --organization-id <uuid> --locale ar
 ```
 
+The guided way, from the repo root, fetches the token and URL itself, asks for
+the rest, shows a summary and confirms before calling the API:
+
+```bash
+make create user        # a person with their personal profile; may join an existing firm
+make create business    # a new firm (§4, key optional: `provision --no-key`), then its first person
+```
+
+Both are `server/scripts/provision-account.sh user|business`.
+
 Every user is also created with exactly one personal profile (MUT-120). With no
 firm, pass `--currency` and `--timezone` instead of `--organization-id`; with a
 firm they default to the firm's. A personal profile is never shared, issued an

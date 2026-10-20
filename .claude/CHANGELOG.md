@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — `make create user` / `make create business` (guided account provisioning)
+
+### Added
+- `make create user` and `make create business` (root `Makefile`, `create` target with the same word-swallowing as `make release`): guided, prompt-then-confirm provisioning against the live admin API. `user` creates a person with their personal profile, optionally in an existing firm; `business` creates the firm first, picks its uuid out of `npm run provision`'s output, then creates the first person in it. `GCP_PROJECT_ID` is derived the way the server release derives it, so the script never asks for it from make.
+- `server/scripts/provision-account.sh` takes a mode argument (`user`, the default, or `business`) and honours `GCP_PROJECT_ID` from the environment instead of prompting.
+- `npm run provision -- --no-key`: create an organization without issuing a Malafat API key (refused together with `--organization-id`, where it would do nothing). The business flow asks "Issue a Malafat API key?" and defaults to no, so a firm that does not use Malafat never has a live key printed to a terminal.
+
+### Changed
+- `server/DEPLOYMENT.md` §4b names the make targets as the guided way; the by-hand commands stay.
+
+### Why
+Basel asked for one command that fetches the URL and admin token itself and prompts for the rest, for both a solo person and a firm with its first user. Verified with a dry run of both modes against fake `gcloud`/`npm` binaries (the exact argument chain is logged), `make create` / `make create bogus` usage errors, server typecheck and eslint on `provision.ts`. No live account was created. No automated test covers the shell script (none covered it before either).
+
+### Files
+`Makefile`, `server/scripts/provision-account.sh`, `server/src/scripts/provision.ts`, `server/DEPLOYMENT.md`, `.claude/CHANGELOG.md`.
+
+---
+
 ## [Unreleased] - 2026-10-20 — Decision: self-service signup, business-email review, forgot-password and Resend (MUT-331, ADR-159)
 
 **Why:** GA (epic MUT-322) needs anyone to sign up, pay and leave without the operator. Accounts were operator-issued only (ADR-037 §1, ADR-088), and the server had no email provider. Planning only; no code changed.

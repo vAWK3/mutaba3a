@@ -81,11 +81,17 @@ ifeq (ci,$(firstword $(MAKECMDGOALS)))
     $(eval $(CI_ARGS):;@:)
   endif
 endif
+ifeq (create,$(firstword $(MAKECMDGOALS)))
+  CREATE_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  ifneq ($(CREATE_ARGS),)
+    $(eval $(CREATE_ARGS):;@:)
+  endif
+endif
 
 # Printed at the end of each release: CI no longer starts on push.
 CI_REMINDER = printf '\n$(C_YEL)Reminder: CI runs only when started. Run it on what you just pushed: make ci %s$(C_OFF)\n\n'
 
-.PHONY: help release release-web release-server release-full ci \
+.PHONY: help release release-web release-server release-full ci create \
         preflight-web preflight-server doctor \
         check-web check-server check check-e2e qa-view \
         bump-web bump-server \
@@ -99,6 +105,9 @@ help:
 	@printf '  $(C_GREEN)make release server$(C_OFF)    deploy the API + hosted portal to Cloud Run ($(ENVIRONMENT))\n'
 	@printf '  $(C_GREEN)make release full$(C_OFF)      web, then server — each gated and confirmed on its own\n'
 	@printf '  $(C_DIM)  after a terms bump: make release web, wait for Netlify, then make release server$(C_OFF)\n'
+	@printf '\n$(C_BOLD)Accounts$(C_OFF) $(C_DIM)(live admin API of $(ENVIRONMENT); prompts, then confirms)$(C_OFF)\n'
+	@printf '  $(C_GREEN)make create user$(C_OFF)       a person with their personal profile (optionally joining an existing firm)\n'
+	@printf '  $(C_GREEN)make create business$(C_OFF)   a new firm, then its first person (personal profile + the firm'"'"'s)\n'
 	@printf '\n$(C_BOLD)GitHub Actions CI$(C_OFF) $(C_DIM)(manual only)$(C_OFF)\n'
 	@printf '  make ci [web|server|contracts|all]   start CI on origin/$(RELEASE_BRANCH) (default: all)\n'
 	@printf '\n$(C_BOLD)Checks only — change nothing$(C_OFF)\n'
@@ -133,6 +142,23 @@ release:
 	  '')     printf 'usage: make release web | make release server | make release full\n' >&2; exit 2 ;; \
 	  *)      printf 'unknown release target "%s" — expected web, server, or full\n' '$(RELEASE_ARGS)' >&2; exit 2 ;; \
 	esac
+
+# ---------------------------------------------------------------------------
+# Accounts — operator-issued, no signup (ADR-037, TD-018). Both flows are
+# server/scripts/provision-account.sh: it reads the admin token from Secret
+# Manager into the environment only, defaults the URL from config/hosts.json,
+# asks for the rest, shows a summary and confirms before calling the live API.
+# GCP_PROJECT_ID comes from the same place the server release gets it.
+# ---------------------------------------------------------------------------
+
+create:
+	@case '$(CREATE_ARGS)' in \
+	  user|business) ;; \
+	  '')  printf 'usage: make create user | make create business\n' >&2; exit 2 ;; \
+	  *)   printf 'unknown create target "%s" — expected user or business\n' '$(CREATE_ARGS)' >&2; exit 2 ;; \
+	esac; \
+	[ -n "$${GCP_PROJECT_ID}" ] || { printf 'GCP_PROJECT_ID is unknown: set it in deploy.env or on the command line\n' >&2; exit 1; }; \
+	cd server && GCP_PROJECT_ID="$${GCP_PROJECT_ID}" ./scripts/provision-account.sh '$(CREATE_ARGS)'
 
 # ---------------------------------------------------------------------------
 # CI — the workflows run only when started (workflow_dispatch), on the pushed
