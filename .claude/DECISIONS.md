@@ -3447,7 +3447,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 1. **`release-notes.json`** at the repo root maps `x.y.z` to `{ en: string[], ar: string[] }`, with the same number of non-empty lines in each language (`releaseNotesProblems`, tested). It is the only place notes are written.
 2. **Three readers**:
    - The web app bundles it (`RELEASE_NOTES`).
-   - `make release-web` refuses a bumped version without an entry (`npm run release:notes -- <v>`, between the bump and the build).
+   - `make release-web` refuses a bumped version without an entry (`npm run release:notes -- <v>`, between the bump and the build) and commits `release-notes.json` with the version bump (2026-10-20: v0.1.16 shipped without its notes because only the version files were committed, and the dirty tree then broke the server release).
    - `tag-release.sh` writes the English lines into the `web-v*` tag's message, from the file as it stood in the tagged commit.
 3. **What shows.** `whats-new-seen-version` (localStorage) is the newest version this browser dismissed. The app shows every entry newer than it and no newer than the running version, newest first. `app-last-known-version` is not used for this, because `handleVersionChange` rewrites it on every start, so a tab closed without dismissing would lose the notes.
 4. **Seeding.** Seeded once at start (`seedSeenVersion`):

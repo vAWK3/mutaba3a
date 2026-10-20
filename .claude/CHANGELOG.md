@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — The web release commits its notes; the server release refuses a dirty tree before it pushes
+
+**Why:** `make release web` v0.1.16 wrote the 0.1.16 entry into `release-notes.json` (ADR-151) but committed only the version files, so the pushed commit, the Netlify build and the `web-v0.1.16` tag all lacked the notes. `make release server` then asked "continue with 1 uncommitted change?", committed and pushed `release: api v0.3.16`, and deploy.sh refused the dirty tree — a pushed version commit that deployed nothing. Basel committed the notes by hand (4fc2c799).
+
+### Fixed
+- **`release-web` stages `release-notes.json`** with the version bump, so the release commit, the Netlify build and the web tag carry the notes. The failure hint no longer says "commit it".
+- **`preflight.sh server` fails on a dirty tree** without asking: deploy.sh refuses one anyway, and it runs after the commit and push. `ALLOW_DIRTY` is web-only now (header comment). The web preflight still asks.
+- **`release-server` re-checks the tree** right before the version commit (`git status --porcelain` minus the two bumped package files) and stops with the stray paths listed, so nothing is committed or pushed that deploy.sh will refuse.
+- `release-notes.json` 0.1.16: the Arabic line had been typed in English; now "إصلاحات طفيفة للأخطاء".
+
+### Technical
+- `scripts/__tests__/tag-release.test.ts`: `release-web` stages `release-notes.json` before the release commit; a dirty tree never reaches deploy.sh (deploy.sh still refuses one unless `IMAGE_TAG` is set, the server preflight fails instead of asking and names deploy.sh, `release-server` checks the tree before the commit and the push).
+- Verified by running `scripts/preflight.sh server` on this dirty tree with no terminal: 1 failure, no prompt. Files: `Makefile`, `scripts/preflight.sh`, `release-notes.json`, `server/DEPLOYMENT.md`, knowledge files.
+
 ## [Unreleased] - 2026-10-20 — Drawers fit a phone, in Arabic and English (MUT-357, TD-070)
 
 **Why:** The portal opens in Arabic (ADR-077), and pilot users (MUT-322) will see it on phones. At 375px every drawer was 480px wide: in Arabic it ran 105px off the right edge, cutting off the title and Save; in English it ran off the left edge. Found with MUT-325's Your data drawer; the shared drawer was the cause, so every drawer had it.
