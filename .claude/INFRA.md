@@ -91,7 +91,7 @@ docker build + push ───────────────▶  Artifact R
 prisma migrate deploy ──(proxy)────▶  Cloud SQL Postgres 16  mutaba3a-pg   db mutaba3a, user mutaba3a_api
 terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api  (min 1, max 1)  ◀── Malafat, Bearer mut_live_…
                                       Secret Manager  mutaba3a-api-database-url, mutaba3a-api-admin-token, mutaba3a-api-session-pepper
-                                      Cloud Storage  <project>-mutaba3a-attachments (private; attachments + expense receipts)
+                                      Cloud Storage  <project>-mutaba3a-attachments (private; attachments + expense receipts; soft delete 14d)
                                       Cloud Monitoring  uptime checks /health /ready portal /, Cloud SQL alerts → email + SMS (MUT-328)
 ```
 
@@ -99,6 +99,7 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 |---|---|
 | `API_KEY_ENVIRONMENT` | `live` |
 | Cloud SQL | `db-g1-small`, REGIONAL, daily backups + PITR 7d, deletion protection |
+| Attachments bucket | no versioning; deleted objects restorable 14 days (`soft_delete_policy`, TD-190), as long as the 14 daily backups. **Prepared 2026-10-20, not applied**: until Basel runs `server/DEPLOYMENT.md` §6c it has GCS's default 7 days. Record the apply date here |
 | Cloud Run instances | min 1 · max 1 (TD-017) |
 | Prisma pool per instance | `db_pool_size` = 10, as `connection_limit` in the DATABASE_URL secret Terraform writes (MUT-270) |
 | Cloud SQL `max_connections` | `db_max_connections` = 50, an explicit flag (db-g1-small's own default) (MUT-270) |
@@ -150,6 +151,7 @@ Money M8.
 |---|---|
 | Cloud SQL | ~$50–60/mo (`db-g1-small`, REGIONAL) |
 | Cloud Run | ~$10–15/mo (1 min instance, 512Mi, cpu idle) |
+| Attachments bucket, incl. 14 days of soft-deleted receipts (TD-190) | cents/mo at pilot volume (STANDARD rate; soft-deleted bytes bill the same until purged) |
 | Secret Manager, Artifact Registry, uptime checks + 5 alert conditions (MUT-328) | < $1/mo (checks within the 1M runs/month free; ~$0.10/condition/month if alerting charges apply) |
 
 ADR-005's "zero server costs" still holds for the desktop/PWA; the hosted API

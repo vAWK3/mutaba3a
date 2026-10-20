@@ -27,6 +27,12 @@ locals {
   # the few Cloud SQL keeps for its own superuser and maintenance.
   db_reserved_connections = 10
 
+  # TD-190: daily backups kept, and deleted receipt files kept as long, so a database restored to
+  # the oldest backup can still find every receipt's file. The privacy policy promises this number
+  # (scripts/__tests__/legal-terms.test.ts reads it from here).
+  db_retained_backups             = 14
+  attachments_soft_delete_seconds = local.db_retained_backups * 24 * 60 * 60
+
   secret_database_url   = "mutaba3a-api-database-url${local.suffix}"
   secret_admin_token    = "mutaba3a-api-admin-token${local.suffix}"
   secret_session_pepper = "mutaba3a-api-session-pepper${local.suffix}"
@@ -110,7 +116,7 @@ resource "google_sql_database_instance" "postgres" {
       transaction_log_retention_days = 7
 
       backup_retention_settings {
-        retained_backups = 14
+        retained_backups = local.db_retained_backups
       }
     }
 
@@ -497,6 +503,13 @@ resource "google_storage_bucket" "attachments" {
 
   versioning {
     enabled = false
+  }
+
+  # TD-190: deleting a receipt deletes its object, and the database backups don't hold files.
+  # Deleted objects stay restorable as long as the oldest backup (14 days), so a restored receipt
+  # row can still find its file (pilot runbook §4.4). Soft-deleted bytes bill at STANDARD rates.
+  soft_delete_policy {
+    retention_duration_seconds = local.attachments_soft_delete_seconds
   }
 
   lifecycle_rule {

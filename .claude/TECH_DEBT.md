@@ -19,7 +19,7 @@
 ## Open Debt
 
 ### TD-190: Receipt files aren't covered by the database backups
-**Status**: Open
+**Status**: Resolved in code (2026-10-20: `soft_delete_policy` of 14 days on `google_storage_bucket.attachments`, tied to `retained_backups` by `local.db_retained_backups`; `tests/attachments_bucket.tftest.hcl`). **Not applied yet**: Basel runs the targeted plan in `server/DEPLOYMENT.md` §6c and records the date in INFRA.md §2
 **Ticket**: none (MUT-327, 2026-10-20)
 **Added**: 2026-10-20
 **Priority**: Medium (pilot data; a restored receipt row can point at a deleted file)
