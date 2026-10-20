@@ -28,6 +28,17 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — MAL-1137 backfill: skip never-seeded personal profiles; one read for all
+
+**Why:** `backfill-personal-expense-categories.test.ts` timed out (5000ms, all tests) under the full `test:db` run. The backfill read each personal profile's categories one query at a time, and the shared test DB never resets, so every test scanned 4,558 profiles: about 2s a test alone, more under parallel load. Behind the slowness was a real bug. A personal profile that had never listed its categories (none seeded yet) got the three new categories added, and then `GET /v1/expense-categories`'s "none yet → seed" check never seeded the full preset for it. 4,351 test-DB profiles were left with exactly those three.
+
+### Fixed
+- `server/src/scripts/backfill-personal-expense-categories.ts`: only seeded personal profiles (`expenseCategories: { some: {} }`) are considered, and their categories come back in the same query (no N+1). A never-seeded profile is left empty, so it seeds the current preset itself.
+- New test: a never-seeded personal profile stays empty and isn't reported. The file now runs in ~1.5s against the same 4,558 profiles (was ~9.8s).
+
+### Technical
+- Production: if `backfill:personal-categories` was ever run without `--dry`, never-seeded personal profiles there have only the three new categories and will never get the full preset. Not repaired here. Check before the next run (see the session notes).
+
 ## [Unreleased] - 2026-10-20 — Receipt files kept as long as the backups (TD-190)
 
 **Why:** MUT-327 found that the database backups don't cover receipt files. Deleting a receipt deletes its object, and the attachments bucket had no versioning and no explicit soft-delete policy, so a database restored to an older backup could bring back a receipt row whose file GCS had already purged (default soft delete: 7 days; backups: 14).
