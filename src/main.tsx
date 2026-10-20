@@ -62,11 +62,11 @@ const PrivacyPolicyPage =
       )
     : null;
 
-const HostedOfferPage =
+const TermsPage =
   __BUILD_MODE__ === "web"
     ? lazy(() =>
-        import("./pages/landing/HostedOfferPage").then((m) => ({
-          default: m.HostedOfferPage,
+        import("./pages/landing/TermsPage").then((m) => ({
+          default: m.TermsPage,
         })),
       )
     : null;
@@ -108,14 +108,23 @@ function App() {
       );
     }
 
-    if (path === HOSTED_OFFER_URL && HostedOfferPage) {
+    // MUT-324: /terms is the latest terms, /terms/<version> each released version, frozen;
+    // ?lang is the language the portal records for the reader
+    if ((path === "/terms" || path.startsWith("/terms/")) && TermsPage) {
       return (
         <LandingProviders>
           <Suspense fallback={<BootSplash />}>
-            <HostedOfferPage />
+            <TermsPage path={path} search={window.location.search} />
           </Suspense>
         </LandingProviders>
       );
+    }
+
+    // /hosted is retired (the free-vs-hosted comparison): hosted is now the only
+    // plan, and its request form lives inline on the main landing page instead.
+    if (path === HOSTED_OFFER_URL) {
+      window.location.replace("/");
+      return null;
     }
   }
 

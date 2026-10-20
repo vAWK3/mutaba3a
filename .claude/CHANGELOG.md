@@ -43,6 +43,138 @@
 ### Changed
 - `.claude/INFRA.md`: operator-held row for the Mutaba3a Stripe account.
 
+## [Unreleased] - 2026-10-19 — MUT-337: icon save-feedback animation runtime decision + web prototype (ADR-152)
+
+**Why:** MUT-338/339/340 (the epic's actual gamification features, the first marked highest-priority) are all blocked until an animation runtime is chosen for the MUT-335/336 icon system. This ticket decides and proves the mechanism; MUT-338 wires it into a real trigger.
+
+### Added
+- `src/lib/motion/iconMotion.ts` — `playIconFeedback(targets, { preset, reducedMotion })`: one scale(0→1) transform played through `ICON_OVERSHOOT_EASE` (playful) or `ICON_RESTRAINED_EASE` (restrained) — the exact same cubic-bezier control points as Flutter's `MMotion.overshoot`/`.spring`. Re-triggering mid-flight stops the prior play and restarts from its live value; reduced motion skips straight to the end state.
+- `src/lib/motion/__tests__/iconMotion.test.ts` (7 tests) — including an assertion that the playful preset's live value genuinely exceeds 1 mid-flight (not just "which constant was passed").
+- ADR-152 (`.claude/DECISIONS.md`): adopts `motion` + shared easing curves; rejects Rive (new runtime/CSP grant/asset pipeline for capability not needed) and CSS keyframes (loses interruptibility).
+- `.claude/designs/mut-337-icon-animation-runtime.md` — the full candidate comparison (AC #1).
+
+### Technical
+- No new dependency on either platform. No new UI ships — this is a headless, unit-tested library function; MUT-338 is where it becomes visible.
+- Flutter half (wiring `MMotion.overshoot`/`.spring` through an `AnimationController`) not built in this session — needs its own mutaba3a-flutter worktree.
+
+## [Unreleased] - 2026-10-19 — MUT-336: SVG → React icon codegen pipeline (web half)
+
+**Why:** MUT-336 turns the MUT-335 canonical icon set (`assets/icons/source/*.svg`) into usable platform code instead of hand-copying each icon. This is mini-crm's half (React); the Flutter half is its own ticket slice in that repo.
+
+### Added
+- `scripts/icon-set.ts` — pure SVG parser/codegen/drift-detection logic (`scripts/__tests__/icon-set.test.ts`, 21 tests).
+- `scripts/generate-icons.ts` (`npm run icons:generate`) and `scripts/validate-icon-set.ts` (`npm run icons:check`) — thin CLI wrappers.
+- `src/components/icons/generated/*.tsx` — all 61 icons, regenerated from source; a named sub-part (`id="nuqta"`) becomes `data-part="nuqta"`, never a raw `id`, so MUT-337's animation runtime can target one instance without a DOM-id collision across repeated icons on a page.
+- `assets/icons/README.md` — the add/update flow end to end (AC #2).
+- Pilot (AC #3): `LanguageIcon` (generated) rendered next to the language setting in `SettingsPage.tsx` — a new addition, not a migration of any existing icon call site.
+
+### Technical
+- Generation fails the whole run (nothing written) on any source file that doesn't parse — a partial regenerate must not look like a pass.
+- Call-site migration of the 16 hand-written `src/components/icons/*` components, or the scattered inline SVG duplicates, is explicitly out of MUT-336's scope.
+
+## [Unreleased] - 2026-10-19 — MUT-335: mini-crm's half of the canonical icon mirror is complete
+
+**Why:** MUT-335 designs one canonical, animatable icon set across mini-crm and mutaba3a-flutter in a shared Claude Design project; mini-crm keeps a byte-identical copy of the source SVGs so MUT-336's web codegen step doesn't need to read across repos.
+
+### Added
+- `assets/icons/source/*.svg` — all 61 canonical icons now mirrored (was 26); the remaining 35 copied from mutaba3a-flutter's `mut-335-icon-system` branch (commit `967794eb`) once that repo finished syncing from Claude Design.
+
+### Technical
+- No call-site migration yet (that's MUT-336, explicitly out of scope for MUT-335) — `src/components/icons/*` and the hand-drawn per-component SVGs are untouched.
+
+## [Unreleased] - 2026-10-19 — MUT-324 review fixes: the terms link language, release order, the 409 recovery, wording
+
+**Why:** /review pass 1 on MUT-324 (`.claude/designs/mut-324-review-findings.md`) found six must-fix items before release. Branch `fix/mut-324-review-fixes`.
+
+### Fixed
+- **Recorded language = read language.** Portal terms links carry `?lang=<portal language>`. `/terms` shows that language for the text only (lang/dir on the text), and never stores it.
+- **`make release full`** is web, then server (ADR-102 override log; ADR-043's server-first addendum overridden).
+- **The terms guard runs in `scripts/preflight.sh server`**, before the version bump and push. `deploy.sh` checks again every time, and only `SKIP_TERMS_CHECK=1` skips either (pass 2: a `TERMS_CHECKED_BY_PREFLIGHT` flag let `SKIP_REMOTE=1` skip both). A failure names the HTTP status or fetch error.
+- **The Updated-terms step recovers from a 409 `TERMS_VERSION_STALE`.** It refetches Me and says the terms changed, and the retry accepts the new version. A success cancels in-flight Me fetches and writes through an updater.
+- **Wording (Basel's choices):**
+  - privacy: "restore your records to any moment in the last 7 days" (point-in-time recovery is 7 days; backups are kept 14);
+  - terms §10: "the next time you open your account on the web, or by email". Version 2026-10-19 has not been released yet, so its sha256 in `server/src/legal.ts` was updated.
+- **Should-fix:**
+  - the setup checkbox row layout, paragraph gaps, link underlines, and a mailto support link;
+  - the manifest skips non-JSON files;
+  - a setup 409 without `details.current` asks the link again;
+  - only `Me.terms` is nullable in OpenAPI.
+
+- **Review pass 2:**
+  - the Updated-terms step never switches version silently: a refetch that names newer terms, or a 409's `details.current`, shows "the terms changed";
+  - `Me.terms` is null again in the portal's generated types (an inline nullable object; TD-181 logs the repo-wide 3.0-style `nullable` under the 3.1.0 label);
+  - the setup page clears the terms tick when its language changes (Basel), and a 409 with no version followed by a dead or unreachable re-check says so;
+  - §10 is reworded again (Basel): "by email or the next time you open your account on the web";
+  - the consent row reads at body size; Arabic heading tracking is keyed on the heading's own language;
+  - `termsManifest` refuses misnamed files again (dotfiles skipped); `users.acceptTerms` returns only `{ created }`.
+
+### Technical
+- `LegalPage` takes `loading` and `textLanguage`.
+- `staleTerms` moved to `terms-acceptance.ts`.
+- The audit profile reads run in parallel, and the accept route no longer reads back.
+- `buildMe` runs its count and the terms status together.
+- `FakeApi.bumpTerms` was added for QA.
+- Follow-ups: MUT-346 (the draft is lost on a bump), MUT-347 (per-environment guard, rollback), MUT-348 (evidence decisions). The MUT-333 scope now includes purging the terms audit rows.
+
+## [Unreleased] - 2026-10-19 — Terms of service, accepted at setup and on the portal (MUT-324, ADR-102, TD-180)
+
+**Why:** a paying pilot (MUT-322) needs terms people accept, and a privacy policy that says where hosted records live. Basel's D1–D12 are in `.claude/designs/mut-324-terms-plan.md` §0.
+
+### Added
+- **Landing:**
+  - `/terms` and `/terms/<version>`, with frozen EN/AR texts in `src/content/legal/terms/`. The governing law is England & Wales, and English prevails.
+  - A hosted-accounts section in the privacy policy.
+  - Terms links in the footer and under the /hosted form.
+  - `/legal/terms-versions.json`, emitted by the web build.
+- **Server:**
+  - `terms_acceptances` (version, locale, sha256, surface), cascade-deleted with the person.
+  - `CURRENT_TERMS` in `legal.ts`.
+  - The setup check names `termsVersion`; the redeem requires it (409 `TERMS_VERSION_STALE`).
+  - `Me.terms`, and `POST /v1/me/terms-acceptance`.
+  - The admin `GET /admin/v1/terms-acceptance` and `npm run terms:report`.
+  - `deploy.sh` checks that the terms are live (`terms:check-live`). API 1.38.0-mut324.
+- **Portal:**
+  - A required "I agree" tick on the setup page, linking the exact version.
+  - The Updated-terms step for anyone behind on the terms.
+  - Terms links in the account menu and on the sign-in page.
+
+### Changed
+- `PrivacyPolicyPage` renders through the new shared `LegalPage`.
+- The QA fake API, the setup spec, the test `provision` helper and the demo-seed script all accept the terms.
+
+### Technical
+- Acceptances are kept out of the local-mode snapshot; signed out, `Me.terms` is null.
+- TD-180: acceptance is enforced on the portal only (the phone part is MUT-344).
+## [Unreleased] - 2026-10-19 — Signed out: expenses, groups, conversions, receipts and documents on this device (MUT-287, ADR-100 decision 11, TD-171 resolved)
+
+**Why:** MUT-286 brought core records to the signed-out portal but hid Expenses and Conversions, because receipts and exchange rates had no place to go without a server. Epic MUT-284 decision 4: both modes are the same app.
+
+### Added
+- **`GET /v1/public/fx-rates`** (server, MUT-285 D3): the cached ECB snapshot `{ rateDate, perEur, fetchedAt, source }`, anonymous, no profile header, 30 per minute per address (`PUBLIC_FX_POLICY`, 429 + Retry-After), same `CachedFxRates` instance as `/v1/fx-rates`. Registered outside `PORTAL_ROUTES`. API `1.37.0-mut287`.
+- **Receipt files on this device:** `LocalAttachmentStorage` runs the server's own receipt and attachment routes in the page over a new IndexedDB database, `mut-local-blobs` (`IndexedDbBlobStore`, `{ type, bytes }` per file). Uploads and downloads are signed `local-blob:<key>`; the portal's `putToSignedUrl` and `downloadNavigator.open(url, filename)` branch on it (`localFiles.put`/`read`, object URL + `<a download>`, no preview).
+- **Exchange rates signed out:** `PublicFxRateSource` feeds the server's `CachedFxRates` (one fetch per page per hour, no credentials), so the expense-group ≈ line works online and hides offline.
+- **"Download my records" is a zip:** `records.json` (the MUT-286 file, unchanged) plus `receipts/<key>` binary entries; jszip loads only on Download/Restore. Restore reads a zip or a MUT-286 `.json`.
+- Release-QA `portal.local.expense-receipt` (core), `fx-line`, `conversion`, `documents-empty`.
+
+### Changed
+- The nav shows the same sections signed in and out: Expenses (with Groups) and Conversions are back signed out.
+- Documents signed out shows its empty state instead of an error (`GET /v1/attachments` needed storage).
+- Restore is crash-safe by order across the two databases: add the backup's files, save the records, then delete files no receipt names. A receipt file is deleted only after its request's snapshot saved; boot sweeps orphans.
+- The server modules' `Buffer` is bound per module at build time (`scopeServerBufferShim`), no longer installed on `globalThis`.
+
+### Fixed
+- "Download my records" crashed in real browsers once jszip loaded: it saw the global partial `Buffer`, took its Node path and broke in its compressor. Caught by release-QA, invisible to unit tests on Node's real `Buffer`.
+
+### Review (pre-landing /review + qa-reconcile, Basel D1–D13, 2026-10-19)
+- **Server:** the public FX limiter is built in `index.ts` and pruned each minute (it grew per address without bound); 120/min per address; `EcbSnapshot.upstream` relays a cached source's staleness; the route documents only 429/503.
+- **Local backend:** FX fetched before the cross-tab lock and remembered on the device for an hour (`mut-local-fx`); the records zip is copied under the lock and zipped after, receipts STOREd; Restore names missing receipt files in the confirm (new en/ar copy), accepts a zip re-made from Safari's extracted folder, unpacks files only on Replace under the upload rules, and cleans up after a refused save; pending uploads' files expire with their 15-minute link; `head()` reads a `{ type, size }` record; both databases open through `LocalDatabase` (step aside for a newer build's upgrade, reject a blocked one); one `saveBlobAs` for every in-hand download (URL released after 60 s).
+- **Tests:** parity for expenses, receipts, groups and conversions; fingerprint fills every nullable field; the Buffer plugin is tested; release-QA `restore-missing-receipts` added, `fx-line` updated.
+
+### Technical
+- `format-fingerprint.test.ts` covers all 27 snapshot maps from `helpers/everyRecord.ts` (TD-171 resolved).
+- `check-bundles`: jszip must not be statically reachable from the portal's entry (`jszipInEntryGraph`); `stuk.github.io` (a jszip doc link) joins the hosted origins. Local chunk 115.7 KB gzip, jszip chunk 30.1 KB gzip.
+- Files: `server/src/routes/fx-rates.ts`, `server/src/schemas.ts`, `server/src/app.ts`, `src/hosted/local/{blobStore,attachments,fxSource,recordsArchive,restore}.ts`, `src/hosted/local/{index,transport,createLocalApp}.ts`, `src/hosted/session/localBackendContract.ts`, `src/hosted/data/{download,expenseQueries}.ts`, `src/hosted/components/{ReceiptUploader,YourDataDrawer}.tsx`, `src/hosted/pages/views/DocumentsList.tsx`, `src/hosted/shell/HostedShell.tsx`, `vite.config.ts`, `eslint.config.js`, `scripts/{bundle-rules,check-bundles}.ts`, `scripts/bundle-origins.json`.
+
 ## [Unreleased] - 2026-10-19 — Direction comes from `<html dir>` and the `dir` attribute only (MUT-109, ADR-101, TD-048 resolved)
 
 **Why:** `theme.css` set `direction` on every `:lang()` element, which beat the `dir` attribute: every `dir="ltr"` was ignored in Arabic, and every `dir="rtl"`/`"auto"` in English. Last open child of Brand v2 (MUT-101).

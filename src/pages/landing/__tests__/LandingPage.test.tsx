@@ -2,29 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, within, fireEvent, cleanup } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
-import type { ReleaseInfo } from '../../../hooks/useLatestRelease';
 import { LandingPage } from '../LandingPage';
 import { malafatUrl } from '../../../content/malafatLinks';
 import { FakeIntersectionObserver, installFakeIntersectionObserver } from '../../../test/intersectionObserver';
 
-const release = vi.hoisted(() => ({
-  current: {
-    release: {
-      version: '0.0.66',
-      releaseNotesUrl: 'https://example.test/notes',
-      hasMacBuild: true,
-      hasWindowsBuild: true,
-    } as ReleaseInfo | null,
-    isLoading: false,
-    error: null as string | null,
-  },
-}));
-
-vi.mock('../../../hooks/useLatestRelease', () => ({
-  useLatestRelease: () => release.current,
-}));
-
-// The store config, swapped per case through a getter so every reassignment is seen (as HostedOfferPage.test does)
+// The store config, swapped per case through a getter so every reassignment is seen
 const apps = vi.hoisted(() => ({
   links: {
     ios: { available: true, url: null as string | null },
@@ -57,20 +39,20 @@ function part(name: string): HTMLElement {
 }
 
 /**
- * Claims the landing's paid-tier sections must never make (MUT-173/174): reports or analytics the portal
- * doesn't have, a price or subscription, a sync or automation the capture doesn't do. Arabic is matched with
+ * Claims the landing's sections must never make: reports or analytics the portal
+ * doesn't have, a sync or automation the capture doesn't do. Arabic is matched with
  * its diacritics stripped, so a fatha or shadda can't slip a word past it.
  */
 const BANNED_CLAIMS_EN =
-  /report|analytic|dashboard|statistic|chart|\bpric\w*|\/month|per month|subscri\w*|checkout|sign[- ]?up|[$₪€]\s?\d|\d\s?(usd|ils|eur)\b|\b(sync\w*|auto(mat\w*|-\w+)|seamless\w*|instant\w*|real[- ]?time)\b/i;
-const BANNED_CLAIMS_AR = /تقرير|تقارير|تحليل|إحصا|رسوم بيانية|سعر|أسعار|اشترا?ك|زامن|تلقائ|آليا|فوري|لحظي/;
+  /report|analytic|dashboard|statistic|chart|\/month|per month|checkout|\b(sync\w*|auto(mat\w*|-\w+)|seamless\w*|instant\w*|real[- ]?time)\b/i;
+const BANNED_CLAIMS_AR = /تقرير|تقارير|تحليل|إحصا|رسوم بيانية|زامن|تلقائ|آليا|فوري|لحظي/;
 /** MUT-25's still-in-progress "shared money core": the Malafat band must not describe Mutaba3a as part of Malafat. */
 const MONEY_CORE_EN = /\b(module|core|engine)\b|inside malafat|within malafat|part of malafat|built into|embedded|integrat\w* into/i;
 const MONEY_CORE_AR = /داخل|ضمن|جزء من|مدمج|وحدة|نواة|محر?ك/;
 
 /** Arabic without its harakat, shadda and tatweel. */
 function bare(text: string): string {
-  return text.replace(/[\u064B-\u0652\u0640]/g, '');
+  return text.replace(/[ً-ْـ]/g, '');
 }
 
 /** A part's own words, without any decorative mock (sample amounts are not prices). */
@@ -83,16 +65,6 @@ function partCopy(name: string): string {
 beforeEach(() => {
   localStorage.clear();
   apps.links = { ios: { available: true, url: null }, android: { available: false, url: null } };
-  release.current = {
-    release: {
-      version: '0.0.66',
-      releaseNotesUrl: 'https://example.test/notes',
-      hasMacBuild: true,
-      hasWindowsBuild: true,
-    },
-    isLoading: false,
-    error: null,
-  };
 });
 
 describe('LandingPage structure', () => {
@@ -118,7 +90,7 @@ describe('LandingPage structure', () => {
   it('leads with the two-beat headline', () => {
     renderLanding('en');
     const h1 = screen.getByRole('heading', { level: 1 });
-    expect(h1).toHaveTextContent('Track your finances, securely.');
+    expect(h1).toHaveTextContent('Log it before you forget it.');
   });
 
   it('gives each chapter its own heading', () => {
@@ -137,96 +109,74 @@ describe('LandingPage structure', () => {
 
 describe('LandingPage honesty', () => {
   // Scoped to <main>: the footer's "Buy Me a Coffee" is a donation brand, not a price.
-  it('makes no price or platform claim the product cannot keep (EN)', () => {
+  it('makes no desktop-app or local-storage claim the hosted-only product cannot keep (EN)', () => {
     renderLanding('en');
     const text = document.querySelector('main')?.textContent ?? '';
     expect(text).not.toMatch(/\bBuy\b/);
-    expect(text).not.toContain('$49');
     expect(text).not.toMatch(/Universal/i);
     expect(text).not.toMatch(/Intel/i);
+    expect(text).not.toMatch(/download for (mac|windows)/i);
+    expect(text).not.toMatch(/stored on your device/i);
   });
 
-  it('makes no price claim in Arabic either', () => {
+  it('makes the same claim in Arabic', () => {
     renderLanding('ar');
     const text = document.querySelector('main')?.textContent ?? '';
     expect(text).not.toMatch(/شراء|اشترِ|اشتر /);
-    expect(text).not.toContain('49');
   });
 
-  it('says the app is free during early access', () => {
+  it('says there is no free plan, and points to requesting an account instead', () => {
     renderLanding('en');
-    expect(part('get-it')).toHaveTextContent('Free during early access');
-  });
-
-  it('says so when the latest release has no Windows installer, instead of linking to it', () => {
-    release.current = {
-      ...release.current,
-      release: { ...release.current.release!, hasWindowsBuild: false },
-    };
-    renderLanding('en');
-    const getIt = part('get-it');
-    expect(within(getIt).queryByRole('link', { name: /windows/i })).toBeNull();
-    expect(getIt).toHaveTextContent(/Windows installer isn't in this release/i);
-  });
-
-  it('links to the Windows installer when the release has one', () => {
-    renderLanding('en');
-    const link = within(part('get-it')).getByRole('link', { name: /Download for Windows/i });
-    expect(link).toHaveAttribute('href', '/download/windows');
-  });
-
-  it('labels the Mac download for Apple Silicon', () => {
-    renderLanding('en');
-    expect(part('get-it')).toHaveTextContent('Apple Silicon');
-  });
-
-  it('still offers downloads while the release is unknown', () => {
-    release.current = { release: null, isLoading: false, error: 'offline' };
-    renderLanding('en');
-    expect(within(part('get-it')).getByRole('link', { name: /Download for Mac/i })).toHaveAttribute(
-      'href',
-      '/download/mac'
-    );
+    expect(part('faq')).toHaveTextContent('Is there a free plan?');
+    fireEvent.click(screen.getByRole('button', { name: 'Is there a free plan?' }));
+    expect(part('faq')).toHaveTextContent("accounts are set up for your organization");
   });
 });
 
-describe('LandingPage Get it, free vs paid (MUT-172)', () => {
-  // No price, no checkout, no signup, no platform the phone app can't yet be installed on
-  const BANNED_EN = /\bprice\b|\/month|checkout|sign ?up|\$\d|android|\bios\b/i;
-  const BANNED_AR = /سعر|اشترك|إنشاء حساب/;
-
-  it('says the hosted account and phone app come with a paid plan, with one link to /hosted', () => {
+describe('LandingPage Get it (hosted-only)', () => {
+  it('leads with a request-account form, not a download', () => {
     renderLanding('en');
-    const paid = part('get-it-paid');
-    expect(paid).toHaveTextContent('Unlike the apps above');
-    expect(paid).toHaveTextContent('paid plan');
-    const links = within(paid).getAllByRole('link');
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAccessibleName('See hosted accounts');
-    expect(links[0]).toHaveAttribute('href', '/hosted');
-    expect(links[0]).not.toHaveAttribute('target');
-    expect(paid.textContent).not.toMatch(BANNED_EN);
+    const getIt = part('get-it');
+    expect(within(getIt).getByRole('heading', { name: 'Request an account' })).toBeInTheDocument();
+    expect(within(getIt).getByRole('form')).toBeInTheDocument();
   });
 
-  it('leaves the free line in place above it (A1)', () => {
+  it('offers sign-in only when the build set a portal URL', () => {
+    vi.stubGlobal('__PORTAL_URL__', 'https://portal.test');
     renderLanding('en');
-    expect(part('get-it')).toHaveTextContent('Free during early access');
-    expect(part('get-it').textContent).not.toMatch(/stay free/i);
+    const signIn = within(part('get-it')).getByRole('link', { name: 'Already have an account? Sign in' });
+    expect(signIn).toHaveAttribute('href', 'https://portal.test');
+    vi.unstubAllGlobals();
+  });
+
+  it('offers both phone apps once their store links are configured', () => {
+    apps.links = {
+      ios: { available: true, url: 'https://apps.apple.com/app/id1' },
+      android: { available: true, url: 'https://play.google.com/store/apps/details?id=com.barmajiyat.mutaba3a' },
+    };
+    renderLanding('en');
+    const getIt = part('get-it');
+    expect(within(getIt).getByRole('link', { name: /App Store/i })).toHaveAttribute(
+      'href',
+      expect.stringContaining('apps.apple.com'),
+    );
+    expect(within(getIt).getByRole('link', { name: /Google Play/i })).toHaveAttribute(
+      'href',
+      expect.stringContaining('play.google.com'),
+    );
   });
 
   it('reads the same in Arabic', () => {
     renderLanding('ar');
-    const paid = part('get-it-paid');
-    expect(paid).toHaveTextContent('خطة مدفوعة');
-    expect(within(paid).getByRole('link', { name: 'اطّلع على الحسابات المستضافة' })).toHaveAttribute('href', '/hosted');
-    expect(paid.textContent).not.toMatch(BANNED_AR);
+    const getIt = part('get-it');
+    expect(within(getIt).getByRole('heading', { name: 'اطلب حسابًا' })).toBeInTheDocument();
   });
 });
 
 describe('LandingPage phone and portal (MUT-173)', () => {
   const stores = () => within(part('phone')).getByRole('list', { name: 'Phone apps' });
 
-  it('says the phone logs and the hosted account shows, with one link to /hosted', () => {
+  it('says the phone logs and the hosted account shows, with one link into Get it', () => {
     renderLanding('en');
     const section = part('phone');
     expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent(
@@ -234,10 +184,8 @@ describe('LandingPage phone and portal (MUT-173)', () => {
     );
     expect(section).toHaveTextContent('The phone app is for logging');
     expect(section).toHaveTextContent('portal');
-    const link = within(section).getByRole('link', { name: 'See hosted accounts' });
-    expect(link).toHaveAttribute('href', '/hosted');
-    expect(link).not.toHaveAttribute('target');
-    expect(within(section).getAllByRole('link')).toHaveLength(1);
+    const link = within(section).getByRole('link', { name: 'Request an account' });
+    expect(link).toHaveAttribute('href', '#get-it');
   });
 
   it('links a store once its URL is configured, in a new tab', () => {
@@ -262,7 +210,7 @@ describe('LandingPage phone and portal (MUT-173)', () => {
   it('names an available app without a link while no store URL is set, never a dead link', () => {
     renderLanding('en');
     const list = stores();
-    expect(list).toHaveTextContent('iPhone with your hosted account');
+    expect(list).toHaveTextContent('iPhone with your account');
     expect(within(list).queryAllByRole('link')).toHaveLength(0);
     expect(list.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(2);
   });
@@ -272,7 +220,7 @@ describe('LandingPage phone and portal (MUT-173)', () => {
     renderLanding('en');
     const list = stores();
     expect(within(list).queryAllByRole('link')).toHaveLength(0);
-    expect(list).toHaveTextContent('iPhone with your hosted account');
+    expect(list).toHaveTextContent('iPhone with your account');
     expect(list).toHaveTextContent('Android coming soon');
   });
 
@@ -290,11 +238,11 @@ describe('LandingPage phone and portal (MUT-173)', () => {
     renderLanding('ar');
     const section = part('phone');
     expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('سجّل من هاتفك');
-    expect(within(section).getByRole('link', { name: 'اطّلع على الحسابات المستضافة' })).toHaveAttribute('href', '/hosted');
+    expect(within(section).getByRole('link', { name: 'اطلب حسابًا' })).toHaveAttribute('href', '#get-it');
     expect(within(section).getByRole('list', { name: 'تطبيقات الهاتف' })).toHaveTextContent('Android قريبًا');
   });
 
-  it('claims no reports, analytics, price or automation, in either language', () => {
+  it('claims no reports, analytics, or automation, in either language', () => {
     renderLanding('en');
     expect(partCopy('phone')).not.toMatch(BANNED_CLAIMS_EN);
     cleanup();
@@ -317,11 +265,11 @@ describe('LandingPage FAQ', () => {
     expect(answer).not.toHaveAttribute('hidden');
   });
 
-  it('warns about data loss exactly once, inside the backup answer', () => {
+  it('says signing in on a new device is enough — the account is the backup', () => {
     renderLanding('en');
-    const warning = /export a backup first/gi;
-    expect((document.body.textContent ?? '').match(warning)).toHaveLength(1);
-    expect(part('faq').textContent).toMatch(warning);
+    const questions = within(part('faq')).getAllByRole('button');
+    fireEvent.click(questions[2]); // "How do I back up, or move to another device?"
+    expect(part('faq')).toHaveTextContent('your account is the backup');
   });
 
   it('names every supported currency in the currency answer', () => {
@@ -338,7 +286,7 @@ describe('LandingPage language', () => {
     renderLanding('ar');
     expect(document.documentElement.dir).toBe('rtl');
     const h1 = screen.getByRole('heading', { level: 1 });
-    expect(h1).toHaveTextContent('تابع مالك، بأمان.');
+    expect(h1).toHaveTextContent('سجّله من هاتفك');
   });
 
   it.each(['en', 'ar'] as const)('shows no raw translation keys (%s)', (language) => {
@@ -389,10 +337,10 @@ describe('LandingPage header button (MUT-77)', () => {
 describe('LandingPage title (MUT-77)', () => {
   it('follows the active language', () => {
     renderLanding('en');
-    expect(document.title).toBe('Mutaba3a — Track your finances, securely');
+    expect(document.title).toBe('Mutaba3a — Log it before you forget it');
 
     fireEvent.click(screen.getByRole('button', { name: /Switch language/ }));
-    expect(document.title).toBe('متابعة — تابع مالك، بأمان');
+    expect(document.title).toBe('متابعة — سجّله من هاتفك، تابعه من كل مكان');
   });
 });
 
@@ -412,9 +360,9 @@ describe('LandingPage Malafat (MUT-174)', () => {
     expect(link().getAttribute('rel')).toContain('noopener');
   });
 
-  it('ties the capture claim to a hosted account linked to the firm\'s Malafat and the phone app, so it never contradicts the free app', () => {
+  it("ties the capture claim to the firm's Malafat linked to the account and the phone app, so it never implies Mutaba3a is part of Malafat", () => {
     renderLanding('en');
-    expect(part('malafat')).toHaveTextContent("With a hosted account linked to your firm's Malafat");
+    expect(part('malafat')).toHaveTextContent("Link your firm's Malafat to your account");
     expect(part('malafat')).toHaveTextContent('phone app');
     expect(part('malafat')).toHaveTextContent('unallocated');
   });
@@ -428,16 +376,16 @@ describe('LandingPage Malafat (MUT-174)', () => {
     renderLanding('ar');
     const band = part('malafat');
     const title = within(band).getByRole('heading', { level: 2 });
-    expect(title).toHaveTextContent('المحاماة');
-    expect(title).toHaveTextContent('المحاسبة');
-    expect(band).toHaveTextContent('حساب مستضاف مربوط بـ Malafat مكتبك');
-    expect(band).toHaveTextContent('تطبيق متابعة على الهاتف');
-    expect(band).toHaveTextContent('غير مخصَّصة');
+    expect(title).toHaveTextContent('محاماة');
+    expect(title).toHaveTextContent('محاسبة');
+    expect(band).toHaveTextContent('اربط Malafat مكتبك بحسابك في متابعة');
+    expect(band).toHaveTextContent('تطبيق الهاتف');
+    expect(band).toHaveTextContent('غير مخصّصة');
     expect(link()).toHaveAccessibleName('اطّلع على Malafat (يُفتح في علامة تبويب جديدة)');
     expect(link()).toHaveAttribute('href', malafatUrl({ locale: 'ar', medium: 'landing', content: 'landing-section' }));
   });
 
-  it('claims nothing automatic, no sync, no reports, no price and nothing of the money-core spike', () => {
+  it('claims nothing automatic, no sync, no reports and nothing of the money-core spike', () => {
     renderLanding('en');
     expect(partCopy('malafat')).not.toMatch(BANNED_CLAIMS_EN);
     expect(partCopy('malafat')).not.toMatch(MONEY_CORE_EN);
@@ -448,10 +396,10 @@ describe('LandingPage Malafat (MUT-174)', () => {
   });
 
   it('catches a banned claim however it is spelled', () => {
-    for (const claim of ['payments sync', 'automated', 'automation', 'realtime', 'pricing', 'per month', 'sign-up', '₪49']) {
+    for (const claim of ['payments sync', 'automated', 'automation', 'realtime']) {
       expect(claim).toMatch(BANNED_CLAIMS_EN);
     }
-    for (const claim of ['مزامَنة', 'تقرير', 'إحصائيات', 'أسعار', 'اشتراك', 'تلقائيًا', 'فوري']) {
+    for (const claim of ['مزامَنة', 'تقرير', 'إحصائيات', 'تلقائيًا', 'فوري']) {
       expect(bare(claim)).toMatch(BANNED_CLAIMS_AR);
     }
     for (const fine of ['رسوم الأتعاب', 'آليّة الدفع']) {

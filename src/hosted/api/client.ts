@@ -14,6 +14,9 @@ import { currentMode, setMode } from '../session/mode';
 
 export type Schemas = components['schemas'];
 export type Me = Schemas['Me'];
+/** MUT-324: Me.terms is null where no terms apply (signed out); the generated type must keep that null, or callers lose the check. */
+export type MeTermsMayBeNull = AssertTrue<null extends Me['terms'] ? true : false>;
+type AssertTrue<T extends true> = T;
 export type HostedProfile = Schemas['HostedProfile'];
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];
@@ -166,6 +169,8 @@ const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup)(\/|\?|$)/;
 /** The local backend's errors that stop the page, by class name: the classes live in the lazy chunk (transport.ts). */
 const LOCAL_STOPS: Readonly<Record<string, LocalStopCode>> = {
   LocalFormatTooNewError: 'LOCAL_FORMAT_TOO_NEW',
+  // MUT-287 review D12: a newer build upgraded a local database under this page (src/hosted/local/idb.ts); same screen.
+  LocalDatabaseSupersededError: 'LOCAL_FORMAT_TOO_NEW',
   LocalSaveFailedError: 'LOCAL_SAVE_FAILED',
 };
 
@@ -350,6 +355,8 @@ export const api = {
     request<OkJson<'/v1/account-setup', 'post'>>('POST', '/v1/account-setup', { body, signal }),
   /** MUT-191: off replaces; dismissals are added to what the account holds. */
   changeMalafatSuggestions: (body: MalafatSuggestionsChange) => request<MalafatSuggestions>('PATCH', '/v1/me/malafat-suggestions', { body }),
+  /** MUT-324: the signed-in person accepts the current terms, read in `locale`. Idempotent per version. */
+  acceptTerms: (body: Schemas['TermsAcceptanceRequest']) => request<Schemas['TermsStatus']>('POST', '/v1/me/terms-acceptance', { body }),
 
   organizationSummary: (profileId: string, query: Query<'/v1/summaries/organization'> = {}) =>
     request<Get<'/v1/summaries/organization'>>('GET', '/v1/summaries/organization', { profileId, query }),

@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useT } from '../../../lib/i18n/core';
+import { useLanguage, useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import { Button } from '../../../components/ui/Button';
 import { api, ApiError, retryMinutes, type SetupLinkRefusal } from '../../api/client';
@@ -10,6 +10,7 @@ import { AlertIcon } from '../../components/Icons';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
 import { ME_KEY, ME_TIMEOUT_MS } from '../../session/me';
 import { setMode } from '../../session/mode';
+import { termsHref } from '../../terms';
 import { CheckingSession } from './BootScreens';
 import { NEW_PASSWORD_POLICY, answerWasLost, passwordProblem, redeemFailure, tokenFromHash, type PasswordProblem } from './setupLink';
 
@@ -74,7 +75,7 @@ function SetupLink({ token }: { token: string }) {
   if (check.isPending) return <CheckingSession label={t('hosted.setup.checking')} />;
   if (check.error) return <CheckFailed error={check.error} onRetry={() => void check.refetch()} retrying={check.isFetching} />;
   if (!link) return <SetupNotice outcome={{ kind: 'refused', state: check.data.state === 'valid' ? 'invalid' : check.data.state }} />;
-  return <SetupForm token={token} email={link.email} purpose={link.purpose} onOutcome={setOutcome} />;
+  return <SetupForm token={token} email={link.email} purpose={link.purpose} termsVersion={link.termsVersion} onOutcome={setOutcome} />;
 }
 
 function SetupLayout({ children }: { children: ReactNode }) {
@@ -142,10 +143,24 @@ interface SetupFormProps {
   token: string;
   email: string;
   purpose: 'SETUP' | 'RESET';
+  /** MUT-324: the terms version the check named; replaced by the current one if it changes while the page is open. */
+  termsVersion: string;
   onOutcome: (outcome: Outcome) => void;
 }
 
-function SetupForm({ token, email, purpose, onOutcome }: SetupFormProps) {
+/** MUT-324: what the link's check says now, when a 409 didn't name the new terms version. */
+type RecheckedTerms = { kind: 'version'; version: string } | { kind: 'refused'; state: SetupLinkRefusal } | { kind: 'unreachable' };
+
+async function recheckTermsVersion(token: string): Promise<RecheckedTerms> {
+  try {
+    const link = await api.checkSetupLink(token, requestTimeout());
+    return link.state === 'valid' ? { kind: 'version', version: link.termsVersion } : { kind: 'refused', state: link.state };
+  } catch {
+    return { kind: 'unreachable' };
+  }
+}
+
+function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, onOutcome }: SetupFormProps) {
   const t = useT();
   const tp = useTp();
   const queryClient = useQueryClient();
@@ -153,6 +168,8 @@ function SetupForm({ token, email, purpose, onOutcome }: SetupFormProps) {
   const adoptAccountLocale = useAdoptAccountLocale();
   const ids = useId();
   const passwordRef = useRef<HTMLInputElement>(null);
+  const termsRef = useRef<HTMLInputElement>(null);
+  const { language } = useLanguage();
   /** An earlier save on this page ended without an answer, so it may have set the password (TD-149). */
   const answerLost = useRef(false);
 
@@ -161,6 +178,15 @@ function SetupForm({ token, email, purpose, onOutcome }: SetupFormProps) {
   const [fieldError, setFieldError] = useState<FieldError | null>(null);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
+  const [termsVersion, setTermsVersion] = useState(checkedTermsVersion);
+  const [agreed, setAgreed] = useState(false);
+  const [termsProblem, setTermsProblem] = useState<'required' | 'changed' | null>(null);
+  // A tick is for the text read in the page's language, the one recorded: a language switch clears it (review pass 2)
+  const [tickedIn, setTickedIn] = useState(language);
+  if (language !== tickedIn) {
+    setTickedIn(language);
+    setAgreed(false);
+  }
 
   function refuseInline(error: FieldError) {
     setFieldError(error);
@@ -189,18 +215,37 @@ function SetupForm({ token, email, purpose, onOutcome }: SetupFormProps) {
     const problem = passwordProblem(password);
     if (problem) return refuseInline(problem);
     setFieldError(null);
+    if (!agreed) {
+      setTermsProblem('required');
+      termsRef.current?.focus();
+      return;
+    }
+    setTermsProblem(null);
     setBanner(null);
     setPhase('saving');
     try {
-      const { email: account } = await api.redeemSetupLink({ token, password }, requestTimeout());
+      const termsLocale = language === 'ar' ? 'ar' : 'en';
+      const { email: account } = await api.redeemSetupLink({ token, password, acceptedTermsVersion: termsVersion, termsLocale }, requestTimeout());
       await signIn(account, { kind: 'saved' });
     } catch (error) {
       const failure = redeemFailure(error, answerLost.current);
       if (answerWasLost(error)) answerLost.current = true;
       if (failure.kind === 'trySignIn') return void (await signIn(email, { kind: 'usedAfterRetry' }));
+      // A 409 that doesn't name the new version: ask the link, or the retry would resend the stale one
+      const rechecked: RecheckedTerms | null =
+        failure.kind !== 'termsChanged' ? null : failure.current ? { kind: 'version', version: failure.current } : await recheckTermsVersion(token);
       setPhase('idle');
       if (failure.kind === 'refused') onOutcome({ kind: 'refused', state: failure.state });
+      else if (rechecked?.kind === 'refused') onOutcome({ kind: 'refused', state: rechecked.state });
       else if (failure.kind === 'policy') refuseInline('rule');
+      else if (failure.kind === 'termsChanged') {
+        // MUT-324: what was ticked is no longer what would be recorded, so the person reads and ticks again.
+        if (rechecked?.kind === 'version') setTermsVersion(rechecked.version);
+        else setBanner({ kind: 'unreachable' });
+        setAgreed(false);
+        setTermsProblem('changed');
+        termsRef.current?.focus();
+      }
       else setBanner(failure);
     }
   }
@@ -209,6 +254,8 @@ function SetupForm({ token, email, purpose, onOutcome }: SetupFormProps) {
   const bannerId = `${ids}-banner`;
   const ruleId = `${ids}-rule`;
   const errorId = `${ids}-error`;
+  const termsErrorId = `${ids}-terms-error`;
+  const termsLink = termsHref(language, termsVersion);
   const variant = purpose === 'RESET' ? 'reset' : 'setup';
 
   return (
@@ -273,6 +320,38 @@ function SetupForm({ token, email, purpose, onOutcome }: SetupFormProps) {
           {fieldError && (
             <p className="hp-field-error" id={errorId}>
               {t(`hosted.setup.${fieldError}`, POLICY_VARS)}
+            </p>
+          )}
+        </div>
+
+        <div className="hp-field">
+          <label className="hp-check-row">
+            <input
+              ref={termsRef}
+              type="checkbox"
+              checked={agreed}
+              disabled={pending}
+              aria-invalid={termsProblem !== null}
+              aria-describedby={termsProblem ? termsErrorId : undefined}
+              onChange={(e) => {
+                setAgreed(e.target.checked);
+                if (e.target.checked) setTermsProblem(null);
+              }}
+            />
+            <span>
+              {t('hosted.setup.terms.agree')}{' '}
+              {termsLink ? (
+                <a href={termsLink} target="_blank" rel="noopener">
+                  {t('hosted.setup.terms.link')}
+                </a>
+              ) : (
+                t('hosted.setup.terms.link')
+              )}
+            </span>
+          </label>
+          {termsProblem && (
+            <p className="hp-field-error" id={termsErrorId}>
+              {t(`hosted.setup.terms.${termsProblem}`)}
             </p>
           )}
         </div>

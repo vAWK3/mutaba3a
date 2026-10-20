@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+  <path id="ground" d="M18 140h124" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path id="arch" d="M40 140V76a40 40 0 0 1 80 0v64" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path id="path" d="M70 140c2-14 18-18 20-34" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 9"/>
+  <circle id="nuqta" cx="80" cy="70" r="10" fill="#E89960"/>
+  <g id="sparkles"><circle cx="24" cy="54" r="3" fill="#795DBA"/><path d="M138 34v10M133 39h10" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="140" cy="96" r="3" fill="none" stroke="#795DBA" stroke-width="2"/></g>
+</svg>

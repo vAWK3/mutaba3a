@@ -1,6 +1,7 @@
 import { defineConfig, type HtmlTagDescriptor, type Plugin, type UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA, type ManifestOptions, type VitePWAOptions } from "vite-plugin-pwa";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json";
 import ar from "./src/lib/i18n/translations/ar";
@@ -11,7 +12,8 @@ import {
   MULTILINE_FIELDS,
   NETLIFY_FORMS_FILE,
 } from "./src/pages/landing/hostedRequest";
-import { HOSTED_OFFER_FILE, HOSTED_OFFER_URL } from "./src/content/download-config";
+import { HOSTED_OFFER_URL } from "./src/content/download-config";
+import { TERMS_MANIFEST_FILE, termsManifest } from "./src/content/legal/termsManifest";
 
 /** Dev-only default for where `vite --mode hosted` proxies `/v1`; override with MUTABA3A_API_ORIGIN. */
 const DEFAULT_DEV_API_ORIGIN = "http://127.0.0.1:8787";
@@ -98,6 +100,11 @@ export function portalUrl(override: string | undefined): string {
   return assertHttpsOrigin("MUTABA3A_PORTAL_URL", override ?? DEFAULT_PORTAL_URL);
 }
 
+/** MUT-324: the landing's /terms, which the portal links to (versioned as /terms/<version>); a bad origin fails the build. */
+export function termsUrl(override: string | undefined): string {
+  return `${assertHttpsOrigin("MUTABA3A_PUBLIC_ORIGIN", override ?? DEFAULT_PUBLIC_ORIGIN)}/terms`;
+}
+
 /** The public /hosted page the portal's sign-in links to; a bad MUTABA3A_PUBLIC_ORIGIN fails the build (MUT-188). */
 export function hostedOfferUrl(override: string | undefined): string {
   return `${assertHttpsOrigin("MUTABA3A_PUBLIC_ORIGIN", override ?? DEFAULT_PUBLIC_ORIGIN)}${HOSTED_OFFER_URL}`;
@@ -116,18 +123,6 @@ const HOME_PAGE: SocialPage = {
   title: `${ar.landing.hero.headlineLine1} ${ar.landing.hero.headlineLine2}`,
   description: ar.landing.hero.subheadline,
 };
-
-/** /hosted's card, so a shared link previews the offer, not the home page (MUT-186, F7). */
-export const HOSTED_OFFER_PAGE: SocialPage = {
-  path: HOSTED_OFFER_URL,
-  title: ar.landing.hostedOffer.hero.title,
-  description: ar.landing.hostedOffer.hero.sub,
-};
-
-/** /hosted's static tab title, for crawlers (the page sets its own once it runs). */
-export const HOSTED_OFFER_TITLE = ar.common.pageTitle.replace("{page}", ar.landing.hostedOffer.meta.title);
-
-export { HOSTED_OFFER_FILE };
 
 /** The share card in `public/`: Claude Design's Arabic card, 1.91:1 so feeds show it large (MUT-104, D9). */
 const SOCIAL_CARD = { path: "/og-card-ar-1200x630.png", width: 1200, height: 630 };
@@ -236,24 +231,19 @@ export function withPageMeta(html: string, tags: HtmlTagDescriptor[], documentTi
 }
 
 /**
- * Emits hosted-offer.html: the built index.html with /hosted's link preview
- * (MUT-186, F7). Crawlers run no JavaScript, so the one shared index.html
- * would preview every /hosted link as the home page. Web build only.
+ * MUT-324 (D11): `/legal/terms-versions.json`, every released terms version and the sha256 of its EN and AR
+ * text, which the server release preflight checks before a server naming a new version is released. Web only.
  */
-function hostedOfferHtml(): Plugin {
-  const origin = (process.env.MUTABA3A_PUBLIC_ORIGIN ?? DEFAULT_PUBLIC_ORIGIN).replace(/\/$/, "");
-  const tags = socialMetaTags(origin, HOSTED_OFFER_PAGE);
+function legalTermsManifest(): Plugin {
+  const dir = fileURLToPath(new URL("./src/content/legal/terms/", import.meta.url));
   return {
-    name: "mutaba3a:hosted-offer-html",
-    enforce: "post",
-    generateBundle(_options, bundle) {
-      const index = bundle["index.html"];
-      if (!index || index.type !== "asset") throw new Error("mutaba3a:hosted-offer-html: the build emitted no index.html");
-      this.emitFile({
-        type: "asset",
-        fileName: HOSTED_OFFER_FILE,
-        source: withPageMeta(String(index.source), tags, HOSTED_OFFER_TITLE, `${origin}${HOSTED_OFFER_PAGE.path}`),
-      });
+    name: "mutaba3a:legal-terms-manifest",
+    generateBundle() {
+      // Files only: a folder in there (drafts/) is not a released text
+      const files = readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map(({ name }) => ({ name, bytes: readFileSync(`${dir}${name}`) }));
+      this.emitFile({ type: "asset", fileName: TERMS_MANIFEST_FILE, source: `${JSON.stringify(termsManifest(files), null, 2)}\n` });
     },
   };
 }
@@ -297,9 +287,8 @@ export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
   globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
   // Share cards are for crawlers, never shown in the app (MUT-104)
   // The Netlify form twin is a bare form for the deploy bot, never opened in the app (MUT-186, D2)
-  // /hosted's page copy is served by Netlify, never from the cache (MUT-186, F7)
   // The landing's PostHog chunks are fetched only on the landing, never stored for the local app (MUT-154)
-  globIgnores: ["og-*.png", NETLIFY_FORMS_FILE, HOSTED_OFFER_FILE, ...POSTHOG_PRECACHE_IGNORES],
+  globIgnores: ["og-*.png", NETLIFY_FORMS_FILE, ...POSTHOG_PRECACHE_IGNORES],
   runtimeCaching: [
     {
       urlPattern: ({ request }) => request.destination === "font",
@@ -340,6 +329,29 @@ export const PWA_MANIFEST = {
 } satisfies Partial<ManifestOptions>;
 
 /**
+ * The server's route modules call `Buffer.from(…)` as a Node global (MUT-286).
+ * In the portal's local chunk that name is bound, per module, to the slice of
+ * Buffer they use (`src/hosted/local/platform/buffer-shim.ts`), never set on
+ * `globalThis` (MUT-287): a global partial Buffer makes any library that
+ * sniffs `typeof Buffer` take its Node path (jszip's did, and its records zip
+ * broke in the browser). Runs after TypeScript is stripped, so only value
+ * references to `Buffer` remain to be bound. The import goes at the end:
+ * imports hoist, so every existing line and column stays where it was and the
+ * module's source map needs no change (`map: null`).
+ */
+export function scopeServerBufferShim(): Plugin {
+  const shim = fileURLToPath(new URL("./src/hosted/local/platform/buffer-shim.ts", import.meta.url));
+  return {
+    name: "mut-scope-server-buffer-shim",
+    enforce: "post",
+    transform(code, id) {
+      if (!id.includes("/server/src/") || id.includes("/node_modules/") || !/\bBuffer\b/.test(code)) return null;
+      return { code: `${code}\nimport { bufferShim as Buffer } from ${JSON.stringify(shim)};\n`, map: null };
+    },
+  };
+}
+
+/**
  * The hosted portal (MUT-43, hosted-portal.md §2, §7.5, §9): its own entry,
  * output and public dir, and no PWA plugin, so no service worker or offline
  * cache can ever hold firm figures. Same-origin with the API in dev through the
@@ -375,10 +387,12 @@ function hostedConfig(): UserConfig {
       __BUILD_MODE__: JSON.stringify("hosted"),
       // The sign-in page's "No account? Request one" link (MUT-188): the landing's /hosted page
       __HOSTED_OFFER_URL__: JSON.stringify(hostedOfferUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
+      // The terms the setup page, the Updated-terms step and the account menu link to (MUT-324)
+      __TERMS_URL__: JSON.stringify(termsUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
       // Opt-in, anonymous usage counts (MUT-155, ADR-090); "" turns analytics off
       __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
     },
-    plugins: [react(), emitHostedEntryAsIndex()],
+    plugins: [react(), emitHostedEntryAsIndex(), scopeServerBufferShim()],
     clearScreen: false,
     server: {
       port: HOSTED_DEV_PORT,
@@ -424,7 +438,7 @@ export default defineConfig(({ mode }) => {
     },
   plugins: [
     react(),
-    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), hostedOfferDevRoute(), hostedOfferHtml()] : []),
+    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), legalTermsManifest(), hostedOfferDevRoute()] : []),
     VitePWA({
       disable: isTauri, // Disable PWA for desktop builds
       registerType: "autoUpdate",

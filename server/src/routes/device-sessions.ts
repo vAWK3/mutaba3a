@@ -4,6 +4,7 @@ import { signIn, warmDummyHash } from '../auth/sign-in.js';
 import { DEFAULT_DEVICE_ABSOLUTE_DAYS, DEFAULT_DEVICE_IDLE_DAYS, clientIp, type SignInThrottle } from '../auth/sessions.js';
 import type { PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
+import type { CurrentTerms } from '../legal.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { DeviceSessionSchema, ErrorEnvelopeSchema, SignInRequestSchema } from '../schemas.js';
@@ -23,6 +24,8 @@ export interface DeviceSessionRouteOptions {
   settings: SessionSettings;
   throttle: SignInThrottle;
   ipLimiter: RateLimiter;
+  /** MUT-324: the current terms, reported in the signed-in Me. */
+  terms: CurrentTerms;
 }
 
 /** Acts on the person, not an organization — mirrors ORGANIZATION_INDEPENDENT_ROUTES in routes/sessions.ts. */
@@ -31,7 +34,7 @@ export const DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string>
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPIHono<AppEnv> {
-  const { store, passwordHasher, settings, throttle, ipLimiter } = options;
+  const { store, passwordHasher, settings, throttle, ipLimiter, terms } = options;
   const app = new OpenAPIHono<AppEnv>();
   warmDummyHash(passwordHasher);
 
@@ -63,7 +66,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
         idleMs: (settings.deviceIdleDays ?? DEFAULT_DEVICE_IDLE_DAYS) * 86_400_000,
         absoluteMs: (settings.deviceAbsoluteDays ?? DEFAULT_DEVICE_ABSOLUTE_DAYS) * 86_400_000,
       });
-      const me = await buildMe(store, user);
+      const me = await buildMe(store, user, terms);
       return c.json({ ...me, token }, 201);
     },
   );

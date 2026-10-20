@@ -19,6 +19,10 @@
 
 :lang(ar) .privacy-policy-title {
   font-family: var(--font-heading-ar);
+}
+
+/* On the title's own language, so an English title on an Arabic page (/terms?lang=en) keeps its tracking */
+.privacy-policy-title:lang(ar) {
   letter-spacing: 0;
 }
 
@@ -49,6 +53,17 @@
   color: var(--muted);
   line-height: var(--leading-relaxed, 1.6);
   margin: 0;
+}
+
+/* A legal section can run to several paragraphs (MUT-324 terms) */
+.privacy-policy-section p + p {
+  margin-top: var(--space-3);
+}
+
+/* Links inside a sentence carry an underline, not colour alone (axe link-in-text-block) */
+.privacy-policy-intro a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .privacy-policy-back {

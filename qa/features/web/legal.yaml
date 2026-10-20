@@ -1,0 +1,58 @@
+app: web
+area: legal
+title: Terms of service and the privacy policy's hosted-accounts section
+tier: secondary
+paths:
+  - src/pages/landing/TermsPage.tsx
+  - src/pages/landing/LegalPage.tsx
+  - src/content/legal/**
+features:
+  - id: terms-page
+    title: /terms shows the latest frozen terms in Arabic and English, every released version keeps its own address, and an unknown version says so (MUT-324)
+    tier: secondary
+    legacy: [MUT-324]
+    steps:
+      - Open /terms in English, then in Arabic, on a desktop window and at phone width
+      - Open /terms/2026-10-19
+      - Open /terms/2001-01-01
+    expect:
+      - Every section of the terms shows with its version line; the governing-law section says the English text prevails
+      - The Arabic page reads right to left, and nothing scrolls sideways at 375px
+      - The version's own address shows the same text
+      - An unknown version says it doesn't exist and links to the current terms
+  - id: terms-linked-language
+    title: A portal link (/terms/<version>?lang=en|ar) opens the terms in the language the portal records, without changing the site's language (MUT-324 review fix 1)
+    tier: secondary
+    legacy: [MUT-324]
+    steps:
+      - With the site in Arabic, open /terms/2026-10-19?lang=en
+      - Then open /terms with no language in the address
+    expect:
+      - The English text shows, reading left to right
+      - Without ?lang the site is still in Arabic
+  - id: links
+    title: The terms are linked from the landing footer and under the /hosted request form, and the privacy policy explains hosted accounts (MUT-324)
+    tier: secondary
+    legacy: [MUT-324]
+    paths:
+      - src/pages/landing/PrivacyPolicyPage.tsx
+      - src/pages/landing/components/LandingFooter.tsx
+      - src/pages/landing/components/HostedRequestForm.tsx
+    steps:
+      - Open the landing page and the privacy policy
+      - Open /hosted
+    expect:
+      - The footer links Terms to /terms
+      - The request form's notice links the terms of service
+      - The privacy policy has a hosted-accounts section naming me-west1, 14-day backups with recovery to any moment in the last 7 days, Sentry and PostHog in the EU, and deletion after 30 days
+  - id: terms-manifest
+    title: The website publishes /legal/terms-versions.json, the list the server release checks before naming a new version (MUT-324 D11)
+    tier: secondary
+    legacy: [MUT-324]
+    paths:
+      - src/content/legal/termsManifest.ts
+      - vite.config.ts
+    steps:
+      - Fetch /legal/terms-versions.json from the website
+    expect:
+      - It lists 2026-10-19 with a sha256 for the English and the Arabic text

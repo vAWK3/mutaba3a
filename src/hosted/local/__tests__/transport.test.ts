@@ -4,7 +4,7 @@ import { createLocalApp } from '../createLocalApp.js';
 import { LocalLock } from '../locks.js';
 import { mintLocalSession } from '../mintLocalSession.js';
 import { IndexedDbPersistence } from '../persistence.js';
-import { createLocalTransport, LocalFormatTooNewError, type LocalTransport } from '../transport.js';
+import { createLocalTransport, LocalFormatTooNewError, LocalSaveFailedError, type LocalTransport, type StagedRemovals } from '../transport.js';
 
 /**
  * `transport.ts`'s write rule (MUT-286 plan Phase B item 9): only a mutating
@@ -37,7 +37,7 @@ interface Harness {
   headers: Record<string, string>;
 }
 
-async function harness(): Promise<Harness> {
+async function harness(removals?: StagedRemovals): Promise<Harness> {
   dbCounter += 1;
   const store = new MemoryLedgerStore();
   const persistence = new IndexedDbPersistence(`mut-local-transport-test-${dbCounter}`);
@@ -46,7 +46,7 @@ async function harness(): Promise<Harness> {
   const [membership] = await store.memberships.listByUser(user.id);
   if (!membership) throw new Error('the local person has no personal profile');
   const app = createLocalApp({ store, now: NOW });
-  const transport = createLocalTransport({ app, store, persistence, lock, now: NOW });
+  const transport = createLocalTransport({ app, store, persistence, lock, now: NOW, removals });
   return { transport, persistence, store, headers: { Authorization: `Bearer ${token}`, 'X-Mutaba3a-Profile': membership.organizationId } };
 }
 
@@ -118,5 +118,47 @@ describe('createLocalTransport', () => {
 
     await expect(createCustomer(h, 'Too New', 'transport-key-3')).rejects.toBeInstanceOf(LocalFormatTooNewError);
     expect(await h.persistence.peekVersion()).toEqual({ formatVersion: 999, stateVersion: 1 });
+  });
+
+  describe('staged receipt-file removals (MUT-287)', () => {
+    function recorder(): StagedRemovals & { events: string[] } {
+      const events: string[] = [];
+      return { events, flushRemovals: async () => void events.push('flush'), discardRemovals: () => void events.push('discard') };
+    }
+
+    it('deletes them only after a successful write has saved', async () => {
+      const removals = recorder();
+      const h = await harness(removals);
+      const save = h.persistence.save.bind(h.persistence);
+      h.persistence.save = async (snapshot) => {
+        await save(snapshot);
+        removals.events.push('saved');
+      };
+
+      expect((await createCustomer(h, 'Ramallah Bakery', 'staged-1')).status).toBe(201);
+
+      expect(removals.events).toEqual(['saved', 'flush', 'discard']);
+    });
+
+    it('forgets them when the write was refused', async () => {
+      const removals = recorder();
+      const h = await harness(removals);
+
+      expect((await createCustomer(h, '', 'staged-2')).status).toBe(422);
+
+      expect(removals.events).toEqual(['discard']);
+    });
+
+    it('forgets them, and never deletes, when the save fails', async () => {
+      const removals = recorder();
+      const h = await harness(removals);
+      h.persistence.save = async () => {
+        throw new DOMException('full', 'QuotaExceededError');
+      };
+
+      await expect(createCustomer(h, 'Ramallah Bakery', 'staged-3')).rejects.toBeInstanceOf(LocalSaveFailedError);
+
+      expect(removals.events).toEqual(['discard']);
+    });
   });
 });

@@ -12,6 +12,7 @@ import {
   newOrigins,
   posthogInEntryGraph,
   localBackendInEntryGraph,
+  jszipInEntryGraph,
   indexedDbOutsideLocalBackend,
   posthogPrecached,
   precachedUrls,
@@ -262,6 +263,18 @@ describe('PostHog stays out of the local app (ADR-090, MUT-154)', () => {
     it('fails when a statically loaded file opens IndexedDB', () => {
       const leaky = { ...files, 'assets/app-shell-c3.js': 'const r=indexedDB.open("mut-local",1);' };
       expect(localBackendInEntryGraph(leaky['index.html'], reader(leaky))).toEqual(['assets/app-shell-c3.js']);
+    });
+  });
+
+  describe('the records zip library stays lazy (MUT-287)', () => {
+    it('passes when jszip lives only in a lazily loaded chunk', () => {
+      const lazy = { ...files, 'assets/jszip.min-f6.js': 'throw new Error("see https://stuk.github.io/jszip/documentation/howto/read_zip.html")' };
+      expect(jszipInEntryGraph(lazy['index.html'], reader(lazy))).toEqual([]);
+    });
+
+    it('fails when a statically loaded file carries jszip', () => {
+      const leaky = { ...files, 'assets/util-d4.js': 'var e="https://stuk.github.io/jszip/documentation/howto/read_zip.html";' };
+      expect(jszipInEntryGraph(leaky['index.html'], reader(leaky))).toEqual(['assets/util-d4.js']);
     });
   });
 

@@ -7,7 +7,8 @@
 #
 # Every check prints a line; nothing is silently skipped. The script exits 1
 # if any check FAILs, 0 if the worst is a WARN. It changes nothing on disk and
-# touches the network only to `git fetch` and to ask gcloud who you are.
+# touches the network only to `git fetch`, to ask gcloud who you are, and (server)
+# to read the public site's terms manifest.
 #
 # Escape hatches (set to 1 to downgrade a FAIL to a WARN without asking), for
 # the cases where you know better than the check. Left unset, each of these
@@ -17,6 +18,7 @@
 #   ALLOW_WORKTREES    extra git worktrees still checked out
 #   ALLOW_NODE_MAJOR   a node major other than the supported one
 #   SKIP_REMOTE        do not contact origin (offline)
+#   SKIP_TERMS_CHECK   server: do not check the terms are live (an emergency fix that keeps the version)
 #
 # Other knobs:
 #   RELEASE_BRANCH     branch a release must come from (default: main)
@@ -356,6 +358,20 @@ if [[ "$MODE" == "server" ]]; then
     ok "server/.env exists (development only — production reads Secret Manager)"
   else
     ok "no server/.env (production secrets come from Secret Manager)"
+  fi
+
+  # MUT-324 (D11): web first. The server asks people to accept CURRENT_TERMS, so the public
+  # site must already list that exact text. Checked here, before the version bump and push,
+  # so a refusal leaves nothing behind (review fix 3). The script prints what is wrong.
+  # SKIP_REMOTE doesn't skip it: it reads the public site, not origin or GCP (review pass 2).
+  head_ "Terms of service"
+  if [[ "${SKIP_TERMS_CHECK:-0}" == "1" ]]; then
+    warn "terms not checked ${DIM}(SKIP_TERMS_CHECK=1)${NC}"
+  elif TERMS_OUT="$(npm --prefix server run --silent terms:check-live 2>&1)"; then
+    ok "${TERMS_OUT#\[terms\] }"
+  else
+    bad "${TERMS_OUT#\[terms\] }"
+    hint "if the version isn't listed yet: make release web, wait for Netlify, then release the server"
   fi
 fi
 

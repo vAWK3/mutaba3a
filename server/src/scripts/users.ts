@@ -34,7 +34,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -50,6 +50,7 @@ const USAGE = [
   '  disable --email <email>',
   '  enable  --email <email>',
   '  revoke-sessions --email <email>',
+  '  terms   lists every user with the terms version they last accepted, flagging who is behind the current terms',
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
 ].join('\n');
 
@@ -221,6 +222,17 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
   },
   disable: async (ctx) => setStatus(ctx, 'disable'),
   enable: async (ctx) => setStatus(ctx, 'enable'),
+  // MUT-324 T1: who hasn't accepted the current terms (someone on the phone only is never asked until MUT-344).
+  terms: async ({ client, out }) => {
+    const report = await client.call<{
+      current: string;
+      users: Array<{ email: string; status: string; latestVersion: string | null; accepted: boolean }>;
+    }>('GET', '/admin/v1/terms-acceptance');
+    out(`current terms ${report.current}`);
+    for (const u of report.users) out(`${u.email}  ${u.status}  ${u.latestVersion ?? 'never'}  ${u.accepted ? 'ok' : 'BEHIND'}`);
+    const active = report.users.filter((u) => u.status === 'ACTIVE');
+    out(`${active.filter((u) => !u.accepted).length} of ${active.length} active users behind the current terms`);
+  },
   'revoke-sessions': async ({ client, need, out }) => {
     const user = await client.userByEmail(need('email'));
     const { revoked } = await client.call<{ revoked: number }>('POST', `/admin/v1/users/${user.id}/sessions/revoke`);

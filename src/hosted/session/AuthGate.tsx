@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { ApiError } from '../api/client';
 import { useAdoptAccountLocale } from '../i18n/HostedLanguageProvider';
 import { BootUnreachable, CheckingSession, LocalUnavailable, ReloadToContinue } from '../pages/auth/BootScreens';
+import { TermsUpdatePage } from '../pages/auth/TermsUpdatePage';
 import { HostedShell } from '../shell/HostedShell';
 import { useProfileDrawers } from '../shell/ProfileDrawers';
 import { MeProvider, ProfileProvider, meQuery, useMe } from './me';
@@ -30,6 +31,8 @@ export function AuthGate() {
     if (locale) adoptAccountLocale(locale);
   }, [locale, adoptAccountLocale]);
 
+  // MUT-324: someone behind on the terms reads and accepts them before anything else; null (signed out) never asks
+  if (me.data?.terms?.accepted === false) return <TermsUpdatePage version={me.data.terms.version} />;
   if (me.data) {
     return (
       <MeProvider me={me.data}>

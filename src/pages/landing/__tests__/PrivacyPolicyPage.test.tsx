@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
 import { PrivacyPolicyPage } from '../PrivacyPolicyPage';
@@ -26,12 +26,12 @@ describe('PrivacyPolicyPage', () => {
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
   });
 
-  it('covers the iPhone and Android apps alongside Mac, Windows, and the browser', () => {
+  it('covers the hosted web portal and the iPhone and Android apps, not any retired local app', () => {
     renderPage('en');
     const intro = document.querySelector('.privacy-policy-intro')?.textContent ?? '';
-    for (const platform of ['Mac', 'Windows', 'browser', 'iPhone', 'Android']) {
-      expect(intro).toContain(platform);
-    }
+    expect(intro).toContain('iPhone');
+    expect(intro).toContain('Android');
+    expect(intro).not.toMatch(/\bMac\b|\bWindows\b/);
   });
 
   it('says the mobile apps use an account and store data on a server, and names the processor', () => {
@@ -50,7 +50,7 @@ describe('PrivacyPolicyPage', () => {
 
   it('says what the hosted-account request form collects, that Netlify receives it, and what it is for (MUT-186)', () => {
     renderPage('en');
-    const heading = screen.getByRole('heading', { level: 2, name: /ask for a hosted account/ });
+    const heading = screen.getByRole('heading', { level: 2, name: /ask for an account/ });
     const section = heading.parentElement?.textContent ?? '';
     expect(section).toContain('Netlify');
     expect(section).toMatch(/only to reply with an offer/);
@@ -75,7 +75,6 @@ describe('PrivacyPolicyPage', () => {
     expect(headings.indexOf('Anonymous usage counts')).toBe(headings.indexOf('No ads, no tracking') + 1);
     const body = (name: RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
     const usage = body(/Anonymous usage counts/);
-    expect(usage).toMatch(/free apps on Mac, Windows, and in the browser never send usage data/);
     expect(usage).toMatch(/PostHog, hosted in the EU/);
     expect(usage).toMatch(/without cookies/);
     expect(usage).toMatch(/your location/);
@@ -137,5 +136,19 @@ describe('PrivacyPolicyPage', () => {
   ] as const)('names the tab in the active language (%s, MUT-77)', (language, title) => {
     renderPage(language);
     expect(document.title).toBe(title);
+  });
+
+  it('says where hosted records live, how they are backed up and processed, and when they are deleted (MUT-324)', () => {
+    renderPage('en');
+    const heading = screen.getByRole('heading', { level: 2, name: /Where your records live/ });
+    const section = heading.parentElement?.textContent ?? '';
+    for (const fact of ['me-west1', 'Tel Aviv', '14 days', 'Sentry', 'PostHog', 'only if you agree', '30 days', 'terms of service']) {
+      expect(section).toContain(fact);
+    }
+  });
+
+  it('links the terms of service from the footer (MUT-324)', () => {
+    renderPage('en');
+    expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');
   });
 });

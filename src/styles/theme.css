@@ -369,7 +369,15 @@ h6, .h6 { font-size: var(--text-body); }
 :lang(ar) .h1, :lang(ar) .h2, :lang(ar) .h3,
 :lang(ar) .h4, :lang(ar) .h5, :lang(ar) .h6 {
   font-family: var(--font-heading-ar);
-  letter-spacing: 0; /* Arabic doesn't use tight tracking */
+}
+
+/* Arabic doesn't use tight tracking. Keyed on the heading's own language, so an English heading inside an
+   Arabic page (a /terms?lang=en text, MUT-324) keeps its tracking. */
+h1:lang(ar), h2:lang(ar), h3:lang(ar),
+h4:lang(ar), h5:lang(ar), h6:lang(ar),
+.h1:lang(ar), .h2:lang(ar), .h3:lang(ar),
+.h4:lang(ar), .h5:lang(ar), .h6:lang(ar) {
+  letter-spacing: 0;
 }
 
 /* Numeric utility class */

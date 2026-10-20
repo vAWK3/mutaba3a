@@ -1,3 +1,5 @@
+import { CURRENT_TERMS } from '../../legal.js';
+
 /**
  * MUT-235: the operator surface no longer hands out passwords, so a test that
  * needs a signed-in person provisions them and sets a password the way the
@@ -29,7 +31,8 @@ export function setupTokenOf(url: string): string {
 }
 
 export async function redeemSetupLink(app: RequestableApp, url: string, password = SETUP_TEST_PASSWORD): Promise<void> {
-  const res = await app.request('/v1/account-setup', post({ token: setupTokenOf(url), password }, SAME_ORIGIN));
+  // MUT-324: a test person accepts the shipped terms, as the setup page makes them.
+  const res = await app.request('/v1/account-setup', post({ token: setupTokenOf(url), password, acceptedTermsVersion: CURRENT_TERMS.version }, SAME_ORIGIN));
   if (res.status !== 200) throw new Error(`redeeming the setup link failed: ${res.status} ${await res.text()}`);
 }
 

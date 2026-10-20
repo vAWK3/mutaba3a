@@ -3175,3 +3175,64 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Release-QA `@portal.income.add-matter` | signed in: hint with no client; Add matter POST body + headers; income names it; nothing offered on a Malafat-fed profile |
 | Release-QA `@portal.income.matter-fills-client` | client chips; picking Client 2's Retainer fills Client 2; switching to Client 1 empties Matter |
 | Reconcile additions (2026-10-19) | `EntityTypeahead.test.tsx`: no second pick while one saves (list shut on ArrowDown/refocus); cascade flash comes off after its span and replays. `useClientProjectCascade.test.tsx`: `onAutoFill` with the default owner, not when the client already owns it. `IncomeCaptureDrawer.test.tsx`: Save held while a matter is added; Enter held still saves once it lands; CURRENCY_MISMATCH under Matter; Malafat no-Add check now waits for the open list (was vacuous). `ExpenseDrawer.test.tsx`: Save held while a matter is added; picking a matter fills the client, changing the client empties it. `incomeApiErrors.test.ts`: CURRENCY_MISMATCH → `matterCurrency` with the matter's currency. Release-QA `@portal.income.add-matter`: the Malafat step waits for the open list before asserting no Add row |
+
+## MUT-324 — Terms of service, accepted at setup (2026-10-19, ADR-102)
+
+- **Server:**
+  - `server/src/__tests__/terms.test.ts`: the version in the check; a missing or stale version is refused before hashing; a dead link says why first; version, locale, sha256 and surface are recorded; audit on owned profiles only; a reset after acceptance; `Me.terms` on every sign-in surface; a bump asks again; null signed out; the accept route is idempotent, phone surface, stale, 401.
+  - `store-contract-account-setup.ts` (memory + Postgres): idempotent accept, the latest by version, FK, redeem + reset keep one row, and a refused redeem records nothing.
+  - `check-terms-live.test.ts`, the `users-cli` terms report, route-security lists, the store-guard operator list.
+- **Landing:** `TermsPage.test.tsx` (EN/AR, versions, unknown version, English prevails); `PrivacyPolicyPage.test.tsx` (hosted-accounts section, footer link); `HostedOfferPage.test.tsx` (terms link); `termsManifest.test.ts`; `scripts/__tests__/legal-terms.test.ts` (server pin = files = landing latest; deploy-check origin = Vite's).
+- **Portal:**
+  - `SetupPage.test.tsx`: the tick is required, sends the version and the language, links the exact version, terms changed. The existing setup behaviours are kept (R5); `save()` ticks.
+  - `setupLink.test.ts` (termsChanged), `TermsUpdatePage.test.tsx`, `UserMenu.terms.test.tsx`.
+- **Release-QA:** `qa/features/web/legal.yaml` (terms-page, links, terms-manifest) and `qa/features/portal/terms.yaml` (setup-requires-accept, updated-terms-step, links); specs in `qa/specs/{web/legal,portal/terms}.spec.ts`. `setup.spec.ts` now ticks the terms.
+- **Review fixes (2026-10-19, `fix/mut-324-review-fixes`):**
+  - Fix 1, the link language: `src/hosted/__tests__/terms.test.ts` (termsHref `?lang`); `TermsPage.test.tsx` `?lang` (wins over the page language, lang/dir on the text, never stored, unknown language ignored, kept on the current-terms link); the portal link hrefs in `SetupPage`/`TermsUpdatePage`/`UserMenu.terms` tests, both languages.
+  - Fixes 2–3, release order: `legal-terms.test.ts` (release-full is web then server; the server preflight runs `terms:check-live` before bump-version; deploy.sh checks only when run alone). `check-terms-live.test.ts` `checkTermsLive` (HTTP status, fetch error, not JSON, missing version).
+  - Fix 4: `TermsUpdatePage.test.tsx` (a 409 refetches Me, and the retry sends the new version; Sign out on the step).
+  - Fix 5: `legal-terms.test.ts` privacy promise = terraform (14 backups, 7 PITR).
+  - Should-fix: a `RELEASED_TERMS` frozen table; `termsManifest` skips non-JSON; the Arabic governing law; Arabic setup (`?lang=ar`, `termsLocale: 'ar'`); a setup 409 without `details.current` asks the check again; `aria-busy` while loading only. Server: accept-route cross-site 403 and 422; a contract test (memory + Postgres) for `listLatestTermsVersions`.
+  - Release-QA: `@web.legal.terms-linked-language`, `@portal.terms.changed-mid-step`, `@portal.terms.step-sign-out`; `?lang` assertions in `portal/terms` and `portal/signin`; the privacy facts list includes "the last 7 days".
+- **Review pass 2 (2026-10-19):** `legal-terms.test.ts` (no TERMS_CHECKED_BY_PREFLIGHT; only SKIP_TERMS_CHECK skips the preflight check); `TermsUpdatePage.test.tsx` (a refetch naming newer terms shows "changed"; an in-flight /v1/me can't bring the step back, which fails without cancelQueries; a 409 uses details.current when the refetch fails); `SetupPage.test.tsx` (a language switch clears the tick; after a 409 with no version, a dead re-check shows the refusal and a failed one the unreachable banner); `server terms.test.ts` (TermsStatus non-null, Me.terms an inline nullable object) plus a compile-time `MeTermsMayBeNull` in `client.ts`; `termsManifest.test.ts` (misnamed files refused, dotfiles skipped); `store-contract-account-setup.ts` (`acceptTerms` → `{ created }`). Release-QA `@portal.terms.language-switch-clears-tick`.
+## MUT-287 — Signed out: expenses, groups, conversions, receipts and documents on this device (2026-10-19, ADR-100 decision 11)
+
+| Test | Covers |
+|---|---|
+| `server/src/__tests__/routes-fx-rates.test.ts` › public (5) | 200 with no session or profile header, the raw snapshot; same cache as `/v1/fx-rates` (one provider call); 503 with no source / provider down; 429 + Retry-After past the per-address limit, other addresses unaffected |
+| `route-security.test.ts`, `no-self-registration.test.ts` | `GET /v1/public/fx-rates` is the one new public operation |
+| `src/hosted/local/__tests__/blobStore.test.ts` (4) | type and size kept; keys/delete; survives a new connection; its own `mut-local-blobs` database, never `mut-local` |
+| `attachments.test.ts` (7) | `local-blob:` upload/download URLs; head size/type (untyped → null); removal staged until flush, forgotten on discard; sweep deletes only unnamed files |
+| `receipts.test.ts` (8) | start → putBlob → complete READY → reload → same bytes; UPLOAD_INCOMPLETE / UPLOAD_MISMATCH; deleting the expense removes the file after the save; non-local URLs refused; boot sweep keeps a pending upload; Documents lists an empty page (AC3); export zip → cleared device → restore → receipt downloads |
+| `transport.test.ts` › staged removals (3) | flush after a saved write; discard on a refused write; discard and no flush when the save fails |
+| `fxSource.test.ts` (8) | no credentials, no redirects; non-2xx / bad body / offline fail; local `/v1/fx-rates` runs `crossRates`; offline → 503; one fetch per cache window; the local app never serves the public route |
+| `no-network.test.ts` (+3) | expense + receipt + documents + categories, and group + mark + conversion, with no fetch (AC1, AC4); reference rates: exactly one fetch, to `/v1/public/fx-rates`, `credentials: 'omit'` (D3) |
+| `recordsArchive.test.ts` (6) | zip of `records.json` + binary receipt entries; round trip typed from the receipt; MUT-286 `.json` restores; missing receipt entry named, records restored; unnamed entries ignored; refusals |
+| `restore.test.ts` (2) | backup replaces records and files and sweeps the old; a refused save leaves this device's records and files intact (R1) |
+| `format-fingerprint.test.ts` (29) | every snapshot map has a case and a record; per-map field kinds (TD-171) |
+| `src/hosted/data/__tests__/download.test.ts` (2) | local-blob download via object URL + `<a download>` named after the file, released later; missing file rejects |
+| `ReceiptUploader.test.tsx` (+2, 1 changed) | local-blob upload goes to `localFiles.put`, never fetched; a refused store shows the upload-failed toast; download passes the filename |
+| `local-mode.test.tsx`, `views.test.tsx` | nav shows Expenses and Conversions signed out; Your data downloads a `.zip`; Documents download passes the filename |
+| `scripts/__tests__/check-bundles.test.ts` (+2) | jszip only in a lazy chunk |
+| Release-QA `@portal.local.expense-receipt` (core) | record, attach a PDF, reload, download by name, same bytes; only the first-visit request |
+| Release-QA `@portal.local.fx-line` | USD + ILS group shows the ≈ line with the ECB date; offline it hides; only `/v1/me` and `/v1/public/fx-rates` |
+| Release-QA `@portal.local.conversion`, `@portal.local.documents-empty` | log, reload, edit a conversion; Documents empty state with no error |
+| Release-QA `@portal.local.download-restore` (extended) | zip with `records.json` and the receipt as its own file; after Restore the receipt downloads again byte for byte |
+| Review (2026-10-19) | `routes-fx-rates.test.ts` default limiter at 120/min; `fx-rates.test.ts` relayed upstream staleness; `fx-outside-lock.test.ts` a save never waits on a stuck FX fetch; `fxSource.test.ts` relay + device memory (1 h) + unreadable storage; `idb.test.ts` superseded and blocked upgrades; `blobStore.test.ts` `stat`; `attachments.test.ts` live vs backed-up keys (pending expiry); `recordsArchive.test.ts` damaged zip, Safari-folder zip, two folders refused, upload-rule refusal, `.json` missing count; `restore.test.ts` refused save leaves no backup files; `parity.test.ts` expense/receipt/group/conversion script; `format-fingerprint.test.ts` no null-only field; `vite-config.test.ts` Buffer plugin; `local-mode.test.tsx` missing-receipts confirm line; release-QA `@portal.local.restore-missing-receipts`, `fx-line` remembered rates |
+
+
+## MUT-336 — SVG → React icon codegen pipeline (2026-10-19)
+
+| Test | Covers |
+|---|---|
+| `scripts/__tests__/icon-set.test.ts` (21) | `kebabToComponentName` (single-word, hyphenated, 3-part); `parseSvg` (simple path children, nested `<g>` groups, throws on unrecognized element/attribute naming the file, throws on unclosed tag); `generateComponent` (imports shared `IconProps`, injects `size`/`className`/drops `xmlns`, numeric `strokeWidth`, `id` → `data-part` never raw `id`, nested groups preserved, a quote/backslash in an attribute value round-trips as a safe JS expression); `generateBarrel` (sorted, one line per name); `ICON_PROPS_MODULE`; `findIconSetProblems` (clean, missing, stale, orphaned, ignores `index.ts`/`types.ts`) |
+| `src/pages/settings/__tests__/SettingsPage.icons.test.tsx` | Pilot (AC #3): the generated `LanguageIcon` renders next to the language setting, asserted via its `data-part="nuqta"` sub-element |
+| Existing `src/pages/settings/__tests__/*` (116 tests) | Re-run unchanged after the pilot edit — no regression |
+| Manual: `npm run icons:generate` then `npm run icons:check` | 61/61 source icons generate; validator reports clean |
+
+## MUT-337 — Icon save-feedback animation runtime decision + web prototype (2026-10-19, ADR-152)
+
+| Test | Covers |
+|---|---|
+| `src/lib/motion/__tests__/iconMotion.test.ts` (7) | `ICON_OVERSHOOT_EASE`/`ICON_RESTRAINED_EASE` match `MMotion.overshoot`/`.spring` exactly; playful and restrained both settle at scale(1); the playful preset's live value exceeds 1 mid-flight (the actual "bounce," not just which constant was selected); reduced motion jumps straight to scale(1) on either preset; every target in a list animates; re-triggering mid-flight doesn't throw and still settles cleanly |
+| Manual | No dev-server CSP check performed — the mechanism writes `element.style.transform` directly via JS, the same pattern `playRowEnter`/`playRowExit` already use under the portal's CSP (ADR-044), so it's CSP-safe by construction, not by inspection |

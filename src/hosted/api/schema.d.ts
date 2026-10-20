@@ -213,60 +213,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The signed-in person and the hosted profiles they may open */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Me */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Me"];
-                    };
-                };
-                /** @description No valid session */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description PRINCIPAL_NOT_ACCEPTED */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/me/malafat-suggestions": {
         parameters: {
             query?: never;
@@ -335,6 +281,85 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/v1/me/terms-acceptance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept the current terms of service (MUT-324)
+         * @description Records that the signed-in person accepted `version`, read in `locale`, from the portal or the phone. Idempotent per version: accepting again changes nothing and writes no second audit row. The person accepts for themselves and, as owner, for their own profiles, so `user.terms_accepted` is audited on each profile they own.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TermsAcceptanceRequest"];
+                };
+            };
+            responses: {
+                /** @description The terms status after accepting */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TermsStatus"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TERMS_VERSION_STALE — `version` is not the current terms; details.current names it */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Invalid body */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/me/password": {
@@ -616,6 +641,15 @@ export interface paths {
                 };
                 /** @description CROSS_SITE_REQUEST */
                 403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TERMS_VERSION_STALE — acceptedTermsVersion is missing or not the current terms; details.current names it */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -938,867 +972,6 @@ export interface paths {
                 };
                 /** @description Key lacks the required scope */
                 403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/customers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List customers */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Page size, 1–200. */
-                    limit?: number;
-                    /** @description Opaque `nextCursor` from the previous page. */
-                    cursor?: string;
-                    status?: components["schemas"]["EntityStatus"];
-                    provider?: components["schemas"]["Provider"];
-                    externalId?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description A page */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CustomerPage"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        /**
-         * Create a customer
-         * @description With `externalReference`, creation is idempotent on that reference: a known reference returns the existing customer with 200 and changes nothing. Requires a CONNECTED integration for the provider. A session may create a customer on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
-                    "idempotency-key": string;
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["CreateCustomerRequest"];
-                };
-            };
-            responses: {
-                /** @description Already exists for this external reference */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Customer"];
-                    };
-                };
-                /** @description Created */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Customer"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Conflict; `details.reason` says which (see the API description) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/customers/{customerId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get a customer */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    customerId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description The customer */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Customer"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update a customer (optimistic, If-Match) */
-        patch: {
-            parameters: {
-                query?: never;
-                header: {
-                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
-                    "if-match": string;
-                };
-                path: {
-                    customerId: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["UpdateCustomerRequest"];
-                };
-            };
-            responses: {
-                /** @description Updated */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Customer"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Conflict; `details.reason` says which (see the API description) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        trace?: never;
-    };
-    "/v1/customers/{customerId}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Archive a customer
-         * @description Idempotent. Refused with 409 HAS_ACTIVE_PROJECTS while any of its projects is ACTIVE. Nothing is ever deleted.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
-                    "idempotency-key": string;
-                };
-                path: {
-                    customerId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Archived (or already was) */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Customer"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Conflict; `details.reason` says which (see the API description) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/projects": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List projects */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Page size, 1–200. */
-                    limit?: number;
-                    /** @description Opaque `nextCursor` from the previous page. */
-                    cursor?: string;
-                    status?: components["schemas"]["EntityStatus"];
-                    customerId?: string;
-                    currency?: components["schemas"]["Currency"];
-                    provider?: components["schemas"]["Provider"];
-                    externalId?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description A page */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ProjectPage"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        /**
-         * Create a project
-         * @description One currency per project. With `externalReference`, creation is idempotent on that reference: a known reference returns the existing project with 200 when it belongs to the same customer, or 409 CUSTOMER_MISMATCH when it does not. A session may create a project on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
-                    "idempotency-key": string;
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["CreateProjectRequest"];
-                };
-            };
-            responses: {
-                /** @description Already exists for this external reference */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Project"];
-                    };
-                };
-                /** @description Created */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Project"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Conflict; `details.reason` says which (see the API description) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/projects/{projectId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get a project */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    projectId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description The project */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Project"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Update a project (optimistic, If-Match)
-         * @description `currency` can change only while nothing is posted against the project; afterwards it is refused with 409 CURRENCY_LOCKED. `customerId` is immutable.
-         */
-        patch: {
-            parameters: {
-                query?: never;
-                header: {
-                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
-                    "if-match": string;
-                };
-                path: {
-                    projectId: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["UpdateProjectRequest"];
-                };
-            };
-            responses: {
-                /** @description Updated */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Project"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Conflict; `details.reason` says which (see the API description) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        trace?: never;
-    };
-    "/v1/projects/{projectId}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Archive a project
-         * @description Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding and 409 PROPOSAL_OPEN while a fee proposal is open (withdraw it first). Nothing is ever deleted.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
-                    "idempotency-key": string;
-                };
-                path: {
-                    projectId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Archived (or already was) */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Project"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Conflict; `details.reason` says which (see the API description) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -4356,6 +3529,1713 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/operations/{idempotencyKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The stored outcome of an idempotent write
+         * @description COMPLETED carries the response the original request received (2xx or 4xx, both final). PENDING means a request with this key is still running. 404 means the key was never claimed by this organization or was released after a server error — retrying with the same key is safe.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    idempotencyKey: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The operation */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Operation"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List audit events, oldest first, filtered by entity or action
+         * @description entityType is the API’s entity name (payment, receivable, agreement, installment, retainer_charge, customer, project, attachment, …); entityId its id. Keyset pagination like every list.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page size, 1–200. */
+                    limit?: number;
+                    /** @description Opaque `nextCursor` from the previous page. */
+                    cursor?: string;
+                    entityType?: string;
+                    entityId?: string;
+                    action?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuditPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your unsorted entries, newest first
+         * @description Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page size, 1–200. */
+                    limit?: number;
+                    /** @description Opaque `nextCursor` from the previous page. */
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InboxEntryPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Capture an amount now, decide where it belongs later
+         * @description occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. A typo year is refused at once: not more than ten years before UTC yesterday (MUT-227); filing applies the exact floor. kind is fixed at capture.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateInboxEntryRequest"];
+                };
+            };
+            responses: {
+                /** @description Captured */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InboxEntry"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many unsorted entries are waiting
+         * @description Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile. MUT-240: the Capture hub's Recent handle wants an exact "N to file" without paging a whole list.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The count */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InboxCount"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Throw away an unsorted entry
+         * @description Gone for good — an entry is a scratch note, not a ledger row, so there is no tombstone and no 204-again. A second delete is 404.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Done */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /**
+         * Fix an unsorted entry (optimistic, If-Match)
+         * @description Anything you captured. Not kind: what an entry is destined to become is fixed at capture. A changed currency needs the amount again (422 AMOUNT_INVALID), read in that currency's digits. null clears an optional field.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateInboxEntryRequest"];
+                };
+            };
+            responses: {
+                /** @description Changed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InboxEntry"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/inbox/{entryId}/file-as-expense": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * File an unsorted entry as an expense on a profile
+         * @description Amount, currency, date and note come from the entry; only what it could not know is sent here. The expense is created and the entry removed in one transaction: on success it is gone, on any refusal it is untouched. 409 ENTRY_KIND_MISMATCH for an entry captured as income.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FileAsExpenseRequest"];
+                };
+            };
+            responses: {
+                /** @description Filed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Expense"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/inbox/{entryId}/file-as-income": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * File an unsorted entry as income on a profile
+         * @description Received or Owed is chosen here, not at capture: the distinction only means something once a client is (or deliberately is not) in the picture. MUT-65's rules apply unchanged — Owed requires a client, and a Malafat-fed profile refuses the write with READ_ONLY_PROFILE, leaving the entry in place. 409 ENTRY_KIND_MISMATCH for an entry captured as an expense.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    entryId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FileAsIncomeRequest"];
+                };
+            };
+            responses: {
+                /** @description Filed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IncomeResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your entries across profiles, newest logged first
+         * @description Expenses, received payments, Owed entries and conversions on every profile you belong to (or the profiles you name), ordered by when each was logged. Everything on a profile, whoever logged it, Malafat's payments included; scheduled installments and retainer charges are not entries. No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox. A page is a snapshot: an entry edited or deleted later changes only when that page is read again (a deleted one is simply absent), so cache only the pages you re-read. A settle shows as a received payment with settlesOwedId next to its Owed (settled once paid in full, open before); a Malafat correction as a received payment with replacesPaymentId next to the reversed one.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404. */
+                    profileId?: string[];
+                    /** @description Page size, 1–100. */
+                    limit?: number;
+                    /** @description Opaque `nextCursor` from the previous page. */
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EntryPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List customers */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page size, 1–200. */
+                    limit?: number;
+                    /** @description Opaque `nextCursor` from the previous page. */
+                    cursor?: string;
+                    status?: components["schemas"]["EntityStatus"];
+                    provider?: components["schemas"]["Provider"];
+                    externalId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CustomerPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create a customer
+         * @description With `externalReference`, creation is idempotent on that reference: a known reference returns the existing customer with 200 and changes nothing. Requires a CONNECTED integration for the provider. A session may create a customer on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateCustomerRequest"];
+                };
+            };
+            responses: {
+                /** @description Already exists for this external reference */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Customer"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Customer"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/customers/{customerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a customer */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The customer */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Customer"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a customer (optimistic, If-Match) */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateCustomerRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Customer"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/customers/{customerId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a customer
+         * @description Idempotent. Refused with 409 HAS_ACTIVE_PROJECTS while any of its projects is ACTIVE. Nothing is ever deleted.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Archived (or already was) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Customer"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List projects */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page size, 1–200. */
+                    limit?: number;
+                    /** @description Opaque `nextCursor` from the previous page. */
+                    cursor?: string;
+                    status?: components["schemas"]["EntityStatus"];
+                    customerId?: string;
+                    currency?: components["schemas"]["Currency"];
+                    provider?: components["schemas"]["Provider"];
+                    externalId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create a project
+         * @description One currency per project. With `externalReference`, creation is idempotent on that reference: a known reference returns the existing project with 200 when it belongs to the same customer, or 409 CUSTOMER_MISMATCH when it does not. A session may create a project on its own personal profile (MUT-65); it has no external reference to link, so externalReference is refused there.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateProjectRequest"];
+                };
+            };
+            responses: {
+                /** @description Already exists for this external reference */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Project"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Project"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{projectId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a project */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    projectId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The project */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Project"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update a project (optimistic, If-Match)
+         * @description `currency` can change only while nothing is posted against the project; afterwards it is refused with 409 CURRENCY_LOCKED. `customerId` is immutable.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    projectId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateProjectRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Project"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/projects/{projectId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a project
+         * @description Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding and 409 PROPOSAL_OPEN while a fee proposal is open (withdraw it first). Nothing is ever deleted.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    projectId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Archived (or already was) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Project"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/receivables": {
         parameters: {
             query?: never;
@@ -5429,92 +6309,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/operations/{idempotencyKey}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * The stored outcome of an idempotent write
-         * @description COMPLETED carries the response the original request received (2xx or 4xx, both final). PENDING means a request with this key is still running. 404 means the key was never claimed by this organization or was released after a server error — retrying with the same key is safe.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    idempotencyKey: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description The operation */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Operation"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/summaries/organization": {
         parameters: {
             query?: never;
@@ -5723,89 +6517,6 @@ export interface paths {
                 };
                 /** @description No such entity in this organization */
                 404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/audit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List audit events, oldest first, filtered by entity or action
-         * @description entityType is the API’s entity name (payment, receivable, agreement, installment, retainer_charge, customer, project, attachment, …); entityId its id. Keyset pagination like every list.
-         */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Page size, 1–200. */
-                    limit?: number;
-                    /** @description Opaque `nextCursor` from the previous page. */
-                    cursor?: string;
-                    entityType?: string;
-                    entityId?: string;
-                    action?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description A page */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["AuditPage"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -8786,683 +9497,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/inbox": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List your unsorted entries, newest first
-         * @description Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile.
-         */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Page size, 1–200. */
-                    limit?: number;
-                    /** @description Opaque `nextCursor` from the previous page. */
-                    cursor?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description A page */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["InboxEntryPage"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        /**
-         * Capture an amount now, decide where it belongs later
-         * @description occurredOn may be in the future: with no profile there is no timezone to judge "today" in, so that check happens when you file. A typo year is refused at once: not more than ten years before UTC yesterday (MUT-227); filing applies the exact floor. kind is fixed at capture.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
-                    "idempotency-key": string;
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["CreateInboxEntryRequest"];
-                };
-            };
-            responses: {
-                /** @description Captured */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["InboxEntry"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/inbox/count": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * How many unsorted entries are waiting
-         * @description Yours alone, on every device you sign in on. No X-Mutaba3a-Profile: an unsorted entry belongs to no profile. MUT-240: the Capture hub's Recent handle wants an exact "N to file" without paging a whole list.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description The count */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["InboxCount"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/inbox/{entryId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Throw away an unsorted entry
-         * @description Gone for good — an entry is a scratch note, not a ledger row, so there is no tombstone and no 204-again. A second delete is 404.
-         */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    entryId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Done */
-                204: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        options?: never;
-        head?: never;
-        /**
-         * Fix an unsorted entry (optimistic, If-Match)
-         * @description Anything you captured. Not kind: what an entry is destined to become is fixed at capture. A changed currency needs the amount again (422 AMOUNT_INVALID), read in that currency's digits. null clears an optional field.
-         */
-        patch: {
-            parameters: {
-                query?: never;
-                header: {
-                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
-                    "if-match": string;
-                };
-                path: {
-                    entryId: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["UpdateInboxEntryRequest"];
-                };
-            };
-            responses: {
-                /** @description Changed */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["InboxEntry"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Conflict; `details.reason` says which (see the API description) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        trace?: never;
-    };
-    "/v1/inbox/{entryId}/file-as-expense": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * File an unsorted entry as an expense on a profile
-         * @description Amount, currency, date and note come from the entry; only what it could not know is sent here. The expense is created and the entry removed in one transaction: on success it is gone, on any refusal it is untouched. 409 ENTRY_KIND_MISMATCH for an entry captured as income.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
-                    "idempotency-key": string;
-                };
-                path: {
-                    entryId: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["FileAsExpenseRequest"];
-                };
-            };
-            responses: {
-                /** @description Filed */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Expense"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Conflict; `details.reason` says which (see the API description) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/inbox/{entryId}/file-as-income": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * File an unsorted entry as income on a profile
-         * @description Received or Owed is chosen here, not at capture: the distinction only means something once a client is (or deliberately is not) in the picture. MUT-65's rules apply unchanged — Owed requires a client, and a Malafat-fed profile refuses the write with READ_ONLY_PROFILE, leaving the entry in place. 409 ENTRY_KIND_MISMATCH for an entry captured as an expense.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
-                    "idempotency-key": string;
-                };
-                path: {
-                    entryId: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["FileAsIncomeRequest"];
-                };
-            };
-            responses: {
-                /** @description Filed */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["IncomeResponse"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Conflict; `details.reason` says which (see the API description) */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/entries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Your entries across profiles, newest logged first
-         * @description Expenses, received payments, Owed entries and conversions on every profile you belong to (or the profiles you name), ordered by when each was logged. Everything on a profile, whoever logged it, Malafat's payments included; scheduled installments and retainer charges are not entries. No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox. A page is a snapshot: an entry edited or deleted later changes only when that page is read again (a deleted one is simply absent), so cache only the pages you re-read. A settle shows as a received payment with settlesOwedId next to its Owed (settled once paid in full, open before); a Malafat correction as a received payment with replacesPaymentId next to the reversed one.
-         */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description Repeatable. Only these profiles; every profile you belong to when absent. One you do not belong to (or not an id at all) answers 404. */
-                    profileId?: string[];
-                    /** @description Page size, 1–100. */
-                    limit?: number;
-                    /** @description Opaque `nextCursor` from the previous page. */
-                    cursor?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description A page */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["EntryPage"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/profiles": {
         parameters: {
             query?: never;
@@ -9736,6 +9770,117 @@ export interface paths {
                 };
                 /** @description Rate limited */
                 429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in person and the hosted profiles they may open */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Me */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Me"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/fx-rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The ECB reference snapshot behind /v1/fx-rates, with no session
+         * @description Public market data for the portal used signed out, which computes cross rates itself. Same cache, age rules and 503 as /v1/fx-rates; rate-limited to 120 requests per minute per address. Display only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Snapshot */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicFxRatesResponse"];
+                    };
+                };
+                /** @description Too many requests from this address; `Retry-After` and `details.retryAfterSeconds` say when to try again */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No rates to serve, or no rate source configured */
+                503: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -10182,6 +10327,54 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/terms-acceptance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every user and the terms version they last accepted (MUT-324)
+         * @description For the operator to see who has not yet accepted the current terms, for example someone who only uses the phone app.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The terms report */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TermsReport"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10640,6 +10833,12 @@ export interface components {
     schemas: {
         /** @enum {string} */
         CaptureSource: "app" | "siri" | "widget" | "quick_action" | "share";
+        TermsStatus: {
+            version: components["schemas"]["TermsVersion"];
+            accepted: boolean;
+        };
+        /** @example 2026-10-19 */
+        TermsVersion: string;
         Health: {
             /** @enum {string} */
             status: "ok";
@@ -10681,6 +10880,10 @@ export interface components {
              *     ]
              */
             currencies: string[];
+            terms: {
+                version: components["schemas"]["TermsVersion"];
+                accepted: boolean;
+            } | null;
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
@@ -10725,7 +10928,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
+                code: "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -10738,6 +10941,10 @@ export interface components {
         MalafatSuggestionsChange: {
             off?: boolean;
             dismiss?: components["schemas"]["MalafatMoment"][];
+        };
+        TermsAcceptanceRequest: {
+            version: components["schemas"]["TermsVersion"];
+            locale: components["schemas"]["UserLocale"];
         };
         ChangePasswordRequest: {
             currentPassword: string;
@@ -10756,6 +10963,7 @@ export interface components {
             purpose: components["schemas"]["SetupLinkPurpose"];
             /** Format: date-time */
             expiresAt: string;
+            termsVersion: components["schemas"]["TermsVersion"];
         } | {
             /** @enum {string} */
             state: "expired" | "used" | "superseded" | "invalid";
@@ -10771,6 +10979,8 @@ export interface components {
         SetupLinkRedeemRequest: {
             token: string;
             password: components["schemas"]["NewPassword"];
+            acceptedTermsVersion?: components["schemas"]["TermsVersion"];
+            termsLocale?: components["schemas"]["UserLocale"];
         };
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];
@@ -10850,90 +11060,6 @@ export interface components {
             /** @enum {boolean} */
             apiKeyRevoked: true;
         };
-        Customer: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            email: string | null;
-            phone: string | null;
-            notes: string | null;
-            vatTreatment: components["schemas"]["VatTreatment"];
-            status: components["schemas"]["EntityStatus"];
-            /** Format: date-time */
-            archivedAt: string | null;
-            externalReference: components["schemas"]["ExternalReference"];
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        /** @enum {string|null} */
-        VatTreatment: "STANDARD_RATED" | "ZERO_RATED" | "EXEMPT" | "OUT_OF_SCOPE" | null;
-        /** @enum {string} */
-        EntityStatus: "ACTIVE" | "ARCHIVED";
-        ExternalReference: {
-            provider: components["schemas"]["Provider"];
-            externalId: string;
-        } | null;
-        /** @enum {string} */
-        Provider: "MALAFAT";
-        CreateCustomerRequest: {
-            name: string;
-            /** Format: email */
-            email?: string;
-            phone?: string;
-            notes?: string;
-            vatTreatment?: components["schemas"]["VatTreatment"];
-            externalReference?: components["schemas"]["ExternalReference"];
-        };
-        CustomerPage: {
-            items: components["schemas"]["Customer"][];
-            nextCursor: string | null;
-        };
-        UpdateCustomerRequest: {
-            name?: string;
-            /** Format: email */
-            email?: string | null;
-            phone?: string | null;
-            notes?: string | null;
-            vatTreatment?: components["schemas"]["VatTreatment"];
-        };
-        Project: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            customerId: string;
-            name: string;
-            currency: components["schemas"]["Currency"];
-            vatTreatment: components["schemas"]["VatTreatment"];
-            status: components["schemas"]["EntityStatus"];
-            /** Format: date-time */
-            archivedAt: string | null;
-            externalReference: components["schemas"]["ExternalReference"];
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        CreateProjectRequest: {
-            /** Format: uuid */
-            customerId: string;
-            name: string;
-            currency: components["schemas"]["Currency"];
-            vatTreatment?: components["schemas"]["VatTreatment"];
-            externalReference?: components["schemas"]["ExternalReference"];
-        };
-        ProjectPage: {
-            items: components["schemas"]["Project"][];
-            nextCursor: string | null;
-        };
-        UpdateProjectRequest: {
-            name?: string;
-            currency?: components["schemas"]["Currency"];
-            vatTreatment?: components["schemas"]["VatTreatment"];
-        };
         ImportPreviewResponse: {
             rows: components["schemas"]["ImportPlanRow"][];
             totals: {
@@ -10962,6 +11088,8 @@ export interface components {
             provider: components["schemas"]["Provider"];
             rows: components["schemas"]["ImportRow"][];
         };
+        /** @enum {string} */
+        Provider: "MALAFAT";
         ImportRow: {
             /** @enum {string} */
             entityType: "CUSTOMER";
@@ -11137,6 +11265,8 @@ export interface components {
         };
         /** @enum {string} */
         AgreementType: "FIXED" | "RECURRING" | "CONTINGENCY";
+        /** @enum {string} */
+        VatTreatment: "STANDARD_RATED" | "ZERO_RATED" | "EXEMPT" | "OUT_OF_SCOPE";
         /** @enum {string} */
         PaymentTerms: "IMMEDIATE" | "EOM" | "EOM_15" | "EOM_30" | "EOM_45" | "EOM_60";
         AgreementContingency: {
@@ -11654,6 +11784,312 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             today: string;
         };
+        Operation: {
+            key: string;
+            operation: string;
+            /** @enum {string} */
+            status: "PENDING" | "COMPLETED";
+            responseStatus: number | null;
+            response?: unknown;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            completedAt: string | null;
+        };
+        AuditPage: {
+            items: components["schemas"]["AuditEvent"][];
+            nextCursor: string | null;
+        };
+        AuditEvent: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            actorType: "API_KEY" | "ADMIN" | "SYSTEM" | "USER";
+            actorId: string | null;
+            action: string;
+            entityType: string;
+            entityId: string | null;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            requestId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        InboxEntryPage: {
+            items: components["schemas"]["InboxEntry"][];
+            nextCursor: string | null;
+        };
+        InboxEntry: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["InboxEntryKind"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn: string;
+            note: string | null;
+            captureSource: components["schemas"]["CaptureSource"] & unknown;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        InboxEntryKind: "income" | "expense";
+        InboxCount: {
+            count: number;
+        };
+        CreateInboxEntryRequest: {
+            kind: components["schemas"]["InboxEntryKind"];
+            /** @description Greater than zero, in the currency's fractional digits */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check. Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past; filing applies the exact floor in the profile's timezone. */
+            occurredOn: string;
+            note?: string;
+            captureSource?: components["schemas"]["CaptureSource"];
+        };
+        UpdateInboxEntryRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount?: string;
+            currency?: components["schemas"]["Currency"];
+            /** @description Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date. */
+            occurredOn?: string;
+            note?: string | null;
+            captureSource?: components["schemas"]["CaptureSource"] & unknown;
+        };
+        Expense: {
+            /** Format: uuid */
+            id: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            title: string | null;
+            vendor: string | null;
+            /** Format: uuid */
+            categoryId: string | null;
+            /** Format: uuid */
+            customerId: string | null;
+            /** Format: uuid */
+            projectId: string | null;
+            notes: string | null;
+            /** Format: uuid */
+            createdByUserId: string;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        FileAsExpenseRequest: {
+            /** Format: uuid */
+            categoryId?: string;
+            vendor?: string;
+            title?: string;
+            /** Format: uuid */
+            customerId?: string;
+            /**
+             * Format: uuid
+             * @description With projectId alone, customerId is the project's customer
+             */
+            projectId?: string;
+        };
+        IncomeResponse: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["IncomeKind"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn: string;
+            /** Format: uuid */
+            customerId: string | null;
+            /** Format: uuid */
+            projectId: string | null;
+            title: string | null;
+            notes: string | null;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate: string | null;
+            status: components["schemas"]["IncomeStatus"];
+            version: number;
+        };
+        /** @enum {string} */
+        IncomeKind: "received" | "owed";
+        /** @enum {string} */
+        IncomeStatus: "unallocated" | "partial" | "allocated" | "reversed" | "open" | "settled";
+        FileAsIncomeRequest: {
+            kind: components["schemas"]["IncomeKind"];
+            /** Format: uuid */
+            customerId?: string;
+            /** Format: uuid */
+            projectId?: string;
+            title?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate?: string;
+            method?: components["schemas"]["PaymentMethod"];
+        };
+        /** @enum {string} */
+        PaymentMethod: "CASH" | "BANK";
+        EntryPage: {
+            items: components["schemas"]["Entry"][];
+            nextCursor: string | null;
+        };
+        Entry: {
+            /** @enum {string} */
+            kind: "expense";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string;
+            expense: components["schemas"]["Expense"] & {
+                /** @description READY receipts attached */
+                receiptCount: number;
+            };
+        } | {
+            /** @enum {string} */
+            kind: "received";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string | null;
+            /** @enum {string} */
+            origin: "capture" | "integration";
+            /** Format: uuid */
+            settlesOwedId: string | null;
+            /** Format: uuid */
+            replacesPaymentId: string | null;
+            income: components["schemas"]["IncomeResponse"];
+        } | {
+            /** @enum {string} */
+            kind: "owed";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string | null;
+            income: components["schemas"]["IncomeResponse"];
+        } | {
+            /** @enum {string} */
+            kind: "conversion";
+            /** Format: uuid */
+            profileId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdByUserId: string;
+            conversion: components["schemas"]["Conversion"];
+        };
+        Conversion: {
+            /** Format: uuid */
+            id: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            toAmount: string;
+            toCurrency: components["schemas"]["Currency"];
+            notes: string | null;
+            /** Format: uuid */
+            createdByUserId: string;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        Customer: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            email: string | null;
+            phone: string | null;
+            notes: string | null;
+            vatTreatment: components["schemas"]["VatTreatment"] & unknown;
+            status: components["schemas"]["EntityStatus"];
+            /** Format: date-time */
+            archivedAt: string | null;
+            externalReference: components["schemas"]["ExternalReference"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        EntityStatus: "ACTIVE" | "ARCHIVED";
+        ExternalReference: {
+            provider: components["schemas"]["Provider"];
+            externalId: string;
+        } | null;
+        CreateCustomerRequest: {
+            name: string;
+            /** Format: email */
+            email?: string;
+            phone?: string;
+            notes?: string;
+            vatTreatment?: components["schemas"]["VatTreatment"];
+            externalReference?: components["schemas"]["ExternalReference"];
+        };
+        CustomerPage: {
+            items: components["schemas"]["Customer"][];
+            nextCursor: string | null;
+        };
+        UpdateCustomerRequest: {
+            name?: string;
+            /** Format: email */
+            email?: string | null;
+            phone?: string | null;
+            notes?: string | null;
+            vatTreatment?: components["schemas"]["VatTreatment"] & unknown;
+        };
+        Project: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            customerId: string;
+            name: string;
+            currency: components["schemas"]["Currency"];
+            vatTreatment: components["schemas"]["VatTreatment"] & unknown;
+            status: components["schemas"]["EntityStatus"];
+            /** Format: date-time */
+            archivedAt: string | null;
+            externalReference: components["schemas"]["ExternalReference"];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateProjectRequest: {
+            /** Format: uuid */
+            customerId: string;
+            name: string;
+            currency: components["schemas"]["Currency"];
+            vatTreatment?: components["schemas"]["VatTreatment"];
+            externalReference?: components["schemas"]["ExternalReference"];
+        };
+        ProjectPage: {
+            items: components["schemas"]["Project"][];
+            nextCursor: string | null;
+        };
+        UpdateProjectRequest: {
+            name?: string;
+            currency?: components["schemas"]["Currency"];
+            vatTreatment?: components["schemas"]["VatTreatment"] & unknown;
+        };
         ReceivablePage: {
             items: components["schemas"]["Receivable"][];
             nextCursor: string | null;
@@ -11745,8 +12181,6 @@ export interface components {
         PaymentOrigin: "integration" | "capture";
         /** @enum {string} */
         AllocationState: "unallocated" | "partial" | "allocated";
-        /** @enum {string} */
-        PaymentMethod: "CASH" | "BANK";
         /** @enum {string} */
         PaymentStatus: "POSTED" | "REVERSED";
         Allocation: {
@@ -11885,18 +12319,6 @@ export interface components {
         };
         ReversePaymentRequest: {
             reason: string;
-        };
-        Operation: {
-            key: string;
-            operation: string;
-            /** @enum {string} */
-            status: "PENDING" | "COMPLETED";
-            responseStatus: number | null;
-            response?: unknown;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            completedAt: string | null;
         };
         OrganizationSummary: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -12044,26 +12466,6 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             asOf: string;
         };
-        AuditPage: {
-            items: components["schemas"]["AuditEvent"][];
-            nextCursor: string | null;
-        };
-        AuditEvent: {
-            /** Format: uuid */
-            id: string;
-            /** @enum {string} */
-            actorType: "API_KEY" | "ADMIN" | "SYSTEM" | "USER";
-            actorId: string | null;
-            action: string;
-            entityType: string;
-            entityId: string | null;
-            metadata?: {
-                [key: string]: unknown;
-            };
-            requestId: string | null;
-            /** Format: date-time */
-            createdAt: string;
-        };
         CreateUploadResponse: {
             attachment: components["schemas"]["Attachment"];
             upload: {
@@ -12137,31 +12539,6 @@ export interface components {
         ExpensePage: {
             items: components["schemas"]["Expense"][];
             nextCursor: string | null;
-        };
-        Expense: {
-            /** Format: uuid */
-            id: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            occurredOn: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            amount: string;
-            currency: components["schemas"]["Currency"];
-            title: string | null;
-            vendor: string | null;
-            /** Format: uuid */
-            categoryId: string | null;
-            /** Format: uuid */
-            customerId: string | null;
-            /** Format: uuid */
-            projectId: string | null;
-            notes: string | null;
-            /** Format: uuid */
-            createdByUserId: string;
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
         };
         ExpenseDetail: components["schemas"]["Expense"] & {
             receipts: components["schemas"]["ExpenseReceipt"][];
@@ -12287,30 +12664,6 @@ export interface components {
             color?: string | null;
             archived?: boolean;
         };
-        IncomeResponse: {
-            /** Format: uuid */
-            id: string;
-            kind: components["schemas"]["IncomeKind"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            amount: string;
-            currency: components["schemas"]["Currency"];
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            occurredOn: string;
-            /** Format: uuid */
-            customerId: string | null;
-            /** Format: uuid */
-            projectId: string | null;
-            title: string | null;
-            notes: string | null;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            dueDate: string | null;
-            status: components["schemas"]["IncomeStatus"];
-            version: number;
-        };
-        /** @enum {string} */
-        IncomeKind: "received" | "owed";
-        /** @enum {string} */
-        IncomeStatus: "unallocated" | "partial" | "allocated" | "reversed" | "open" | "settled";
         CreateIncomeRequest: {
             kind: components["schemas"]["IncomeKind"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
@@ -12433,26 +12786,6 @@ export interface components {
                 }[];
             }[];
         };
-        Conversion: {
-            /** Format: uuid */
-            id: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            occurredOn: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            amount: string;
-            currency: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            toAmount: string;
-            toCurrency: components["schemas"]["Currency"];
-            notes: string | null;
-            /** Format: uuid */
-            createdByUserId: string;
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
         CreateConversionRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             occurredOn: string;
@@ -12509,129 +12842,6 @@ export interface components {
             /** @description True when either side of the pair is pegged to the US dollar (never base→base): the ECB publishes no rate for it, so the rate comes from its USD peg (1 USD = 0.709 JOD, 3.6725 AED, 3.75 SAR, 3.64 QAR, 0.376 BHD, 0.3845 OMR) */
             derived: boolean;
         };
-        InboxEntryPage: {
-            items: components["schemas"]["InboxEntry"][];
-            nextCursor: string | null;
-        };
-        InboxEntry: {
-            /** Format: uuid */
-            id: string;
-            kind: components["schemas"]["InboxEntryKind"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            amount: string;
-            currency: components["schemas"]["Currency"];
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            occurredOn: string;
-            note: string | null;
-            captureSource: components["schemas"]["CaptureSource"] & unknown;
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        /** @enum {string} */
-        InboxEntryKind: "income" | "expense";
-        InboxCount: {
-            count: number;
-        };
-        CreateInboxEntryRequest: {
-            kind: components["schemas"]["InboxEntryKind"];
-            /** @description Greater than zero, in the currency's fractional digits */
-            amount: string;
-            currency: components["schemas"]["Currency"];
-            /** @description May be in the future: an unsorted entry has no profile, so no timezone to judge "today" in. Filing applies that check. Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past; filing applies the exact floor in the profile's timezone. */
-            occurredOn: string;
-            note?: string;
-            captureSource?: components["schemas"]["CaptureSource"];
-        };
-        UpdateInboxEntryRequest: {
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            amount?: string;
-            currency?: components["schemas"]["Currency"];
-            /** @description Not more than ten years (3660 days) before UTC yesterday (MUT-227): 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date. */
-            occurredOn?: string;
-            note?: string | null;
-            captureSource?: components["schemas"]["CaptureSource"] & unknown;
-        };
-        FileAsExpenseRequest: {
-            /** Format: uuid */
-            categoryId?: string;
-            vendor?: string;
-            title?: string;
-            /** Format: uuid */
-            customerId?: string;
-            /**
-             * Format: uuid
-             * @description With projectId alone, customerId is the project's customer
-             */
-            projectId?: string;
-        };
-        FileAsIncomeRequest: {
-            kind: components["schemas"]["IncomeKind"];
-            /** Format: uuid */
-            customerId?: string;
-            /** Format: uuid */
-            projectId?: string;
-            title?: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            dueDate?: string;
-            method?: components["schemas"]["PaymentMethod"];
-        };
-        EntryPage: {
-            items: components["schemas"]["Entry"][];
-            nextCursor: string | null;
-        };
-        Entry: {
-            /** @enum {string} */
-            kind: "expense";
-            /** Format: uuid */
-            profileId: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            createdByUserId: string;
-            expense: components["schemas"]["Expense"] & {
-                /** @description READY receipts attached */
-                receiptCount: number;
-            };
-        } | {
-            /** @enum {string} */
-            kind: "received";
-            /** Format: uuid */
-            profileId: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            createdByUserId: string | null;
-            /** @enum {string} */
-            origin: "capture" | "integration";
-            /** Format: uuid */
-            settlesOwedId: string | null;
-            /** Format: uuid */
-            replacesPaymentId: string | null;
-            income: components["schemas"]["IncomeResponse"];
-        } | {
-            /** @enum {string} */
-            kind: "owed";
-            /** Format: uuid */
-            profileId: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            createdByUserId: string | null;
-            income: components["schemas"]["IncomeResponse"];
-        } | {
-            /** @enum {string} */
-            kind: "conversion";
-            /** Format: uuid */
-            profileId: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: uuid */
-            createdByUserId: string;
-            conversion: components["schemas"]["Conversion"];
-        };
         CreateProfileRequest: {
             name: string;
             type: components["schemas"]["ProfileType"];
@@ -12659,6 +12869,28 @@ export interface components {
             deletedCategories: number;
             /** @enum {string} */
             preset: "lawFirm" | "personal" | "general";
+        };
+        PublicFxRatesResponse: {
+            /**
+             * @description The ECB reference date (its last business day), YYYY-MM-DD
+             * @example 2026-10-15
+             */
+            rateDate: string;
+            /** @description Units of each currency per 1 EUR, as the ECB publishes them. Every other supported currency derives from these and the USD pegs. */
+            perEur: {
+                USD: number;
+                ILS: number;
+            };
+            /**
+             * Format: date-time
+             * @description When this server instance read the rates from the provider
+             */
+            fetchedAt: string;
+            /**
+             * @description live = inside the cache window; stale = the last refresh failed and these are the last good rates
+             * @enum {string}
+             */
+            source: "live" | "stale";
         };
         CreateOrganizationRequest: {
             name: string;
@@ -12738,6 +12970,18 @@ export interface components {
         };
         UserList: {
             users: components["schemas"]["UserSummary"][];
+        };
+        TermsReport: {
+            current: components["schemas"]["TermsVersion"];
+            users: {
+                /** Format: uuid */
+                id: string;
+                email: string;
+                /** @enum {string} */
+                status: "ACTIVE" | "DISABLED";
+                latestVersion: components["schemas"]["TermsVersion"] & unknown;
+                accepted: boolean;
+            }[];
         };
         UserDetail: {
             user: components["schemas"]["UserSummary"];

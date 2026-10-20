@@ -2,7 +2,7 @@
 #
 #   make release web      Netlify frontend  (bump → gates → commit → push main → tag web-v<x>)
 #   make release server   Cloud Run API + hosted portal (bump → gates → deploy.sh → tag api-v<x>)
-#   make release full     server, then web — each gated and confirmed on its own
+#   make release full     web, then server — each gated and confirmed on its own
 #
 # Desktop (DMG, notarization, GitHub release) is a separate pipeline
 # (`npm run release`) and is deliberately not part of `full` — see ADR-043.
@@ -78,7 +78,8 @@ help:
 	@printf '$(C_BOLD)Mutaba3a — release$(C_OFF)\n\n'
 	@printf '  $(C_GREEN)make release web$(C_OFF)       deploy the frontend to Netlify (push to $(RELEASE_BRANCH))\n'
 	@printf '  $(C_GREEN)make release server$(C_OFF)    deploy the API + hosted portal to Cloud Run ($(ENVIRONMENT))\n'
-	@printf '  $(C_GREEN)make release full$(C_OFF)      server, then web — each gated and confirmed on its own\n'
+	@printf '  $(C_GREEN)make release full$(C_OFF)      web, then server — each gated and confirmed on its own\n'
+	@printf '  $(C_DIM)  after a terms bump: make release web, wait for Netlify, then make release server$(C_OFF)\n'
 	@printf '\n$(C_BOLD)Checks only — change nothing$(C_OFF)\n'
 	@printf '  make doctor            run every preflight check for both targets\n'
 	@printf '  make preflight-web     release-readiness for the web target\n'
@@ -96,6 +97,7 @@ help:
 	@printf '\n$(C_BOLD)Overrides$(C_OFF) $(C_DIM)(prefix any target)$(C_OFF)\n'
 	@printf '  ALLOW_DIRTY=1 ALLOW_UNMERGED=1 ALLOW_WORKTREES=1 ALLOW_NODE_MAJOR=1\n'
 	@printf '  SKIP_REMOTE=1          offline: do not contact origin or GCP\n'
+	@printf '  SKIP_TERMS_CHECK=1     server: skip the terms-are-live check (an emergency fix that keeps the terms version)\n'
 	@printf '  BUMP=patch|minor|major|keep    skip the version prompt\n'
 	@printf '  AUTO=1                 skip the final "deploy now?" confirmation\n'
 	@printf '  RELEASE_BRANCH=  ENVIRONMENT=  GCP_PROJECT_ID=  TF_STATE_BUCKET=\n'
@@ -257,14 +259,19 @@ release-server: preflight-server
 	scripts/tag-release.sh api "$$version" --push
 
 # ---------------------------------------------------------------------------
-# release full — server then web, back to back. Server first so the API a
-# release ships is already live before the frontend that calls it goes out.
+# release full — web then server, back to back (ADR-102 overrides ADR-043's
+# 2026-10-12 server-first addendum). The web build ships the terms text the
+# server asks people to accept, and the server preflight refuses a version the
+# public site doesn't list yet (MUT-324 D11). After a terms bump, Netlify must
+# finish building before the server half passes that check, so release web,
+# wait for the build, then release server. The portal ships inside the server
+# image, so no frontend here calls an API the release hasn't shipped.
 # Each half keeps its own preflight, gates, version bump and confirmation;
 # declining one does not block the other. Desktop is excluded on purpose
 # (ADR-043) — it stays its own pipeline: npm run release.
 # ---------------------------------------------------------------------------
 
-release-full: release-server release-web
+release-full: release-web release-server
 
 # ---------------------------------------------------------------------------
 

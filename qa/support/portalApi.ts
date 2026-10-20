@@ -1,5 +1,5 @@
 import type { Page, Request, Route } from '@playwright/test';
-import { customer, meBody, openSignedInPortal, type StubProfile } from './portal';
+import { QA_TERMS_VERSION, customer, meBody, openSignedInPortal, type StubProfile } from './portal';
 
 /**
  * A small in-memory hosted API for portal specs (shapes from src/hosted/api/schema.d.ts).
@@ -363,6 +363,8 @@ export interface FakeApiSeed {
   setupLink?: StubSetupLink;
   /** The account's password (MUT-237): POST /v1/me/password checks it against this. */
   currentPassword?: string;
+  /** MUT-324: false makes the portal show the Updated-terms step until the spec agrees. Defaults to true. */
+  termsAccepted?: boolean;
 }
 
 export type SetupLinkState = 'valid' | 'expired' | 'used' | 'superseded' | 'invalid';
@@ -398,6 +400,10 @@ export class FakeApi {
   private serial = 500;
   private setupLink: StubSetupLink | null;
   private currentPassword: string;
+  /** MUT-324: false = the person is behind on the terms and the portal asks them first. */
+  private termsAccepted: boolean;
+  /** MUT-324: the version the server names; bumpTerms moves it, as a release would. */
+  private termsVersion = QA_TERMS_VERSION;
 
   constructor(seed: FakeApiSeed) {
     this.signedIn = seed.signedIn ?? true;
@@ -419,6 +425,7 @@ export class FakeApi {
     this.uncategorized = seed.uncategorizedOnTypeChange ?? 0;
     this.setupLink = seed.setupLink ?? null;
     this.currentPassword = seed.currentPassword ?? 'the-current-password';
+    this.termsAccepted = seed.termsAccepted ?? true;
   }
 
   /** The setup link changed behind the page's back: a lost answer that committed, a newer link, an expiry. */
@@ -440,10 +447,18 @@ export class FakeApi {
     return this.calls(method, path).at(-1);
   }
 
+  /** MUT-324: a server release names newer terms; the person is behind until they accept those. */
+  bumpTerms(version: string) {
+    this.termsVersion = version;
+    this.termsAccepted = false;
+  }
+
   me(language: 'en' | 'ar' = 'en') {
     const body = meBody(
       this.profiles.map((p) => p.stub),
       language,
+      undefined,
+      { version: this.termsVersion, accepted: this.termsAccepted },
     );
     return {
       ...body,
@@ -529,6 +544,12 @@ export class FakeApi {
       }
     }
     if (resource === 'me' && method === 'GET' && !id) return json(this.me(language));
+    if (resource === 'me' && id === 'terms-acceptance' && method === 'POST') {
+      const { version } = (e.body ?? {}) as { version?: string };
+      if (version !== this.termsVersion) return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: this.termsVersion } } }, 409);
+      this.termsAccepted = true;
+      return json({ version: this.termsVersion, accepted: true });
+    }
     if (resource === 'me' && id === 'password' && method === 'POST') return this.changePasswordAnswer(e.body as { currentPassword?: string; newPassword?: string } | null);
 
     if (resource === 'profiles') return this.profileAnswer(e, id, sub);
@@ -593,9 +614,13 @@ export class FakeApi {
     const email = link.email ?? 'nour@office.ps';
     if (e.path === '/v1/account-setup/check') {
       if (link.state !== 'valid') return json({ state: link.state });
-      return json({ state: 'valid', email, locale: link.locale ?? 'en', purpose: link.purpose ?? 'SETUP', expiresAt: '2026-10-19T09:00:00.000Z' });
+      return json({ state: 'valid', email, locale: link.locale ?? 'en', purpose: link.purpose ?? 'SETUP', expiresAt: '2026-10-19T09:00:00.000Z', termsVersion: this.termsVersion });
     }
     if (link.state !== 'valid') return json({ error: { code: 'SETUP_LINK_UNUSABLE', message: 'Ask for a new link', details: { state: link.state } } }, 410);
+    // MUT-324: the real server checks the version after the link state
+    if ((e.body as { acceptedTermsVersion?: string } | null)?.acceptedTermsVersion !== this.termsVersion) {
+      return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: this.termsVersion } } }, 409);
+    }
     this.markSetupLink('used');
     return json({ email });
   }

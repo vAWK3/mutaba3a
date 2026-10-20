@@ -1,7 +1,7 @@
 {
   "name": "mutaba3a",
   "private": true,
-  "version": "0.1.13",
+  "version": "0.1.15",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -30,7 +30,9 @@
     "hosted:types": "openapi-typescript server/openapi/openapi.yaml -o src/hosted/api/schema.d.ts",
     "hosted:types:check": "tsx scripts/check-hosted-types.ts",
     "i18n:check": "tsx scripts/check-i18n-keys.ts",
-    "release:notes": "tsx scripts/check-release-notes.ts"
+    "release:notes": "tsx scripts/check-release-notes.ts",
+    "icons:generate": "tsx scripts/generate-icons.ts",
+    "icons:check": "tsx scripts/validate-icon-set.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.2.7",

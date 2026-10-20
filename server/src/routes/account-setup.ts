@@ -5,6 +5,7 @@ import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { clientIp, isSameOriginRequest, sessionDigest, type SignInThrottle } from '../auth/sessions.js';
 import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
+import type { CurrentTerms } from '../legal.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { AccountSetupTokenRecord, AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
 import {
@@ -14,6 +15,7 @@ import {
   SetupLinkRedeemRequestSchema,
   SetupLinkRedeemResponseSchema,
 } from '../schemas.js';
+import { staleTerms, termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
 
 /**
  * The two public routes a setup link reaches (MUT-235, ADR-088). They are the
@@ -33,12 +35,14 @@ export interface AccountSetupRouteOptions {
   ipLimiter: RateLimiter;
   /** The sign-in throttle (shared with both sign-in routes); a successful redeem clears the person's lock in it. */
   throttle: SignInThrottle;
+  /** MUT-324: the terms a person must accept to finish setting up. */
+  terms: CurrentTerms;
 }
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHono<AppEnv> {
-  const { store, passwordHasher, settings, ipLimiter, throttle } = options;
+  const { store, passwordHasher, settings, ipLimiter, throttle, terms } = options;
   const app = new OpenAPIHono<AppEnv>();
 
   async function guard(c: Context<AppEnv>): Promise<Date> {
@@ -79,7 +83,10 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       const { link, person } = await lookUp(c.req.valid('json').token);
       const state = setupLinkState(link, person, now);
       if (state === 'valid' && link && person) {
-        return c.json({ state, email: person.email, locale: person.locale, purpose: link.purpose, expiresAt: link.expiresAt.toISOString() }, 200);
+        return c.json(
+          { state, email: person.email, locale: person.locale, purpose: link.purpose, expiresAt: link.expiresAt.toISOString(), termsVersion: terms.version },
+          200,
+        );
       }
       return c.json({ state: refusalOf(state) }, 200);
     },
@@ -96,6 +103,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       responses: {
         200: { description: 'Password set; sign in with POST /v1/sessions', content: { 'application/json': { schema: SetupLinkRedeemResponseSchema } } },
         403: errorResponse('CROSS_SITE_REQUEST'),
+        409: errorResponse('TERMS_VERSION_STALE — acceptedTermsVersion is missing or not the current terms; details.current names it'),
         410: errorResponse('SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid'),
         422: errorResponse('Validation failed (the password is 12 to 128 characters)'),
         429: errorResponse('Too many attempts from this address'),
@@ -103,17 +111,22 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     }),
     async (c) => {
       const now = await guard(c);
-      const { token, password } = c.req.valid('json');
+      const { token, password, acceptedTermsVersion, termsLocale } = c.req.valid('json');
       const tokenDigest = sessionDigest(settings.pepper, token);
       const { link, person } = await lookUp(token);
       const state = setupLinkState(link, person, now);
       if (state !== 'valid' || !link || !person) throw unusable(refusalOf(state));
+      // MUT-324 C4: after the link state (a dead link says why it is dead), before the slow hash.
+      if (acceptedTermsVersion !== terms.version) throw staleTerms(terms);
       // Hash before claiming, so the slow part never runs inside the transaction.
       const passwordHash = await passwordHasher.hash(password);
       const audit = await passwordSetAudit(c, person, link);
+      // The setup page is the portal: a cookie surface.
+      const acceptance = termsAcceptanceOf(terms, termsLocale ?? person.locale, 'cookie');
+      const termsAudit = await termsAcceptedAudit(store, person, acceptance, c.get('requestId'));
       // A fresh instant after the slow hash: the expiry check and passwordChangedAt must not predate a sign-in that ran meanwhile.
       const at = c.get('now')();
-      const redeemed = await store.accountSetup.redeem({ tokenDigest, passwordHash, at, audit });
+      const redeemed = await store.accountSetup.redeem({ tokenDigest, passwordHash, at, audit, terms: acceptance, termsAudit });
       if (!redeemed) {
         // Lost a race (another tab, a newer link, a disable, expiry during hashing): say what the link is now.
         const again = await lookUp(token);

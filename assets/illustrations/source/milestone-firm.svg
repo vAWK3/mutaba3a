@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+  <path id="ground" d="M24 140h112" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <g id="steps"><rect x="34" y="108" width="26" height="32" rx="4" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="67" y="88" width="26" height="52" rx="4" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><rect x="100" y="66" width="26" height="74" rx="4" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <g id="flag"><path d="M113 66V30" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M113 32h22l-6 8 6 8h-22" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <circle id="nuqta" cx="113" cy="22" r="6" fill="#E89960"/>
+</svg>

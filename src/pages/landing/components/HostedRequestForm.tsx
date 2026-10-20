@@ -3,7 +3,6 @@ import { Input, Select, Textarea } from '../../../components/ui/Input';
 import '../../../components/ui/Button.css';
 import { useLanguage, useT } from '../../../lib/i18n';
 import { isolate } from '../../../lib/utils';
-import { WEB_APP_URL } from '../../../content/download-config';
 import {
   DEVICES,
   FIELD_MAX_LENGTH,
@@ -25,7 +24,7 @@ type Status = 'idle' | 'sending' | 'success' | 'error';
 /** The address shown in the email error, so the expected shape is concrete. */
 const EXAMPLE_EMAIL = 'name@example.com';
 
-const T = 'landing.hostedOffer';
+const T = 'landing.requestAccount';
 
 /**
  * The hosted-account request form (MUT-186). Posts to Netlify Forms; the
@@ -102,8 +101,8 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
         >
           {t(`${T}.success.edit`)}
         </button>
-        <a href={WEB_APP_URL} className="hosted-success-free">
-          {t(`${T}.success.freeApp`)}
+        <a href="#top" className="hosted-success-free">
+          {t(`${T}.success.backHome`)}
         </a>
       </div>
     );
@@ -222,7 +221,7 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
         {t(`${T}.form.${sending ? 'sending' : status === 'error' ? 'retry' : 'send'}`)}
       </button>
       <p className="hosted-notice">
-        {t(`${T}.form.notice`)} <a href="/privacy">{t(`${T}.form.privacyLink`)}</a>
+        {t(`${T}.form.notice`)} <a href="/privacy">{t(`${T}.form.privacyLink`)}</a> · <a href="/terms">{t(`${T}.form.termsLink`)}</a>
       </p>
     </form>
   );

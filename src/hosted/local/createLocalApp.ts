@@ -1,6 +1,8 @@
 import { createApiShell } from '../../../server/src/app-shell.js';
 import { authenticate, buildRouteAccessIndex, type RouteAccessIndex, type SessionSettings } from '../../../server/src/auth/middleware.js';
 import { requestScopedStore } from '../../../server/src/auth/store-guard.js';
+import type { AttachmentStorage } from '../../../server/src/attachments/storage.js';
+import type { CachedFxRates } from '../../../server/src/fx-rates.js';
 import type { Logger } from '../../../server/src/logger.js';
 import { SlidingWindowRateLimiter } from '../../../server/src/rate-limit.js';
 import type { LedgerStore } from '../../../server/src/repositories/ports.js';
@@ -8,11 +10,16 @@ import { FX_ORGANIZATION_INDEPENDENT_ROUTES } from '../../../server/src/routes/f
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from '../../../server/src/routes/me.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from '../../../server/src/routes/portal-routes.js';
 import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from '../../../server/src/routes/profiles.js';
+import { LOCAL_URL_TTL_SECONDS } from './attachments.js';
 import { LOCAL_PEPPER } from './mintLocalSession.js';
 
 export interface CreateLocalAppOptions {
   store: LedgerStore;
   now: () => Date;
+  /** Receipt files on this device (MUT-287, `LocalAttachmentStorage`). Absent = 503 ATTACHMENTS_NOT_CONFIGURED, as an unconfigured server. */
+  attachments?: AttachmentStorage | null;
+  /** Reference rates read from GET /v1/public/fx-rates (MUT-287, D3). Absent = 503 FX_RATES_UNAVAILABLE. */
+  fxRates?: CachedFxRates | null;
 }
 
 /**
@@ -28,6 +35,7 @@ type LocalApp = ReturnType<typeof createApiShell>['app'];
 
 /** No rate limit meaningfully applies to one local person's one tab; generous enough that normal use never trips it. Present only because `authenticate()`'s options require a `RateLimiter`. */
 const LOCAL_RATE_LIMIT_PER_MINUTE = 10_000;
+
 
 /**
  * `createApiShell` only ever calls `.error(...)` on this (its `onError`
@@ -55,12 +63,13 @@ export function consoleLogger(): Logger {
  *  - no CSP / `no-store` / access-logging middleware: meaningless for an
  *    in-page `fetch`-shaped call that never leaves the tab.
  *
- * `attachments: null` and `fxRates: null` degrade exactly like an
- * unconfigured hosted deployment (503 `ATTACHMENTS_NOT_CONFIGURED` / 503
- * `FX_RATES_UNAVAILABLE`) — MUT-287 wires both for local mode.
+ * MUT-287 wires attachments (receipt files in `mut-local-blobs`) and FX
+ * rates (`GET /v1/public/fx-rates`, cached in the page). Left out, either one
+ * degrades exactly like an unconfigured hosted deployment (503
+ * `ATTACHMENTS_NOT_CONFIGURED` / 503 `FX_RATES_UNAVAILABLE`).
  */
 export function createLocalApp(options: CreateLocalAppOptions): LocalApp {
-  const { store, now } = options;
+  const { store, now, attachments = null, fxRates = null } = options;
   const { app } = createApiShell({ now, logger: consoleLogger() });
 
   const scopedStore = requestScopedStore(store);
@@ -86,7 +95,8 @@ export function createLocalApp(options: CreateLocalAppOptions): LocalApp {
     }),
   );
 
-  const deps: PortalRouteDependencies = { store: scopedStore, attachments: { storage: null, urlTtlSeconds: 900 }, fxRates: null };
+  // MUT-324: no terms apply signed out, so /v1/me reports `terms: null` and the portal never asks.
+  const deps: PortalRouteDependencies = { store: scopedStore, attachments: { storage: attachments, urlTtlSeconds: LOCAL_URL_TTL_SECONDS }, fxRates, terms: null };
   for (const route of PORTAL_ROUTES) app.route('/', route(deps));
 
   return app;

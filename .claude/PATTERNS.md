@@ -2524,3 +2524,41 @@ A hint that appears while typing ("Choose a client first to add a matter.") is r
 
 ### Pattern: A drawer holds Save while a picker is still adding (MUT-318 reconcile)
 A picker that creates on pick (Add «name») reports `onCreatingChange(true/false)` around its mutation (`finally`). The drawer's `usePendingPicks()` counts them: `pending` drives Save's look, `guard(handleSubmit(onSubmit))` drops a submit while any is in flight, before validation. The guard reads a ref, not state, because the picker reports done just before EntityTypeahead submits for an Enter held during the save, ahead of React's re-render. First instance: the hosted IncomeCaptureDrawer and ExpenseDrawer; the local IncomeDrawer's `clientCreating` is the same idea.
+
+## Patterns added by MUT-324 (2026-10-19, ADR-102)
+
+### Pattern: A legal text people accept is a frozen, versioned file, fingerprinted where it's accepted
+Each version is its own content file, never edited once released. The side that records acceptance (the server) pins the version and the sha256 of each language's file, and stores the hash with every acceptance. A root test keeps the pin and the files in step, so a changed text that kept its version fails CI.
+
+### Pattern: Prove a static file is live with a build-emitted manifest, not a page fetch
+Netlify's SPA fallback answers 200 for every path, so a release guard can't fetch a page to learn whether it exists. The web build emits a small JSON manifest (`legal/terms-versions.json`), like `__forms.html`. The guard (`server/src/scripts/check-terms-live.ts`, run by `scripts/preflight.sh server` before the version bump and again by `deploy.sh`) reads that file and compares it to what the release is about to name.
+## Patterns added by MUT-287 (2026-10-19, ADR-100 decision 11)
+
+### Pattern: Two local databases are kept consistent by order, not by one transaction
+When records (`mut-local`) and their files (`mut-local-blobs`) live apart, never delete a file before the records that stop naming it are saved: stage removals during the request and flush them inside the same lock right after the save; on Restore add the new files, save, then sweep files no live record names; sweep on boot for whatever a crash left. A crash at any step leaves records whose files all exist. First instance: `LocalAttachmentStorage` + `transport.ts`, `restore.ts` `applyRestore`.
+
+### Pattern: A Node stand-in for server modules is bound per module, never on `globalThis`
+Server code that runs in the page (`server/src` in the local chunk) gets its Node globals as module bindings injected at build time (`scopeServerBufferShim`, like the `node:crypto` alias), not as a global: libraries sniff `typeof Buffer` and take a Node path a partial stand-in can't serve (jszip did). Verify such paths in a real browser (release-QA): unit tests run on Node's real globals and can't see the difference.
+
+### Pattern: Every local IndexedDB database opens through `LocalDatabase` (MUT-287 review D12)
+A database the page owns must let go when a newer build upgrades it (`onversionchange`: close, then refuse further use so the reload screen shows) and must not hang when an older tab won't (`onblocked` rejects). Both rules live in `src/hosted/local/idb.ts`; `persistence.ts` and `blobStore.ts` use it, and so must any later local database. Tabs running a build are the old tabs of the next one.
+
+## Patterns added by MUT-336 (2026-10-19)
+
+### Pattern: Generated output is pure logic + a thin fs wrapper, named `<name>.ts` / `check-<name>.ts`
+Following `scripts/i18n-keys.ts` + `scripts/check-i18n-keys.ts`: the logic (parsing, naming, codegen, drift-detection) takes and returns plain data — strings, `Record<string, string>` — never touches `node:fs` itself, so `scripts/__tests__/*.test.ts` exercises the exact logic the real run uses, with vitest picking the test up automatically (it only globs `scripts/**/*.test.ts`, not `.mjs` — `validate_illustrations.mjs`'s sibling `.test.mjs` predates this and isn't wired into any script, a pre-existing gap, not a convention to copy). The CLI file does only `readdirSync`/`readFileSync`/`writeFileSync` and exits non-zero on error. First instance: `scripts/icon-set.ts` + `scripts/generate-icons.ts` / `scripts/validate-icon-set.ts` (MUT-336).
+
+### Pattern: A generated directory is wholly owned — nothing in it is hand-edited, ever
+`src/components/icons/generated/` (barrel, shared types module, every component) is rewritten in full by its generator every run; the validator (`icons:check`) regenerates each source in memory and diffs it against what's on disk to catch hand-edited-then-forgotten-to-regenerate drift, plus orphaned generated files with no matching source. The generator itself computes and validates everything before writing anything — one bad input fails the whole run with nothing written, never a silent partial regenerate. First instance: MUT-336's icon codegen.
+
+### Pattern: A named sub-part survives codegen as `data-part`, never a raw `id`
+A source asset's named sub-element (`id="nuqta"`) exists for something downstream to target one part of it later (an animation runtime, in this case). Emitting it as a raw DOM `id` breaks the instant the same generated component renders twice on one page — two elements can't share an `id`, and a global `id` selector would just find the first. Emit `data-part="<name>"` instead and scope the lookup to one instance's root (`rootRef.current.querySelector('[data-part="nuqta"]')`). First instance: the icon codegen pipeline (MUT-336); applies to any future SVG/asset codegen with named internal parts.
+
+## Patterns added by MUT-337 (2026-10-19)
+
+### Pattern: A playful/restrained split is one transform through one of two named curves, never two engines
+When a feature needs a "playful" and a "restrained" version of the same motion, don't reach for two different animation mechanisms (e.g. a bounce library for one, CSS for the other) — play the identical transform through a different easing curve. `ICON_OVERSHOOT_EASE`/`ICON_RESTRAINED_EASE` (`src/lib/motion/iconMotion.ts`) are the exact four control points as Flutter's `MMotion.overshoot`/`.spring` (`mutaba3a_theme.dart:74-76`) — a cubic-bezier with y > 1 overshoots before settling (playful); one that stays within [0,1] doesn't (restrained). Proven in `iconMotion.test.ts`: the playful preset's live value is asserted `> 1` at some point mid-flight, not just "which constant was passed." First instance: MUT-337's icon save-feedback prototype.
+
+### Pattern: Before adding a dependency, check if this app already rejected its category (ADR search)
+MUT-337 almost evaluated Rive from scratch; `.claude/DECISIONS.md`'s ADR-079/080 had already rejected `lottie-web` for the same shape of reason (new runtime, new CSP grant, new asset pipeline, to buy capability a simpler existing tool already covers) — the comparison this time started from "does our existing CSP-proven, zero-new-dependency motion tooling (`motion`, ADR-044) already cover this" instead of re-litigating general-purpose-engine tradeoffs. Search `DECISIONS.md` for the capability category (not the specific library name) before comparing candidates for anything animation/media/rendering-runtime shaped.
+

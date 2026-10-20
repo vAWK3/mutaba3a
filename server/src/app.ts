@@ -11,6 +11,7 @@ import { SCOPES } from './auth/scopes.js';
 import { requestScopedStore } from './auth/store-guard.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from './auth/users.js';
 import { ERROR_CODES } from './errors.js';
+import { CURRENT_TERMS, type CurrentTerms } from './legal.js';
 import type { CachedFxRates } from './fx-rates.js';
 import type { Logger } from './logger.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
@@ -24,7 +25,7 @@ import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } f
 import { accountSetupRoutes } from './routes/account-setup.js';
 import { auditRoutes } from './routes/audit.js';
 import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/profiles.js';
-import { FX_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/fx-rates.js';
+import { FX_ORGANIZATION_INDEPENDENT_ROUTES, PUBLIC_FX_POLICY, publicFxRateRoutes } from './routes/fx-rates.js';
 import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from './inbox/routes-keys.js';
 import { inboxRoutes } from './routes/inbox.js';
 import { ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, entriesRoutes } from './routes/entries.js';
@@ -40,7 +41,7 @@ import { healthRoutes } from './routes/health.js';
 import { importRoutes } from './routes/import.js';
 import { integrationRoutes } from './routes/integration.js';
 import { wellKnownRoutes, type AppAssociationConfig } from './routes/well-known.js';
-import { CaptureSourceSchema, CONFLICT_REASONS, VALIDATION_REASONS } from './schemas.js';
+import { CaptureSourceSchema, CONFLICT_REASONS, TermsStatusSchema, VALIDATION_REASONS } from './schemas.js';
 import { DAYS_IN_PAST_LIMIT } from './agreements/compose.js';
 
 export interface AppDependencies {
@@ -57,6 +58,8 @@ export interface AppDependencies {
   attachmentUrlTtlSeconds?: number;
   /** argon2id hasher for user passwords (MUT-37). Defaults to the OWASP minimum profile; production passes the configured one. */
   passwordHasher?: PasswordHasher;
+  /** MUT-324: the terms people accept. Defaults to CURRENT_TERMS; a test passes a later version to act out a release that bumps them. */
+  terms?: CurrentTerms;
   /** Browser sessions (MUT-38). Production passes the configured pepper and limits; tests get a random pepper and the defaults. */
   sessions?: SessionSettings;
   /** Sign-in lockout state (in process, one instance until TD-017). */
@@ -69,6 +72,8 @@ export interface AppDependencies {
   appAssociation?: AppAssociationConfig | null;
   /** Reference exchange rates (MUT-228), cached per instance. Null or absent = GET /v1/fx-rates answers 503 FX_RATES_UNAVAILABLE. */
   fxRates?: CachedFxRates | null;
+  /** Per-IP budget for the anonymous GET /v1/public/fx-rates (MUT-287). Defaults to PUBLIC_FX_POLICY. */
+  publicFxIpLimiter?: RateLimiter;
   /** MUT-293 minimum app version gate. Null or absent = no platform gated (every floor/recommended undefined, check not disabled). */
   minimumBuild?: MinimumBuildConfig | null;
 }
@@ -119,7 +124,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.36.0-mut293';
+export const API_VERSION = '1.38.0-mut324';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -146,6 +151,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   });
 
   const passwordHasher = deps.passwordHasher ?? createArgon2Hasher(ARGON2_MINIMUMS);
+  const terms = deps.terms ?? CURRENT_TERMS;
   // Every route reaches the ledger through the guard authenticate() sets (ADR-037 decision 7); authenticate itself reads the base store.
   const store = requestScopedStore(deps.store);
   const sessions = deps.sessions ?? defaultSessionSettings();
@@ -180,6 +186,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // use it meets as the component; Payment's nullable response field made the shared component nullable, and every
   // request body that $refs it (income, settle, expense, inbox) advertised a null the server rejects.
   app.openAPIRegistry.register('CaptureSource', CaptureSourceSchema);
+  // MUT-324 review: the same for TermsStatus. Me.terms is nullable; the accept route's 200 is not.
+  app.openAPIRegistry.register('TermsStatus', TermsStatusSchema);
   app.route('/', healthRoutes(store, deps.version));
   app.route(
     '/',
@@ -189,6 +197,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       settings: sessions,
       throttle: signInThrottle,
       ipLimiter: signInIpLimiter,
+      terms,
     }),
   );
   app.route(
@@ -199,10 +208,11 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       settings: sessions,
       throttle: signInThrottle,
       ipLimiter: signInIpLimiter,
+      terms,
     }),
   );
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
-  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle }));
+  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms }));
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', importRoutes(store));
   app.route('/', vatRoutes(store));
@@ -219,10 +229,13 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     store,
     attachments: { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 },
     fxRates: deps.fxRates ?? null,
+    terms,
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
+  // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
+  app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
-  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions }));
+  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms }));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {

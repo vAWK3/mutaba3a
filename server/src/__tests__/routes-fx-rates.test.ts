@@ -4,6 +4,7 @@ import { createApp } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
 import { CachedFxRates, USD_PEGS, type EcbSnapshot, type FxRateSource } from '../fx-rates.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
+import { PUBLIC_FX_POLICY } from '../routes/fx-rates.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
 
@@ -26,7 +27,7 @@ const json = (body: unknown, headers: Record<string, string> = {}) => ({
 });
 
 /** `fxRates: 'absent'` passes null, as an app with no rate source configured. */
-function harness(options: { providerDown?: boolean; fxRates?: 'absent' } = {}) {
+function harness(options: { providerDown?: boolean; fxRates?: 'absent'; publicPerMinute?: number | 'default' } = {}) {
   const provider = { calls: 0, down: options.providerDown ?? false };
   const clock = { now: NOW };
   const source: FxRateSource = {
@@ -46,6 +47,7 @@ function harness(options: { providerDown?: boolean; fxRates?: 'absent' } = {}) {
     now: () => clock.now,
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 },
     fxRates: options.fxRates === 'absent' ? null : new CachedFxRates({ source, ttlMs: 4 * 60 * 60 * 1000, now: () => clock.now }),
+    ...(options.publicPerMinute === 'default' ? {} : { publicFxIpLimiter: new SlidingWindowRateLimiter(options.publicPerMinute ?? 1_000_000) }),
   });
   return { app, provider, clock };
 }
@@ -183,5 +185,59 @@ describe('GET /v1/fx-rates', () => {
     const res = await rates(h, '?base=ILS', s.asDevice);
     expect(res.status).toBe(503);
     expect((await read(res)).error.code).toBe('FX_RATES_UNAVAILABLE');
+  });
+});
+
+/** MUT-287 (MUT-285 D3, ADR-097 §7): the raw ECB snapshot, anonymous, for the portal's signed-out FX source. */
+describe('GET /v1/public/fx-rates', () => {
+  const publicRates = (h: ReturnType<typeof harness>, headers: Record<string, string> = {}) => h.app.request('/v1/public/fx-rates', { headers });
+
+  it('answers with no session and no profile header: the cached ECB snapshot, not cross rates', async () => {
+    const h = harness();
+    const res = await publicRates(h);
+    expect(res.status).toBe(200);
+    expect(await read(res)).toEqual({ rateDate: '2026-10-15', perEur: { USD: 1.1208, ILS: 3.4769 }, fetchedAt: '2026-10-15T14:02:11.000Z', source: 'live' });
+  });
+
+  it('reads the same cache as /v1/fx-rates, so it never adds a provider call', async () => {
+    const h = harness();
+    const s = await signedIn(h);
+    expect((await publicRates(h)).status).toBe(200);
+    expect((await rates(h, '?base=USD', s.asDevice)).status).toBe(200);
+    expect(h.provider.calls).toBe(1);
+  });
+
+  it('answers 503 FX_RATES_UNAVAILABLE when the app has no rate source configured', async () => {
+    const h = harness({ fxRates: 'absent' });
+    const res = await publicRates(h);
+    expect(res.status).toBe(503);
+    expect((await read(res)).error.code).toBe('FX_RATES_UNAVAILABLE');
+  });
+
+  it('answers 503 FX_RATES_UNAVAILABLE when the provider is down and nothing is cached', async () => {
+    const h = harness({ providerDown: true });
+    const res = await publicRates(h);
+    expect(res.status).toBe(503);
+    expect((await read(res)).error.code).toBe('FX_RATES_UNAVAILABLE');
+  });
+
+  it('limits at PUBLIC_FX_POLICY by default, when the app is given no limiter of its own', async () => {
+    const h = harness({ publicPerMinute: 'default' });
+    const from = { 'x-forwarded-for': '203.0.113.50' };
+    expect(PUBLIC_FX_POLICY.ipPerMinute).toBe(120);
+    for (let i = 0; i < PUBLIC_FX_POLICY.ipPerMinute; i += 1) expect((await publicRates(h, from)).status).toBe(200);
+    expect((await publicRates(h, from)).status).toBe(429);
+  });
+
+  it('limits each address per minute with 429 RATE_LIMITED and Retry-After', async () => {
+    const h = harness({ publicPerMinute: 2 });
+    const from = { 'x-forwarded-for': '203.0.113.9' };
+    expect((await publicRates(h, from)).status).toBe(200);
+    expect((await publicRates(h, from)).status).toBe(200);
+    const res = await publicRates(h, from);
+    expect(res.status).toBe(429);
+    expect(res.headers.get('retry-after')).toMatch(/^\d+$/);
+    expect((await read(res)).error.code).toBe('RATE_LIMITED');
+    expect((await publicRates(h, { 'x-forwarded-for': '198.51.100.4' })).status).toBe(200);
   });
 });

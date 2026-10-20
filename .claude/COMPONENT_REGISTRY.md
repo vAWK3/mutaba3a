@@ -1696,6 +1696,30 @@ import {
 <IconButton icon={<CloseIcon />} label="Close" />
 ```
 
+### Generated icons (MUT-336)
+
+**Location**: `src/components/icons/generated/` — a second, separate barrel.
+Every file in it, including `index.ts` and `types.ts`, is produced by
+`npm run icons:generate` from `assets/icons/source/*.svg` (the MUT-335
+canonical set) and overwritten on every run — never hand-edit anything here.
+`npm run icons:check` fails on missing/stale/orphaned drift between source and
+generated output. Full flow: `assets/icons/README.md`. Logic:
+`scripts/icon-set.ts` (tested directly, `scripts/__tests__/icon-set.test.ts`).
+
+These are **not yet consumed anywhere except one pilot** (`LanguageIcon` in
+`SettingsPage.tsx`) — migrating the 16 hand-written components above, or the
+scattered inline SVGs (`XIcon`, `MoreIcon`, `PlusIcon` duplicates, etc.), to
+the generated set is explicitly out of MUT-336's scope.
+
+```tsx
+import { LanguageIcon } from '../../components/icons/generated';
+<LanguageIcon size={16} className="settings-label-icon" />
+```
+
+A named sub-part survives codegen as `data-part="<name>"` (never a raw `id` —
+collides across repeated instances of the same icon on one page), for
+MUT-337's future animation runtime to target.
+
 ---
 
 ## Component Ownership
@@ -1751,12 +1775,13 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `components/Drawer.tsx` (MUT-44) | `Drawer` (title/onClose/children/footer/closeLabel; Escape + overlay-click close) on the app's `.drawer`/`.drawer-overlay` classes from shared `src/index.css` — not an import of `src/components/drawers/Drawer.tsx` | `ExpenseDrawer` |
 | `components/ExpenseDrawer.tsx` (MUT-44) | `ExpenseDrawer` (create/edit, `ExpenseFormFields` + pickers + vendor text + `ReceiptUploader`, MUT-42 error-code → field/toast mapping) | `ExpensesList` |
 | `components/ClientPicker.tsx`, `ProjectPicker.tsx` (MUT-44) | `EntityTypeahead` fed by the read-only `useCustomerDirectory`/`useProjectDirectory`; no create-new branch (MUT-42 D6: existing org records only) | `ExpenseDrawer` |
-| `components/ReceiptUploader.tsx` (MUT-44) | `ReceiptUploader` (start → PUT the signed URL → complete; PDF/JPEG/PNG, 10 MB, 10-receipt cap counting only READY) | `ExpenseDrawer` (edit mode only) |
+| `components/ReceiptUploader.tsx` (MUT-44) | `ReceiptUploader` (start → PUT the signed URL → complete; PDF/JPEG/PNG, 10 MB, 10-receipt cap counting only READY). Signed out (MUT-287) the server signs `local-blob:` and the file goes to this device (`localFiles.put`); download passes the filename | `ExpenseDrawer` (edit mode only) |
+| `data/download.ts` (MUT-287) | `downloadNavigator.open(url, filename)` (signed URL: top-level navigation; `local-blob:`: object URL + `<a download>`), `localFiles.put`/`read` (the local backend's receipt files) | `ReceiptUploader`, `DocumentsList`, `expenseQueries.putToSignedUrl` |
 | `components/expenseApiErrors.ts` (MUT-44) | `applyExpenseApiError` (MUT-42's `VALIDATION_FAILED`/`CONFLICT` reasons → `setError(..., {type:'manual'})` or a toast) | `ExpenseDrawer` |
 | `components/Brand.tsx`, `Icons.tsx` | `Wordmark`, `LanguageSwitch` (explicit, persisted), `InfoIcon`, `AlertIcon`, `LockIcon` | sign-in, shell |
 | `shell/` | `HostedShell` (nav now incl. Expenses, MUT-44), `ProfileSwitcher`, `UserMenu`, `usePopover` (the portal's twin of `useMenuButton`, which it may not import) | `ProfileLayout` |
 | `session/` | `meQuery`, `profileKey(id, …)`, `useMe`, `useProfile`, `AuthGate`, `HomeRedirect`, `CaptureRedirect` (MUT-111, shares `FirstProfileRedirect` with `HomeRedirect`), `ProfileLayout`, `SessionBridge`, `endSession`, `useSignOut`, `safeNext`, `announceSignedOut` / `onSignedOutElsewhere` | router |
-| `data/queries.ts` | query hooks (`useOrganizationSummary`, `useCustomerSummary`, `useCustomer`, `useCustomerDirectory`, `useProjectDirectory`, `useReceivables`, `usePayments`, `useAttachments`), `useCursorList` (exported for reuse), filter models and parsers, `downloadNavigator` | views, router, `data/expenseQueries.ts` |
+| `data/queries.ts` | query hooks (`useOrganizationSummary`, `useCustomerSummary`, `useCustomer`, `useCustomerDirectory`, `useProjectDirectory`, `useReceivables`, `usePayments`, `useAttachments`), `useCursorList` (exported for reuse), filter models and parsers | views, router, `data/expenseQueries.ts` |
 | `components/ConversionDrawer.tsx` (MUT-161, edit/delete MUT-194) | `ConversionDrawer` (`mode?: 'create' \| 'edit'`, `conversionId`, `onDeleted`; two legs + implied rate; edit prefills from `useConversion`, PATCHes both legs at the loaded version, on 409 refetches and refills via a reset effect keyed on id + version; Delete confirms with `hosted.conversions.drawer.deleteConfirm` naming both legs via `formatDecimal`; a load error shows `Unreachable`) | `ConversionsList` |
 | `components/conversionFormSchema.ts` (MUT-161, JOD MUT-194) | `conversionFormSchema` (USD/ILS/EUR/JOD, per-leg decimals by `currencyExponent`, SAME_CURRENCY), `CURRENCY_OPTIONS`, `impliedRate` | `ConversionDrawer` |
 | `data/conversionQueries.ts` (MUT-161, MUT-194) | `useConversions`, `useConversion`, `conversionKey`, `useCreateConversion`, `useUpdateConversion`, `useDeleteConversion` | `ConversionsList`, `ConversionDrawer` |
@@ -2037,7 +2062,7 @@ Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
 **Purpose**: the memoized lazy local backend (`@mut/local-backend`), for UI that needs it directly (Your data, cross-tab refresh). A failed boot is forgotten so the next call retries. Tests: `api/__tests__/client-mode.test.ts`.
 
 ### YourDataDrawer — `src/hosted/components/YourDataDrawer.tsx`
-**Purpose**: Download my records / Restore from file, signed out only, opened by `?yourData=true` from the account menu (`AccountDrawers`). Tests: `session/__tests__/local-mode.test.tsx` › Your data.
+**Purpose**: Download my records (since MUT-287 a `.zip`: records.json + receipt files) / Restore from file (a zip, or a MUT-286 `.json`), signed out only, opened by `?yourData=true` from the account menu (`AccountDrawers`). Tests: `session/__tests__/local-mode.test.tsx` › Your data.
 
 ### ReloadToContinue — `src/hosted/pages/auth/BootScreens.tsx`
 **Purpose**: the D1 screen when another tab saved this device's records with a newer build (`ApiError` code `LOCAL_FORMAT_TOO_NEW`), shown by `AuthGate`.
@@ -2060,3 +2085,22 @@ Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
 ### ClientPicker `canCreate` — `src/hosted/components/ClientPicker.tsx` (extended, MUT-286)
 **Purpose**: the portal's client field now offers "Add client: «name»" when `canCreate` (`canAddClient(profile)`, `data/incomeAffordances.ts`) and no client has the typed name; picking creates it through `useCreateCustomer` (`data/customerQueries.ts`) and picks it. Without `canCreate` it is unchanged. Used by IncomeCaptureDrawer and ExpenseDrawer (`canAddClient` prop). Tests: `components/__tests__/ClientPicker.test.tsx`.
 
+## Terms of service — MUT-324 (ADR-102)
+
+### LegalPage — `src/pages/landing/LegalPage.tsx` (new, extracted from PrivacyPolicyPage)
+Landing chrome plus a dated, titled-sections legal document. `sections: { title, paragraphs[] }[]`, optional `updated`/`intro`, `after` slot, `loading` (sets `aria-busy`), and `textLanguage` (sets lang/dir on the text when it differs from the page's, as in /terms?lang; MUT-324 review). Used by `PrivacyPolicyPage` and `TermsPage`. Usage: `<LegalPage title={…} updated={…} intro={…} sections={…} />`. Tests: `PrivacyPolicyPage.test.tsx`, `TermsPage.test.tsx`.
+
+### TermsPage — `src/pages/landing/TermsPage.tsx`
+`/terms` (latest) and `/terms/<version>`: loads the frozen text through `src/content/legal/terms.ts` (`loadTerms`, `TERMS_VERSIONS`, `LATEST_TERMS_VERSION`, `termsVersionOf`, `termsLanguageOf`), in the page language unless a portal link names one (`?lang=en|ar`). That language applies to the text only (LegalPage `textLanguage`) and is never stored. An unknown version says so and links `/terms`, keeping `?lang`.
+
+### termsManifest — `src/content/legal/termsManifest.ts` (Node only)
+Builds `/legal/terms-versions.json` (version + sha256 per language) for the web build's `legalTermsManifest()` Vite plugin and the pin test. Never import it from page code.
+
+### TermsUpdatePage — `src/hosted/pages/auth/TermsUpdatePage.tsx`
+The portal's "We've updated our terms" step, rendered by `AuthGate` (prop `version` only) when `Me.terms.accepted === false`: read the version (new tab, `?lang` = page language), I agree (`api.acceptTerms`), Sign out, and the support line (a mailto link). It keeps the version it showed: a different one from a /v1/me refetch, or named by a 409 `TERMS_VERSION_STALE`, replaces it and shows "the terms changed". A success cancels in-flight /v1/me fetches and writes through an updater.
+
+### termsHref / SUPPORT_EMAIL — `src/hosted/terms.ts`
+`termsHref(language, version?)` reads the `__TERMS_URL__` build define (ADR-076 typeof guard; '' when unset) and always adds `?lang=<language>`, the language the acceptance records. Used by SetupPage, TermsUpdatePage, UserMenu and SignInPage.
+
+### termsAcceptanceOf / termsAcceptedAudit — `server/src/terms-acceptance.ts`
+The acceptance row for the current terms (sha256 by locale, surface from `Session.kind`), and its `user.terms_accepted` audit on owned profiles only. Shared by the setup redeem and `POST /v1/me/terms-acceptance`.

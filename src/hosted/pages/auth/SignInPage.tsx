@@ -1,7 +1,7 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useT } from '../../../lib/i18n/core';
+import { useLanguage, useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import { api, ApiError, retryMinutes } from '../../api/client';
 import { LanguageSwitch, Wordmark } from '../../components/Brand';
@@ -9,6 +9,7 @@ import { ME_KEY, meQuery } from '../../session/me';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
 import { safeNext } from '../../session/safeNext';
 import { setMode, useMode } from '../../session/mode';
+import { termsHref } from '../../terms';
 import { CheckingSession } from './BootScreens';
 import { AlertIcon, InfoIcon } from '../../components/Icons';
 
@@ -62,6 +63,7 @@ export function SignInPage({ next, reason }: SignInPageProps) {
 
 function SignInForm({ next, reason }: SignInPageProps) {
   const t = useT();
+  const { language } = useLanguage();
   const tp = useTp();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -124,6 +126,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
 
   const pending = signIn.isPending;
   const offerUrl = hostedOfferHref();
+  const termsLink = termsHref(language);
   const bannerId = `${ids}-banner`;
   const describedBy = (field: string, error?: FieldError) =>
     [error ? `${ids}-${field}-error` : null, banner ? bannerId : null].filter(Boolean).join(' ') || undefined;
@@ -224,6 +227,13 @@ function SignInForm({ next, reason }: SignInPageProps) {
         {offerUrl && (
           <p className="hp-help">
             {t('hosted.auth.request.lead')} <a href={offerUrl}>{t('hosted.auth.request.link')}</a>
+          </p>
+        )}
+        {termsLink && (
+          <p className="hp-help">
+            <a href={termsLink} target="_blank" rel="noopener">
+              {t('hosted.terms.link')}
+            </a>
           </p>
         )}
         <p className="hp-help">

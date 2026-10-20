@@ -53,7 +53,7 @@ export function HostedDevicesMock() {
       <div className="hosted-devices-phone landing-mock">
         <OwedSummary />
       </div>
-      <p className="hosted-devices-caption">{t('landing.hostedOffer.devices.caption')}</p>
+      <p className="hosted-devices-caption">{t('landing.phone.devicesCaption')}</p>
     </div>
   );
 }
