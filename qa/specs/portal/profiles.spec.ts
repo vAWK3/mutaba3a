@@ -210,3 +210,42 @@ test('A Malafat-fed profile cannot be edited here, and at the cap New profile sa
     await expect(page.getByRole('dialog', { name: 'Haddad & Partners' })).toHaveCount(0);
   });
 });
+
+test('The owner of a Business profile asks for firm features; it reads Requested, and a Personal profile never offers it', { tag: '@portal.profiles.firm-request' }, async ({ page, step }) => {
+  const home = { ...office(OFFICE_B, 'Home'), type: 'PERSONAL' as const };
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Khatib Law'), home, malafatFirm()] });
+  const list = page.getByRole('dialog', { name: 'Profiles' });
+  const pane = page.getByRole('dialog', { name: 'Khatib Law' });
+  const section = pane.getByRole('region', { name: 'Use this profile for a firm' });
+
+  await step('Open Manage profiles and choose the Personal profile: no firm request', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients`);
+    await openManage(page);
+    await list.getByRole('button', { name: /^Home/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Home' }).getByLabel('Name')).toHaveValue('Home');
+    await expect(page.getByText('Use this profile for a firm')).toHaveCount(0);
+  });
+
+  await step('Go back and choose the Business profile: it offers firm features', async () => {
+    await page.getByRole('button', { name: 'All profiles' }).click();
+    await list.getByRole('button', { name: /^Khatib Law/ }).click();
+    await expect(section).toContainText('Firm features are tools for running an office');
+    await expect(section.getByRole('button', { name: 'Request firm features' })).toBeVisible();
+  });
+
+  await step('Request firm features: sent once with an Idempotency-Key, then Requested', async () => {
+    await section.getByRole('button', { name: 'Request firm features' }).click();
+    await expect(section).toContainText("Firm features show up here once they're turned on.");
+    await expect(section).toContainText('Requested on');
+    await expect(section.getByRole('button', { name: 'Request firm features' })).toHaveCount(0);
+    const requests = api.calls('POST', new RegExp(`^/v1/profiles/${OFFICE_A}/firm-request$`));
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.headers['idempotency-key']).toBeTruthy();
+  });
+
+  await step('Reopen the portal and the same profile: still Requested', async () => {
+    await page.goto(`/p/${OFFICE_A}/clients?editProfile=${OFFICE_A}`);
+    await expect(section).toContainText('Requested on');
+    await expect(section.getByRole('button', { name: 'Request firm features' })).toHaveCount(0);
+  });
+});

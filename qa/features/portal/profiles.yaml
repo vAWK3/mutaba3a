@@ -67,3 +67,18 @@ features:
       - New profile is aria-disabled with "You've used 6 of 6 profiles" and opens nothing
       - The Malafat firm's row is not a button and reads "Managed in Malafat. Change it there."; New profile is aria-disabled there too
       - The link shows the profile list, not an edit pane
+  - id: firm-request
+    title: The owner of a Business profile asks for firm features from its edit pane; it then reads Requested, and a Personal profile never offers it (MUT-300)
+    tier: secondary
+    paths:
+      - src/hosted/components/FirmRequestSection.tsx
+    steps:
+      - Open Manage profiles and choose a Personal profile you own
+      - Go back and choose a Business profile you own
+      - Request firm features
+      - Reopen the portal and the same profile
+    expect:
+      - The Personal profile's pane has no firm request
+      - The Business profile's pane offers "Use this profile for a firm" with Request firm features
+      - POST /v1/profiles/{id}/firm-request goes once with an Idempotency-Key, and the pane reads "Requested on … Firm features show up here once they're turned on." with no button
+      - After the reload it still reads Requested

@@ -21,6 +21,11 @@ export interface StubProfile {
   type: 'BUSINESS' | 'PERSONAL' | null;
   owned: boolean;
   writerOfRecord: 'MALAFAT' | null;
+  /** MUT-300: firm features on (the caller is OWNER unless `role` says otherwise); off when absent. */
+  firm?: boolean;
+  role?: 'OWNER' | 'BOOKKEEPER' | 'SUBMITTER';
+  /** MUT-300: the owner's pending request for firm features. */
+  firmRequestedAt?: string | null;
 }
 
 export const office = (id: string, name: string): StubProfile => ({ id, name, type: 'BUSINESS', owned: true, writerOfRecord: null });
@@ -43,6 +48,9 @@ export function hostedProfile(p: StubProfile) {
     owned: p.owned,
     type: p.type,
     version: 1,
+    firm: p.firm ?? false,
+    role: p.firm ? (p.role ?? 'OWNER') : null,
+    firmRequestedAt: p.owned ? (p.firmRequestedAt ?? null) : null,
   };
 }
 
