@@ -3176,6 +3176,12 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Release-QA `@portal.income.matter-fills-client` | client chips; picking Client 2's Retainer fills Client 2; switching to Client 1 empties Matter |
 | Reconcile additions (2026-10-19) | `EntityTypeahead.test.tsx`: no second pick while one saves (list shut on ArrowDown/refocus); cascade flash comes off after its span and replays. `useClientProjectCascade.test.tsx`: `onAutoFill` with the default owner, not when the client already owns it. `IncomeCaptureDrawer.test.tsx`: Save held while a matter is added; Enter held still saves once it lands; CURRENCY_MISMATCH under Matter; Malafat no-Add check now waits for the open list (was vacuous). `ExpenseDrawer.test.tsx`: Save held while a matter is added; picking a matter fills the client, changing the client empties it. `incomeApiErrors.test.ts`: CURRENCY_MISMATCH → `matterCurrency` with the matter's currency. Release-QA `@portal.income.add-matter`: the Malafat step waits for the open list before asserting no Add row |
 
+## MUT-356 — /privacy honours ?lang, like /terms (2026-10-20)
+
+- **Landing:** `src/content/legal/__tests__/language.test.ts` (`legalLanguageOf`: en, ar, among other params; absent, empty, unknown, upper case and other names ignored). `PrivacyPolicyPage.test.tsx` `?lang` (English text on an Arabic site and the reverse, `lang`/`dir` on the text, `<html dir>` and the stored language unchanged; an unknown value falls back to the page language).
+- **Release-QA:** `@web.legal.privacy-linked-language` (new); `@web.legal.links` now reads the hosted-accounts heading from the translation files (it had gone stale when the heading became "Where your records live").
+- **Phone (mutaba3a-flutter):** `legal_links_test.dart` (`privacyUri` `?lang=en|ar`); `ios.settings.terms-link` taps Privacy in English and in Arabic.
+
 ## MUT-354 — The client release on each terms acceptance (2026-10-20)
 
 - **Server:**

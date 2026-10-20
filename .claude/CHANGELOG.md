@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — MUT-356: /privacy honours ?lang, like /terms
+
+**Why:** the phone's Settings › Privacy policy (MUT-344) opens `<site>/privacy`, which opened in the landing's stored language (Arabic by default, ADR-077), so English phone users read the Arabic policy.
+
+### Changed
+- `/privacy?lang=en|ar` shows the policy text in that language, marked with its own `lang`/`dir`; the chrome stays in the page language and nothing is stored, as on `/terms` (`PrivacyPolicyPage` takes `search`, `main.tsx` passes it). An unknown value is ignored.
+
+### Technical
+- `src/content/legal/language.ts`: `legalLanguageOf` + `LegalLanguage`, lifted from `termsLanguageOf` (removed) and shared by both legal pages.
+- `useTIn(language)` in `src/lib/i18n/context.tsx`: a translator for a text's own language that touches no state.
+- Release-QA: new `web.legal.privacy-linked-language`; the stale hosted-accounts heading in `@web.legal.links` now comes from the translation files.
+- No portal change: no portal surface links to `/privacy`.
+- Phone half (mutaba3a-flutter): `privacyUri(languageCode:)` adds `?lang`.
+
 ## [Unreleased] - 2026-10-20 — The custom domain is one input (MUT-326, ADR-155)
 
 **Why:** The domain must be live before the pilot (MUT-322) but isn't chosen yet. The run.app and netlify.app hosts were written into vite, the bundle allowlist, the terms release guard, provisioning, Sentry tfvars and tests, so a move meant hunting for them. Now picking the domain is one edit, and MUT-112 shrinks to "pick, apply, release". Brief: `.claude/designs/mut-326-domain-move.md`.
