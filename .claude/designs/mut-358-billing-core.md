@@ -120,12 +120,12 @@ There's a new `billing` repository on `LedgerStore`, implemented in `memory.ts` 
 
 **Where audit rows land:** `AuditEvent.organizationId` is required. A user-level event is written on **each profile the person owns**, as `termsAcceptedAudit` does. An organization-level event goes on that organization. `actorType: ADMIN`.
 
-**The CLI** is `server/src/scripts/billing.ts`, `npm run billing -- <command>`. It follows `users.ts` and reuses its exported `adminClient`. Commands:
-- `grant --email|--organization-id --tier --reason [--expires]`;
-- `revoke --grant-id`;
-- `grants [--email|--organization-id]`;
-- `link --customer cus_… --email`;
-- `unlinked`.
+**The CLI** (as built): new verbs in the existing operator CLI `server/src/scripts/users.ts`, the way MUT-300 added its `firm-*` verbs, rather than a separate script. Each has an npm script:
+- `billing:grant --email|--organization-id --tier --reason [--expires]`;
+- `billing:revoke --grant-id`;
+- `billing:grants [--email|--organization-id] [--active]`;
+- `billing:link --customer cus_… --email [--currency]`;
+- `billing:unlinked`.
 
 ### 2.7 The pre-billing backfill (P1)
 
@@ -141,7 +141,7 @@ So when MUT-361 starts enforcing, nobody who exists today goes read-only. The pi
 
 - **R1, the local-mode snapshot:** `MemoryLedgerStore` is also the portal's local (free) mode store, saved to IndexedDB through `snapshot()`/`restore()`, now at format 2. The billing maps stay **out of the snapshot**, the same way the MUT-324 terms acceptances do, so the shipped local format doesn't change. A test pins that `snapshot().maps` has no billing keys.
 - **R2, the profile restore tool:** `server/scripts/profile-rows.sh` treats every table with an `organizationId` column as profile data. `billing_subscriptions` and `entitlement_grants` have one, so both go into `RESTORE_KEEP_LIVE` (billing follows Stripe and the operator, never a backup) and into `EXPORT_SKIP` (they're not the person's records). `purge-user` keeps deleting them along with the profile (FK order through `tsort`).
-- **R4, people added after the backfill:** the migration only covers users who exist when it runs. Someone provisioned later has no grant and no trial, so once MUT-361 enforces, they'd be read-only. The pilot runbook (`docs/operations/pilot-runbook.md`, provisioning step) gains `npm run billing -- grant --email <email> --tier FREELANCER --reason pilot`, to be revoked once their Stripe subscription is linked (MUT-360). MUT-361's acceptance criteria get a matching "nobody active today turns read-only" check (a Jira comment).
+- **R4, people added after the backfill:** the migration only covers users who exist when it runs. Someone provisioned later has no grant and no trial, so once MUT-361 enforces, they'd be read-only. The pilot runbook (`docs/operations/pilot-runbook.md`, provisioning step) gains `npm run billing:grant -- --email <email> --tier FREELANCER --reason pilot` (§1.5), to be revoked once their Stripe subscription is linked (MUT-360). MUT-361's acceptance criteria get a matching "nobody active today turns read-only" check (a Jira comment).
 
 ## 3. Reuse
 

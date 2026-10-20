@@ -211,6 +211,14 @@
 **Impact**: the 200-group cap counts live groups only, so create-and-delete churn grows `expense_groups` without bound. The list index `(organizationId, startOn DESC, id DESC)` includes the dead rows.
 **Fix**: a partial index `WHERE "deletedAt" IS NULL` in place of the full one.
 
+### TD-193: Billing coverage follows the single owner `profileOwnerOf` names; co-owners (MUT-373) aren't counted
+
+**Introduced**: 2026-10-21 (MUT-358, ADR-162)
+**Where**: `server/src/billing/entitlement.ts` (`subscriptionCovers`, `grantCovers`) and `server/src/billing/coverage.ts`.
+**Problem**: An owned profile is covered by its owner's subscription or grant. MUT-373 adds equal-partner co-owners on owned Business profiles; a co-owner's own subscription doesn't cover the shared profile, and only the original owner's trial counts.
+**Fix when**: MUT-373 lands. Decide whether any co-owner's coverage covers the shared profile, then pass every owner into `ProfileFacts`.
+**Severity**: Low until MUT-361 enforces anything.
+
 ### TD-192: An operator grant racing a firm enable can leave the new member OWNER
 **Status**: Open
 **Ticket**: none (MUT-300 build, 2026-10-20; built as TD-183, renumbered TD-192 at the 2026-10-20 merge: MUT-338 also took TD-183 and main reached TD-191)

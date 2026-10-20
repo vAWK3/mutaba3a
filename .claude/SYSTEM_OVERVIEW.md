@@ -322,6 +322,15 @@ npm run tauri build      # macOS/Windows bundles
 ### Terms of service (MUT-324, ADR-102)
 Hosted accounts are covered by terms of service at `/terms/<version>`. The texts are frozen and versioned, governed by the law of England & Wales, with English prevailing. A person accepts at their setup link, and again in the portal's Updated-terms step after a version bump. Each acceptance records the version, the language, the text's sha256 and the surface. Signed out, no terms apply.
 
+**Billing (MUT-358, ADR-160/162; nothing enforced until MUT-361).**
+- The person pays; each hosted profile is entitled. `GET /v1/me` reports `billing: { state, source, tier, until }` on every profile. `server/src/billing/entitlement.ts` resolves it from:
+  - a CONNECTED Malafat integration;
+  - an operator grant;
+  - the owner's (or the profile's own) Stripe subscription mirror;
+  - the 14-day trial (read-only until day 30, then locked if never paid).
+- Operators grant coverage and link pilot Stripe customers with `npm run billing:*` (admin `/admin/v1/billing/*`), audited.
+- Billing never travels with a profile's data: it isn't in the local snapshot, in a profile export, or rolled back by a restore.
+
 ### Taking your records with you (MUT-325, ADR-156)
 Signed in, Your data › Download my records writes the chosen profiles to the same records file the signed-out portal restores (`records.json` + receipt files, labelled as an export from the account). The server streams each profile (`GET /v1/records-export`, audited `records.exported`) re-homed to the device's one person: no password, no other person's row or email, no Malafat connection or documents. It's an export, not a backup: nothing restores into an account yet (MUT-290).
 

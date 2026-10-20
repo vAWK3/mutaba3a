@@ -4338,3 +4338,30 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - A first deploy to a new project still bootstraps the registry and database as before.
 - The four addresses are listed once, in the helper; renaming any of them is a change to that list and its test.
 
+
+## ADR-162: Billing Core: One Pure Resolver per Profile, Pre-Billing Grants for Everyone Who Exists, Billing Out of the Local Snapshot and Out of Restores (MUT-358)
+
+**Status**: Active
+**Date**: 2026-10-21
+**Context**: ADR-160 (MUT-332) decided who pays and what a lapse means. MUT-358 builds the server half that every later billing story reads (MUT-360…365), with nothing enforced until MUT-361. Brief: `.claude/designs/mut-358-billing-core.md`. Basel approved P1–P3 on 2026-10-20 (Jira MUT-358 comment 12273).
+**Decision**:
+1. **One pure resolver.** `billing/entitlement.ts` `resolveEntitlement(profile, facts, now)` runs seven rules in order: MALAFAT, OPERATOR, STRIPE (covering), TRIAL (running), STRIPE (lapsed), TRIAL (ended), NONE. States are ACTIVE, GRACE, READ_ONLY and LOCKED. The trial is ACTIVE for 14 days from `User.trialStartedAt`, READ_ONLY until day 30, then LOCKED. LOCKED applies only to someone who never paid; `incomplete` and `incomplete_expired` subscriptions never count as paying.
+2. **Coverage follows the owner (`profileOwnerOf`).**
+   - The owner's subscriptions cover all of the owner's profiles; Firm includes Freelancer.
+   - A subscription or grant tied to an organization covers that profile.
+   - `firmEnabledAt` is not read (P3).
+3. **`User.trialStartedAt`, not a verification time (P2).** It is null for every operator-issued account; MUT-331's signup sets it through `billing.setTrialStart`.
+4. **Pre-billing backfill (P1).** The migration grants every existing user (FREELANCER) and every owner-less operator firm (FIRM), with `reason = 'pre-billing'`. People provisioned later get a grant by hand (`pilot-runbook.md` §1.5).
+5. **`/v1/me` reads billing once per call** (`billing.factsFor`: three queries, whatever the profile count). Each profile gets an additive, nullable `billing` field. It is null in the portal's signed-out mode (`PortalRouteDependencies.billing: false`). POST/PATCH `/v1/profiles` omit it.
+6. **Store guard.** `billing.factsFor` is `sessionOnly`; every other billing method is `operator`. The admin routes, and from MUT-360 the webhook, write on the unguarded store.
+7. **Billing never travels with a profile's data.**
+   - The memory store keeps its billing maps out of `snapshot()`, so local format 2 is unchanged.
+   - `profile-rows.sh` keeps `billing_subscriptions` and `entitlement_grants` live on restore and leaves them out of export.
+8. **Operator surface.**
+   - `POST|GET /admin/v1/billing/grants`, `DELETE /admin/v1/billing/grants/{id}` (sets revokedAt, never deletes), `POST /admin/v1/billing/accounts/link` and `GET /admin/v1/billing/accounts`.
+   - The CLI verbs are `billing:*` in `users.ts`.
+   - Every change is audited (`billing.grant_created|grant_revoked|account_linked`) on each profile it reaches.
+**Consequences**:
+- MUT-361 can enforce from `/v1/me`'s `billing` and a store-guard rule alone.
+- MUT-373 co-owners: coverage follows the one owner `profileOwnerOf` names; a co-owner's own subscription doesn't cover a shared profile yet (TD-193).
+- The API is 1.42.0-mut358.
