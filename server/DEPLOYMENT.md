@@ -734,7 +734,7 @@ stack. Cloud Run reads the token secret by name, so deleting it first breaks the
 | Delete a user who owns profiles (a privacy request) | Users are normally disabled, never deleted. If one must go, first remove (or hand to an operator) every organization with `"ownerUserId" = '<user id>'` and its rows: `organizations.ownerUserId` is `ON DELETE RESTRICT` (MUT-182), exactly as `personalOwnerUserId` is (MUT-120), so the user delete is refused while any remain |
 | Uptime alerts: apply, verify SMS, drill (MUT-328) | §6b |
 | Pilot counts (MUT-330) | Entries per profile and per pilot user, read-only, never sent anywhere: §6a |
-| Backups | Cloud SQL automated daily at 03:00 + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg` |
+| Backups | Cloud SQL automated daily at 03:00 (14 kept) + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg`. Receipt files aren't in them: the bucket's 14-day soft delete covers them (§6c) |
 | Pilot operator runbook and restore drill (MUT-327) | [`docs/operations/pilot-runbook.md`](../docs/operations/pilot-runbook.md): onboard, reset, restore one profile or the whole database, incidents, support, offboard; `scripts/restore-drill.sh` (Basel runs it, results in its §10) |
 | Scale beyond one instance | blocked by Terraform validation until TD-017; do not raise `max_instances` by hand |
 | Add staging later | `ENVIRONMENT=staging ./scripts/deploy.sh` with a `staging.tfvars` (`environment = "staging"`, ZONAL, no backups, `deletion_protection = false`); it would issue `test` keys and need its own Malafat URL secret. Not planned for now |
@@ -931,6 +931,36 @@ There is no staging to scale to zero, so the drill adds a fourth check against a
 #### When the domain moves (MUT-112)
 
 Set `uptime_host` to the portal's bare hostname, or let MUT-326's domain input feed it (see `local.uptime_host` in `monitoring.tf`). Plan with the targets above. The checks may be replaced (new check ids) and the policies change to follow them. That's expected. Watch step 5 above again afterwards.
+
+### 6c. Receipt files kept as long as the backups (TD-190)
+
+Deleting a receipt deletes its object, and the database backups hold rows, not files. So the attachments bucket keeps a deleted object restorable (soft delete) for **14 days**, the same as the 14 daily Cloud SQL backups (`local.db_retained_backups` in `main.tf` sets both). A database restored to its oldest backup still finds every receipt's file. Restoring a file: pilot runbook §4.4.
+
+Before this, the bucket had no explicit policy and kept GCS's default of 7 days.
+
+**Cost:** a soft-deleted object bills at the bucket's STANDARD storage rate until it's purged, and restoring one is free. At pilot volumes (receipts are at most 10 MB) that's cents a month. Versioning with a non-current-version lifecycle rule would cost the same, but it also needs a rule to expire versions and a different restore command, so soft delete was chosen.
+
+#### Apply (Basel, once)
+
+The bucket change is in place: no object, the bucket's name and the API are untouched. Plan only the bucket, so it's reviewed on its own and not inside a release:
+
+```bash
+cd infrastructure/terraform
+terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-api/production"
+TAG=$(curl -fsS "$(terraform output -raw service_url)/health" | jq -r .version)   # the running image tag
+terraform plan -var-file=production.tfvars -var image_tag="$TAG" -target=google_storage_bucket.attachments
+```
+
+Expect **`Plan: 0 to add, 1 to change, 0 to destroy`**: `google_storage_bucket.attachments` updated in place, with `soft_delete_policy` `retention_duration_seconds = 604800 -> 1209600`. Anything else marked change, or any replace or destroy, means stop and ask. Then apply the same command with `apply` in place of `plan`.
+
+Check it, and record the date in INFRA.md §2:
+
+```bash
+gcloud storage buckets describe "gs://$GCP_PROJECT_ID-mutaba3a-attachments" --format='yaml(soft_delete_policy)'
+# retentionDurationSeconds: '1209600'
+```
+
+The restore drill prints the same line (runbook §8).
 
 ## 7. Production record
 

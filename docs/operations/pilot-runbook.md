@@ -197,7 +197,8 @@ What you have:
 
 - 14 daily automated backups, taken at 03:00 UTC.
 - 7 days of point-in-time recovery (PITR), down to the second.
-- The attachments bucket isn't versioned (TD-190), so the backups don't cover receipt files.
+- The backups hold rows, not receipt files. A deleted receipt's file stays restorable for 14 days,
+  as long as the oldest backup (§4.4).
 
 **Find the moment.** The profile's audit trail shows when the mistake happened:
 
@@ -339,11 +340,13 @@ gcloud sql backups restore <backup id> --restore-instance=mutaba3a-pg --backup-i
 
 ### 4.4 Receipt files
 
-Deleting a receipt deletes its object, and the bucket keeps no versions (TD-190). A restored receipt
-row can therefore point at a missing file.
+Deleting a receipt deletes its object, and the database backups hold rows, not files. A restored
+receipt row can therefore point at a file that was deleted after that backup.
 
-Google Cloud Storage keeps deleted objects for its soft-delete window. That's 7 days by default; the
-drill prints the bucket's actual window.
+The attachments bucket keeps deleted objects restorable (soft delete) for **14 days**, as long as the
+oldest daily backup, so a restore in §4.2 or §4.3 can still find its files if you restore them the
+same day (TD-190, DEPLOYMENT.md §6c). Until §6c is applied the bucket keeps GCS's default of 7 days. The drill prints
+the bucket's actual window.
 
 ```bash
 B=$GCP_PROJECT_ID-mutaba3a-attachments
@@ -351,6 +354,8 @@ gcloud storage objects describe "gs://$B/<storageKey>"                   # still
 gcloud storage ls --soft-deleted "gs://$B/<storageKey>"                   # deleted but restorable? note its generation
 gcloud storage restore "gs://$B/<storageKey>#<generation>"
 ```
+
+After a §4.2 or §4.3 restore, do this for each restored receipt whose file is missing.
 
 **Past the window, the file is gone.** Tell the person, and ask them to upload it again if they still
 have it.
@@ -531,8 +536,9 @@ nothing was deleted.
 
 ### 7.4 Day 44: backups have aged out
 
-The last daily backup that held them expires 14 days after the purge. PITR logs go after 7. Reply to
-the person that deletion is complete, if they asked to be told.
+The last daily backup that held them expires 14 days after the purge. PITR logs go after 7, and the
+receipt files deleted in §7.3 step 4 leave the bucket's soft delete after 14 (DEPLOYMENT.md §6c).
+Reply to the person that deletion is complete, if they asked to be told.
 
 ## 8. The restore drill
 
@@ -570,8 +576,9 @@ scripts/restore-drill.sh --project $GCP_PROJECT_ID --receipt-id <a receipt you k
 4. **If it fails or you stop it,** the exit trap deletes what it made. Check with
    `scripts/restore-drill.sh teardown --project $GCP_PROJECT_ID`, which lists every leftover
    `mutaba3a-pg-drill-*` instance and asks before deleting each.
-5. **If the receipt check fails** with "object missing", you've found TD-190's case. Note it, and
-   look at the bucket's soft-delete window that the drill printed.
+5. **If the receipt check fails** with "object missing", the file was deleted after that backup.
+   Restore it per §4.4, and check that the window the drill printed is `1209600` (14 days). Anything
+   shorter means DEPLOYMENT.md §6c isn't applied.
 
 Run the drill again after any change to backups or the database tier, and before the pilot opens
 beyond 10 users.

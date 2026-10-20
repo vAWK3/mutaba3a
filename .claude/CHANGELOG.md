@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — Receipt files kept as long as the backups (TD-190)
+
+**Why:** MUT-327 found that the database backups don't cover receipt files. Deleting a receipt deletes its object, and the attachments bucket had no versioning and no explicit soft-delete policy, so a database restored to an older backup could bring back a receipt row whose file GCS had already purged (default soft delete: 7 days; backups: 14).
+
+### Changed
+- `google_storage_bucket.attachments` gets `soft_delete_policy { retention_duration_seconds = 1209600 }` (14 days). `local.db_retained_backups` now sets both that and Cloud SQL's `retained_backups`, so the two can't drift. Soft delete over versioning + a non-current-version lifecycle rule: same storage cost, one block, and the runbook's `gcloud storage restore` and the drill's `soft_delete_policy` read already fit it.
+- `docs/operations/pilot-runbook.md` §4, §4.4, §7.4 and §8 step 5: the 14-day window, and the purge's files leaving soft delete on day 44 with the backups.
+- `server/DEPLOYMENT.md` §6c: why, cost, and the targeted plan/apply (`-target=google_storage_bucket.attachments`, expect 1 in-place change) Basel runs. `.claude/INFRA.md` §2 records it as prepared, not applied. TD-190 resolved in code.
+
+### Technical
+- `server/infrastructure/terraform/tests/attachments_bucket.tftest.hcl`: the window is 14 days and equals `retained_backups` × 86400 (mocked providers, offline). Seen failing with a 7-day window first.
+- **Not applied to production.** Basel applies DEPLOYMENT.md §6c.
+
 ## [Unreleased] - 2026-10-20 — Restore drill and pilot operator runbook (MUT-327, ADR-157)
 
 **Why:** Pilot gate (MUT-322). Production keeps 14 daily backups and 7 days of point-in-time recovery, but nobody had ever restored one. The operator steps for 10 paying users were spread over DEPLOYMENT.md, INFRA.md and memory. Plan: `.claude/designs/mut-327-restore-drill-runbook.md`.
