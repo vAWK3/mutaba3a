@@ -76,7 +76,7 @@ The rules run in order, and the first that matches wins:
 
 `firmEnabledAt` (MUT-300) **isn't read here**. Coverage depends on the subscription, not the flag, so this ticket doesn't wait for MUT-300's branch. Whether firm features *need* the Firm tier is MUT-363's business.
 
-Constants: `TRIAL_DAYS = 14`, `TRIAL_READ_ONLY_DAYS = 14`, in `billing/entitlement.ts`.
+Constants: `TRIAL_DAYS = 14` and `TRIAL_LOCK_DAYS = 30` (both counted from `trialStartedAt`), in `billing/entitlement.ts`.
 
 ### 2.3 Loading: `server/src/billing/coverage.ts`
 
