@@ -24,6 +24,8 @@ creation is 10–15 minutes of waiting.
   - [4d. App association files](#4d-app-association-files-mut-111--what-is-set-and-why)
 - [5. Wire Malafat to it](#5-wire-malafat-to-it)
 - [6. Day-2 operations](#6-day-2-operations)
+  - [6a. Pilot: entries per profile and per user](#6a-pilot-entries-per-profile-and-per-user-mut-330)
+  - [6b. Uptime checks and alerts](#6b-uptime-checks-and-alerts-mut-328)
 - [7. Production record](#7-production-record)
 - [8. Where to go from here](#8-where-to-go-from-here)
 
@@ -39,7 +41,7 @@ creation is 10–15 minutes of waiting.
 | Attachments bucket | `<project>-mutaba3a-attachments`, private; M6 attachments and MUT-42 expense receipts (`org/{id}/expense-receipts/…`) | same |
 | Service account | `mutaba3a-api@<project>.iam` — `cloudsql.client`, accessor on its three secrets, object access on the bucket | same |
 | Artifact Registry | `me-west1-docker.pkg.dev/<project>/mutaba3a/mutaba3a-api:<sha>` | same; image built by `scripts/deploy.sh` on your machine |
-| Uptime check | `GET /health` every 5 min; alert only if you pass notification channels | same |
+| Uptime checks + alerts | `GET /health`, `/ready` and the portal `/` every 5 min from six regions; email + SMS after 2 failed rounds, Cloud SQL disk/CPU alerts (MUT-328, §6b). Alerts only once `alert_email` / `alert_sms_number` are set | `infrastructure/terraform/monitoring.tf` |
 | Hosted portal | `dist-hosted/` (MUT-45), baked into the same image at `/app/portal`, served by the same Cloud Run service — no separate domain, load balancer or Terraform resource | `Dockerfile`, `src/app.ts` |
 
 The service issues and accepts **`live`** API keys (`config.API_KEY_ENVIRONMENT`).
@@ -228,7 +230,7 @@ What you will see, and what to answer:
    from `server/` against production, output ends with
    `All migrations have been successfully applied`, the proxy stops.
 5. The full plan: service account + IAM, admin-token secret, Cloud Run
-   service, public invoker, uptime check → **yes**.
+   service, public invoker, uptime checks (alerts once §6b is set) → **yes**.
 6. `smoke.ts` runs the unauthenticated checks and prints `smoke: all checks passed`.
 7. The proxy starts again and `npm run post-roll` repairs rows the old revision
    wrote after the migration (MUT-61: a person's payment must be `origin
@@ -411,9 +413,10 @@ cookies or CORS beyond what MUT-38 already built:
   (`src/auth/sessions.ts`) then compares the request's `Origin` header against
   the URL it actually arrived on, which is correct and sufficient as long as
   nothing in front of Cloud Run changes the apparent origin — true today,
-  since there is no custom domain (see the note at the end of §5). Setting
-  `PORTAL_ORIGIN` only becomes necessary if a reverse proxy or load balancer is
-  ever put in front of the service with a different public hostname.
+  since there is no custom domain. The custom domain's front door (§5a, ADR-155)
+  sets `PORTAL_ORIGIN` together with `FRONT_DOOR_TOKEN`: requests carrying the
+  token are checked against `PORTAL_ORIGIN`, direct run.app requests against
+  their own origin, so both hosts work during the move.
 - **CSP**: `default-src 'self'; connect-src 'self' https://storage.googleapis.com
   https://eu.i.posthog.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'` on every
   response. `'self'` everywhere else is possible precisely because the portal
@@ -452,10 +455,10 @@ config so a domain move (MUT-112) changes no code.
   App Signing fingerprint joins later, in the Android epic). Edit the value in
   `production.tfvars`, `terraform apply`, done — no code change, no redeploy
   of the image itself (only the Cloud Run revision's env vars change).
-- **Moving domains**: MUT-112's job, not this file's. When it lands, update
-  this section with whatever changes (if anything) in how these two routes
-  are reached — the `appID`/`package_name` values themselves don't change
-  just because the hostname did.
+- **Moving domains** (§5a): nothing changes here. Both files are host-free, so
+  the front door serves them on `app.<apex>` as-is, and run.app keeps serving
+  them for old app builds (the legacy redirect never touches `/.well-known/*`).
+  The phone must claim both hosts for a release (§5a step 5).
 - **Apple's CDN caches the AASA for up to about 24 hours.** A fingerprint or
   path-list change deployed just now will not necessarily be visible to a
   freshly-installed iOS app immediately — don't assume a redeploy is broken
@@ -489,17 +492,216 @@ creates `money_integrations`), and in the firm's Malafat as a Partner:
 organization name, masked key and scopes, and "Test connection" calls
 `GET /v1/integration` round-trip.
 
-Optional, deliberately deferred past MUT-45: put `api.mutaba3a.app` in front of
-the run.app URL. Cloud Run domain mappings are not offered in `me-west1`, so
-this would be a Cloudflare proxied CNAME (the same approach as
-`malafat-router`) or an external HTTPS load balancer — either one adds a hop
-that changes the origin the browser sees from the one Cloud Run sees, which is
-exactly what `PORTAL_ORIGIN` and `TRUSTED_PROXY_HOPS` exist to handle (§4c).
-MUT-45 intentionally shipped without it: ADR-037 decision 10 only requires the
-portal and the API to share an origin, which the bare run.app URL already
-does, at zero extra cost or infrastructure. The run.app URL is stable for the
-life of the service; add a custom domain as its own follow-up ticket if a
-branded URL becomes a real requirement, not before.
+A custom domain (deferred past MUT-45) is prepared in §5a: the run.app URL keeps
+answering the API for good, so Malafat's secret needs no change when it lands.
+
+## 5a. Moving to the custom domain (MUT-326 prepares, MUT-112 runs it)
+
+**Everything below reads one file: `config/hosts.json`** (ADR-155). It holds:
+
+- `domain`: the apex, `null` until it is chosen.
+- `portalSubdomain`: `app`, so the portal and API move to `app.<apex>`.
+- `legacy`: today's run.app and netlify.app origins. They keep answering throughout the move.
+- `stage`: one of `legacy` → `proxy` → `live` → `redirect`.
+
+Picking the domain is the one edit; each later step moves `stage` on by one. The landing goes
+to the apex. To see what any change does before you make it, run:
+
+```bash
+npm run domain:plan -- --domain example.com --stage live
+```
+
+It prints every consumer's value now and after: vite defaults, Netlify redirects, Cloud Run
+env, front door, Sentry, the uptime host, the exact phone `.env` / entitlements / manifest
+lines, and Malafat.
+
+**Why a Worker, and why a token (ADR-155):**
+
+- **Cloud Run domain mapping isn't offered in `me-west1`.** So `app.<apex>` is a Cloudflare
+  Worker (`server/infrastructure/frontdoor/worker/front-door.js`) in front of the run.app URL,
+  like Malafat's `malafat-router`. Free up to 100,000 requests a day per Cloudflare account.
+- **run.app stays reachable directly** for old phone builds, Malafat and the carry-over. The
+  front-door path has one more hop than the direct path, so a single `TRUSTED_PROXY_HOPS` can't
+  key sign-in throttling correctly on both.
+- **The token solves that.** The Worker sends `FRONT_DOOR_TOKEN` and the client IP Cloudflare
+  read, and the server trusts that IP only when the token matches. `TRUSTED_PROXY_HOPS` stays 1.
+
+### What you need first
+- **The domain, bought.** Cloudflare Registrar is the simplest, because the zone then already
+  exists (see the import note in step 1).
+- **A Cloudflare account, chosen on purpose.** The Workers free tier is per account: on
+  Malafat's account it is shared with `malafat-router`.
+  - API token scopes on that account: Zone Edit, DNS Edit, Zone Settings Edit, Workers Scripts
+    Edit, Workers Routes Edit. Export it as `CLOUDFLARE_API_TOKEN`.
+- **A Netlify personal access token**, exported as `NETLIFY_API_TOKEN`.
+- **The Netlify site id** of the landing (Site settings › Site details).
+- **`server/infrastructure/frontdoor/production.tfvars`**, copied from the `.example` and filled
+  in with `project_id`, `cloudflare_account_id` and `netlify_site_id`.
+
+### Step 0: name the domain (`stage: "proxy"`)
+
+In `config/hosts.json`, set `"domain": "<apex>"` and `"stage": "proxy"`.
+
+```bash
+npm run domain:plan -- --stage proxy
+npm run test:run -- scripts/__tests__/no-hardcoded-hosts.test.ts
+```
+
+Read the plan, then commit. At this stage no build changes: vite, the terms guard and the phone
+still use the legacy hosts. A release made now ships nothing new.
+
+### Step 1: DNS (front-door stack)
+
+```bash
+cd server/infrastructure/frontdoor
+terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="prefix=mutaba3a-frontdoor/production"
+# Bought at Cloudflare Registrar? The zone exists already: import it first.
+#   terraform import -var-file=production.tfvars 'cloudflare_zone.this[0]' <zone id>
+terraform plan -var-file=production.tfvars -out=frontdoor.plan
+terraform show -json frontdoor.plan | jq -r '.resource_changes[] | select(.change.actions != ["create"] and .change.actions != ["no-op"]) | "\(.change.actions) \(.address)"'
+```
+
+The `jq` line must print **nothing**: the first plan only adds. On a placeholder domain it reads
+`16 to add, 0 to change, 0 to destroy`. Then:
+
+```bash
+terraform apply frontdoor.plan
+terraform output name_servers
+```
+
+Set those name servers at the registrar, then wait until Cloudflare shows the zone **Active**:
+
+```bash
+dig +short NS <apex>
+```
+
+### Step 2: certificates
+
+- **Portal host:** Cloudflare's edge certificate for `app.<apex>` is automatic.
+- **Apex and `www`:** Netlify issues their certificate once DNS resolves to it (the apex is a
+  flattened CNAME to `apex-loadbalancer.netlify.com`, DNS only). If it doesn't, use Netlify ›
+  Domain management › HTTPS › Verify DNS configuration.
+
+Then check all three:
+
+```bash
+curl -sI https://<apex>/ | head -1
+curl -sI https://www.<apex>/ | head -1
+curl -s https://app.<apex>/health
+```
+
+### Step 3: proxy, then the server learns the token
+
+```bash
+make release server
+```
+
+Same `stage: proxy`, so the build is unchanged. Terraform adds `PORTAL_ORIGIN` and
+`FRONT_DOOR_TOKEN` to Cloud Run; its data source fails loudly if step 1 wasn't applied. Then
+check the front door end to end:
+
+```bash
+curl -s https://app.<apex>/health
+curl -s https://app.<apex>/ready
+curl -s https://app.<apex>/.well-known/apple-app-site-association | head -c 200
+curl -s https://app.<apex>/.well-known/assetlinks.json | head -c 200
+npm --prefix server run smoke -- --url https://app.<apex>
+```
+
+Then sign in on `https://app.<apex>`. The session cookie is per origin, so expect to sign in
+there separately.
+
+**Nobody is sent to the new hosts before this works.**
+
+### Step 4: go live (`stage: "live"`)
+
+In `config/hosts.json`, set `"stage": "live"`, run `npm run domain:plan`, and commit. Then
+release in this order:
+
+```bash
+make release web
+make release server
+```
+
+**Web first.** The landing builds canonical/og tags for the apex. Its `_redirects` sends
+`<apex>/app/*` back to `netlify.app/app`, because the free web app's records live in that
+origin's IndexedDB until MUT-291.
+
+**Then the server.** The portal bundle links to the apex's `/terms`, and the terms guard reads
+`https://<apex>/legal/terms-versions.json`, so wait for Netlify's deploy first. `deploy.sh` now
+also smoke-tests `public_portal_origin`.
+
+Then:
+- **Sentry:** re-apply the Sentry stack (§1.5) so the DSNs accept the new origins.
+- **Uptime:** the checks follow `local.public_portal_host` (MUT-328).
+- **PostHog:** check the pilot tiles' `$host` filters (MUT-330).
+
+### Step 5: phone release with both hosts (mutaba3a-flutter repo)
+
+Copy the lines `npm run domain:plan` prints under **7. Phone**:
+
+- **`.env`:** `MUTABA3A_API_BASE_URL` and `MUTABA3A_PORTAL_BASE_URL` = `https://app.<apex>`;
+  `MUTABA3A_PUBLIC_ORIGIN` = `https://<apex>`.
+- **`ios/Flutter/AssociatedDomains.xcconfig`:** `MUTABA3A_LINK_HOST`.
+- **`Runner.entitlements`:** one `applinks` + `webcredentials` pair **per host**, new and run.app.
+- **`AndroidManifest.xml`:** `android:host` per host and path.
+- **`strings.xml` `asset_statements`:** both hosts' `assetlinks.json`.
+
+Keep the run.app host for at least one release: old links and passwords saved against run.app
+keep working only while it is claimed. Apple's CDN caches the AASA for up to about 24 hours.
+
+### Step 6: redirect the old hosts (`stage: "redirect"`)
+
+**Only after the carry-over (MUT-112/MUT-291, design §7) has shipped.** Before that, a
+redirect strands signed-out local-mode records on run.app.
+
+In `config/hosts.json`, set `"stage": "redirect"`, commit, then:
+
+```bash
+make release web
+make release server
+```
+
+- **Netlify:** 302s the old host's landing pages (`/`, `/download`, `/privacy`, `/terms*`) to
+  the apex. Never `/app/*`.
+- **Cloud Run:** gets `PORTAL_LEGACY_REDIRECT=true`. Direct run.app page visits go to the
+  same-origin `/carry-over?next=…` page, which carries local records over and then sends the
+  browser on.
+- **Never redirected on run.app:** the API (`/v1/*`), `/admin/*`, the association files,
+  `/health`, `/ready`, `/assets/*`, static files and writes.
+
+Check it:
+
+```bash
+curl -sI https://<run.app host>/sign-in | grep -i location
+curl -sI https://<run.app host>/v1/me | head -1
+```
+
+The first must show `/carry-over?next=%2Fsign-in`. The second must still be `401`, not a redirect.
+
+### Rollback (any step)
+
+| From | Undo |
+|---|---|
+| 6 | `stage: "live"`, then `make release web` and `make release server`. 302s are never cached, so visitors return to the old hosts at once |
+| 5 | Ship the phone again with the run.app values. The old host was never unclaimed |
+| 4 | `stage: "proxy"`, then `make release web` and `make release server`. Users are back on the legacy hosts; the front door still works |
+| 3 | `stage: "legacy"` and `domain: null` in a **branch you deploy from**, then `make release server`. Cloud Run drops `PORTAL_ORIGIN` and `FRONT_DOOR_TOKEN` and the IAM grant; the server behaves exactly as before |
+| 1–2 | Leave the frontdoor stack applied: unused, it costs nothing. To remove it, lift `prevent_destroy` on the zone and the token secret, then `terraform destroy`. `cloudflare_zone_setting` can't be destroyed from Terraform (the provider says so) and stays with the zone |
+
+Order matters on the way back: undo the API stack (step 3) before destroying the frontdoor
+stack. Cloud Run reads the token secret by name, so deleting it first breaks the next cold start.
+
+### What doesn't move
+- **Malafat** calls `/v1` on run.app, which answers for good. Switching
+  `malafat-web-mutaba3a-api-url` to `https://app.<apex>` is optional.
+- **The Malafat OAuth client identity** (`CIMD_CLIENT_ID`, `public/.well-known/oauth-client.json`)
+  keeps its own value.
+- **Browser-saved passwords** in Safari/iCloud Keychain and Chrome are tied to run.app. They
+  aren't offered on `app.<apex>`, so people sign in once and their browser saves the new host.
+  The phone app keeps offering them through `webcredentials` for both hosts. Google Password
+  Manager could link the two hosts through web↔web statements in `assetlinks.json`, an API
+  contract change left to MUT-112. Say so in MUT-112's release note.
 
 ## 6. Day-2 operations
 
@@ -530,6 +732,7 @@ branded URL becomes a real requirement, not before.
 | Roll back past MUT-235 | Harmless while `SELECT count(*) FROM users WHERE "passwordHash" IS NULL` is 0 (the new table stays unused). **Once any exists, roll forward only:** every account created since, and every `--lock`, has a NULL password, which an older revision's Prisma client cannot read (P2032), so sign-in and every lookup of those people fail with a 500 and the old admin reset cannot fix them. If a rollback is unavoidable, first set those rows to the argon2id hash of a random throwaway password (still unusable), then reissue links after rolling forward |
 | Roll back past MUT-182 | Safe for the schema: the old revision writes personal profiles without `ownerUserId`/`profileType`, the CHECKs allow that, and the next deploy's post-roll `repairPersonalOwnership` stamps them. But once any user has created a profile (`SELECT count(*) FROM organizations WHERE "ownerUserId" IS NOT NULL AND "personalOwnerUserId" IS NULL` > 0), an older revision treats those as operator firms: it would issue them API keys, bind them to Malafat or share them on request. **Roll forward only** once that count is above 0, or refuse every such operator request while the old revision serves |
 | Delete a user who owns profiles (a privacy request) | Users are normally disabled, never deleted. If one must go, first remove (or hand to an operator) every organization with `"ownerUserId" = '<user id>'` and its rows: `organizations.ownerUserId` is `ON DELETE RESTRICT` (MUT-182), exactly as `personalOwnerUserId` is (MUT-120), so the user delete is refused while any remain |
+| Uptime alerts: apply, verify SMS, drill (MUT-328) | §6b |
 | Pilot counts (MUT-330) | Entries per profile and per pilot user, read-only, never sent anywhere: §6a |
 | Backups | Cloud SQL automated daily at 03:00 + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg` |
 | Scale beyond one instance | blocked by Terraform validation until TD-017; do not raise `max_instances` by hand |
@@ -663,6 +866,70 @@ Reading it:
   logged. `activated` is the activation bar. `weeks_with_entries_of_last_4`
   of 3 or 4 meets the weekly-use bar. The weeks are the four 7-day windows
   ending at `as_of`.
+
+### 6b. Uptime checks and alerts (MUT-328)
+
+**What it watches** (`infrastructure/terraform/monitoring.tf`, brief `.claude/designs/mut-328-uptime-alerts.md`):
+
+| Watch | Rule | Severity |
+|---|---|---|
+| `GET /health`, `GET /ready`, portal `GET /` (must contain `id="root"`) | Each runs from all six Cloud Monitoring regions every 5 min. An alert fires when **2 or more regions fail on 2 rounds in a row** (about 6 min after the second failed round). It closes when the check passes again. One failed round, or one region failing, never alerts. | CRITICAL |
+| Cloud SQL `mutaba3a-pg` disk | Above 80% for 15 min | WARNING |
+| Cloud SQL `mutaba3a-pg` CPU | Above 90% for 15 min | WARNING |
+
+Alerts go to email and SMS (Basel's call, 2026-10-19), plus any ids in `alert_notification_channels`. With no channel set, Terraform keeps only the checks and creates no alerts. Production ran that way until this section was applied.
+
+**Cost:** the checks make about 160k runs a month, inside the 1M free per project. Channels are free. The 5 alert conditions cost about $0.50/month at most, if Google's per-condition alerting charge applies.
+
+#### Apply (Basel, once)
+
+1. Add two lines to the git-ignored `infrastructure/terraform/production.tfvars`. The phone number never goes in the repo:
+   ```hcl
+   alert_email      = "you@example.com"
+   alert_sms_number = "+9725XXXXXXXX"   # E.164
+   ```
+   Leave `uptime_host` unset until the custom domain is live (MUT-112). Unset means the Cloud Run host.
+2. Plan only the monitoring resources, so this is reviewed on its own and not inside a release:
+   ```bash
+   cd infrastructure/terraform
+   terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-api/production"
+   URL=$(terraform output -raw service_url)
+   TAG=$(curl -fsS "$URL/health" | jq -r .version)   # the running image tag, so Cloud Run plans no change
+   MON=(-target=google_monitoring_uptime_check_config.endpoint -target=google_monitoring_notification_channel.email
+        -target=google_monitoring_notification_channel.sms -target=google_monitoring_alert_policy.endpoint_down
+        -target=google_monitoring_alert_policy.cloud_sql)
+   terraform plan -var-file=production.tfvars -var image_tag="$TAG" "${MON[@]}"
+   ```
+   Expect `google_monitoring_uptime_check_config.health[0] has moved to …endpoint["health"]` with no change to it, then **`Plan: 9 to add, 0 to change, 0 to destroy`**: the `ready` and `portal` checks, 2 channels, 3 uptime policies and 2 Cloud SQL policies. Anything marked change or destroy means stop and ask. In particular, a change to `google_cloud_run_v2_service.api` (the checks read its host, so `-target` plans it too) means main carries Terraform that isn't released yet: apply this with the next `make release server` instead. (If `alert_notification_channels` was already set, the old `/health` policy moves and shows one in-place change to its condition. That's expected.)
+3. Apply the same command, with `apply` in place of `plan`. Any later `./scripts/deploy.sh` keeps these resources, because its full apply reads the same tfvars.
+4. **Verify the SMS channel.** Cloud Monitoring sends nothing to an SMS channel until the code it texts is confirmed. Email needs no verification.
+   ```bash
+   CH=$(terraform output -raw alert_sms_channel)
+   AUTH="Authorization: Bearer $(gcloud auth print-access-token)"
+   curl -fsS -X POST -H "$AUTH" "https://monitoring.googleapis.com/v3/$CH:sendVerificationCode"
+   curl -fsS -X POST -H "$AUTH" -H 'content-type: application/json' "https://monitoring.googleapis.com/v3/$CH:verify" -d '{"code":"G-123456"}'   # the code from the text
+   ```
+   Or use the console: Monitoring → Alerting → Edit notification channels → SMS → Verify. If your number's country isn't offered for SMS, the channel stays unverified and email still works.
+5. **Check it's green.** After about 10 minutes, Monitoring → Uptime checks shows `mutaba3a-api /health`, `/ready` and `portal /` passing in every region. Monitoring → Alerting lists 5 policies, all with no open incidents.
+
+#### Fire a test alert, then let it close (the drill)
+
+There is no staging to scale to zero, so the drill adds a fourth check against a path that always fails. It goes through the same rule and the same channels, and production behaviour doesn't change. Pass it with `-var` only, never in tfvars, so the next `deploy.sh` removes it if you forget step 3.
+
+1. **Fire.** `terraform apply -var-file=production.tfvars -var image_tag="$TAG" -var uptime_drill_path=/v1/uptime-drill "${MON[@]}"` adds 2 resources (the drill check and its policy). `/v1/uptime-drill` is a JSON 404. About 10 to 15 minutes later, an email and a text arrive: **"mutaba3a-api drill /v1/uptime-drill is down"**.
+2. **Recover.** Run the same command with `-var uptime_drill_path=/health`. The check's path changes in place. Within about 10 minutes the incident closes and a closing notice arrives. *No closing notice?* The Google provider here (5.x) cannot set the policy's notification prompts, so the close notice depends on Cloud Monitoring's default (TD-185). Open each uptime policy in the console, turn on **Notify on incident closure**, and record that here. Terraform's updates leave that setting alone.
+3. **Remove.** Run the same command without `uptime_drill_path`. It destroys the 2 drill resources. Write the date and how long each notice took into §7.
+
+#### When an alert fires
+
+- **`/health` down:** the service is down or unreachable. Check `gcloud run services describe mutaba3a-api --region=me-west1` (latest revision ready?) and the logs (§6). Roll back with `IMAGE_TAG=<old sha> ./scripts/deploy.sh` if a release caused it.
+- **`/ready` down while `/health` is up:** the database. Check the `mutaba3a-pg` status in Cloud SQL (maintenance window: Sunday 03:00), and run `npm run db:psql`.
+- **Portal down while `/health` is up:** the image shipped without `dist-hosted/`, or the domain (after MUT-112) points somewhere else. `curl -s "$URL/" | head` shows what is being served.
+- **Cloud SQL disk or CPU:** not urgent. Query Insights in the console shows the heavy query. Disk grows by itself (`disk_autoresize`), and so does the bill.
+
+#### When the domain moves (MUT-112)
+
+Set `uptime_host` to the portal's bare hostname, or let MUT-326's domain input feed it (see `local.uptime_host` in `monitoring.tf`). Plan with the targets above. The checks may be replaced (new check ids) and the policies change to follow them. That's expected. Watch step 5 above again afterwards.
 
 ## 7. Production record
 

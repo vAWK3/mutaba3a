@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { signIn, warmDummyHash } from '../auth/sign-in.js';
-import { clientIp, isSameOriginRequest, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
+import { isSamePortalOrigin, requestClientIp, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
 import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
@@ -75,11 +75,11 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       },
     }),
     async (c) => {
-      if (!isSameOriginRequest(c.req, settings.portalOrigin)) {
+      if (!isSamePortalOrigin(c.req, settings)) {
         throw new ApiError('CROSS_SITE_REQUEST', 'Sign in from the Mutaba3a portal itself');
       }
       const now = c.get('now')();
-      const ip = await ipLimiter.check(`sign-in:${clientIp((name) => c.req.header(name), settings.trustedProxyHops)}`, now);
+      const ip = await ipLimiter.check(`sign-in:${requestClientIp((name) => c.req.header(name), settings)}`, now);
       if (!ip.allowed) {
         c.header('Retry-After', String(ip.retryAfterSeconds));
         throw new ApiError('RATE_LIMITED', 'Too many sign-in attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
@@ -150,7 +150,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       tags: ['Sessions'],
       summary: 'Accept the current terms of service (MUT-324)',
       description:
-        'Records that the signed-in person accepted `version`, read in `locale`, from the portal or the phone. Idempotent per version: accepting again changes nothing and writes no second audit row. The person accepts for themselves and, as owner, for their own profiles, so `user.terms_accepted` is audited on each profile they own.',
+        'Records that the signed-in person accepted `version`, read in `locale`, from the portal or the phone, with the optional `clientRelease` that showed it (MUT-354, stored as sent). Idempotent per version: accepting again changes nothing and writes no second audit row. The person accepts for themselves and, as owner, for their own profiles, so `user.terms_accepted` is audited on each profile they own.',
       security: [{ session: [] }, { deviceSession: [] }],
       request: { body: { required: true, content: { 'application/json': { schema: TermsAcceptanceRequestSchema } } } },
       responses: {
@@ -162,10 +162,10 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       },
     }),
     async (c) => {
-      const { version, locale } = c.req.valid('json');
+      const { version, locale, clientRelease } = c.req.valid('json');
       if (version !== terms.version) throw staleTerms(terms);
       const { user, session } = c.get('identity');
-      const acceptance = termsAcceptanceOf(terms, locale, session.kind);
+      const acceptance = termsAcceptanceOf(terms, locale, session.kind, clientRelease);
       const audit = await termsAcceptedAudit(store, user, acceptance, c.get('requestId'));
       await store.users.acceptTerms({ userId: user.id, ...acceptance, at: c.get('now')(), audit });
       // The version is the current one, so the person's latest now covers it (D10): no need to read it back

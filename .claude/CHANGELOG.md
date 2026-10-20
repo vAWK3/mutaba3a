@@ -28,6 +28,78 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — The custom domain is one input (MUT-326, ADR-155)
+
+**Why:** The domain must be live before the pilot (MUT-322) but isn't chosen yet. The run.app and netlify.app hosts were written into vite, the bundle allowlist, the terms release guard, provisioning, Sentry tfvars and tests, so a move meant hunting for them. Now picking the domain is one edit, and MUT-112 shrinks to "pick, apply, release". Brief: `.claude/designs/mut-326-domain-move.md`.
+
+### Added
+- **`config/hosts.json` + `config/hosts.ts`.** `domain` (null), `portalSubdomain`, the legacy origins and a `stage` (`legacy` → `proxy` → `live` → `redirect`), resolved into the origins each consumer uses. Fixtures in `config/fixtures/` are shared with the Terraform tests.
+- **`npm run domain:plan [-- --domain <apex> --stage <stage>]`** (`scripts/hosts.ts`) prints every consumer's value now and with the domain: vite, Netlify redirects, Cloud Run env, front door, Sentry, uptime host, the phone's `.env` / entitlements / manifest lines, and Malafat. `npm run --silent hosts -- get <key>` serves shell scripts.
+- **`scripts/__tests__/no-hardcoded-hosts.test.ts`.** It fails on the legacy hosts, any `mutaba3a*.a.run.app` / `*.netlify.app`, or the chosen domain outside `config/hosts.json`, and rehearses `mutaba3a.app` as the domain. Prose and the CIMD files are exempt.
+- **`server/infrastructure/frontdoor/`.** A new operator-applied stack: Cloudflare zone and settings, DNS (apex/www DNS-only to Netlify, `app.` proxied), the front-door Worker (`worker/front-door.js`) and its route, the token secret, and the Netlify custom domain. It's empty while no domain is set. A placeholder domain plans 16 to add, 0 to change, 0 to destroy. Offline `terraform test`; joins the server-ci matrix.
+- **Server front-door awareness.**
+  - `FRONT_DOOR_TOKEN` and `PORTAL_LEGACY_REDIRECT` (`"true"`/`"false"` only) in `config.ts`.
+  - `isViaFrontDoor`, `requestClientIp` and `isSamePortalOrigin` in `auth/sessions.ts`, used by sign-in, device sign-in, account setup, the session middleware and the public FX limiter.
+  - The legacy-host redirect to `/carry-over?next=…` in `app.ts`.
+  - With no token, behaviour is unchanged.
+- **API stack `domain.tf`.** It reads the token secret, grants the service account, adds `PORTAL_ORIGIN` / `FRONT_DOOR_TOKEN` (and `PORTAL_LEGACY_REDIRECT` at stage redirect) to Cloud Run, and outputs `public_portal_origin` (for MUT-328's uptime checks).
+- **`server/DEPLOYMENT.md` §5a.** The operator runbook for the move: prerequisites, the six stages with commands and checks, and the rollback table.
+- **Web build `mutaba3a:domain-move-redirects`.** It emits Netlify `_redirects` from the config: from `live`, `<apex>/app/*` back to netlify.app; at `redirect`, the old host's landing pages to the apex.
+
+### Changed
+- `vite.config.ts` `DEFAULT_PUBLIC_ORIGIN` / `DEFAULT_PORTAL_URL` = `HOSTS.landingOrigin` / `HOSTS.portalOrigin`. The values are the same today; the web snapshot masks the portal URL and lists the new plugin.
+- `scripts/check-bundles.ts` adds `HOSTS.allOrigins` to both allowlists; `bundle-origins.json` no longer lists our own hosts.
+- `terms:check-live` takes `MUTABA3A_PUBLIC_ORIGIN` from the config through its npm script; the script itself has no default. `provision-account.sh` defaults its URL from the config.
+- **Sentry stack:** `portal_origins` / `landing_origins` are now extras. The DSNs accept the config's origins, new and legacy, by themselves.
+- `deploy.sh` also smoke-tests `public_portal_origin` once it differs from the service URL.
+- MUT-328's uptime checks (merged first) now default `uptime_host` to `local.public_portal_host`, as its own comment asked: the config's portal host, so they follow the domain at stage `live`. `monitoring.tftest.hcl` reads the no-domain fixture, plus one run for a live domain.
+- Test fixtures and comments use neutral example hosts instead of our real ones.
+
+### Files
+`config/{hosts.json,hosts.ts,fixtures/*}`, `scripts/{hosts.ts,check-bundles.ts,bundle-origins.json}`, `scripts/__tests__/{hosts,hosts-cli,no-hardcoded-hosts,front-door-worker,vite-config,legal-terms}.test.ts`, `vite.config.ts`, `package.json`, `server/src/{config.ts,index.ts,app.ts,auth/sessions.ts,auth/middleware.ts,routes/{sessions,account-setup,device-sessions,fx-rates}.ts,scripts/check-terms-live.ts}`, `server/src/__tests__/{legacy-redirect,config,check-terms-live,smoke}.test.ts`, `server/src/auth/__tests__/{front-door,sessions}.test.ts`, `server/infrastructure/{frontdoor/**,terraform/{domain.tf,main.tf,outputs.tf,tests/domain.tftest.hcl},sentry/**}`, `server/scripts/{deploy.sh,provision-account.sh}`, `server/package.json`, `.github/workflows/server-ci.yml`, `.env.example`, `server/.env.example`, `server/DEPLOYMENT.md`.
+
+## [Unreleased] - 2026-10-20 — Uptime checks and alerts for the API and portal (MUT-328, ADR-154)
+
+**Why:** Pilot gate (MUT-322). Production had one `/health` uptime check, and no alert reached anyone because no notification channel was set. An outage was found only when a user wrote in.
+
+### Added
+- `server/infrastructure/terraform/monitoring.tf`: uptime checks on `/health`, `/ready` and the portal `/` (matched on `id="root"`), every 5 min from all six regions. They probe `uptime_host`, falling back to the Cloud Run host so they can follow the custom domain (MUT-112/326). Email and SMS notification channels come from `alert_email` / `alert_sms_number` (the number is sensitive, set only in the operator's tfvars). One CRITICAL policy per check fires when more than one region fails for 360 s, which is two failed rounds in a row. Two WARNING Cloud SQL policies cover disk above 80% and CPU above 90% for 15 min. `uptime_drill_path` adds an opt-in drill check to fire and close a real alert without touching production.
+- `tests/monitoring.tftest.hcl`: 14 offline runs (mocked providers).
+- `server/DEPLOYMENT.md` §6b: apply (targeted plan, expect 9 to add), SMS verification, the drill, what each alert means, and the domain move.
+
+### Changed
+- The monitoring section moved from `main.tf` to `monitoring.tf`. `moved` blocks carry the existing `/health` check (and its policy, where one exists) to `endpoint["health"]` unchanged.
+
+### Technical
+- Prepared, **not applied**. Basel applies per §6b. `terraform fmt`/`validate`/`test` pass (17 runs including database_pool). TD-185: provider 5.x cannot pin the close notification.
+
+## [Unreleased] - 2026-10-20 — MUT-354: each terms acceptance records the client release that showed it (API 1.39.0-mut354)
+
+**Why:** MUT-348 (Basel, 2026-10-20, comment 12222) decided that the evidence of what a person read is the frozen terms file (`textSha256`) plus the page code at the release that rendered it. Before this, nothing recorded that release. Plan: `.claude/designs/mut-354-terms-client-release.md`.
+
+### Added
+- `terms_acceptances.clientRelease VARCHAR(64)`, nullable, from migration `20261020120000_mut354_terms_client_release`. It is additive, and existing rows stay null.
+- `POST /v1/me/terms-acceptance` and `POST /v1/account-setup` take an optional `clientRelease`.
+  - It must be printable ASCII with no spaces, 1–64 characters (`CLIENT_RELEASE_MAX` / `CLIENT_RELEASE_PATTERN` in `server/src/legal.ts`); anything else gets 422.
+  - It is stored as sent and never trusted. Clients that omit it still succeed and record null.
+  - A repeat accept keeps the release first recorded.
+- `user.terms_accepted` audit metadata carries `clientRelease`.
+- `GET /admin/v1/terms-acceptance` gains `users[].clientRelease`, the release on each person's latest accepted version. `npm --prefix server run terms:report` prints it after the version, or `-` when there is none.
+- The portal sends `clientRelease = web-v<APP_VERSION>` (`TERMS_CLIENT_RELEASE`, `src/hosted/terms.ts`) from the setup page and the Updated-terms step.
+
+### Changed
+- API `1.39.0-mut354`; `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+
+### Release note
+- **Ship the server before any phone build sends the field.** `TermsAcceptanceRequest` is `.strict()`, so a phone (MUT-344) that sends `clientRelease` to an older server gets 422. The portal ships inside the same image, so it is safe.
+
+### Technical
+- TD-184: the recorded web version can lag the live landing by one web release.
+- Files:
+  - server: `prisma/schema.prisma`, the migration, `legal.ts`, `schemas.ts`, `repositories/{ports,memory,prisma}.ts`, `terms-acceptance.ts`, `routes/{sessions,account-setup,admin-users}.ts`, `scripts/users.ts`, `app.ts`;
+  - portal: `src/hosted/terms.ts`, `SetupPage.tsx`, `TermsUpdatePage.tsx`;
+  - release-QA: `qa/support/portal.ts`, `qa/specs/portal/{terms,setup}.spec.ts`, `qa/features/portal/terms.yaml`.
+
 ## [Unreleased] - 2026-10-20 — CI back to green; CI manual-only with a release reminder (ADR-153)
 
 **Why:** Web CI and Server CI had failed on every main push since 2026-10-19. MUT-286's local mode makes the portal import the server's route modules, so the web typecheck (`tsconfig.hosted-local.json` pins `server/node_modules/@types`), its tests and `build:hosted` (`@hono/zod-openapi`) need server deps. Neither workflow installed them. Behind that, web coverage had fallen below its floors: server files were counted, the browser shims are only exercised by the server suite, and the HostedRequestForm tests were deleted with HostedOfferPage (7914685a).

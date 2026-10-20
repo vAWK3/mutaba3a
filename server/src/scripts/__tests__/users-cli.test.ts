@@ -194,6 +194,7 @@ describe('users terms (MUT-324 T1)', () => {
       locale: 'en',
       textSha256: CURRENT_TERMS.sha256.en,
       surface: 'portal',
+      clientRelease: 'web-v0.1.16',
       at: new Date('2026-10-20T10:00:00Z'),
       audit: [],
     });
@@ -201,8 +202,9 @@ describe('users terms (MUT-324 T1)', () => {
     expect(await h.run(['terms'])).toBe(0);
     const text = h.out.join('\n');
     expect(text).toContain(`current terms ${CURRENT_TERMS.version}`);
-    expect(h.out.find((l) => l.startsWith('accepted@firm.ps'))).toMatch(new RegExp(`${CURRENT_TERMS.version}.*ok$`));
-    expect(h.out.find((l) => l.startsWith('never@firm.ps'))).toMatch(/never.*BEHIND$/);
+    // MUT-354: the client release that showed the latest accepted version, or - when none was recorded
+    expect(h.out.find((l) => l.startsWith('accepted@firm.ps'))).toMatch(new RegExp(`${CURRENT_TERMS.version}  web-v0\\.1\\.16  ok$`));
+    expect(h.out.find((l) => l.startsWith('never@firm.ps'))).toMatch(/never {2}- {2}BEHIND$/);
     expect(text).toContain('1 of 2 active users behind the current terms');
   });
 });

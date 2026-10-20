@@ -2562,3 +2562,14 @@ When a feature needs a "playful" and a "restrained" version of the same motion, 
 ### Pattern: Before adding a dependency, check if this app already rejected its category (ADR search)
 MUT-337 almost evaluated Rive from scratch; `.claude/DECISIONS.md`'s ADR-079/080 had already rejected `lottie-web` for the same shape of reason (new runtime, new CSP grant, new asset pipeline, to buy capability a simpler existing tool already covers) — the comparison this time started from "does our existing CSP-proven, zero-new-dependency motion tooling (`motion`, ADR-044) already cover this" instead of re-litigating general-purpose-engine tradeoffs. Search `DECISIONS.md` for the capability category (not the specific library name) before comparing candidates for anything animation/media/rendering-runtime shaped.
 
+
+## Patterns added by MUT-326 (2026-10-20, ADR-155)
+
+### Pattern: A public host is read from `config/hosts.json`, never written down
+Our own hosts (landing, portal/API, legacy and new) live only in `config/hosts.json`. TypeScript reads `HOSTS` from `config/hosts.ts`; shell scripts read `npm run --silent hosts -- get <landingOrigin|portalOrigin|domain>`; Terraform reads the file with `jsondecode(file("${path.module}/${var.hosts_file}"))` (tests point `hosts_file` at `config/fixtures/`). `scripts/__tests__/no-hardcoded-hosts.test.ts` fails otherwise. Tests and examples that need *an* origin use neutral ones (`example.com`, `*.example.test`), never ours. The Malafat CIMD client id is the one deliberate exception.
+
+### Pattern: A move that needs DNS is staged in config, not in branches
+"The value is known" and "the value is live" are separate fields (`domain` vs `stage`). Infrastructure keys on the first; builds and links key on the second, so a commit can name the domain without the next release pointing anyone at a host that doesn't resolve yet. `npm run domain:plan -- --stage <s>` shows each stage's effect before it's committed.
+
+### Pattern: A second path to the service proves itself with a token, not a hop count
+When the same service is reached both directly and through a proxy, don't raise `TRUSTED_PROXY_HOPS`: that trusts a forged `X-Forwarded-For` entry on the direct path. The proxy sends a shared secret (Secret Manager, a `secret_text` binding) plus the client IP it read. The server uses those only when the secret matches (digest + `timingSafeEqual`) and otherwise keeps its old rules (`auth/sessions.ts` `requestClientIp`, `isSamePortalOrigin`).

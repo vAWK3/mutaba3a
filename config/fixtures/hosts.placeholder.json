@@ -1,0 +1,15 @@
+{
+  "$comment": "MUT-326: Terraform tests and scripts/__tests__/hosts.test.ts read this fixture (a placeholder domain is set and live; redirects still off).",
+  "production": {
+    "domain": "placeholder.example",
+    "portalSubdomain": "app",
+    "stage": "live",
+    "legacy": { "landing": "https://landing.example.test", "portal": "https://portal.example.test" }
+  },
+  "staging": {
+    "domain": "staging-placeholder.example",
+    "portalSubdomain": "app",
+    "stage": "live",
+    "legacy": { "landing": "https://landing-staging.example.test", "portal": "https://portal-staging.example.test" }
+  }
+}

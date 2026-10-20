@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
  * API of a running service, like `npm run provision`. There is no other way to
  * create a user, grant access or reset a password — by design.
  *
- *   npm run provision:user  -- --url https://api.mutaba3a.app --email nour@firm.ps --name "Nour Haddad" --organization-id <uuid> [--locale en] [--valid-hours 72]  (Arabic by default, MUT-209)
+ *   npm run provision:user  -- --url https://<portal origin> --email nour@firm.ps --name "Nour Haddad" --organization-id <uuid> [--locale en] [--valid-hours 72]  (Arabic by default, MUT-209)
  *   npm run provision:user  -- --email solo@me.ps --name "Solo" --currency ILS --timezone Asia/Jerusalem   (no firm; MUT-120)
  *   npm run grant:user      -- --email nour@firm.ps --organization-id <uuid>
  *   npm run revoke:user     -- --email nour@firm.ps --organization-id <uuid>
@@ -50,7 +50,7 @@ const USAGE = [
   '  disable --email <email>',
   '  enable  --email <email>',
   '  revoke-sessions --email <email>',
-  '  terms   lists every user with the terms version they last accepted, flagging who is behind the current terms',
+  '  terms   lists every user with the terms version they last accepted and the client release that showed it, flagging who is behind the current terms',
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
 ].join('\n');
 
@@ -226,10 +226,11 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
   terms: async ({ client, out }) => {
     const report = await client.call<{
       current: string;
-      users: Array<{ email: string; status: string; latestVersion: string | null; accepted: boolean }>;
+      users: Array<{ email: string; status: string; latestVersion: string | null; clientRelease: string | null; accepted: boolean }>;
     }>('GET', '/admin/v1/terms-acceptance');
     out(`current terms ${report.current}`);
-    for (const u of report.users) out(`${u.email}  ${u.status}  ${u.latestVersion ?? 'never'}  ${u.accepted ? 'ok' : 'BEHIND'}`);
+    // MUT-354: the client release that showed the latest accepted version, - when none was recorded
+    for (const u of report.users) out(`${u.email}  ${u.status}  ${u.latestVersion ?? 'never'}  ${u.clientRelease ?? '-'}  ${u.accepted ? 'ok' : 'BEHIND'}`);
     const active = report.users.filter((u) => u.status === 'ACTIVE');
     out(`${active.filter((u) => !u.accepted).length} of ${active.length} active users behind the current terms`);
   },

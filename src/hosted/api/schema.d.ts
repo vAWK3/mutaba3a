@@ -294,7 +294,7 @@ export interface paths {
         put?: never;
         /**
          * Accept the current terms of service (MUT-324)
-         * @description Records that the signed-in person accepted `version`, read in `locale`, from the portal or the phone. Idempotent per version: accepting again changes nothing and writes no second audit row. The person accepts for themselves and, as owner, for their own profiles, so `user.terms_accepted` is audited on each profile they own.
+         * @description Records that the signed-in person accepted `version`, read in `locale`, from the portal or the phone, with the optional `clientRelease` that showed it (MUT-354, stored as sent). Idempotent per version: accepting again changes nothing and writes no second audit row. The person accepts for themselves and, as owner, for their own profiles, so `user.terms_accepted` is audited on each profile they own.
          */
         post: {
             parameters: {
@@ -10511,7 +10511,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Every user and the terms version they last accepted (MUT-324)
+         * Every user, the terms version they last accepted and the client release that showed it (MUT-324, MUT-354)
          * @description For the operator to see who has not yet accepted the current terms, for example someone who only uses the phone app.
          */
         get: {
@@ -11115,6 +11115,11 @@ export interface components {
         TermsAcceptanceRequest: {
             version: components["schemas"]["TermsVersion"];
             locale: components["schemas"]["UserLocale"];
+            /**
+             * @description The client release that showed the terms, e.g. the portal’s `web-v<x>` tag (MUT-354). Stored as sent.
+             * @example web-v0.1.16
+             */
+            clientRelease?: string;
         };
         ChangePasswordRequest: {
             currentPassword: string;
@@ -11151,6 +11156,11 @@ export interface components {
             password: components["schemas"]["NewPassword"];
             acceptedTermsVersion?: components["schemas"]["TermsVersion"];
             termsLocale?: components["schemas"]["UserLocale"];
+            /**
+             * @description The client release that showed the terms, e.g. the portal’s `web-v<x>` tag (MUT-354). Stored as sent.
+             * @example web-v0.1.16
+             */
+            clientRelease?: string;
         };
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];
@@ -13162,6 +13172,7 @@ export interface components {
                 /** @enum {string} */
                 status: "ACTIVE" | "DISABLED";
                 latestVersion: components["schemas"]["TermsVersion"] & unknown;
+                clientRelease: string | null;
                 accepted: boolean;
             }[];
         };

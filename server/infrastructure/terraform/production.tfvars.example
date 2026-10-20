@@ -11,6 +11,10 @@ min_instances       = 1
 # db_pool_size        = 10
 # db_max_connections  = 50
 log_level           = "info"
+# Uptime alerts (MUT-328, server/DEPLOYMENT.md §6b). Real values only in the git-ignored production.tfvars.
+# alert_email      = "you@example.com"
+# alert_sms_number = "+9725XXXXXXXX"   # E.164; verify the SMS channel once after the apply
+# uptime_host      = "app.example.com" # set when the custom domain is live (MUT-112); unset = the Cloud Run host
 # alert_notification_channels = ["projects/your-gcp-project/notificationChannels/1234567890"]
 
 # App-association files (MUT-111): set all four together, or leave all four

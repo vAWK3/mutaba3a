@@ -5,7 +5,7 @@ import { SCOPES } from '../auth/scopes.js';
  * Operator CLI: create an organization and issue its first API key through
  * the admin API of a running service. Prints the secret once.
  *
- *   npm run provision -- --url https://api.mutaba3a.app --name "Sader Law Firm" \
+ *   npm run provision -- --url https://<portal origin> --name "Sader Law Firm" \
  *       --currency ILS --timezone Asia/Jerusalem --key-name "Malafat"
  *
  * MUTABA3A_ADMIN_TOKEN is read from the environment, never from a flag, so it

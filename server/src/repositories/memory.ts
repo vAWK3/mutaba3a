@@ -450,9 +450,9 @@ export class MemoryLedgerStore implements LedgerStore {
       [...this.people.values()]
         .sort((a, b) => (a.email < b.email ? -1 : a.email > b.email ? 1 : 0))
         .map((u) => {
-          let latestVersion: string | null = null;
-          for (const a of this.termsAcceptances.values()) if (a.userId === u.id && (latestVersion === null || a.version > latestVersion)) latestVersion = a.version;
-          return { userId: u.id, email: u.email, status: u.status, latestVersion };
+          let latest: TermsAcceptanceRecord | undefined;
+          for (const a of this.termsAcceptances.values()) if (a.userId === u.id && (!latest || a.version > latest.version)) latest = a;
+          return { userId: u.id, email: u.email, status: u.status, latestVersion: latest?.version ?? null, latestClientRelease: latest?.clientRelease ?? null };
         }),
     acceptTerms: async (input) => {
       if (!this.people.has(input.userId)) throw new ForeignKeyViolation('terms_acceptances.userId');
@@ -1856,8 +1856,8 @@ export class MemoryLedgerStore implements LedgerStore {
     const key = `${userId}:${terms.version}`;
     const existing = this.termsAcceptances.get(key);
     if (existing) return { acceptance: { ...existing }, created: false };
-    const { version, locale, textSha256, surface } = terms;
-    const acceptance: TermsAcceptanceRecord = { userId, version, locale, textSha256, surface, acceptedAt: at };
+    const { version, locale, textSha256, surface, clientRelease } = terms;
+    const acceptance: TermsAcceptanceRecord = { userId, version, locale, textSha256, surface, clientRelease, acceptedAt: at };
     this.termsAcceptances.set(key, acceptance);
     return { acceptance: { ...acceptance }, created: true };
   }

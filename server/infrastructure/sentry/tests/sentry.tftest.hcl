@@ -12,9 +12,9 @@ mock_provider "sentry" {
 }
 
 variables {
-  organization    = "test-org"
-  portal_origins  = ["https://portal.example.test"]
-  landing_origins = ["https://landing.example.test"]
+  organization = "test-org"
+  # MUT-326: the origins come from the hosts config; this fixture's legacy hosts are portal/landing.example.test.
+  hosts_file = "../../../config/fixtures/hosts.no-domain.json"
 }
 
 run "four_projects_each_with_one_capped_key" {
@@ -154,14 +154,20 @@ run "rejects_an_origin_with_a_path" {
   expect_failures = [var.landing_origins]
 }
 
-run "rejects_an_empty_origin_list" {
+# MUT-326: the tfvars lists are extras now; with none, each DSN still accepts the hosts config's
+# origins, so neither ever ends up accepting nothing (or everything).
+run "no_extras_still_allows_the_configured_origins" {
   command = plan
 
   variables {
-    portal_origins = []
+    portal_origins  = []
+    landing_origins = []
   }
 
-  expect_failures = [var.portal_origins]
+  assert {
+    condition     = sentry_project.this["portal"].client_security.allowed_domains == toset(["https://portal.example.test"])
+    error_message = "With no extras the portal DSN accepts exactly the configured portal origin."
+  }
 }
 
 run "rejects_a_zero_rate_limit" {
@@ -204,4 +210,25 @@ run "rejects_a_spike_threshold_the_daily_caps_never_reach" {
   }
 
   expect_failures = [var.spike_threshold_per_hour]
+}
+
+# MUT-326: once a domain is set in config/hosts.json, both DSNs accept the new origin and keep the legacy one.
+run "a_chosen_domain_adds_its_origins_and_keeps_the_legacy_ones" {
+  command = plan
+
+  variables {
+    hosts_file      = "../../../config/fixtures/hosts.placeholder.json"
+    portal_origins  = ["https://extra.example.test"]
+    landing_origins = []
+  }
+
+  assert {
+    condition     = sentry_project.this["portal"].client_security.allowed_domains == toset(["https://app.placeholder.example", "https://portal.example.test", "https://extra.example.test"])
+    error_message = "The portal DSN accepts the new portal origin, the legacy one and the tfvars extras."
+  }
+
+  assert {
+    condition     = sentry_project.this["landing"].client_security.allowed_domains == toset(["https://placeholder.example", "https://landing.example.test"])
+    error_message = "The landing DSN accepts the apex and the legacy landing origin."
+  }
 }

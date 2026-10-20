@@ -18,6 +18,41 @@
 
 ## Open Debt
 
+### TD-186: The front-door Worker fails closed past the Cloudflare free tier, and every portal asset counts
+**Status**: Open
+**Ticket**: none (MUT-326 adversarial review, 2026-10-20; ADR-155)
+**Added**: 2026-10-20
+**Priority**: Low until the pilot grows (10 users are far below it)
+**Impact**: Once the custom domain is live, every request to `app.<apex>` goes through the Worker, hashed `/assets/*` files included. Past 100,000 requests a day per Cloudflare account, the Worker answers error 1027 until UTC midnight. The free tier is shared with anything else on the account, such as `malafat-router` if it's Malafat's.
+**Fix**: Workers Paid ($5/month, 10M requests) before a usage alert says it's close, or serve `/assets/*` from Cloudflare's cache (a Cache Rule on the route, or `cf: { cacheEverything }` for that prefix) so repeats never reach the Worker.
+
+### TD-187: The phone repo still writes the run.app and netlify.app hosts in tests and defaults
+**Status**: Open
+**Ticket**: none (MUT-326 inventory, 2026-10-20)
+**Added**: 2026-10-20
+**Priority**: Medium (MUT-112 step 5 edits these by hand)
+**Impact**: mutaba3a-flutter has no equivalent of `config/hosts.json` or the guard test. Its `.env` sets `MUTABA3A_API_BASE_URL` (fastlane requires it), while `lib/core/env.dart` defaults it to `https://api.mutaba3a.app`, which has no DNS. `MUTABA3A_PUBLIC_ORIGIN` defaults to the Netlify origin. The link host sits in `AssociatedDomains.xcconfig`, three `AndroidManifest.xml` hosts and `strings.xml`. About ten tests (links, legal links, settings) hardcode run.app or netlify.app.
+**Fix**: in that repo, derive the manifest and strings hosts from one Gradle property, point the QA and unit tests at `Env`, and add a guard test like mini-crm's. `npm run domain:plan` prints the values meanwhile.
+
+### TD-185: Uptime alerts can't pin "notify on close" (google provider 5.x)
+**Status**: Open
+**Ticket**: none (MUT-328, 2026-10-20)
+**Added**: 2026-10-20
+**Priority**: Low. Cloud Monitoring is expected to notify on close by default for metric policies, and the drill in `server/DEPLOYMENT.md` §6b confirms it.
+**Impact**: `alert_strategy.notification_prompts = ["OPENED", "CLOSED"]` exists only in hashicorp/google 6.x. `server/infrastructure/terraform` is locked to 5.45.2 (`~> 5.0`). If the default ever changes, recovery is silent. The runbook's fallback is the console's "Notify on incident closure" setting, which Terraform doesn't track.
+**Fix**: with the provider 6.x upgrade of this root (its own ticket: check every resource's plan for drift), add `notification_prompts = ["OPENED", "CLOSED"]` to both policy resources in `monitoring.tf` and assert it in `tests/monitoring.tftest.hcl`.
+
+### TD-184: An acceptance's `clientRelease` names the portal's built web version, which can lag the live landing that showed the terms text
+**Status**: Open (Q1 in `.claude/designs/mut-354-terms-client-release.md`, Basel's call)
+**Ticket**: MUT-354 (2026-10-20, eng review)
+**Added**: 2026-10-20
+**Priority**: Low (the file hash `textSha256` still pins the exact words; only the page code around them can differ)
+**Impact**:
+- The terms text renders on the landing, the Netlify `web-v<x>` deploy.
+- The portal sends `web-v<APP_VERSION>` (`src/hosted/terms.ts`). `APP_VERSION` is the root `package.json` version at the commit the API image was built from, because the portal ships inside it (ADR-081).
+- Web releases first (ADR-102), so normally that version is the live landing's. But a web release that isn't followed by a server release leaves the recorded release one behind the landing that actually showed the text.
+**Fix**: if Basel wants the exact landing release, the landing's `legal/terms-versions.json` gains its release, and the portal reads it when it shows the terms link. That's a cross-origin fetch with its own failure mode. Otherwise, close this as accepted.
+
 ### TD-182: `scripts/*.ts` are never type-checked by any npm script
 **Status**: Open
 **Ticket**: none (found 2026-10-19, MUT-336)
