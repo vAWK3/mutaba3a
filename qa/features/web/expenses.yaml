@@ -14,6 +14,8 @@ paths:
   - src/db/defaultExpenseCategories.ts
   # Every spec here turns Expenses on through it (support/app.ts enableOptionalArea)
   - src/pages/settings/AdvancedFeaturesSection.tsx
+  - src/lib/i18n/translations/en/expenses.json
+  - src/lib/i18n/translations/ar/expenses.json
 features:
   - id: log-expense
     title: Log two expenses from the same vendor; the second reuses the vendor the first created
@@ -113,3 +115,15 @@ features:
     expect:
       - The Edit Expense drawer opens filled with the old expense
       - The project's Transactions tab shows the new amount
+  - id: save-feedback-animation
+    title: A successful expense save shows a success toast with the animated icon (MUT-338)
+    tier: tertiary
+    legacy: [MUT-338]
+    paths:
+      - src/components/icons/SaveFeedbackIcon.tsx
+      - src/lib/motion/saveFeedbackPreset.ts
+    steps:
+      - Turn on Expenses in Settings → Advanced features
+      - Log an expense
+    expect:
+      - A toast saying "Expense saved successfully" appears with the animated save-feedback icon

@@ -85,7 +85,7 @@ describe('portal expenses: after save', () => {
 
     await waitFor(async () => expect(await rowWith('Printer ink')).toHaveClass('row-flash'));
     expect(await rowWith('Office supplies')).not.toHaveClass('row-flash');
-    expect(screen.getByText('Saved', { selector: '.sr-only' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Saved');
     expect(screen.queryByText('Expense saved')).not.toBeInTheDocument();
   });
 

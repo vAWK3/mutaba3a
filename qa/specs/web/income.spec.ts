@@ -1,6 +1,7 @@
 import { test, expect } from '../../support/qa';
-import { openFreshApp, openNewIncomeDrawer } from '../../support/app';
+import { logIncome, openFreshApp, openNewIncomeDrawer } from '../../support/app';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
+import { traceIconScale, readIconScale } from '../../support/motion';
 
 // MUT-5: logging work is title, Tab, amount, Tab, client, Enter, keyboard only.
 test(
@@ -147,5 +148,27 @@ test(
       const input = await group.locator('input').boundingBox();
       expect(prefix && input && prefix.x < input.x).toBe(true);
     });
+  },
+);
+
+test(
+  'a successful save shows the animated save-feedback icon in its toast',
+  { tag: '@web.income.save-feedback-animation' },
+  async ({ page, step }) => {
+    await step('Open a fresh install at /income', async () => {
+      await openFreshApp(page, '/income');
+    });
+
+    await step('Log an income entry for a new client', async () => {
+      await traceIconScale(page);
+      await logIncome(page, { title: 'Logo redesign', amount: '100', client: 'Acme Studio' });
+    });
+
+    await expect(page.locator('.toast-icon [data-part]').first()).toBeVisible();
+    // The local app has no firm profiles, so it is always the playful pop: it overshoots, then settles
+    await expect.poll(async () => (await readIconScale(page)).last).toBe(1);
+    const trace = await readIconScale(page);
+    expect(trace.min).toBeLessThan(0.5);
+    expect(trace.max).toBeGreaterThan(1.02);
   },
 );

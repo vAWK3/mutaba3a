@@ -48,3 +48,57 @@ export async function traceExit(page: Page, selector: string): Promise<void> {
 /** What `traceExit` has seen so far. */
 export const readExitTrace = (page: Page): Promise<ExitTrace> =>
   page.evaluate(() => (window as unknown as { __qaExit: ExitTrace }).__qaExit);
+
+/**
+ * The save-feedback icon's pop (MUT-338), measured frame by frame. Every
+ * `.save-feedback-icon [data-part]` on the page has its inline `scale()` read on
+ * each animation frame, so a spec can tell the two presets apart by their curve:
+ * playful overshoots past 1 before settling, restrained never does, and reduced
+ * motion paints 1 from the first frame. It also follows the ring's centre:
+ * the pop scales around the icon's centre, so the ring never drifts from it.
+ */
+export interface IconScaleTrace {
+  /** Frames on which at least one icon part was on the page */
+  frames: number;
+  /** Smallest and largest scale seen across every part */
+  min: number;
+  max: number;
+  /** Scale of the last frame seen */
+  last: number;
+  /** Largest distance, in px, between the ring's centre and its icon's centre */
+  maxOffCenter: number;
+}
+
+/** Start sampling. Call before the save so the first painted frame is caught. */
+export async function traceIconScale(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const trace: IconScaleTrace = { frames: 0, min: Infinity, max: -Infinity, last: NaN, maxOffCenter: 0 };
+    (window as unknown as { __qaIconScale: IconScaleTrace }).__qaIconScale = trace;
+    const tick = () => {
+      const parts = document.querySelectorAll<SVGElement | HTMLElement>('.save-feedback-icon [data-part]');
+      if (parts.length) {
+        trace.frames += 1;
+        parts.forEach((part) => {
+          const scale = /scale\((-?[\d.]+)\)/.exec(part.style.transform);
+          if (!scale) return;
+          const value = Number(scale[1]);
+          trace.min = Math.min(trace.min, value);
+          trace.max = Math.max(trace.max, value);
+          trace.last = value;
+          const svg = (part as SVGElement).ownerSVGElement;
+          if (part.dataset.part !== 'ring' || !svg || value <= 0) return;
+          const ring = part.getBoundingClientRect();
+          const icon = svg.getBoundingClientRect();
+          const off = Math.hypot(ring.x + ring.width / 2 - (icon.x + icon.width / 2), ring.y + ring.height / 2 - (icon.y + icon.height / 2));
+          trace.maxOffCenter = Math.max(trace.maxOffCenter, off);
+        });
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+/** What `traceIconScale` has seen so far. */
+export const readIconScale = (page: Page): Promise<IconScaleTrace> =>
+  page.evaluate(() => (window as unknown as { __qaIconScale: IconScaleTrace }).__qaIconScale);

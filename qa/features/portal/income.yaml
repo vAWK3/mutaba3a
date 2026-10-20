@@ -226,3 +226,15 @@ features:
       - Open its Payments at ?payment=<id>
     expect:
       - No row is clickable and no drawer opens on either list
+  - id: save-feedback-animation
+    title: A successful income save shows the animated save-feedback icon in its toast (MUT-338)
+    tier: tertiary
+    legacy: [MUT-338]
+    paths:
+      - src/components/icons/SaveFeedbackIcon.tsx
+      - src/lib/motion/saveFeedbackPreset.ts
+    steps:
+      - Open Payments and choose + Add income
+      - Save a received income entry
+    expect:
+      - The saved toast includes the animated save-feedback icon

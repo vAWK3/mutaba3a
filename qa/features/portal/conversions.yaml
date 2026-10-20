@@ -47,3 +47,15 @@ features:
       - The prompt reads "Delete this conversion ($1,000.00 → ₪3,700.00)? This can't be undone."; Cancel sends nothing
       - OK sends DELETE and the list is empty
       - The old link shows "This conversion no longer exists"
+  - id: save-feedback-animation
+    title: A successful conversion save shows the animated save-feedback icon in SavedNotice (MUT-338)
+    tier: tertiary
+    legacy: [MUT-338]
+    paths:
+      - src/components/icons/SaveFeedbackIcon.tsx
+      - src/lib/motion/saveFeedbackPreset.ts
+    steps:
+      - Open Conversions and add a new conversion
+      - Save it
+    expect:
+      - The saved-flash notice includes the animated save-feedback icon

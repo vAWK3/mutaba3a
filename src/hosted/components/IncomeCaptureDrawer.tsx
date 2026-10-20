@@ -21,6 +21,8 @@ import { useMatterCascade } from './useMatterCascade';
 import { usePendingPicks } from './usePendingPicks';
 import { mapIncomeError } from './incomeApiErrors';
 import { trackPortal } from '../analytics/portalAnalytics';
+import { SaveFeedbackIcon } from '../../components/icons/SaveFeedbackIcon';
+import { saveFeedbackPreset } from '../../lib/motion/saveFeedbackPreset';
 import {
   DETAIL_FIELDS,
   INCOME_CURRENCIES,
@@ -138,7 +140,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
       attempt.succeeded();
       // Opt-in usage counts (MUT-155): the kind and currency only, never the amount or client
       void trackPortal('income_recorded', { currency: values.currency, paid: values.kind === 'received' });
-      showToast(savedMessage(values, body.amount), { tone: 'info' });
+      showToast(savedMessage(values, body.amount), { tone: 'info', icon: <SaveFeedbackIcon preset={saveFeedbackPreset(profile)} /> });
       onSaved?.();
       onClose();
     } catch (error) {

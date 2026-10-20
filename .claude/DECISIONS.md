@@ -4196,6 +4196,26 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - A profile restore loses that profile's changes after the restore point, and access changes since then need a manual check.
 - Whole-database dumps need Postgres 16 client tools.
 
+---
+
+## ADR-158: Claimed-Save Feedback Rides the Existing Toast/SavedNotice Surface, Not a New Floating Element
+
+**Status**: Active
+**Date**: 2026-10-19
+**Context**: MUT-338 wires ADR-152's `playIconFeedback` into a real save. The "claimed" path (the saved row is already on screen) had no visible feedback at all before this ticket — only a permanent `sr-only` "Saved" span, because the row itself tints (`useSavedFlashRows`). Making the new icon visible here meant either inventing a new floating UI element with no existing visual home and an un-pinned-down position, or reusing a surface the app already has designed, positioned and tested: the existing Toast (legacy app) / `SavedNotice`'s `NoticeBox` shape (portal), which already handles the sibling "unclaimed" case.
+
+**Decision**: Reuse the existing toast/notice surface for the claimed path too, firing a brief (`FLASH_MS`, matching the row tint's own window) message carrying the icon, instead of a new component. Presented as a 3-way choice to Basel (reuse Toast / new floating chip / leave sr-only-only); **reuse Toast** was chosen.
+1. **Legacy app** (`SavedFlashAnnouncer.tsx`): the claimed branch now calls the same `showToast` the unclaimed branch already uses, with `icon: <SaveFeedbackIcon preset="playful" />` and `duration: FLASH_MS`.
+2. **Portal** (`SavedNotice.tsx`): no global toast context reaches a page-scoped component cleanly here, so the claimed branch renders a `NoticeBox`-shaped element in place (same `hp-toast hp-toast-info` classes the unclaimed `NoticeBox` already uses), gated by a local flash timer. Built as a render-time state adjustment (`if (claimedVisible && shownFor !== claimedVisible) { setShownFor(...); setFlashVisible(true) }`) rather than `setState` inside a `useEffect` body — the React Compiler / `react-hooks/set-state-in-effect` lint rule flags the latter (cascading-render risk); only the timer that *ends* the flash lives in an effect.
+3. **Rejected: a new floating chip.** No existing design pins down where it would sit (not near the row — rows can be anywhere in a long list; not fixed-position — nothing like that exists in the portal today), and it would need its own CSS, review and tests for zero behavioral gain over the already-designed toast surface.
+
+**Consequences**:
+- Every claimed save now also produces a transient toast/notice, not just the row tint — slightly more feedback than before, intentionally (that was the point: there was no icon-bearing surface to animate otherwise).
+- `SavedNotice`'s `preset: IconFeedbackPreset` prop is resolved once by the page (`ExpensesList.tsx`/`ConversionsList.tsx`, which already hold the full `HostedProfile` via `useProfile()`), not looked up inside `SavedNotice`/`ExpenseDrawer`/`ConversionDrawer` via `useMe()` — those three only ever held `profileId: string`, and adding `useMe()` there would have broken their existing tests (none wrap a `Me` context) for no benefit over a one-line prop threaded from where the data already lives.
+- MUT-339/340 (streaks, milestones) inherit this precedent: reuse the existing toast/notice surface for new icon-bearing feedback before inventing new floating UI.
+
+---
+
 ## ADR-159: Open Signup Verifies the Email First and Ends on the Setup-Link Page; Only Business Email Is Instant, the Rest Waits for the Operator; Forgot-Password Mails a RESET Link; Resend Is the One Mailer (Overrides ADR-037 §1's "Operator-Issued Only")
 
 **Status**: Accepted (Basel, 2026-10-20, Q1–Q5 + Q4b in `.claude/designs/mut-331-self-service-signup.md` §10). Overrides ADR-037 §1 and ADR-088's "no signup or forgot-password route" for GA. Supersedes firm-books §10.3 / MUT-299 D14 ("MUT-306 picks the email provider"). Partly overrides Basel's own 2026-10-19 "no approval step" (MUT-331 comment 12133).

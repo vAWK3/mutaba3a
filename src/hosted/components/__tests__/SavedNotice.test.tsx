@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
-import { BACKSTOP_MS, useSavedFlashStore, type SavedFlash } from '../../../lib/savedFlashStore';
+import { BACKSTOP_MS, FLASH_MS, useSavedFlashStore, type SavedFlash } from '../../../lib/savedFlashStore';
 import { NOTICE_MS, SavedNotice } from '../SavedNotice';
 
 /** The portal's view of an unclaimed save (MUT-91, eng review D4/D5). */
@@ -19,13 +19,18 @@ function unclaimed(f: SavedFlash) {
   });
 }
 
-function notice(onShow = vi.fn()) {
+function notice(onShow = vi.fn(), preset: 'playful' | 'restrained' = 'playful') {
   const ui = (
     <HostedLanguageProvider>
-      <SavedNotice kind="expense" message="Expense saved" profileId={PROFILE} onShow={onShow} />
+      <SavedNotice kind="expense" message="Expense saved" profileId={PROFILE} onShow={onShow} preset={preset} />
     </HostedLanguageProvider>
   );
   return { onShow, ...render(ui) };
+}
+
+function scaleOf(el: Element): number {
+  const match = /scale\(([-\d.]+)\)/.exec((el as HTMLElement).style.transform);
+  return match ? Number(match[1]) : 0;
 }
 
 beforeEach(() => {
@@ -54,7 +59,7 @@ describe('SavedNotice', () => {
     expect(screen.queryByText('Expense saved')).not.toBeInTheDocument();
   });
 
-  it('says only a polite "Saved" when the list claimed it', () => {
+  it('shows a brief "Saved" flash with the animated icon when the list claimed it (MUT-338)', () => {
     notice();
     act(() => {
       const store = useSavedFlashStore.getState();
@@ -62,8 +67,36 @@ describe('SavedNotice', () => {
       store.markSaved(flash());
       store.reportSettled('list', ['e-9'], true);
     });
-    expect(screen.getByText('Saved', { selector: '.sr-only' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Saved');
+    expect(screen.getByRole('status').querySelector('[data-part]')).not.toBeNull();
     expect(screen.queryByText('Expense saved')).not.toBeInTheDocument();
+  });
+
+  it('hides the claimed flash after FLASH_MS', () => {
+    vi.useFakeTimers();
+    notice();
+    act(() => {
+      const store = useSavedFlashStore.getState();
+      store.registerList('list');
+      store.markSaved(flash());
+      store.reportSettled('list', ['e-9'], true);
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Saved');
+    act(() => vi.advanceTimersByTime(FLASH_MS));
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('plays the preset passed in - restrained does not overshoot past scale(1)', async () => {
+    notice(vi.fn(), 'restrained');
+    act(() => {
+      const store = useSavedFlashStore.getState();
+      store.registerList('list');
+      store.markSaved(flash());
+      store.reportSettled('list', ['e-9'], true);
+    });
+    const parts = Array.from(screen.getByRole('status').querySelectorAll('[data-part]'));
+    expect(parts.length).toBeGreaterThan(0);
+    await waitFor(() => parts.forEach((part) => expect(scaleOf(part)).toBe(1)), { timeout: 2000 });
   });
 
   it('hides after NOTICE_MS and does not come back on a remount', () => {
@@ -133,9 +166,9 @@ describe('SavedNotice', () => {
       store.markSaved(flash());
       store.reportSettled('list', ['e-9'], true);
     });
-    expect(screen.getByText('Saved', { selector: '.sr-only' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Saved');
     first.unmount();
     notice();
-    expect(screen.queryByText('Saved', { selector: '.sr-only' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });
