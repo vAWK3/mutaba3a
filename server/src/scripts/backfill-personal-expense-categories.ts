@@ -7,7 +7,8 @@ import { PERSONAL_PRESET } from '../expenses/presets.js';
  * categories once, on its first `GET /v1/expense-categories` (MUT-42 D2), so a
  * profile that already had categories before MAL-1137 kept the old ten —
  * including "Projects", which the ticket retired. This brings an
- * already-seeded profile in line: adds the three categories it's missing, and
+ * already-seeded profile in line (one with none yet is left to seed the current
+ * preset itself): adds the three categories it’s missing, and
  * retires "Projects", moving its expenses to "Other" first (categories are
  * archived, never deleted — `routes/expense-categories.ts`).
  *
@@ -45,12 +46,16 @@ function detectLocale(existingKeys: ReadonlySet<string>): 'en' | 'ar' {
 }
 
 export async function backfillPersonalExpenseCategories(db: PrismaClient, at = new Date(), options: { dry?: boolean } = {}): Promise<PersonalCategoryBackfillResult> {
-  const organizations = await db.organization.findMany({ where: { personalOwnerUserId: { not: null } }, select: { id: true } });
+  // Seeded profiles only: one with no categories yet seeds the whole current preset on its first list, and
+  // adding the three here would make that "none yet" check skip it for good. Categories ride along, one read for all.
+  const organizations = await db.organization.findMany({
+    where: { personalOwnerUserId: { not: null }, expenseCategories: { some: {} } },
+    select: { id: true, expenseCategories: true },
+  });
 
   const result: PersonalCategoryBackfillResult = { organizations: [] };
   for (const org of organizations) {
-    const categories = await db.expenseCategory.findMany({ where: { organizationId: org.id } });
-    const byKey = new Map(categories.map((c) => [c.nameKey, c]));
+    const byKey = new Map(org.expenseCategories.map((c) => [c.nameKey, c]));
     const locale = detectLocale(new Set(byKey.keys()));
     const line: PersonalCategoryBackfillLine = { organizationId: org.id, categoriesAdded: [], expensesReassignedFromProjects: 0, projectsArchived: false };
 

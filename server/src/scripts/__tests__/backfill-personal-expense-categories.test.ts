@@ -132,6 +132,17 @@ if (!url) {
     expect(await db.expenseCategory.count({ where: { organizationId: org.id } })).toBe(12);
   });
 
+  it('leaves a never-seeded personal profile empty, so its first list still seeds the whole current preset', async () => {
+    const tag = randomUUID().slice(0, 8);
+    const at = new Date('2026-10-14T08:00:00Z');
+    const { org } = await personalProfile(tag, 'en');
+
+    const result = await backfillPersonalExpenseCategories(db, at);
+    expect(result.organizations.find((l) => l.organizationId === org.id)).toBeUndefined();
+    // Three categories here would make the route's "none yet → seed" check skip the preset for good.
+    expect(await db.expenseCategory.count({ where: { organizationId: org.id } })).toBe(0);
+  });
+
   it('writes nothing in dry mode but still reports what it would do', async () => {
     const tag = randomUUID().slice(0, 8);
     const at = new Date('2026-10-14T08:00:00Z');
