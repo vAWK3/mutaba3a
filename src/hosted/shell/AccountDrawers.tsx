@@ -2,6 +2,7 @@
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { omitShellOverlay, parseProfileDrawer, type ProfileDrawerSearch } from '../data/filters';
 import { ChangePasswordDrawer } from '../components/ChangePasswordDrawer';
+import { HostedYourDataDrawer } from '../components/HostedYourDataDrawer';
 import { YourDataDrawer } from '../components/YourDataDrawer';
 import { useIsLocalMode } from '../session/mode';
 
@@ -29,11 +30,11 @@ export function useAccountDrawers() {
   };
 }
 
-/** Each drawer only in the mode it belongs to: a password is an account's, Your data is this device's (MUT-286). */
+/** Each drawer only in the mode it belongs to: a password is an account's; Your data is this device's signed out (MUT-286) and the account's signed in (MUT-325). */
 export function AccountDrawers() {
   const drawers = useAccountDrawers();
   const local = useIsLocalMode();
   if (drawers.state.changePassword && !local) return <ChangePasswordDrawer onClose={drawers.close} />;
-  if (drawers.state.yourData && local) return <YourDataDrawer onClose={drawers.close} />;
+  if (drawers.state.yourData) return local ? <YourDataDrawer onClose={drawers.close} /> : <HostedYourDataDrawer onClose={drawers.close} />;
   return null;
 }

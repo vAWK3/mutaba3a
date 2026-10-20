@@ -1,7 +1,7 @@
 import type { AttachmentStorage, SignedUrl, StoredObject } from '../../../server/src/attachments/storage.js';
 import type { LocalSnapshotMaps } from '../../../server/src/repositories/memory.js';
 import { localBlobUrl } from '../session/localBackendContract.js';
-import type { IndexedDbBlobStore } from './blobStore.js';
+import { readBytes, type IndexedDbBlobStore } from './blobStore.js';
 
 /**
  * The server's `AttachmentStorage`, on this device (MUT-287, brief §6). The
@@ -41,7 +41,14 @@ export class LocalAttachmentStorage implements AttachmentStorage {
   /** The interface's, for the hosted export (MUT-325); local mode never registers those routes. */
   async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
     const file = await this.blobs.get(key);
-    return file ? file.stream() : null;
+    if (!file) return null;
+    const bytes = new Uint8Array(await readBytes(file));
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
   }
 
   /** After the snapshot saved. A failed delete only leaves an orphan, which the next boot sweeps. */

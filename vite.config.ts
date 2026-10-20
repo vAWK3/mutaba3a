@@ -380,6 +380,11 @@ function hostedConfig(): UserConfig {
         "@mut/local-backend": fileURLToPath(
           new URL("./src/hosted/local/index.ts", import.meta.url),
         ),
+        // MUT-325: the signed-in Download, a chunk of its own loaded on click
+        // (src/hosted/session/recordsExportContract.ts).
+        "@mut/records-export": fileURLToPath(
+          new URL("./src/hosted/local/hostedExport.ts", import.meta.url),
+        ),
       },
     },
     define: {
@@ -398,6 +403,8 @@ function hostedConfig(): UserConfig {
       port: HOSTED_DEV_PORT,
       strictPort: true,
       host: "127.0.0.1",
+      // Release-QA run in place writes traces into qa/runs/ (MUT-325): watching them reloaded pages mid-test.
+      watch: { ignored: ["**/qa/runs/**"] },
       proxy: {
         "/v1": { target: process.env.MUTABA3A_API_ORIGIN ?? DEFAULT_DEV_API_ORIGIN },
       },
@@ -459,6 +466,8 @@ export default defineConfig(({ mode }) => {
     port: 5173,
     strictPort: true,
     host: "127.0.0.1",
+    // Release-QA run in place writes traces into qa/runs/ (MUT-325): watching them reloaded pages mid-test.
+    watch: { ignored: ["**/qa/runs/**"] },
     proxy: {
       // Redirect /download/* to GitHub in dev (mirrors Netlify behavior)
       '/download/mac': {

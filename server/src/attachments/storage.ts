@@ -114,6 +114,12 @@ export class MemoryAttachmentStorage implements AttachmentStorage {
 
   async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
     if (!this.objects.has(key)) return null;
-    return new Blob([this.contents.get(key) ?? new Uint8Array()]).stream();
+    const bytes = this.contents.get(key) ?? new Uint8Array();
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
   }
 }

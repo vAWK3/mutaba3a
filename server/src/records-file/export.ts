@@ -66,7 +66,7 @@ export async function* profileExportPages(
         yield { field, entries: [[organization.id, localProfileOf(organization, person.id)]] };
         break;
       case 'ints': // Integration rows hold Malafat's connection; none leaves. Without one the profile has no other writer locally.
-      case 'files': // Malafat's documents stay with Malafat (ADR-097 §7, ADR-154); receipts are the files a records file carries.
+      case 'files': // Malafat's documents stay with Malafat (ADR-097 §7, ADR-155); receipts are the files a records file carries.
         break;
       case 'people':
         yield { field, entries: [[person.id, localPersonOf(person)]] };

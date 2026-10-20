@@ -31,7 +31,7 @@ export interface RecordsExportOptions {
 }
 
 /**
- * MUT-325 (ADR-154): "Download my records", signed in. The profile's records
+ * MUT-325 (ADR-155): "Download my records", signed in. The profile's records
  * as the portal's local mode holds them — the same file its own Download
  * writes — streamed a page of rows at a time, and each receipt's bytes for the
  * portal to put beside it in the zip. Signed-in only, outside `PORTAL_ROUTES`:
