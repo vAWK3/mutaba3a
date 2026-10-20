@@ -37,6 +37,10 @@ export function playIconFeedback(targets: Element[], { preset, reducedMotion }: 
   for (const target of targets) {
     activeByTarget.get(target)?.stop();
     const el = target as HTMLElement | SVGElement;
+    // An SVG part scales around the viewBox origin (its top-left) by default;
+    // the pop scales around the icon's centre, as Flutter's ScaleTransition does (MUT-338)
+    el.style.setProperty('transform-box', 'view-box');
+    el.style.transformOrigin = 'center';
     const progress = motionValue(reducedMotion ? 1 : 0);
     const paint = () => {
       el.style.transform = `scale(${progress.get()})`;

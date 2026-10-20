@@ -63,11 +63,13 @@ describe('SavedFlashAnnouncer', () => {
       useSavedFlashStore.getState().registerList('list-a');
       useSavedFlashStore.getState().reportSettled('list-a', ['tx-1'], true);
     });
-    renderWithProviders(<SavedFlashAnnouncer />);
+    const { rerender } = renderWithProviders(<SavedFlashAnnouncer />);
     await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1));
 
+    // A re-render re-runs the effect (showToast is a new function each render),
+    // so only the per-save guard keeps a second toast away
     act(() => useToastStore.setState({ toasts: [] }));
-    act(() => useSavedFlashStore.getState().reportSettled('list-a', ['tx-1'], true));
+    rerender(<SavedFlashAnnouncer />);
 
     expect(useToastStore.getState().toasts).toHaveLength(0);
   });

@@ -90,7 +90,7 @@ export function SavedNotice({ kind, message, profileId, onShow, anchor, filtersK
 
   if (claimedVisible && flashVisible) {
     return (
-      <div className="hp-toast hp-toast-info" role="status" aria-live="polite">
+      <div key={claimedVisible.ids[0]} className="hp-toast hp-toast-info" role="status" aria-live="polite">
         <SaveFeedbackIcon preset={preset} />
         <span>{t('hosted.savedFlash.saved')}</span>
       </div>

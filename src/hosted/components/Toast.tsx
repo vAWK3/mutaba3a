@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AlertIcon, InfoIcon } from './Icons';
 
 /**
@@ -97,7 +97,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className={info ? 'hp-toast hp-toast-info' : 'sr-only'} aria-live="polite" aria-atomic="true" data-testid="toast-live" {...hold}>
         {info && (
           <>
-            {info.icon ?? <InfoIcon />}
+            {/* Keyed by show, so a second save inside the window replays its icon (MUT-338) */}
+            <Fragment key={info.id}>{info.icon ?? <InfoIcon />}</Fragment>
             <span key={info.id}>{info.message}</span>
             {actionButton(info)}
           </>
