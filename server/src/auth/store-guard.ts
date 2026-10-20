@@ -237,6 +237,8 @@ export const STORE_ACCESS: StoreAccess = {
    * no person behind it and so no feed.
    */
   entries: { list: 'sessionOnly', settledOwedIds: 'sessionOnly' },
+  // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
+  recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };
 
 export interface StoreGuard {

@@ -1,6 +1,7 @@
 import { generateDeviceSessionToken, sessionDigest } from '../../../server/src/auth/sessions.js';
 import { PERSONAL_PROFILE_NAME, personalProfileFor } from '../../../server/src/personal-profile.js';
 import type { LedgerStore, UserLocale, UserRecord } from '../../../server/src/repositories/ports.js';
+import { LOCAL_PERSON_EMAIL } from '../../../server/src/records-file/local-person.js';
 
 /**
  * Not a secret (ADR-097 §2.2, brief §2.2): the local pepper and token protect
@@ -11,8 +12,7 @@ import type { LedgerStore, UserLocale, UserRecord } from '../../../server/src/re
  */
 export const LOCAL_PEPPER = 'mut-local-mode-pepper';
 
-/** Never shown; exists only so the local person is an ordinary row `findByEmail` can find again on the next boot. */
-export const LOCAL_PERSON_EMAIL = 'local@device.invalid';
+export { LOCAL_PERSON_EMAIL };
 
 /** Matches the hosted portal's own "create a profile" default (`ProfileCreateDrawer.tsx`); there is no admin or sign-up flow here to ask instead. */
 const LOCAL_DEFAULT_CURRENCY = 'ILS';

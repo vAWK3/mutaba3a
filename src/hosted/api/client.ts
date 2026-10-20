@@ -289,8 +289,14 @@ async function toApiError(response: Response): Promise<ApiError> {
   );
 }
 
-export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, options: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+/**
+ * The request, its routing and its errors, without reading the body: `request` reads it as JSON; MUT-325's export
+ * reads a records file and receipt bytes as they stream. Throws `ApiError` for any non-2xx, as `request` always has.
+ */
+export async function send(method: Method, path: string, options: RequestOptions & { accept?: string } = {}): Promise<Response> {
+  const headers: Record<string, string> = { Accept: options.accept ?? 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (options.profileId) headers['X-Mutaba3a-Profile'] = options.profileId;
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
@@ -335,6 +341,11 @@ export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DEL
     if (error.status === 401 && !isSignIn && wentRemote) unauthorisedHandler?.(error);
     throw error;
   }
+  return response;
+}
+
+export async function request<T>(method: Method, path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await send(method, path, options);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }

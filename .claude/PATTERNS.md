@@ -2563,6 +2563,17 @@ When a feature needs a "playful" and a "restrained" version of the same motion, 
 MUT-337 almost evaluated Rive from scratch; `.claude/DECISIONS.md`'s ADR-079/080 had already rejected `lottie-web` for the same shape of reason (new runtime, new CSP grant, new asset pipeline, to buy capability a simpler existing tool already covers) — the comparison this time started from "does our existing CSP-proven, zero-new-dependency motion tooling (`motion`, ADR-044) already cover this" instead of re-litigating general-purpose-engine tradeoffs. Search `DECISIONS.md` for the capability category (not the specific library name) before comparing candidates for anything animation/media/rendering-runtime shaped.
 
 
+## Patterns added by MUT-325 (2026-10-20, ADR-156)
+
+### Pattern: A large download is pulled a page at a time, never built whole
+`GET /v1/records-export` returns a `ReadableStream` whose `pull()` asks an async generator for the next chunk (`recordsFileChunks` over `profileExportPages`): each page is one 500-row query, read only when the reader wants more, so a slow client slows the reads and the server holds one page. A failure mid-stream calls `controller.error()`, cutting the response off (and logging it) instead of ending it as if whole; the portal decodes before saving, so a cut file is refused.
+
+### Pattern: A Prisma read that must match a record exactly selects `Columns<R>`
+`prisma-records-export.ts` types each `select` as exactly the record's keys (`cols<R>()({...})`: every key, nothing extra), so a column the record lacks never leaks and a field it has is never dropped. Prisma can't check a select passed through a shared delegate, so `prisma-records-export-columns.test.ts` holds every selected column to `Prisma.dmmf` without a database.
+
+### Pattern: Code that runs server modules in the page is a lazy alias with a contract file
+Like `@mut/local-backend`: `@mut/records-export` maps to `session/recordsExportContract.ts` for the portal's types (tsconfig.hosted.json) and to `src/hosted/local/hostedExport.ts` for code (vite/vitest), so the portal program never type-checks server files and the chunk loads on click. Dependencies the chunk can't import (the portal's `send()`) are injected (`RecordsExportTransport`).
+
 ## Patterns added by MUT-326 (2026-10-20, ADR-155)
 
 ### Pattern: A public host is read from `config/hosts.json`, never written down

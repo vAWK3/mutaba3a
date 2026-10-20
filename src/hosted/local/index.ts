@@ -90,6 +90,7 @@ async function boot(): Promise<LocalBackend> {
     return {
       recordCount: countRecords(decoded.snapshot.maps),
       missingReceiptFiles: decoded.missing.length,
+      exportedFromAccountAt: decoded.fromAccount ? decoded.snapshot.savedAt : null,
       apply: async () => {
         // Unpacked only now, outside the lock; the lock covers just the add, save and sweep (restore.ts).
         const { files, missing } = await decoded.readFiles();

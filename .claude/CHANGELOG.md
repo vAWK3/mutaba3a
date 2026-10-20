@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — Signed in, download all my records (MUT-325, ADR-156)
+
+**Why:** The pilot gate (MUT-322): a paying user must be able to leave with their records. Signed out, Your data already wrote a records file; signed in there was no export at all. The export is the same file local mode restores, so leaving never loses data.
+
+### Added
+- **`GET /v1/records-export`** (session-only, X-Mutaba3a-Profile): the profile as the local-mode records file, re-homed to the device's one person, without Malafat's connection or documents, labelled `origin: "hosted-export"`. Streamed 500 rows a query, gzip when accepted; due items posted first; audited `records.exported`. API 1.40.0-mut325.
+- **`GET /v1/records-export/receipts/{receiptId}`**: a READY receipt's bytes as a download (`octet-stream`, `attachment`, `nosniff`) — the API's one byte-passing route (ADR-156 override of ADR-028 §2).
+- **`RecordsExportRepository`** (`recordsExport` on `LedgerStore`; memory + `repositories/prisma-records-export.ts` with exact per-record selects), store guard `sessionOnly`; `AttachmentStorage.read()`.
+- **`server/src/records-file/`**: `codec.ts` (the `$map/$date/$bigint` codec, moved from `src/hosted/local/recordsFile.ts`, plus the pulled `recordsFileChunks` writer), `export.ts` (paging + re-homing), `local-person.ts`.
+- **Portal Your data, signed in** (`HostedYourDataDrawer`, account menu): profile checklist, "an export, not a backup", Download my records with progress and Cancel, missing-file count. Export code in `src/hosted/local/hostedExport.ts`, reached lazily through `@mut/records-export` (`session/recordsExportContract.ts`). EN + AR.
+- Restore's confirm says when a file came from an account (`PendingRestore.exportedFromAccountAt`).
+- Release-QA `portal.your-data.download-signed-in` and `portal.your-data.download-cancel`.
+
+### Changed
+- MUT-286's "Your data is not there signed in" test now asserts the signed-in drawer instead.
+- The hosted dev server ignores `qa/runs/**`: in-place release-QA runs write traces there, which reloaded pages mid-test. (The web dev server has the same exposure; its config is snapshot-guarded, so it is left for its own change.)
+
+### Files
+`server/src/records-file/*`, `server/src/routes/records-export.ts`, `server/src/repositories/{ports,memory,prisma,prisma-records-export}.ts`, `server/src/auth/store-guard.ts`, `server/src/attachments/storage.ts`, `server/src/app.ts`, `src/hosted/local/{hostedExport,recordsFile,recordsArchive,attachments,index,mintLocalSession}.ts`, `src/hosted/components/{HostedYourDataDrawer,YourDataDrawer}.tsx`, `src/hosted/data/recordsExportTransport.ts`, `src/hosted/session/{recordsExportContract,localBackendContract}.ts`, `src/hosted/shell/{AccountDrawers,UserMenu}.tsx`, `src/hosted/api/client.ts` (`send()`), i18n, `hosted.css`, `vite.config.ts`, `vitest.config.ts`, `tsconfig.hosted.json`, `eslint.config.js` (allowlist), `qa/features/portal/your-data.yaml`, `qa/specs/portal/your-data.spec.ts`.
+
 ## [Unreleased] - 2026-10-20 — MUT-356: /privacy honours ?lang, like /terms
 
 **Why:** the phone's Settings › Privacy policy (MUT-344) opens `<site>/privacy`, which opened in the landing's stored language (Arabic by default, ADR-077), so English phone users read the Arabic policy.

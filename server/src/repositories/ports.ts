@@ -1440,6 +1440,8 @@ export interface LedgerStore {
   expenseGroups: ExpenseGroupRepository;
   /** MUT-270: one newest-first feed across a person's profiles; session-only (store guard `sessionOnly`). */
   entries: EntriesRepository;
+  /** MUT-325: one profile's rows for its records file; session-only (store guard `sessionOnly`). */
+  recordsExport: RecordsExportRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------
@@ -1867,6 +1869,61 @@ export interface EntriesRepository {
    * made it. Other payments are absent. Same trust in `organizationIds` as `list`.
    */
   settledOwedIds(organizationIds: readonly string[], paymentIds: readonly string[]): Promise<Map<string, string>>;
+}
+
+// ---- MUT-325: the records-file export ---------------------------------------
+
+/**
+ * Each profile-owned snapshot field (`LocalSnapshotMaps`, memory.ts) and the record it holds. The person-level
+ * fields (`orgs`, `ints`, `people`, `members`, `inbox`) are not here: the export builds or omits those itself. Nor
+ * is `files`: Malafat's documents stay with Malafat (ADR-097 §7: local profiles have none; ADR-156).
+ */
+export interface ProfileExportRecords {
+  custs: CustomerRecord;
+  projs: ProjectRecord;
+  refs: ExternalReferenceRecord;
+  rates: VatRateRecord;
+  agrs: AgreementRecord;
+  insts: InstallmentRecord;
+  charges: RetainerChargeRecord;
+  recs: ReceivableRecord;
+  supps: SupplementRecord;
+  versions: RetainerVersionRecord;
+  pays: PaymentRecord;
+  allocs: AllocationRecord;
+  credits: CreditRecord;
+  /** The last payment number used in a year; keyed `${organizationId}:${year}`. */
+  counters: number;
+  props: FeeProposalRecord;
+  exps: ExpenseRecord;
+  expCats: ExpenseCategoryRecord;
+  expReceipts: ExpenseReceiptRecord;
+  convs: ConversionRecord;
+  expGroups: ExpenseGroupRecord;
+  /** Keyed `${groupId}:${expenseId}`. */
+  groupMarks: ExpenseGroupOverrideRecord;
+}
+
+export type ProfileExportField = keyof ProfileExportRecords;
+
+/** One page of a field: `[key, record]` exactly as `MemoryLedgerStore` keys that map, ascending by key. */
+export interface ExportPage<T> {
+  entries: Array<[string, T]>;
+  /** Pass back as `afterKey` for the next page; null on the last one. */
+  nextKey: string | null;
+}
+
+/**
+ * MUT-325: a profile's rows for "Download my records", read in key order a page at a time so an export never holds
+ * a whole profile. Every row, soft-deleted ones included, exactly as stored: the file is the store, not a view of it.
+ * Trusts its ids: the route resolves the profile from the session's membership.
+ */
+export interface RecordsExportRepository {
+  profilePage<F extends ProfileExportField>(organizationId: string, field: F, afterKey: string | null, limit: number): Promise<ExportPage<ProfileExportRecords[F]>>;
+  /** The person's unsorted inbox (MUT-66), which belongs to no profile. */
+  inboxPage(userId: string, afterKey: string | null, limit: number): Promise<ExportPage<InboxEntryRecord>>;
+  /** A READY, undeleted receipt of this profile: the only files the export hands out bytes for. */
+  findExportableReceipt(organizationId: string, id: string): Promise<{ storageKey: string; mimeType: string; sizeBytes: number } | null>;
 }
 
 // ---- MUT-66: the unsorted inbox ---------------------------------------------

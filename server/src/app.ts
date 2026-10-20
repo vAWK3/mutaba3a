@@ -35,6 +35,7 @@ import { feeProposalRoutes } from './routes/fee-proposals.js';
 import { installmentRoutes } from './routes/installments.js';
 import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
+import { recordsExportRoutes } from './routes/records-export.js';
 import { retainerRoutes } from './routes/retainers.js';
 import { vatRoutes } from './routes/vat.js';
 import { healthRoutes } from './routes/health.js';
@@ -137,7 +138,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.39.0-mut354';
+export const API_VERSION = '1.40.0-mut325';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -245,6 +246,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     terms,
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
+  // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.
+  app.route('/', recordsExportRoutes(store, { storage: deps.attachments ?? null, logger: deps.logger }));
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
@@ -342,6 +345,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Profiles', description: 'A signed-in person\'s own standalone profiles: create, rename, default currency and type (sessions only; never a Malafat organization)' },
       { name: 'Expenses', description: 'A hosted profile\'s expenses, categories, receipts and expense summary (sessions only)' },
       { name: 'Income', description: 'Received or Owed, captured directly by the signed-in person on a personal profile (sessions only)' },
+      { name: 'Your data', description: 'Download my records: a profile as the records file the signed-out portal restores, and its receipt files (sessions only)' },
       { name: 'Admin', description: 'Operator provisioning: organizations, API keys, users and memberships' },
     ],
   });
