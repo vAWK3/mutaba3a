@@ -96,6 +96,23 @@ Portal SetupPage / TermsUpdatePage ─ TERMS_CLIENT_RELEASE (unit + @portal.setu
 **Outside Voice:** skipped for this small ticket, at the caller's request.
 **Failure modes:** 0 critical gaps flagged. The one real production failure, a phone sending the field to an old server, is covered by the release-order note.
 
+## QA reconcile (2026-10-20, branch head 3b619e04)
+
+| AC | Criterion | Evidence | Verdict |
+|---|---|---|---|
+| AC1 | A new portal acceptance records the web release that rendered the page | Recorded release-qa run `after-api-v0.3.15/20261020-145817` @3b619e04: `portal.terms.setup-requires-accept`, step "Tick and save: the version, language and web release go with the password" @0:00; `portal.terms.updated-terms-step`, step "I agree: … with the web release" @0:00. Server side: `terms.test.ts` "the client release on each acceptance" (stored, audited, in the report) | PASS |
+| AC2a | `openapi:check` passes | `npm --prefix server run openapi:check`: "up to date" | PASS (tooling) |
+| AC2b | The server tests pass | `npm --prefix server test`: 2297 passed, 30 skipped. `test:db` on a private database: 2529 passed, 3 failed; see the note below | PASS (see note) |
+| AC2c | Old clients that don't send the field still succeed | `terms.test.ts` "an old client that sends none still succeeds" (redeem and accept); contract "a redeem from a client that sends no release records null" | PASS (API contract; no UI surface) |
+
+- **The 3 `test:db` failures:** `migration-mut61`, `migration-mut100` and `migration-mut107` hit 60 s timeouts while the web suite ran at the same time. These are the known shared-DB timeouts. Rerun alone, all 3 pass (22.6 s), including their "result matches the schema" replay, which now includes this migration.
+- **Drift:** none. The ADR-102 addendum named in the ticket belongs to the MUT-348 docs session (scope note at the top). Not done here.
+- **Scope creep:** none. The audit metadata carrying `clientRelease` goes past the ticket's literal list, but it is the same evidence the row records, and it costs nothing.
+- **Review note (P3):** after a server rollback to a version before 1.39.0, a portal bundle still cached by the service worker would send `clientRelease` to a `.strict()` request and get 422 on I agree until the page reloads. A rollback across this version is unlikely, so it is accepted. The phone ordering is in the MUT-344 comment.
+- **Gates (Node 22):** web `lint`, `typecheck`, `test:run` (392 files, 5546 passed) and `build` all exit 0. The server's `typecheck`, `lint`, `openapi:check` and `test` all exit 0. The migration has no drift (`prisma migrate diff --exit-code`). `release-qa lint`: no errors; the unmapped files predate this branch.
+
+Verdict: **PASS.** Moving MUT-354 to In Review waits for Basel's approval.
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
