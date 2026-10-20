@@ -558,7 +558,8 @@ Unmount it whenever you like: the exit animation plays after it has gone (ADR-04
 **Behaviour**: springs in from its edge (response 0.3, damping 1.0). It follows a horizontal drag 1:1, rubber-banding past open. A release past half the width, after projecting momentum, dismisses. A press catches any live motion where it is. Every other close leaves as an inert snapshot along the same edge. In RTL the edge is mirrored. Reduced motion gives 150ms cross-fades.
 **Opt-out**: put `data-drawer-no-drag` on a region that needs horizontal pointer gestures of its own. Form fields, editable content and horizontally scrolling regions are already excluded.
 **Snapshots carry no ids** (MUT-82): `exitSnapshot` strips every `id` from the clone, so a drawer opened while another is still playing out never resolves an id (the payment drawer's `form=` button, a label) to the clone.
-**Tests**: `src/components/ui/drawer/__tests__/` (`DrawerFrame`, `drawerGesture`, `exitSnapshot`); `qa/specs/web/drawer-motion.spec.ts`.
+**Width** (MUT-357): `--drawer-width` (480px), capped at the viewport (`max-width: 100%` on `.drawer`), so on a phone it fills the screen in either direction. Motion measures the rendered `offsetWidth`, never the variable.
+**Tests**: `src/components/ui/drawer/__tests__/` (`DrawerFrame`, `drawerGesture`, `exitSnapshot`); `qa/specs/web/drawer-motion.spec.ts`; `src/styles/__tests__/drawerFit.test.ts` and `@portal.direction.drawer-phone-*` (width).
 
 ### Motion physics and focusables (MUT-80)
 - `src/lib/motion/physics.ts`: `springFromResponse(response, dampingRatio)`, `projectMomentum(velocity, rate = 0.998)`, `rubberband` / `rubberbandInverse`, `velocityFromSamples(samples, windowMs = 100)`. Reuse these for anything draggable or flickable.

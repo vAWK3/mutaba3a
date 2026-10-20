@@ -2318,6 +2318,9 @@ div.input-with-prefix {
   right: 0;
   bottom: 0;
   width: var(--drawer-width);
+  /* Never wider than the screen: on a phone the drawer fills it rather than
+     hanging off its anchored edge, in either direction (MUT-357). */
+  max-width: 100%;
   background: var(--surface);
   box-shadow: var(--drawer-shadow);
   z-index: 201;

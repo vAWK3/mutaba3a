@@ -20,6 +20,7 @@ paths:
   - src/hosted/components/ProfileCreateDrawer.tsx
   - src/hosted/components/ProfileEditForm.tsx
   - src/hosted/components/ProfilesManageDrawer.tsx
+  - src/hosted/components/Drawer.tsx
 features:
   - id: signin
     title: In Arabic, sign-in's email and password are typed left to right, on the right as before
@@ -46,3 +47,21 @@ features:
     expect:
       - PAY-2026-0001 and INV-2026-007 compute left to right and read in order
       - The payment's amount reads ₪ 1,500.00 on screen, as before, from a plain <bdi>
+  - id: drawer-phone-ar
+    title: In Arabic on a phone, a drawer sits wholly on screen, with no sideways scroll
+    tier: secondary
+    legacy: [MUT-357]
+    steps:
+      - Open Change password in Arabic on a 375px-wide phone
+    expect:
+      - The drawer fills the screen edge to edge, its title and buttons whole
+      - The page does not scroll sideways
+  - id: drawer-phone-en
+    title: In English on a phone, a drawer sits wholly on screen, with no sideways scroll
+    tier: secondary
+    legacy: [MUT-357]
+    steps:
+      - Open Change password in English on a 375px-wide phone
+    expect:
+      - The drawer fills the screen edge to edge, its title and buttons whole
+      - The page does not scroll sideways

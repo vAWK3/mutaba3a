@@ -3310,3 +3310,13 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Shellcheck | Both scripts clean |
 | Local walk (runbook §9) | Every locally walkable step against the local API and copies of `mutaba3a_dev` |
 | Not automatable here | The drill against production backups (AC1), in-place restore, ingress close and reopen, bucket soft-delete restore: Basel's steps |
+
+## MUT-357 — Drawers fit a phone (2026-10-20, TD-070)
+
+| Test | Covers |
+|---|---|
+| `src/styles/__tests__/drawerFit.test.ts` (2) | `.drawer` in `src/index.css` declares `max-width: 100%`; its only `width` is `var(--drawer-width)`, and no `.drawer` rule (plain, `[dir="rtl"]`, dark) sets another `width` or a `min-width` |
+| `qa/specs/portal/direction.spec.ts` (`@portal.direction.drawer-phone-ar`, `-en`) | At 375×812, Change password in Arabic and English: once its spring settles the dialog's box is 0..375 (fills the screen) and `scrollWidth` does not exceed `clientWidth`. Both red on main (Arabic 0..480, English −105..375), green on the branch (preview build) |
+| `qa/specs/web/brand.spec.ts` (`@web.brand.layout`) | The payment drawer at 375px now has to fit outright (its `KNOWN_OVERFLOW` entry is gone), English and Arabic, light and dark |
+| Re-run, unchanged | `@portal.account.*`, `@portal.your-data.*`, `@web.drawer-motion.*` (incl. `rtl-mirror`): desktop drawers, drag-to-dismiss and the RTL mirror still pass |
+
