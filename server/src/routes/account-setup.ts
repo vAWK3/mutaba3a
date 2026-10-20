@@ -111,7 +111,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     }),
     async (c) => {
       const now = await guard(c);
-      const { token, password, acceptedTermsVersion, termsLocale } = c.req.valid('json');
+      const { token, password, acceptedTermsVersion, termsLocale, clientRelease } = c.req.valid('json');
       const tokenDigest = sessionDigest(settings.pepper, token);
       const { link, person } = await lookUp(token);
       const state = setupLinkState(link, person, now);
@@ -122,7 +122,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       const passwordHash = await passwordHasher.hash(password);
       const audit = await passwordSetAudit(c, person, link);
       // The setup page is the portal: a cookie surface.
-      const acceptance = termsAcceptanceOf(terms, termsLocale ?? person.locale, 'cookie');
+      const acceptance = termsAcceptanceOf(terms, termsLocale ?? person.locale, 'cookie', clientRelease);
       const termsAudit = await termsAcceptedAudit(store, person, acceptance, c.get('requestId'));
       // A fresh instant after the slow hash: the expiry check and passwordChangedAt must not predate a sign-in that ran meanwhile.
       const at = c.get('now')();
