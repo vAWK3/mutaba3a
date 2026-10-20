@@ -384,6 +384,27 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
+      # MUT-326: the custom domain's front door (domain.tf); empty while config/hosts.json names no domain.
+      dynamic "env" {
+        for_each = local.front_door_env
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+      dynamic "env" {
+        for_each = local.front_door_enabled ? [local.front_door_token_secret] : []
+        content {
+          name = "FRONT_DOOR_TOKEN"
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
+      }
+
       startup_probe {
         http_get {
           path = "/health"
@@ -443,6 +464,7 @@ resource "google_cloud_run_v2_service" "api" {
     google_secret_manager_secret_iam_member.api_reads_database_url,
     google_secret_manager_secret_iam_member.api_reads_admin_token,
     google_secret_manager_secret_iam_member.api_reads_session_pepper,
+    google_secret_manager_secret_iam_member.api_reads_front_door_token,
   ]
 }
 

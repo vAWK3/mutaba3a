@@ -12,7 +12,7 @@ mock_provider "google" {
   }
   mock_resource "google_cloud_run_v2_service" {
     defaults = {
-      uri = "https://mutaba3a-api-abc123-zf.a.run.app"
+      uri = "https://service-abc123-zf.a.run.example"
     }
   }
 }
@@ -21,6 +21,8 @@ mock_provider "random" {}
 variables {
   project_id = "test-project"
   image_tag  = "test"
+  # MUT-326: the default host is the config's portal host; this fixture's is portal.example.test.
+  hosts_file = "../../../config/fixtures/hosts.no-domain.json"
 }
 
 run "defaults_check_health_ready_and_the_portal_on_the_cloud_run_host_without_alerting" {
@@ -37,8 +39,8 @@ run "defaults_check_health_ready_and_the_portal_on_the_cloud_run_host_without_al
   }
 
   assert {
-    condition     = alltrue([for c in google_monitoring_uptime_check_config.endpoint : c.monitored_resource[0].labels.host == "mutaba3a-api-abc123-zf.a.run.app"])
-    error_message = "With no uptime_host, every check probes the Cloud Run host (today's behaviour)."
+    condition     = alltrue([for c in google_monitoring_uptime_check_config.endpoint : c.monitored_resource[0].labels.host == "portal.example.test"])
+    error_message = "With no uptime_host, every check probes the portal host config/hosts.json names (today the Cloud Run host)."
   }
 
   assert {
@@ -67,7 +69,7 @@ run "defaults_check_health_ready_and_the_portal_on_the_cloud_run_host_without_al
   }
 
   assert {
-    condition     = output.uptime_host == "mutaba3a-api-abc123-zf.a.run.app"
+    condition     = output.uptime_host == "portal.example.test"
     error_message = "output.uptime_host reports the probed host."
   }
 }
@@ -295,5 +297,19 @@ run "disabling_uptime_checks_keeps_the_cloud_sql_alerts" {
   assert {
     condition     = length(google_monitoring_alert_policy.cloud_sql) == 2
     error_message = "The Cloud SQL alerts don't depend on the uptime checks."
+  }
+}
+
+# MUT-326: once config/hosts.json's domain is live, the checks follow it with no tfvars change.
+run "the_host_follows_the_custom_domain_once_live" {
+  command = plan
+
+  variables {
+    hosts_file = "../../../config/fixtures/hosts.placeholder.json"
+  }
+
+  assert {
+    condition     = alltrue([for c in google_monitoring_uptime_check_config.endpoint : c.monitored_resource[0].labels.host == "app.placeholder.example"])
+    error_message = "From stage live, every check probes the custom domain's portal host."
   }
 }

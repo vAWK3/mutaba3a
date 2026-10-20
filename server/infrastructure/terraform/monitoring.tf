@@ -3,9 +3,10 @@
 # Brief: .claude/designs/mut-328-uptime-alerts.md. Operator steps: server/DEPLOYMENT.md §6b.
 
 locals {
-  # A bare hostname. Empty uptime_host = the Cloud Run host, today's address.
-  # MUT-326/MUT-112: put the custom-domain input in front of this fallback so the checks follow it.
-  uptime_host = var.uptime_host != "" ? var.uptime_host : trimprefix(google_cloud_run_v2_service.api.uri, "https://")
+  # A bare hostname. Empty uptime_host = where users reach the portal (MUT-326, domain.tf): the
+  # config/hosts.json portal host, which is the Cloud Run host until the custom domain's stage is
+  # "live", then app.<domain>. An environment the config doesn't name falls back to the service's URL.
+  uptime_host = var.uptime_host != "" ? var.uptime_host : local.public_portal_host
 
   uptime_period_seconds = 300
 

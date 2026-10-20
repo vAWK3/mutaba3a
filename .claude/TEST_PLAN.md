@@ -3176,6 +3176,12 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Release-QA `@portal.income.matter-fills-client` | client chips; picking Client 2's Retainer fills Client 2; switching to Client 1 empties Matter |
 | Reconcile additions (2026-10-19) | `EntityTypeahead.test.tsx`: no second pick while one saves (list shut on ArrowDown/refocus); cascade flash comes off after its span and replays. `useClientProjectCascade.test.tsx`: `onAutoFill` with the default owner, not when the client already owns it. `IncomeCaptureDrawer.test.tsx`: Save held while a matter is added; Enter held still saves once it lands; CURRENCY_MISMATCH under Matter; Malafat no-Add check now waits for the open list (was vacuous). `ExpenseDrawer.test.tsx`: Save held while a matter is added; picking a matter fills the client, changing the client empties it. `incomeApiErrors.test.ts`: CURRENCY_MISMATCH → `matterCurrency` with the matter's currency. Release-QA `@portal.income.add-matter`: the Malafat step waits for the open list before asserting no Add row |
 
+## MUT-356 — /privacy honours ?lang, like /terms (2026-10-20)
+
+- **Landing:** `src/content/legal/__tests__/language.test.ts` (`legalLanguageOf`: en, ar, among other params; absent, empty, unknown, upper case and other names ignored). `PrivacyPolicyPage.test.tsx` `?lang` (English text on an Arabic site and the reverse, `lang`/`dir` on the text, `<html dir>` and the stored language unchanged; an unknown value falls back to the page language).
+- **Release-QA:** `@web.legal.privacy-linked-language` (new); `@web.legal.links` now reads the hosted-accounts heading from the translation files (it had gone stale when the heading became "Where your records live").
+- **Phone (mutaba3a-flutter):** `legal_links_test.dart` (`privacyUri` `?lang=en|ar`); `ios.settings.terms-link` taps Privacy in English and in Arabic.
+
 ## MUT-354 — The client release on each terms acceptance (2026-10-20)
 
 - **Server:**
@@ -3260,6 +3266,27 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `server/infrastructure/terraform/tests/monitoring.tftest.hcl` (14 runs, mocked Google + random, server-ci `terraform test`) | Defaults: `health`/`ready`/`portal` on the Cloud Run host, every 300 s over validated HTTPS, all regions, no channel or policy, `/health` keeps its display name; the portal matcher `id="root"`; `uptime_host` moves every check; a host with a scheme, path or port is refused; email + SMS create 2 channels and 5 policies, each notifying both plus existing ids; uptime policy > 1 region for 360 s at 300 s `ALIGN_NEXT_OLDER` + `REDUCE_COUNT_FALSE`, its own check id, CRITICAL; Cloud SQL disk > 0.8 / CPU > 0.9 for 900 s on `<project>:mutaba3a-pg`, WARNING; non-E.164 SMS refused; existing channel ids alone still alert; the drill adds a check + policy, and a path without `/` is refused; `enable_uptime_check = false` keeps the SQL alerts |
 | `tests/database_pool.tftest.hcl` (3) | Unchanged, still green after the monitoring section moved out of `main.tf` |
 | Not automatable here | The real plan against production (expected: 9 to add, the `/health` check moved) and the drill (fire, then close) are Basel's steps in `server/DEPLOYMENT.md` §6b |
+
+## MUT-326 — The custom domain is one input (2026-10-20, ADR-155)
+
+| Test | Covers |
+|---|---|
+| `scripts/__tests__/hosts.test.ts` (24) | `parseHostsConfig` refuses each bad field by name (domain shape, subdomain label, unknown stage, stage/domain mismatch, http or pathful legacy origins, a domain the legacy hosts live under); `resolveHosts` per stage: legacy (legacy hosts, no front door), proxy (front door built, builds unchanged), live (apex + `app.` subdomain, both hosts for the phone), redirect; the fixtures shared with Terraform |
+| `scripts/__tests__/hosts-cli.test.ts` (18) | `get` per key and an unknown key; `withDomain` previews without touching the file; `domain:plan` names every consumer, shows before → after, keeps both hosts in the phone lines, the Netlify rules per stage, the proxy stage leaving builds alone; `main` exit codes and usage |
+| `scripts/__tests__/no-hardcoded-hosts.test.ts` (3) | AC1: no legacy host, `mutaba3a*.a.run.app` / `*.netlify.app` or chosen domain outside `config/hosts.json` (prose and the CIMD files exempt); the pattern catches a planted literal; a rehearsal with `mutaba3a.app` as the domain stays green |
+| `scripts/__tests__/front-door-worker.test.ts` (7) | The Worker forwards path and query, sends the token and the edge-read client IP, overwrites forged copies, passes `X-Mutaba3a-Profile`/cookies/`Sec-Fetch-Site`/`Origin` through but not Host, never gives GET/HEAD a body, keeps the server's 302 and both `Set-Cookie`s (`redirect: manual`), fails closed when unconfigured |
+| `scripts/__tests__/vite-config.test.ts` (+5) | Defaults equal `HOSTS`; the Netlify rules: none before live, `<apex>/app*` back to netlify.app from live, the old landing pages (and only those) to the apex at redirect, never `/app` or assets on the old host; web build only. The web snapshot masks the config-derived portal URL |
+| `scripts/__tests__/legal-terms.test.ts` | The terms guard's npm script reads the landing origin from the config, the same value vite builds for |
+| `server/src/auth/__tests__/front-door.test.ts` (10) | Token match exact, absent without a configured token; client IP from the front door only with the token, `unknown` for a missing/odd/listed value, `X-Forwarded-For` with the configured hops on the direct path (forged headers ignored); same-origin per path; no token = today's rules |
+| `server/src/__tests__/config.test.ts` (+9) | `FRONT_DOOR_TOKEN` length and its need for `PORTAL_ORIGIN`; `PORTAL_LEGACY_REDIRECT` reads only "true"/"false" ("false" is off) and needs the token |
+| `server/src/__tests__/legacy-redirect.test.ts` (17) | Old-host page visits 302 to `/carry-over?next=…` with no-store; the carry-over page itself, the API, admin, health, readiness, assets, static files, association files and writes are never redirected; through the front door never; off unless the stage says so and without a front door |
+| `server/src/__tests__/check-terms-live.test.ts` (+4) | `publicOrigin` takes the env value without a trailing slash and refuses to guess when it's unset |
+| `server/infrastructure/terraform/tests/domain.tftest.hcl` (4) | No domain: no front-door env or IAM, today's plan unchanged; the checked-in config; a live domain: `PORTAL_ORIGIN`, `FRONT_DOOR_TOKEN` as a secret ref, no redirect env, the IAM grant, `public_portal_origin`; an unnamed environment |
+| `server/infrastructure/frontdoor/tests/frontdoor.tftest.hcl` (5) | No domain: zero resources; the checked-in config; a domain: zone, apex/www DNS-only to Netlify, proxied portal host, Worker route, upstream and secret bindings, strict TLS and no edge challenge, token secret name, Netlify domain, output; staging names; missing account ids flagged |
+| `server/infrastructure/sentry/tests/sentry.tftest.hcl` (+2) | DSN origins come from the config (no extras still allows them); a chosen domain adds its origins and keeps the legacy ones |
+| Manual (offline) | `terraform plan` of the frontdoor stack with the placeholder fixture, a local backend and dummy tokens: **16 to add, 0 to change, 0 to destroy**, all `create` |
+| Manual (operator, MUT-112) | DEPLOYMENT.md §5a's checks per stage (curl of `/health`, `/ready`, both association files and a sign-in through `app.<apex>`; the redirect check at stage redirect) |
+| Release-QA | None added: nothing is user-visible while `domain` is null (builds byte-identical, pinned by the snapshot and the guard). The carry-over's `web.bridge`, `portal.carry-over` and `portal.carry-over-fallback` belong to MUT-112/MUT-291 (design §7) |
 
 ## MUT-327 — Restore drill and pilot operator runbook (2026-10-20, ADR-157)
 

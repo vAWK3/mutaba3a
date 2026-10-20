@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkTermsLive, termsLiveProblem } from '../scripts/check-terms-live.js';
+import { checkTermsLive, publicOrigin, termsLiveProblem } from '../scripts/check-terms-live.js';
 import type { CurrentTerms } from '../legal.js';
 
 /** MUT-324 (D11): the release refuses a terms version the public site does not list with the same text. */
@@ -55,5 +55,14 @@ describe('checkTermsLive', () => {
 
   it('still says to release web first when the site is up but lacks the version', async () => {
     expect(await checkTermsLive(URL_, TERMS, answering(Response.json({ versions: [] })))).toMatch(/release web first/);
+  });
+});
+
+describe('publicOrigin (MUT-326: no default; the npm script fills it from config/hosts.json)', () => {
+  it('takes MUTABA3A_PUBLIC_ORIGIN without its trailing slash', () => {
+    expect(publicOrigin({ MUTABA3A_PUBLIC_ORIGIN: 'https://landing.example/' })).toBe('https://landing.example');
+  });
+  it.each([undefined, '', '   '])('is null for %j, so the check refuses instead of guessing a site', (value) => {
+    expect(publicOrigin(value === undefined ? {} : { MUTABA3A_PUBLIC_ORIGIN: value })).toBeNull();
   });
 });

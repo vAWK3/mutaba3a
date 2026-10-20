@@ -4,12 +4,12 @@ import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
 import { PrivacyPolicyPage } from '../PrivacyPolicyPage';
 
-function renderPage(language: 'en' | 'ar') {
+function renderPage(language: 'en' | 'ar', search = '') {
   localStorage.setItem('mutaba3a-language', language);
   return render(
     <ThemeProvider>
       <LanguageProvider>
-        <PrivacyPolicyPage />
+        <PrivacyPolicyPage search={search} />
       </LanguageProvider>
     </ThemeProvider>
   );
@@ -150,5 +150,35 @@ describe('PrivacyPolicyPage', () => {
   it('links the terms of service from the footer (MUT-324)', () => {
     renderPage('en');
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');
+  });
+});
+
+/** MUT-356: a link from the phone or the portal names its language (`?lang`), as /terms does. */
+describe('PrivacyPolicyPage ?lang', () => {
+  /** The element that carries the text's own language and direction. */
+  const textOf = (title: string) => screen.getByRole('heading', { level: 1, name: title }).parentElement;
+
+  it('?lang=en shows the English policy on an Arabic site, left to right, and changes nothing stored', () => {
+    renderPage('ar', '?lang=en');
+    expect(textOf('Privacy Policy')).toHaveAttribute('lang', 'en');
+    expect(textOf('Privacy Policy')).toHaveAttribute('dir', 'ltr');
+    expect(screen.getByRole('heading', { level: 2, name: 'Anonymous usage counts' })).toBeInTheDocument();
+    expect(document.documentElement.dir).toBe('rtl');
+    expect(localStorage.getItem('mutaba3a-language')).toBe('ar');
+  });
+
+  it('?lang=ar shows the Arabic policy on an English site, right to left', () => {
+    renderPage('en', '?lang=ar');
+    expect(textOf('سياسة الخصوصية')).toHaveAttribute('lang', 'ar');
+    expect(textOf('سياسة الخصوصية')).toHaveAttribute('dir', 'rtl');
+    expect(screen.getByRole('heading', { level: 2, name: 'إحصاءات استخدام مجهولة' })).toBeInTheDocument();
+    expect(document.documentElement.dir).toBe('ltr');
+    expect(localStorage.getItem('mutaba3a-language')).toBe('en');
+  });
+
+  it('an unknown ?lang falls back to the page language', () => {
+    renderPage('ar', '?lang=fr');
+    expect(textOf('سياسة الخصوصية')).not.toHaveAttribute('lang');
+    expect(document.body.textContent).not.toMatch(/\blanding\.[a-zA-Z]/);
   });
 });

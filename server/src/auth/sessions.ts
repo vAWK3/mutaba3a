@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 /**
  * Browser sessions on the hosted service (MUT-38, ADR-037 decisions 3–4,
@@ -88,6 +88,62 @@ export function isSameOriginRequest(req: { url: string; header: HeaderReader }, 
   const origin = req.header('origin');
   if (!origin) return false;
   return origin === (portalOrigin ?? new URL(req.url).origin);
+}
+
+/**
+ * MUT-326 (ADR-155 D3): the custom domain's front door (a Cloudflare Worker,
+ * server/infrastructure/frontdoor/worker) proves itself with this header and hands
+ * over the client address it read at its edge. While run.app stays reachable
+ * directly, one TRUSTED_PROXY_HOPS can't fit both paths: the front door adds a hop,
+ * and counting it on the direct path would trust a forged X-Forwarded-For entry.
+ */
+export const FRONT_DOOR_HEADER = 'x-mutaba3a-front-door';
+export const FRONT_DOOR_CLIENT_IP_HEADER = 'x-mutaba3a-client-ip';
+
+/**
+ * MUT-326 stage "redirect": where an old-host portal visit lands first. The page (built
+ * with the carry-over, MUT-112/MUT-291, design §7) checks this origin's local records,
+ * offers to carry them over, then sends the browser on to PORTAL_ORIGIN + `next`.
+ */
+export const LEGACY_CARRY_OVER_PATH = '/carry-over';
+
+/** The settings that decide where a request came from (a subset of SessionSettings). */
+export interface RequestPathSettings {
+  trustedProxyHops: number;
+  /** The front door's shared secret (FRONT_DOOR_TOKEN); unset until the custom domain exists. */
+  frontDoorToken?: string;
+}
+
+const digest = (value: string) => createHash('sha256').update(value).digest();
+/** One IPv4 or IPv6 address, nothing else (the front door sends CF-Connecting-IP). */
+const IP_ADDRESS = /^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-f:]*:[0-9a-f:.]*)$/i;
+
+/** True only when the front door's token matches; compared as fixed-length digests, in constant time. */
+export function isViaFrontDoor(header: HeaderReader, token: string | undefined): boolean {
+  const presented = header(FRONT_DOOR_HEADER);
+  if (!token || !presented) return false;
+  return timingSafeEqual(digest(presented), digest(token));
+}
+
+/** The caller's address: the front door's word for it when the token matches, else X-Forwarded-For as before. */
+export function requestClientIp(header: HeaderReader, settings: RequestPathSettings): string {
+  if (!isViaFrontDoor(header, settings.frontDoorToken)) return clientIp(header, settings.trustedProxyHops);
+  const ip = header(FRONT_DOOR_CLIENT_IP_HEADER)?.trim() ?? '';
+  return ip.length <= 45 && IP_ADDRESS.test(ip) ? ip : 'unknown';
+}
+
+/**
+ * isSameOriginRequest for the portal's own routes. With a front door the expected
+ * origin depends on the path: PORTAL_ORIGIN through it (the Worker rewrites Host to
+ * run.app), the request's own origin on direct run.app traffic. Without one,
+ * unchanged: PORTAL_ORIGIN when set, else the request's own origin.
+ */
+export function isSamePortalOrigin(
+  req: { url: string; header: HeaderReader },
+  settings: { portalOrigin?: string; frontDoorToken?: string },
+): boolean {
+  if (!settings.frontDoorToken) return isSameOriginRequest(req, settings.portalOrigin);
+  return isSameOriginRequest(req, isViaFrontDoor(req.header, settings.frontDoorToken) ? settings.portalOrigin : undefined);
 }
 
 /**

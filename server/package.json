@@ -31,7 +31,7 @@
     "provision:user": "tsx src/scripts/users.ts create",
     "grant:user": "tsx src/scripts/users.ts grant",
     "terms:report": "tsx src/scripts/users.ts terms",
-    "terms:check-live": "tsx src/scripts/check-terms-live.ts",
+    "terms:check-live": "MUTABA3A_PUBLIC_ORIGIN=\"${MUTABA3A_PUBLIC_ORIGIN:-$(npm --prefix .. run --silent hosts -- get landingOrigin)}\" tsx src/scripts/check-terms-live.ts",
     "revoke:user": "tsx src/scripts/users.ts revoke",
     "rotate:password": "tsx src/scripts/users.ts rotate",
     "disable:user": "tsx src/scripts/users.ts disable",

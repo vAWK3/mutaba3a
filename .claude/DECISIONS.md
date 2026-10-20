@@ -4113,6 +4113,35 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 5. Monitoring changes are applied with a targeted plan (DEPLOYMENT.md §6b), separate from releases.
 **Consequences**: Expect about a 6 to 11 minute delay between an outage and the page. A one-region network problem never pages. The close notice depends on Cloud Monitoring's default until the provider is on 6.x (TD-185). Moving the domain may replace the checks (new ids), and their policies follow them.
 
+---
+
+## ADR-155: The Custom Domain Is One Input: `config/hosts.json`, a Cloudflare Worker Front Door, a Front-Door Token, Staged Cut-Over
+
+**Status**: Active (amends DEPLOYMENT.md §4c "PORTAL_ORIGIN intentionally unset" and §5's deferred-domain note; the front-door choice can be overridden, see 2)
+**Date**: 2026-10-20
+**Context**: MUT-326 (epic MUT-322, blocks MUT-112). The domain isn't chosen, but it must be live before the pilot (Basel, 2026-10-19). On 2026-10-20 Basel listed the apex, the subdomain and the front door as undecided on MUT-112; MUT-326's own text says to pick the cheapest front door that keeps `TRUSTED_PROXY_HOPS` correct. The legacy hosts were hardcoded in vite, the bundle allowlist, the terms release guard, provisioning, Sentry tfvars and the phone. Cloud Run domain mapping isn't offered in me-west1. Brief: `.claude/designs/mut-326-domain-move.md`; adversarial review folded in.
+**Decision**:
+1. **One file per repo, `config/hosts.json`**, holding `domain` (null until chosen), `portalSubdomain` (`app`), the `legacy` origins and a `stage`: `legacy` → `proxy` (the front door exists; builds unchanged) → `live` (builds, links and the phone use the new hosts) → `redirect` (old-host pages are sent on). `config/hosts.ts` (TS) and the Terraform `locals` (HCL) derive the same values, pinned to the same fixtures. `stage` exists because committing the domain must not re-point the next release before DNS works. `scripts/__tests__/no-hardcoded-hosts.test.ts` fails on our hosts anywhere else, and rehearses `mutaba3a.app` as the domain. The Malafat OAuth `CIMD_CLIENT_ID` keeps its own value.
+2. **Front door: a Cloudflare Worker** on `app.<apex>/*` forwarding to the run.app origin (`server/infrastructure/frontdoor`, its own operator-applied stack). This follows Malafat's `malafat-router`. It costs $0 on the Workers free tier, against about $18/month for a Google external HTTPS load balancer, and the certificate is automatic. Apex and `www` are DNS-only to Netlify. Swapping to a load balancer later changes only that stack and where the server reads the client IP.
+3. **A front-door token instead of a second hop count.** run.app stays reachable directly for old phones, Malafat and the carry-over, so one `TRUSTED_PROXY_HOPS` can't fit both paths. The Worker sends `x-mutaba3a-front-door: <FRONT_DOOR_TOKEN>` and `x-mutaba3a-client-ip: <CF-Connecting-IP>`, overwriting the caller's copies. The server:
+   - takes that IP and judges `Origin` against `PORTAL_ORIGIN` only when the token matches (sha256 digests, `timingSafeEqual`);
+   - judges every other request exactly as before.
+
+   The token is Terraform `random_password` in Secret Manager, a `secret_text` binding in the Worker, and mounted by reference in Cloud Run.
+4. **The frontdoor stack owns the token secret.** The API stack reads it with a data source, so its plan fails loudly when the frontdoor stack wasn't applied first. The zone and the secret are `prevent_destroy`.
+5. **Redirects are staged and 302.**
+   - From `live`, Netlify sends `<apex>/app/*` back to netlify.app, where the free web app's IndexedDB is.
+   - At `redirect`, Netlify sends the old host's landing pages to the apex.
+   - At `redirect`, the server sends direct run.app page visits to the same-origin `/carry-over?next=…` page. It never touches the API, admin, association files, health checks, assets, static files or writes.
+   - `PORTAL_LEGACY_REDIRECT` parses only `"true"`/`"false"`.
+6. **The phone repo is not edited here.** `npm run domain:plan` prints its exact lines, and it claims both hosts for at least one release.
+**Rejected**: a Google external HTTPS LB plus serverless NEG (cost; two hop counts during the transition); a Cloudflare proxied CNAME with an Origin Rule host override (no place to inject the token and client IP that is as testable as a Worker); a hop-count bump (`TRUSTED_PROXY_HOPS=2` would trust a forged `X-Forwarded-For` entry on direct run.app traffic).
+**Consequences**:
+- While `domain` is null, nothing changes, and the plans and the builds are as before (snapshot masked, tests pin it).
+- Past 100k requests/day per Cloudflare account the Worker fails closed until UTC midnight (TD-186).
+- Browser-saved passwords don't follow the host: people sign in once on the new host (MUT-112 release note). Google Password Manager affiliation through web↔web `assetlinks.json` statements is left to MUT-112 (it changes the API contract).
+- `cloudflare_zone_setting` can't be destroyed from Terraform.
+
 ## ADR-157: Restores Go Through a Scratch Copy; a Profile Restore Never Rolls Back Access or Audit (MUT-327)
 
 **Status**: Active

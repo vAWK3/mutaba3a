@@ -115,7 +115,7 @@ variable "alert_notification_channels" {
 }
 
 variable "uptime_host" {
-  description = "Bare hostname the uptime checks probe (no scheme, path or port). Empty (default) = the Cloud Run service's own host. The custom domain (MUT-112) moves the checks with it."
+  description = "Bare hostname the uptime checks probe (no scheme, path or port). Empty (default) = the portal host config/hosts.json names (MUT-326): the Cloud Run host until the custom domain is live, then app.<domain>. Set it only to override."
   type        = string
   default     = ""
   validation {
