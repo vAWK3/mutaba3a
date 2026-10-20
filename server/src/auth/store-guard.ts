@@ -242,6 +242,23 @@ export const STORE_ACCESS: StoreAccess = {
    * no person behind it and so no feed.
    */
   entries: { list: 'sessionOnly', settledOwedIds: 'sessionOnly' },
+  /**
+   * MUT-358: a signed-in person's /v1/me reads the billing facts of their own profiles (`sessionOnly`: an API key has no
+   * person behind it, and MUT-361's gate runs on sessions only). Grants, links and Stripe's mirror are written by the
+   * operator and, from MUT-360, the webhook, both on the unguarded store.
+   */
+  billing: {
+    factsFor: 'sessionOnly',
+    setTrialStart: 'operator',
+    createGrant: 'operator',
+    revokeGrant: 'operator',
+    getGrant: 'operator',
+    listGrants: 'operator',
+    linkAccount: 'operator',
+    listAccounts: 'operator',
+    saveAccount: 'operator',
+    saveSubscription: 'operator',
+  },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };

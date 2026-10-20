@@ -170,7 +170,7 @@ describe('hosted export → local restore parity (MUT-325 AC1)', () => {
     expect(new Uint8Array(await readBytes((await device.blobs.get(receipt.storageKey))!))).toEqual(PDF);
   });
 
-  it('differs only where the re-homing says: no Malafat writer, the firm is the person\'s own, the person has no email', async () => {
+  it('differs only where the re-homing says: no Malafat writer, the firm is the person\'s own, the person has no email, no billing', async () => {
     const hosted = await hostedAccount();
     const { blob } = await exportHostedRecords({ profileIds: [hosted.personal, hosted.firm], transport: hosted.transport });
     const device = await restoredDevice(blob);
@@ -181,7 +181,10 @@ describe('hosted export → local restore parity (MUT-325 AC1)', () => {
     const firmHere = here.profiles.find((p) => p.id === hosted.firm)!;
     expect(firmThere).toMatchObject({ writerOfRecord: 'MALAFAT', owned: false });
     expect(firmHere).toMatchObject({ writerOfRecord: null, owned: true, type: 'BUSINESS', name: 'Haddad Law' });
-    expect(here.profiles.find((p) => p.id === hosted.personal)).toEqual(there.profiles.find((p) => p.id === hosted.personal));
+    // MUT-358: billing is a hosted account's alone; on this device every profile reports `billing: null`.
+    const withoutBilling = (p: Record<string, unknown> | undefined) => ({ ...p, billing: undefined });
+    expect(here.profiles.every((p) => p.billing === null)).toBe(true);
+    expect(withoutBilling(here.profiles.find((p) => p.id === hosted.personal))).toEqual(withoutBilling(there.profiles.find((p) => p.id === hosted.personal)));
     expect(JSON.stringify(device.store.snapshot().maps.people)).not.toContain('rana@studio.ps');
     expect(device.store.snapshot().maps.ints.size).toBe(0);
     expect(device.decoded.fromAccount).toBe(true);

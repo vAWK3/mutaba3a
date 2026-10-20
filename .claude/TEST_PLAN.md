@@ -3337,3 +3337,15 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `qa/specs/web/brand.spec.ts` (`@web.brand.layout`) | The payment drawer at 375px now has to fit outright (its `KNOWN_OVERFLOW` entry is gone), English and Arabic, light and dark |
 | Re-run, unchanged | `@portal.account.*`, `@portal.your-data.*`, `@web.drawer-motion.*` (incl. `rtl-mirror`): desktop drawers, drag-to-dismiss and the RTL mirror still pass |
 
+## MUT-358 — Billing core (2026-10-21, ADR-162)
+
+| Test | Covers |
+|---|---|
+| `server/src/billing/__tests__/entitlement.test.ts` (22, pure) | Every rule in order: Malafat first; live, expired, revoked and someone else's grants; Freelancer covers the owner's profiles but not a firm they belong to; Firm covers its organization and the payer's own; trialing = active; past_due = GRACE; ranking ACTIVE > GRACE then FIRM; lapsed paid = READ_ONLY for good; incomplete ignored; trial ACTIVE to day 14, READ_ONLY to day 30, LOCKED from day 30; a payer is never LOCKED (AC2); incomplete_expired isn't paying; running trial beats a lapsed subscription; operator firm and no-trial accounts are READ_ONLY/NONE |
+| `server/src/__tests__/billing-core.test.ts` (13, memory) | `/v1/me` `billing` per profile through a trial, past_due and a grant (ISO `until`); Malafat-covered firm; `null` in signed-out mode; one `factsFor` read per call; the snapshot carries no billing; admin grant by email (audited on owned profiles only) and on a profile with expiry; 422 two targets / past expiry, 404 unknown, 401 no token; revoke once + idempotent + `active=true` listing; link needs a currency for a new customer, is idempotent and audited; unlinked listing; 409 `CUSTOMER_LINKED_ELSEWHERE` / `USER_HAS_ANOTHER_ACCOUNT`; 422 bad customer id |
+| `server/src/repositories/__tests__/store-contract-billing.ts` via `store-memory-billing.test.ts` and `store-prisma-billing.test.ts` (6 each) | `factsFor` (payer on each subscription, grants, trial starts), grant write + audit, revoke once, `activeAt`, one-target + FK refusals, link idempotency/conflicts/currency, unlinked listing, subscription upsert needs a known customer |
+| `server/src/repositories/__tests__/migration-mut358.test.ts` (1, scratch DB) | The backfill grants every existing user (FREELANCER) and operator firm (FIRM), none for owned profiles, no trials; the one-target CHECK; schema parity after later migrations |
+| `server/src/scripts/__tests__/users-cli.test.ts` (+3) | `billing-grant/grants/revoke` (idempotent), exactly one target, `billing-link`, `billing-unlinked` |
+| `server/src/scripts/__tests__/profile-rows.test.ts` (extended) | Export leaves out `entitlement_grants` / `billing_subscriptions`; a grant made after the backup survives a restore |
+| Release-QA | None: no user-visible flow. MUT-361/362 carry the portal billing scenarios |
+

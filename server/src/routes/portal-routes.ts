@@ -36,6 +36,8 @@ export interface PortalRouteDependencies {
   fxRates: CachedFxRates | null;
   /** MUT-324: the terms /v1/me reports; null where none apply (the portal's signed-out mode). */
   terms: CurrentTerms | null;
+  /** MUT-358: whether /v1/me reports billing; false in the portal's signed-out mode, which has none. */
+  billing: boolean;
 }
 
 export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => OpenAPIHono<AppEnv>> = [
@@ -52,5 +54,5 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => conversionRoutes(deps.store),
   (deps) => fxRateRoutes(deps.fxRates),
   (deps) => profileRoutes(deps.store),
-  (deps) => meRoutes(deps.store, deps.terms),
+  (deps) => meRoutes(deps.store, deps.terms, deps.billing),
 ];

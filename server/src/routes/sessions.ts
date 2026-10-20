@@ -94,7 +94,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         { idleMs: settings.idleMinutes * 60_000, absoluteMs: settings.absoluteHours * 3_600_000 },
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user, terms), 201);
+      return c.json(await buildMe(store, user, terms, c.get('now')()), 201);
     },
   );
 

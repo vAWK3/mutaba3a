@@ -11267,6 +11267,306 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/billing/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List grants, newest first; active=true keeps only those in force now */
+        get: {
+            parameters: {
+                query?: {
+                    userId?: string;
+                    organizationId?: string;
+                    active?: "true" | "false";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Grants */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EntitlementGrantList"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Grant billing coverage to a person (their own profiles) or to one profile */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateEntitlementGrantRequest"];
+                };
+            };
+            responses: {
+                /** @description Granted */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EntitlementGrant"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such user or organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/grants/{grantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a grant (it is kept, with revokedAt set); revoking twice changes nothing */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    grantId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Revoked, or already revoked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RevokeEntitlementGrantResponse"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such grant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/accounts/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link a Stripe customer to a person (a pilot subscription made by hand in the dashboard)
+         * @description Creates the billing account when the customer is new here; `currency` is then required. Linking the same pair again changes nothing.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["LinkBillingAccountRequest"];
+                };
+            };
+            responses: {
+                /** @description Linked, or already linked to this person */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LinkBillingAccountResponse"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such user */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT: the customer is linked to someone else, or the person already has another customer */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed, or currency missing for a new customer */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Stripe customers, oldest first; linked=false lists those still to be matched to a person */
+        get: {
+            parameters: {
+                query?: {
+                    linked?: "true" | "false";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Billing accounts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BillingAccountList"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -11356,6 +11656,16 @@ export interface components {
             role: components["schemas"]["MembershipRole"];
             /** Format: date-time */
             firmRequestedAt: string | null;
+            billing?: {
+                /** @enum {string} */
+                state: "ACTIVE" | "GRACE" | "READ_ONLY" | "LOCKED";
+                /** @enum {string} */
+                source: "MALAFAT" | "OPERATOR" | "STRIPE" | "TRIAL" | "NONE";
+                /** @enum {string|null} */
+                tier: "FREELANCER" | "FIRM" | null;
+                /** Format: date-time */
+                until: string | null;
+            } | null;
         };
         /** @enum {string} */
         Currency: "ILS" | "USD" | "EUR" | "JOD" | "AED" | "SAR" | "QAR" | "BHD" | "OMR";
@@ -13534,6 +13844,71 @@ export interface components {
         };
         RevokeSessionsResponse: {
             revoked: number;
+        };
+        EntitlementGrant: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string | null;
+            /** Format: uuid */
+            organizationId: string | null;
+            tier: components["schemas"]["BillingTier"];
+            reason: string;
+            /** Format: date-time */
+            expiresAt: string | null;
+            grantedBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt: string | null;
+        };
+        /** @enum {string} */
+        BillingTier: "FREELANCER" | "FIRM";
+        CreateEntitlementGrantRequest: {
+            /** Format: uuid */
+            userId?: string;
+            userEmail?: string;
+            /** Format: uuid */
+            organizationId?: string;
+            tier: components["schemas"]["BillingTier"];
+            reason: string;
+            /** Format: date-time */
+            expiresAt?: string;
+        };
+        RevokeEntitlementGrantResponse: {
+            grant: components["schemas"]["EntitlementGrant"];
+            revoked: boolean;
+        };
+        EntitlementGrantList: {
+            grants: components["schemas"]["EntitlementGrant"][];
+        };
+        LinkBillingAccountResponse: {
+            account: components["schemas"]["BillingAccount"];
+            linked: boolean;
+        };
+        BillingAccount: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string | null;
+            stripeCustomerId: string;
+            country: string | null;
+            currency: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        LinkBillingAccountRequest: {
+            stripeCustomerId: string;
+            /** Format: uuid */
+            userId?: string;
+            userEmail?: string;
+            /** @enum {string} */
+            currency?: "ILS" | "USD";
+        };
+        BillingAccountList: {
+            accounts: components["schemas"]["BillingAccount"][];
         };
     };
     responses: never;

@@ -85,6 +85,7 @@ function servedPaths(): ReadonlySet<string> {
     attachments: { storage: null, urlTtlSeconds: 900 },
     fxRates: null,
     terms: null,
+    billing: false,
   };
   const served = new Set<string>();
   for (const factory of PORTAL_ROUTES) {

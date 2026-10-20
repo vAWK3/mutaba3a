@@ -44,7 +44,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -66,6 +66,12 @@ const USAGE = [
   '          on in place; an owned Business profile needs no --owner (its owner is OWNER); an operator firm needs at least one member',
   '  firm-disable --organization-id <uuid>',
   '  firm-decline --organization-id <uuid>',
+  '  billing-grant  (--email <email> | --organization-id <uuid>) --tier FREELANCER|FIRM --reason <text> [--expires <ISO date-time>]',
+  '          covers the person\'s own profiles, or one profile (MUT-358); a pilot user gets one until their Stripe subscription is linked',
+  '  billing-revoke --grant-id <uuid>',
+  '  billing-grants [--email <email> | --organization-id <uuid>] [--active]',
+  '  billing-link   --customer cus_… --email <email> [--currency ILS|USD]   (currency only for a customer the server has not seen yet)',
+  '  billing-unlinked   (Stripe customers not yet matched to a person)',
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
 ].join('\n');
 
@@ -101,6 +107,12 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
         'valid-hours': { type: 'string' },
         lock: { type: 'boolean' },
         owner: { type: 'string' },
+        tier: { type: 'string' },
+        reason: { type: 'string' },
+        expires: { type: 'string' },
+        'grant-id': { type: 'string' },
+        customer: { type: 'string' },
+        active: { type: 'boolean' },
       },
     }).values;
   } catch (e) {
@@ -233,6 +245,74 @@ const FIRM_HANDLERS: Record<Extract<Command, `firm-${string}`>, (ctx: HandlerCon
   },
 };
 
+/** MUT-358: the operator's billing levers (routes/admin-billing.ts). */
+interface GrantRow {
+  id: string;
+  userId: string | null;
+  organizationId: string | null;
+  tier: string;
+  reason: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+}
+
+interface BillingAccountRow {
+  stripeCustomerId: string;
+  userId: string | null;
+  country: string | null;
+  currency: string;
+  createdAt: string;
+}
+
+function describeGrant(g: GrantRow): string {
+  const target = g.userId ? `person ${g.userId}` : `profile ${g.organizationId}`;
+  const state = g.revokedAt ? `revoked ${g.revokedAt}` : g.expiresAt ? `until ${g.expiresAt}` : 'no expiry';
+  return `${g.id} ${g.tier} for ${target} (${state}): ${g.reason}`;
+}
+
+const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: HandlerContext) => Promise<void>> = {
+  'billing-grant': async ({ client, need, optional, out }) => {
+    const email = optional('email');
+    const organizationId = optional('organization-id');
+    if ((email === undefined) === (organizationId === undefined)) throw new CliError('give exactly one of --email and --organization-id');
+    const expires = optional('expires');
+    const target = email ? { userId: (await client.userByEmail(email)).id } : { organizationId };
+    const grant = await client.call<GrantRow>('POST', '/admin/v1/billing/grants', { ...target, tier: need('tier'), reason: need('reason'), ...(expires ? { expiresAt: expires } : {}) });
+    out(`granted: ${describeGrant(grant)}`);
+  },
+  'billing-revoke': async ({ client, need, out }) => {
+    const { grant, revoked } = await client.call<{ grant: GrantRow; revoked: boolean }>('DELETE', `/admin/v1/billing/grants/${need('grant-id')}`);
+    out(revoked ? `revoked: ${describeGrant(grant)}` : `already revoked: ${describeGrant(grant)}`);
+  },
+  'billing-grants': async ({ client, optional, flag, out }) => {
+    const email = optional('email');
+    const params = new URLSearchParams();
+    if (email) params.set('userId', (await client.userByEmail(email)).id);
+    const organizationId = optional('organization-id');
+    if (organizationId) params.set('organizationId', organizationId);
+    if (flag('active')) params.set('active', 'true');
+    const query = params.size > 0 ? `?${params.toString()}` : '';
+    const { grants } = await client.call<{ grants: GrantRow[] }>('GET', `/admin/v1/billing/grants${query}`);
+    for (const g of grants) out(describeGrant(g));
+    if (grants.length === 0) out('no grants');
+  },
+  'billing-link': async ({ client, need, optional, out }) => {
+    const user = await client.userByEmail(need('email'));
+    const currency = optional('currency');
+    const { account, linked } = await client.call<{ account: BillingAccountRow; linked: boolean }>('POST', '/admin/v1/billing/accounts/link', {
+      stripeCustomerId: need('customer'),
+      userId: user.id,
+      ...(currency ? { currency } : {}),
+    });
+    out(`${account.stripeCustomerId} ${linked ? 'linked to' : 'was already linked to'} ${user.email} (${account.currency})`);
+  },
+  'billing-unlinked': async ({ client, out }) => {
+    const { accounts } = await client.call<{ accounts: BillingAccountRow[] }>('GET', '/admin/v1/billing/accounts?linked=false');
+    for (const a of accounts) out(`${a.stripeCustomerId} ${a.currency}${a.country ? ` ${a.country}` : ''}: seen ${a.createdAt}`);
+    if (accounts.length === 0) out('every Stripe customer is linked');
+  },
+};
+
 const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> = {
   create: async ({ client, need, optional, out }) => {
     const locale = optional('locale');
@@ -304,6 +384,7 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
     out(`${user.email}: ${revoked} ${revoked === 1 ? 'session' : 'sessions'} revoked`);
   },
   ...FIRM_HANDLERS,
+  ...BILLING_HANDLERS,
 };
 
 

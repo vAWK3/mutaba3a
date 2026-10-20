@@ -271,3 +271,46 @@ describe('users terms (MUT-324 T1)', () => {
     expect(text).toContain('1 of 2 active users behind the current terms');
   });
 });
+
+describe('billing verbs (MUT-358)', () => {
+  async function person(h: ReturnType<typeof harness>, email: string) {
+    expect(await h.run(['create', '--email', email, '--name', 'Rana', '--currency', 'ILS', '--timezone', 'Asia/Jerusalem'])).toBe(0);
+    h.out.length = 0;
+    return (await h.store.users.findByEmail(email))!;
+  }
+
+  it('billing-grant covers a person by email; billing-grants lists it; billing-revoke revokes it once', async () => {
+    const h = harness();
+    const user = await person(h, 'rana@studio.ps');
+    expect(await h.run(['billing-grant', '--email', 'rana@studio.ps', '--tier', 'FREELANCER', '--reason', 'pilot P01'])).toBe(0);
+    const [grant] = await h.store.billing.listGrants({ userId: user.id });
+    expect(h.out).toEqual([`granted: ${grant!.id} FREELANCER for person ${user.id} (no expiry): pilot P01`]);
+    h.out.length = 0;
+    expect(await h.run(['billing-grants', '--email', 'rana@studio.ps', '--active'])).toBe(0);
+    expect(h.out).toHaveLength(1);
+    h.out.length = 0;
+    expect(await h.run(['billing-revoke', '--grant-id', grant!.id])).toBe(0);
+    expect(h.out[0]).toMatch(/^revoked: /);
+    h.out.length = 0;
+    expect(await h.run(['billing-revoke', '--grant-id', grant!.id])).toBe(0);
+    expect(h.out[0]).toMatch(/^already revoked: /);
+  });
+
+  it('billing-grant needs exactly one target', async () => {
+    const h = harness();
+    expect(await h.run(['billing-grant', '--tier', 'FIRM', '--reason', 'x'])).toBe(1);
+    expect(h.err).toEqual(['give exactly one of --email and --organization-id']);
+  });
+
+  it('billing-link ties a customer to a person; billing-unlinked lists those still unmatched', async () => {
+    const h = harness();
+    await person(h, 'rana@studio.ps');
+    await h.store.billing.saveAccount({ stripeCustomerId: 'cus_LEFT', userId: null, country: null, currency: 'USD' });
+    expect(await h.run(['billing-link', '--customer', 'cus_P01', '--email', 'rana@studio.ps', '--currency', 'ILS'])).toBe(0);
+    expect(h.out).toEqual(['cus_P01 linked to rana@studio.ps (ILS)']);
+    h.out.length = 0;
+    expect(await h.run(['billing-unlinked'])).toBe(0);
+    expect(h.out).toEqual([expect.stringMatching(/^cus_LEFT USD: seen /)]);
+  });
+});
+

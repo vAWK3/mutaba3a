@@ -1,8 +1,8 @@
 import type { SessionKind } from './auth/sessions.js';
 import { ApiError } from './errors.js';
 import { TERMS_SURFACE_OF, type CurrentTerms } from './legal.js';
-import { profileOwnerOf } from './personal-profile.js';
-import type { AuditEventInput, LedgerStore, Organization, TermsAcceptanceInput, UserLocale, UserRecord } from './repositories/ports.js';
+import { ownedProfilesOf } from './personal-profile.js';
+import type { AuditEventInput, LedgerStore, TermsAcceptanceInput, UserLocale, UserRecord } from './repositories/ports.js';
 
 /**
  * MUT-324 (ADR-102): what one acceptance of the current terms records, shared
@@ -21,15 +21,10 @@ export function staleTerms(terms: CurrentTerms): ApiError {
 /**
  * `user.terms_accepted`, as the person, on each profile they own (D2): a person
  * accepts for themselves and, as owner, for their own profiles. A firm they are
- * only a member of never sees it. The profiles are read in one tick: Prisma batches same-tick
- * `findUnique` calls into a single query, so this is one round trip, not a fan-out on the pool.
+ * only a member of never sees it (ownedProfilesOf).
  */
 export async function termsAcceptedAudit(store: LedgerStore, person: UserRecord, acceptance: TermsAcceptanceInput, requestId: string): Promise<AuditEventInput[]> {
-  const memberships = await store.memberships.listByUser(person.id);
-  const organizations = await Promise.all(memberships.map((membership) => store.organizations.getById(membership.organizationId)));
-  return organizations
-    .filter((organization): organization is Organization => organization !== null && profileOwnerOf(organization) === person.id)
-    .map((organization) => ({
+  return (await ownedProfilesOf(store, person.id)).map((organization) => ({
       organizationId: organization.id,
       actorType: 'USER' as const,
       actorId: person.id,

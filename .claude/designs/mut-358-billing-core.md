@@ -2,7 +2,7 @@
 
 > **Ticket:** MUT-358 (epic MUT-322, `ga-gate`). It blocks MUT-360, MUT-361, MUT-362, MUT-363 and MUT-364.
 > **Source design:** `docs/commercial/billing-spike.md` §4 and ADR-160 (Basel, 2026-10-20).
-> **Status:** plan, waiting for Basel's approval of P1–P3 (§7).
+> **Status:** approved. Basel approved P1–P3 as written (Jira MUT-358 comment 12273, 2026-10-20), and the eng-review findings are folded into §2.5 and §2.8.
 
 ## 1. Problem and acceptance criteria
 
@@ -76,7 +76,7 @@ The rules run in order, and the first that matches wins:
 
 `firmEnabledAt` (MUT-300) **isn't read here**. Coverage depends on the subscription, not the flag, so this ticket doesn't wait for MUT-300's branch. Whether firm features *need* the Firm tier is MUT-363's business.
 
-Constants: `TRIAL_DAYS = 14`, `TRIAL_READ_ONLY_DAYS = 14`, in `billing/entitlement.ts`.
+Constants: `TRIAL_DAYS = 14` and `TRIAL_LOCK_DAYS = 30` (both counted from `trialStartedAt`), in `billing/entitlement.ts`.
 
 ### 2.3 Loading: `server/src/billing/coverage.ts`
 
@@ -100,15 +100,13 @@ Each `profiles[]` entry gains `billing: { state, source, tier, until } | null`. 
 
 The schema: `BillingEntitlementSchema` is inline and nullable, like `terms`, so the generated portal type keeps the null (the review-pass-2 lesson in `schemas.ts`). The field is additive: today's portal and phone ignore it.
 
-API version: `1.41.0-mut358` (from `1.40.0-mut325`).
+API version: `1.42.0-mut358` (from `1.41.0-mut300`).
 
 ### 2.5 Store guard
 
-There's a new `billing` repository on `LedgerStore`, implemented in `memory.ts` and `prisma.ts`. In `STORE_ACCESS`:
-- `subscriptionsCovering` and `grantsCovering` are `read`: `/v1/me` runs them as the person, and they return nothing about other people beyond what the person's own profiles need.
+There's a new `billing` repository on `LedgerStore`, implemented in `memory.ts` and `prisma.ts`. In `STORE_ACCESS` (review finding R3):
+- `subscriptionsCovering`, `grantsCovering` and `users.trialStartsFor` are **`sessionOnly`**: only a signed-in person's `/v1/me` reads them, and an API key has no person behind it. MUT-361's gate also runs on sessions only. MUT-360's webhook and the admin routes run on the raw, unguarded store.
 - `createGrant`, `revokeGrant`, `listGrants`, `linkAccount` and `listAccounts` are `operator`.
-
-`users.trialStartsFor` is `read`.
 
 ### 2.6 Operator surface (admin API + CLI), every write audited
 
@@ -122,12 +120,12 @@ There's a new `billing` repository on `LedgerStore`, implemented in `memory.ts` 
 
 **Where audit rows land:** `AuditEvent.organizationId` is required. A user-level event is written on **each profile the person owns**, as `termsAcceptedAudit` does. An organization-level event goes on that organization. `actorType: ADMIN`.
 
-**The CLI** is `server/src/scripts/billing.ts`, `npm run billing -- <command>`. It follows `users.ts` and reuses its exported `adminClient`. Commands:
-- `grant --email|--organization-id --tier --reason [--expires]`;
-- `revoke --grant-id`;
-- `grants [--email|--organization-id]`;
-- `link --customer cus_… --email`;
-- `unlinked`.
+**The CLI** (as built): new verbs in the existing operator CLI `server/src/scripts/users.ts`, the way MUT-300 added its `firm-*` verbs, rather than a separate script. Each has an npm script:
+- `billing:grant --email|--organization-id --tier --reason [--expires]`;
+- `billing:revoke --grant-id`;
+- `billing:grants [--email|--organization-id] [--active]`;
+- `billing:link --customer cus_… --email [--currency]`;
+- `billing:unlinked`.
 
 ### 2.7 The pre-billing backfill (P1)
 
@@ -138,6 +136,12 @@ The migration inserts **one OPERATOR grant per existing user** and **one per exi
 - `grantedBy = 'migration:mut358'`.
 
 So when MUT-361 starts enforcing, nobody who exists today goes read-only. The pilot runbook revokes a person's pre-billing grant once their Stripe subscription is linked.
+
+### 2.8 Places the new tables have to be known about (review findings R1, R2, R4)
+
+- **R1, the local-mode snapshot:** `MemoryLedgerStore` is also the portal's local (free) mode store, saved to IndexedDB through `snapshot()`/`restore()`, now at format 2. The billing maps stay **out of the snapshot**, the same way the MUT-324 terms acceptances do, so the shipped local format doesn't change. A test pins that `snapshot().maps` has no billing keys.
+- **R2, the profile restore tool:** `server/scripts/profile-rows.sh` treats every table with an `organizationId` column as profile data. `billing_subscriptions` and `entitlement_grants` have one, so both go into `RESTORE_KEEP_LIVE` (billing follows Stripe and the operator, never a backup) and into `EXPORT_SKIP` (they're not the person's records). `purge-user` keeps deleting them along with the profile (FK order through `tsort`).
+- **R4, people added after the backfill:** the migration only covers users who exist when it runs. Someone provisioned later has no grant and no trial, so once MUT-361 enforces, they'd be read-only. The pilot runbook (`docs/operations/pilot-runbook.md`, provisioning step) gains `npm run billing:grant -- --email <email> --tier FREELANCER --reason pilot` (§1.5), to be revoked once their Stripe subscription is linked (MUT-360). MUT-361's acceptance criteria get a matching "nobody active today turns read-only" check (a Jira comment).
 
 ## 3. Reuse
 
@@ -199,7 +203,7 @@ So when MUT-361 starts enforcing, nobody who exists today goes read-only. The pi
 
 **Release-QA:** **no user-visible flow** in this ticket. The `billing` field has no UI until MUT-361 and MUT-362, whose briefs carry the QA scenarios (`qa/features/portal/billing.yaml`). `release-qa lint` must show no new unmapped files: map `server/src/billing/**` and the new route and script to the existing server/API feature group, or mark them `manual: true` with that reason.
 
-## 7. Decisions for Basel
+## 7. Decisions (Basel approved all three, MUT-358 comment 12273)
 
 - **P1. Backfill pre-billing grants for everyone who exists today** (recommended), so MUT-361 can't put a current user into read-only. The alternative is no backfill: then every pilot user must be linked to Stripe or granted by hand before MUT-361 ships.
 - **P2. `User.trialStartedAt` (null = no trial), not `emailVerifiedAt`.** Operator-issued accounts never trial; MUT-331's signup sets it. It keeps "when did the trial start" apart from "is the email verified".
