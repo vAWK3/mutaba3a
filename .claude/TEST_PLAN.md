@@ -324,6 +324,7 @@ Still manual: the Data Tools row in RTL.
 #### Release tooling (added 2026-10-11)
 | File | Type | Tests | Coverage |
 |------|------|-------|----------|
+| `server/src/scripts/__tests__/deploy-bootstrap.test.ts` | Unit (bash via fake `terraform`) | 4 | **Full** - deploy.sh step 0 helper (ADR-161): skip when all four bootstrap addresses are in state; apply exactly the four targets when one is missing; apply with no state at all; exact-address match (`api` vs `api_readonly`) |
 | `scripts/__tests__/release-files.test.ts` | Unit + contract | 7 | **Full** - each manifest staged with its lockfile; `RELEASE_COMMIT_FILES` equals deploy.sh `tag_and_push`'s `git add` (parsed from the script); porcelain partition: unstaged/staged/both columns, untracked, rename destination, leading-space first line, clean tree |
 
 `vitest.config.ts` includes `scripts/**/*.{test,spec}.ts` for this. Still manual

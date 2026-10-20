@@ -28,6 +28,43 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — deploy.sh step 0 bootstraps only on an empty state (ADR-161)
+
+### Fixed
+- `make release server` died at deploy.sh step 0 on every attempt since MUT-328 merged (api v0.3.16, v0.3.17 and v0.3.18 never deployed; production stayed on api-v0.3.15). The step's `terraform apply -target=…` refuses to plan while a `moved` block is pending in the configuration ("Moved resource instances excluded by targeting"), and MUT-328's rename of the uptime check had not been applied. Step 0 now runs the targeted apply only when one of its four resources is missing from state (first run on an empty project); otherwise it reads the outputs and moves on, and step 4's full apply reconciles everything.
+
+### Added
+- `server/scripts/lib/tf-bootstrap.sh`: `BOOTSTRAP_TARGETS`, `bootstrap_missing`, `ensure_bootstrap`, sourced by deploy.sh.
+- `server/src/scripts/__tests__/deploy-bootstrap.test.ts` (4): drives the helper through a fake `terraform` on PATH: skip when all four are in state; apply exactly the four targets when one is missing; apply with no state at all; exact-address match only.
+
+### Changed
+- `server/DEPLOYMENT.md` §6b: the monitoring plan targets the check's old address too (`google_monitoring_uptime_check_config.health`), which Terraform 1.15 requires for a targeted plan over a `moved` block; notes that the targets pull in the Cloud Run service and the attachments bucket, so §6c's 7 → 14 day change rides along.
+- `docs/operations/before-release.md`: the MUT-328 item says it blocks the release, not that it is optional.
+
+**Files**: `server/scripts/deploy.sh`, `server/scripts/lib/tf-bootstrap.sh`, `server/src/scripts/__tests__/deploy-bootstrap.test.ts`, `server/DEPLOYMENT.md`, `docs/operations/before-release.md`.
+
+---
+
+## [Unreleased] - 2026-10-20 — `make create user` / `make create business` (guided account provisioning)
+
+### Added
+- `make create user` and `make create business` (root `Makefile`, `create` target with the same word-swallowing as `make release`): guided, prompt-then-confirm provisioning against the live admin API. `user` creates a person with their personal profile, optionally in an existing firm; `business` creates the firm first, picks its uuid out of `npm run provision`'s output, then creates the first person in it. `GCP_PROJECT_ID` is derived the way the server release derives it, so the script never asks for it from make.
+- `server/scripts/provision-account.sh` takes a mode argument (`user`, the default, or `business`) and honours `GCP_PROJECT_ID` from the environment instead of prompting.
+- `npm run provision -- --no-key`: create an organization without issuing a Malafat API key (refused together with `--organization-id`, where it would do nothing). The business flow asks "Issue a Malafat API key?" and defaults to no, so a firm that does not use Malafat never has a live key printed to a terminal.
+
+### Changed
+- `server/DEPLOYMENT.md` §4b names the make targets as the guided way; the by-hand commands stay.
+
+### Why
+Basel asked for one command that fetches the URL and admin token itself and prompts for the rest, for both a solo person and a firm with its first user. Verified with a dry run of both modes against fake `gcloud`/`npm` binaries (the exact argument chain is logged), `make create` / `make create bogus` usage errors, server typecheck and eslint on `provision.ts`. No live account was created. No automated test covers the shell script (none covered it before either).
+
+### Files
+`Makefile`, `server/scripts/provision-account.sh`, `server/src/scripts/provision.ts`, `server/DEPLOYMENT.md`, `.claude/CHANGELOG.md`.
+
+---
+
+---
+
 ## [Unreleased] - 2026-10-20 — Firm switch: an operator turns firm features on; the owner requests it (MUT-300, epic MUT-298)
 
 **Why:** every firm feature (MUT-301..314) checks one entitlement, and an owner needs a way to ask for it. The first requests are the pilot candidates (D13).

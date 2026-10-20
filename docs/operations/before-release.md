@@ -7,6 +7,6 @@ record the date where the item says.
 ## server
 
 - TD-190: the attachments bucket keeps deleted receipt files 14 days (`soft_delete_policy`), not applied. This release's `terraform apply` (deploy.sh step 4) will show `google_storage_bucket.attachments` updated in place, `retention_duration_seconds` 604800 -> 1209600: approve it. Or apply it alone first: server/DEPLOYMENT.md §6c. Then record the date in .claude/INFRA.md §2 and delete this line.
-- MUT-328: uptime checks and alerts, not applied (.claude/INFRA.md §2, 2026-10-20). Put alert_email and alert_sms_number in production.tfvars first, or the plan adds only the checks and no alerts. Then verify the SMS channel and run the drill: server/DEPLOYMENT.md §6b.
+- MUT-328: uptime checks and alerts, not applied (.claude/INFRA.md §2, 2026-10-20). BLOCKS this release until applied: its Terraform rename (`moved` block) makes deploy.sh step 0 refuse to plan. Put alert_email and alert_sms_number in production.tfvars, apply server/DEPLOYMENT.md §6b, verify the SMS channel, run the drill. Then record the date in .claude/INFRA.md §2 and delete this line.
 
 ## web

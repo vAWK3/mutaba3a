@@ -8,6 +8,9 @@ import { SCOPES } from '../auth/scopes.js';
  *   npm run provision -- --url https://<portal origin> --name "Sader Law Firm" \
  *       --currency ILS --timezone Asia/Jerusalem --key-name "Malafat"
  *
+ * `--no-key` creates the organization only (a firm that does not use Malafat
+ * gets no live key printed to a terminal); `make create business` uses it.
+ *
  * MUTABA3A_ADMIN_TOKEN is read from the environment, never from a flag, so it
  * does not land in shell history.
  */
@@ -21,6 +24,7 @@ const { values } = parseArgs({
     'key-name': { type: 'string', default: 'Malafat' },
     scopes: { type: 'string', default: SCOPES.join(',') },
     'organization-id': { type: 'string' },
+    'no-key': { type: 'boolean', default: false },
   },
 });
 
@@ -56,6 +60,14 @@ if (!organizationId) {
   });
   organizationId = org.id;
   console.log(`organization ${org.slug} = ${org.id}`);
+}
+
+if (values['no-key']) {
+  if (values['organization-id']) {
+    console.error('--no-key does nothing with --organization-id: there is nothing left to create');
+    process.exit(1);
+  }
+  process.exit(0);
 }
 
 const key = await call<{ secret: string; apiKey: { id: string; masked: string; scopes: string[] } }>(
