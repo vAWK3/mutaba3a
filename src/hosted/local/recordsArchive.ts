@@ -3,7 +3,7 @@ import { ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_BYTES } from '../../../server/src
 import { backedUpKeys } from './attachments.js';
 import { readBytes, type IndexedDbBlobStore, type StoredFile } from './blobStore.js';
 import type { StoredSnapshot } from './migrations/index.js';
-import { decodeRecordsFile, encodeRecordsFile } from './recordsFile.js';
+import { decodeRecordsFileWithOrigin, encodeRecordsFile } from './recordsFile.js';
 
 /**
  * "Download my records" with receipts (MUT-287, eng review R2 / D3): a zip of
@@ -21,6 +21,8 @@ const ZIP_MAGIC = [0x50, 0x4b];
 
 export interface DecodedRecordsArchive {
   snapshot: Omit<StoredSnapshot, 'stateVersion'>;
+  /** MUT-325: the file came from a Mutaba3a account's Download, not a device's. */
+  fromAccount: boolean;
   /**
    * Visible receipts (READY) whose file this records file can't supply: absent
    * (a MUT-286 `.json`, a damaged or trimmed zip) or refused by the upload
@@ -75,9 +77,9 @@ export async function encodeRecordsArchive(snapshot: StoredSnapshot, blobs: Inde
 export async function decodeRecordsArchive(file: Blob): Promise<DecodedRecordsArchive> {
   const bytes = await readBytes(file);
   if (!isZip(bytes)) {
-    const snapshot = decodeRecordsFile(new TextDecoder().decode(bytes));
+    const { snapshot, fromAccount } = decodeRecordsFileWithOrigin(new TextDecoder().decode(bytes));
     const missing = visibleReceipts(snapshot).map((r) => r.storageKey);
-    return { snapshot, missing, readFiles: async () => ({ files: [], missing }) };
+    return { snapshot, fromAccount, missing, readFiles: async () => ({ files: [], missing }) };
   }
 
   const JSZip = await loadJsZip();
@@ -87,7 +89,7 @@ export async function decodeRecordsArchive(file: Blob): Promise<DecodedRecordsAr
   const root = recordsRoot(Object.keys(zip.files));
   const records = zip.file(`${root}${RECORDS_ENTRY}`);
   if (!records) throw new LocalRecordsFileRefused('not-a-records-file');
-  const snapshot = decodeRecordsFile(await records.async('string'));
+  const { snapshot, fromAccount } = decodeRecordsFileWithOrigin(await records.async('string'));
 
   const candidates: Array<{ receipt: VisibleReceipt; entry: ZipEntry }> = [];
   const missing: string[] = [];
@@ -99,6 +101,7 @@ export async function decodeRecordsArchive(file: Blob): Promise<DecodedRecordsAr
 
   return {
     snapshot,
+    fromAccount,
     missing,
     readFiles: async () => {
       const files: Array<{ key: string } & StoredFile> = [];

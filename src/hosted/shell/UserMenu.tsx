@@ -99,6 +99,10 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
               <button type="button" role="menuitem" className="hp-menu-item press" onClick={openChangePassword}>
                 {t('hosted.auth.changePassword')}
               </button>
+              {/* MUT-325: the account's own Download my records */}
+              <button type="button" role="menuitem" className="hp-menu-item press" onClick={openYourData}>
+                {t('hosted.yourData.title')}
+              </button>
               {/* After Sign out, so Sign out stays the menu's first item (focus on open) */}
               <MalafatMenuItems profile={profile} />
               {/* MUT-155: the anonymous-usage switch; no telemetry signed out (brief §10) */}

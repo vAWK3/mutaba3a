@@ -77,6 +77,9 @@ const LOCAL_SERVER_ALLOWLIST = [
   'logger',
   'personal-profile',
   'rate-limit',
+  // MUT-325: the records file's text and the device person's address, shared with the hosted export
+  'records-file/codec',
+  'records-file/local-person',
   'repositories/memory',
   'repositories/ports',
   'routes/fx-rates',

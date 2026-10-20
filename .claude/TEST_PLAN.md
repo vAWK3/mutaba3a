@@ -128,6 +128,19 @@ The test plan for MUT-300..314 is `.claude/designs/firm-books-tests.md`. It cove
 
 Every money rule runs on both stores (memory and `test:db`).
 
+## Signed-in records export (MUT-325, added 2026-10-20)
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit | `server/src/records-file/__tests__/codec.test.ts`, `export.test.ts` | streamed JSON equals the one-shot encoder at any page size; every field once and in order; re-homing (one person, no foreign email, no integrations or documents, firms owned, extra columns dropped); page bound |
+| Route | `server/src/__tests__/routes-records-export.test.ts` | auth (member only, header required, key refused), audit, gzip, lazy posting first, paging, mid-stream abort; receipt route bytes/headers/404s/503 |
+| Schema | `server/src/repositories/__tests__/prisma-records-export-columns.test.ts` | every selected column exists in the Prisma schema (no DB) |
+| Postgres (`test:db`) | `store-records-export-parity.test.ts` | Prisma export reads every field and the inbox exactly as the memory store does; key cursors over 2-row pages; receipt lookup |
+| Parity (AC1) | `src/hosted/local/__tests__/hosted-export-parity.test.ts` | hosted export → local restore: every portal read equal field for field (personal + Malafat-fed firm), inbox rows, receipt bytes; documented re-homing differences |
+| Scale (AC2) | `hosted-export-large.test.ts` | 10k entries + 200 receipts through the real routes; progress to 200/200; cancel partway |
+| Component | `HostedYourDataDrawer.test.tsx`, `local-mode.test.tsx` | menu/URL, checklist, progress, cancel, missing files, too-new reload, Arabic RTL; Restore confirm names an account export |
+| Release-QA | `qa/specs/portal/your-data.spec.ts` | `portal.your-data.download-signed-in`, `portal.your-data.download-cancel` |
+
 ## Current Test Coverage
 
 ### Landing header and motion (MUT-77, added 2026-10-14)

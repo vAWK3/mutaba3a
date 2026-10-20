@@ -34,6 +34,22 @@
 **Impact**: /hosted and `docs/commercial/pilot-offer.md` §4 say "We'll move them into your hosted account with you, by hand. Nothing to type again." Nothing imports a records file into a hosted profile, so the by-hand move today is re-entering with the person.
 **Fix**: build MUT-290 before the first free-app user moves in, or change the copy to drop "nothing to type again" (landing honesty tests, ADR-037).
 
+### TD-188: The signed-in Download holds the whole zip in the tab
+**Status**: Open
+**Ticket**: none (MUT-325, 2026-10-20, ADR-156)
+**Added**: 2026-10-20
+**Priority**: Low. The same ceiling local mode's own Download has; a pilot account's receipts are far below it.
+**Impact**: `hostedExport.ts` keeps every receipt's bytes and then the zip (`zipRecordsArchive`, jszip) in memory. Receipts are at most 10 MB each; an account with a few hundred large photos could exhaust a phone browser's tab.
+**Fix**: stream the zip to disk (File System Access API where available, a service-worker download elsewhere) with a streaming zip writer, for both Downloads.
+
+### TD-189: A long export is not one snapshot
+**Status**: Open
+**Ticket**: none (MUT-325, 2026-10-20, ADR-156)
+**Added**: 2026-10-20
+**Priority**: Low. Only a write made on another device during the seconds an export reads can land between pages.
+**Impact**: `GET /v1/records-export` reads 500 rows a query, field by field, outside one transaction. A payment recorded mid-export can appear without its allocation (or the reverse), so `paidMinor` and the allocations disagree in that file.
+**Fix**: run the reads in one read-only `REPEATABLE READ` transaction (with a longer timeout, sized against the pool), or stamp the export's start and re-read rows changed after it.
+
 ### TD-186: The front-door Worker fails closed past the Cloudflare free tier, and every portal asset counts
 **Status**: Open
 **Ticket**: none (MUT-326 adversarial review, 2026-10-20; ADR-155)

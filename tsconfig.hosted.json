@@ -30,7 +30,8 @@
 
     /* MUT-286: the lazy local backend's types, not its code (session/localBackendContract.ts explains the split) */
     "paths": {
-      "@mut/local-backend": ["./src/hosted/session/localBackendContract.ts"]
+      "@mut/local-backend": ["./src/hosted/session/localBackendContract.ts"],
+      "@mut/records-export": ["./src/hosted/session/recordsExportContract.ts"]
     }
   },
   "include": ["src/hosted", "src/vite-env.d.ts"],

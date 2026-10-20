@@ -457,8 +457,11 @@ starts deletion: the account goes read-only instead.
 ### 7.1 Day 0: the request, and the export
 
 1. **Confirm the request** from the account's own address (§6). Note the date in the offboarding log.
-2. **The export.** MUT-325 (signed-in "Download my records") is in progress, not shipped.
-   - **Once MUT-325 ships,** the person downloads it themselves from Settings › Your data.
+2. **The export.** MUT-325 (signed-in "Download my records") is merged to `main` (2026-10-20) but
+   not released yet; it goes out with the next server release (MUT-329).
+   - **Once it's live,** the person downloads it themselves from Settings › Your data, per profile
+     they own. It's the same records file as local mode, receipts included, and it's audited
+     `records.exported`.
    - **Until then,** you export for them, per profile they own:
 
      ```bash
@@ -471,8 +474,8 @@ starts deletion: the account goes read-only instead.
      - The export is one CSV per table, the profile row, and the receipt files.
      - Send the zip one way and its password another: email, then SMS.
      - Delete both local copies once they confirm receipt.
-     - **⚠ Basel decides:** whether this CSV export is enough, or the pilot waits for MUT-325's
-       records file for anyone leaving.
+     - **⚠ Basel decides:** whether this CSV export is enough, or anyone leaving before the
+       release waits for MUT-325's records file.
 3. **Cancel their Stripe subscription** at the period's end, in the dashboard (pilot-offer §5).
 
 ### 7.2 Day 0: start the grace period

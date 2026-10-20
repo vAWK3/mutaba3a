@@ -62,7 +62,11 @@ export default defineConfig({
   // MUT-286: the portal's lazy local backend, as vite.config.ts maps it for the hosted build.
   // node:crypto / node:async_hooks stay real here: tests run in Node, and platform-shim.test.ts checks the shims.
   resolve: {
-    alias: { '@mut/local-backend': fileURLToPath(new URL('./src/hosted/local/index.ts', import.meta.url)) },
+    alias: {
+      '@mut/local-backend': fileURLToPath(new URL('./src/hosted/local/index.ts', import.meta.url)),
+      // MUT-325: the signed-in Download (src/hosted/session/recordsExportContract.ts).
+      '@mut/records-export': fileURLToPath(new URL('./src/hosted/local/hostedExport.ts', import.meta.url)),
+    },
   },
   test: {
     globals: true,

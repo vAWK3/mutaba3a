@@ -2065,6 +2065,19 @@ Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
 
 ### YourDataDrawer — `src/hosted/components/YourDataDrawer.tsx`
 **Purpose**: Download my records (since MUT-287 a `.zip`: records.json + receipt files) / Restore from file (a zip, or a MUT-286 `.json`), signed out only, opened by `?yourData=true` from the account menu (`AccountDrawers`). Tests: `session/__tests__/local-mode.test.tsx` › Your data.
+Since MUT-325 its Restore confirm also says when the file came from an account (`exportedFromAccountAt`).
+
+### HostedYourDataDrawer — `src/hosted/components/HostedYourDataDrawer.tsx` (new, MUT-325)
+**Purpose**: Your data signed in, the same `?yourData=true` drawer key (`AccountDrawers` picks by mode). Profile checklist (all ticked), the "export, not a backup" note, Download my records with a progress bar (`role=progressbar`) and Cancel (closing the drawer cancels too), and the missing-receipt-files count. Loads the export code lazily from `@mut/records-export` and passes `recordsExportTransport` (`data/recordsExportTransport.ts`). Tests: `components/__tests__/HostedYourDataDrawer.test.tsx`; QA `portal.your-data.*`.
+
+### exportHostedRecords — `src/hosted/local/hostedExport.ts` (new, MUT-325)
+**Purpose**: builds the local-mode records file from the signed-in export routes: per-profile `records.json` merged, receipts fetched 4 at a time (429 waited out, two failed tries or a wrong size → left out and counted), zipped by `zipRecordsArchive`. Typed by `session/recordsExportContract.ts`. Tests: `local/__tests__/hostedExport.test.ts`, `hosted-export-parity.test.ts`, `hosted-export-large.test.ts`.
+
+### Records-file codec — `server/src/records-file/` (new, MUT-325)
+**Purpose**: the one records-file text for both modes: `codec.ts` (`encodeTagged`/`decodeTagged`, `encodeRecordsFileText`, the pulled `recordsFileChunks`, `SNAPSHOT_FIELDS`, `HOSTED_EXPORT_ORIGIN`), `export.ts` (`profileExportPages`, `localPersonOf`, `localProfileOf`, `localMembershipOf`), `local-person.ts` (`LOCAL_PERSON_EMAIL`). Local mode's `recordsFile.ts` builds on it. Tests: `server/src/records-file/__tests__/`.
+
+### send — `src/hosted/api/client.ts` (extended, MUT-325)
+**Purpose**: `request()`'s routing and error handling without reading the body, for responses read as text or bytes; `request()` is `send()` + JSON.
 
 ### ReloadToContinue — `src/hosted/pages/auth/BootScreens.tsx`
 **Purpose**: the D1 screen when another tab saved this device's records with a newer build (`ApiError` code `LOCAL_FORMAT_TOO_NEW`), shown by `AuthGate`.

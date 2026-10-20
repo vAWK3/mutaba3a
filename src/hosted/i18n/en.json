@@ -858,7 +858,8 @@
         "restored": "Records restored.",
         "notAFile": "This isn't a Mutaba3a records file.",
         "tooNew": "This file was saved by a newer version of Mutaba3a. Reload and try again.",
-        "failed": "Couldn't restore the file. Nothing was changed."
+        "failed": "Couldn't restore the file. Nothing was changed.",
+        "fromAccount": "This file was downloaded from your Mutaba3a account on {date}. It's an export: restoring it here doesn't change the account."
       },
       "reload": "Reload",
       "saveFailed": {
@@ -870,6 +871,26 @@
         "body": "Private browsing or a storage setting is blocking it. Turn on storage for this site, or sign in to keep your records in your account.",
         "retry": "Try again"
       }
+    },
+    "yourData": {
+      "title": "Your data",
+      "body": "Download a copy of your records: clients, matters, income, payments, expenses, groups, conversions and receipt files. You can open it in Mutaba3a without an account: signed out, choose Your data › Restore from file.",
+      "notBackup": "It's an export, not a backup: it can't be restored into your account. Profiles that Malafat fills come with their income as your own records, without Malafat's documents.",
+      "profiles": "Profiles to include",
+      "download": "Download my records",
+      "cancel": "Cancel",
+      "readingProfile": "Reading profile {current} of {total}…",
+      "fetchingReceipts": "Receipt files: {done} of {total}",
+      "zipping": "Putting the file together…",
+      "downloaded": "Records downloaded.",
+      "missingReceipts": {
+        "one": "{count} receipt file couldn't be downloaded, so it isn't in the file. Try again later to include it.",
+        "other": "{count} receipt files couldn't be downloaded, so they aren't in the file. Try again later to include them."
+      },
+      "cancelled": "Download cancelled. Nothing was saved.",
+      "failed": "Couldn't download your records. Nothing was saved. Try again.",
+      "tooNew": "Mutaba3a has been updated. Reload the page, then download again.",
+      "reload": "Reload"
     }
   }
 }
