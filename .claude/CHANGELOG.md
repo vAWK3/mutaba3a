@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — Decision: self-service signup, business-email review, forgot-password and Resend (MUT-331, ADR-159)
+
+**Why:** GA (epic MUT-322) needs anyone to sign up, pay and leave without the operator. Accounts were operator-issued only (ADR-037 §1, ADR-088), and the server had no email provider. Planning only; no code changed.
+
+### Added
+- `.claude/designs/mut-331-self-service-signup.md`. It covers:
+  - signup: verify first, then set a password and accept the terms on the existing `/setup` page;
+  - forgot-password: a mailed RESET link;
+  - the business-email check and operator review queue;
+  - the provider comparison;
+  - abuse controls;
+  - passkeys, terms, pilot and phone interactions;
+  - QA scenarios;
+  - build stories S1–S7.
+- ADR-159 (Accepted, Basel's Q1–Q5 + Q4b): open signup behind `SELF_SIGNUP_ENABLED`; instant only for verified business domains (webmail and unverified domains wait for approval); Resend as the one mailer; a password is required and a passkey is suggested after MUT-115; Freelancer by default.
+
+### Changed
+- ADR-037 §1 and ADR-088 carry override notes pointing to ADR-159.
+- firm-books §10.3 notes that the email provider is now picked (Resend), superseding MUT-299 D14.
+
 ## [Unreleased] - 2026-10-20 — Drawers fit a phone, in Arabic and English (MUT-357, TD-070)
 
 **Why:** The portal opens in Arabic (ADR-077), and pilot users (MUT-322) will see it on phones. At 375px every drawer was 480px wide: in Arabic it ran 105px off the right edge, cutting off the title and Save; in English it ran off the left edge. Found with MUT-325's Your data drawer; the shared drawer was the cause, so every drawer had it.

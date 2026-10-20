@@ -341,6 +341,8 @@ Selection criteria: EU data region; DKIM/SPF on our sending domain; bounce and c
 
 Candidates: Amazon SES, Postmark, Resend. **MUT-306's planning picks one**, with setup cost.
 
+> **Superseded (2026-10-20, ADR-159, MUT-331):** Basel picked **Resend** (Barmajiyat's account, Mutaba3a's own domain, `eu-west-1` sending) for signup and recovery. MUT-306 uses that `Mailer`; it no longer picks a provider. MUT-331's story S1 blocks MUT-306.
+
 ### 10.4 Accept step (DR12, approved)
 
 - **Portal:** after sign-in, a full-page "Join {firm}?" step comes before the app (Accept / Decline).
