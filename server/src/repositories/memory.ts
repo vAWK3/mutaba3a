@@ -1867,7 +1867,8 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!account) throw new ForeignKeyViolation('billing_subscriptions.billingAccountId');
       if (input.organizationId !== null && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('billing_subscriptions.organizationId');
       const now = new Date();
-      const { stripeCustomerId: _customer, ...fields } = input;
+      const { stripeCustomerId, ...fields } = input;
+      void stripeCustomerId; // matched above; the subscription row stores the account id instead
       const existing = [...this.billingSubs.values()].find((s) => s.stripeSubscriptionId === input.stripeSubscriptionId);
       const sub: BillingSubscriptionRecord = existing ?? { id: randomUUID(), billingAccountId: account.id, ...fields, createdAt: now, updatedAt: now };
       Object.assign(sub, fields, { billingAccountId: account.id, updatedAt: now });
