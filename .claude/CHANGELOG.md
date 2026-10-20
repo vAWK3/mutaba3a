@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — Restore drill and pilot operator runbook (MUT-327, ADR-157)
+
+**Why:** Pilot gate (MUT-322). Production keeps 14 daily backups and 7 days of point-in-time recovery, but nobody had ever restored one. The operator steps for 10 paying users were spread over DEPLOYMENT.md, INFRA.md and memory. Plan: `.claude/designs/mut-327-restore-drill-runbook.md`.
+
+### Added
+- `docs/operations/pilot-runbook.md`: onboard (provision:user, setup link, profiles, the firm switch once MUT-300 lands), password reset and `--lock`, the free-app move (no tool until MUT-290, flagged), restoring one profile vs the whole database, incident response, support (info@malafat.app, 2 working days), offboarding (export, 30-day grace, purge, backups gone 14 days later), the drill, a walk log and an empty "Drill results" section. Linked from `server/DEPLOYMENT.md` §6 and `.claude/INFRA.md` §2.
+- `server/scripts/restore-drill.sh`: restores last night's automated backup and a point-in-time clone (1 hour ago) into scratch Cloud SQL instances. Checks each copy read-only: row counts, migrations, the newest audit event, and that a receipt's file opens. Prints timings, then deletes the copies on every exit path. Every mutating call refuses anything but a `mutaba3a-pg-drill-*` name. `--dry-run` calls nothing; `teardown` removes leftovers.
+- `server/scripts/profile-rows.sh`:
+  - `export`: one profile as CSV, plus its receipt copy lines;
+  - `restore`: one profile back from a restored copy, in one transaction. Access tables keep their live rows, audit rows only grow, and an `organization.restored` event records it;
+  - `purge-user`: the offboarding hard delete until MUT-333. It refuses while the person is in a profile they don't own, or is still referenced from one.
+  - The schema is read from the catalog, and `--dry-run` rolls back.
+- Tests: `server/src/scripts/__tests__/restore-drill.test.ts` (8, dry run and refusals, fake gcloud on PATH) and `profile-rows.test.ts` (7, two scratch Postgres databases built from the migrations).
+
+### Technical
+- The drill against production is **not run**: it's Basel's step (AC1). Walked locally on 2026-10-20 against copies of `mutaba3a_dev` (runbook §9). Found: Homebrew's pg_dump 18 output fails on Postgres 16, so the runbook requires `postgresql@16` tools for whole-database dumps. TD-190: receipts aren't in the database backups. TD-191: the free-app move has no tool.
+
 ## [Unreleased] - 2026-10-20 — Signed in, download all my records (MUT-325, ADR-156)
 
 **Why:** The pilot gate (MUT-322): a paying user must be able to leave with their records. Signed out, Your data already wrote a records file; signed in there was no export at all. The export is the same file local mode restores, so leaving never loses data.

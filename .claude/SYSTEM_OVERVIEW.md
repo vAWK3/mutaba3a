@@ -539,6 +539,7 @@ mini-crm/
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-10-20 | 0.3.15 | MUT-327: pilot operator runbook (`docs/operations/pilot-runbook.md`), restore drill script and the one-profile export, restore and purge tool (ADR-157); drill against production pending Basel |
 | 2026-10-16 | 0.1.6 | MUT-24: locale files split by feature + key check (121 orphans removed, 2 raw-key bugs fixed); What's new after an update from `release-notes.json`, with a release gate (ADR-151) |
 | 2026-10-16 | 0.0.65 | MUT-237: change your own password from the account menu (`POST /v1/me/password`, API 1.31.0-mut237); other sessions revoked, this one stays signed in |
 | 2026-10-16 | 0.0.65 | MUT-236: portal `/setup` page for setup links (check, set password, sign in; token stripped from the URL); ships with MUT-235 in one server release |

@@ -4164,3 +4164,22 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 | ADR-028 §2 (downloads are a 302 to a signed URL) | The API never passes bytes on | `GET /v1/records-export/receipts/{id}` streams a receipt as `application/octet-stream`, `Content-Disposition: attachment`, `nosniff` | The portal must read the bytes to zip them, and the bucket has no CORS in IaC; still a download, never rendered | 2026-10-20 |
 
 **Consequences.** MUT-290 (moving a device's records into an account) will meet hosted ids already on devices. A write from another device during a long export can leave the file a moment inconsistent across pages (TD-189). The cap of 6 owned profiles isn't enforced on restore: re-owning firms can leave a device owning more than 6, which only stops it creating new ones.
+
+## ADR-157: Restores Go Through a Scratch Copy; a Profile Restore Never Rolls Back Access or Audit (MUT-327)
+
+**Status**: Active
+**Date**: 2026-10-20
+**Context**: Pilot gate (MUT-322). Backups had never been restored. A pilot user's mistake is far likelier than a lost database, and a whole-database restore costs every other user their recent work. Claude never touches production; Basel runs the drill.
+**Decision**:
+1. **Every restore reads from a scratch copy first.** That's a backup restored into, or a point-in-time clone to, an instance named `mutaba3a-pg-drill-<stamp>-b|p`. Nothing restores in place, except a whole-database restore from a daily backup (runbook §4.3 A), and that only after an on-demand backup (the undo point) with ingress closed.
+2. **One profile is restored on its own** (`scripts/profile-rows.sh restore`), in one transaction:
+   - Its rows in every table with an `organizationId` are replaced by the copy's.
+   - `api_keys`, `memberships`, `integrations` and `idempotency_keys` keep their live rows, so a restore never re-grants revoked access.
+   - `audit_events` are merged, never removed, and a `SYSTEM` `organization.restored` event is appended.
+3. **The schema comes from the catalog**, so the tools follow migrations without edits. Profile tables are those with `organizationId`; foreign keys give the order. A copy whose columns differ from live is refused.
+4. **The drill's safety is structural.** Every create, change or delete passes `mutate <scratch name>`, which refuses the source and any non-drill name. The copies get their own password for `mutaba3a_api`, so the drill never reads production's.
+5. **Until MUT-333, the operator's hard delete** (`purge-user`) deletes only what the person owns. It refuses while they're a member of, or referenced from, someone else's profile: that's MUT-333's decision. A later whole-database restore must replay the purge log (runbook §4.3).
+**Consequences**:
+- Receipt files aren't in the database backups: the bucket keeps no versions, only the soft-delete window (TD-190).
+- A profile restore loses that profile's changes after the restore point, and access changes since then need a manual check.
+- Whole-database dumps need Postgres 16 client tools.

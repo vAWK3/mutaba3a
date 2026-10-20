@@ -735,6 +735,7 @@ stack. Cloud Run reads the token secret by name, so deleting it first breaks the
 | Uptime alerts: apply, verify SMS, drill (MUT-328) | §6b |
 | Pilot counts (MUT-330) | Entries per profile and per pilot user, read-only, never sent anywhere: §6a |
 | Backups | Cloud SQL automated daily at 03:00 + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg` |
+| Pilot operator runbook and restore drill (MUT-327) | [`docs/operations/pilot-runbook.md`](../docs/operations/pilot-runbook.md): onboard, reset, restore one profile or the whole database, incidents, support, offboard; `scripts/restore-drill.sh` (Basel runs it, results in its §10) |
 | Scale beyond one instance | blocked by Terraform validation until TD-017; do not raise `max_instances` by hand |
 | Add staging later | `ENVIRONMENT=staging ./scripts/deploy.sh` with a `staging.tfvars` (`environment = "staging"`, ZONAL, no backups, `deletion_protection = false`); it would issue `test` keys and need its own Malafat URL secret. Not planned for now |
 

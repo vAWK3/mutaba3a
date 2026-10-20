@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-190: Receipt files aren't covered by the database backups
+**Status**: Open
+**Ticket**: none (MUT-327, 2026-10-20)
+**Added**: 2026-10-20
+**Priority**: Medium (pilot data; a restored receipt row can point at a deleted file)
+**Impact**: Deleting a receipt deletes its object (`routes/expenses.ts`), and `google_storage_bucket.attachments` has `versioning { enabled = false }` and no `soft_delete_policy`. A database restored to before the delete brings the row back, and the file is only recoverable within GCS's default soft-delete window (7 days on buckets created since 2024; the drill prints the bucket's real window). Past that, the file is gone.
+**Fix**: set an explicit `soft_delete_policy { retention_duration_seconds = 1209600 }` (14 days, matching the backups) on the bucket in Terraform. Or turn on versioning with a lifecycle rule that keeps non-current versions 14 days. Basel applies either. Then the runbook's §4.4 window matches the backups.
+
+### TD-191: A free-app user's data can't be moved into a hosted account without retyping
+**Status**: Open (decision for Basel, runbook §3)
+**Ticket**: MUT-290 (Backlog) is the in-app move
+**Added**: 2026-10-20
+**Priority**: High for the pilot's promise
+**Impact**: /hosted and `docs/commercial/pilot-offer.md` §4 say "We'll move them into your hosted account with you, by hand. Nothing to type again." Nothing imports a records file into a hosted profile, so the by-hand move today is re-entering with the person.
+**Fix**: build MUT-290 before the first free-app user moves in, or change the copy to drop "nothing to type again" (landing honesty tests, ADR-037).
+
 ### TD-188: The signed-in Download holds the whole zip in the tab
 **Status**: Open
 **Ticket**: none (MUT-325, 2026-10-20, ADR-156)
