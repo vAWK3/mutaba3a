@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-186: The front-door Worker fails closed past the Cloudflare free tier, and every portal asset counts
+**Status**: Open
+**Ticket**: none (MUT-326 adversarial review, 2026-10-20; ADR-155)
+**Added**: 2026-10-20
+**Priority**: Low until the pilot grows (10 users are far below it)
+**Impact**: Once the custom domain is live, every request to `app.<apex>` goes through the Worker, hashed `/assets/*` files included. Past 100,000 requests a day per Cloudflare account, the Worker answers error 1027 until UTC midnight. The free tier is shared with anything else on the account, such as `malafat-router` if it's Malafat's.
+**Fix**: Workers Paid ($5/month, 10M requests) before a usage alert says it's close, or serve `/assets/*` from Cloudflare's cache (a Cache Rule on the route, or `cf: { cacheEverything }` for that prefix) so repeats never reach the Worker.
+
+### TD-187: The phone repo still writes the run.app and netlify.app hosts in tests and defaults
+**Status**: Open
+**Ticket**: none (MUT-326 inventory, 2026-10-20)
+**Added**: 2026-10-20
+**Priority**: Medium (MUT-112 step 5 edits these by hand)
+**Impact**: mutaba3a-flutter has no equivalent of `config/hosts.json` or the guard test. Its `.env` sets `MUTABA3A_API_BASE_URL` (fastlane requires it), while `lib/core/env.dart` defaults it to `https://api.mutaba3a.app`, which has no DNS. `MUTABA3A_PUBLIC_ORIGIN` defaults to the Netlify origin. The link host sits in `AssociatedDomains.xcconfig`, three `AndroidManifest.xml` hosts and `strings.xml`. About ten tests (links, legal links, settings) hardcode run.app or netlify.app.
+**Fix**: in that repo, derive the manifest and strings hosts from one Gradle property, point the QA and unit tests at `Env`, and add a guard test like mini-crm's. `npm run domain:plan` prints the values meanwhile.
+
 ### TD-182: `scripts/*.ts` are never type-checked by any npm script
 **Status**: Open
 **Ticket**: none (found 2026-10-19, MUT-336)

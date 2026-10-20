@@ -1,7 +1,7 @@
 # MUT-326 — Prepare the domain move so the chosen domain is one input
 
 Epic MUT-322 (pilot gate). Blocks MUT-112. Relates MUT-291, MUT-113, MUT-115, MUT-347, MUT-328.
-Status: design, 2026-10-20. ADR-155.
+Status: built, 2026-10-20. ADR-155. The adversarial review is folded in (§12).
 
 ## 1. Problem
 
@@ -21,7 +21,7 @@ IndexedDB.
 | AC | Met by |
 |---|---|
 | A test fails if any origin is hardcoded outside the single config | `scripts/__tests__/no-hardcoded-hosts.test.ts` (§5.3) |
-| `terraform plan` with a placeholder domain shows only additions | `frontdoor` stack (§5.6): every resource is new. Offline proof in `frontdoor/tests/*.tftest.hcl`; on the day, `scripts/check-tf-plan.ts --only-create` on the real plan |
+| `terraform plan` with a placeholder domain shows only additions | The `frontdoor` stack (§5.6). A real offline `terraform plan` on the placeholder fixture says **16 to add, 0 to change, 0 to destroy**, all creates. `frontdoor/tests/frontdoor.tftest.hcl` pins the resources. On the day, the runbook's `jq` one-liner over the real plan must print nothing. The API stack's change is the in-place Cloud Run env of a normal release, applied by `deploy.sh` |
 | The carry-over is written down and its test plan drafted | §7 (built in MUT-112 or MUT-291, whichever lands first) |
 | MUT-112 is updated to "pick the domain, apply, release" | Jira comment and description edit when this lands |
 
@@ -36,7 +36,7 @@ IndexedDB.
 | `server/scripts/provision-account.sh` default URL | literal run.app | `hosts get portalOrigin` |
 | Cloud Run env `PORTAL_ORIGIN`, `FRONT_DOOR_TOKEN`, `PORTAL_LEGACY_REDIRECT` | not set | Terraform `domain.tf`, from `config/hosts.json` |
 | Front door: DNS, certificate, proxy | none | new `server/infrastructure/frontdoor/` stack, from `config/hosts.json` |
-| Netlify legacy-host redirects | none | web build emits `_redirects` from `HOSTS` once `redirectLegacy` is on |
+| Netlify legacy-host redirects | none | web build emits `_redirects` from `HOSTS` per stage (D5) |
 | Sentry allowed origins (`sentry/production.tfvars.example`) | both literals in tfvars | Sentry stack adds `HOSTS` origins itself; tfvars lists only extras |
 | `.env.example` comments | literals | point at `config/hosts.json` |
 | Test fixtures (`guard.test.ts`, `landingAnalytics.test.ts`, vite-config snapshot, `smoke` examples) | literals | `HOSTS` or neutral example hosts |
@@ -55,7 +55,10 @@ Terraform sets it.
 
 - **D1 — One file: `config/hosts.json`, per environment.** Its fields are `domain` (the one
   input, `null` until chosen), `portalSubdomain` (`"app"`, the shape decided 2026-10-12),
-  `redirectLegacy` (a later stage switch, §6), and `legacy` (today's two origins). It's JSON so
+  `stage`, and `legacy` (today's two origins). `stage` runs `legacy` → `proxy` → `live` →
+  `redirect`. It separates "the domain is known", which the front-door Terraform keys on, from
+  "the domain is live", which builds, links and the phone key on. Without that split,
+  committing the domain would re-point the next release before DNS works. It's JSON so
   that TypeScript (vite, scripts, tests), Terraform (`jsondecode(file())`) and shell (through the
   CLI) all read the same bytes. `config/hosts.ts` turns it into resolved values. That is the
   only place deriving `https://app.<domain>` lives in TypeScript; Terraform repeats the same
@@ -96,18 +99,20 @@ Terraform sets it.
   secret by name (a data source, so its plan fails loudly if the front door wasn't applied
   first), grants the API's service account access, and sets the env vars. This keeps the
   ticket's order: DNS → certificate → proxy → app release → redirect.
-- **D5 — Legacy redirects are a separate, later switch (`redirectLegacy`), and use 302.**
-  - **Server:** once `PORTAL_LEGACY_REDIRECT` is on, a direct (non-front-door) `GET`/`HEAD`
-    for a portal page gets a 302 to `PORTAL_ORIGIN` + path + query. Never redirected:
+- **D5 — Redirects are staged and use 302.**
+  - **Server, stage `redirect`:** `PORTAL_LEGACY_REDIRECT=true`. A direct (non-front-door)
+    `GET`/`HEAD` page visit gets a 302 to the **same-origin** `/carry-over?next=<path+query>`.
+    That page reads this origin's local records before anything leaves. Never redirected:
     `/v1/*`, `/admin/*`, `/health`, `/ready`, `/openapi.json`, `/.well-known/*`, `/assets/*`,
-    and the paths in `LEGACY_HOST_KEEPS`, which MUT-112 extends with the carry-over page.
-  - **Netlify:** the web build emits host-scoped `_redirects` for the landing pages only (`/`,
-    `/download`, `/privacy`, `/terms`, `/terms/*`). The free web app under `/app/*`, its
-    assets and the service worker stay on netlify.app: its IndexedDB data lives on that origin
-    until MUT-291's bridge (§7).
+    static files (a dot in the last segment), writes, and `/carry-over` itself.
+  - **Netlify, from stage `live`:** `<apex>/app` and `/app/*` go back to netlify.app. The
+    landing links to `/app` relatively, and the free web app's data is there until MUT-291.
+  - **Netlify, at stage `redirect`:** the old host's landing pages (`/`, `/download`,
+    `/privacy`, `/terms`, `/terms/*`) go to the apex. Never `/app/*`, its assets or the service
+    worker.
   - **Why 302:** a cached 301 would make rollback impossible for anyone who already followed it.
-  - **Why it waits:** redirecting run.app before the carry-over ships would strand signed-out
-    local-mode data, so the runbook turns it on only after MUT-112/291's carry-over is live.
+  - **Why it waits:** the carry-over page doesn't exist until MUT-112/291 builds it, so the
+    runbook moves to stage `redirect` only after that.
 - **D6 — Netlify keeps netlify.app answering.** Its docs say the subdomain "will always work
   even if you set up a custom domain"; there is no automatic redirect. That's what makes the
   MUT-291 bridge on `mutaba3a.netlify.app/app` possible after the move.
@@ -122,9 +127,9 @@ Terraform sets it.
   - `domain` is a bare lowercase hostname or `null`.
   - `portalSubdomain` is one DNS label.
   - `legacy.*` are https origins.
-  - `redirectLegacy` requires a domain.
-- `resolveHosts(config, env)` → `{ environment, domain, landingOrigin, portalOrigin, legacy, redirectLegacy, allOrigins, appLinkHosts, frontDoor }`.
-- `HOSTS` is the resolved production config, built at import.
+  - `stage` is `legacy` exactly when `domain` is null.
+- `resolveHosts(config, env)` → `{ environment, domain, stage, landingOrigin, portalOrigin, legacy, redirectLegacy, allOrigins, appLinkHosts, frontDoor }`.
+- `HOSTS` is the resolved production config, built at import. The stage decides `landingOrigin` and `portalOrigin` (legacy before `live`). `frontDoor.portalOrigin` is the new portal origin from stage `proxy` on, and is what the server's `PORTAL_ORIGIN` gets.
 
 ### 5.2 `scripts/hosts.ts` CLI (tsx) + `npm run domain:plan`
 - `get <landingOrigin|portalOrigin|domain>` prints one value, for shell scripts.
@@ -140,8 +145,8 @@ It fails on any `mutaba3a…` `*.a.run.app` / `*.netlify.app` host, on either le
 configured domain once one is set.
 
 ### 5.4 Web build
-`vite.config.ts` reads `HOSTS`. A `legacyRedirects()` web plugin emits `_redirects` from
-`netlifyLegacyRedirects(HOSTS)` (empty unless `redirectLegacy`). `check-bundles.ts` merges
+`vite.config.ts` reads `HOSTS`. A `domainMoveRedirects()` web plugin emits `_redirects` from
+`netlifyRedirects(HOSTS)` (empty before stage `live`). `check-bundles.ts` merges
 `HOSTS.allOrigins` into both allowlists.
 
 ### 5.5 Server
@@ -162,37 +167,39 @@ configured domain once one is set.
   `public_portal_origin`. MUT-328's uptime checks should use `local.public_portal_host`.
 - **Frontdoor stack.** Providers: cloudflare `~> 5`, google `~> 5`, random, netlify. Resources
   are count-gated on the domain:
-  - `random_password` and the Secret Manager secret and version;
-  - `cloudflare_zone` plus zone settings (SSL strict, always HTTPS, TLS ≥ 1.2);
-  - DNS records: apex and `www` CNAME to the Netlify site (DNS-only), `app` AAAA `100::` (proxied);
+  - `random_password` and the Secret Manager secret (`prevent_destroy`) and its version;
+  - `cloudflare_zone` (`prevent_destroy`) plus zone settings: SSL strict, always HTTPS, TLS ≥ 1.2, browser check and email obfuscation off, security level low. Edge challenges would answer JSON clients and the AASA fetcher with HTML;
+  - DNS records: the apex as a flattened CNAME to `apex-loadbalancer.netlify.com` and `www` as a CNAME to the Netlify site (both DNS-only), and `app` AAAA `100::` (proxied);
   - the Worker script (`worker/front-door.js`) and its route `app.<domain>/*`;
   - `netlify_site_domain_settings` (apex primary, `www` alias).
 
   Offline `terraform test` uses mock providers.
-- **`scripts/check-tf-plan.ts`** reads `terraform show -json` output. It fails on any delete or
-  replace. `--only-create` fails on anything but create or no-op, and `--allow-update <addr>`
-  whitelists the Cloud Run service.
+- No plan-checking script: the review cut it, and the runbook's `jq` one-liner over
+  `terraform show -json` does the job.
 - **Sentry stack** unions `HOSTS.allOrigins` into `allowed_domains`.
 
 ### 5.7 Worker (`server/infrastructure/frontdoor/worker/front-door.js`)
 The Worker proxies to the run.app origin with `redirect: 'manual'`, so the server's 302 and
-`Set-Cookie` pass through untouched. It sets the two `x-mutaba3a-*` headers, drops any copies
-the caller sent, and sends `x-forwarded-host`. It's plain ESM, tested by vitest with a fake
-`fetch`.
+`Set-Cookie` pass through untouched.
+- It overwrites exactly the two `x-mutaba3a-front-door` / `x-mutaba3a-client-ip` headers.
+  Other `x-mutaba3a-*` headers, such as `X-Mutaba3a-Profile`, pass through.
+- It drops `Host`, sends no `x-forwarded-host` (the review cut it as a future spoofable
+  input), and never gives a GET or HEAD a body.
+- It fails closed (503) when unconfigured.
+- It's plain ESM, tested by vitest with a fake `fetch`.
 
 ## 6. Cut-over order (runbook in `server/DEPLOYMENT.md` §5a)
 
-| Step | What happens |
-|---|---|
-| 0. Pick and buy | Set `domain` in `config/hosts.json`, commit, run `npm run domain:plan` |
-| 1. DNS | Frontdoor stack plan, which shows only creates (`check-tf-plan --only-create`), then apply. Set the registrar's nameservers to Cloudflare's. Wait until the zone is active |
-| 2. Certificates | Cloudflare's edge certificate for `app.` is automatic. Netlify issues the apex one once DNS resolves. Verify both with `curl` |
-| 3. Proxy | `curl https://app.<domain>/health`, `/ready` and both `/.well-known` files through the Worker |
-| 4. Web release | `make release web`: canonical, og tags and terms links on the apex |
-| 5. Server release | `make release server`: the hosted build points at the new hosts; Cloud Run gets `PORTAL_ORIGIN` and `FRONT_DOOR_TOKEN`; the terms guard reads the apex |
-| 6. Phone release with both hosts | `.env` and the link host move to the new host; the old host stays in the entitlements and manifest for at least one release |
-| 7. Redirects | Only after MUT-112/291's carry-over is live: `redirectLegacy: true`, then web and server releases |
-| Rollback | Each step's undo is in the runbook. Before step 7, nothing old stops working. From step 7 on, set `redirectLegacy: false` and release (302s aren't cached) |
+| Step | Stage | What happens |
+|---|---|---|
+| 0. Pick and buy | `proxy` | Set `domain` in `config/hosts.json`, commit, run `npm run domain:plan`. No build changes |
+| 1. DNS | `proxy` | Frontdoor stack plan, which shows only creates (the `jq` check), then apply. Set the registrar's nameservers to Cloudflare's |
+| 2. Certificates | `proxy` | Cloudflare's for `app.` is automatic. Netlify issues the apex one once DNS resolves to it |
+| 3. Proxy | `proxy` | `make release server`, same build. Cloud Run gets `PORTAL_ORIGIN` and `FRONT_DOOR_TOKEN` **before** anyone is sent to the new host, so sign-in throttling never sees a shared Cloudflare address. Check with `curl` and a sign-in through `app.<apex>` |
+| 4. Live | `live` | `make release web`, then `make release server` (the terms guard reads the apex). Re-apply Sentry |
+| 5. Phone release with both hosts | `live` | `.env` and the link host move; the old host stays in the entitlements and manifest for at least one release |
+| 6. Redirects | `redirect` | Only after the carry-over ships: web and server releases |
+| Rollback | | Each step's undo is in the runbook. Step the stage back and release; 302s aren't cached. Undo the API stack before ever destroying the frontdoor stack |
 
 ## 7. Carry-over of signed-out local-mode data (written down here; built in MUT-112 or MUT-291)
 
@@ -206,7 +213,8 @@ MUT-291):
 
 **Mechanism.**
 1. The old origin serves a bridge page: `/app/bridge` on Netlify (A), `/carry-over` on run.app
-   (B, added to `LEGACY_HOST_KEEPS` so the redirect skips it).
+   (B). The server already sends every direct page visit there at stage `redirect`, and never
+   redirects the page itself (`LEGACY_CARRY_OVER_PATH`). MUT-112 builds the page in the portal.
 2. The bridge reads the local data and serialises it in the existing **Download my records**
    format (portal local mode's backup file, MUT-287). For A, it first maps the records through
    `createLocalApp`, per MUT-285 §11.
@@ -221,9 +229,18 @@ MUT-291):
    user action, kept for at least 90 days (MUT-292).
 6. **Fallback.** A blocked popup, a missing ack after 10 s, or a different browser leads to
    "Download my records" on the old host and "Restore" on the new one.
-7. **When the bridge triggers.** Signed-out pages on the old origin check for local data
-   before the redirect stage. With data, they show the carry-over offer. With none, they
-   continue to the new host.
+7. **When the bridge triggers.** At stage `redirect` every old-host page visit lands on
+   `/carry-over?next=…` first. With local data, it shows the offer. With none, it calls
+   `location.replace(PORTAL_ORIGIN + next)` at once. Nobody who didn't visit during an
+   earlier window is stranded.
+8. **Message hygiene.**
+   - Use an explicit `targetOrigin`, never `'*'`, and check `event.source === window.opener`.
+   - Neither page may send COOP `same-origin`, which nulls `opener`; pin this with a header test.
+   - Send the payload as a transferable `ArrayBuffer`/`Blob`, not a JSON string.
+   - The receiver accepts exactly the two legacy origins (A and B). It shows counts and asks
+     before writing, and never silently overwrites a non-empty store: merge, or refuse with a
+     message. Anything on netlify.app, the landing included, shares the trusted origin, so
+     the receiver validates every record as Restore does.
 
 **Draft test plan.**
 
@@ -243,11 +260,10 @@ MUT-291):
 
 | File | Proves |
 |---|---|
-| `config/__tests__/hosts.test.ts` | parse errors per field; resolve with and without a domain; `allOrigins` and `appLinkHosts` during the transition; `redirectLegacy` without a domain is refused |
+| `scripts/__tests__/hosts.test.ts` | parse errors per field; resolve per stage; `allOrigins` and `appLinkHosts` during the transition; a stage and domain that disagree are refused; fixtures shared with Terraform |
 | `scripts/__tests__/hosts-cli.test.ts` | `domainPlan()` lists every consumer; phone lines carry both hosts; `get` values |
 | `scripts/__tests__/no-hardcoded-hosts.test.ts` | AC1; plus a self-test that the pattern catches a planted literal |
-| `scripts/__tests__/check-tf-plan.test.ts` | create-only passes; delete, replace and unlisted updates fail; `--allow-update` |
-| `scripts/__tests__/vite-config.test.ts` (updated) | defaults equal `HOSTS`; `netlifyLegacyRedirects` empty, then host-scoped rules for landing paths only (never `/app`) |
+| `scripts/__tests__/vite-config.test.ts` (updated) | defaults equal `HOSTS`; `netlifyRedirects` per stage: empty before live, `<apex>/app*` back from live, landing paths only at redirect (never `/app`) |
 | `server/src/auth/__tests__/front-door.test.ts` | token match is constant-time and exact; client IP from the header only with the token; forged headers without it are ignored; expected origin per path; no token configured → today's behaviour |
 | `server/src/__tests__/config.test.ts` (extended) | `FRONT_DOOR_TOKEN` needs `PORTAL_ORIGIN`; the redirect needs the token |
 | `server/src/__tests__/legacy-redirect.test.ts` | 302 for a portal page on the direct path; never for the API, well-known, health, assets or front-door requests; off by default |
@@ -273,3 +289,25 @@ Paid upgrade at $5/month is needed only past 100k portal requests a day (TD).
 
 No new UI strings. The carry-over UI (§7) is in Arabic and English, RTL, in the ticket that
 builds it.
+
+## 12. Adversarial review (2026-10-20), and what changed
+
+| Finding | Disposition |
+|---|---|
+| Committing the domain re-points every release before DNS works | **Fixed:** `stage` (D1) |
+| `<apex>/app` would open an empty free web app | **Fixed:** Netlify sends it back to netlify.app from `live` (D5) |
+| A 302 to the new host makes the client-side carry-over check impossible | **Fixed:** the redirect goes to the same-origin `/carry-over?next=` page (D5, §7.7) |
+| `PORTAL_LEGACY_REDIRECT="false"` would read as true under `z.coerce.boolean` | **Fixed:** an enum of "true"/"false", tested |
+| A pilot-wide sign-in lockout between the web release and the token | **Fixed:** the runbook gives Cloud Run the token (step 3) before anyone is sent there (step 4) |
+| Worker header handling | **Fixed:** two exact names, Profile passes, no GET body, `secret_text`, no `x-forwarded-host`, fail closed |
+| Cloudflare edge features (browser check, email obfuscation) can break JSON, AASA and phone traffic | **Fixed:** zone settings |
+| The free-tier ceiling fails closed and is shared per account | **Deferred:** TD-186; the account is a deliberate tfvars choice |
+| Saved passwords don't carry over in browsers | **Deferred:** stated in the runbook. Web↔web `assetlinks.json` affiliation is an API contract change for MUT-112. The phone keeps both hosts |
+| Terraform lifecycle: destroy on a typo, Registrar import, CI matrix, staging lookup, metadata-only data source | **Fixed:** `prevent_destroy`, an import note, the matrix, `lookup`, and `data google_secret_manager_secret` |
+| The Netlify apex target | **Fixed:** `apex-loadbalancer.netlify.com` |
+| Fixtures naming `mutaba3a.app` would trip the guard on cut-over day | **Fixed:** scrubbed, plus a `mutaba3a.app` rehearsal in the guard test (CIMD exempt) |
+| "Only additions" honesty | Stated in §2: the frontdoor plan is creates only; the API stack's change is a normal release's in-place Cloud Run update |
+| A front-door smoke test in `deploy.sh` | **Added** |
+| The service worker answers `/` on netlify.app, so the landing redirect never fires for app users | Accepted: those visitors still get the landing, with a canonical pointing at the apex |
+| Cut the `check-tf-plan` script and `x-forwarded-host` | **Cut** |
+| Cut the Netlify provider | **Kept:** MUT-112's AC requires no console edits |
