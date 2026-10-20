@@ -243,8 +243,8 @@ if (!url || !hasPsql) {
       expect(await live.db.user.count({ where: { id: ids.owner } })).toBe(0);
       expect(await live.db.organization.count({ where: { id: { in: [ids.personal, ids.business] } } })).toBe(0);
       for (const table of ['customers', 'expenses', 'expense_receipts', 'expense_categories', 'audit_events', 'memberships']) {
-        const [{ n }] = await live.db.$queryRawUnsafe<Array<{ n: bigint }>>(`SELECT count(*) AS n FROM ${table} WHERE "organizationId" IN ('${ids.personal}', '${ids.business}')`);
-        expect(Number(n), table).toBe(0);
+        const rows = await live.db.$queryRawUnsafe<Array<{ n: bigint }>>(`SELECT count(*) AS n FROM ${table} WHERE "organizationId" IN ('${ids.personal}', '${ids.business}')`);
+        expect(Number(rows[0]?.n), table).toBe(0);
       }
       expect(await live.db.termsAcceptance.count({ where: { userId: ids.owner } })).toBe(0);
       expect(await live.db.auditEvent.count({ where: { action: 'user.terms_accepted', actorId: ids.owner } })).toBe(0);
