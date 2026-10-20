@@ -241,7 +241,7 @@ ESLint enforces it (MUT-47, ADR-071).
 | Reports Presets | 🔄 Routes exist | Medium |
 | FX Rate Import | 🔄 Manual only | Low |
 | SQLite Migration | 📋 Designed | Future |
-| Firm books (epic MUT-298): roles, approval, receipts read on device, vendor bills, VAT summary, month close, accountant pack | 📋 Designed (brief `.claude/designs/firm-books.md`, ADR-099; v1 Nov 2026, pilot gate before v3) | High |
+| Firm books (epic MUT-298): roles, approval, receipts read on device, vendor bills, VAT summary, month close, accountant pack | 🚧 v1 in progress: the firm switch is built (MUT-300: operator enables in place, owner requests from the portal, `/v1/me` `firm`/`role`); the rest designed (brief `.claude/designs/firm-books.md`, ADR-099; pilot gate before v3) | High |
 
 ---
 

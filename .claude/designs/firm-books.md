@@ -60,30 +60,30 @@ Naming in this brief:
 
 **A firm is an organization with `firmEnabledAt` set** (ID3: explicit and operator-enabled). Firm features never key off `ProfileType`.
 
-There are two ways an organization becomes a firm:
-1. **An operator-provisioned organization** (`ownerUserId` null; it may be Malafat-fed, ID1). The operator sets the flag.
-2. **An owned Business profile** whose owner asks for firm features. The operator **converts** it (B1):
-   - Ownership moves from the `ownerUserId` column to an OWNER membership role.
-   - `profileType` is cleared together with `ownerUserId`. CHECK `organizations_owner_type_check` requires both to be null or both set.
-   - The profile stops counting toward the cap of 6.
-   - From then on it follows firm rules, and it can be shared.
-   - The built-in personal profile can **never** convert (CHECK `organizations_personal_owned_check`). The request row isn't offered on it.
+There are two ways an organization becomes a firm, and the operator sets the flag **in place** for both (amended by the MUT-300 eng review D4, 2026-10-19):
+1. **An operator-provisioned organization** (`ownerUserId` null; it may be Malafat-fed, ID1).
+2. **An owned Business profile** whose owner asks for firm features. It **stays owned**: `ownerUserId` and `profileType` are untouched, it still counts toward the cap of 6, and its owner's membership becomes OWNER. Every owned-keyed capability keeps working (income capture, settle, redate, rename, the API-key/bind/grant refusals).
+   - The built-in personal profile never gets firm features (CHECK `organizations_firm_not_personal_check`). An owned profile typed PERSONAL is refused too (409 `NOT_BUSINESS`). The request row isn't offered on either.
 
-This keeps MUT-182's invariant "an owned profile is standalone, never shared" true by construction.
+~~B1 conversion~~ (ownership moved to an OWNER role, `profileType` cleared) is **superseded by D4**: it would have removed income capture, settle and redate from the first pilot owner, since all three key on `owned`. MUT-182's invariant "an owned profile is standalone, never shared" therefore still holds for v1–v2. **Sharing an owned firm profile with staff is a v3 decision**, taken after the pilot (MUT-305/306 Jira notes).
 
 ### 3.2 Columns (MUT-300)
 
 `Organization`:
 - `firmEnabledAt DateTime?` — set means the organization is a firm.
-- `firmRequestedAt DateTime?` and `firmRequestedByUserId Uuid?` — the request is kept until it's decided.
+- `firmRequestedAt DateTime?` and `firmRequestedByUserId Uuid?` — the request is kept until it's decided (enabled or declined). CHECK `organizations_firm_request_pair_check`: both or neither.
 - `closedThroughMonth String? @db.VarChar(7)` — added by MUT-312.
+
+`Membership.role MembershipRole @default(OWNER)` — added by MUT-300 (not MUT-305), because enabling writes roles. Inert until the flag is on (O10).
 
 ### 3.3 Enabling (D4)
 
-- Enabling requires the operator to name **at least one owner**.
-- Every other existing member becomes **BOOKKEEPER**: today's expense rights, no member management.
+- On an operator firm, enabling requires the operator to name **at least one owner**, each already a member. On an owned profile the owner is the OWNER and named owners are ignored.
+- Every other existing member becomes **BOOKKEEPER**: today's expense rights, no member management. A member added later by the operator is BOOKKEEPER too (MUT-300 D3).
 - Disabling clears the flag and leaves the role values in place; they have no effect while the flag is off.
-- Every enable, disable, convert and request writes an `ADMIN` or `USER` audit event.
+- The operator can **decline** a pending request (MUT-300 D6); the owner sees the offer again and may ask again.
+- The request doesn't bump the profile's `version` (O3), so an open edit form keeps its If-Match.
+- Every enable, disable, decline and request writes an `ADMIN` or `USER` audit event, in the write's transaction. The same state twice writes nothing.
 
 ---
 
@@ -353,11 +353,11 @@ Candidates: Amazon SES, Postmark, Resend. **MUT-306's planning picks one**, with
 
 | Ticket | Adds | Memory store / local snapshot |
 |---|---|---|
-| MUT-300 | Organization `firmEnabledAt`, `firmRequestedAt`, `firmRequestedByUserId` | mirror; snapshot migration + Organization fingerprint once MUT-284 is on main |
+| MUT-300 | Organization `firmEnabledAt`, `firmRequestedAt`, `firmRequestedByUserId`; Membership `role` (moved here from MUT-305, plan C1) | mirror; snapshot migration + Organization and Membership fingerprints once MUT-284 is on main |
 | MUT-301 | none server-side (portal reading; suggestions go to MUT-255's columns) | n/a |
 | MUT-302 | Expense VAT columns; Bill VAT columns arrive with MUT-308 | mirror + migration |
 | MUT-303 | Vendor `lastCurrency`, `lastVatTreatment`, `lastVatRateBasisPoints` | mirror + migration |
-| MUT-305 | Membership `role`; scopes `expenses:approve`, `close:write`, `members:write` | mirror + migration + **new Membership fingerprint** (missing today) |
+| MUT-305 | role enforcement (the column landed in MUT-300); scopes `expenses:approve`, `close:write`, `members:write` | mirror + **new Membership fingerprint** (missing today) |
 | MUT-306 | `SetupLinkPurpose.INVITE`, `Invitation` (email, role, organizationId, invitedByUserId, tokenDigest, expiresAt, status) and a pending state on Membership | sessions, links and invites are never persisted locally (ADR-097) |
 | MUT-307 | Expense `approval`, `decidedByUserId`, `decidedAt`, `rejectionReason`; Organization `requireApproval` | mirror + migration |
 | MUT-308 | Bill, BillPayment, BillAllocation, BillPaymentCounter; Expense `billPaymentId`; ExpenseReceipt `billId` + CHECK | mirror + migration |
@@ -374,17 +374,19 @@ Candidates: Amazon SES, Postmark, Resend. **MUT-306's planning picks one**, with
 
 ### 12.1 v1 — full contracts
 
-**MUT-300 · firm flag and request** (API minor bump at merge; the current version is `1.36.0-mut293`)
+**MUT-300 · firm flag and request** (as built, API `1.37.0-mut300`; amended by the MUT-300 eng review D3–D6 and plan C2/C5/C6)
 
 | Method & path | Principal | Request | Success | Errors |
 |---|---|---|---|---|
-| `POST /v1/profiles/{profileId}/firm-request` | session, owner of an owned BUSINESS profile | `Idempotency-Key`; empty body | 202 `{ firmRequest: { requestedAt } }`; a repeat returns the same body | 404 `NOT_FOUND`; 409 `CONFLICT` `reason: PERSONAL_PROFILE` (built-in personal) or `NOT_OWNER` or `ALREADY_FIRM`; 403 `PRINCIPAL_NOT_ACCEPTED` (API key) |
-| `GET /admin/v1/firm-requests` | admin | `?cursor` | 200 `{ data: [{ organizationId, name, requestedAt, requestedByUserId, owned: boolean }], nextCursor }` | 401 `ADMIN_UNAUTHORIZED` |
-| `PATCH /admin/v1/organizations/{organizationId}` | admin | `{ firmEnabled: true, ownerUserIds: [uuid, ≥1] }` or `{ firmEnabled: false }`; If-Match | 200 the organization view with `firm: { enabled, enabledAt, ownerUserIds }` | 404; 409 `CONFLICT` `reason: OWNED_PROFILE` (enable on a non-converted owned profile; convert first) or `NOT_A_MEMBER` (named owner isn't a member); 422 `VALIDATION_FAILED` (no owner named on enable) |
-| `POST /admin/v1/organizations/{organizationId}/convert-to-firm` | admin | `{ }`; Idempotency-Key | 200 the organization view with `ownerUserId: null`, `profileType: null`, firm enabled, the former owner as OWNER | 404; 409 `CONFLICT` `reason: PERSONAL_PROFILE` (built-in) or `NOT_OWNED` |
+| `POST /v1/profiles/{profileId}/firm-request` | session, owner of an owned BUSINESS profile | `Idempotency-Key`; no body | 202 `{ firmRequest: { requestedAt } }`; a repeat returns the first request | 404 `NOT_FOUND`; 403 `READ_ONLY_PROFILE` `reason: NOT_OWNER` (a profile the caller only belongs to); 409 `CONFLICT` `reason: PERSONAL_PROFILE` (built-in personal), `NOT_BUSINESS` (owned, typed PERSONAL) or `ALREADY_FIRM`; 403 for an API key |
+| `GET /admin/v1/firm-requests` | admin | `?limit&cursor` | 200 `{ data: [{ organizationId, name, requestedAt, requestedByUserId, requestedByEmail, owned }], nextCursor }`, oldest request first | 401 `ADMIN_UNAUTHORIZED`; 422 bad cursor |
+| `PATCH /admin/v1/organizations/{organizationId}` | admin | `{ firmEnabled: true, ownerUserIds?: uuid[] }` or `{ firmEnabled: false }`; no If-Match (admin routes are idempotent by construction, C5) | 200 `{ organization }` with `firm: { enabledAt, requestedAt, requestedByUserId }`; the same state again is a no-op 200 | 404; 409 `CONFLICT` `reason: PERSONAL_PROFILE`, `NOT_BUSINESS` or `NOT_A_MEMBER` (`userIds`); 422 `VALIDATION_FAILED` (operator firm with no owner named) |
+| `DELETE /admin/v1/organizations/{organizationId}/firm-request` | admin | none | 200 `{ organization }` | 404 (unknown, or nothing pending) |
 
-- Audit actions: `firm.requested`, `firm.enabled`, `firm.disabled`, `firm.converted`.
-- `GET /v1/me` per profile gains `firm: boolean` and `role: OWNER | BOOKKEEPER | SUBMITTER | null` (null when not a firm). `access` reflects the role (D1). The CLI `scripts/users.ts` gains `firm enable|disable|convert`.
+- No convert route (D4).
+- Audit actions: `firm.requested` (USER), `firm.enabled` (`{ ownerUserIds }`), `firm.disabled`, `firm.request_declined` (ADMIN).
+- `GET /v1/me` per profile gains `firm: boolean`, `role: OWNER | BOOKKEEPER | SUBMITTER | null` (null while not a firm) and `firmRequestedAt` (owner only, C6), additive. `access` doesn't read the role until MUT-305 (D1). `Organization` and `Membership` admin views gain `firm` and `role`; the organization detail lists `members` with roles.
+- CLI `scripts/users.ts`: `firm-requests`, `firm-enable --organization-id <id> [--owner <email>[,…]]`, `firm-disable`, `firm-decline` (npm `firm:*`).
 
 **MUT-301 · portal PDF text + QR prefill** (no server routes)
 
@@ -467,8 +469,8 @@ These are summarised here. The full text, the state table and the storyboard are
 
 | id | Area | Steps (as the user says them) | Promised outcome | Ticket |
 |---|---|---|---|---|
-| firm.request | profiles | Open Manage profiles, ask to use my Business profile for a firm | Row reads "Requested"; asking again changes nothing | 300 |
-| firm.enabled-banner | shell | Sign in after the operator enabled firm features | One "Firm features are on" banner; dismissing it keeps it gone | 300 |
+| profiles.firm-request | profiles | Open Manage profiles, open my Business profile, ask to use it for a firm | The pane reads "Requested"; it survives a reload; a Personal profile never offers it | 300 |
+| shell.firm-enabled-banner | shell | Sign in after the operator enabled firm features | One "Firm features are on" note; dismissing it keeps it gone; Arabic reads right to left | 300 |
 | receipts.pdf-prefill | expenses | Upload a text PDF receipt, open it | Date, amount and currency are filled with "Read from the PDF" captions | 301 |
 | receipts.zatca-qr | expenses | Upload a ZATCA receipt image | Seller, VAT no., date, total and VAT are filled "From the QR code" | 301 |
 | receipts.unreadable | expenses | Upload a receipt the reader can't read | Fields are empty, with "Couldn't read this receipt"; can still save by hand | 301 |
@@ -502,7 +504,7 @@ Each becomes a feature in `qa/features/portal/<area>.yaml` (or `qa/features/flut
 ## 18. Rejected options
 
 - **A double-entry general ledger:** too heavy for small firms; their accountant keeps the books (ID9).
-- **Lifting MUT-182's "owned profiles are never shared" rule** instead of converting: it would leave two kinds of shared organization (B1).
+- **Lifting MUT-182's "owned profiles are never shared" rule** instead of converting: it would leave two kinds of shared organization (B1). (MUT-300 D4 then dropped conversion too: v1–v2 neither convert nor share an owned profile; v3 decides sharing after the pilot.)
 - **A separate role middleware:** two sources of truth (D1).
 - **Negative adjusting expenses for closed months:** deferred to TODOS.md #16 (D2).
 - **A copyable invite link:** lets owners claim accounts in others' names (D10).

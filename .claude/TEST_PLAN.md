@@ -128,6 +128,19 @@ The test plan for MUT-300..314 is `.claude/designs/firm-books-tests.md`. It cove
 
 Every money rule runs on both stores (memory and `test:db`).
 
+**MUT-300 (built 2026-10-20):**
+| File | Type | Covers |
+|------|------|--------|
+| `server/src/repositories/__tests__/store-contract-firm.ts` (+ `store-memory-firm`, `store-prisma-firm`) | contract, both stores | request (idempotent, no version bump, audited once, concurrent requests on Postgres), enable in place / operator firm roles, refusals (owners required, not a member, personal, not business), disable keeps roles, no-op writes nothing, decline, listing order and cursor, BOOKKEEPER on later grants |
+| `server/src/repositories/__tests__/migration-mut300.test.ts` | test:db | OWNER backfill, pair CHECK, not-personal CHECK, RESTRICT FK, no schema drift |
+| `server/src/__tests__/routes-profiles-firm.test.ts` | routes | firm-request matrix (202, replay and new key, O3 save after request, PERSONAL_PROFILE, NOT_BUSINESS, NOT_OWNER, 404, ALREADY_FIRM, API key); `/v1/me` `firm`/`role`/`firmRequestedAt`; POST/PATCH profile carry them |
+| `server/src/__tests__/routes-admin-firm.test.ts` | routes | enable/disable/decline/listing, members with roles, 401/404/409/422 |
+| `server/src/scripts/__tests__/users-cli.test.ts` | CLI | `firm-requests`, `firm-enable` (owned and `--owner`), `firm-disable`, `firm-decline` |
+| `src/hosted/data/__tests__/profileRules.test.ts` | unit | `'OPERATOR'` reason, `firmRequestState` incl. older servers |
+| `src/hosted/components/__tests__/ProfileEditForm.firm.test.tsx`, `FirmOnBanner.test.tsx` | portal | offer → Requested with Idempotency-Key, error, visibility, Arabic; banner shown/hidden, dismissal persists, blocked storage, Arabic |
+| `scripts/__tests__/firm-copy-guard.test.ts` | unit | banned compliance phrases in every `hosted.firm.*` / `hosted.profiles.firm.*` string, ar and en |
+| `qa/specs/portal/profiles.spec.ts` `@portal.profiles.firm-request`, `shell.spec.ts` `@portal.shell.firm-enabled-banner` | release-QA | the two user flows, RTL |
+
 ## Current Test Coverage
 
 ### Landing header and motion (MUT-77, added 2026-10-14)
