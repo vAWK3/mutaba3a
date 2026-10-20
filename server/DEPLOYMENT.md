@@ -907,12 +907,12 @@ Alerts go to email and SMS (Basel's call, 2026-10-19), plus any ids in `alert_no
    terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-api/production"
    URL=$(terraform output -raw service_url)
    TAG=$(curl -fsS "$URL/health" | jq -r .version)   # the running image tag, so Cloud Run plans no change
-   MON=(-target=google_monitoring_uptime_check_config.endpoint -target=google_monitoring_notification_channel.email
-        -target=google_monitoring_notification_channel.sms -target=google_monitoring_alert_policy.endpoint_down
-        -target=google_monitoring_alert_policy.cloud_sql)
+   MON=(-target=google_monitoring_uptime_check_config.health -target=google_monitoring_uptime_check_config.endpoint
+        -target=google_monitoring_notification_channel.email -target=google_monitoring_notification_channel.sms
+        -target=google_monitoring_alert_policy.endpoint_down -target=google_monitoring_alert_policy.cloud_sql)
    terraform plan -var-file=production.tfvars -var image_tag="$TAG" "${MON[@]}"
    ```
-   Expect `google_monitoring_uptime_check_config.health[0] has moved to …endpoint["health"]` with no change to it, then **`Plan: 9 to add, 0 to change, 0 to destroy`**: the `ready` and `portal` checks, 2 channels, 3 uptime policies and 2 Cloud SQL policies. Anything marked change or destroy means stop and ask. In particular, a change to `google_cloud_run_v2_service.api` (the checks read its host, so `-target` plans it too) means main carries Terraform that isn't released yet: apply this with the next `make release server` instead. (If `alert_notification_channels` was already set, the old `/health` policy moves and shows one in-place change to its condition. That's expected.)
+   The first target is the check's *old* address: a targeted plan must name both sides of a `moved` block or Terraform refuses it ("Moved resource instances excluded by targeting"). Until this section is applied that same refusal stops `deploy.sh` step 0, so a release cannot go out before it (ADR-161). Expect `google_monitoring_uptime_check_config.health[0] has moved to …endpoint["health"]` with no change to it, then **`Plan: 9 to add, 0 to change, 0 to destroy`**: the `ready` and `portal` checks, 2 channels, 3 uptime policies and 2 Cloud SQL policies. The targets pull in the Cloud Run service and the attachments bucket as dependencies, so an unapplied change to either rides along: §6c's bucket `soft_delete_policy` 7 → 14 days showed here as `1 to change` on 2026-10-20 and was approved with it. Anything else marked change or destroy means stop and ask. In particular, a change to `google_cloud_run_v2_service.api` (the checks read its host, so `-target` plans it too) means main carries Terraform that isn't released yet: apply this with the next `make release server` instead. (If `alert_notification_channels` was already set, the old `/health` policy moves and shows one in-place change to its condition. That's expected.)
 3. Apply the same command, with `apply` in place of `plan`. Any later `./scripts/deploy.sh` keeps these resources, because its full apply reads the same tfvars.
 4. **Verify the SMS channel.** Cloud Monitoring sends nothing to an SMS channel until the code it texts is confirmed. Email needs no verification.
    ```bash

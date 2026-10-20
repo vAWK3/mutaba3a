@@ -1829,6 +1829,7 @@ preflight  →  gates  →  version prompt  →  build  →  confirm  →  commi
 
 - **Preflight is cheap and first.** Every reason a release should not happen — wrong branch, dirty tree, unmerged branch, parked worktree, behind `origin`, wrong `node`, stale `node_modules`, a missing tool or credential — is found in under a second, before anything spends minutes building. `scripts/preflight.sh` reports *every* failure and exits once, rather than dying on the first; an operator fixes the whole list in one pass.
 - **Gates that cannot fail the build run before the version bump**, so a failure leaves the working tree exactly as it was. The build runs *after*, because the version is compiled into the bundle (`__APP_VERSION__`).
+- **Bootstrap applies run once, reconciliation runs every time.** deploy.sh step 0 applies its `-target`s only while one of them is missing from state (`scripts/lib/tf-bootstrap.sh`, ADR-161). A targeted plan refuses any pending `moved` block, so a per-release targeted apply turns every merged Terraform rename into a dead release. Renames are walked by the operator step that introduced them or by the full, untargeted apply.
 - **The irreversible step is last and asks.** `scripts/confirm.sh` defaults to no and fails closed when there is no terminal: a release never proceeds because a prompt could not be shown. `AUTO=1` is the only way past it.
 
 ### Every override is a named variable

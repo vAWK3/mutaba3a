@@ -4282,3 +4282,23 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Stripe Tax can't calculate Israel or Jordan, so those take manual tax rates if MUT-355 says tax is due.
 - A firm member's own profile isn't covered by the firm's subscription until firm v3 decides otherwise (MUT-305/306).
 - The ADR-037 no-self-signup rule is MUT-331's override (ADR-159 on its branch), not this one's.
+
+---
+
+## ADR-161: deploy.sh Step 0 Bootstraps Only on an Empty State; a Pending Terraform Rename Is an Operator Step, Never a Release's Job
+
+**Date**: 2026-10-20
+**Status**: Accepted
+**Context**: deploy.sh step 0 ran `terraform apply` with four `-target`s on every release so the Artifact Registry repository and the database exist before `docker push` and `prisma migrate deploy`. Terraform refuses a targeted plan that leaves a pending `moved` block out ("Moved resource instances excluded by targeting"). MUT-328 (ADR-154) renamed the uptime check from `health[0]` to `endpoint["health"]` with a `moved` block and was merged "prepared, not applied", so from then on every `make release server` died in step 0 before building anything. api v0.3.16, v0.3.17 and v0.3.18 were committed (v0.3.18 pushed) but never deployed; production stayed on api-v0.3.15. The before-release note presented §6b as optional. CI's Terraform job cannot see this: it has no production state.
+
+**Decision**:
+1. Step 0's targeted apply runs only when at least one of its four addresses is missing from `terraform state list` (a first run on an empty project). Otherwise it is skipped and the outputs are read. The logic lives in `server/scripts/lib/tf-bootstrap.sh` so it is testable through a fake `terraform`.
+2. A Terraform rename (`moved`) merged to main is applied by the operator step that introduced it (DEPLOYMENT.md §6b for MUT-328), or by step 4's full apply, which has no `-target`. Terraform's suggestion to add the moved addresses to step 0's targets was rejected: it would create monitoring during the bootstrap, before the image exists, and would recur with every future rename.
+3. A before-release item whose Terraform blocks the release says so ("BLOCKS this release").
+4. §6b's targeted plan names both sides of the move; Terraform 1.15 refuses it otherwise.
+
+**Consequences**:
+- A release never performs a state rename by accident, and never stops on one either.
+- A first deploy to a new project still bootstraps the registry and database as before.
+- The four addresses are listed once, in the helper; renaming any of them is a change to that list and its test.
+

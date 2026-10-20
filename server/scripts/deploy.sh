@@ -50,6 +50,8 @@ die()  { printf '\033[0;31m[deploy] %s\033[0m\n' "$*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing tool: $1 ($2)"; }
 cleanup() { if [[ -n "${PROXY_PID}" ]]; then kill "${PROXY_PID}" 2>/dev/null || true; fi; }
 trap cleanup EXIT
+# shellcheck source=lib/tf-bootstrap.sh
+source "${SERVER_DIR}/scripts/lib/tf-bootstrap.sh"
 # The Cloud SQL Auth Proxy on 127.0.0.1:PROXY_PORT, for steps 3 and 6; needs SQL_CONNECTION (step 0).
 start_proxy() {
   info "starting cloud-sql-proxy for ${SQL_CONNECTION} on 127.0.0.1:${PROXY_PORT}"
@@ -89,7 +91,7 @@ fi
 info "environment=${ENVIRONMENT} project=${GCP_PROJECT_ID} region=${GCP_REGION} tag=${SHORT_SHA}"
 
 # ---------------------------------------------------------------------------
-# 0. Terraform init (remote state) and the registry, which must exist before push
+# 0. Terraform init (remote state); on a first run, the registry and database
 # ---------------------------------------------------------------------------
 pushd "${TF_DIR}" >/dev/null
 terraform init -reconfigure -input=false \
@@ -97,12 +99,9 @@ terraform init -reconfigure -input=false \
   -backend-config="prefix=mutaba3a-api/${ENVIRONMENT}" >/dev/null
 TF_ARGS=(-input=false -var-file="${ENVIRONMENT}.tfvars" -var "image_tag=${SHORT_SHA}")
 APPROVE=(); [[ "${AUTO_APPROVE}" == "1" ]] && APPROVE=(-auto-approve)
-info "ensuring the Artifact Registry repository and the database exist"
-terraform apply "${TF_ARGS[@]}" "${APPROVE[@]}" \
-  -target=google_artifact_registry_repository.images \
-  -target=google_sql_user.api \
-  -target=google_sql_database.mutaba3a \
-  -target=google_secret_manager_secret_version.database_url
+# First run only: the registry must exist before `docker push`, the database
+# before the migration. Skipped once they are in state (lib/tf-bootstrap.sh).
+ensure_bootstrap "${TF_ARGS[@]}" "${APPROVE[@]}"
 LOCAL_DATABASE_URL="$(terraform output -raw local_database_url)"
 SQL_CONNECTION="$(terraform output -raw cloud_sql_connection_name)"
 popd >/dev/null
