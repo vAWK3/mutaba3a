@@ -3236,3 +3236,12 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 |---|---|
 | `src/lib/motion/__tests__/iconMotion.test.ts` (7) | `ICON_OVERSHOOT_EASE`/`ICON_RESTRAINED_EASE` match `MMotion.overshoot`/`.spring` exactly; playful and restrained both settle at scale(1); the playful preset's live value exceeds 1 mid-flight (the actual "bounce," not just which constant was selected); reduced motion jumps straight to scale(1) on either preset; every target in a list animates; re-triggering mid-flight doesn't throw and still settles cleanly |
 | Manual | No dev-server CSP check performed — the mechanism writes `element.style.transform` directly via JS, the same pattern `playRowEnter`/`playRowExit` already use under the portal's CSP (ADR-044), so it's CSP-safe by construction, not by inspection |
+
+## MUT-328 — Uptime checks and alerts (2026-10-20, ADR-154)
+
+| Test | Covers |
+|---|---|
+| `server/infrastructure/terraform/tests/monitoring.tftest.hcl` (14 runs, mocked Google + random, server-ci `terraform test`) | Defaults: `health`/`ready`/`portal` on the Cloud Run host, every 300 s over validated HTTPS, all regions, no channel or policy, `/health` keeps its display name; the portal matcher `id="root"`; `uptime_host` moves every check; a host with a scheme, path or port is refused; email + SMS create 2 channels and 5 policies, each notifying both plus existing ids; uptime policy > 1 region for 360 s at 300 s `ALIGN_NEXT_OLDER` + `REDUCE_COUNT_FALSE`, its own check id, CRITICAL; Cloud SQL disk > 0.8 / CPU > 0.9 for 900 s on `<project>:mutaba3a-pg`, WARNING; non-E.164 SMS refused; existing channel ids alone still alert; the drill adds a check + policy, and a path without `/` is refused; `enable_uptime_check = false` keeps the SQL alerts |
+| `tests/database_pool.tftest.hcl` (3) | Unchanged, still green after the monitoring section moved out of `main.tf` |
+| Not automatable here | The real plan against production (expected: 9 to add, the `/health` check moved) and the drill (fire, then close) are Basel's steps in `server/DEPLOYMENT.md` §6b |
+
