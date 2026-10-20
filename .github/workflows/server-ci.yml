@@ -1,24 +1,13 @@
 # CI for the hosted API in server/ (closes TD-019).
 #
-# Runs on every change under server/ (and to this file). Nothing here deploys
-# and nothing is pushed: the Docker build is a build-only proof that the image
+# Nothing here deploys and nothing is pushed: the Docker build is a build-only proof that the image
 # still assembles and answers /health. Deploys are operator-run from
 # server/scripts/deploy.sh on the operator's machine (ADR-026, server/DEPLOYMENT.md).
 name: Server CI
 
+# Manual only (2026-10-20): start it with `make ci server` or from the Actions tab. `make release`
+# reminds you to run it after each push.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'server/**'
-      # MUT-280: the peg fixture is checked by a server test, so editing it alone must run it.
-      - 'docs/fx/**'
-      - '.github/workflows/server-ci.yml'
-  pull_request:
-    paths:
-      - 'server/**'
-      - 'docs/fx/**'
-      - '.github/workflows/server-ci.yml'
   workflow_dispatch:
 
 concurrency:
@@ -82,8 +71,11 @@ jobs:
           node-version: '22'
       - name: Build the hosted-portal bundle (MUT-45; the image serves it from PORTAL_DIST_DIR)
         working-directory: .
+        # The portal bundles the server's routes for local mode (MUT-286), so it resolves
+        # @hono/zod-openapi and friends from server/node_modules.
         run: |
           npm ci --no-audit --no-fund
+          npm ci --prefix server --no-audit --no-fund
           npm run build:hosted
       - name: Copy the portal build into the server's Docker context
         working-directory: .
