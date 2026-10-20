@@ -72,9 +72,9 @@ function checkBrandFonts(dir: string): string[] {
   return problems;
 }
 
-/** The entry HTML files each dist serves: the web build also emits the /hosted page's copy of index.html. */
+/** The entry HTML files each dist serves. */
 const ENTRY_HTML: Record<string, string[]> = {
-  'dist-web': ['index.html', 'hosted-offer.html'],
+  'dist-web': ['index.html'],
   'dist-desktop': ['index.html'],
   'dist-hosted': ['index.html'],
 };
