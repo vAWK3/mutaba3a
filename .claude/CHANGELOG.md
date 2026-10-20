@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — Terms-acceptance evidence: ADR-102 addendum (MUT-348, epic MUT-322)
+
+**Why:** MUT-324's first review pass left two questions open: does the hash have to cover the rendered page, and do firm-only members need more evidence? Basel decided both on 2026-10-20 (MUT-348 comment 12222).
+
+### Changed
+- `.claude/DECISIONS.md` ADR-102 gets an addendum, and its status line names it.
+  1. The evidence is the frozen terms file (`textSha256`) plus the release that rendered it. MUT-354 records that release per acceptance in a nullable `clientRelease` column. Rows from before it stay null. No rendered-text hash and no HTML snapshots.
+  2. Firm-only members need nothing more for now, because every pilot user is an owner. MUT-305/306 must revisit this before the first member who owns no profile is invited. No code.
+
 ## [Unreleased] - 2026-10-20 — Pilot success bars, weekly review and the operator count (MUT-330, epic MUT-322)
 
 **Why:** without bars agreed in advance, the pilot ends with impressions, not a GA go/no-go. Basel signed off the bars on 2026-10-20 (MUT-330 comment 12221).
