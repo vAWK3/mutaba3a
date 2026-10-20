@@ -4,6 +4,7 @@ import { VitePWA, type ManifestOptions, type VitePWAOptions } from "vite-plugin-
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json";
+import { HOSTS, type ResolvedHosts } from "./config/hosts";
 import ar from "./src/lib/i18n/translations/ar";
 import {
   HONEYPOT_FIELD,
@@ -47,18 +48,19 @@ function emitHostedEntryAsIndex(): Plugin {
 
 /**
  * Where the landing page is served; override with MUTABA3A_PUBLIC_ORIGIN (e.g. a
- * staging host). The Netlify origin until the custom domain has DNS (MUT-112):
- * it feeds the link-preview tags, the /hosted canonical and the portal's
- * sign-in link (MUT-188), all of which must point at a host that answers.
+ * staging host). From config/hosts.json (MUT-326): the Netlify origin until a
+ * domain is set there, then its apex. It feeds the link-preview tags, the /hosted
+ * canonical and the portal's sign-in link (MUT-188), all of which must point at a
+ * host that answers.
  */
-export const DEFAULT_PUBLIC_ORIGIN = "https://mutaba3a.netlify.app";
+export const DEFAULT_PUBLIC_ORIGIN = HOSTS.landingOrigin;
 
 /**
  * Where the free web app's "Already have an account? Sign in" link goes: the
- * Cloud Run service that serves the portal (no custom domain yet, MUT-112).
- * Override with MUTABA3A_PORTAL_URL (MUT-187).
+ * service that serves the portal, from config/hosts.json (MUT-326). Override with
+ * MUTABA3A_PORTAL_URL (MUT-187).
  */
-export const DEFAULT_PORTAL_URL = "https://mutaba3a-api-t5bzsudmja-zf.a.run.app";
+export const DEFAULT_PORTAL_URL = HOSTS.portalOrigin;
 
 /** `value` without its trailing slash; throws, naming `envVar`, unless it is a bare https origin. */
 function assertHttpsOrigin(envVar: string, value: string): string {
@@ -259,6 +261,50 @@ function netlifyForms(): Plugin {
 }
 
 /**
+ * The landing pages a visitor on the old Netlify host is sent on to the apex at stage
+ * "redirect" (config/hosts.json; MUT-326, ADR-155 D5). Never `/app/*`, its assets or
+ * the service worker: the free web app's records live in that origin's IndexedDB
+ * until MUT-291's bridge carries them over.
+ */
+export const LEGACY_LANDING_PATHS = ["/", "/download", "/privacy", "/terms", "/terms/*"] as const;
+
+/** One Netlify `_redirects` line; `/*` paths carry the rest of the path over. 302 so a rollback is never stuck in a cache. */
+function redirectLine(fromOrigin: string, path: string, toOrigin: string): string {
+  const to = path.endsWith("/*") ? `${path.slice(0, -1)}:splat` : path;
+  return `${fromOrigin}${path} ${toOrigin}${to} 302!`;
+}
+
+/**
+ * Netlify `_redirects` for the domain move, or "" while there is nothing to redirect.
+ * Host-scoped, so deploy previews are untouched.
+ * - From stage "live": the apex's `/app` goes back to the old host, where the free web
+ *   app's data is (the landing links to `/app` relatively); MUT-291 retires this.
+ * - At stage "redirect": the old host's landing pages go on to the apex.
+ */
+export function netlifyRedirects(hosts: Pick<ResolvedHosts, "stage" | "legacy" | "frontDoor">): string {
+  if (!hosts.legacy || !hosts.frontDoor || (hosts.stage !== "live" && hosts.stage !== "redirect")) return "";
+  const apex = `https://${hosts.frontDoor.landingHost}`;
+  const old = hosts.legacy.landingOrigin;
+  const lines = [
+    redirectLine(apex, "/app", old),
+    redirectLine(apex, "/app/*", old),
+    ...(hosts.stage === "redirect" ? LEGACY_LANDING_PATHS.map((path) => redirectLine(old, path, apex)) : []),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+/** Emits `_redirects` (read before netlify.toml's rules) only when there is something to redirect. */
+function domainMoveRedirects(): Plugin {
+  const source = netlifyRedirects(HOSTS);
+  return {
+    name: "mutaba3a:domain-move-redirects",
+    generateBundle() {
+      if (source) this.emitFile({ type: "asset", fileName: "_redirects", source });
+    },
+  };
+}
+
+/**
  * The service worker's cache rules. Thmanyah (~1.2 MB of .otf, which the
  * licence forbids converting) is cached on use instead of being precached on
  * every install (MUT-102, PD10). No font is preloaded either: a preload
@@ -438,7 +484,7 @@ export default defineConfig(({ mode }) => {
     },
   plugins: [
     react(),
-    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), legalTermsManifest(), hostedOfferDevRoute()] : []),
+    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), legalTermsManifest(), domainMoveRedirects(), hostedOfferDevRoute()] : []),
     VitePWA({
       disable: isTauri, // Disable PWA for desktop builds
       registerType: "autoUpdate",

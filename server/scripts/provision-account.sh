@@ -17,7 +17,8 @@ if [[ ! -f package.json ]] || ! grep -q '"provision:user"' package.json; then
   exit 1
 fi
 
-DEFAULT_URL="https://mutaba3a-api-t5bzsudmja-zf.a.run.app"
+# The portal/API origin config/hosts.json names (MUT-326); empty if the repo root has no node_modules.
+DEFAULT_URL="$(npm --prefix .. run --silent hosts -- get portalOrigin 2>/dev/null || true)"
 SECRET_NAME="mutaba3a-api-admin-token"
 
 echo "== Mutaba3a: provision a live user account =="
@@ -47,6 +48,10 @@ url="${url:-$DEFAULT_URL}"
 # Tolerate pasting a full sign-in link instead of the bare API origin.
 url="${url%/sign-in}"
 url="${url%/}"
+if [[ -z "$url" ]]; then
+  echo "An API base URL is required (npm install at the repo root lets this default to config/hosts.json)." >&2
+  exit 1
+fi
 
 read -rp "New user's email: " email
 if [[ -z "$email" ]]; then

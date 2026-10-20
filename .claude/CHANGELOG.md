@@ -28,6 +28,36 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — The custom domain is one input (MUT-326, ADR-155)
+
+**Why:** The domain must be live before the pilot (MUT-322) but isn't chosen yet. The run.app and netlify.app hosts were written into vite, the bundle allowlist, the terms release guard, provisioning, Sentry tfvars and tests, so a move meant hunting for them. Now picking the domain is one edit, and MUT-112 shrinks to "pick, apply, release". Brief: `.claude/designs/mut-326-domain-move.md`.
+
+### Added
+- **`config/hosts.json` + `config/hosts.ts`.** `domain` (null), `portalSubdomain`, the legacy origins and a `stage` (`legacy` → `proxy` → `live` → `redirect`), resolved into the origins each consumer uses. Fixtures in `config/fixtures/` are shared with the Terraform tests.
+- **`npm run domain:plan [-- --domain <apex> --stage <stage>]`** (`scripts/hosts.ts`) prints every consumer's value now and with the domain: vite, Netlify redirects, Cloud Run env, front door, Sentry, uptime host, the phone's `.env` / entitlements / manifest lines, and Malafat. `npm run --silent hosts -- get <key>` serves shell scripts.
+- **`scripts/__tests__/no-hardcoded-hosts.test.ts`.** It fails on the legacy hosts, any `mutaba3a*.a.run.app` / `*.netlify.app`, or the chosen domain outside `config/hosts.json`, and rehearses `mutaba3a.app` as the domain. Prose and the CIMD files are exempt.
+- **`server/infrastructure/frontdoor/`.** A new operator-applied stack: Cloudflare zone and settings, DNS (apex/www DNS-only to Netlify, `app.` proxied), the front-door Worker (`worker/front-door.js`) and its route, the token secret, and the Netlify custom domain. It's empty while no domain is set. A placeholder domain plans 16 to add, 0 to change, 0 to destroy. Offline `terraform test`; joins the server-ci matrix.
+- **Server front-door awareness.**
+  - `FRONT_DOOR_TOKEN` and `PORTAL_LEGACY_REDIRECT` (`"true"`/`"false"` only) in `config.ts`.
+  - `isViaFrontDoor`, `requestClientIp` and `isSamePortalOrigin` in `auth/sessions.ts`, used by sign-in, device sign-in, account setup, the session middleware and the public FX limiter.
+  - The legacy-host redirect to `/carry-over?next=…` in `app.ts`.
+  - With no token, behaviour is unchanged.
+- **API stack `domain.tf`.** It reads the token secret, grants the service account, adds `PORTAL_ORIGIN` / `FRONT_DOOR_TOKEN` (and `PORTAL_LEGACY_REDIRECT` at stage redirect) to Cloud Run, and outputs `public_portal_origin` (for MUT-328's uptime checks).
+- **`server/DEPLOYMENT.md` §5a.** The operator runbook for the move: prerequisites, the six stages with commands and checks, and the rollback table.
+- **Web build `mutaba3a:domain-move-redirects`.** It emits Netlify `_redirects` from the config: from `live`, `<apex>/app/*` back to netlify.app; at `redirect`, the old host's landing pages to the apex.
+
+### Changed
+- `vite.config.ts` `DEFAULT_PUBLIC_ORIGIN` / `DEFAULT_PORTAL_URL` = `HOSTS.landingOrigin` / `HOSTS.portalOrigin`. The values are the same today; the web snapshot masks the portal URL and lists the new plugin.
+- `scripts/check-bundles.ts` adds `HOSTS.allOrigins` to both allowlists; `bundle-origins.json` no longer lists our own hosts.
+- `terms:check-live` takes `MUTABA3A_PUBLIC_ORIGIN` from the config through its npm script; the script itself has no default. `provision-account.sh` defaults its URL from the config.
+- **Sentry stack:** `portal_origins` / `landing_origins` are now extras. The DSNs accept the config's origins, new and legacy, by themselves.
+- `deploy.sh` also smoke-tests `public_portal_origin` once it differs from the service URL.
+- MUT-328's uptime checks (merged first) now default `uptime_host` to `local.public_portal_host`, as its own comment asked: the config's portal host, so they follow the domain at stage `live`. `monitoring.tftest.hcl` reads the no-domain fixture, plus one run for a live domain.
+- Test fixtures and comments use neutral example hosts instead of our real ones.
+
+### Files
+`config/{hosts.json,hosts.ts,fixtures/*}`, `scripts/{hosts.ts,check-bundles.ts,bundle-origins.json}`, `scripts/__tests__/{hosts,hosts-cli,no-hardcoded-hosts,front-door-worker,vite-config,legal-terms}.test.ts`, `vite.config.ts`, `package.json`, `server/src/{config.ts,index.ts,app.ts,auth/sessions.ts,auth/middleware.ts,routes/{sessions,account-setup,device-sessions,fx-rates}.ts,scripts/check-terms-live.ts}`, `server/src/__tests__/{legacy-redirect,config,check-terms-live,smoke}.test.ts`, `server/src/auth/__tests__/{front-door,sessions}.test.ts`, `server/infrastructure/{frontdoor/**,terraform/{domain.tf,main.tf,outputs.tf,tests/domain.tftest.hcl},sentry/**}`, `server/scripts/{deploy.sh,provision-account.sh}`, `server/package.json`, `.github/workflows/server-ci.yml`, `.env.example`, `server/.env.example`, `server/DEPLOYMENT.md`.
+
 ## [Unreleased] - 2026-10-20 — Uptime checks and alerts for the API and portal (MUT-328, ADR-154)
 
 **Why:** Pilot gate (MUT-322). Production had one `/health` uptime check, and no alert reached anyone because no notification channel was set. An outage was found only when a user wrote in.

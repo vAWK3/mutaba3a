@@ -17,7 +17,7 @@ vi.mock('../../../../lib/analytics/posthogKey', () => ({
 }));
 vi.mock('posthog-js', () => ({ default: sdk }));
 
-const ORIGIN = 'https://mutaba3a.netlify.app';
+const ORIGIN = 'https://landing.example';
 const KEY = 'phc_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
 
 function fakePostHog(): PostHogLike & { init: ReturnType<typeof vi.fn>; capture: ReturnType<typeof vi.fn> } {

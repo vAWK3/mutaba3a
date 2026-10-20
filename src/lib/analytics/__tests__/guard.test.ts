@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { guardEvent, type AnalyticsCapture, type GuardContext } from '../guard';
 
-const LANDING: GuardContext = { surface: 'landing', appVersion: '0.1.12', locale: 'ar', origin: 'https://mutaba3a.netlify.app' };
+const LANDING: GuardContext = { surface: 'landing', appVersion: '0.1.12', locale: 'ar', origin: 'https://landing.example' };
 const PORTAL: GuardContext = { surface: 'portal', appVersion: '0.1.12', locale: 'en', origin: 'https://portal.example' };
 
 /** What posthog-js hands `before_send`: routing, identity, control and context properties around the event's own. */
@@ -123,7 +123,7 @@ describe('guardEvent: the landing allowance', () => {
   it('keeps URL, UTM, referrer, device and the cookieless hash inputs on landing events', () => {
     const out = guardEvent(
       capture('$pageview', {
-        $current_url: 'https://mutaba3a.netlify.app/?utm_source=x',
+        $current_url: 'https://landing.example/?utm_source=x',
         $pathname: '/',
         $referrer: 'https://google.com/',
         $referring_domain: 'google.com',
@@ -134,7 +134,7 @@ describe('guardEvent: the landing allowance', () => {
       LANDING,
     )!;
     expect(out.properties).toMatchObject({
-      $current_url: 'https://mutaba3a.netlify.app/?utm_source=x',
+      $current_url: 'https://landing.example/?utm_source=x',
       $pathname: '/',
       $referrer: 'https://google.com/',
       $referring_domain: 'google.com',
@@ -154,7 +154,7 @@ describe('guardEvent: the landing allowance', () => {
 
   it('drops the referrer when it is this site\'s local app (/app)', () => {
     const out = guardEvent(
-      capture('$pageview', { $referrer: 'https://mutaba3a.netlify.app/app/settings?tx=1', $referring_domain: 'mutaba3a.netlify.app' }),
+      capture('$pageview', { $referrer: 'https://landing.example/app/settings?tx=1', $referring_domain: 'landing.example' }),
       LANDING,
     )!;
     expect(out.properties).not.toHaveProperty('$referrer');
@@ -162,8 +162,8 @@ describe('guardEvent: the landing allowance', () => {
   });
 
   it('keeps a same-site referrer that is another landing page', () => {
-    const out = guardEvent(capture('$pageview', { $referrer: 'https://mutaba3a.netlify.app/hosted' }), LANDING)!;
-    expect(out.properties.$referrer).toBe('https://mutaba3a.netlify.app/hosted');
+    const out = guardEvent(capture('$pageview', { $referrer: 'https://landing.example/hosted' }), LANDING)!;
+    expect(out.properties.$referrer).toBe('https://landing.example/hosted');
   });
 });
 

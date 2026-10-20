@@ -100,7 +100,7 @@ describe('post-deploy smoke checks', () => {
 
 describe('parseBaseUrl (the --url argument of `npm run smoke`)', () => {
   it('accepts an absolute http(s) URL and strips trailing slashes', () => {
-    expect(parseBaseUrl('https://mutaba3a-api-abc.a.run.app/')).toBe('https://mutaba3a-api-abc.a.run.app');
+    expect(parseBaseUrl('https://service-abc.a.run.app/')).toBe('https://service-abc.a.run.app');
     expect(parseBaseUrl('http://localhost:8787')).toBe('http://localhost:8787');
   });
 
@@ -113,7 +113,7 @@ describe('parseBaseUrl (the --url argument of `npm run smoke`)', () => {
 
   it('rejects a relative path and a non-http scheme', () => {
     expect(() => parseBaseUrl('/health')).toThrow(/absolute http/);
-    expect(() => parseBaseUrl('mutaba3a-api.a.run.app')).toThrow(/absolute http/);
-    expect(() => parseBaseUrl('ftp://mutaba3a-api.a.run.app')).toThrow(/absolute http/);
+    expect(() => parseBaseUrl('service.a.run.app')).toThrow(/absolute http/);
+    expect(() => parseBaseUrl('ftp://service.a.run.app')).toThrow(/absolute http/);
   });
 });

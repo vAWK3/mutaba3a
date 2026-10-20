@@ -55,6 +55,11 @@ output "attachments_bucket" {
   value       = google_storage_bucket.attachments.name
 }
 
+output "public_portal_origin" {
+  description = "MUT-326: where users reach the portal: the custom domain's portal host from stage live on, else the legacy one (config/hosts.json). deploy.sh smoke-tests it too when it differs from service_url."
+  value       = local.public_portal_origin
+}
+
 output "uptime_host" {
   description = "Host the uptime checks probe (MUT-328): uptime_host, else the Cloud Run host."
   value       = local.uptime_host

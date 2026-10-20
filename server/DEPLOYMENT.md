@@ -413,9 +413,10 @@ cookies or CORS beyond what MUT-38 already built:
   (`src/auth/sessions.ts`) then compares the request's `Origin` header against
   the URL it actually arrived on, which is correct and sufficient as long as
   nothing in front of Cloud Run changes the apparent origin — true today,
-  since there is no custom domain (see the note at the end of §5). Setting
-  `PORTAL_ORIGIN` only becomes necessary if a reverse proxy or load balancer is
-  ever put in front of the service with a different public hostname.
+  since there is no custom domain. The custom domain's front door (§5a, ADR-155)
+  sets `PORTAL_ORIGIN` together with `FRONT_DOOR_TOKEN`: requests carrying the
+  token are checked against `PORTAL_ORIGIN`, direct run.app requests against
+  their own origin, so both hosts work during the move.
 - **CSP**: `default-src 'self'; connect-src 'self' https://storage.googleapis.com
   https://eu.i.posthog.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'` on every
   response. `'self'` everywhere else is possible precisely because the portal
@@ -454,10 +455,10 @@ config so a domain move (MUT-112) changes no code.
   App Signing fingerprint joins later, in the Android epic). Edit the value in
   `production.tfvars`, `terraform apply`, done — no code change, no redeploy
   of the image itself (only the Cloud Run revision's env vars change).
-- **Moving domains**: MUT-112's job, not this file's. When it lands, update
-  this section with whatever changes (if anything) in how these two routes
-  are reached — the `appID`/`package_name` values themselves don't change
-  just because the hostname did.
+- **Moving domains** (§5a): nothing changes here. Both files are host-free, so
+  the front door serves them on `app.<apex>` as-is, and run.app keeps serving
+  them for old app builds (the legacy redirect never touches `/.well-known/*`).
+  The phone must claim both hosts for a release (§5a step 5).
 - **Apple's CDN caches the AASA for up to about 24 hours.** A fingerprint or
   path-list change deployed just now will not necessarily be visible to a
   freshly-installed iOS app immediately — don't assume a redeploy is broken
@@ -491,17 +492,216 @@ creates `money_integrations`), and in the firm's Malafat as a Partner:
 organization name, masked key and scopes, and "Test connection" calls
 `GET /v1/integration` round-trip.
 
-Optional, deliberately deferred past MUT-45: put `api.mutaba3a.app` in front of
-the run.app URL. Cloud Run domain mappings are not offered in `me-west1`, so
-this would be a Cloudflare proxied CNAME (the same approach as
-`malafat-router`) or an external HTTPS load balancer — either one adds a hop
-that changes the origin the browser sees from the one Cloud Run sees, which is
-exactly what `PORTAL_ORIGIN` and `TRUSTED_PROXY_HOPS` exist to handle (§4c).
-MUT-45 intentionally shipped without it: ADR-037 decision 10 only requires the
-portal and the API to share an origin, which the bare run.app URL already
-does, at zero extra cost or infrastructure. The run.app URL is stable for the
-life of the service; add a custom domain as its own follow-up ticket if a
-branded URL becomes a real requirement, not before.
+A custom domain (deferred past MUT-45) is prepared in §5a: the run.app URL keeps
+answering the API for good, so Malafat's secret needs no change when it lands.
+
+## 5a. Moving to the custom domain (MUT-326 prepares, MUT-112 runs it)
+
+**Everything below reads one file: `config/hosts.json`** (ADR-155). It holds:
+
+- `domain`: the apex, `null` until it is chosen.
+- `portalSubdomain`: `app`, so the portal and API move to `app.<apex>`.
+- `legacy`: today's run.app and netlify.app origins. They keep answering throughout the move.
+- `stage`: one of `legacy` → `proxy` → `live` → `redirect`.
+
+Picking the domain is the one edit; each later step moves `stage` on by one. The landing goes
+to the apex. To see what any change does before you make it, run:
+
+```bash
+npm run domain:plan -- --domain example.com --stage live
+```
+
+It prints every consumer's value now and after: vite defaults, Netlify redirects, Cloud Run
+env, front door, Sentry, the uptime host, the exact phone `.env` / entitlements / manifest
+lines, and Malafat.
+
+**Why a Worker, and why a token (ADR-155):**
+
+- **Cloud Run domain mapping isn't offered in `me-west1`.** So `app.<apex>` is a Cloudflare
+  Worker (`server/infrastructure/frontdoor/worker/front-door.js`) in front of the run.app URL,
+  like Malafat's `malafat-router`. Free up to 100,000 requests a day per Cloudflare account.
+- **run.app stays reachable directly** for old phone builds, Malafat and the carry-over. The
+  front-door path has one more hop than the direct path, so a single `TRUSTED_PROXY_HOPS` can't
+  key sign-in throttling correctly on both.
+- **The token solves that.** The Worker sends `FRONT_DOOR_TOKEN` and the client IP Cloudflare
+  read, and the server trusts that IP only when the token matches. `TRUSTED_PROXY_HOPS` stays 1.
+
+### What you need first
+- **The domain, bought.** Cloudflare Registrar is the simplest, because the zone then already
+  exists (see the import note in step 1).
+- **A Cloudflare account, chosen on purpose.** The Workers free tier is per account: on
+  Malafat's account it is shared with `malafat-router`.
+  - API token scopes on that account: Zone Edit, DNS Edit, Zone Settings Edit, Workers Scripts
+    Edit, Workers Routes Edit. Export it as `CLOUDFLARE_API_TOKEN`.
+- **A Netlify personal access token**, exported as `NETLIFY_API_TOKEN`.
+- **The Netlify site id** of the landing (Site settings › Site details).
+- **`server/infrastructure/frontdoor/production.tfvars`**, copied from the `.example` and filled
+  in with `project_id`, `cloudflare_account_id` and `netlify_site_id`.
+
+### Step 0: name the domain (`stage: "proxy"`)
+
+In `config/hosts.json`, set `"domain": "<apex>"` and `"stage": "proxy"`.
+
+```bash
+npm run domain:plan -- --stage proxy
+npm run test:run -- scripts/__tests__/no-hardcoded-hosts.test.ts
+```
+
+Read the plan, then commit. At this stage no build changes: vite, the terms guard and the phone
+still use the legacy hosts. A release made now ships nothing new.
+
+### Step 1: DNS (front-door stack)
+
+```bash
+cd server/infrastructure/frontdoor
+terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="prefix=mutaba3a-frontdoor/production"
+# Bought at Cloudflare Registrar? The zone exists already: import it first.
+#   terraform import -var-file=production.tfvars 'cloudflare_zone.this[0]' <zone id>
+terraform plan -var-file=production.tfvars -out=frontdoor.plan
+terraform show -json frontdoor.plan | jq -r '.resource_changes[] | select(.change.actions != ["create"] and .change.actions != ["no-op"]) | "\(.change.actions) \(.address)"'
+```
+
+The `jq` line must print **nothing**: the first plan only adds. On a placeholder domain it reads
+`16 to add, 0 to change, 0 to destroy`. Then:
+
+```bash
+terraform apply frontdoor.plan
+terraform output name_servers
+```
+
+Set those name servers at the registrar, then wait until Cloudflare shows the zone **Active**:
+
+```bash
+dig +short NS <apex>
+```
+
+### Step 2: certificates
+
+- **Portal host:** Cloudflare's edge certificate for `app.<apex>` is automatic.
+- **Apex and `www`:** Netlify issues their certificate once DNS resolves to it (the apex is a
+  flattened CNAME to `apex-loadbalancer.netlify.com`, DNS only). If it doesn't, use Netlify ›
+  Domain management › HTTPS › Verify DNS configuration.
+
+Then check all three:
+
+```bash
+curl -sI https://<apex>/ | head -1
+curl -sI https://www.<apex>/ | head -1
+curl -s https://app.<apex>/health
+```
+
+### Step 3: proxy, then the server learns the token
+
+```bash
+make release server
+```
+
+Same `stage: proxy`, so the build is unchanged. Terraform adds `PORTAL_ORIGIN` and
+`FRONT_DOOR_TOKEN` to Cloud Run; its data source fails loudly if step 1 wasn't applied. Then
+check the front door end to end:
+
+```bash
+curl -s https://app.<apex>/health
+curl -s https://app.<apex>/ready
+curl -s https://app.<apex>/.well-known/apple-app-site-association | head -c 200
+curl -s https://app.<apex>/.well-known/assetlinks.json | head -c 200
+npm --prefix server run smoke -- --url https://app.<apex>
+```
+
+Then sign in on `https://app.<apex>`. The session cookie is per origin, so expect to sign in
+there separately.
+
+**Nobody is sent to the new hosts before this works.**
+
+### Step 4: go live (`stage: "live"`)
+
+In `config/hosts.json`, set `"stage": "live"`, run `npm run domain:plan`, and commit. Then
+release in this order:
+
+```bash
+make release web
+make release server
+```
+
+**Web first.** The landing builds canonical/og tags for the apex. Its `_redirects` sends
+`<apex>/app/*` back to `netlify.app/app`, because the free web app's records live in that
+origin's IndexedDB until MUT-291.
+
+**Then the server.** The portal bundle links to the apex's `/terms`, and the terms guard reads
+`https://<apex>/legal/terms-versions.json`, so wait for Netlify's deploy first. `deploy.sh` now
+also smoke-tests `public_portal_origin`.
+
+Then:
+- **Sentry:** re-apply the Sentry stack (§1.5) so the DSNs accept the new origins.
+- **Uptime:** the checks follow `local.public_portal_host` (MUT-328).
+- **PostHog:** check the pilot tiles' `$host` filters (MUT-330).
+
+### Step 5: phone release with both hosts (mutaba3a-flutter repo)
+
+Copy the lines `npm run domain:plan` prints under **7. Phone**:
+
+- **`.env`:** `MUTABA3A_API_BASE_URL` and `MUTABA3A_PORTAL_BASE_URL` = `https://app.<apex>`;
+  `MUTABA3A_PUBLIC_ORIGIN` = `https://<apex>`.
+- **`ios/Flutter/AssociatedDomains.xcconfig`:** `MUTABA3A_LINK_HOST`.
+- **`Runner.entitlements`:** one `applinks` + `webcredentials` pair **per host**, new and run.app.
+- **`AndroidManifest.xml`:** `android:host` per host and path.
+- **`strings.xml` `asset_statements`:** both hosts' `assetlinks.json`.
+
+Keep the run.app host for at least one release: old links and passwords saved against run.app
+keep working only while it is claimed. Apple's CDN caches the AASA for up to about 24 hours.
+
+### Step 6: redirect the old hosts (`stage: "redirect"`)
+
+**Only after the carry-over (MUT-112/MUT-291, design §7) has shipped.** Before that, a
+redirect strands signed-out local-mode records on run.app.
+
+In `config/hosts.json`, set `"stage": "redirect"`, commit, then:
+
+```bash
+make release web
+make release server
+```
+
+- **Netlify:** 302s the old host's landing pages (`/`, `/download`, `/privacy`, `/terms*`) to
+  the apex. Never `/app/*`.
+- **Cloud Run:** gets `PORTAL_LEGACY_REDIRECT=true`. Direct run.app page visits go to the
+  same-origin `/carry-over?next=…` page, which carries local records over and then sends the
+  browser on.
+- **Never redirected on run.app:** the API (`/v1/*`), `/admin/*`, the association files,
+  `/health`, `/ready`, `/assets/*`, static files and writes.
+
+Check it:
+
+```bash
+curl -sI https://<run.app host>/sign-in | grep -i location
+curl -sI https://<run.app host>/v1/me | head -1
+```
+
+The first must show `/carry-over?next=%2Fsign-in`. The second must still be `401`, not a redirect.
+
+### Rollback (any step)
+
+| From | Undo |
+|---|---|
+| 6 | `stage: "live"`, then `make release web` and `make release server`. 302s are never cached, so visitors return to the old hosts at once |
+| 5 | Ship the phone again with the run.app values. The old host was never unclaimed |
+| 4 | `stage: "proxy"`, then `make release web` and `make release server`. Users are back on the legacy hosts; the front door still works |
+| 3 | `stage: "legacy"` and `domain: null` in a **branch you deploy from**, then `make release server`. Cloud Run drops `PORTAL_ORIGIN` and `FRONT_DOOR_TOKEN` and the IAM grant; the server behaves exactly as before |
+| 1–2 | Leave the frontdoor stack applied: unused, it costs nothing. To remove it, lift `prevent_destroy` on the zone and the token secret, then `terraform destroy`. `cloudflare_zone_setting` can't be destroyed from Terraform (the provider says so) and stays with the zone |
+
+Order matters on the way back: undo the API stack (step 3) before destroying the frontdoor
+stack. Cloud Run reads the token secret by name, so deleting it first breaks the next cold start.
+
+### What doesn't move
+- **Malafat** calls `/v1` on run.app, which answers for good. Switching
+  `malafat-web-mutaba3a-api-url` to `https://app.<apex>` is optional.
+- **The Malafat OAuth client identity** (`CIMD_CLIENT_ID`, `public/.well-known/oauth-client.json`)
+  keeps its own value.
+- **Browser-saved passwords** in Safari/iCloud Keychain and Chrome are tied to run.app. They
+  aren't offered on `app.<apex>`, so people sign in once and their browser saves the new host.
+  The phone app keeps offering them through `webcredentials` for both hosts. Google Password
+  Manager could link the two hosts through web↔web statements in `assetlinks.json`, an API
+  contract change left to MUT-112. Say so in MUT-112's release note.
 
 ## 6. Day-2 operations
 
