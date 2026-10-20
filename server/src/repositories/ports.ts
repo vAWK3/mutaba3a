@@ -1876,7 +1876,7 @@ export interface EntriesRepository {
 /**
  * Each profile-owned snapshot field (`LocalSnapshotMaps`, memory.ts) and the record it holds. The person-level
  * fields (`orgs`, `ints`, `people`, `members`, `inbox`) are not here: the export builds or omits those itself. Nor
- * is `files`: Malafat's documents stay with Malafat (ADR-097 §7: local profiles have none; ADR-155).
+ * is `files`: Malafat's documents stay with Malafat (ADR-097 §7: local profiles have none; ADR-156).
  */
 export interface ProfileExportRecords {
   custs: CustomerRecord;

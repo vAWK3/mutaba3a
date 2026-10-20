@@ -322,6 +322,9 @@ npm run tauri build      # macOS/Windows bundles
 ### Terms of service (MUT-324, ADR-102)
 Hosted accounts are covered by terms of service at `/terms/<version>`. The texts are frozen and versioned, governed by the law of England & Wales, with English prevailing. A person accepts at their setup link, and again in the portal's Updated-terms step after a version bump. Each acceptance records the version, the language, the text's sha256 and the surface. Signed out, no terms apply.
 
+### Taking your records with you (MUT-325, ADR-156)
+Signed in, Your data › Download my records writes the chosen profiles to the same records file the signed-out portal restores (`records.json` + receipt files, labelled as an export from the account). The server streams each profile (`GET /v1/records-export`, audited `records.exported`) re-homed to the device's one person: no password, no other person's row or email, no Malafat connection or documents. It's an export, not a backup: nothing restores into an account yet (MUT-290).
+
 ### Data Residency
 - **All data stored locally** in browser IndexedDB or Tauri app storage
 - **No server-side database** — user owns their data completely

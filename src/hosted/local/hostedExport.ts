@@ -7,7 +7,7 @@ import { zipRecordsArchive } from './recordsArchive.js';
 import { decodeRecordsFile, encodeRecordsFile } from './recordsFile.js';
 
 /**
- * "Download my records", signed in (MUT-325, ADR-155): each chosen profile's
+ * "Download my records", signed in (MUT-325, ADR-156): each chosen profile's
  * records file from the server, merged into one, and every receipt's bytes,
  * zipped by local mode's own `zipRecordsArchive` — so the file is the one
  * local mode writes and restores, by construction. The portal reaches it

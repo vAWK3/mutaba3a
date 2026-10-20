@@ -1,6 +1,6 @@
 # MUT-325 — Signed in, download all my records (same records file as local mode)
 
-Status: planned 2026-10-20 (eng-ticket). Epic MUT-322 (pilot gate). Format owner: MUT-286/287 (`src/hosted/local/recordsFile.ts`, `recordsArchive.ts`).
+Status: built 2026-10-20 (ADR-156). See §9 for what the eng review changed from this plan. Epic MUT-322 (pilot gate). Format owner: MUT-286/287 (`src/hosted/local/recordsFile.ts`, `recordsArchive.ts`).
 Decisions marked **(D#)** were taken without Basel and are flagged for review in the Jira comment.
 
 ## 1. Problem and acceptance criteria
@@ -142,3 +142,15 @@ Spec `qa/specs/portal/your-data.spec.ts`, routes stubbed with `page.route` like 
 - Tab memory holds the zip (receipts ≤ 10 MB each). TD: stream to disk (File System Access) if accounts outgrow it.
 - Abuse: session rate limit applies per request; exports are audited.
 - Infra: none (Cloud Run timeout unchanged; MUT-328 owns `main.tf`).
+
+## 9. Eng review fold-in (2026-10-20) — what changed from §3–§5
+
+- **No Malafat documents (D3 dropped).** ADR-097 §7 keeps local profiles document-free; `files` is written empty and only receipts carry bytes. The receipt route is `GET /v1/records-export/receipts/{receiptId}`, served as `application/octet-stream`, `Content-Disposition: attachment`, `nosniff` (ADR-028).
+- **Override log.** ADR-156 logs the overrides of ADR-097's "no hosted row stored locally" and ADR-028 §2.
+- **Exact shapes.** Organization, person and membership rows are copied field by field; Prisma reads select exactly each record's keys (`Columns<R>`), checked against the schema by a DMMF test.
+- **Lazy posting first** (ADR-037 decision 8), so a device never re-posts due items with new ids.
+- **Mid-stream failure** errors the stream (logged with the request id); the portal decodes before saving.
+- **Rate limit.** A 429 is waited out (Retry-After), never counted as a failed file.
+- **Where the code lives.** The export runs server code in the page, so it sits in `src/hosted/local/hostedExport.ts` behind the lazy alias `@mut/records-export` (ADR-097 §9's boundary; ESLint allowlist gains `records-file/codec` and `records-file/local-person`).
+- **Accepted, recorded as debt:** the zip in tab memory (TD-188); no single snapshot across pages (TD-189); a device may own more than 6 profiles after restoring firms (stops new ones only).
+- **Phone:** out of scope (the ticket is the portal's Your data).

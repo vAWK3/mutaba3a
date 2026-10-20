@@ -4141,3 +4141,26 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Past 100k requests/day per Cloudflare account the Worker fails closed until UTC midnight (TD-186).
 - Browser-saved passwords don't follow the host: people sign in once on the new host (MUT-112 release note). Google Password Manager affiliation through web↔web `assetlinks.json` statements is left to MUT-112 (it changes the API contract).
 - `cloudflare_zone_setting` can't be destroyed from Terraform.
+
+## ADR-156: Signed In, "Download My Records" Writes the Local-Mode Records File — Built in the Portal From a Streamed Per-Profile Export (MUT-325)
+
+**Date:** 2026-10-20 · **Status:** Accepted (decisions D1–D5 taken without Basel; flagged for review on MUT-325) · **Epic:** MUT-322 (pilot gate) · **Format owner:** MUT-286/287
+
+**Context.** A paying user must be able to leave with their records. Signed out, Your data already writes a versioned records file (a zip of `records.json` — a `MemoryLedgerStore` snapshot — and `receipts/<storageKey>`) and restores it. Signed in there was no export at all.
+
+**Decision.**
+1. **Same file, by construction (D1).** The signed-in Download produces exactly the file local mode writes: the portal fetches each chosen profile's `records.json` from `GET /v1/records-export` (X-Mutaba3a-Profile), merges them, fetches each READY receipt's bytes from `GET /v1/records-export/receipts/{id}`, and zips with local mode's own `zipRecordsArchive`. The `$map/$date/$bigint` codec moved to `server/src/records-file/codec.ts`, shared by both sides. Restore, migrations and the format fingerprint are unchanged.
+2. **Streamed, not a job (D1).** The server reads a profile 500 rows a query (`RecordsExportRepository`, memory + Prisma with exact per-record selects) and writes the JSON as it is pulled (gzip when accepted), so memory holds one page whatever the profile's size. Receipts are one short request each (4 at a time; a 429 is waited out; a file that fails twice or arrives the wrong size is left out and counted). No request carries the whole export, so Cloud Run's request timeout never applies to it; no queue, bucket object or Terraform is needed. The cost is the zip in the tab's memory, the same ceiling local mode's own Download already has (TD-188).
+3. **Re-homed to the device's person (D2).** The file holds one person — the exporter, under `local@device.invalid`, with no password, lockout or sign-in state — and their membership only. A profile they belong to but don't own becomes theirs on the device (BUSINESS, or PERSONAL for someone's personal one): ADR-097 §2.2, the local person owns every local profile. Organization, person and membership rows are copied field by field, so a column added later (ADR-099's roles, firm fields) never reaches a device unasked. No other person's row or email is written; other people's ids on rows stay as opaque UUIDs (locally `capturedBy` reads null for a colleague's capture).
+4. **Malafat stays with Malafat (D4).** No integration row (they hold the connection) and no Malafat document (`files`) is written; `refs` (opaque Malafat ids) are kept. On the device the firm has no other writer, so its income arrives as the person's own records. The file is labelled `origin: "hosted-export"` beside `maps` (not a format change), named `mutaba3a-export-<date>.zip`, and both the drawer and the Restore confirm say it is an export, not a backup: nothing restores into an account (MUT-290 is later).
+5. **Faithful to what reads show.** Due installments and charges are posted before the export (ADR-037 decision 8), so a device never posts them again with new ids. The export is audited `records.exported` on the profile, as the person.
+6. **Signed-in only, a lazy chunk.** The routes are session-only and outside `PORTAL_ROUTES`; local mode never serves them. The portal reaches the export code through the alias `@mut/records-export` (types: `session/recordsExportContract.ts`; code: `src/hosted/local/hostedExport.ts`), loaded only on Download, the same split as `@mut/local-backend`.
+
+**Override log.**
+
+| Overridden | What it said | Replaced by | Why | Date |
+|---|---|---|---|---|
+| ADR-097 override note ("no shared ids, no hosted row stored locally") | Hosted and local data stay apart | A person may restore their own hosted rows, ids kept, onto a device (§3–4 above) | The pilot gate: a paying user can leave with their records, in the format the free app already reads | 2026-10-20 |
+| ADR-028 §2 (downloads are a 302 to a signed URL) | The API never passes bytes on | `GET /v1/records-export/receipts/{id}` streams a receipt as `application/octet-stream`, `Content-Disposition: attachment`, `nosniff` | The portal must read the bytes to zip them, and the bucket has no CORS in IaC; still a download, never rendered | 2026-10-20 |
+
+**Consequences.** MUT-290 (moving a device's records into an account) will meet hosted ids already on devices. A write from another device during a long export can leave the file a moment inconsistent across pages (TD-189). The cap of 6 owned profiles isn't enforced on restore: re-owning firms can leave a device owning more than 6, which only stops it creating new ones.

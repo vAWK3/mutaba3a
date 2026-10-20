@@ -1,5 +1,5 @@
 /**
- * The portal's view of the signed-in records export (MUT-325, ADR-155). The
+ * The portal's view of the signed-in records export (MUT-325, ADR-156). The
  * export builds the local-mode records file, so it lives with local mode in
  * `src/hosted/local/hostedExport.ts` and runs server code (the records-file
  * codec) checked under tsconfig.hosted-local.json. The portal reaches it the

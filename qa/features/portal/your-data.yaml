@@ -6,7 +6,9 @@ tier: secondary
 # the signed-out portal restores (the same zip as local mode's Download), receipt files included. An export, not a backup.
 paths:
   - src/hosted/components/HostedYourDataDrawer.tsx
-  - src/hosted/data/recordsExport.ts
+  - src/hosted/local/hostedExport.ts
+  - src/hosted/data/recordsExportTransport.ts
+  - src/hosted/session/recordsExportContract.ts
   - src/hosted/shell/AccountDrawers.tsx
 features:
   - id: download-signed-in

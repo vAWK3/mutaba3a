@@ -23,7 +23,7 @@ import { decodeRecordsArchive } from '../recordsArchive.js';
  * over the export routes) is restored into a fresh local store, and every
  * read the portal makes is compared, field for field. Ids are kept by the
  * export, so nothing is renumbered. The only differences are the ones the
- * re-homing promises (ADR-155): the firm has no Malafat writer and is the
+ * re-homing promises (ADR-156): the firm has no Malafat writer and is the
  * person's own on the device, and the device's person has no email.
  */
 

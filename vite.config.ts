@@ -512,8 +512,6 @@ export default defineConfig(({ mode }) => {
     port: 5173,
     strictPort: true,
     host: "127.0.0.1",
-    // Release-QA run in place writes traces into qa/runs/ (MUT-325): watching them reloaded pages mid-test.
-    watch: { ignored: ["**/qa/runs/**"] },
     proxy: {
       // Redirect /download/* to GitHub in dev (mirrors Netlify behavior)
       '/download/mac': {
