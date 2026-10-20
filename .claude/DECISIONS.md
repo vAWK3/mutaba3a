@@ -4259,4 +4259,4 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - The privacy policy names Resend (US records), Cloudflare Turnstile and the RDAP lookup.
 - At GA most freelancer signups (webmail) wait for review, about 5 a day at 1,000 users. Moving a webmail provider to instant is a list edit and a recorded decision.
 - The phone's "Create an account" link waits on in-app account deletion (MUT-333, App Store 5.1.1(v)).
-- Build stories: see the brief §12.
+- Build stories MUT-359, MUT-366..371 (brief §12).

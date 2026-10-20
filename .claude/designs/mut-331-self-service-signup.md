@@ -295,19 +295,19 @@ The `memory` mailer plus `GET /admin/v1/dev-outbox` lets a spec read the mail an
 | `passkey.suggest` (after MUT-115) | Sign in for the first time after signup | The "Add a passkey" card shows; Not now hides it; adding one stops it showing |
 | Phone `ios.signin.recover-link` | On the app's sign-in screen tap "Forgot your password?" | The portal's /recover page opens in the in-app browser, in the app's language |
 
-## 12. Build stories (filed after Q1–Q5; all under MUT-322, label `ga-gate`)
+## 12. Build stories (filed 2026-10-20 under MUT-322, label `ga-gate`, with Blocks links)
 
 | # | Story | Blocked by |
 |---|---|---|
-| S1 | Server: transactional email with Resend. `Mailer` port and adapters (`resend`, `log`, `memory` + dev outbox, `noop`), templates in en/ar, the svix-signed bounce/complaint webhook → `email_suppressions`, the global send cap, the "password changed" notice, `email:check`, the `email` Terraform stack (DNS records only), runbook and before-release steps | MUT-112 (for the live-sending AC only) |
-| S2 | Server: signup and recovery routes. SIGNUP purpose (email-bound token, User on redeem, `emailVerifiedAt`), recovery issuing RESET or SETUP, Turnstile verify, limits, response floors, signup switch, token pruning, the test and OpenAPI changes, audit `user.signed_up` | S1 |
-| S3 | Server + operator: business-email check and the review queue. Disposable and webmail lists with an update script, the `DomainChecker` port (DNS + RDAP; fixture adapter), the `PENDING_REVIEW` status and the 403 `ACCOUNT_UNDER_REVIEW` sign-in answer (portal + device), `signup_reviews`, admin routes + `signups:review` CLI, approve/decline mails, the operator digest mail | S2 |
-| S4 | Portal: `/signup`, `/recover`, sign-in links, `/setup` SIGNUP copy, the under-review screen, first-run, the lazy Turnstile widget, `HOSTED_RULES` revision, bundle origin + CSP, en/ar copy, QA specs `signup.*` and `recover.*` | S3 |
-| S5 | Landing + privacy: the GA CTA switch (build value), privacy-policy processors (Resend with US storage, Cloudflare Turnstile), what the domain check sends to RDAP, `/hosted` copy | S4 |
-| S6 | Portal + phone: suggest a passkey after the first sign-in (dismissible card, at most 3 times, hidden once a passkey exists) | MUT-115, S4 |
-| S7 | Phone: "Forgot your password?" now, and "Create an account" once in-app account deletion exists; the under-review answer at sign-in; iOS QA flows | S4, MUT-333 (create link only) |
+| S1 · MUT-359 | Server: transactional email with Resend. `Mailer` port and adapters (`resend`, `log`, `memory` + dev outbox, `noop`), templates in en/ar, the svix-signed bounce/complaint webhook → `email_suppressions`, the global send cap, the "password changed" notice, `email:check`, the `email` Terraform stack (DNS records only), runbook and before-release steps | MUT-112 (for the live-sending AC only) |
+| S2 · MUT-366 | Server: signup and recovery routes. SIGNUP purpose (email-bound token, User on redeem, `emailVerifiedAt`), recovery issuing RESET or SETUP, Turnstile verify, limits, response floors, signup switch, token pruning, the test and OpenAPI changes, audit `user.signed_up` | S1 |
+| S3 · MUT-367 | Server + operator: business-email check and the review queue. Disposable and webmail lists with an update script, the `DomainChecker` port (DNS + RDAP; fixture adapter), the `PENDING_REVIEW` status and the 403 `ACCOUNT_UNDER_REVIEW` sign-in answer (portal + device), `signup_reviews`, admin routes + `signups:review` CLI, approve/decline mails, the operator digest mail | S2 |
+| S4 · MUT-368 | Portal: `/signup`, `/recover`, sign-in links, `/setup` SIGNUP copy, the under-review screen, first-run, the lazy Turnstile widget, `HOSTED_RULES` revision, bundle origin + CSP, en/ar copy, QA specs `signup.*` and `recover.*` | S3 |
+| S5 · MUT-369 | Landing + privacy: the GA CTA switch (build value), privacy-policy processors (Resend with US storage, Cloudflare Turnstile), what the domain check sends to RDAP, `/hosted` copy | S4 |
+| S6 · MUT-370 | Portal + phone: suggest a passkey after the first sign-in (dismissible card, at most 3 times, hidden once a passkey exists) | MUT-115, S4 |
+| S7 · MUT-371 | Phone: "Forgot your password?" now, and "Create an account" once in-app account deletion exists; the under-review answer at sign-in; iOS QA flows | S4, MUT-333 (create link only) |
 
-S1 also **blocks MUT-306**, because invites need the mailer. This replaces firm-books D14's "MUT-306 picks the provider": ADR-159 picks it now, against the same criteria.
+S1 (MUT-359) also **blocks MUT-306**, because invites need the mailer. This replaces firm-books D14's "MUT-306 picks the provider": ADR-159 picks it now, against the same criteria.
 
 ## 13. Impact, cost, i18n, infra
 
@@ -316,3 +316,5 @@ S1 also **blocks MUT-306**, because invites need the mailer. This replaces firm-
 - **i18n:** all copy en/ar, Arabic by default, RTL at 375 px. Mail templates have both languages, pinned by a test.
 - **Security:** no new session path. Every link still goes through the ADR-088 redeem. Tokens are in the fragment, digested under the pepper. Accounts are never revealed (§5). An auth change, so tests come first.
 - **Not in scope:** changing your email address (follow-up), passkey-only accounts, SSO (Malafat SSO rejected 2026-10-11), marketing mail, invites (MUT-306), billing (MUT-332).
+
+Cross-links: MUT-367 relates to MUT-358 (billing entitlements: never charge a PENDING_REVIEW account). MUT-368 relates to MUT-362 (the billing step after the first sign-in). MUT-115 and MUT-333 block MUT-370 and MUT-371 respectively.
