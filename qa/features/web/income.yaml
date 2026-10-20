@@ -85,3 +85,4 @@ features:
       - Log an income entry for a new client
     expect:
       - A toast with the animated save-feedback icon appears
+      - The icon overshoots past full size, then settles (playful: the local app has no firm profiles)

@@ -149,7 +149,7 @@ async function setCaption(page: Page, text: string) {
   await page.evaluate((t) => (window as unknown as { __qaCaption?: (s: string) => void }).__qaCaption?.(t), text).catch(() => {});
 }
 
-type Step = <T>(title: string, body: () => Promise<T>) => Promise<T>;
+export type Step = <T>(title: string, body: () => Promise<T>) => Promise<T>;
 
 /** A private-range address unique to one test attempt, so IP-keyed rate limits see separate clients. */
 function clientIpFor(testId: string, retry: number): string {
