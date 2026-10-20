@@ -17,18 +17,36 @@ const BINARY = /\.(png|jpe?g|gif|webp|ico|icns|otf|ttf|woff2?|pdf|zip|gz|mp4|mov
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/**
+ * The Malafat OAuth client identity (CIMD_CLIENT_ID) stays on its own value whatever domain
+ * is chosen (MUT-326 scope), so these files may name mutaba3a.app even if it becomes the domain.
+ */
+const OWN_VALUE_FILES = new Set([
+  'public/.well-known/oauth-client.json',
+  'src/services/oauth/oauth-client.ts',
+  'src/services/oauth/__tests__/oauth-client.test.ts',
+  'src/services/oauth/__tests__/cimd-document.test.ts',
+  'scripts/bundle-origins.json',
+  // This file names it for the rehearsal below.
+  'scripts/__tests__/no-hardcoded-hosts.test.ts',
+]);
+
 /** Every host the config names, plus any Mutaba3a Cloud Run or Netlify host (a new service URL must go through the config too). */
+const hostPattern = (host: string) => new RegExp(`(?<![a-z0-9-])${escape(host)}(?![a-z0-9-])`, 'i');
+
+/** The legacy hosts the config names, plus any Mutaba3a Cloud Run or Netlify host (a new service URL must go through the config too). */
+function legacyPatterns(config: unknown): RegExp[] {
+  const hosts = Object.values(parseHostsConfig(config)).flatMap((env) => [new URL(env.legacy.landing).hostname, new URL(env.legacy.portal).hostname]);
+  return [...new Set(hosts)].map(hostPattern).concat(/mutaba3a[a-z0-9-]*\.(?:a\.run\.app|netlify\.app)/i);
+}
+
+/** The chosen domains (and every subdomain of them). */
+function domainPatterns(config: unknown): RegExp[] {
+  return Object.values(parseHostsConfig(config)).flatMap((env) => (env.domain ? [hostPattern(env.domain)] : []));
+}
+
 function forbiddenPatterns(config: unknown): RegExp[] {
-  const hosts = new Set<string>();
-  for (const env of Object.values(parseHostsConfig(config))) {
-    hosts.add(new URL(env.legacy.landing).hostname);
-    hosts.add(new URL(env.legacy.portal).hostname);
-    if (env.domain) hosts.add(env.domain);
-  }
-  return [
-    ...[...hosts].map((host) => new RegExp(`(?<![a-z0-9-])${escape(host)}(?![a-z0-9-])`, 'i')),
-    /mutaba3a[a-z0-9-]*\.(?:a\.run\.app|netlify\.app)/i,
-  ];
+  return [...legacyPatterns(config), ...domainPatterns(config)];
 }
 
 export function hardcodedHosts(text: string, patterns: RegExp[]): string[] {
@@ -46,8 +64,6 @@ function scannedFiles(): string[] {
 }
 
 describe('no hardcoded hosts (MUT-326)', () => {
-  const patterns = forbiddenPatterns(raw);
-
   it('catches a planted literal, a new run.app service and a chosen domain', () => {
     const planted = forbiddenPatterns({
       production: { domain: 'placeholder.example', portalSubdomain: 'app', stage: 'live', legacy: { landing: 'https://old.example', portal: 'https://portal.old.example' } },
@@ -59,16 +75,25 @@ describe('no hardcoded hosts (MUT-326)', () => {
     expect(hardcodedHosts('const ok = "https://example.a.run.app";', planted)).toEqual([]);
   });
 
-  it('finds our hosts in no code, test, script, Terraform or CI file outside config/hosts.json', () => {
-    const findings = scannedFiles().flatMap((file) => {
+  function findings(legacy: RegExp[], domains: RegExp[]): string[] {
+    return scannedFiles().flatMap((file) => {
       let text: string;
       try {
         text = readFileSync(file, 'utf8');
       } catch {
         return []; // deleted in the working tree
       }
-      return hardcodedHosts(text, patterns).map((hit) => `${file}:${hit}`);
+      const filePatterns = OWN_VALUE_FILES.has(file) ? legacy : [...legacy, ...domains];
+      return hardcodedHosts(text, filePatterns).map((hit) => `${file}:${hit}`);
     });
-    expect(findings, 'read the host from config/hosts.ts, `npm run hosts -- get`, or Terraform var.hosts_file').toEqual([]);
+  }
+
+  it('finds our hosts in no code, test, script, Terraform or CI file outside config/hosts.json', () => {
+    expect(findings(legacyPatterns(raw), domainPatterns(raw)), 'read the host from config/hosts.ts, `npm run hosts -- get`, or Terraform var.hosts_file').toEqual([]);
+  });
+
+  it('would stay green on the day the likeliest domain (mutaba3a.app) is set', () => {
+    const rehearsal = { ...raw, production: { ...raw.production, domain: 'mutaba3a.app', stage: 'live' } };
+    expect(findings(legacyPatterns(rehearsal), domainPatterns(rehearsal))).toEqual([]);
   });
 });

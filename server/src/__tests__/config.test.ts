@@ -57,7 +57,42 @@ describe('loadConfig — sessions (MUT-38)', () => {
   });
 
   it('accepts a portal origin', () => {
-    expect(loadConfig({ ...base, PORTAL_ORIGIN: 'https://portal.mutaba3a.app' }).PORTAL_ORIGIN).toBe('https://portal.mutaba3a.app');
+    expect(loadConfig({ ...base, PORTAL_ORIGIN: 'https://portal.example.com' }).PORTAL_ORIGIN).toBe('https://portal.example.com');
+  });
+});
+
+describe('loadConfig — custom-domain front door (MUT-326)', () => {
+  const door = { PORTAL_ORIGIN: 'https://app.placeholder.example', FRONT_DOOR_TOKEN: 't'.repeat(48) };
+
+  it('has no front door and no redirect by default', () => {
+    const config = loadConfig(base);
+    expect(config.FRONT_DOOR_TOKEN).toBeUndefined();
+    expect(config.PORTAL_LEGACY_REDIRECT).toBe(false);
+  });
+
+  it('accepts a token with the portal origin it serves', () => {
+    expect(loadConfig({ ...base, ...door }).FRONT_DOOR_TOKEN).toBe(door.FRONT_DOOR_TOKEN);
+  });
+
+  it('refuses a short token', () => {
+    expect(() => loadConfig({ ...base, ...door, FRONT_DOOR_TOKEN: 'short' })).toThrow(/FRONT_DOOR_TOKEN/);
+  });
+
+  it('refuses a token without PORTAL_ORIGIN', () => {
+    expect(() => loadConfig({ ...base, FRONT_DOOR_TOKEN: door.FRONT_DOOR_TOKEN })).toThrow(/needs PORTAL_ORIGIN/);
+  });
+
+  it('reads PORTAL_LEGACY_REDIRECT="false" as off (z.coerce.boolean would read it as on)', () => {
+    expect(loadConfig({ ...base, ...door, PORTAL_LEGACY_REDIRECT: 'false' }).PORTAL_LEGACY_REDIRECT).toBe(false);
+    expect(loadConfig({ ...base, ...door, PORTAL_LEGACY_REDIRECT: 'true' }).PORTAL_LEGACY_REDIRECT).toBe(true);
+  });
+
+  it.each(['1', 'yes', 'TRUE', ''])('refuses PORTAL_LEGACY_REDIRECT=%j', (value) => {
+    expect(() => loadConfig({ ...base, ...door, PORTAL_LEGACY_REDIRECT: value })).toThrow(/PORTAL_LEGACY_REDIRECT/);
+  });
+
+  it('refuses the redirect without the front door', () => {
+    expect(() => loadConfig({ ...base, PORTAL_LEGACY_REDIRECT: 'true' })).toThrow(/needs FRONT_DOOR_TOKEN/);
   });
 });
 

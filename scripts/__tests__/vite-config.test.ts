@@ -168,7 +168,7 @@ describe('vite.config', () => {
   });
 
   describe('social preview (MUT-104)', () => {
-    const tags = (origin = 'https://mutaba3a.app') =>
+    const tags = (origin = 'https://example.com') =>
       Object.fromEntries(
         socialMetaTags(origin).map(({ attrs }) => [String(attrs?.property ?? attrs?.name), String(attrs?.content)]),
       );
@@ -186,8 +186,8 @@ describe('vite.config', () => {
 
     it('points at the wide Arabic card by absolute URL, at its real size', () => {
       const meta = tags();
-      expect(meta['og:url']).toBe('https://mutaba3a.app/');
-      expect(meta['og:image']).toBe('https://mutaba3a.app/og-card-ar-1200x630.png');
+      expect(meta['og:url']).toBe('https://example.com/');
+      expect(meta['og:image']).toBe('https://example.com/og-card-ar-1200x630.png');
       expect(meta['twitter:image']).toBe(meta['og:image']);
       expect(meta['twitter:card']).toBe('summary_large_image');
       const file = repoPath('public/og-card-ar-1200x630.png');
@@ -196,10 +196,10 @@ describe('vite.config', () => {
     });
 
     it('drops a trailing slash from the configured origin', () => {
-      expect(tags('https://staging.mutaba3a.app/')['og:image']).toBe('https://staging.mutaba3a.app/og-card-ar-1200x630.png');
+      expect(tags('https://staging.example.com/')['og:image']).toBe('https://staging.example.com/og-card-ar-1200x630.png');
     });
 
-    it.each(['http://mutaba3a.app', 'mutaba3a.app', '', 'https://'])('refuses %j as an origin, failing the build', (origin) => {
+    it.each(['http://example.com', 'example.com', '', 'https://'])('refuses %j as an origin, failing the build', (origin) => {
       expect(() => socialMetaTags(origin)).toThrow(/MUTABA3A_PUBLIC_ORIGIN/);
     });
 
@@ -230,7 +230,7 @@ describe('vite.config', () => {
       }));
       try {
         const { socialMetaTags: mockedSocialMetaTags } = await import('../../vite.config');
-        const dangerousTags = mockedSocialMetaTags('https://mutaba3a.app');
+        const dangerousTags = mockedSocialMetaTags('https://example.com');
         // Every tag is a plain {tag, attrs} descriptor: Vite's serializeTags() HTML-escapes
         // each attrs value (escape-html) when it renders the tag, so the raw string here is correct.
         for (const tag of dangerousTags) {
@@ -275,10 +275,10 @@ describe('vite.config', () => {
     });
 
     it('takes MUTABA3A_PORTAL_URL over the default and drops a trailing slash', () => {
-      expect(portalUrl('https://portal.mutaba3a.app/')).toBe('https://portal.mutaba3a.app');
+      expect(portalUrl('https://portal.example.com/')).toBe('https://portal.example.com');
     });
 
-    it.each(['http://portal.mutaba3a.app', 'portal.mutaba3a.app', '', 'https://', 'https://portal.mutaba3a.app/sign-in'])(
+    it.each(['http://portal.example.com', 'portal.example.com', '', 'https://', 'https://portal.example.com/sign-in'])(
       'refuses %j as the portal URL, failing the build',
       (value) => {
         expect(() => portalUrl(value)).toThrow(/MUTABA3A_PORTAL_URL/);
@@ -428,22 +428,22 @@ describe('vite.config', () => {
       Object.fromEntries(tags.map(({ attrs }) => [String(attrs?.property ?? attrs?.name), String(attrs?.content)]));
 
     it('keeps the home card as it was when no page is given', () => {
-      expect(meta(socialMetaTags('https://mutaba3a.app'))['og:url']).toBe('https://mutaba3a.app/');
+      expect(meta(socialMetaTags('https://example.com'))['og:url']).toBe('https://example.com/');
     });
 
     const INDEX = [
       '<!doctype html><html lang="en"><head><meta charset="UTF-8" /><title>متابعة</title>',
-      '<meta property="og:url" content="https://mutaba3a.app/">',
+      '<meta property="og:url" content="https://example.com/">',
       '<meta property="og:title" content="home">',
       '<meta name="twitter:title" content="home">',
       '<script type="module" src="/assets/index-abc.js"></script></head><body><div id="root"></div></body></html>',
     ].join('\n');
 
     it('swaps every link-preview tag and the title, and keeps the app\'s scripts', () => {
-      const html = withPageMeta(INDEX, socialMetaTags('https://mutaba3a.app'), 'متابعة', 'https://mutaba3a.app/');
-      expect(html).toContain('<meta property="og:url" content="https://mutaba3a.app/">');
+      const html = withPageMeta(INDEX, socialMetaTags('https://example.com'), 'متابعة', 'https://example.com/');
+      expect(html).toContain('<meta property="og:url" content="https://example.com/">');
       expect(html).toContain('<title>متابعة</title>');
-      expect(html).toContain('<link rel="canonical" href="https://mutaba3a.app/">');
+      expect(html).toContain('<link rel="canonical" href="https://example.com/">');
       expect(html).toContain('<script type="module" src="/assets/index-abc.js"></script>');
       expect(html.match(/property="og:title"/g)).toHaveLength(1);
     });
