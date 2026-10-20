@@ -211,9 +211,9 @@
 **Impact**: the 200-group cap counts live groups only, so create-and-delete churn grows `expense_groups` without bound. The list index `(organizationId, startOn DESC, id DESC)` includes the dead rows.
 **Fix**: a partial index `WHERE "deletedAt" IS NULL` in place of the full one.
 
-### TD-183: An operator grant racing a firm enable can leave the new member OWNER
+### TD-192: An operator grant racing a firm enable can leave the new member OWNER
 **Status**: Open
-**Ticket**: none (MUT-300 build, 2026-10-20; numbered after local main's TD-182 — renumber at merge if another lands first)
+**Ticket**: none (MUT-300 build, 2026-10-20; built as TD-183, renumbered TD-192 at the 2026-10-20 merge: MUT-338 also took TD-183 and main reached TD-191)
 **Added**: 2026-10-20
 **Priority**: Low (both writes are the operator's own, one person at a CLI; roles have no effect until MUT-305)
 **Impact**: `memberships.grant` reads `firmEnabledAt` to pick BOOKKEEPER vs OWNER without the organization's row lock that `setFirm` holds. A grant that reads "off" just before an enable commits inserts an OWNER after the enable has rewritten roles.
