@@ -10,7 +10,7 @@ import { AlertIcon } from '../../components/Icons';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
 import { ME_KEY, ME_TIMEOUT_MS } from '../../session/me';
 import { setMode } from '../../session/mode';
-import { termsHref } from '../../terms';
+import { TERMS_CLIENT_RELEASE, termsHref } from '../../terms';
 import { CheckingSession } from './BootScreens';
 import { NEW_PASSWORD_POLICY, answerWasLost, passwordProblem, redeemFailure, tokenFromHash, type PasswordProblem } from './setupLink';
 
@@ -225,7 +225,7 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
     setPhase('saving');
     try {
       const termsLocale = language === 'ar' ? 'ar' : 'en';
-      const { email: account } = await api.redeemSetupLink({ token, password, acceptedTermsVersion: termsVersion, termsLocale }, requestTimeout());
+      const { email: account } = await api.redeemSetupLink({ token, password, acceptedTermsVersion: termsVersion, termsLocale, clientRelease: TERMS_CLIENT_RELEASE }, requestTimeout());
       await signIn(account, { kind: 'saved' });
     } catch (error) {
       const failure = redeemFailure(error, answerLost.current);

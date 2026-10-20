@@ -290,3 +290,94 @@ describe('the terms in the OpenAPI document (MUT-324)', () => {
     expect(terms.allOf).toBeUndefined();
   });
 });
+
+/**
+ * MUT-354 (MUT-348 decision 1): each acceptance also records the client release that showed the terms, so it maps
+ * to the git tag holding the page code. Stored as sent and never trusted; clients that send none still succeed.
+ */
+describe('the client release on each acceptance (MUT-354)', () => {
+  const RELEASE = 'web-v0.1.16';
+  const report = async (h: Harness) => (await read(await h.app.request('/admin/v1/terms-acceptance', { headers: admin }))).users as Loose[];
+
+  async function bumped() {
+    const store = new MemoryLedgerStore();
+    const before = harness(store);
+    const p = await provision(before);
+    await redeem(before, p.token, { acceptedTermsVersion: CURRENT_TERMS.version, clientRelease: 'web-v0.1.15' });
+    const h = harness(store, BUMPED);
+    return { h, p, cookie: (await signIn(h, p.email)).cookie };
+  }
+
+  it('the setup redeem records it, the audit carries it and the operator report shows it', async () => {
+    const h = harness();
+    const p = await provision(h);
+    expect((await redeem(h, p.token, { acceptedTermsVersion: CURRENT_TERMS.version, clientRelease: RELEASE })).status).toBe(200);
+    expect(await h.store.users.latestTermsAcceptance(p.id)).toMatchObject({ version: CURRENT_TERMS.version, clientRelease: RELEASE });
+    expect((await termsAudit(h, p.personalId))[0]?.metadata).toMatchObject({ clientRelease: RELEASE });
+    expect((await report(h)).find((u) => u.id === p.id)).toMatchObject({ latestVersion: CURRENT_TERMS.version, clientRelease: RELEASE });
+  });
+
+  it('POST /v1/me/terms-acceptance records it, and the report shows the release of the latest version', async () => {
+    const { h, p, cookie } = await bumped();
+    expect((await accept(h, cookie, { version: BUMPED.version, locale: 'en', clientRelease: RELEASE })).status).toBe(200);
+    expect(await h.store.users.latestTermsAcceptance(p.id)).toMatchObject({ version: BUMPED.version, clientRelease: RELEASE });
+    expect((await report(h)).find((u) => u.id === p.id)).toMatchObject({ latestVersion: BUMPED.version, clientRelease: RELEASE });
+  });
+
+  it('an old client that sends none still succeeds, and the acceptance records null', async () => {
+    const h = harness();
+    const p = await provision(h);
+    expect((await redeem(h, p.token)).status).toBe(200);
+    expect(await h.store.users.latestTermsAcceptance(p.id)).toMatchObject({ clientRelease: null });
+    expect((await termsAudit(h, p.personalId))[0]?.metadata).toMatchObject({ clientRelease: null });
+    expect((await report(h)).find((u) => u.id === p.id)).toMatchObject({ clientRelease: null });
+
+    const after = harness(h.store, BUMPED);
+    const { cookie } = await signIn(after, p.email);
+    expect((await accept(after, cookie, { version: BUMPED.version, locale: 'en' })).status).toBe(200);
+    expect(await after.store.users.latestTermsAcceptance(p.id)).toMatchObject({ version: BUMPED.version, clientRelease: null });
+  });
+
+  it('a repeat acceptance keeps the release first recorded', async () => {
+    const { h, p, cookie } = await bumped();
+    expect((await accept(h, cookie, { version: BUMPED.version, locale: 'en', clientRelease: RELEASE })).status).toBe(200);
+    expect((await accept(h, cookie, { version: BUMPED.version, locale: 'en', clientRelease: 'web-v9.9.9' })).status).toBe(200);
+    expect(await h.store.users.latestTermsAcceptance(p.id)).toMatchObject({ clientRelease: RELEASE });
+  });
+
+  it('refuses an empty, over-long, spaced or control-character release with 422, and records nothing', async () => {
+    const tooLong = `web-v${'1'.repeat(60)}`;
+    expect(tooLong.length).toBe(65);
+    const bad = ['', tooLong, 'web v0.1.16', 'web-v0.1.16\n', '\u001b[31mweb', 'ويب-1'];
+    const { h, p, cookie } = await bumped();
+    for (const clientRelease of bad) expect((await accept(h, cookie, { version: BUMPED.version, locale: 'en', clientRelease })).status).toBe(422);
+    expect(await h.store.users.latestTermsAcceptance(p.id)).toMatchObject({ version: CURRENT_TERMS.version });
+
+    const fresh = harness();
+    const q = await provision(fresh);
+    for (const clientRelease of bad) expect((await redeem(fresh, q.token, { acceptedTermsVersion: CURRENT_TERMS.version, clientRelease })).status).toBe(422);
+    expect(await fresh.store.users.latestTermsAcceptance(q.id)).toBeNull();
+  });
+
+  it('takes a 64-character release and a phone-style version+build', async () => {
+    const { h, p, cookie } = await bumped();
+    const longest = `web-v${'1'.repeat(59)}`;
+    expect(longest.length).toBe(64);
+    expect((await accept(h, cookie, { version: BUMPED.version, locale: 'en', clientRelease: longest })).status).toBe(200);
+    expect(await h.store.users.latestTermsAcceptance(p.id)).toMatchObject({ clientRelease: longest });
+    const device = await deviceSignIn(h, p.email);
+    const other = harness(h.store, { ...BUMPED, version: '2099-02-01' });
+    expect((await other.app.request('/v1/me/terms-acceptance', json({ version: '2099-02-01', locale: 'ar', clientRelease: 'phone-1.4.0+52' }, device))).status).toBe(200);
+    expect(await h.store.users.latestTermsAcceptance(p.id)).toMatchObject({ version: '2099-02-01', surface: 'phone', clientRelease: 'phone-1.4.0+52' });
+  });
+
+  it('the OpenAPI document states the optional field and its limits on both requests', async () => {
+    const doc = await read(await harness().app.request('/openapi.json'));
+    for (const name of ['TermsAcceptanceRequest', 'SetupLinkRedeemRequest']) {
+      const schema = doc.components.schemas[name];
+      expect(schema.required ?? []).not.toContain('clientRelease');
+      expect(schema.properties.clientRelease).toMatchObject({ type: 'string', minLength: 1, maxLength: 64 });
+      expect(schema.properties.clientRelease.pattern).toBeDefined();
+    }
+  });
+});

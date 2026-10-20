@@ -83,7 +83,7 @@ describe('clientIp', () => {
 });
 
 describe('isSameOriginRequest', () => {
-  const req = (h: Record<string, string>, url = 'https://portal.mutaba3a.app/v1/sessions') => ({
+  const req = (h: Record<string, string>, url = 'https://portal.example.com/v1/sessions') => ({
     url,
     header: (name: string) => h[name.toLowerCase()],
   });
@@ -91,17 +91,17 @@ describe('isSameOriginRequest', () => {
   it('trusts Sec-Fetch-Site', () => {
     expect(isSameOriginRequest(req({ 'sec-fetch-site': 'same-origin' }), undefined)).toBe(true);
     for (const site of ['cross-site', 'same-site', 'none']) {
-      expect(isSameOriginRequest(req({ 'sec-fetch-site': site, origin: 'https://portal.mutaba3a.app' }), undefined)).toBe(false);
+      expect(isSameOriginRequest(req({ 'sec-fetch-site': site, origin: 'https://portal.example.com' }), undefined)).toBe(false);
     }
   });
 
   it('compares Origin with the configured portal origin', () => {
-    expect(isSameOriginRequest(req({ origin: 'https://portal.mutaba3a.app' }), 'https://portal.mutaba3a.app')).toBe(true);
-    expect(isSameOriginRequest(req({ origin: 'https://evil.example' }), 'https://portal.mutaba3a.app')).toBe(false);
+    expect(isSameOriginRequest(req({ origin: 'https://portal.example.com' }), 'https://portal.example.com')).toBe(true);
+    expect(isSameOriginRequest(req({ origin: 'https://evil.example' }), 'https://portal.example.com')).toBe(false);
   });
 
   it('falls back to the request origin when no portal origin is configured', () => {
-    expect(isSameOriginRequest(req({ origin: 'https://portal.mutaba3a.app' }), undefined)).toBe(true);
+    expect(isSameOriginRequest(req({ origin: 'https://portal.example.com' }), undefined)).toBe(true);
     expect(isSameOriginRequest(req({ origin: 'https://evil.example' }), undefined)).toBe(false);
   });
 

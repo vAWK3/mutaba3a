@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { OFFICE_A, QA_TERMS_VERSION, office } from '../../support/portal';
+import { OFFICE_A, QA_CLIENT_RELEASE, QA_TERMS_VERSION, office } from '../../support/portal';
 import { FakeApi } from '../../support/portalApi';
 
 /**
@@ -31,12 +31,12 @@ test('a setup link can’t be finished without agreeing to the terms, and the sa
     expect(api.calls('POST', /^\/v1\/account-setup$/)).toHaveLength(0);
   });
 
-  await step('Tick and save: the version and language go with the password, and Overview opens', async () => {
+  await step('Tick and save: the version, language and web release go with the password, and Overview opens', async () => {
     await terms(page).check();
     await page.getByRole('button', { name: 'Save and sign in' }).click();
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
     await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
-    expect(api.last('POST', /^\/v1\/account-setup$/)?.body).toMatchObject({ acceptedTermsVersion: QA_TERMS_VERSION, termsLocale: 'en' });
+    expect(api.last('POST', /^\/v1\/account-setup$/)?.body).toMatchObject({ acceptedTermsVersion: QA_TERMS_VERSION, termsLocale: 'en', clientRelease: expect.stringMatching(QA_CLIENT_RELEASE) });
   });
 });
 
@@ -60,7 +60,7 @@ test('switching the setup page’s language clears the terms tick, so the agreem
     await page.getByRole('checkbox', { name: /شروط الخدمة/ }).check();
     await page.getByRole('button', { name: 'احفظ وسجّل الدخول' }).click();
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
-    expect(api.last('POST', /^\/v1\/account-setup$/)?.body).toMatchObject({ acceptedTermsVersion: QA_TERMS_VERSION, termsLocale: 'ar' });
+    expect(api.last('POST', /^\/v1\/account-setup$/)?.body).toMatchObject({ acceptedTermsVersion: QA_TERMS_VERSION, termsLocale: 'ar', clientRelease: expect.stringMatching(QA_CLIENT_RELEASE) });
   });
 });
 
@@ -76,10 +76,10 @@ test('someone behind on the terms agrees once on the Updated-terms step, then wo
     await expect(page.getByRole('navigation')).toHaveCount(0);
   });
 
-  await step('I agree: the version is recorded in English, the language the link opened, and Overview opens', async () => {
+  await step('I agree: the version is recorded in English, the language the link opened, with the web release, and Overview opens', async () => {
     await page.getByRole('button', { name: 'I agree' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
-    expect(api.last('POST', /^\/v1\/me\/terms-acceptance$/)?.body).toEqual({ version: QA_TERMS_VERSION, locale: 'en' });
+    expect(api.last('POST', /^\/v1\/me\/terms-acceptance$/)?.body).toEqual({ version: QA_TERMS_VERSION, locale: 'en', clientRelease: expect.stringMatching(QA_CLIENT_RELEASE) });
   });
 
   await step('Reload: the step doesn’t come back', async () => {
@@ -108,7 +108,7 @@ test('when the terms change again while the step is open, the step says so and t
   await step('I agree again: the new version is recorded and Overview opens', async () => {
     await page.getByRole('button', { name: 'I agree' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
-    expect(api.last('POST', /^\/v1\/me\/terms-acceptance$/)?.body).toEqual({ version: NEWER, locale: 'en' });
+    expect(api.last('POST', /^\/v1\/me\/terms-acceptance$/)?.body).toEqual({ version: NEWER, locale: 'en', clientRelease: expect.stringMatching(QA_CLIENT_RELEASE) });
   });
 });
 

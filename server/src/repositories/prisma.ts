@@ -267,9 +267,15 @@ export class PrismaLedgerStore implements LedgerStore {
       (
         await this.prisma.user.findMany({
           orderBy: { email: 'asc' },
-          select: { id: true, email: true, status: true, termsAcceptances: { orderBy: { version: 'desc' }, take: 1, select: { version: true } } },
+          select: { id: true, email: true, status: true, termsAcceptances: { orderBy: { version: 'desc' }, take: 1, select: { version: true, clientRelease: true } } },
         })
-      ).map((u) => ({ userId: u.id, email: u.email, status: u.status, latestVersion: u.termsAcceptances[0]?.version ?? null })),
+      ).map((u) => ({
+        userId: u.id,
+        email: u.email,
+        status: u.status,
+        latestVersion: u.termsAcceptances[0]?.version ?? null,
+        latestClientRelease: u.termsAcceptances[0]?.clientRelease ?? null,
+      })),
     acceptTerms: (input) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
@@ -1942,8 +1948,8 @@ function toApiKey(row: PrismaApiKey): ApiKeyRecord {
 
 /** MUT-324: the (userId, version) unique key; true when this call wrote the row, false when it already existed. */
 async function insertTermsAcceptance(tx: Prisma.TransactionClient, userId: string, terms: TermsAcceptanceInput, at: Date): Promise<boolean> {
-  const { version, locale, textSha256, surface } = terms;
-  const { count } = await tx.termsAcceptance.createMany({ data: [{ userId, version, locale, textSha256, surface, acceptedAt: at }], skipDuplicates: true });
+  const { version, locale, textSha256, surface, clientRelease } = terms;
+  const { count } = await tx.termsAcceptance.createMany({ data: [{ userId, version, locale, textSha256, surface, clientRelease, acceptedAt: at }], skipDuplicates: true });
   return count === 1;
 }
 
@@ -1954,6 +1960,7 @@ function toTermsAcceptance(row: Prisma.TermsAcceptanceGetPayload<object>): Terms
     locale: row.locale as TermsLocale,
     textSha256: row.textSha256,
     surface: row.surface,
+    clientRelease: row.clientRelease,
     acceptedAt: row.acceptedAt,
   };
 }

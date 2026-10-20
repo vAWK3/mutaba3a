@@ -4025,7 +4025,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 ## ADR-102: Terms of Service Are Frozen, Versioned Texts; Acceptance Is Recorded at Setup and Re-asked on the Portal (MUT-324)
 
-**Status**: Active (amends ADR-088: a setup-link redeem also records the terms the person accepted)
+**Status**: Active (amends ADR-088: a setup-link redeem also records the terms the person accepted; addendum 2026-10-20, MUT-348)
 **Date**: 2026-10-19
 **Context**: The pilot (epic MUT-322) needs terms of service that a paying person accepts. The terms text ships with the landing page (Netlify, web build) and the version people must accept ships with the API image, two separate deploys. Accounts are operator-issued, so everyone passes a setup link once. Accounts that already have passwords never pass one again. Plan `.claude/designs/mut-324-terms-plan.md` §0 records Basel's answers D1–D12 (2026-10-19).
 
@@ -4057,6 +4057,17 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **What replaces it:** web, then server. After a terms bump Netlify must finish building before the server preflight passes, so the server half refuses cleanly (before its bump) and is rerun once the build is live.
 - Decided by Basel through the review's must-fix list.
 
+**Addendum (2026-10-20, MUT-348): how strong the acceptance evidence must be.** MUT-324's first review pass left two questions open. Basel decided both on 2026-10-20 (MUT-348 comment 12222).
+1. **The evidence is the frozen file plus the release that rendered it.** `textSha256` fingerprints the JSON content file, not the page `TermsPage` builds from it.
+   - That's enough: the frozen `/terms/<version>` file, plus the `TermsPage` code at the release that rendered it, show what the person read.
+   - Each acceptance should record that release, so it maps to a git tag. Nothing stores it today. **MUT-354** adds a nullable `clientRelease` column to `terms_acceptances`, written per acceptance.
+   - Until MUT-354 ships, an acceptance maps to a release only through its `acceptedAt` and the release history. Rows written before it keep `clientRelease` null.
+   - We won't hash the rendered text or keep HTML snapshots.
+2. **Firm-only members need nothing more for now.** A person who owns no profile gets no `user.terms_accepted` audit row (decision 6). Their `terms_acceptances` row is the only evidence, and it's deleted with the account (decision 3). That matches the published promise.
+   - Such a person can't exist during the pilot: every pilot user is an owner (MUT-322), and staff invites only come with firm-v3 roles (MUT-305/306).
+   - **MUT-305/306 must revisit this** before the first member who owns no profile is invited, for example with an audit row on the firm or an operator log.
+   - No code now.
+
 ## ADR-152: Icon Save-Feedback Animation Reuses `motion` and Mirrors Flutter's `MMotion` Curves Byte-for-Byte — No New Runtime
 
 **Status**: Active
@@ -4075,3 +4086,58 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - No new dependency on either platform; the duration (0.4s, shared by both presets — only the curve differs) is this prototype's placeholder, not yet a Brand v2-reviewed number; MUT-338 may tune it.
 - A future change to either platform's curve numbers needs a matching change on the other side — nothing enforces this automatically yet (no parity test exists across the two repos the way `bloomLoaderData.ts`'s does against its Lottie JSON); flagged as a follow-up, not blocking this ticket.
 - The Flutter half (`AnimationController` + `CurvedAnimation(curve: MMotion.overshoot | .spring)`) is not built in mini-crm; needs its own mutaba3a-flutter worktree.
+
+---
+
+## ADR-153: GitHub CI Runs Only by Hand; `make release` Reminds the Operator
+
+**Status**: Active (amends MUT-24 §C D2 and TD-019's push/PR triggers for web-ci, server-ci and contracts-ci)
+**Date**: 2026-10-20
+**Context**: CI on main had been red since 2026-10-19 (MUT-286 made the web typecheck, tests and portal build need `server/node_modules`, which the workflows never installed). Every release push started a run nobody was waiting on. Releases are operator-run from `make release`, where the local gates already run.
+**Decision**:
+1. `web-ci.yml`, `server-ci.yml` and `contracts-ci.yml` trigger on `workflow_dispatch` only. Run them with `make ci [web|server|contracts|all]`, from the Actions tab, or `gh workflow run <file> --ref main`.
+2. `make release web` / `make release server` call `scripts/ci-reminder.sh` just before the deploy confirmation. It prints the last run of that target's workflow on the release branch (result, commit, how far behind HEAD) and the command to start one. It is a reminder, never a gate: it exits 0 when gh is missing, signed out or offline (`SKIP_REMOTE=1`). After a successful push the target prints one more line: run `make ci <target>` on what was just pushed.
+3. `build-windows.yml` keeps its GitHub-release trigger. It is the desktop release build, not CI.
+**Consequences**: A red main is no longer announced on push. The reminder at release time is the prompt to run CI. Pull requests get no automatic checks.
+
+## ADR-154: Uptime Alerts Page on Two Failed Rounds From Two Regions, by Email + SMS, on a Host Variable (MUT-328)
+
+**Status**: Active (supersedes the optional single `/health` alert from ADR-026's first cut)
+**Date**: 2026-10-20
+**Context**: Pilot gate (MUT-322). Production's only uptime check had no alert channel. Basel chose email + SMS through Cloud Monitoring channels, with the phone number kept out of the repo (MUT-328 comment, 2026-10-19). The custom domain isn't chosen yet (MUT-112, prepared by MUT-326). There is no staging.
+**Decision**:
+1. Three uptime checks (`/health`, `/ready`, the portal `/` matched on `id="root"`) live in the API root's `monitoring.tf`, every 300 s from all six regions, on `local.uptime_host`: `var.uptime_host`, else the Cloud Run host. The domain input feeds that local.
+2. Each check's policy fires when **more than 1 region** fails for **360 s** (period + 60 s), on `ALIGN_NEXT_OLDER` + `REDUCE_COUNT_FALSE` aligned to the period. One failed round can't page, and two in a row do. Severity is CRITICAL. Cloud SQL disk > 80% and CPU > 90% for 900 s are WARNING.
+3. Channels come from `alert_email` and `alert_sms_number` (sensitive, E.164), plus any `alert_notification_channels`. With no channel there are no policies.
+4. Firing and closing are proven with an opt-in drill check (`uptime_drill_path`) passed only with `-var`, never by scaling production down.
+5. Monitoring changes are applied with a targeted plan (DEPLOYMENT.md §6b), separate from releases.
+**Consequences**: Expect about a 6 to 11 minute delay between an outage and the page. A one-region network problem never pages. The close notice depends on Cloud Monitoring's default until the provider is on 6.x (TD-185). Moving the domain may replace the checks (new ids), and their policies follow them.
+
+---
+
+## ADR-155: The Custom Domain Is One Input: `config/hosts.json`, a Cloudflare Worker Front Door, a Front-Door Token, Staged Cut-Over
+
+**Status**: Active (amends DEPLOYMENT.md §4c "PORTAL_ORIGIN intentionally unset" and §5's deferred-domain note; the front-door choice can be overridden, see 2)
+**Date**: 2026-10-20
+**Context**: MUT-326 (epic MUT-322, blocks MUT-112). The domain isn't chosen, but it must be live before the pilot (Basel, 2026-10-19). On 2026-10-20 Basel listed the apex, the subdomain and the front door as undecided on MUT-112; MUT-326's own text says to pick the cheapest front door that keeps `TRUSTED_PROXY_HOPS` correct. The legacy hosts were hardcoded in vite, the bundle allowlist, the terms release guard, provisioning, Sentry tfvars and the phone. Cloud Run domain mapping isn't offered in me-west1. Brief: `.claude/designs/mut-326-domain-move.md`; adversarial review folded in.
+**Decision**:
+1. **One file per repo, `config/hosts.json`**, holding `domain` (null until chosen), `portalSubdomain` (`app`), the `legacy` origins and a `stage`: `legacy` → `proxy` (the front door exists; builds unchanged) → `live` (builds, links and the phone use the new hosts) → `redirect` (old-host pages are sent on). `config/hosts.ts` (TS) and the Terraform `locals` (HCL) derive the same values, pinned to the same fixtures. `stage` exists because committing the domain must not re-point the next release before DNS works. `scripts/__tests__/no-hardcoded-hosts.test.ts` fails on our hosts anywhere else, and rehearses `mutaba3a.app` as the domain. The Malafat OAuth `CIMD_CLIENT_ID` keeps its own value.
+2. **Front door: a Cloudflare Worker** on `app.<apex>/*` forwarding to the run.app origin (`server/infrastructure/frontdoor`, its own operator-applied stack). This follows Malafat's `malafat-router`. It costs $0 on the Workers free tier, against about $18/month for a Google external HTTPS load balancer, and the certificate is automatic. Apex and `www` are DNS-only to Netlify. Swapping to a load balancer later changes only that stack and where the server reads the client IP.
+3. **A front-door token instead of a second hop count.** run.app stays reachable directly for old phones, Malafat and the carry-over, so one `TRUSTED_PROXY_HOPS` can't fit both paths. The Worker sends `x-mutaba3a-front-door: <FRONT_DOOR_TOKEN>` and `x-mutaba3a-client-ip: <CF-Connecting-IP>`, overwriting the caller's copies. The server:
+   - takes that IP and judges `Origin` against `PORTAL_ORIGIN` only when the token matches (sha256 digests, `timingSafeEqual`);
+   - judges every other request exactly as before.
+
+   The token is Terraform `random_password` in Secret Manager, a `secret_text` binding in the Worker, and mounted by reference in Cloud Run.
+4. **The frontdoor stack owns the token secret.** The API stack reads it with a data source, so its plan fails loudly when the frontdoor stack wasn't applied first. The zone and the secret are `prevent_destroy`.
+5. **Redirects are staged and 302.**
+   - From `live`, Netlify sends `<apex>/app/*` back to netlify.app, where the free web app's IndexedDB is.
+   - At `redirect`, Netlify sends the old host's landing pages to the apex.
+   - At `redirect`, the server sends direct run.app page visits to the same-origin `/carry-over?next=…` page. It never touches the API, admin, association files, health checks, assets, static files or writes.
+   - `PORTAL_LEGACY_REDIRECT` parses only `"true"`/`"false"`.
+6. **The phone repo is not edited here.** `npm run domain:plan` prints its exact lines, and it claims both hosts for at least one release.
+**Rejected**: a Google external HTTPS LB plus serverless NEG (cost; two hop counts during the transition); a Cloudflare proxied CNAME with an Origin Rule host override (no place to inject the token and client IP that is as testable as a Worker); a hop-count bump (`TRUSTED_PROXY_HOPS=2` would trust a forged `X-Forwarded-For` entry on direct run.app traffic).
+**Consequences**:
+- While `domain` is null, nothing changes, and the plans and the builds are as before (snapshot masked, tests pin it).
+- Past 100k requests/day per Cloudflare account the Worker fails closed until UTC midnight (TD-186).
+- Browser-saved passwords don't follow the host: people sign in once on the new host (MUT-112 release note). Google Password Manager affiliation through web↔web `assetlinks.json` statements is left to MUT-112 (it changes the API contract).
+- `cloudflare_zone_setting` can't be destroyed from Terraform.

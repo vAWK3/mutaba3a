@@ -8,7 +8,7 @@ import type { RateLimiter } from '../rate-limit.js';
 import type { ApiKeyRecord, LedgerStore, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
 import { hasScope, isScope, type Scope } from './scopes.js';
-import { DEFAULT_DEVICE_IDLE_DAYS, isDeviceSessionToken, isSameOriginRequest, sessionCookieName, sessionDigest } from './sessions.js';
+import { DEFAULT_DEVICE_IDLE_DAYS, isDeviceSessionToken, isSamePortalOrigin, sessionCookieName, sessionDigest } from './sessions.js';
 import { principalStoreGuard, unguarded, type StoreGuard } from './store-guard.js';
 import { domainOfScope, matrixRow, profileWriterOf, sessionScopesFor, writeRefusal, type Principal, type ProfileWriter } from './writability.js';
 
@@ -119,6 +119,10 @@ export interface SessionSettings {
   secureCookie: boolean;
   portalOrigin?: string;
   trustedProxyHops: number;
+  /** MUT-326: the front door's shared secret; with it, requests that carry it are judged by PORTAL_ORIGIN and the IP it hands over. */
+  frontDoorToken?: string;
+  /** MUT-326 stage "redirect": portal page visits that bypass the front door go to the carry-over page, then the new host. */
+  legacyRedirect?: boolean;
   /** MUT-64 device-session lifetime (native app bearer tokens). Defaults to 30/180 days when absent. */
   deviceIdleDays?: number;
   deviceAbsoluteDays?: number;
@@ -169,7 +173,7 @@ export function authenticate(options: AuthenticateOptions): MiddlewareHandler<Ap
     if (cookie) {
       const identity = await authenticateSession(c, cookie, options);
       if (access && !access.principals.has('session')) throw await keyOnlyRefusal(c, identity, access, options.store);
-      if (!SAFE_METHODS.has(c.req.method) && !isSameOriginRequest(c.req, options.sessions.portalOrigin)) {
+      if (!SAFE_METHODS.has(c.req.method) && !isSamePortalOrigin(c.req, options.sessions)) {
         throw new ApiError('CROSS_SITE_REQUEST', 'This request must come from the Mutaba3a portal itself');
       }
       await finishSessionAuth(c, identity, endpoint, options);

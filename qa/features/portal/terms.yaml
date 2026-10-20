@@ -19,7 +19,7 @@ features:
     expect:
       - Without the tick the page asks to agree and sends nothing
       - The terms link opens the version being accepted, in the page language (?lang), in a new tab
-      - Saving sends that version and the page language, and the person lands signed in on Overview
+      - Saving sends that version, the page language and the web release that showed it (MUT-354), and the person lands signed in on Overview
   - id: language-switch-clears-tick
     title: Switching the setup page's language clears the terms tick, so the agreement follows a read in the language recorded (MUT-324 review pass 2)
     tier: secondary
@@ -46,7 +46,7 @@ features:
       - Reload the page
     expect:
       - The step shows before any navigation, with Read the terms (that version, ?lang in the page language), I agree, Sign out and the support email
-      - Agreeing records the version in the page language and opens Overview
+      - Agreeing records the version in the page language with the web release that showed it (MUT-354), and opens Overview
       - After reloading, the step doesn't come back
   - id: changed-mid-step
     title: If the terms change again while the Updated-terms step is open, I agree says so, the step names the new version, and the retry accepts it (MUT-324 review fix 4)

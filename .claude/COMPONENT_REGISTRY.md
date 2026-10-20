@@ -2105,8 +2105,9 @@ Builds `/legal/terms-versions.json` (version + sha256 per language) for the web 
 ### TermsUpdatePage — `src/hosted/pages/auth/TermsUpdatePage.tsx`
 The portal's "We've updated our terms" step, rendered by `AuthGate` (prop `version` only) when `Me.terms.accepted === false`: read the version (new tab, `?lang` = page language), I agree (`api.acceptTerms`), Sign out, and the support line (a mailto link). It keeps the version it showed: a different one from a /v1/me refetch, or named by a 409 `TERMS_VERSION_STALE`, replaces it and shows "the terms changed". A success cancels in-flight /v1/me fetches and writes through an updater.
 
-### termsHref / SUPPORT_EMAIL — `src/hosted/terms.ts`
+### termsHref / TERMS_CLIENT_RELEASE / SUPPORT_EMAIL — `src/hosted/terms.ts`
 `termsHref(language, version?)` reads the `__TERMS_URL__` build define (ADR-076 typeof guard; '' when unset) and always adds `?lang=<language>`, the language the acceptance records. Used by SetupPage, TermsUpdatePage, UserMenu and SignInPage.
+`TERMS_CLIENT_RELEASE` (MUT-354) is `web-v<APP_VERSION>`, the `clientRelease` SetupPage and TermsUpdatePage send with each acceptance.
 
 ### termsAcceptanceOf / termsAcceptedAudit — `server/src/terms-acceptance.ts`
-The acceptance row for the current terms (sha256 by locale, surface from `Session.kind`), and its `user.terms_accepted` audit on owned profiles only. Shared by the setup redeem and `POST /v1/me/terms-acceptance`.
+The acceptance row for the current terms (sha256 by locale, surface from `Session.kind`, MUT-354 the request's `clientRelease` or null), and its `user.terms_accepted` audit on owned profiles only. Shared by the setup redeem and `POST /v1/me/terms-acceptance`.

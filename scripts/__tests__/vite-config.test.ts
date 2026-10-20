@@ -14,6 +14,8 @@ import configFn, {
   POSTHOG_PRECACHE_IGNORES,
   appVersion,
   netlifyFormsHtml,
+  netlifyRedirects,
+  LEGACY_LANDING_PATHS,
   portalUrl,
   posthogKey,
   scopeServerBufferShim,
@@ -32,6 +34,7 @@ import tokens from '../../src/styles/brand/mutaba3a.tokens.json';
 import pkg from '../../package.json';
 import { repoPath } from '../../src/test/css/brandCss';
 import { pngSize } from '../../src/test/pngSize';
+import { HOSTS, parseHostsConfig, resolveHosts } from '../../config/hosts';
 
 /**
  * hosted-portal.md §8: the hosted build target is additive. The `web` and
@@ -57,8 +60,17 @@ function pluginNames(plugins: PluginOption[] | undefined): string[] {
   return names;
 }
 
+/** The portal origin comes from config/hosts.json (MUT-326), so picking the domain doesn't rewrite this snapshot. */
+function maskPortalUrl(define: UserConfig['define']) {
+  return define?.__PORTAL_URL__ === JSON.stringify(HOSTS.portalOrigin) ? { __PORTAL_URL__: '<config/hosts.json portalOrigin>' } : {};
+}
+
 function comparable(config: UserConfig) {
-  return { ...config, define: { ...config.define, __APP_VERSION__: '<package.json version>' }, plugins: pluginNames(config.plugins) };
+  return {
+    ...config,
+    define: { ...config.define, __APP_VERSION__: '<package.json version>', ...maskPortalUrl(config.define) },
+    plugins: pluginNames(config.plugins),
+  };
 }
 
 
@@ -114,8 +126,49 @@ describe('vite.config', () => {
     });
   });
 
+  describe('Netlify domain-move redirects (MUT-326, ADR-155 D5)', () => {
+    const LEGACY = { landing: 'https://old.netlify.example', portal: 'https://old-portal.run.example' };
+    const hosts = (env: Record<string, unknown>) =>
+      resolveHosts(parseHostsConfig({ production: { domain: null, portalSubdomain: 'app', stage: 'legacy', legacy: LEGACY, ...env } }));
+    const lines = (stage: string) => netlifyRedirects(hosts({ domain: 'placeholder.example', stage })).trim().split('\n');
+
+    it('emits nothing before the domain is live', () => {
+      expect(netlifyRedirects(hosts({}))).toBe('');
+      expect(netlifyRedirects(hosts({ domain: 'placeholder.example', stage: 'proxy' }))).toBe('');
+    });
+
+    it('live: the apex sends /app back to the old host, where the free web app\'s data is', () => {
+      expect(lines('live')).toEqual([
+        'https://placeholder.example/app https://old.netlify.example/app 302!',
+        'https://placeholder.example/app/* https://old.netlify.example/app/:splat 302!',
+      ]);
+    });
+
+    it('redirect: also sends the old host\'s landing pages, and only those, on to the apex', () => {
+      expect(lines('redirect').slice(2)).toEqual([
+        'https://old.netlify.example/ https://placeholder.example/ 302!',
+        'https://old.netlify.example/download https://placeholder.example/download 302!',
+        'https://old.netlify.example/privacy https://placeholder.example/privacy 302!',
+        'https://old.netlify.example/terms https://placeholder.example/terms 302!',
+        'https://old.netlify.example/terms/* https://placeholder.example/terms/:splat 302!',
+      ]);
+    });
+
+    it('never sends the old host\'s free web app, assets or service worker anywhere (their data lives there until MUT-291)', () => {
+      for (const line of lines('redirect')) expect(line).not.toMatch(/^https:\/\/old\.netlify\.example\/(app|assets|sw\.js|workbox|manifest)/);
+      for (const path of LEGACY_LANDING_PATHS) expect(path).not.toMatch(/^\/(app|assets)/);
+    });
+
+    it('builds the checked-in config\'s rules into the web build only', () => {
+      expect(pluginNames(resolve('web').plugins)).toContain('mutaba3a:domain-move-redirects');
+      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:domain-move-redirects');
+      expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:domain-move-redirects');
+      expect(netlifyRedirects(HOSTS)).toBe(HOSTS.stage === 'legacy' || HOSTS.stage === 'proxy' ? '' : expect.stringContaining('/app'));
+    });
+  });
+
   describe('social preview (MUT-104)', () => {
-    const tags = (origin = 'https://mutaba3a.app') =>
+    const tags = (origin = 'https://example.com') =>
       Object.fromEntries(
         socialMetaTags(origin).map(({ attrs }) => [String(attrs?.property ?? attrs?.name), String(attrs?.content)]),
       );
@@ -133,8 +186,8 @@ describe('vite.config', () => {
 
     it('points at the wide Arabic card by absolute URL, at its real size', () => {
       const meta = tags();
-      expect(meta['og:url']).toBe('https://mutaba3a.app/');
-      expect(meta['og:image']).toBe('https://mutaba3a.app/og-card-ar-1200x630.png');
+      expect(meta['og:url']).toBe('https://example.com/');
+      expect(meta['og:image']).toBe('https://example.com/og-card-ar-1200x630.png');
       expect(meta['twitter:image']).toBe(meta['og:image']);
       expect(meta['twitter:card']).toBe('summary_large_image');
       const file = repoPath('public/og-card-ar-1200x630.png');
@@ -143,10 +196,10 @@ describe('vite.config', () => {
     });
 
     it('drops a trailing slash from the configured origin', () => {
-      expect(tags('https://staging.mutaba3a.app/')['og:image']).toBe('https://staging.mutaba3a.app/og-card-ar-1200x630.png');
+      expect(tags('https://staging.example.com/')['og:image']).toBe('https://staging.example.com/og-card-ar-1200x630.png');
     });
 
-    it.each(['http://mutaba3a.app', 'mutaba3a.app', '', 'https://'])('refuses %j as an origin, failing the build', (origin) => {
+    it.each(['http://example.com', 'example.com', '', 'https://'])('refuses %j as an origin, failing the build', (origin) => {
       expect(() => socialMetaTags(origin)).toThrow(/MUTABA3A_PUBLIC_ORIGIN/);
     });
 
@@ -177,7 +230,7 @@ describe('vite.config', () => {
       }));
       try {
         const { socialMetaTags: mockedSocialMetaTags } = await import('../../vite.config');
-        const dangerousTags = mockedSocialMetaTags('https://mutaba3a.app');
+        const dangerousTags = mockedSocialMetaTags('https://example.com');
         // Every tag is a plain {tag, attrs} descriptor: Vite's serializeTags() HTML-escapes
         // each attrs value (escape-html) when it renders the tag, so the raw string here is correct.
         for (const tag of dangerousTags) {
@@ -216,16 +269,16 @@ describe('vite.config', () => {
       expect(resolve('desktop').define?.__PORTAL_URL__).toBe(JSON.stringify(''));
     });
 
-    it('defaults to the Cloud Run service that serves the portal', () => {
+    it('defaults to the portal origin config/hosts.json names (MUT-326)', () => {
       expect(portalUrl(undefined)).toBe(DEFAULT_PORTAL_URL);
-      expect(DEFAULT_PORTAL_URL).toMatch(/^https:\/\/[^/]+\.run\.app$/);
+      expect(DEFAULT_PORTAL_URL).toBe(HOSTS.portalOrigin);
     });
 
     it('takes MUTABA3A_PORTAL_URL over the default and drops a trailing slash', () => {
-      expect(portalUrl('https://portal.mutaba3a.app/')).toBe('https://portal.mutaba3a.app');
+      expect(portalUrl('https://portal.example.com/')).toBe('https://portal.example.com');
     });
 
-    it.each(['http://portal.mutaba3a.app', 'portal.mutaba3a.app', '', 'https://', 'https://portal.mutaba3a.app/sign-in'])(
+    it.each(['http://portal.example.com', 'portal.example.com', '', 'https://', 'https://portal.example.com/sign-in'])(
       'refuses %j as the portal URL, failing the build',
       (value) => {
         expect(() => portalUrl(value)).toThrow(/MUTABA3A_PORTAL_URL/);
@@ -247,9 +300,10 @@ describe('vite.config', () => {
       expect(() => termsUrl('http://x.example')).toThrow();
     });
 
-    it('defaults to the Netlify origin until the custom domain has DNS (MUT-112)', () => {
+    it('defaults to the landing origin config/hosts.json names (MUT-326)', () => {
       expect(hostedOfferUrl(undefined)).toBe(`${DEFAULT_PUBLIC_ORIGIN}/hosted`);
-      expect(DEFAULT_PUBLIC_ORIGIN).toMatch(/^https:\/\/[^/]+\.netlify\.app$/);
+      expect(DEFAULT_PUBLIC_ORIGIN).toBe(HOSTS.landingOrigin);
+      expect(DEFAULT_PORTAL_URL).toBe(HOSTS.portalOrigin);
     });
 
     it('takes MUTABA3A_PUBLIC_ORIGIN over the default and drops a trailing slash', () => {
@@ -374,22 +428,22 @@ describe('vite.config', () => {
       Object.fromEntries(tags.map(({ attrs }) => [String(attrs?.property ?? attrs?.name), String(attrs?.content)]));
 
     it('keeps the home card as it was when no page is given', () => {
-      expect(meta(socialMetaTags('https://mutaba3a.app'))['og:url']).toBe('https://mutaba3a.app/');
+      expect(meta(socialMetaTags('https://example.com'))['og:url']).toBe('https://example.com/');
     });
 
     const INDEX = [
       '<!doctype html><html lang="en"><head><meta charset="UTF-8" /><title>متابعة</title>',
-      '<meta property="og:url" content="https://mutaba3a.app/">',
+      '<meta property="og:url" content="https://example.com/">',
       '<meta property="og:title" content="home">',
       '<meta name="twitter:title" content="home">',
       '<script type="module" src="/assets/index-abc.js"></script></head><body><div id="root"></div></body></html>',
     ].join('\n');
 
     it('swaps every link-preview tag and the title, and keeps the app\'s scripts', () => {
-      const html = withPageMeta(INDEX, socialMetaTags('https://mutaba3a.app'), 'متابعة', 'https://mutaba3a.app/');
-      expect(html).toContain('<meta property="og:url" content="https://mutaba3a.app/">');
+      const html = withPageMeta(INDEX, socialMetaTags('https://example.com'), 'متابعة', 'https://example.com/');
+      expect(html).toContain('<meta property="og:url" content="https://example.com/">');
       expect(html).toContain('<title>متابعة</title>');
-      expect(html).toContain('<link rel="canonical" href="https://mutaba3a.app/">');
+      expect(html).toContain('<link rel="canonical" href="https://example.com/">');
       expect(html).toContain('<script type="module" src="/assets/index-abc.js"></script>');
       expect(html.match(/property="og:title"/g)).toHaveLength(1);
     });

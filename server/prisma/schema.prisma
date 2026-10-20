@@ -379,16 +379,18 @@ enum TermsSurface {
 /// Deleted with the person (D3): the schema's one cascade, chosen by the owner,
 /// so closing an account (MUT-333) also removes the record of its agreement.
 model TermsAcceptance {
-  id         String       @id @default(uuid()) @db.Uuid
-  userId     String       @db.Uuid
-  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String       @id @default(uuid()) @db.Uuid
+  userId        String       @db.Uuid
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// An ISO date; string order is release order.
-  version    String       @db.VarChar(10)
+  version       String       @db.VarChar(10)
   /// 'en' | 'ar', validated by the API.
-  locale     String       @db.VarChar(5)
-  textSha256 String       @db.Char(64)
-  surface    TermsSurface
-  acceptedAt DateTime
+  locale        String       @db.VarChar(5)
+  textSha256    String       @db.Char(64)
+  surface       TermsSurface
+  /// MUT-354: the client release that showed the terms (`web-v<x>`), as sent; null for older clients and rows.
+  clientRelease String?      @db.VarChar(64)
+  acceptedAt    DateTime
 
   @@unique([userId, version])
   @@map("terms_acceptances")

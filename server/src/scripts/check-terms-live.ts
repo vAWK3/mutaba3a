@@ -10,11 +10,11 @@ import { CURRENT_TERMS, TERMS_LOCALES, type CurrentTerms } from '../legal.js';
  * with the app shell, so the check reads the build's manifest
  * (`/legal/terms-versions.json`, src/content/legal/termsManifest.ts), never a page.
  *
- * MUTABA3A_PUBLIC_ORIGIN names the site; its default is vite.config.ts's
- * DEFAULT_PUBLIC_ORIGIN (pinned by scripts/__tests__/legal-terms.test.ts; MUT-326
- * moves both to one origin config).
+ * MUTABA3A_PUBLIC_ORIGIN names the site. The `terms:check-live` npm script fills it
+ * from config/hosts.json (`npm run hosts -- get landingOrigin` at the repo root,
+ * MUT-326), the same value vite.config.ts builds the landing for; this file lives in
+ * the image's build context, which never sees that config, so it takes no default.
  */
-export const DEFAULT_PUBLIC_ORIGIN = 'https://mutaba3a.netlify.app';
 const MANIFEST_PATH = '/legal/terms-versions.json';
 const TIMEOUT_MS = 15_000;
 
@@ -51,8 +51,18 @@ export async function checkTermsLive(url: string, terms: CurrentTerms, fetchImpl
   return termsLiveProblem(manifest, terms);
 }
 
+/** The site to check, or null when the caller named none (run it through `npm run terms:check-live`). */
+export function publicOrigin(env: NodeJS.ProcessEnv): string | null {
+  const origin = env.MUTABA3A_PUBLIC_ORIGIN?.trim().replace(/\/$/, '');
+  return origin ? origin : null;
+}
+
 async function main(): Promise<number> {
-  const origin = (process.env.MUTABA3A_PUBLIC_ORIGIN ?? DEFAULT_PUBLIC_ORIGIN).replace(/\/$/, '');
+  const origin = publicOrigin(process.env);
+  if (!origin) {
+    console.error('[terms] MUTABA3A_PUBLIC_ORIGIN is not set; run `npm --prefix server run terms:check-live`, which reads it from config/hosts.json');
+    return 1;
+  }
   const url = `${origin}${MANIFEST_PATH}`;
   const problem = await checkTermsLive(url, CURRENT_TERMS);
   if (problem) {

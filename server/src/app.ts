@@ -6,7 +6,7 @@ import { createApiShell } from './app-shell.js';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
 import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
 import { requireMinimumBuild, type MinimumBuildConfig } from './auth/minimum-build.js';
-import { DEFAULT_DEVICE_ABSOLUTE_DAYS, DEFAULT_DEVICE_IDLE_DAYS, SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
+import { DEFAULT_DEVICE_ABSOLUTE_DAYS, DEFAULT_DEVICE_IDLE_DAYS, LEGACY_CARRY_OVER_PATH, SIGN_IN_POLICY, SignInThrottle, isViaFrontDoor } from './auth/sessions.js';
 import { SCOPES } from './auth/scopes.js';
 import { requestScopedStore } from './auth/store-guard.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from './auth/users.js';
@@ -103,6 +103,19 @@ function isPortalExcludedPath(path: string): boolean {
   return PORTAL_EXCLUDED_EXACT.has(path) || PORTAL_EXCLUDED_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
+/**
+ * MUT-326 (ADR-155 D5): a portal page visit the legacy-host redirect may move. Never
+ * the API, admin, health or association paths, never a static file (an old cached
+ * page's script must still load from 'self'), never a write, and never the carry-over
+ * page itself, which has to read this origin's local records.
+ */
+function isLegacyPageVisit(method: string, path: string): boolean {
+  if (method !== 'GET' && method !== 'HEAD') return false;
+  if (isPortalExcludedPath(path) || path.startsWith('/.well-known/') || path.startsWith('/assets/')) return false;
+  if (path === LEGACY_CARRY_OVER_PATH) return false;
+  return !(path.split('/').pop() ?? '').includes('.');
+}
+
 // connect-src includes the GCS signed-URL host: receipt uploads (MUT-44) PUT
 // bytes directly to it via fetch(), which connect-src governs. Downloads are
 // top-level navigations instead, so they need no entry here. It also names
@@ -124,7 +137,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.38.0-mut324';
+export const API_VERSION = '1.39.0-mut354';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -233,7 +246,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
-  app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops }));
+  app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms }));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
@@ -339,6 +352,16 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // answering JSON, never the portal shell.
   if (deps.portal) {
     const { distDir } = deps.portal;
+
+    // MUT-326 stage "redirect": page visits that bypass the front door go through the carry-over page.
+    const { legacyRedirect, frontDoorToken } = sessions;
+    if (legacyRedirect && frontDoorToken) {
+      app.use('*', async (c, next) => {
+        if (!isLegacyPageVisit(c.req.method, c.req.path) || isViaFrontDoor((name) => c.req.header(name), frontDoorToken)) return next();
+        const url = new URL(c.req.url);
+        return c.redirect(`${LEGACY_CARRY_OVER_PATH}?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
+      });
+    }
 
     // Any real file in the build (hashed assets, favicon, manifest, …); a miss
     // falls through to the SPA-shell handler below via Hono's own next().

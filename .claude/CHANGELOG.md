@@ -41,6 +41,175 @@
 - Release-QA: new `web.legal.privacy-linked-language`; the stale hosted-accounts heading in `@web.legal.links` now comes from the translation files.
 - No portal change: no portal surface links to `/privacy`.
 - Phone half (mutaba3a-flutter): `privacyUri(languageCode:)` adds `?lang`.
+## [Unreleased] - 2026-10-20 — The custom domain is one input (MUT-326, ADR-155)
+
+**Why:** The domain must be live before the pilot (MUT-322) but isn't chosen yet. The run.app and netlify.app hosts were written into vite, the bundle allowlist, the terms release guard, provisioning, Sentry tfvars and tests, so a move meant hunting for them. Now picking the domain is one edit, and MUT-112 shrinks to "pick, apply, release". Brief: `.claude/designs/mut-326-domain-move.md`.
+
+### Added
+- **`config/hosts.json` + `config/hosts.ts`.** `domain` (null), `portalSubdomain`, the legacy origins and a `stage` (`legacy` → `proxy` → `live` → `redirect`), resolved into the origins each consumer uses. Fixtures in `config/fixtures/` are shared with the Terraform tests.
+- **`npm run domain:plan [-- --domain <apex> --stage <stage>]`** (`scripts/hosts.ts`) prints every consumer's value now and with the domain: vite, Netlify redirects, Cloud Run env, front door, Sentry, uptime host, the phone's `.env` / entitlements / manifest lines, and Malafat. `npm run --silent hosts -- get <key>` serves shell scripts.
+- **`scripts/__tests__/no-hardcoded-hosts.test.ts`.** It fails on the legacy hosts, any `mutaba3a*.a.run.app` / `*.netlify.app`, or the chosen domain outside `config/hosts.json`, and rehearses `mutaba3a.app` as the domain. Prose and the CIMD files are exempt.
+- **`server/infrastructure/frontdoor/`.** A new operator-applied stack: Cloudflare zone and settings, DNS (apex/www DNS-only to Netlify, `app.` proxied), the front-door Worker (`worker/front-door.js`) and its route, the token secret, and the Netlify custom domain. It's empty while no domain is set. A placeholder domain plans 16 to add, 0 to change, 0 to destroy. Offline `terraform test`; joins the server-ci matrix.
+- **Server front-door awareness.**
+  - `FRONT_DOOR_TOKEN` and `PORTAL_LEGACY_REDIRECT` (`"true"`/`"false"` only) in `config.ts`.
+  - `isViaFrontDoor`, `requestClientIp` and `isSamePortalOrigin` in `auth/sessions.ts`, used by sign-in, device sign-in, account setup, the session middleware and the public FX limiter.
+  - The legacy-host redirect to `/carry-over?next=…` in `app.ts`.
+  - With no token, behaviour is unchanged.
+- **API stack `domain.tf`.** It reads the token secret, grants the service account, adds `PORTAL_ORIGIN` / `FRONT_DOOR_TOKEN` (and `PORTAL_LEGACY_REDIRECT` at stage redirect) to Cloud Run, and outputs `public_portal_origin` (for MUT-328's uptime checks).
+- **`server/DEPLOYMENT.md` §5a.** The operator runbook for the move: prerequisites, the six stages with commands and checks, and the rollback table.
+- **Web build `mutaba3a:domain-move-redirects`.** It emits Netlify `_redirects` from the config: from `live`, `<apex>/app/*` back to netlify.app; at `redirect`, the old host's landing pages to the apex.
+
+### Changed
+- `vite.config.ts` `DEFAULT_PUBLIC_ORIGIN` / `DEFAULT_PORTAL_URL` = `HOSTS.landingOrigin` / `HOSTS.portalOrigin`. The values are the same today; the web snapshot masks the portal URL and lists the new plugin.
+- `scripts/check-bundles.ts` adds `HOSTS.allOrigins` to both allowlists; `bundle-origins.json` no longer lists our own hosts.
+- `terms:check-live` takes `MUTABA3A_PUBLIC_ORIGIN` from the config through its npm script; the script itself has no default. `provision-account.sh` defaults its URL from the config.
+- **Sentry stack:** `portal_origins` / `landing_origins` are now extras. The DSNs accept the config's origins, new and legacy, by themselves.
+- `deploy.sh` also smoke-tests `public_portal_origin` once it differs from the service URL.
+- MUT-328's uptime checks (merged first) now default `uptime_host` to `local.public_portal_host`, as its own comment asked: the config's portal host, so they follow the domain at stage `live`. `monitoring.tftest.hcl` reads the no-domain fixture, plus one run for a live domain.
+- Test fixtures and comments use neutral example hosts instead of our real ones.
+
+### Files
+`config/{hosts.json,hosts.ts,fixtures/*}`, `scripts/{hosts.ts,check-bundles.ts,bundle-origins.json}`, `scripts/__tests__/{hosts,hosts-cli,no-hardcoded-hosts,front-door-worker,vite-config,legal-terms}.test.ts`, `vite.config.ts`, `package.json`, `server/src/{config.ts,index.ts,app.ts,auth/sessions.ts,auth/middleware.ts,routes/{sessions,account-setup,device-sessions,fx-rates}.ts,scripts/check-terms-live.ts}`, `server/src/__tests__/{legacy-redirect,config,check-terms-live,smoke}.test.ts`, `server/src/auth/__tests__/{front-door,sessions}.test.ts`, `server/infrastructure/{frontdoor/**,terraform/{domain.tf,main.tf,outputs.tf,tests/domain.tftest.hcl},sentry/**}`, `server/scripts/{deploy.sh,provision-account.sh}`, `server/package.json`, `.github/workflows/server-ci.yml`, `.env.example`, `server/.env.example`, `server/DEPLOYMENT.md`.
+
+## [Unreleased] - 2026-10-20 — Uptime checks and alerts for the API and portal (MUT-328, ADR-154)
+
+**Why:** Pilot gate (MUT-322). Production had one `/health` uptime check, and no alert reached anyone because no notification channel was set. An outage was found only when a user wrote in.
+
+### Added
+- `server/infrastructure/terraform/monitoring.tf`: uptime checks on `/health`, `/ready` and the portal `/` (matched on `id="root"`), every 5 min from all six regions. They probe `uptime_host`, falling back to the Cloud Run host so they can follow the custom domain (MUT-112/326). Email and SMS notification channels come from `alert_email` / `alert_sms_number` (the number is sensitive, set only in the operator's tfvars). One CRITICAL policy per check fires when more than one region fails for 360 s, which is two failed rounds in a row. Two WARNING Cloud SQL policies cover disk above 80% and CPU above 90% for 15 min. `uptime_drill_path` adds an opt-in drill check to fire and close a real alert without touching production.
+- `tests/monitoring.tftest.hcl`: 14 offline runs (mocked providers).
+- `server/DEPLOYMENT.md` §6b: apply (targeted plan, expect 9 to add), SMS verification, the drill, what each alert means, and the domain move.
+
+### Changed
+- The monitoring section moved from `main.tf` to `monitoring.tf`. `moved` blocks carry the existing `/health` check (and its policy, where one exists) to `endpoint["health"]` unchanged.
+
+### Technical
+- Prepared, **not applied**. Basel applies per §6b. `terraform fmt`/`validate`/`test` pass (17 runs including database_pool). TD-185: provider 5.x cannot pin the close notification.
+
+## [Unreleased] - 2026-10-20 — MUT-354: each terms acceptance records the client release that showed it (API 1.39.0-mut354)
+
+**Why:** MUT-348 (Basel, 2026-10-20, comment 12222) decided that the evidence of what a person read is the frozen terms file (`textSha256`) plus the page code at the release that rendered it. Before this, nothing recorded that release. Plan: `.claude/designs/mut-354-terms-client-release.md`.
+
+### Added
+- `terms_acceptances.clientRelease VARCHAR(64)`, nullable, from migration `20261020120000_mut354_terms_client_release`. It is additive, and existing rows stay null.
+- `POST /v1/me/terms-acceptance` and `POST /v1/account-setup` take an optional `clientRelease`.
+  - It must be printable ASCII with no spaces, 1–64 characters (`CLIENT_RELEASE_MAX` / `CLIENT_RELEASE_PATTERN` in `server/src/legal.ts`); anything else gets 422.
+  - It is stored as sent and never trusted. Clients that omit it still succeed and record null.
+  - A repeat accept keeps the release first recorded.
+- `user.terms_accepted` audit metadata carries `clientRelease`.
+- `GET /admin/v1/terms-acceptance` gains `users[].clientRelease`, the release on each person's latest accepted version. `npm --prefix server run terms:report` prints it after the version, or `-` when there is none.
+- The portal sends `clientRelease = web-v<APP_VERSION>` (`TERMS_CLIENT_RELEASE`, `src/hosted/terms.ts`) from the setup page and the Updated-terms step.
+
+### Changed
+- API `1.39.0-mut354`; `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+
+### Release note
+- **Ship the server before any phone build sends the field.** `TermsAcceptanceRequest` is `.strict()`, so a phone (MUT-344) that sends `clientRelease` to an older server gets 422. The portal ships inside the same image, so it is safe.
+
+### Technical
+- TD-184: the recorded web version can lag the live landing by one web release.
+- Files:
+  - server: `prisma/schema.prisma`, the migration, `legal.ts`, `schemas.ts`, `repositories/{ports,memory,prisma}.ts`, `terms-acceptance.ts`, `routes/{sessions,account-setup,admin-users}.ts`, `scripts/users.ts`, `app.ts`;
+  - portal: `src/hosted/terms.ts`, `SetupPage.tsx`, `TermsUpdatePage.tsx`;
+  - release-QA: `qa/support/portal.ts`, `qa/specs/portal/{terms,setup}.spec.ts`, `qa/features/portal/terms.yaml`.
+
+## [Unreleased] - 2026-10-20 — CI back to green; CI manual-only with a release reminder (ADR-153)
+
+**Why:** Web CI and Server CI had failed on every main push since 2026-10-19. MUT-286's local mode makes the portal import the server's route modules, so the web typecheck (`tsconfig.hosted-local.json` pins `server/node_modules/@types`), its tests and `build:hosted` (`@hono/zod-openapi`) need server deps. Neither workflow installed them. Behind that, web coverage had fallen below its floors: server files were counted, the browser shims are only exercised by the server suite, and the HostedRequestForm tests were deleted with HostedOfferPage (7914685a).
+
+### Fixed
+- `web-ci.yml` and the server-ci Docker job also run `npm ci --prefix server`.
+- `vitest.config.ts` coverage excludes `server/**` (the `src/**` glob matched `server/src/**`; the server suite owns it). The coverage floors are unchanged.
+- Added `src/hosted/local/__tests__/platform.test.ts`: the crypto and Buffer shims against real `node:crypto`/`Buffer` from the web suite, including branches `server/src/__tests__/platform-shim.test.ts` never reaches (multi-block input, keys over one block, the randomUUID fallback, invalid hex).
+- Restored the 18 HostedRequestForm tests as `src/pages/landing/__tests__/HostedRequestForm.test.tsx`, against the form itself.
+- Added `src/hosted/local/__tests__/asyncHooksShim.test.ts`. No suite covered the AsyncLocalStorage shim.
+- Added tests for the demo time freeze (`src/demo/timeFreeze.ts`, previously untested) and `SeededRandom`'s remaining helpers.
+
+### Changed
+- web-ci, server-ci and contracts-ci run on `workflow_dispatch` only (ADR-153).
+- `make ci [web|server|contracts|all]` starts the workflows on origin/main.
+- `make release web|server` prints the target workflow's last result and the command to run it before the deploy confirmation (`scripts/ci-reminder.sh`), and ends with a reminder to run `make ci <target>` on what it pushed. `make help` lists the commands.
+
+### Technical
+- Verified under Node 22 with root and server deps installed as CI does: lint, typecheck, test:coverage (392 files, 5545 tests; statements 91.50 / branches 84.73 / functions 88.53 / lines 92.35) and build:hosted all pass. The Docker image build and /health probe were not run locally.
+
+## [Unreleased] - 2026-10-20 — Pilot tiles on PostHog dashboard 1031822 (MUT-330, epic MUT-322)
+
+**Why:** the dashboard's activation funnel counted income only, over 30 days, and nothing tracked weekly use. The MUT-330 bars count income or expense, within 7 days, and entries in 3 of the last 4 weeks.
+
+### Added (in PostHog, EU project 304889, at Basel's go)
+- The action "Recorded an entry" (170934): `income_recorded`, `expense_recorded` or `payment_recorded`.
+- The insight "Pilot activation: opt-in → first entry within 7 days" (`0Iw0a0uZ`): a funnel over 90 days with test accounts filtered out.
+- The insight "Pilot weekly use: weeks with an entry, last 4" (`hLRXPSk0`): cumulative stickiness over four 7-day periods.
+- Both are on dashboard 1031822. Both ran before saving: 4 people had opted in so far, and 1 had recorded an entry.
+
+### Changed
+- `docs/commercial/pilot-metrics.md` and `pilot-reviews.md` point at the two tiles. They stay a cross-check: opt-in only, and they include everyone who opted in, not just pilot users.
+- `.claude/INFRA.md`: the dashboard row lists the tiles and the action. The MCP starts in project 125127, so switch to 304889 first.
+
+## [Unreleased] - 2026-10-20 — Terms-acceptance evidence: ADR-102 addendum (MUT-348, epic MUT-322)
+
+**Why:** MUT-324's first review pass left two questions open: does the hash have to cover the rendered page, and do firm-only members need more evidence? Basel decided both on 2026-10-20 (MUT-348 comment 12222).
+
+### Changed
+- `.claude/DECISIONS.md` ADR-102 gets an addendum, and its status line names it.
+  1. The evidence is the frozen terms file (`textSha256`) plus the release that rendered it. MUT-354 records that release per acceptance in a nullable `clientRelease` column. Rows from before it stay null. No rendered-text hash and no HTML snapshots.
+  2. Firm-only members need nothing more for now, because every pilot user is an owner. MUT-305/306 must revisit this before the first member who owns no profile is invited. No code.
+
+## [Unreleased] - 2026-10-20 — Pilot success bars, weekly review and the operator count (MUT-330, epic MUT-322)
+
+**Why:** without bars agreed in advance, the pilot ends with impressions, not a GA go/no-go. Basel signed off the bars on 2026-10-20 (MUT-330 comment 12221).
+
+### Added
+- `docs/commercial/pilot-metrics.md`:
+  - the five GA bars across the 10 pilot users at pilot end: activation ≥ 8/10 within 7 days of setup; weekly use ≥ 6/10 with entries in 3 of the last 4 weeks; paid conversion ≥ 7/10 (paid the month-3 invoice, hasn't asked to leave); Sean Ellis "very disappointed" ≥ 40%; support ≤ 0.5 tickets per user per week;
+  - the verdict: all met is GO, one missed extends the pilot, two or more is no-go;
+  - where each number comes from;
+  - a 30-minute exit interview script in EN + AR that ends with the Sean Ellis question.
+- `docs/commercial/pilot-reviews.md`: the Monday review. It's written, with no meeting: the numbers, users at risk and one action. Pilot users appear only as codes `P01`…`P10`, never by email or name, because the file is in the repository.
+- `server/DEPLOYMENT.md` §6a (and a §6 row): the operator's count of entries per profile and per pilot user.
+  - It runs read-only (`PGOPTIONS='-c default_transaction_read_only=on'`), and the output is never sent anywhere (ADR-024).
+  - Entries are live expenses, `POSTED` captured payments and live `ADJUSTMENT` receivables, counted by `createdAt`.
+  - Setup is the first terms acceptance (ADR-102), or the account's creation if there's none.
+  - The email list that maps to the codes lives outside the repository.
+
+### Changed
+- `docs/commercial/pilot-offer.md` (EN + AR): the end-of-pilot call is 30 minutes, matching the exit interview.
+
+### Verified
+- The runbook SQL, exactly as written, ran read-only against the local dev schema (`mutaba3a_dev` on the test Postgres container): both queries return, and `default_transaction_read_only` is `on`.
+
+## [Unreleased] - 2026-10-20 — Pilot offer: Basel's decisions applied (MUT-323, epic MUT-322)
+
+**Why:** Basel settled the draft's open defaults on 2026-10-20 (MUT-323 comment 12220). Internal docs only: no price words reach the site (MUT-171/185).
+
+### Changed
+- `docs/commercial/pilot-offer.md` (EN + AR) and `docs/commercial/hosted-request-reply.md` (EN + AR):
+  - the pilot runs 3 months;
+  - feedback calls in week 2 and at the end;
+  - Stripe subscriptions created by hand in the dashboard from day one;
+  - the VAT sentence, word for word: "Prices exclude VAT; VAT is added where the law requires it." The rate per country is MUT-355, which blocks the first invoice, not the sign-off;
+  - the support promise reads exactly "email only, a reply within 2 working days".
+- The Arabic offer gains the pilot length, the feedback calls and an invoicing section.
+- Prices, the seller (Barmajiyat Ltd, UK) and the 12-month lock are unchanged.
+
+### Verified
+- `npx vitest run src/pages/landing` (landing and /hosted honesty tests): 15 files, 223 tests pass.
+
+## [Unreleased] - 2026-10-19 — Pilot offer and the /hosted reply template (MUT-323, epic MUT-322)
+
+**Why:** /hosted promises an offer by email within 2 working days, but no price or reply existed. These docs are internal. No price reaches the site: MUT-171/185 hold that rule until billing exists (MUT-332).
+
+### Added
+- `docs/commercial/pilot-offer.md` (EN + AR) covers:
+  - founder prices, excluding VAT: Freelancer ₪39 / $10 a month, Firm ₪299 / $80 a month per firm, billed in ILS in Israel and USD elsewhere, locked 12 months, yearly at 10× monthly;
+  - what each tier includes (shipped features only);
+  - the pilot's promises: email support within 2 working days, read-only + export when a payment lapses, 30 days before a closed account is deleted;
+  - pilot invoicing through the Barmajiyat Ltd **Mutaba3a** Stripe account from the dashboard, with no code. The subscriptions carry over to MUT-332.
+- `docs/commercial/hosted-request-reply.md`: the reply to a /hosted request, in EN and AR. It has blocks for freelancers, firms and Malafat firms (who are sent to the Malafat add-on, MAL-870), and a checklist to go through before sending.
+
+### Changed
+- `.claude/INFRA.md`: operator-held row for the Mutaba3a Stripe account.
 
 ## [Unreleased] - 2026-10-19 — MUT-337: icon save-feedback animation runtime decision + web prototype (ADR-152)
 

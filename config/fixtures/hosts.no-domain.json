@@ -1,0 +1,9 @@
+{
+  "$comment": "MUT-326: Terraform tests and scripts/__tests__/hosts.test.ts read this fixture (no domain chosen yet).",
+  "production": {
+    "domain": null,
+    "portalSubdomain": "app",
+    "stage": "legacy",
+    "legacy": { "landing": "https://landing.example.test", "portal": "https://portal.example.test" }
+  }
+}

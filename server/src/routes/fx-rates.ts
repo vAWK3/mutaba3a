@@ -1,6 +1,6 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
-import { clientIp } from '../auth/sessions.js';
+import { requestClientIp } from '../auth/sessions.js';
 import { ApiError } from '../errors.js';
 import { crossRates, MAX_RATE_AGE_DAYS, type CachedFxRates } from '../fx-rates.js';
 import type { RateLimiter } from '../rate-limit.js';
@@ -72,6 +72,8 @@ export interface PublicFxRateRouteOptions {
   rates: CachedFxRates | null;
   ipLimiter: RateLimiter;
   trustedProxyHops: number;
+  /** MUT-326: requests through the front door are keyed by the address it hands over. */
+  frontDoorToken?: string;
 }
 
 /**
@@ -82,7 +84,7 @@ export interface PublicFxRateRouteOptions {
  * client doesn't call it, and the local app must not serve it.
  */
 export function publicFxRateRoutes(options: PublicFxRateRouteOptions): OpenAPIHono<AppEnv> {
-  const { rates, ipLimiter, trustedProxyHops } = options;
+  const { rates, ipLimiter } = options;
   const app = new OpenAPIHono<AppEnv>();
 
   app.openapi(
@@ -103,7 +105,7 @@ export function publicFxRateRoutes(options: PublicFxRateRouteOptions): OpenAPIHo
       },
     }),
     async (c) => {
-      const ip = await ipLimiter.check(`public-fx:${clientIp((name) => c.req.header(name), trustedProxyHops)}`, c.get('now')());
+      const ip = await ipLimiter.check(`public-fx:${requestClientIp((name) => c.req.header(name), options)}`, c.get('now')());
       if (!ip.allowed) {
         c.header('Retry-After', String(ip.retryAfterSeconds));
         throw new ApiError('RATE_LIMITED', 'Too many requests; try again in a minute', { retryAfterSeconds: ip.retryAfterSeconds });
