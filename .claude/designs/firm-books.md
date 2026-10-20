@@ -353,7 +353,7 @@ Candidates: Amazon SES, Postmark, Resend. **MUT-306's planning picks one**, with
 
 | Ticket | Adds | Memory store / local snapshot |
 |---|---|---|
-| MUT-300 | Organization `firmEnabledAt`, `firmRequestedAt`, `firmRequestedByUserId`; Membership `role` (moved here from MUT-305, plan C1) | mirror; snapshot migration + Organization and Membership fingerprints once MUT-284 is on main |
+| MUT-300 | Organization `firmEnabledAt`, `firmRequestedAt`, `firmRequestedByUserId`; Membership `role` (moved here from MUT-305, plan C1) | mirror; snapshot format 1 → 2 migration and the orgs/members fingerprints (done at the merge with main, 2026-10-20) |
 | MUT-301 | none server-side (portal reading; suggestions go to MUT-255's columns) | n/a |
 | MUT-302 | Expense VAT columns; Bill VAT columns arrive with MUT-308 | mirror + migration |
 | MUT-303 | Vendor `lastCurrency`, `lastVatTreatment`, `lastVatRateBasisPoints` | mirror + migration |

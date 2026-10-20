@@ -11,14 +11,9 @@ async function formatOneSnapshot(): Promise<StoredSnapshot> {
   const store = new MemoryLedgerStore();
   await store.users.create({ email: 'rana@studio.ps', displayName: 'Rana', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-rana', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
   const { maps } = store.snapshot();
-  const orgs = new Map([...maps.orgs].map(([id, org]) => {
-    const { firmEnabledAt: _e, firmRequestedAt: _r, firmRequestedByUserId: _b, ...v1 } = org;
-    return [id, v1];
-  }));
-  const members = new Map([...maps.members].map(([key, membership]) => {
-    const { role: _role, ...v1 } = membership;
-    return [key, v1];
-  }));
+  const without = (record: object, fields: string[]) => Object.fromEntries(Object.entries(record).filter(([field]) => !fields.includes(field)));
+  const orgs = new Map([...maps.orgs].map(([id, org]) => [id, without(org, ['firmEnabledAt', 'firmRequestedAt', 'firmRequestedByUserId'])]));
+  const members = new Map([...maps.members].map(([key, membership]) => [key, without(membership, ['role'])]));
   return { formatVersion: 1, stateVersion: 3, savedAt: AT, maps: { ...maps, orgs, members } as unknown as StoredSnapshot['maps'] };
 }
 

@@ -140,6 +140,9 @@ Every money rule runs on both stores (memory and `test:db`).
 | `src/hosted/components/__tests__/ProfileEditForm.firm.test.tsx`, `FirmOnBanner.test.tsx` | portal | offer → Requested with Idempotency-Key, error, visibility, Arabic; banner shown/hidden, dismissal persists, blocked storage, Arabic |
 | `scripts/__tests__/firm-copy-guard.test.ts` | unit | banned compliance phrases in every `hosted.firm.*` / `hosted.profiles.firm.*` string, ar and en |
 | `qa/specs/portal/profiles.spec.ts` `@portal.profiles.firm-request`, `shell.spec.ts` `@portal.shell.firm-enabled-banner` | release-QA | the two user flows, RTL |
+| `src/hosted/local/__tests__/migrations.test.ts`, `format-fingerprint.test.ts` (orgs, members) | unit | local snapshot 1 → 2: firm off, nothing requested, OWNER; the input snapshot untouched; restores into a store |
+| `server/src/records-file/__tests__/export.test.ts` | unit | the export writes firm off and the exporter as OWNER, even as a firm's BOOKKEEPER |
+| `src/hosted/session/__tests__/local-mode.test.tsx` | portal | signed out on this device, an owned Business profile's pane has no firm request |
 
 ## Signed-in records export (MUT-325, added 2026-10-20)
 

@@ -47,9 +47,14 @@
 - **D4:** firm features are on **in place** on an owned Business profile; brief §3.1/§3.3/§11/§12.1/§16 and ADR-099 decision 1 amended, and the ADR-037 MUT-182 override withdrawn. Sharing an owned profile is a v3 decision.
 - **D5:** the portal's read-only reason `'FIRM'` is now `'OPERATOR'` (`hosted.profiles.readOnly.operator`, same text); the 403 message and API docs no longer call a non-owned profile "a firm".
 - A new membership in an organization with firm features on is BOOKKEEPER (D3).
+- **Merged with main's local mode (MUT-286/287) and records export (MUT-325), 2026-10-20:**
+  - The local snapshot format is now **2** (`CURRENT_STORE_SNAPSHOT_VERSION`). The 1 → 2 migration (`src/hosted/local/migrations/index.ts`) gives every profile on a device the firm switch off with nothing requested, and every membership OWNER. The fingerprint test watches the new fields.
+  - The signed-in records export writes the firm switch off and the exporter's membership as OWNER: a device has no operator, and its one person owns every profile (ADR-097 §2.2).
+  - Signed out on this device, the edit pane never offers firm features: no operator would see a request saved there.
+  - A portal still on format 1 that downloads a format-2 export reads "Mutaba3a has been updated. Reload the page…" (the existing too-new path). The portal and the API ship together, so this only lasts until a reload.
 
 ### Technical
-- Files: `server/prisma/{schema.prisma,migrations/20261020150000_mut300_firm_flag}`, `server/src/{firm.ts,repositories/{ports,memory,prisma}.ts,auth/store-guard.ts,routes/{profiles,admin,sessions}.ts,serializers.ts,schemas.ts,app.ts,scripts/users.ts}`, `server/openapi/openapi.yaml`, `src/hosted/{api/client.ts,api/schema.d.ts,components/{FirmRequestSection,FirmOnBanner,ProfileEditForm,ProfilesManageDrawer}.tsx,data/{firmBanner,profileQueries,profileRules}.ts,pages/views/OverviewPage.tsx,i18n/*.json,hosted.css}`, `qa/{features,specs,support}/portal/*`.
+- Files: `server/prisma/{schema.prisma,migrations/20261020150000_mut300_firm_flag}`, `server/src/{firm.ts,repositories/{ports,memory,prisma}.ts,auth/store-guard.ts,routes/{profiles,admin,me}.ts,serializers.ts,schemas.ts,app.ts,scripts/users.ts,records-file/export.ts}`, `src/hosted/local/migrations/index.ts`, `server/openapi/openapi.yaml`, `src/hosted/{api/client.ts,api/schema.d.ts,components/{FirmRequestSection,FirmOnBanner,ProfileEditForm,ProfilesManageDrawer}.tsx,data/{firmBanner,profileQueries,profileRules}.ts,pages/views/OverviewPage.tsx,i18n/*.json,hosted.css}`, `qa/{features,specs,support}/portal/*`.
 - Ratchets updated on purpose: the store guard's operator list, the session-route surface (`route-security.test.ts`), the membership shape (`routes-users.test.ts`) and the API version pins.
 
 ---
