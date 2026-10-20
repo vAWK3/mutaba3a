@@ -168,7 +168,7 @@ Nothing on the server imports a records file into a hosted profile. Until MUT-29
 
 1. **⚠ Basel decides:**
    - either prioritise MUT-290 before the first free-app user moves in;
-   - or soften the promise to "we'll move them with you", dropping "nothing to type again" (TD-189).
+   - or soften the promise to "we'll move them with you", dropping "nothing to type again" (TD-191).
 2. Meanwhile, the honest procedure:
    1. The person keeps their free-app data where it is. Nothing is lost by waiting.
    2. They make a copy for safety:
@@ -197,7 +197,7 @@ What you have:
 
 - 14 daily automated backups, taken at 03:00 UTC.
 - 7 days of point-in-time recovery (PITR), down to the second.
-- The attachments bucket isn't versioned (TD-188), so the backups don't cover receipt files.
+- The attachments bucket isn't versioned (TD-190), so the backups don't cover receipt files.
 
 **Find the moment.** The profile's audit trail shows when the mistake happened:
 
@@ -339,7 +339,7 @@ gcloud sql backups restore <backup id> --restore-instance=mutaba3a-pg --backup-i
 
 ### 4.4 Receipt files
 
-Deleting a receipt deletes its object, and the bucket keeps no versions (TD-188). A restored receipt
+Deleting a receipt deletes its object, and the bucket keeps no versions (TD-190). A restored receipt
 row can therefore point at a missing file.
 
 Google Cloud Storage keeps deleted objects for its soft-delete window. That's 7 days by default; the
@@ -567,7 +567,7 @@ scripts/restore-drill.sh --project $GCP_PROJECT_ID --receipt-id <a receipt you k
 4. **If it fails or you stop it,** the exit trap deletes what it made. Check with
    `scripts/restore-drill.sh teardown --project $GCP_PROJECT_ID`, which lists every leftover
    `mutaba3a-pg-drill-*` instance and asks before deleting each.
-5. **If the receipt check fails** with "object missing", you've found TD-188's case. Note it, and
+5. **If the receipt check fails** with "object missing", you've found TD-190's case. Note it, and
    look at the bucket's soft-delete window that the drill printed.
 
 Run the drill again after any change to backups or the database tier, and before the pilot opens

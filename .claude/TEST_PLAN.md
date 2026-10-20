@@ -3261,3 +3261,12 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `tests/database_pool.tftest.hcl` (3) | Unchanged, still green after the monitoring section moved out of `main.tf` |
 | Not automatable here | The real plan against production (expected: 9 to add, the `/health` check moved) and the drill (fire, then close) are Basel's steps in `server/DEPLOYMENT.md` §6b |
 
+## MUT-327 — Restore drill and pilot operator runbook (2026-10-20, ADR-157)
+
+| Test | Covers |
+|---|---|
+| `server/src/scripts/__tests__/restore-drill.test.ts` (8, no database, fake `gcloud`/`cloud-sql-proxy`/`psql` that fail if called) | Usage without `--project`; the dry run prints backup list, create, backup restore, PITR clone, receipt checks and teardown, and calls nothing; every create/clone/patch/restore/set-password/delete targets only a `mutaba3a-pg-drill-<stamp>-b\|p` name; `--only pitr`; teardown refuses `mutaba3a-pg` and non-drill names; a drill name as the source is refused; `--pitr-minutes` outside 1 to 7 days is refused |
+| `server/src/scripts/__tests__/profile-rows.test.ts` (7, `MUTABA3A_TEST_DATABASE_URL` + `psql`, two databases built from the migrations) | export: one CSV per table, no `api_keys`/`idempotency_keys`, other profiles excluded, receipt copy lines; restore refuses the same database and a schema mismatch; restore puts back a renamed customer, a deleted expense and receipt, removes a later customer, leaves another profile, memberships and later audit rows, adds `organization.restored`, and a dry run changes nothing; purge-user refuses a shared membership and a reference from someone else's profile, then deletes the user, owned profiles and their rows, terms rows and `user.terms_accepted` everywhere, and nothing else |
+| Shellcheck | Both scripts clean |
+| Local walk (runbook §9) | Every locally walkable step against the local API and copies of `mutaba3a_dev` |
+| Not automatable here | The drill against production backups (AC1), in-place restore, ingress close and reopen, bucket soft-delete restore: Basel's steps |

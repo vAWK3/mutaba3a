@@ -115,7 +115,7 @@ Every step has exact commands. Placeholders are marked **⚠ Basel decides**.
 
 - `server/DEPLOYMENT.md` §6 table: one row "Pilot operator runbook, restore drill".
   `.claude/INFRA.md` §2 "Code-defined": one bullet. Nothing else in those files (MUT-326 edits them).
-- ADR-156 (restore policy), TD-188 (receipts aren't in the database backups), TD-189 (manual moves
+- ADR-157 (restore policy), TD-190 (receipts aren't in the database backups), TD-191 (manual moves
   from the free app have no tool until MUT-290), CHANGELOG, COMPONENT_REGISTRY (two scripts),
   TEST_PLAN, SYSTEM_OVERVIEW (ops line).
 
@@ -150,7 +150,7 @@ Run: `npm --prefix server test -- restore-drill profile-rows` (with the test DB 
 - **R3 Receipts aren't backed up.** Deleting a receipt deletes its object (`expenses.ts:330`) and the
   bucket has no versioning, so a restored row can point at a missing object. GCS soft delete (7 days
   by default on new buckets) may still hold it; the drill prints the bucket's soft-delete window and
-  the runbook gives `gcloud storage restore`. → TD-188, and a follow-up card for bucket versioning or
+  the runbook gives `gcloud storage restore`. → TD-190, and a follow-up card for bucket versioning or
   a set soft-delete window (an infra change that Basel applies).
 - **R4 Cost.** Two `db-g1-small` instances for about an hour: the clone inherits REGIONAL. That's well
   under $1. Prompts state it; teardown on every exit path (`trap`), plus the `teardown` subcommand.
