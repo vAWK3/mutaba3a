@@ -3176,6 +3176,22 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Release-QA `@portal.income.matter-fills-client` | client chips; picking Client 2's Retainer fills Client 2; switching to Client 1 empties Matter |
 | Reconcile additions (2026-10-19) | `EntityTypeahead.test.tsx`: no second pick while one saves (list shut on ArrowDown/refocus); cascade flash comes off after its span and replays. `useClientProjectCascade.test.tsx`: `onAutoFill` with the default owner, not when the client already owns it. `IncomeCaptureDrawer.test.tsx`: Save held while a matter is added; Enter held still saves once it lands; CURRENCY_MISMATCH under Matter; Malafat no-Add check now waits for the open list (was vacuous). `ExpenseDrawer.test.tsx`: Save held while a matter is added; picking a matter fills the client, changing the client empties it. `incomeApiErrors.test.ts`: CURRENCY_MISMATCH → `matterCurrency` with the matter's currency. Release-QA `@portal.income.add-matter`: the Malafat step waits for the open list before asserting no Add row |
 
+## MUT-354 — The client release on each terms acceptance (2026-10-20)
+
+- **Server:**
+  - `server/src/__tests__/terms.test.ts` "the client release on each acceptance":
+    - the redeem and the accept route record it; the audit and the admin report show it, with the release of the latest version;
+    - an old client that sends none succeeds and records null;
+    - a repeat keeps the first release;
+    - an empty, 65-character, spaced, control-character or non-ASCII value gets 422 on both routes, with nothing written;
+    - a 64-character value and a phone-style `phone-1.4.0+52` are accepted;
+    - the OpenAPI document states the optional field with its limits.
+  - `store-contract-account-setup.ts` (memory + Postgres): the release is kept on a repeat; `listLatestTermsVersions` returns `latestClientRelease`; a redeem records it, or null.
+  - `users-cli.test.ts`: `terms` prints the release, or `-`.
+  - The migration has no drift against `schema.prisma` (`prisma migrate diff --exit-code` on a fresh database).
+- **Portal:** `src/hosted/__tests__/terms.test.ts` (`TERMS_CLIENT_RELEASE` = `web-v0.0.0` under tests); the `SetupPage.test.tsx` and `TermsUpdatePage.test.tsx` request bodies carry it.
+- **Release-QA:** the bodies in `@portal.terms.setup-requires-accept`, `.language-switch-clears-tick`, `.updated-terms-step`, `.changed-mid-step` and `@portal.setup.set-password` carry `clientRelease` matching `web-v<x.y.z>` (`QA_CLIENT_RELEASE`). 11/11 `@portal.terms.*` + `@portal.setup.*` pass on a hosted preview build (Node 22, 2026-10-20).
+
 ## MUT-324 — Terms of service, accepted at setup (2026-10-19, ADR-102)
 
 - **Server:**
@@ -3236,6 +3252,14 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 |---|---|
 | `src/lib/motion/__tests__/iconMotion.test.ts` (7) | `ICON_OVERSHOOT_EASE`/`ICON_RESTRAINED_EASE` match `MMotion.overshoot`/`.spring` exactly; playful and restrained both settle at scale(1); the playful preset's live value exceeds 1 mid-flight (the actual "bounce," not just which constant was selected); reduced motion jumps straight to scale(1) on either preset; every target in a list animates; re-triggering mid-flight doesn't throw and still settles cleanly |
 | Manual | No dev-server CSP check performed — the mechanism writes `element.style.transform` directly via JS, the same pattern `playRowEnter`/`playRowExit` already use under the portal's CSP (ADR-044), so it's CSP-safe by construction, not by inspection |
+
+## MUT-328 — Uptime checks and alerts (2026-10-20, ADR-154)
+
+| Test | Covers |
+|---|---|
+| `server/infrastructure/terraform/tests/monitoring.tftest.hcl` (14 runs, mocked Google + random, server-ci `terraform test`) | Defaults: `health`/`ready`/`portal` on the Cloud Run host, every 300 s over validated HTTPS, all regions, no channel or policy, `/health` keeps its display name; the portal matcher `id="root"`; `uptime_host` moves every check; a host with a scheme, path or port is refused; email + SMS create 2 channels and 5 policies, each notifying both plus existing ids; uptime policy > 1 region for 360 s at 300 s `ALIGN_NEXT_OLDER` + `REDUCE_COUNT_FALSE`, its own check id, CRITICAL; Cloud SQL disk > 0.8 / CPU > 0.9 for 900 s on `<project>:mutaba3a-pg`, WARNING; non-E.164 SMS refused; existing channel ids alone still alert; the drill adds a check + policy, and a path without `/` is refused; `enable_uptime_check = false` keeps the SQL alerts |
+| `tests/database_pool.tftest.hcl` (3) | Unchanged, still green after the monitoring section moved out of `main.tf` |
+| Not automatable here | The real plan against production (expected: 9 to add, the `/health` check moved) and the drill (fire, then close) are Basel's steps in `server/DEPLOYMENT.md` §6b |
 
 ## MUT-326 — The custom domain is one input (2026-10-20, ADR-155)
 

@@ -24,6 +24,8 @@ creation is 10–15 minutes of waiting.
   - [4d. App association files](#4d-app-association-files-mut-111--what-is-set-and-why)
 - [5. Wire Malafat to it](#5-wire-malafat-to-it)
 - [6. Day-2 operations](#6-day-2-operations)
+  - [6a. Pilot: entries per profile and per user](#6a-pilot-entries-per-profile-and-per-user-mut-330)
+  - [6b. Uptime checks and alerts](#6b-uptime-checks-and-alerts-mut-328)
 - [7. Production record](#7-production-record)
 - [8. Where to go from here](#8-where-to-go-from-here)
 
@@ -39,7 +41,7 @@ creation is 10–15 minutes of waiting.
 | Attachments bucket | `<project>-mutaba3a-attachments`, private; M6 attachments and MUT-42 expense receipts (`org/{id}/expense-receipts/…`) | same |
 | Service account | `mutaba3a-api@<project>.iam` — `cloudsql.client`, accessor on its three secrets, object access on the bucket | same |
 | Artifact Registry | `me-west1-docker.pkg.dev/<project>/mutaba3a/mutaba3a-api:<sha>` | same; image built by `scripts/deploy.sh` on your machine |
-| Uptime check | `GET /health` every 5 min; alert only if you pass notification channels | same |
+| Uptime checks + alerts | `GET /health`, `/ready` and the portal `/` every 5 min from six regions; email + SMS after 2 failed rounds, Cloud SQL disk/CPU alerts (MUT-328, §6b). Alerts only once `alert_email` / `alert_sms_number` are set | `infrastructure/terraform/monitoring.tf` |
 | Hosted portal | `dist-hosted/` (MUT-45), baked into the same image at `/app/portal`, served by the same Cloud Run service — no separate domain, load balancer or Terraform resource | `Dockerfile`, `src/app.ts` |
 
 The service issues and accepts **`live`** API keys (`config.API_KEY_ENVIRONMENT`).
@@ -228,7 +230,7 @@ What you will see, and what to answer:
    from `server/` against production, output ends with
    `All migrations have been successfully applied`, the proxy stops.
 5. The full plan: service account + IAM, admin-token secret, Cloud Run
-   service, public invoker, uptime check → **yes**.
+   service, public invoker, uptime checks (alerts once §6b is set) → **yes**.
 6. `smoke.ts` runs the unauthenticated checks and prints `smoke: all checks passed`.
 7. The proxy starts again and `npm run post-roll` repairs rows the old revision
    wrote after the migration (MUT-61: a person's payment must be `origin
@@ -730,6 +732,7 @@ stack. Cloud Run reads the token secret by name, so deleting it first breaks the
 | Roll back past MUT-235 | Harmless while `SELECT count(*) FROM users WHERE "passwordHash" IS NULL` is 0 (the new table stays unused). **Once any exists, roll forward only:** every account created since, and every `--lock`, has a NULL password, which an older revision's Prisma client cannot read (P2032), so sign-in and every lookup of those people fail with a 500 and the old admin reset cannot fix them. If a rollback is unavoidable, first set those rows to the argon2id hash of a random throwaway password (still unusable), then reissue links after rolling forward |
 | Roll back past MUT-182 | Safe for the schema: the old revision writes personal profiles without `ownerUserId`/`profileType`, the CHECKs allow that, and the next deploy's post-roll `repairPersonalOwnership` stamps them. But once any user has created a profile (`SELECT count(*) FROM organizations WHERE "ownerUserId" IS NOT NULL AND "personalOwnerUserId" IS NULL` > 0), an older revision treats those as operator firms: it would issue them API keys, bind them to Malafat or share them on request. **Roll forward only** once that count is above 0, or refuse every such operator request while the old revision serves |
 | Delete a user who owns profiles (a privacy request) | Users are normally disabled, never deleted. If one must go, first remove (or hand to an operator) every organization with `"ownerUserId" = '<user id>'` and its rows: `organizations.ownerUserId` is `ON DELETE RESTRICT` (MUT-182), exactly as `personalOwnerUserId` is (MUT-120), so the user delete is refused while any remain |
+| Uptime alerts: apply, verify SMS, drill (MUT-328) | §6b |
 | Pilot counts (MUT-330) | Entries per profile and per pilot user, read-only, never sent anywhere: §6a |
 | Backups | Cloud SQL automated daily at 03:00 + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg` |
 | Scale beyond one instance | blocked by Terraform validation until TD-017; do not raise `max_instances` by hand |
@@ -863,6 +866,70 @@ Reading it:
   logged. `activated` is the activation bar. `weeks_with_entries_of_last_4`
   of 3 or 4 meets the weekly-use bar. The weeks are the four 7-day windows
   ending at `as_of`.
+
+### 6b. Uptime checks and alerts (MUT-328)
+
+**What it watches** (`infrastructure/terraform/monitoring.tf`, brief `.claude/designs/mut-328-uptime-alerts.md`):
+
+| Watch | Rule | Severity |
+|---|---|---|
+| `GET /health`, `GET /ready`, portal `GET /` (must contain `id="root"`) | Each runs from all six Cloud Monitoring regions every 5 min. An alert fires when **2 or more regions fail on 2 rounds in a row** (about 6 min after the second failed round). It closes when the check passes again. One failed round, or one region failing, never alerts. | CRITICAL |
+| Cloud SQL `mutaba3a-pg` disk | Above 80% for 15 min | WARNING |
+| Cloud SQL `mutaba3a-pg` CPU | Above 90% for 15 min | WARNING |
+
+Alerts go to email and SMS (Basel's call, 2026-10-19), plus any ids in `alert_notification_channels`. With no channel set, Terraform keeps only the checks and creates no alerts. Production ran that way until this section was applied.
+
+**Cost:** the checks make about 160k runs a month, inside the 1M free per project. Channels are free. The 5 alert conditions cost about $0.50/month at most, if Google's per-condition alerting charge applies.
+
+#### Apply (Basel, once)
+
+1. Add two lines to the git-ignored `infrastructure/terraform/production.tfvars`. The phone number never goes in the repo:
+   ```hcl
+   alert_email      = "you@example.com"
+   alert_sms_number = "+9725XXXXXXXX"   # E.164
+   ```
+   Leave `uptime_host` unset until the custom domain is live (MUT-112). Unset means the Cloud Run host.
+2. Plan only the monitoring resources, so this is reviewed on its own and not inside a release:
+   ```bash
+   cd infrastructure/terraform
+   terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-api/production"
+   URL=$(terraform output -raw service_url)
+   TAG=$(curl -fsS "$URL/health" | jq -r .version)   # the running image tag, so Cloud Run plans no change
+   MON=(-target=google_monitoring_uptime_check_config.endpoint -target=google_monitoring_notification_channel.email
+        -target=google_monitoring_notification_channel.sms -target=google_monitoring_alert_policy.endpoint_down
+        -target=google_monitoring_alert_policy.cloud_sql)
+   terraform plan -var-file=production.tfvars -var image_tag="$TAG" "${MON[@]}"
+   ```
+   Expect `google_monitoring_uptime_check_config.health[0] has moved to …endpoint["health"]` with no change to it, then **`Plan: 9 to add, 0 to change, 0 to destroy`**: the `ready` and `portal` checks, 2 channels, 3 uptime policies and 2 Cloud SQL policies. Anything marked change or destroy means stop and ask. In particular, a change to `google_cloud_run_v2_service.api` (the checks read its host, so `-target` plans it too) means main carries Terraform that isn't released yet: apply this with the next `make release server` instead. (If `alert_notification_channels` was already set, the old `/health` policy moves and shows one in-place change to its condition. That's expected.)
+3. Apply the same command, with `apply` in place of `plan`. Any later `./scripts/deploy.sh` keeps these resources, because its full apply reads the same tfvars.
+4. **Verify the SMS channel.** Cloud Monitoring sends nothing to an SMS channel until the code it texts is confirmed. Email needs no verification.
+   ```bash
+   CH=$(terraform output -raw alert_sms_channel)
+   AUTH="Authorization: Bearer $(gcloud auth print-access-token)"
+   curl -fsS -X POST -H "$AUTH" "https://monitoring.googleapis.com/v3/$CH:sendVerificationCode"
+   curl -fsS -X POST -H "$AUTH" -H 'content-type: application/json' "https://monitoring.googleapis.com/v3/$CH:verify" -d '{"code":"G-123456"}'   # the code from the text
+   ```
+   Or use the console: Monitoring → Alerting → Edit notification channels → SMS → Verify. If your number's country isn't offered for SMS, the channel stays unverified and email still works.
+5. **Check it's green.** After about 10 minutes, Monitoring → Uptime checks shows `mutaba3a-api /health`, `/ready` and `portal /` passing in every region. Monitoring → Alerting lists 5 policies, all with no open incidents.
+
+#### Fire a test alert, then let it close (the drill)
+
+There is no staging to scale to zero, so the drill adds a fourth check against a path that always fails. It goes through the same rule and the same channels, and production behaviour doesn't change. Pass it with `-var` only, never in tfvars, so the next `deploy.sh` removes it if you forget step 3.
+
+1. **Fire.** `terraform apply -var-file=production.tfvars -var image_tag="$TAG" -var uptime_drill_path=/v1/uptime-drill "${MON[@]}"` adds 2 resources (the drill check and its policy). `/v1/uptime-drill` is a JSON 404. About 10 to 15 minutes later, an email and a text arrive: **"mutaba3a-api drill /v1/uptime-drill is down"**.
+2. **Recover.** Run the same command with `-var uptime_drill_path=/health`. The check's path changes in place. Within about 10 minutes the incident closes and a closing notice arrives. *No closing notice?* The Google provider here (5.x) cannot set the policy's notification prompts, so the close notice depends on Cloud Monitoring's default (TD-185). Open each uptime policy in the console, turn on **Notify on incident closure**, and record that here. Terraform's updates leave that setting alone.
+3. **Remove.** Run the same command without `uptime_drill_path`. It destroys the 2 drill resources. Write the date and how long each notice took into §7.
+
+#### When an alert fires
+
+- **`/health` down:** the service is down or unreachable. Check `gcloud run services describe mutaba3a-api --region=me-west1` (latest revision ready?) and the logs (§6). Roll back with `IMAGE_TAG=<old sha> ./scripts/deploy.sh` if a release caused it.
+- **`/ready` down while `/health` is up:** the database. Check the `mutaba3a-pg` status in Cloud SQL (maintenance window: Sunday 03:00), and run `npm run db:psql`.
+- **Portal down while `/health` is up:** the image shipped without `dist-hosted/`, or the domain (after MUT-112) points somewhere else. `curl -s "$URL/" | head` shows what is being served.
+- **Cloud SQL disk or CPU:** not urgent. Query Insights in the console shows the heavy query. Disk grows by itself (`disk_autoresize`), and so does the bill.
+
+#### When the domain moves (MUT-112)
+
+Set `uptime_host` to the portal's bare hostname, or let MUT-326's domain input feed it (see `local.uptime_host` in `monitoring.tf`). Plan with the targets above. The checks may be replaced (new check ids) and the policies change to follow them. That's expected. Watch step 5 above again afterwards.
 
 ## 7. Production record
 

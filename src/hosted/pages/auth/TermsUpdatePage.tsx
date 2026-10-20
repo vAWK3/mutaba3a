@@ -6,7 +6,7 @@ import { LanguageSwitch, Wordmark } from '../../components/Brand';
 import { AlertIcon } from '../../components/Icons';
 import { ME_KEY } from '../../session/me';
 import { useSignOut } from '../../session/useSignOut';
-import { SUPPORT_EMAIL, termsHref } from '../../terms';
+import { SUPPORT_EMAIL, TERMS_CLIENT_RELEASE, termsHref } from '../../terms';
 
 /**
  * MUT-324 (ADR-102, D1, D6): stands in front of the portal when the person's
@@ -45,7 +45,7 @@ export function TermsUpdatePage({ version: current }: { version: string }) {
     setSaving(true);
     setProblem(null);
     try {
-      const terms = await api.acceptTerms({ version, locale: language });
+      const terms = await api.acceptTerms({ version, locale: language, clientRelease: TERMS_CLIENT_RELEASE });
       // A /v1/me already in flight was asked before this acceptance; it must not undo it
       await queryClient.cancelQueries({ queryKey: ME_KEY });
       queryClient.setQueryData<Me>(ME_KEY, (current) => current && { ...current, terms });

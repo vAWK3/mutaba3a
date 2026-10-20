@@ -50,7 +50,7 @@ describe('the Updated terms step (MUT-324)', () => {
     const { user, router } = renderPortal('/');
     await user.click(await screen.findByRole('button', { name: 'I agree' }));
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
-    expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === ACCEPT)?.body).toEqual({ version: CURRENT, locale: 'en' });
+    expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === ACCEPT)?.body).toEqual({ version: CURRENT, locale: 'en', clientRelease: 'web-v0.0.0' });
     expect(screen.queryByRole('heading', { level: 1, name: "We've updated our terms" })).not.toBeInTheDocument();
   });
 
@@ -61,7 +61,7 @@ describe('the Updated terms step (MUT-324)', () => {
     const { user } = renderPortal('/');
     expect(await screen.findByRole('link', { name: 'اقرأ الشروط' })).toHaveAttribute('href', `${TERMS_URL}/${CURRENT}?lang=ar`);
     await user.click(await screen.findByRole('button', { name: 'أوافق' }));
-    await waitFor(() => expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === ACCEPT)?.body).toEqual({ version: CURRENT, locale: 'ar' }));
+    await waitFor(() => expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === ACCEPT)?.body).toEqual({ version: CURRENT, locale: 'ar', clientRelease: 'web-v0.0.0' }));
   });
 
   it('says so when saving fails, and stays on the step', async () => {
@@ -96,8 +96,8 @@ describe('the Updated terms step (MUT-324)', () => {
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
     const accepts = api.calls.filter((c) => `${c.method} ${c.url.pathname}` === ACCEPT).map((c) => c.body);
     expect(accepts).toEqual([
-      { version: CURRENT, locale: 'en' },
-      { version: NEWER, locale: 'en' },
+      { version: CURRENT, locale: 'en', clientRelease: 'web-v0.0.0' },
+      { version: NEWER, locale: 'en', clientRelease: 'web-v0.0.0' },
     ]);
   });
 
@@ -114,7 +114,7 @@ describe('the Updated terms step (MUT-324)', () => {
     await waitFor(() => expect(screen.getByRole('link', { name: 'Read the terms' })).toHaveAttribute('href', `${TERMS_URL}/${NEWER}?lang=en`));
     expect(screen.getByRole('alert')).toHaveTextContent('The terms changed while this page was open');
     await user.click(screen.getByRole('button', { name: 'I agree' }));
-    await waitFor(() => expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === ACCEPT)?.body).toEqual({ version: NEWER, locale: 'en' }));
+    await waitFor(() => expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === ACCEPT)?.body).toEqual({ version: NEWER, locale: 'en', clientRelease: 'web-v0.0.0' }));
   });
 
   it('a /v1/me asked before I agree cannot bring the step back once the answer arrives (review pass 2)', async () => {

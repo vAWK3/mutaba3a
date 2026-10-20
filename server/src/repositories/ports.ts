@@ -1231,8 +1231,11 @@ export interface UserRepository {
    * ForeignKeyViolation on an unknown user.
    */
   acceptTerms(input: AcceptTermsInput): Promise<{ created: boolean }>;
-  /** MUT-324 T1 (operator only): every user, ordered by email, with the highest terms version they accepted (null if none). */
-  listLatestTermsVersions(): Promise<Array<{ userId: string; email: string; status: UserStatus; latestVersion: string | null }>>;
+  /**
+   * MUT-324 T1 (operator only): every user, ordered by email, with the highest terms version they accepted (null if
+   * none) and, MUT-354, the client release recorded with that acceptance (null if none).
+   */
+  listLatestTermsVersions(): Promise<Array<{ userId: string; email: string; status: UserStatus; latestVersion: string | null; latestClientRelease: string | null }>>;
 }
 
 /** MUT-324 (ADR-102): one person's acceptance of one terms version, tied to the exact text by its sha256. */
@@ -1245,6 +1248,8 @@ export interface TermsAcceptanceRecord {
   /** sha256 of that language's frozen content file (server/src/legal.ts). */
   textSha256: string;
   surface: TermsSurface;
+  /** MUT-354: the client release that showed the terms, as the client sent it; null from a client that sent none. */
+  clientRelease: string | null;
   acceptedAt: Date;
 }
 
@@ -1253,6 +1258,7 @@ export interface TermsAcceptanceInput {
   locale: TermsLocale;
   textSha256: string;
   surface: TermsSurface;
+  clientRelease: string | null;
 }
 
 export interface AcceptTermsInput extends TermsAcceptanceInput {

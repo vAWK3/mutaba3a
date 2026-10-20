@@ -59,3 +59,18 @@ output "public_portal_origin" {
   description = "MUT-326: where users reach the portal: the custom domain's portal host from stage live on, else the legacy one (config/hosts.json). deploy.sh smoke-tests it too when it differs from service_url."
   value       = local.public_portal_origin
 }
+
+output "uptime_host" {
+  description = "Host the uptime checks probe (MUT-328): uptime_host, else the Cloud Run host."
+  value       = local.uptime_host
+}
+
+output "uptime_check_ids" {
+  description = "Uptime check ids by target (health, ready, portal, and drill while uptime_drill_path is set)."
+  value       = { for key, check in google_monitoring_uptime_check_config.endpoint : key => check.uptime_check_id }
+}
+
+output "alert_sms_channel" {
+  description = "Resource name of the SMS notification channel, for the one-time verification in DEPLOYMENT.md §6b. null without alert_sms_number."
+  value       = one(google_monitoring_notification_channel.sms[*].name)
+}

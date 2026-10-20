@@ -144,6 +144,8 @@ describe('saving', () => {
       password: PASSWORD,
       acceptedTermsVersion: TERMS_VERSION,
       termsLocale: 'en',
+      // MUT-354: the release that showed the page; tests define no __APP_VERSION__
+      clientRelease: 'web-v0.0.0',
     });
     expect(api.calls.find((c) => `${c.method} ${c.url.pathname}` === SIGN_IN)?.body).toEqual({ email: EMAIL, password: PASSWORD });
   });
@@ -233,7 +235,7 @@ describe('the terms (MUT-324)', () => {
     await user.click(screen.getByRole('checkbox', { name: /شروط الخدمة/ }));
     await user.click(screen.getByRole('button', { name: 'احفظ وسجّل الدخول' }));
     await waitFor(() => expect(redeems(api)).toHaveLength(1));
-    expect(redeems(api)[0]?.body).toEqual({ token: TOKEN, password: PASSWORD, acceptedTermsVersion: TERMS_VERSION, termsLocale: 'ar' });
+    expect(redeems(api)[0]?.body).toEqual({ token: TOKEN, password: PASSWORD, acceptedTermsVersion: TERMS_VERSION, termsLocale: 'ar', clientRelease: 'web-v0.0.0' });
   });
 
   it('links the exact version being accepted, in the language recorded, in a new tab', async () => {
