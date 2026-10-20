@@ -244,7 +244,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       method: 'get',
       path: '/admin/v1/terms-acceptance',
       tags: ['Admin'],
-      summary: 'Every user and the terms version they last accepted (MUT-324)',
+      summary: 'Every user, the terms version they last accepted and the client release that showed it (MUT-324, MUT-354)',
       description: 'For the operator to see who has not yet accepted the current terms, for example someone who only uses the phone app.',
       security: [{ adminToken: [] }],
       responses: {
@@ -254,7 +254,14 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     }),
     async (c) => {
       const rows = await store.users.listLatestTermsVersions();
-      const users = rows.map((r) => ({ id: r.userId, email: r.email, status: r.status, latestVersion: r.latestVersion, accepted: termsAccepted(r.latestVersion, terms.version) }));
+      const users = rows.map((r) => ({
+        id: r.userId,
+        email: r.email,
+        status: r.status,
+        latestVersion: r.latestVersion,
+        clientRelease: r.latestClientRelease,
+        accepted: termsAccepted(r.latestVersion, terms.version),
+      }));
       return c.json({ current: terms.version, users }, 200);
     },
   );
