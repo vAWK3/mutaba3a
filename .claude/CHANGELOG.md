@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — Drawers fit a phone, in Arabic and English (MUT-357, TD-070)
+
+**Why:** The portal opens in Arabic (ADR-077), and pilot users (MUT-322) will see it on phones. At 375px every drawer was 480px wide: in Arabic it ran 105px off the right edge, cutting off the title and Save; in English it ran off the left edge. Found with MUT-325's Your data drawer; the shared drawer was the cause, so every drawer had it.
+
+### Fixed
+- **`.drawer` is never wider than the viewport** (`max-width: 100%` in `src/index.css`). At or below 480px it fills the screen edge to edge in both directions; wider screens are unchanged. The local web app's drawers fit too. Drag, release and exit already use the rendered width (`useDrawerMotion` reads `offsetWidth`).
+
+### Technical
+- `src/styles/__tests__/drawerFit.test.ts`: `.drawer` keeps `max-width: 100%` and one `width`, with no direction or theme rule overriding them.
+- `qa/specs/portal/direction.spec.ts` + `qa/features/portal/direction.yaml`: `@portal.direction.drawer-phone-ar` / `-en` open Change password at 375×812 and assert the dialog's box is inside the viewport with no sideways scroll. Red on main, green on the branch (preview build).
+- `qa/specs/web/brand.spec.ts`: `Payment drawer@375` removed from `KNOWN_OVERFLOW`; `Income drawer@375` stays for Income behind it (TD-083).
+- TD-070 resolved; TD-083 updated.
+
+---
+
 ## [Unreleased] - 2026-10-20 — Signed in, download all my records (MUT-325, ADR-156)
 
 **Why:** The pilot gate (MUT-322): a paying user must be able to leave with their records. Signed out, Your data already wrote a records file; signed in there was no export at all. The export is the same file local mode restores, so leaving never loses data.

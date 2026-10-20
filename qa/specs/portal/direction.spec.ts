@@ -92,3 +92,37 @@ test('Arabic: payment and invoice numbers read left to right, and amounts keep t
     await attachScreenshot(page, 'ar-portal-documents');
   });
 });
+
+/** A phone, narrower than the drawer's 480px (--drawer-width in src/styles/theme.css). */
+const PHONE = { width: 375, height: 812 };
+
+/** Where the open drawer sits once its spring has settled, and whether the page scrolls sideways. */
+async function readDrawerFit(page: Page) {
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect.poll(() => dialog.evaluate((el) => getComputedStyle(el).transform)).toBe('none');
+  const box = await dialog.boundingBox();
+  const sideScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  return { box, sideScroll };
+}
+
+for (const language of ['ar', 'en'] as const) {
+  test(`${language === 'ar' ? 'Arabic' : 'English'} on a phone: a drawer sits wholly on screen, with no sideways scroll`, { tag: `@portal.direction.drawer-phone-${language}` }, async ({ page, step }) => {
+    const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });
+
+    await step(`Open Change password in ${language === 'ar' ? 'Arabic' : 'English'} on a 375px phone`, async () => {
+      await page.setViewportSize(PHONE);
+      await api.open(page, `/p/${OFFICE_A}/expenses?changePassword=true`, language);
+    });
+
+    await step('The drawer fills the screen edge to edge, and nothing scrolls sideways', async () => {
+      const { box, sideScroll } = await readDrawerFit(page);
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(PHONE.width);
+      expect(box!.width).toBe(PHONE.width);
+      expect(sideScroll).toBe(false);
+      await attachScreenshot(page, `${language}-portal-drawer-phone`);
+    });
+  });
+}

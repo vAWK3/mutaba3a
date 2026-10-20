@@ -249,11 +249,9 @@ const KNOWN_OVERFLOW: Record<string, { note: string; maxContentWidth: number }> 
   // (718–736px across a year: Thmanyah's digits are proportional). MUT-250 sets compact dates in the figure face
   // (CompactDate: Plex Mono, tabular digits), so it is 735px on every date (Arabic, 9 dates, 2026-10-19). Fails if it grows.
   'Income@375': { note: 'TD-083: the Income top bar, status tabs and table are wider than a phone', maxContentWidth: 735 },
-  // --drawer-width is 480px: the drawer is 105px wider than the window, same on main
-  'Payment drawer@375': { note: 'TD-083: drawers are a fixed 480px (--drawer-width), wider than a phone', maxContentWidth: 480 },
   // MUT-103 baseline, measured on main a48f72d (2026-10-13) before the sweep: opened over Income, so Income's width shows through
-  // Re-measured with Income for MUT-250: 735px
-  'Income drawer@375': { note: 'TD-083: opens over Income, which is wider than a phone; drawers are a fixed 480px', maxContentWidth: 735 },
+  // Re-measured with Income for MUT-250: 735px. The drawer itself fits since MUT-357 (TD-070); Income behind it does not
+  'Income drawer@375': { note: 'TD-083: opens over Income, which is wider than a phone', maxContentWidth: 735 },
 };
 
 /** The widest thing sticking out: the page's content width, or a dialog's width. */
