@@ -23,7 +23,7 @@ const PURE = { lines: 100, statements: 100, functions: 100, branches: 100 };
 const RISK = { lines: 95, statements: 95, functions: 95, branches: 95 };
 
 const COVERAGE_THRESHOLDS = {
-  // 2026-10-20 run (server/** excluded): lines 92.11, statements 91.22, functions 88.20, branches 84.52.
+  // 2026-10-20 run (server/** excluded): lines 92.35, statements 91.50, functions 88.53, branches 84.73.
   lines: 91,
   statements: 91,
   functions: 88,
