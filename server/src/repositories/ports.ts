@@ -18,6 +18,9 @@ import type { PricingBasis, VatTreatment } from '../vat.js';
 /** MUT-182: an owned profile's kind. It only selects the expense-category preset; BUSINESS is not a firm or a Malafat tenant. */
 export type ProfileType = 'PERSONAL' | 'BUSINESS';
 
+/** MUT-300 (ADR-099): a member's role in a firm. Read only while the organization's firm features are on; inert elsewhere. */
+export type MembershipRole = 'OWNER' | 'BOOKKEEPER' | 'SUBMITTER';
+
 export interface Organization {
   id: string;
   name: string;
@@ -32,6 +35,12 @@ export interface Organization {
   profileType: ProfileType | null;
   /** MUT-182: If-Match for PATCH /v1/profiles/{id}. */
   version: number;
+  /** MUT-300: firm features are on from this instant; null = off. Never set on the built-in personal profile. */
+  firmEnabledAt: Date | null;
+  /** MUT-300: an owner's pending request for firm features; cleared when an operator enables or declines it. */
+  firmRequestedAt: Date | null;
+  /** MUT-300: set exactly when firmRequestedAt is. */
+  firmRequestedByUserId: string | null;
   createdAt: Date;
 }
 
@@ -197,6 +206,36 @@ export interface ProfileTypeChange {
   deletedCategories: number;
 }
 
+/** MUT-300: who a firm-switch write is attributed to. The owner's request is a USER row; an operator's change is ADMIN with no actor id. */
+export interface FirmAudit {
+  actorId: string | null;
+  requestId: string | null;
+}
+
+export type RequestFirmResult =
+  /** `created: false` when a request was already pending: it comes back unchanged, with no new audit row. */
+  | { kind: 'requested'; organization: Organization; created: boolean }
+  | { kind: 'already_firm' }
+  | { kind: 'not_found' };
+
+/** Enable names the owners of an operator firm; on an owned profile they're ignored and its owner is the OWNER (eng review D4). */
+export type SetFirmInput = { enabled: true; ownerUserIds: string[] } | { enabled: false };
+
+export type SetFirmResult =
+  /** `changed: false` when the organization was already in the asked state: nothing written, no audit row. */
+  | { kind: 'updated'; organization: Organization; changed: boolean }
+  | { kind: 'not_found' }
+  /** The built-in personal profile never gets firm features (CHECK organizations_firm_not_personal_check). */
+  | { kind: 'personal_profile' }
+  /** An owned profile typed PERSONAL: firm features are for Business profiles. */
+  | { kind: 'not_business' }
+  /** An operator firm with no owner named. */
+  | { kind: 'owners_required' }
+  /** Named owners who aren't members of the organization. */
+  | { kind: 'not_a_member'; userIds: string[] };
+
+export type DeclineFirmRequestResult = { kind: 'declined'; organization: Organization } | { kind: 'not_found' };
+
 export type UpdateOwnedOrganizationResult =
   | { kind: 'updated'; record: Organization; typeChange: ProfileTypeChange | null }
   | { kind: 'stale'; record: Organization }
@@ -243,6 +282,28 @@ export interface OrganizationRepository {
   ): Promise<UpdateOwnedOrganizationResult>;
   /** What a type change would do right now (the preview). */
   typeChangeImpact(id: string): Promise<ProfileTypeChange>;
+  /**
+   * MUT-300: records an owner's request for firm features, under the
+   * organization's row lock, audited `firm.requested` in the same
+   * transaction. Idempotent: a pending request comes back unchanged with no
+   * new audit row. Doesn't bump `version` (eng review O3): it isn't a field
+   * edit, so the owner's open edit form keeps its If-Match. Ownership and
+   * profile kind are the route's checks.
+   */
+  requestFirm(id: string, userId: string, at: Date, audit: FirmAudit): Promise<RequestFirmResult>;
+  /**
+   * MUT-300 (operator): turns firm features on in place or off, under the
+   * row lock, audited `firm.enabled` / `firm.disabled` in the same
+   * transaction. Enabling clears a pending request and rewrites every
+   * member's role: the owner of an owned profile, or the named owners of an
+   * operator firm, OWNER; everyone else BOOKKEEPER. Disabling leaves roles as
+   * they are (inert). One version bump per change.
+   */
+  setFirm(id: string, input: SetFirmInput, at: Date, audit: FirmAudit): Promise<SetFirmResult>;
+  /** MUT-300 (operator, eng review D6): clears a pending request, audited `firm.request_declined`; not_found when nothing is pending. */
+  declineFirmRequest(id: string, at: Date, audit: FirmAudit): Promise<DeclineFirmRequestResult>;
+  /** MUT-300 (operator): pending requests (firm features still off), oldest request first; the cursor's createdAt is `firmRequestedAt`. */
+  listFirmRequests(page: PageRequest): Promise<Page<Organization>>;
 }
 
 export interface ApiKeyRepository {
@@ -1189,6 +1250,8 @@ export interface CreateUserInput {
 export interface MembershipRecord {
   userId: string;
   organizationId: string;
+  /** MUT-300: OWNER by default, BOOKKEEPER for a new member of an organization whose firm features are on (eng review D3). */
+  role: MembershipRole;
   createdAt: Date;
 }
 
@@ -1236,7 +1299,10 @@ export interface ChangePasswordInput {
 }
 
 export interface MembershipRepository {
-  /** Idempotent: an existing membership is returned unchanged with `created: false`. ForeignKeyViolation on an unknown user or organization. */
+  /**
+   * Idempotent: an existing membership is returned unchanged with `created: false`. ForeignKeyViolation on an unknown user or organization.
+   * MUT-300: a new membership is BOOKKEEPER when the organization's firm features are on, OWNER otherwise (inert).
+   */
   grant(userId: string, organizationId: string, at: Date): Promise<{ membership: MembershipRecord; created: boolean }>;
   /** True when a membership was removed. */
   revoke(userId: string, organizationId: string): Promise<boolean>;

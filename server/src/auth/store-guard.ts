@@ -46,6 +46,11 @@ export const STORE_ACCESS: StoreAccess = {
     countOwnedBy: 'sessionOnly',
     updateOwned: 'sessionOnly',
     typeChangeImpact: 'sessionOnly',
+    // MUT-300: the owner's own request (ownership is the route's ownedBy check); enabling, declining and the listing are the operator's.
+    requestFirm: 'sessionOnly',
+    setFirm: 'operator',
+    declineFirmRequest: 'operator',
+    listFirmRequests: 'operator',
   },
   apiKeys: {
     create: 'operator',

@@ -7,6 +7,7 @@ import { resolveClaim } from './idempotency-claim.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
+import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
 import type {
   AccountSetupRepository,
   AccountSetupTokenRecord,
@@ -175,6 +176,71 @@ export class PrismaLedgerStore implements LedgerStore {
         }),
       ),
     typeChangeImpact: (id) => typeChangeImpactOf(this.prisma, id),
+    requestFirm: (id, userId, at, audit) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // MUT-300: the row lock queues two requests (and a request against an enable), so only one writes and audits.
+          await lockOrganization(tx, id);
+          const current = await tx.organization.findUnique({ where: { id } });
+          if (!current) return { kind: 'not_found' as const };
+          if (current.firmEnabledAt) return { kind: 'already_firm' as const };
+          if (current.firmRequestedAt) return { kind: 'requested' as const, organization: current, created: false };
+          // No version bump (eng review O3): the owner's open edit form keeps its If-Match.
+          const organization = await tx.organization.update({ where: { id }, data: { firmRequestedAt: at, firmRequestedByUserId: userId } });
+          await tx.auditEvent.createMany({ data: auditRows([firmAuditRow(id, 'firm.requested', audit)], at) });
+          return { kind: 'requested' as const, organization, created: true };
+        }),
+      ),
+    setFirm: (id, input, at, audit) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          await lockOrganization(tx, id);
+          const current = await tx.organization.findUnique({ where: { id } });
+          if (!current) return { kind: 'not_found' as const };
+          if (firmUnchanged(current, input)) return { kind: 'updated' as const, organization: current, changed: false };
+          if (!input.enabled) {
+            const organization = await tx.organization.update({ where: { id }, data: { firmEnabledAt: null, version: { increment: 1 } } });
+            await tx.auditEvent.createMany({ data: auditRows([firmAuditRow(id, 'firm.disabled', audit)], at) });
+            return { kind: 'updated' as const, organization, changed: true };
+          }
+          const members = await tx.membership.findMany({ where: { organizationId: id }, select: { userId: true } });
+          const refusal = firmEnableRefusal(current, input.ownerUserIds, new Set(members.map((m) => m.userId)));
+          if (refusal) return refusal;
+          const owners = firmOwnersOf(current, input.ownerUserIds);
+          await tx.membership.updateMany({ where: { organizationId: id, userId: { in: owners } }, data: { role: 'OWNER' } });
+          await tx.membership.updateMany({ where: { organizationId: id, userId: { notIn: owners } }, data: { role: 'BOOKKEEPER' } });
+          const organization = await tx.organization.update({
+            where: { id },
+            data: { firmEnabledAt: at, firmRequestedAt: null, firmRequestedByUserId: null, version: { increment: 1 } },
+          });
+          await tx.auditEvent.createMany({ data: auditRows([firmAuditRow(id, 'firm.enabled', audit, { ownerUserIds: owners })], at) });
+          return { kind: 'updated' as const, organization, changed: true };
+        }),
+      ),
+    declineFirmRequest: (id, at, audit) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          await lockOrganization(tx, id);
+          const current = await tx.organization.findUnique({ where: { id } });
+          if (!current?.firmRequestedAt) return { kind: 'not_found' as const };
+          const organization = await tx.organization.update({ where: { id }, data: { firmRequestedAt: null, firmRequestedByUserId: null } });
+          await tx.auditEvent.createMany({ data: auditRows([firmAuditRow(id, 'firm.request_declined', audit)], at) });
+          return { kind: 'declined' as const, organization };
+        }),
+      ),
+    listFirmRequests: async (page) => {
+      const after = page.cursor
+        ? { OR: [{ firmRequestedAt: { gt: page.cursor.createdAt } }, { firmRequestedAt: page.cursor.createdAt, id: { gt: page.cursor.id } }] }
+        : {};
+      const rows = await this.prisma.organization.findMany({
+        where: { firmRequestedAt: { not: null }, firmEnabledAt: null, ...after },
+        orderBy: [{ firmRequestedAt: 'asc' }, { id: 'asc' }],
+        take: page.limit + 1,
+      });
+      const items = rows.slice(0, page.limit);
+      const last = items[items.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last?.firmRequestedAt ? { createdAt: last.firmRequestedAt, id: last.id } : null };
+    },
   };
 
   readonly apiKeys: ApiKeyRepository = {
@@ -210,8 +276,10 @@ export class PrismaLedgerStore implements LedgerStore {
           });
           const personalOrganization = await tx.organization.create({ data: { ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL' } });
           const memberships = [];
+          const firm = input.organizationId ? await tx.organization.findUnique({ where: { id: input.organizationId }, select: { firmEnabledAt: true } }) : null;
           for (const organizationId of [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])]) {
-            memberships.push(toMembership(await tx.membership.create({ data: { userId: user.id, organizationId, createdAt: input.at } })));
+            const role = roleForNewMembership(organizationId === personalOrganization.id ? personalOrganization : (firm ?? { firmEnabledAt: null }));
+            memberships.push(toMembership(await tx.membership.create({ data: { userId: user.id, organizationId, role, createdAt: input.at } })));
           }
           // MUT-235 review fix: the first setup link commits with the user, or neither does.
           if (input.setupLink) {
@@ -382,7 +450,10 @@ export class PrismaLedgerStore implements LedgerStore {
       const existing = await this.prisma.membership.findUnique({ where });
       if (existing) return { membership: toMembership(existing), created: false };
       try {
-        const membership = await translate(() => this.prisma.membership.create({ data: { userId, organizationId, createdAt: at } }));
+        // MUT-300 (D3): BOOKKEEPER into a firm. An unknown organization falls through to the insert's ForeignKeyViolation.
+        const organization = await this.prisma.organization.findUnique({ where: { id: organizationId }, select: { firmEnabledAt: true } });
+        const role = roleForNewMembership(organization ?? { firmEnabledAt: null });
+        const membership = await translate(() => this.prisma.membership.create({ data: { userId, organizationId, role, createdAt: at } }));
         return { membership: toMembership(membership), created: true };
       } catch (err) {
         // Two concurrent grants: the loser reads the winner's row.
@@ -1966,7 +2037,7 @@ function toSession(row: Prisma.SessionGetPayload<object>): SessionRecord {
 }
 
 function toMembership(row: Prisma.MembershipGetPayload<object>): MembershipRecord {
-  return { userId: row.userId, organizationId: row.organizationId, createdAt: row.createdAt };
+  return { userId: row.userId, organizationId: row.organizationId, role: row.role, createdAt: row.createdAt };
 }
 
 function mapNullable<A, B>(value: A | null, fn: (a: A) => B): B | null {

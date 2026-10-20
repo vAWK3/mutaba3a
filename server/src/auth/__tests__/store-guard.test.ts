@@ -85,6 +85,10 @@ describe('STORE_ACCESS', () => {
       'memberships.grant',
       'memberships.revoke',
       'organizations.create',
+      // MUT-300: an operator turns firm features on and off, declines a request and lists the pending ones.
+      'organizations.declineFirmRequest',
+      'organizations.listFirmRequests',
+      'organizations.setFirm',
       'sessions.revokeAllForUser',
       'users.create',
       'users.setPassword',

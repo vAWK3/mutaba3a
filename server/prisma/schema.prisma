@@ -30,6 +30,13 @@ enum ProfileType {
   BUSINESS
 }
 
+/// MUT-300 (ADR-099): a member's role in a firm. Meaningful only while firm features are on.
+enum MembershipRole {
+  OWNER
+  BOOKKEEPER
+  SUBMITTER
+}
+
 /// Which deployment issued a key. A "test" key is rejected by a "live"
 /// deployment and vice versa (see config.API_KEY_ENVIRONMENT).
 enum ApiKeyEnvironment {
@@ -155,30 +162,39 @@ enum SupplementDistribution {
 }
 
 model Organization {
-  id                  String       @id @default(uuid()) @db.Uuid
-  name                String
-  slug                String       @unique
+  id                    String       @id @default(uuid()) @db.Uuid
+  name                  String
+  slug                  String       @unique
   /// ISO 4217. Default for new projects; each project still carries its own.
-  defaultCurrency     String       @db.VarChar(3)
+  defaultCurrency       String       @db.VarChar(3)
   /// IANA zone used by the recurring-charge scheduler (plan §5.4).
-  timezone            String
+  timezone              String
   /// MUT-120: set on a user's one personal organization (created with the
   /// user), null on every firm. Unique, so a user has at most one; such an
   /// organization is never bound to Malafat, issued an API key or shared.
-  personalOwnerUserId String?      @unique @db.Uuid
-  personalOwner       User?        @relation("PersonalProfile", fields: [personalOwnerUserId], references: [id], onDelete: Restrict)
+  personalOwnerUserId   String?      @unique @db.Uuid
+  personalOwner         User?        @relation("PersonalProfile", fields: [personalOwnerUserId], references: [id], onDelete: Restrict)
   /// MUT-182: the user who owns and controls this profile — one they created
   /// with POST /v1/profiles, or their MUT-120 personal one. Null on every
   /// operator-provisioned firm. Not unique: up to MAX_OWNED_PROFILES per user.
   /// An owned profile is standalone: never keyed, bound to Malafat or shared.
-  ownerUserId         String?      @db.Uuid
-  owner               User?        @relation("OwnedProfiles", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  ownerUserId           String?      @db.Uuid
+  owner                 User?        @relation("OwnedProfiles", fields: [ownerUserId], references: [id], onDelete: Restrict)
   /// MUT-182: set exactly when ownerUserId is (CHECK); picks the expense preset.
-  profileType         ProfileType?
+  profileType           ProfileType?
   /// MUT-182: If-Match for PATCH /v1/profiles/{id}.
-  version             Int          @default(1)
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  version               Int          @default(1)
+  /// MUT-300 (ADR-099): firm features are on from this instant; null = off. Set only by an
+  /// operator, in place on an owned Business profile or on an operator firm (eng review D4).
+  /// Never on the built-in personal profile (CHECK).
+  firmEnabledAt         DateTime?
+  /// MUT-300: the owner asked for firm features (POST /v1/profiles/{id}/firm-request); cleared
+  /// when an operator enables or declines. Set together with firmRequestedByUserId (CHECK).
+  firmRequestedAt       DateTime?
+  firmRequestedByUserId String?      @db.Uuid
+  firmRequestedBy       User?        @relation("FirmRequests", fields: [firmRequestedByUserId], references: [id], onDelete: Restrict)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
   apiKeys            ApiKey[]
   integrations       Integration[]
@@ -268,6 +284,8 @@ model User {
   personalProfile Organization?       @relation("PersonalProfile")
   /// MUT-182: every profile this user owns, the personal one included.
   ownedProfiles   Organization[]      @relation("OwnedProfiles")
+  /// MUT-300: firm-feature requests this user made (RESTRICT: users are never hard-deleted).
+  firmRequests    Organization[]      @relation("FirmRequests")
 
   expenses            Expense[]
   expenseReceipts     ExpenseReceipt[]
@@ -324,10 +342,13 @@ model InboxEntry {
 
 /// Access/no-access: the user may see this organization's hosted profile.
 model Membership {
-  userId         String       @db.Uuid
-  user           User         @relation(fields: [userId], references: [id])
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String         @db.Uuid
+  user           User           @relation(fields: [userId], references: [id])
+  organizationId String         @db.Uuid
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  /// MUT-300 (ADR-099): read only while the organization's firm features are on; inert
+  /// elsewhere (the OWNER default included). MUT-305 enforces it.
+  role           MembershipRole @default(OWNER)
   createdAt      DateTime
 
   @@id([userId, organizationId])
