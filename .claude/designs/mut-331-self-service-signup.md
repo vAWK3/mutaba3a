@@ -113,6 +113,7 @@ The domain check runs for every address, so it never splits the branches. The ma
 - Signup creates a person and their **personal profile**. That is all an operator-issued account gets today.
 - The tier is **Freelancer by default** (Basel, Q5). Firm features stay behind MUT-300's switch: the owner adds a Business profile and presses "Request firm features", and the operator turns them on. Until firm books v1 ships, firms pay the Freelancer price (MUT-322).
 - **What billing (MUT-332) gets:** a new account in a state its entitlements define. This brief fixes only the handover. After the first sign-in, the portal reads `Me` and, if billing says the account needs a plan, shows billing's step (trial or checkout, MUT-332 decides). Signup writes no plan column. The plan's owner is billing's entitlement model, so the two can't disagree. This is posted on MUT-332.
+- **ADR-160's trial (MUT-332, merged 2026-10-20):** 14 days with no card, then read-only, then locked. For a `PENDING_REVIEW` account the trial starts at approval, not at signup.
 - **Malafat-fed firms** never sign up. They come through the operator and Malafat (ADR-025/037), and billing marks them "covered by Malafat" (MUT-332). If such a person uses `/signup` with their address, they get the "you already have an account" mail.
 
 ## 7. Abuse controls

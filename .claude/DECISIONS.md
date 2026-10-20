@@ -3457,7 +3457,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 1. **`release-notes.json`** at the repo root maps `x.y.z` to `{ en: string[], ar: string[] }`, with the same number of non-empty lines in each language (`releaseNotesProblems`, tested). It is the only place notes are written.
 2. **Three readers**:
    - The web app bundles it (`RELEASE_NOTES`).
-   - `make release-web` refuses a bumped version without an entry (`npm run release:notes -- <v>`, between the bump and the build).
+   - `make release-web` refuses a bumped version without an entry (`npm run release:notes -- <v>`, between the bump and the build) and commits `release-notes.json` with the version bump (2026-10-20: v0.1.16 shipped without its notes because only the version files were committed, and the dirty tree then broke the server release).
    - `tag-release.sh` writes the English lines into the `web-v*` tag's message, from the file as it stood in the tagged commit.
 3. **What shows.** `whats-new-seen-version` (localStorage) is the newest version this browser dismissed. The app shows every entry newer than it and no newer than the running version, newest first. `app-last-known-version` is not used for this, because `handleVersionChange` rewrites it on every start, so a tab closed without dismissing would lose the notes.
 4. **Seeding.** Seeded once at start (`seedSeenVersion`):
@@ -4223,7 +4223,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
    - The same mailer serves MUT-306 invites and the operator's review digest.
 6. **Abuse controls.** The server verifies Turnstile and fails closed. Limits: 10/h per IP; 1/min and 5/day per address, whether or not an account exists; a 500/day global send cap, kept below the shared Resend plan's limit. Unredeemed SIGNUP tokens are pruned.
 7. **Switches.** `SELF_SIGNUP_ENABLED` (default false) gates signup until GA. Recovery ships as soon as email works, pilot accounts included. Operator issuance stays.
-8. **Tier at signup (Q5): Freelancer by default.** Firm comes through MUT-300's request. Signup writes no plan; billing (MUT-332) owns entitlements and the step after the first sign-in, and never charges a PENDING_REVIEW account.
+8. **Tier at signup (Q5): Freelancer by default.** Firm comes through MUT-300's request. Signup writes no plan; billing (MUT-332) owns entitlements and the step after the first sign-in, and never charges a PENDING_REVIEW account. With ADR-160's 14-day trial, a reviewed account's trial starts when it becomes `ACTIVE` (approval), not at signup, so time spent waiting for the operator never eats the trial.
 9. **Passkeys (Q3).** A password is required at signup. A passkey is optional and suggested as the more secure way, through a dismissible card after the first sign-in, once MUT-115 ships. Passkey-only accounts are out of scope.
 
 **Override log**:
@@ -4260,3 +4260,25 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - At GA most freelancer signups (webmail) wait for review, about 5 a day at 1,000 users. Moving a webmail provider to instant is a list edit and a recorded decision.
 - The phone's "Create an account" link waits on in-app account deletion (MUT-333, App Store 5.1.1(v)).
 - Build stories MUT-359, MUT-366..371 (brief §12).
+## ADR-160: Billing Is Stripe Billing + Stripe Tax; the Person Pays and Each Profile Is Entitled; Unpaid Trials Lock, Paid Lapses Stay Read-Only (MUT-332)
+
+**Status**: Active (spike decision; built by MUT-358, MUT-360…365)
+**Date**: 2026-10-20
+**Context**: GA gate (MUT-322). People must be able to pay without the operator. The seller is Barmajiyat Ltd (UK), and the pilot is already billed with Stripe subscriptions made by hand in the dashboard. Malafat firms pay through Malafat (MAL-870). The full comparison, costs and sources are in `docs/commercial/billing-spike.md`.
+**Decision** (Basel, 2026-10-20):
+1. **Provider: Stripe Billing + Stripe Tax** on the Mutaba3a Stripe account. Barmajiyat Ltd is the seller of record and owns registration and filing (MUT-355). We looked at Paddle, Stripe Managed Payments and Lemon Squeezy as merchants of record and turned them down: the pilot's subscriptions would have had to migrate or couldn't join, Managed Payments still leaves the UAE, Bahrain, Oman and Jordan to us, Lemon Squeezy charges everyone in USD, and they cost more. We revisit Paddle if consumer sales in the Gulf or Jordan become real.
+2. **The person pays, and each profile is entitled.** The Stripe Customer is the `User`. A Freelancer subscription covers the person's own profiles. A Firm subscription covers one organization (`firmEnabledAt`, MUT-300) and the owner's own profiles. Coverage is checked in this order: MALAFAT (a CONNECTED integration), OPERATOR (a grant), STRIPE, TRIAL. The tier comes from `product.metadata.tier`, never from the amount.
+3. **States are ACTIVE, GRACE, READ_ONLY and LOCKED.**
+   - `past_due` is GRACE.
+   - A paid subscription that lapses becomes READ_ONLY for good: reads and records export keep working, and nothing is deleted.
+   - A trial is 14 days with no card, then 14 days READ_ONLY, then LOCKED. LOCKED leaves only Subscribe and Download my records, and applies only to people who never paid.
+4. **One gate.** `SUBSCRIPTION_LAPSED` is enforced in `store-guard.ts` and `authenticate()`, next to READ_ONLY_PROFILE. The `identity` row, `/v1/billing/*` and `GET /v1/records-export*` are always open. Malafat API-key writes are never billing-gated.
+5. **Stripe is the source of truth.** Webhooks are idempotent through `StripeEvent`, re-fetch the object rather than trusting the payload, and a nightly reconcile repairs anything missed. Pilot subscriptions are linked by `metadata.mutaba3a_user_id`, so nothing migrates.
+6. **Consumer checkout opens country by country** (`config/billing-countries.json`). Anywhere else, checkout needs a business tax ID until Barmajiyat Ltd registers there.
+7. **Founder prices are their own Stripe Prices** (`*_founder_*`). A subscription schedule moves each one to the GA list price (`*_list_*`) after its 12-month lock.
+8. **Prices reach the site** only when the MUT-332 §6 gate holds (MUT-365).
+**Consequences**:
+- Stripe's Checkout, Customer Portal and invoices have no Arabic. Our own Arabic Billing page explains everything before the English card form.
+- Stripe Tax can't calculate Israel or Jordan, so those take manual tax rates if MUT-355 says tax is due.
+- A firm member's own profile isn't covered by the firm's subscription until firm v3 decides otherwise (MUT-305/306).
+- The ADR-037 no-self-signup rule is MUT-331's override (ADR-159 on its branch), not this one's.

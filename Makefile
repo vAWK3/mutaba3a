@@ -229,7 +229,7 @@ release-web: preflight-web
 	@scripts/bump-version.sh web
 	@version=$$(node -p "require('./package.json').version"); \
 	if ! npm run --silent release:notes -- "$$version"; then \
-	  printf '\n$(C_YEL)Write what v%s changes for people in release-notes.json (en + ar), commit it, then re-run.$(C_OFF)\n' "$$version"; \
+	  printf '\n$(C_YEL)Write what v%s changes for people in release-notes.json (en + ar), then re-run — the release commit includes it.$(C_OFF)\n' "$$version"; \
 	  printf '$(C_DIM)Undo the bump with: git checkout -- package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock$(C_OFF)\n'; \
 	  exit 1; \
 	fi; \
@@ -250,7 +250,7 @@ release-web: preflight-web
 	  printf '$(C_YEL)The version bump is still in your working tree — undo it or re-run.$(C_OFF)\n'; \
 	  exit 0; \
 	fi; \
-	git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock; \
+	git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock release-notes.json; \
 	git diff --cached --quiet || git commit -m "release: web v$$version"; \
 	git push origin $(RELEASE_BRANCH); \
 	scripts/tag-release.sh web "$$version" --push; \
@@ -262,7 +262,9 @@ release-web: preflight-web
 # release server — server/scripts/deploy.sh owns the rollout (image, migrate,
 # terraform apply, smoke). This target is the gate in front of it: checks,
 # version, a commit that names what ships, and the push that makes the
-# deployed sha reachable by anyone else.
+# deployed sha reachable by anyone else. deploy.sh refuses a dirty tree, so
+# the preflight fails on one and the tree is checked again right before the
+# version commit: a pushed `release: api vX` must never deploy nothing.
 # ---------------------------------------------------------------------------
 
 release-server: preflight-server
@@ -288,6 +290,13 @@ release-server: preflight-server
 	if ! scripts/confirm.sh 'Deploy to Cloud Run now?'; then \
 	  if [ $$bumped = yes ]; then printf '$(C_YEL)The version bump is still in your working tree — undo it or re-run.$(C_OFF)\n'; fi; \
 	  exit 0; \
+	fi; \
+	stray=$$(git status --porcelain | grep -v -E '^ M server/package(-lock)?\.json$$' || true); \
+	if [ -n "$$stray" ]; then \
+	  printf '\n$(C_YEL)The working tree changed since the preflight — deploy.sh refuses a dirty tree. Nothing was committed or pushed.$(C_OFF)\n'; \
+	  printf '%s\n' "$$stray" | sed 's/^/        /'; \
+	  if [ $$bumped = yes ]; then printf '$(C_DIM)The version bump is still in your working tree — commit the rest, then re-run.$(C_OFF)\n'; fi; \
+	  exit 1; \
 	fi; \
 	if [ $$bumped = yes ]; then \
 	  git add server/package.json server/package-lock.json; \
