@@ -21,7 +21,15 @@ This branch was cut from local main at `7f364e01`. Merged into it, in order:
 
 The original branches `feature/mut-300-firm-flag` and `feature/mut-338-save-feedback` still exist as rollback points. Delete them once this branch lands.
 
-### To finish
+### Status 2026-10-20 (late): MUT-300 and MUT-338 are finished; only MUT-358 is left here
+
+- Main was merged in again (`e6a7e5b3`, plus `6ad9ba78`).
+- Fixed: the firm block no longer reaches Malafat's `/v1/integration` (`93d891ad`). MUT-300's TD-183 is renumbered TD-192 (`3e505fb0`).
+- Every gate passed on Node 22: web 5689 tests, server tests, and test:db. test:db's one failure was the known backfill-vs-parity cross-test flake (both tests are from main); it passes alone.
+- Release-QA, all on preview builds at `3e505fb0`, all passing: the 2 MUT-300 features, 7 MUT-338 portal features and 2 MUT-338 web features.
+- Landed with `git merge --no-ff pending/2026-10-20` into local main (not pushed). Steps 1–3 and 5 below are done for MUT-300 and MUT-338; step 4 (MUT-358) is still open.
+
+### To finish (original steps)
 
 1. **Install and check** (nothing ran after the combining merge):
    ```bash
