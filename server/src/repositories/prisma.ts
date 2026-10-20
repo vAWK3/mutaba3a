@@ -11,6 +11,7 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
 import type {
+  BillingRepository,
   TermsAcceptanceInput,
   TermsAcceptanceRecord,
   AccountSetupRepository,
@@ -1541,6 +1542,98 @@ export class PrismaLedgerStore implements LedgerStore {
   // ---- MUT-270: the entries feed -------------------------------------------
 
   readonly recordsExport = prismaRecordsExport(() => this.prisma);
+
+  /** MUT-358 (ADR-160): three queries whatever the number of profiles (brief §2.3). */
+  readonly billing: BillingRepository = {
+    factsFor: async ({ ownerUserIds, organizationIds }) => {
+      const owners = [...ownerUserIds];
+      const orgs = [...organizationIds];
+      const [subscriptions, grants, people] = await Promise.all([
+        this.prisma.billingSubscription.findMany({
+          where: { OR: [{ billingAccount: { userId: { in: owners } } }, { organizationId: { in: orgs } }] },
+          include: { billingAccount: { select: { userId: true } } },
+        }),
+        this.prisma.entitlementGrant.findMany({ where: { OR: [{ userId: { in: owners } }, { organizationId: { in: orgs } }] } }),
+        this.prisma.user.findMany({ where: { id: { in: owners } }, select: { id: true, trialStartedAt: true } }),
+      ]);
+      return {
+        subscriptions: subscriptions.map(({ billingAccount, ...sub }) => ({ ...sub, userId: billingAccount.userId })),
+        grants,
+        trialStarts: new Map(people.map((p) => [p.id, p.trialStartedAt] as const)),
+      };
+    },
+    setTrialStart: async (userId, at) => {
+      const { count } = await this.prisma.user.updateMany({ where: { id: userId }, data: { trialStartedAt: at } });
+      return count === 0 ? null : { trialStartedAt: at };
+    },
+    createGrant: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const { id, userId, organizationId, tier, reason, expiresAt, grantedBy, at } = input;
+          const grant = await tx.entitlementGrant.create({ data: { id, userId, organizationId, tier, reason, expiresAt, grantedBy, createdAt: at } });
+          if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, at) });
+          return grant;
+        }),
+      ),
+    revokeGrant: (id, at, audit) =>
+      this.prisma.$transaction(async (tx) => {
+        // Only an unrevoked grant changes; two revokes racing write one revokedAt and one audit row.
+        const { count } = await tx.entitlementGrant.updateMany({ where: { id, revokedAt: null }, data: { revokedAt: at } });
+        const grant = await tx.entitlementGrant.findUnique({ where: { id } });
+        if (!grant) return null;
+        if (count > 0 && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return { grant, revoked: count > 0 };
+      }),
+    getGrant: (id) => this.prisma.entitlementGrant.findUnique({ where: { id } }),
+    listGrants: ({ userId, organizationId, activeAt }) =>
+      this.prisma.entitlementGrant.findMany({
+        where: {
+          ...(userId !== undefined ? { userId } : {}),
+          ...(organizationId !== undefined ? { organizationId } : {}),
+          ...(activeAt ? { revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: activeAt } }] } : {}),
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      }),
+    linkAccount: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // Lock the customer's row (if any) and the person's, so two links can't both pass the checks below.
+          await tx.$queryRaw`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
+          const existing = await tx.billingAccount.findUnique({ where: { stripeCustomerId: input.stripeCustomerId } });
+          if (existing?.userId === input.userId) return { account: existing, linked: false };
+          if (existing?.userId) throw new StateConflict('billing_account', 'CUSTOMER_LINKED_ELSEWHERE');
+          if (await tx.billingAccount.findUnique({ where: { userId: input.userId } })) throw new StateConflict('billing_account', 'USER_HAS_ANOTHER_ACCOUNT');
+          if (!existing && !input.currency) throw new StateConflict('billing_account', 'CURRENCY_REQUIRED');
+          const account = existing
+            ? await tx.billingAccount.update({ where: { id: existing.id }, data: { userId: input.userId, updatedAt: input.at } })
+            : await tx.billingAccount.create({
+                data: { stripeCustomerId: input.stripeCustomerId, userId: input.userId, currency: input.currency!, createdAt: input.at, updatedAt: input.at },
+              });
+          if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          return { account, linked: true };
+        }),
+      ),
+    listAccounts: ({ linked }) =>
+      this.prisma.billingAccount.findMany({
+        where: linked === undefined ? {} : { userId: linked ? { not: null } : null },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+    saveAccount: (input) =>
+      translate(() =>
+        this.prisma.billingAccount.upsert({
+          where: { stripeCustomerId: input.stripeCustomerId },
+          create: input,
+          update: { userId: input.userId, country: input.country, currency: input.currency },
+        }),
+      ),
+    saveSubscription: ({ stripeCustomerId, ...fields }) =>
+      translate(async () => {
+        const account = await this.prisma.billingAccount.findUnique({ where: { stripeCustomerId }, select: { id: true } });
+        if (!account) throw new ForeignKeyViolation('billing_subscriptions.billingAccountId');
+        const data = { ...fields, billingAccountId: account.id };
+        return this.prisma.billingSubscription.upsert({ where: { stripeSubscriptionId: fields.stripeSubscriptionId }, create: data, update: data });
+      }),
+  };
 
   readonly entries: EntriesRepository = {
     // D3: one typed, index-bounded query per organization and kind (limit + 1 rows each), merged in memory. Review D1:

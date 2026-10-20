@@ -274,6 +274,74 @@ export const AuditEventSchema = z
 
 export const AuditListSchema = z.object({ events: z.array(AuditEventSchema) }).openapi('AuditList');
 
+// ---- MUT-358 (ADR-160): operator billing ------------------------------------
+
+const BillingTierSchema = z.enum(['FREELANCER', 'FIRM']).openapi('BillingTier');
+
+/** An operator grant: covers a person's own profiles (`userId`) or one profile (`organizationId`), never both. */
+export const EntitlementGrantSchema = z
+  .object({
+    id: z.string().uuid(),
+    userId: z.string().uuid().nullable(),
+    organizationId: z.string().uuid().nullable(),
+    tier: BillingTierSchema,
+    reason: z.string(),
+    expiresAt: z.string().datetime().nullable(),
+    grantedBy: z.string(),
+    createdAt: z.string().datetime(),
+    revokedAt: z.string().datetime().nullable(),
+  })
+  .openapi('EntitlementGrant');
+
+/** POST /admin/v1/billing/grants: exactly one of userId, userEmail and organizationId. */
+export const CreateEntitlementGrantRequestSchema = z
+  .object({
+    userId: z.string().uuid().optional(),
+    userEmail: z.string().min(3).max(320).optional(),
+    organizationId: z.string().uuid().optional(),
+    tier: BillingTierSchema,
+    reason: z.string().trim().min(1).max(200),
+    expiresAt: z.string().datetime().optional(),
+  })
+  .strict()
+  .refine((b) => [b.userId, b.userEmail, b.organizationId].filter((v) => v !== undefined).length === 1, 'exactly one of userId, userEmail, organizationId')
+  .openapi('CreateEntitlementGrantRequest');
+
+export const EntitlementGrantListSchema = z.object({ grants: z.array(EntitlementGrantSchema) }).openapi('EntitlementGrantList');
+export const RevokeEntitlementGrantResponseSchema = z
+  .object({ grant: EntitlementGrantSchema, /** false when it was already revoked: nothing changed. */ revoked: z.boolean() })
+  .openapi('RevokeEntitlementGrantResponse');
+
+/** One Stripe customer; `userId` is null until linked. */
+export const BillingAccountSchema = z
+  .object({
+    id: z.string().uuid(),
+    userId: z.string().uuid().nullable(),
+    stripeCustomerId: z.string(),
+    country: z.string().nullable(),
+    currency: z.string(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi('BillingAccount');
+
+/** POST /admin/v1/billing/accounts/link: one of userId and userEmail; `currency` only when the customer is new here. */
+export const LinkBillingAccountRequestSchema = z
+  .object({
+    stripeCustomerId: z.string().regex(/^cus_[A-Za-z0-9]+$/),
+    userId: z.string().uuid().optional(),
+    userEmail: z.string().min(3).max(320).optional(),
+    currency: z.enum(['ILS', 'USD']).optional(),
+  })
+  .strict()
+  .refine((b) => (b.userId === undefined) !== (b.userEmail === undefined), 'exactly one of userId, userEmail')
+  .openapi('LinkBillingAccountRequest');
+
+export const LinkBillingAccountResponseSchema = z
+  .object({ account: BillingAccountSchema, /** false when this customer was already linked to this person: nothing changed. */ linked: z.boolean() })
+  .openapi('LinkBillingAccountResponse');
+export const BillingAccountListSchema = z.object({ accounts: z.array(BillingAccountSchema) }).openapi('BillingAccountList');
+
 // ---- Admin: operator-provisioned users (MUT-37, ADR-037) --------------------
 
 export const UserLocaleSchema = z.enum(['en', 'ar']).openapi('UserLocale');
@@ -442,6 +510,24 @@ export const HostedProfileSchema = z
     role: MembershipRoleSchema.nullable(),
     /** MUT-300: the owner's pending request for firm features; null when none is pending, and always null for anyone but the owner. Additive since 1.41.0-mut300. */
     firmRequestedAt: z.string().datetime().nullable(),
+    /**
+     * MUT-358 (ADR-160): whether this profile is entitled, and why. On GET /v1/me (and the sign-in responses) it is
+     * always present: null only where billing doesn't apply (the portal's signed-out mode). POST/PATCH /v1/profiles
+     * omit it; read /v1/me. Nothing enforces it until MUT-361. Additive since 1.42.0-mut358; older servers omit it.
+     */
+    // Inline, not a ref: a ref's null is written as `nullable`, which OpenAPI 3.1 ignores (the `terms` lesson below).
+    billing: z
+      .object({
+        /** ACTIVE: full use. GRACE: a payment failed and Stripe is retrying. READ_ONLY: reads and export only. LOCKED: an unpaid trial past day 30. */
+        state: z.enum(['ACTIVE', 'GRACE', 'READ_ONLY', 'LOCKED']),
+        /** What decides the state: Malafat's add-on, an operator grant, a Stripe subscription, the trial, or nothing. */
+        source: z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'NONE']),
+        tier: z.enum(['FREELANCER', 'FIRM']).nullable(),
+        /** When this state ends, if known: a grant's expiry, the paid period's end, the trial's end or its lock date. */
+        until: z.string().datetime().nullable(),
+      })
+      .nullable()
+      .optional(),
   })
   .openapi('HostedProfile');
 

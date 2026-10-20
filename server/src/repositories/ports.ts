@@ -1470,6 +1470,137 @@ export interface AccountSetupRepository {
   redeem(input: RedeemSetupLinkInput): Promise<UserRecord | null>;
 }
 
+// ---- MUT-358 (ADR-160): billing core ---------------------------------------
+
+export type BillingTierRecord = 'FREELANCER' | 'FIRM';
+
+/** One Stripe customer; `userId` is null until the operator (or MUT-360's checkout) links it to a person. */
+export interface BillingAccountRecord {
+  id: string;
+  userId: string | null;
+  stripeCustomerId: string;
+  country: string | null;
+  currency: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** A mirror of one Stripe subscription; `status` is Stripe's own string. */
+export interface BillingSubscriptionRecord {
+  id: string;
+  billingAccountId: string;
+  stripeSubscriptionId: string;
+  tier: BillingTierRecord;
+  organizationId: string | null;
+  status: string;
+  currentPeriodEnd: Date;
+  cancelAtPeriodEnd: boolean;
+  priceLookupKey: string | null;
+  founderUntil: Date | null;
+  stripeUpdatedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** An operator grant: exactly one of `userId` (the person's own profiles) and `organizationId` (that profile). */
+export interface EntitlementGrantRecord {
+  id: string;
+  userId: string | null;
+  organizationId: string | null;
+  tier: BillingTierRecord;
+  reason: string;
+  expiresAt: Date | null;
+  grantedBy: string;
+  createdAt: Date;
+  revokedAt: Date | null;
+}
+
+/** A subscription as coverage sees it: with the paying person (null while the customer is unlinked). */
+export interface CoveringSubscriptionRecord extends BillingSubscriptionRecord {
+  userId: string | null;
+}
+
+/** Everything that can cover a set of profiles, for `entitlementsFor` (billing/coverage.ts). */
+export interface BillingFactsRecord {
+  subscriptions: CoveringSubscriptionRecord[];
+  grants: EntitlementGrantRecord[];
+  /** Owner id → trialStartedAt (null: never trialled), for every owner asked about that exists. */
+  trialStarts: Map<string, Date | null>;
+}
+
+export interface CreateGrantInput {
+  /** Chosen by the caller, so the audit rows written with it can name the grant. */
+  id: string;
+  userId: string | null;
+  organizationId: string | null;
+  tier: BillingTierRecord;
+  reason: string;
+  expiresAt: Date | null;
+  grantedBy: string;
+  at: Date;
+  /** Written in the same transaction (MUT-358 §2.6: one row per profile the grant reaches). */
+  audit: AuditEventInput[];
+}
+
+export interface LinkBillingAccountInput {
+  stripeCustomerId: string;
+  userId: string;
+  /** Used only when the customer is not known yet and the account is created here. */
+  currency: string | null;
+  at: Date;
+  audit: AuditEventInput[];
+}
+
+export interface SaveBillingAccountInput {
+  stripeCustomerId: string;
+  userId: string | null;
+  country: string | null;
+  currency: string;
+}
+
+export interface SaveBillingSubscriptionInput {
+  stripeCustomerId: string;
+  stripeSubscriptionId: string;
+  tier: BillingTierRecord;
+  organizationId: string | null;
+  status: string;
+  currentPeriodEnd: Date;
+  cancelAtPeriodEnd: boolean;
+  priceLookupKey: string | null;
+  founderUntil: Date | null;
+  stripeUpdatedAt: Date;
+}
+
+/**
+ * MUT-358: billing state. Reads are a signed-in person's (`/v1/me`, store guard `sessionOnly`); writes are the
+ * operator's and, from MUT-360, the Stripe webhook's (both on the unguarded store).
+ */
+export interface BillingRepository {
+  /** Subscriptions paid by `ownerUserIds` or tied to `organizationIds`, grants on either, and the owners' trial starts. */
+  factsFor(input: { ownerUserIds: readonly string[]; organizationIds: readonly string[] }): Promise<BillingFactsRecord>;
+  /** MUT-331's signup sets it at email verification. Null for an unknown user. */
+  setTrialStart(userId: string, at: Date): Promise<{ trialStartedAt: Date } | null>;
+  /** ForeignKeyViolation on an unknown user or organization. */
+  createGrant(input: CreateGrantInput): Promise<EntitlementGrantRecord>;
+  /** Sets revokedAt (never deletes); an already-revoked grant comes back unchanged and `audit` is not written. Null if unknown. */
+  revokeGrant(id: string, at: Date, audit: AuditEventInput[]): Promise<{ grant: EntitlementGrantRecord; revoked: boolean } | null>;
+  getGrant(id: string): Promise<EntitlementGrantRecord | null>;
+  /** Newest first; `activeAt` keeps only unrevoked grants that have not expired at that time. */
+  listGrants(filter: { userId?: string | undefined; organizationId?: string | undefined; activeAt?: Date | undefined }): Promise<EntitlementGrantRecord[]>;
+  /**
+   * Links a Stripe customer to a person, creating the account if the customer is unknown (then `currency` is needed:
+   * StateConflict('billing_account', 'CURRENCY_REQUIRED')). Idempotent for the same pair (`linked: false`, no audit).
+   * StateConflict('billing_account', 'CUSTOMER_LINKED_ELSEWHERE' | 'USER_HAS_ANOTHER_ACCOUNT'); ForeignKeyViolation on an unknown user.
+   */
+  linkAccount(input: LinkBillingAccountInput): Promise<{ account: BillingAccountRecord; linked: boolean }>;
+  /** Oldest first; `linked: false` lists the unlinked customers the operator still has to match. */
+  listAccounts(filter: { linked?: boolean | undefined }): Promise<BillingAccountRecord[]>;
+  /** MUT-360's webhook (and tests): upsert by stripeCustomerId. */
+  saveAccount(input: SaveBillingAccountInput): Promise<BillingAccountRecord>;
+  /** MUT-360's webhook (and tests): upsert by stripeSubscriptionId; the account must exist (ForeignKeyViolation). */
+  saveSubscription(input: SaveBillingSubscriptionInput): Promise<BillingSubscriptionRecord>;
+}
+
 export interface LedgerStore {
   organizations: OrganizationRepository;
   apiKeys: ApiKeyRepository;
@@ -1508,6 +1639,8 @@ export interface LedgerStore {
   entries: EntriesRepository;
   /** MUT-325: one profile's rows for its records file; session-only (store guard `sessionOnly`). */
   recordsExport: RecordsExportRepository;
+  /** MUT-358: billing state; `/v1/me` reads it (`sessionOnly`), the operator and Stripe write it. */
+  billing: BillingRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------

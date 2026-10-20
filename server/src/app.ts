@@ -18,6 +18,7 @@ import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
 import type { LedgerStore } from './repositories/ports.js';
 import type { AttachmentStorage } from './attachments/storage.js';
 import { adminAuth, adminRoutes } from './routes/admin.js';
+import { adminBillingRoutes } from './routes/admin-billing.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
@@ -138,7 +139,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.41.0-mut300';
+export const API_VERSION = '1.42.0-mut358';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -244,6 +245,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     attachments: { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 },
     fxRates: deps.fxRates ?? null,
     terms,
+    billing: true,
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.
@@ -252,6 +254,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms }));
+  app.route('/', adminBillingRoutes(store));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {

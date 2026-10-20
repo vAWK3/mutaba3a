@@ -66,7 +66,11 @@ export interface BillingFacts {
   trialStarts: ReadonlyMap<string, Date | null>;
 }
 
-const COVERING_STATUSES: Readonly<Record<string, 'ACTIVE' | 'GRACE'>> = { active: 'ACTIVE', trialing: 'ACTIVE', past_due: 'GRACE' };
+const COVERING_STATUSES: ReadonlyMap<string, 'ACTIVE' | 'GRACE'> = new Map([
+  ['active', 'ACTIVE'],
+  ['trialing', 'ACTIVE'],
+  ['past_due', 'GRACE'],
+]);
 /** A subscription that was paid for and then stopped. `incomplete_expired` is an abandoned checkout, never paid. */
 const LAPSED_STATUSES: ReadonlySet<string> = new Set(['unpaid', 'canceled', 'paused']);
 /** Statuses that never meant money changed hands: they neither cover nor count as having paid. */
@@ -79,8 +83,8 @@ export function resolveEntitlement(profile: ProfileFacts, facts: BillingFacts, n
   if (grant) return { state: 'ACTIVE', source: 'OPERATOR', tier: grant.tier, until: grant.expiresAt };
 
   const subscriptions = facts.subscriptions.filter((s) => subscriptionCovers(s, profile));
-  const covering = bestSubscription(subscriptions.filter((s) => Object.hasOwn(COVERING_STATUSES, s.status)));
-  if (covering) return { state: COVERING_STATUSES[covering.status], source: 'STRIPE', tier: covering.tier, until: covering.currentPeriodEnd };
+  const covering = bestSubscription(subscriptions.filter((s) => coveringState(s) !== undefined));
+  if (covering) return { state: coveringState(covering)!, source: 'STRIPE', tier: covering.tier, until: covering.currentPeriodEnd };
 
   const trialStartedAt = profile.ownerUserId ? (facts.trialStarts.get(profile.ownerUserId) ?? null) : null;
   const trialEnd = trialStartedAt && addDays(trialStartedAt, TRIAL_DAYS);
@@ -122,10 +126,14 @@ function subscriptionCovers(subscription: SubscriptionFact, profile: ProfileFact
 
 /** ACTIVE before GRACE, then the Firm tier, then the later period end. */
 function bestSubscription(subscriptions: readonly SubscriptionFact[]): SubscriptionFact | undefined {
-  const stateRank = (s: SubscriptionFact) => (COVERING_STATUSES[s.status] === 'ACTIVE' ? 1 : 0);
+  const stateRank = (s: SubscriptionFact) => (coveringState(s) === 'ACTIVE' ? 1 : 0);
   return [...subscriptions].sort(
     (a, b) => stateRank(b) - stateRank(a) || tierRank(b.tier) - tierRank(a.tier) || b.currentPeriodEnd.getTime() - a.currentPeriodEnd.getTime(),
   )[0];
+}
+
+function coveringState(subscription: SubscriptionFact): 'ACTIVE' | 'GRACE' | undefined {
+  return COVERING_STATUSES.get(subscription.status);
 }
 
 function tierRank(tier: BillingTier): number {

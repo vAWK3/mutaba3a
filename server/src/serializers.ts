@@ -10,6 +10,8 @@ import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource } from './schemas.js';
 import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
 import type {
+  BillingAccountRecord,
+  EntitlementGrantRecord,
   ConversionRecord,
   ExpenseCurrencyTotal,
   ExpenseGroupOverrideRecord,
@@ -654,5 +656,33 @@ export function serializeInboxEntry(e: InboxEntryRecord) {
     version: e.version,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
+  };
+}
+
+/** MUT-358: an operator grant on the admin API. */
+export function serializeGrant(g: EntitlementGrantRecord) {
+  return {
+    id: g.id,
+    userId: g.userId,
+    organizationId: g.organizationId,
+    tier: g.tier,
+    reason: g.reason,
+    expiresAt: g.expiresAt?.toISOString() ?? null,
+    grantedBy: g.grantedBy,
+    createdAt: g.createdAt.toISOString(),
+    revokedAt: g.revokedAt?.toISOString() ?? null,
+  };
+}
+
+/** MUT-358: a Stripe customer on the admin API. */
+export function serializeBillingAccount(a: BillingAccountRecord) {
+  return {
+    id: a.id,
+    userId: a.userId,
+    stripeCustomerId: a.stripeCustomerId,
+    country: a.country,
+    currency: a.currency,
+    createdAt: a.createdAt.toISOString(),
+    updatedAt: a.updatedAt.toISOString(),
   };
 }
