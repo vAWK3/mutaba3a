@@ -4144,7 +4144,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 ## ADR-156: Signed In, "Download My Records" Writes the Local-Mode Records File — Built in the Portal From a Streamed Per-Profile Export (MUT-325)
 
-**Date:** 2026-10-20 · **Status:** Accepted (decisions D1–D5 taken without Basel; flagged for review on MUT-325) · **Epic:** MUT-322 (pilot gate) · **Format owner:** MUT-286/287
+**Date:** 2026-10-20 · **Status:** Accepted (D1–D5 reviewed and accepted by Basel, 2026-10-20; see the members note under Consequences) · **Epic:** MUT-322 (pilot gate) · **Format owner:** MUT-286/287
 
 **Context.** A paying user must be able to leave with their records. Signed out, Your data already writes a versioned records file (a zip of `records.json` — a `MemoryLedgerStore` snapshot — and `receipts/<storageKey>`) and restores it. Signed in there was no export at all.
 
@@ -4164,6 +4164,8 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 | ADR-028 §2 (downloads are a 302 to a signed URL) | The API never passes bytes on | `GET /v1/records-export/receipts/{id}` streams a receipt as `application/octet-stream`, `Content-Disposition: attachment`, `nosniff` | The portal must read the bytes to zip them, and the bucket has no CORS in IaC; still a download, never rendered | 2026-10-20 |
 
 **Consequences.** MUT-290 (moving a device's records into an account) will meet hosted ids already on devices. A write from another device during a long export can leave the file a moment inconsistent across pages (TD-189). The cap of 6 owned profiles isn't enforced on restore: re-owning firms can leave a device owning more than 6, which only stops it creating new ones.
+
+**Members (Basel, 2026-10-20).** Exporting a profile the person belongs to but doesn't own is accepted only while every user is an owner (the pilot). Before the first member invite (MUT-305/306), export must be limited to profiles the person owns, or to what their firm role allows. MUT-305 carries this as a requirement.
 
 ## ADR-157: Restores Go Through a Scratch Copy; a Profile Restore Never Rolls Back Access or Audit (MUT-327)
 
