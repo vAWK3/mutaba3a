@@ -92,14 +92,14 @@ prisma migrate deploy ──(proxy)────▶  Cloud SQL Postgres 16  mutab
 terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api  (min 1, max 1)  ◀── Malafat, Bearer mut_live_…
                                       Secret Manager  mutaba3a-api-database-url, mutaba3a-api-admin-token, mutaba3a-api-session-pepper
                                       Cloud Storage  <project>-mutaba3a-attachments (private; attachments + expense receipts; soft delete 14d)
-                                      Cloud Monitoring  uptime checks /health /ready portal /, Cloud SQL alerts → email + SMS (MUT-328)
+                                      Cloud Monitoring  uptime checks /health /ready portal /, Cloud SQL alerts → email (MUT-328; SMS not set up)
 ```
 
 | Setting | Production |
 |---|---|
 | `API_KEY_ENVIRONMENT` | `live` |
 | Cloud SQL | `db-g1-small`, REGIONAL, daily backups + PITR 7d, deletion protection |
-| Attachments bucket | no versioning; deleted objects restorable 14 days (`soft_delete_policy`, TD-190), as long as the 14 daily backups. **Prepared 2026-10-20, not applied**: until the next `make release server` (or `server/DEPLOYMENT.md` §6c alone) it has GCS's default 7 days. Listed in `docs/operations/before-release.md`. Record the apply date here |
+| Attachments bucket | no versioning; deleted objects restorable 14 days (`soft_delete_policy`, TD-190), as long as the 14 daily backups. **Applied 2026-10-20** (rode along with the §6b apply as a dependency; `retention_duration_seconds` 604800 → 1209600) |
 | Cloud Run instances | min 1 · max 1 (TD-017) |
 | Prisma pool per instance | `db_pool_size` = 10, as `connection_limit` in the DATABASE_URL secret Terraform writes (MUT-270) |
 | Cloud SQL `max_connections` | `db_max_connections` = 50, an explicit flag (db-g1-small's own default) (MUT-270) |
@@ -116,7 +116,7 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 - `server/infrastructure/terraform/` — everything on the GCP side of the
   diagram. `image_tag` is the deployed version; `SERVICE_VERSION` reports it on
   `/health`.
-- `server/infrastructure/terraform/monitoring.tf` — uptime checks, notification channels and alert policies (MUT-328, ADR-154). **Prepared 2026-10-20, not applied**: Basel applies it per `server/DEPLOYMENT.md` §6b (set `alert_email` / `alert_sms_number` in production.tfvars, targeted plan, verify the SMS channel, run the drill). Record the apply date here. The checks probe `uptime_host`, else the Cloud Run host, so they follow the custom domain (MUT-112).
+- `server/infrastructure/terraform/monitoring.tf` — uptime checks, notification channels and alert policies (MUT-328, ADR-154). **Applied 2026-10-20, email only**: `alert_email` set in production.tfvars (channel `notificationChannels/14384563563247649611`), 3 checks + 5 policies live, 8 added / 1 changed (the §6c bucket) / 0 destroyed. No SMS channel yet (`alert_sms_number` unset; add it and re-run §6b steps 2–4 when wanted). The drill (§6b) has not been run. The checks probe `uptime_host`, else the Cloud Run host, so they follow the custom domain (MUT-112).
 - `server/Dockerfile` — the one image.
 - `server/scripts/deploy.sh` — the only rollout path; runs on the operator's machine.
 - `docs/operations/pilot-runbook.md` — the pilot operator runbook (MUT-327): onboarding, resets, restores, incidents, support, offboarding. `server/scripts/restore-drill.sh` restores backups into scratch instances (**drill not yet run against production**; results go in the runbook's §10), `server/scripts/profile-rows.sh` exports, restores or purges one profile.

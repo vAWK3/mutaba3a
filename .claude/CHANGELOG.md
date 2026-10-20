@@ -41,7 +41,10 @@
 - `server/DEPLOYMENT.md` §6b: the monitoring plan targets the check's old address too (`google_monitoring_uptime_check_config.health`), which Terraform 1.15 requires for a targeted plan over a `moved` block; notes that the targets pull in the Cloud Run service and the attachments bucket, so §6c's 7 → 14 day change rides along.
 - `docs/operations/before-release.md`: the MUT-328 item says it blocks the release, not that it is optional.
 
-**Files**: `server/scripts/deploy.sh`, `server/scripts/lib/tf-bootstrap.sh`, `server/src/scripts/__tests__/deploy-bootstrap.test.ts`, `server/DEPLOYMENT.md`, `docs/operations/before-release.md`.
+### Infrastructure (applied to production, 2026-10-20)
+- `server/DEPLOYMENT.md` §6b applied, email only (`alert_email` in the git-ignored tfvars, no SMS): the uptime check renamed in state, `/ready` and portal `/` checks, the email channel and 5 alert policies created; TD-190's bucket soft-delete 14 days applied with it. 8 added, 1 changed, 0 destroyed; a full untargeted plan afterwards reports no changes. Both items removed from `docs/operations/before-release.md`; dates in `.claude/INFRA.md` §2. The §6b drill was not run.
+
+**Files**: `server/scripts/deploy.sh`, `server/scripts/lib/tf-bootstrap.sh`, `server/src/scripts/__tests__/deploy-bootstrap.test.ts`, `server/DEPLOYMENT.md`, `docs/operations/before-release.md`, `.claude/INFRA.md`, `.claude/TECH_DEBT.md`.
 
 ---
 
