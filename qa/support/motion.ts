@@ -54,7 +54,8 @@ export const readExitTrace = (page: Page): Promise<ExitTrace> =>
  * `.save-feedback-icon [data-part]` on the page has its inline `scale()` read on
  * each animation frame, so a spec can tell the two presets apart by their curve:
  * playful overshoots past 1 before settling, restrained never does, and reduced
- * motion paints 1 from the first frame.
+ * motion paints 1 from the first frame. It also follows the ring's centre:
+ * the pop scales around the icon's centre, so the ring never drifts from it.
  */
 export interface IconScaleTrace {
   /** Frames on which at least one icon part was on the page */
@@ -64,12 +65,14 @@ export interface IconScaleTrace {
   max: number;
   /** Scale of the last frame seen */
   last: number;
+  /** Largest distance, in px, between the ring's centre and its icon's centre */
+  maxOffCenter: number;
 }
 
 /** Start sampling. Call before the save so the first painted frame is caught. */
 export async function traceIconScale(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const trace: IconScaleTrace = { frames: 0, min: Infinity, max: -Infinity, last: NaN };
+    const trace: IconScaleTrace = { frames: 0, min: Infinity, max: -Infinity, last: NaN, maxOffCenter: 0 };
     (window as unknown as { __qaIconScale: IconScaleTrace }).__qaIconScale = trace;
     const tick = () => {
       const parts = document.querySelectorAll<SVGElement | HTMLElement>('.save-feedback-icon [data-part]');
@@ -82,6 +85,12 @@ export async function traceIconScale(page: Page): Promise<void> {
           trace.min = Math.min(trace.min, value);
           trace.max = Math.max(trace.max, value);
           trace.last = value;
+          const svg = (part as SVGElement).ownerSVGElement;
+          if (part.dataset.part !== 'ring' || !svg || value <= 0) return;
+          const ring = part.getBoundingClientRect();
+          const icon = svg.getBoundingClientRect();
+          const off = Math.hypot(ring.x + ring.width / 2 - (icon.x + icon.width / 2), ring.y + ring.height / 2 - (icon.y + icon.height / 2));
+          trace.maxOffCenter = Math.max(trace.maxOffCenter, off);
         });
       }
       requestAnimationFrame(tick);

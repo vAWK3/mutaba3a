@@ -57,6 +57,8 @@ test('on a personal profile the save-feedback icon plays the playful pop', { tag
   // Playful overshoots past full size before settling (MMotion.overshoot)
   expect(trace.min).toBeLessThan(0.5);
   expect(trace.max).toBeGreaterThan(1.02);
+  // It pops from the icon's centre, not its top-left corner
+  expect(trace.maxOffCenter).toBeLessThan(0.5);
 });
 
 test('with Reduce Motion on the save-feedback icon shows settled, with no pop', { tag: '@portal.expenses.save-feedback-reduced-motion' }, async ({ page, step }) => {
