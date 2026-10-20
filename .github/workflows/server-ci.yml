@@ -103,8 +103,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # terraform = GCP (ADR-026); sentry = error reporting (ADR-091, MUT-147).
-        module: [terraform, sentry]
+        # terraform = GCP (ADR-026); sentry = error reporting (ADR-091, MUT-147); frontdoor = the custom domain (ADR-155, MUT-326).
+        module: [terraform, sentry, frontdoor]
     defaults:
       run:
         working-directory: server/infrastructure/${{ matrix.module }}
@@ -116,5 +116,5 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false
       - run: terraform validate
-      # Offline: the providers are mocked (Sentry; Google and random since MUT-270), so no token or account is needed.
+      # Offline: the providers are mocked (Sentry; Google and random since MUT-270; Cloudflare and Netlify since MUT-326), so no token or account is needed.
       - run: terraform test
