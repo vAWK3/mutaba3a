@@ -41,6 +41,7 @@
 - Release-QA: new `web.legal.privacy-linked-language`; the stale hosted-accounts heading in `@web.legal.links` now comes from the translation files.
 - No portal change: no portal surface links to `/privacy`.
 - Phone half (mutaba3a-flutter): `privacyUri(languageCode:)` adds `?lang`.
+
 ## [Unreleased] - 2026-10-20 — The custom domain is one input (MUT-326, ADR-155)
 
 **Why:** The domain must be live before the pilot (MUT-322) but isn't chosen yet. The run.app and netlify.app hosts were written into vite, the bundle allowlist, the terms release guard, provisioning, Sentry tfvars and tests, so a move meant hunting for them. Now picking the domain is one edit, and MUT-112 shrinks to "pick, apply, release". Brief: `.claude/designs/mut-326-domain-move.md`.
