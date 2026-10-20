@@ -72,6 +72,31 @@ describe('SavedFlashAnnouncer', () => {
     expect(useToastStore.getState().toasts).toHaveLength(0);
   });
 
+  it('a claimed payment keeps its visually-hidden "Saved" and raises no toast (payments are outside MUT-338)', async () => {
+    act(() => {
+      useSavedFlashStore.getState().markSaved(income({ kind: 'payment' }));
+      useSavedFlashStore.getState().registerList('list-a');
+      useSavedFlashStore.getState().reportSettled('list-a', ['tx-1'], true);
+    });
+    const { container } = renderWithProviders(<SavedFlashAnnouncer />);
+
+    await waitFor(() => expect(container.querySelector('.sr-only[role="status"]')?.textContent).toBe('Saved'));
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('an unclaimed payment message carries no save-feedback icon', async () => {
+    act(() => useSavedFlashStore.getState().markSaved(income({ kind: 'payment' })));
+    renderWithProviders(<SavedFlashAnnouncer />);
+    act(() => {
+      useSavedFlashStore.getState().registerList('list-a');
+      useSavedFlashStore.getState().reportSettled('list-a', ['other'], true);
+    });
+
+    await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1));
+    expect(useToastStore.getState().toasts[0].action?.label).toBe('Show');
+    expect(useToastStore.getState().toasts[0].icon).toBeUndefined();
+  });
+
   it('raises the message with Show when nothing claims the row', async () => {
     act(() => useSavedFlashStore.getState().markSaved(income()));
     renderWithProviders(<SavedFlashAnnouncer />);
