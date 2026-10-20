@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
-import { chooseLanguageScript, LANGUAGE_KEYS } from '../../support/i18n';
+import { chooseLanguageScript, LANGUAGE_KEYS, en as enCopy, ar as arCopy } from '../../support/i18n';
 import { readFileSync } from 'node:fs';
 
 interface TermsText {
@@ -14,6 +14,8 @@ const text = (language: 'en' | 'ar'): TermsText =>
   JSON.parse(readFileSync(new URL(`../../../src/content/legal/terms/2026-10-19.${language}.json`, import.meta.url), 'utf8')) as TermsText;
 const en = text('en');
 const ar = text('ar');
+/** The privacy policy's copy, from the app's own translation files, so a copy change needs no spec change. */
+const privacy = { en: enCopy.landing.privacyPolicy, ar: arCopy.landing.privacyPolicy };
 
 /**
  * MUT-324 (ADR-102): the terms of service and the privacy policy's hosted
@@ -76,11 +78,44 @@ test('a portal link opens the terms in the language the portal records, without 
   });
 });
 
+test('a link from the phone or the portal opens the privacy policy in its language, without changing the site language', { tag: '@web.legal.privacy-linked-language' }, async ({ page, step }) => {
+  /** The element that carries the policy's own language and direction. */
+  const policy = (title: string) => page.getByRole('heading', { level: 1, name: title }).locator('xpath=..');
+
+  await step('With the site in Arabic, open /privacy?lang=en: the English policy, left to right', async () => {
+    await preferLanguage(page, 'ar');
+    await page.goto('/privacy?lang=en');
+    await expect(page.getByRole('heading', { level: 2, name: privacy.en.hostedAccounts.title })).toBeVisible();
+    await expect(policy(privacy.en.title)).toHaveAttribute('lang', 'en');
+    await expect(policy(privacy.en.title)).toHaveAttribute('dir', 'ltr');
+  });
+
+  await step('Open /privacy without ?lang: the site is still in Arabic', async () => {
+    await page.goto('/privacy');
+    await expect(page.getByRole('heading', { level: 1, name: privacy.ar.title })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  });
+
+  await step('With the site in English, open /privacy?lang=ar: the Arabic policy, right to left; the site stays in English', async () => {
+    await preferLanguage(page, 'en');
+    await page.goto('/privacy?lang=ar');
+    await expect(policy(privacy.ar.title)).toHaveAttribute('lang', 'ar');
+    await expect(policy(privacy.ar.title)).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+  });
+
+  await step('Open /privacy?lang=fr: the site language', async () => {
+    await page.goto('/privacy?lang=fr');
+    await expect(page.getByRole('heading', { level: 1, name: privacy.en.title })).toBeVisible();
+    await expect(policy(privacy.en.title)).not.toHaveAttribute('lang', /./);
+  });
+});
+
 test('the terms are linked from the footer and the /hosted form, and the privacy policy explains hosted accounts', { tag: '@web.legal.links' }, async ({ page, step }) => {
   await step('The privacy policy has a hosted-accounts section and its footer links the terms', async () => {
     await preferLanguage(page, 'en');
     await page.goto('/privacy');
-    const heading = page.getByRole('heading', { level: 2, name: /Hosted accounts/ });
+    const heading = page.getByRole('heading', { level: 2, name: privacy.en.hostedAccounts.title });
     await expect(heading).toBeVisible();
     const section = page.locator('section', { has: heading });
     for (const fact of ['me-west1', '14 days', 'the last 7 days', 'Sentry', 'PostHog', '30 days']) await expect(section).toContainText(fact);

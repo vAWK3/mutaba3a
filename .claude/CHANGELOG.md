@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — MUT-356: /privacy honours ?lang, like /terms
+
+**Why:** the phone's Settings › Privacy policy (MUT-344) opens `<site>/privacy`, which opened in the landing's stored language (Arabic by default, ADR-077), so English phone users read the Arabic policy.
+
+### Changed
+- `/privacy?lang=en|ar` shows the policy text in that language, marked with its own `lang`/`dir`; the chrome stays in the page language and nothing is stored, as on `/terms` (`PrivacyPolicyPage` takes `search`, `main.tsx` passes it). An unknown value is ignored.
+
+### Technical
+- `src/content/legal/language.ts`: `legalLanguageOf` + `LegalLanguage`, lifted from `termsLanguageOf` (removed) and shared by both legal pages.
+- `useTIn(language)` in `src/lib/i18n/context.tsx`: a translator for a text's own language that touches no state.
+- Release-QA: new `web.legal.privacy-linked-language`; the stale hosted-accounts heading in `@web.legal.links` now comes from the translation files.
+- No portal change: no portal surface links to `/privacy`.
+- Phone half (mutaba3a-flutter): `privacyUri(languageCode:)` adds `?lang`.
+
 ## [Unreleased] - 2026-10-19 — MUT-337: icon save-feedback animation runtime decision + web prototype (ADR-152)
 
 **Why:** MUT-338/339/340 (the epic's actual gamification features, the first marked highest-priority) are all blocked until an animation runtime is chosen for the MUT-335/336 icon system. This ticket decides and proves the mechanism; MUT-338 wires it into a real trigger.

@@ -102,7 +102,7 @@ function App() {
       return (
         <LandingProviders>
           <Suspense fallback={<BootSplash />}>
-            <PrivacyPolicyPage />
+            <PrivacyPolicyPage search={window.location.search} />
           </Suspense>
         </LandingProviders>
       );
