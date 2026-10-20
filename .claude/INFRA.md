@@ -118,6 +118,7 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 - `server/infrastructure/terraform/monitoring.tf` — uptime checks, notification channels and alert policies (MUT-328, ADR-154). **Prepared 2026-10-20, not applied**: Basel applies it per `server/DEPLOYMENT.md` §6b (set `alert_email` / `alert_sms_number` in production.tfvars, targeted plan, verify the SMS channel, run the drill). Record the apply date here. The checks probe `uptime_host`, else the Cloud Run host, so they follow the custom domain (MUT-112).
 - `server/Dockerfile` — the one image.
 - `server/scripts/deploy.sh` — the only rollout path; runs on the operator's machine.
+- `docs/operations/pilot-runbook.md` — the pilot operator runbook (MUT-327): onboarding, resets, restores, incidents, support, offboarding. `server/scripts/restore-drill.sh` restores backups into scratch instances (**drill not yet run against production**; results go in the runbook's §10), `server/scripts/profile-rows.sh` exports, restores or purges one profile.
 - `.github/workflows/server-ci.yml` — verification only; never pushes or deploys.
 
 ### Operator-held (not in code, by design)
