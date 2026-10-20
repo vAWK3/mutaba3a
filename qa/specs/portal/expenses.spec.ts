@@ -46,10 +46,17 @@ async function saveExpenseAndTraceIcon(page: Page, step: Step, profile: StubProf
 }
 
 test('a successful expense save shows the animated save-feedback icon in the saved notice', { tag: '@portal.expenses.save-feedback-animation' }, async ({ page, step }) => {
-  const trace = await saveExpenseAndTraceIcon(page, step, office(OFFICE_A, 'Nour Studio'));
-  // A business profile is restrained: it grows from nothing and never overshoots
+  const trace = await saveExpenseAndTraceIcon(page, step, { ...office(OFFICE_A, 'Nour Studio'), firm: true, role: 'OWNER' });
+  // A profile with firm features on (MUT-300) is restrained: it grows from nothing and never overshoots
   expect(trace.min).toBeLessThan(0.5);
   expect(trace.max).toBeLessThanOrEqual(1);
+});
+
+test('on a business profile without firm features the save-feedback icon still plays the playful pop', { tag: '@portal.expenses.save-feedback-business-playful' }, async ({ page, step }) => {
+  const trace = await saveExpenseAndTraceIcon(page, step, office(OFFICE_A, 'Nour Studio'));
+  // Restrained goes by MUT-300's firm switch, not by the profile type (MUT-338 comment 12272)
+  expect(trace.min).toBeLessThan(0.5);
+  expect(trace.max).toBeGreaterThan(1.02);
 });
 
 test('on a personal profile the save-feedback icon plays the playful pop', { tag: '@portal.expenses.save-feedback-personal' }, async ({ page, step }) => {

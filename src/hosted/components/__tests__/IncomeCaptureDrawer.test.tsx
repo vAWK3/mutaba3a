@@ -177,9 +177,21 @@ describe('IncomeCaptureDrawer (MUT-133)', () => {
     await waitFor(() => parts.forEach((part) => expect(scaleOf(part)).toBe(1)), { timeout: 2000 });
   });
 
-  it('plays the restrained icon preset on a BUSINESS profile save (MUT-338)', async () => {
+  it('plays the playful icon preset on a BUSINESS profile without firm features (MUT-338, comment 12272)', async () => {
     const posts = stub((r) => created(r.body));
     const { user } = renderDrawer({ profile: BUSINESS, defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '100');
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+
+    const parts = Array.from(screen.getByTestId('toast-live').querySelectorAll('[data-part]'));
+    expect(parts.length).toBeGreaterThan(0);
+    await waitFor(() => parts.forEach((part) => expect(scaleOf(part)).toBeGreaterThan(1)), { timeout: 2000 });
+  });
+
+  it('plays the restrained icon preset once firm features are on (MUT-338)', async () => {
+    const posts = stub((r) => created(r.body));
+    const { user } = renderDrawer({ profile: { ...BUSINESS, firm: true, role: 'OWNER' }, defaultCustomerId: C1 });
     await user.type(screen.getByLabelText('Amount'), '100');
     await user.click(screen.getByRole('button', { name: 'Save income' }));
     await waitFor(() => expect(posts).toHaveLength(1));

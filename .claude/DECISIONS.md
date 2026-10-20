@@ -4229,6 +4229,9 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 ---
 
+**Amendment (2026-10-20, Basel, MUT-338 comment 12272)**: the restrained preset goes to profiles with MUT-300's firm switch on (`firm: true` on `/v1/me`), not to `type === 'BUSINESS'`. A BUSINESS profile without firm features, an operator organization without them, and a server older than 1.41.0-mut300 all play the playful preset. `saveFeedbackPreset` is still the one place the rule lives.
+
+
 ## ADR-159: Open Signup Verifies the Email First and Ends on the Setup-Link Page; Only Business Email Is Instant, the Rest Waits for the Operator; Forgot-Password Mails a RESET Link; Resend Is the One Mailer (Overrides ADR-037 §1's "Operator-Issued Only")
 
 **Status**: Accepted (Basel, 2026-10-20, Q1–Q5 + Q4b in `.claude/designs/mut-331-self-service-signup.md` §10). Overrides ADR-037 §1 and ADR-088's "no signup or forgot-password route" for GA. Supersedes firm-books §10.3 / MUT-299 D14 ("MUT-306 picks the email provider"). Partly overrides Basel's own 2026-10-19 "no approval step" (MUT-331 comment 12133).
