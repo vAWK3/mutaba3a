@@ -359,7 +359,7 @@ if [[ "${DRY_RUN}" != 1 && -f "${WORK}/backup.counts" && -f "${WORK}/pitr.counts
   echo
   echo "| Table | Backup copy | PITR copy |"
   echo "|---|---:|---:|"
-  join -t '|' -a 1 -a 2 -e '—' -o 0,1.2,2.2 "${WORK}/backup.counts" "${WORK}/pitr.counts" | awk -F'|' '{ printf "| %s | %s | %s |\n", $1, $2, $3 }'
+  LC_ALL=C join -t '|' -a 1 -a 2 -e '—' -o 0,1.2,2.2 <(LC_ALL=C sort "${WORK}/backup.counts") <(LC_ALL=C sort "${WORK}/pitr.counts") | awk -F'|' '{ printf "| %s | %s | %s |\n", $1, $2, $3 }'
   backup_audit="$(awk -F'|' '$1 == "audit_events" { print $2 }' "${WORK}/backup.counts")"
   pitr_audit="$(awk -F'|' '$1 == "audit_events" { print $2 }' "${WORK}/pitr.counts")"
   if (( pitr_audit >= backup_audit )); then
