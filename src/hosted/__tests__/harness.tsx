@@ -50,6 +50,10 @@ export function profile(overrides: Partial<HostedProfile> = {}): HostedProfile {
     owned: false,
     type: null,
     version: 1,
+    // MUT-300: firm features off, no role, nothing requested.
+    firm: false,
+    role: null,
+    firmRequestedAt: null,
     ...overrides,
   };
 }

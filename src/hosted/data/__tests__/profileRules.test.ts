@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canCreateProfile, changedFields, profileEditability, profileKindKey } from '../profileRules';
+import { canCreateProfile, changedFields, firmRequestState, profileEditability, profileKindKey } from '../profileRules';
 import { me, profile } from '../../__tests__/harness';
 
 const firm = profile();
@@ -27,8 +27,8 @@ describe('profileEditability (RU2)', () => {
     expect(profileEditability(firm)).toEqual({ editable: false, reason: 'MALAFAT' });
   });
 
-  it('marks an operator firm the user does not own read-only with the firm reason', () => {
-    expect(profileEditability(writerNullFirm)).toEqual({ editable: false, reason: 'FIRM' });
+  it('marks an operator-provisioned profile the user does not own read-only with the operator reason (MUT-300 D5)', () => {
+    expect(profileEditability(writerNullFirm)).toEqual({ editable: false, reason: 'OPERATOR' });
   });
 
   it('lets the owner edit, and locks the type only on the built-in Personal profile', () => {
@@ -62,5 +62,27 @@ describe('changedFields (RU4)', () => {
 
   it('never sends a type for the built-in Personal profile', () => {
     expect(changedFields({ ...builtIn, name: 'Personal' }, { name: 'Personal', defaultCurrency: 'ILS', type: 'BUSINESS' })).toEqual({});
+  });
+});
+
+describe('firmRequestState (MUT-300)', () => {
+  it('offers the request only on an owned Business profile that is not the built-in one', () => {
+    expect(firmRequestState(ownedBusiness)).toBe('offer');
+    expect(firmRequestState(ownedPersonal)).toBe('hidden');
+    expect(firmRequestState(builtIn)).toBe('hidden');
+    expect(firmRequestState(writerNullFirm)).toBe('hidden');
+    expect(firmRequestState(firm)).toBe('hidden');
+  });
+
+  it('shows a pending request as requested, and nothing once firm features are on', () => {
+    expect(firmRequestState({ ...ownedBusiness, firmRequestedAt: '2026-10-20T09:00:00.000Z' })).toBe('requested');
+    expect(firmRequestState({ ...ownedBusiness, firm: true, role: 'OWNER' })).toBe('hidden');
+  });
+
+  it('hides the request when an older server sends no firm fields (it has no route to take it)', () => {
+    const older: Partial<typeof ownedBusiness> = { ...ownedBusiness };
+    delete older.firm;
+    delete older.firmRequestedAt;
+    expect(firmRequestState(older as typeof ownedBusiness)).toBe('hidden');
   });
 });

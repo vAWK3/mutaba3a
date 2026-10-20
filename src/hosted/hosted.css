@@ -503,6 +503,10 @@
 .hp-type-card-seed { display: block; font-size: var(--text-label); color: var(--muted); }
 [aria-invalid='true'] > .hp-type-card { border-color: var(--error-muted); }
 .hp-type-group { border-top: 1px solid var(--divider); padding-top: var(--space-4); }
+/* MUT-300: the owner's firm request, last in the edit pane, set apart like the type group */
+.hp-firm-request { border-top: 1px solid var(--divider); padding-top: var(--space-4); margin-top: var(--space-4); display: grid; gap: var(--space-2); justify-items: start; }
+.hp-firm-request h3 { margin: 0; }
+.hp-firm-request p { margin: 0; }
 
 /* Design review Issue 8: the one destructive step looks destructive. */
 .hp-confirm { border: 1px solid var(--error-muted); border-radius: var(--radius-md); padding: var(--space-4); background: color-mix(in oklab, var(--error-subtle) 25%, var(--surface)); }

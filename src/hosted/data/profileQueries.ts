@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api, type CreateProfileRequest, type HostedProfile, type Me, type ProfileType, type UpdateProfileRequest } from '../api/client';
 import { ME_KEY, profileKey } from '../session/me';
@@ -63,6 +64,23 @@ export function useUpdateProfile(profileId: string) {
       // A type change replaced the categories and uncategorized expenses: every figure under the profile may differ.
       if (result.typeChange) void queryClient.invalidateQueries({ queryKey: profileKey(profileId) });
       refreshMe(queryClient);
+    },
+  });
+}
+
+/**
+ * MUT-300: the owner's request for firm features. The answer lives in
+ * `/v1/me` (`firmRequestedAt`), so a success re-reads it rather than patching
+ * the cache: the pane then shows Requested from the same source a reload would.
+ */
+export function useRequestFirm(profileId: string) {
+  const queryClient = useQueryClient();
+  const [attempt] = useState(createAttemptKey);
+  return useMutation({
+    mutationFn: () => api.requestFirm(profileId, attempt.keyFor({ profileId })),
+    onSuccess: async () => {
+      attempt.succeeded();
+      await queryClient.invalidateQueries({ queryKey: ME_KEY });
     },
   });
 }

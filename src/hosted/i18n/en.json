@@ -560,7 +560,7 @@
       "openNow": "Open now",
       "readOnly": {
         "malafat": "Managed in Malafat. Change it there.",
-        "firm": "Set up for you by your account administrator."
+        "operator": "Set up for you by your account administrator."
       },
       "back": "All profiles",
       "typeGroup": "Profile type",
@@ -600,6 +600,14 @@
         "timezoneInvalid": "Choose a valid time zone",
         "network": "Can't reach Mutaba3a. Nothing was saved. Try again.",
         "generic": "Something went wrong. Nothing was saved."
+      },
+      "firm": {
+        "title": "Use this profile for a firm",
+        "body": "Firm features are tools for running an office's books with its team. We turn them on for each profile on request.",
+        "request": "Request firm features",
+        "requesting": "Sending request…",
+        "requested": "Requested on {date}. Firm features show up here once they're turned on.",
+        "error": "Your request didn't go through. Try again."
       }
     },
     "usage": {
@@ -805,6 +813,12 @@
       },
       "nothingYet": "nothing yet",
       "crumbLabel": "Breadcrumb"
+    },
+    "firm": {
+      "banner": {
+        "text": "Firm features are on for {profile}. New tools show up here as they're released.",
+        "dismiss": "Dismiss"
+      }
     }
   }
 }

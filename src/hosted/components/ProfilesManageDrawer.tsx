@@ -124,7 +124,7 @@ function ProfileRow({ profile, open, onEdit }: { profile: HostedProfile; open: b
         ) : (
           <span className="hp-option-sub hp-profile-row-reason">
             <LockIcon />
-            {t(editability.reason === 'MALAFAT' ? 'hosted.profiles.readOnly.malafat' : 'hosted.profiles.readOnly.firm')}
+            {t(editability.reason === 'MALAFAT' ? 'hosted.profiles.readOnly.malafat' : 'hosted.profiles.readOnly.operator')}
           </span>
         )}
       </span>
