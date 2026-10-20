@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-185: Uptime alerts can't pin "notify on close" (google provider 5.x)
+**Status**: Open
+**Ticket**: none (MUT-328, 2026-10-20)
+**Added**: 2026-10-20
+**Priority**: Low. Cloud Monitoring is expected to notify on close by default for metric policies, and the drill in `server/DEPLOYMENT.md` §6b confirms it.
+**Impact**: `alert_strategy.notification_prompts = ["OPENED", "CLOSED"]` exists only in hashicorp/google 6.x. `server/infrastructure/terraform` is locked to 5.45.2 (`~> 5.0`). If the default ever changes, recovery is silent. The runbook's fallback is the console's "Notify on incident closure" setting, which Terraform doesn't track.
+**Fix**: with the provider 6.x upgrade of this root (its own ticket: check every resource's plan for drift), add `notification_prompts = ["OPENED", "CLOSED"]` to both policy resources in `monitoring.tf` and assert it in `tests/monitoring.tftest.hcl`.
+
 ### TD-184: An acceptance's `clientRelease` names the portal's built web version, which can lag the live landing that showed the terms text
 **Status**: Open (Q1 in `.claude/designs/mut-354-terms-client-release.md`, Basel's call)
 **Ticket**: MUT-354 (2026-10-20, eng review)

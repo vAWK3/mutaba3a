@@ -456,64 +456,7 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
   member   = "allUsers"
 }
 
-# ============================================================================
-# Monitoring: uptime check on /health, optional alert
-# ============================================================================
-
-resource "google_monitoring_uptime_check_config" "health" {
-  count        = var.enable_uptime_check ? 1 : 0
-  project      = var.project_id
-  display_name = "${local.service_name} /health"
-  timeout      = "10s"
-  period       = "300s"
-
-  http_check {
-    path         = "/health"
-    port         = 443
-    use_ssl      = true
-    validate_ssl = true
-  }
-
-  monitored_resource {
-    type = "uptime_url"
-    labels = {
-      project_id = var.project_id
-      host       = trimprefix(google_cloud_run_v2_service.api.uri, "https://")
-    }
-  }
-
-  depends_on = [google_project_service.apis]
-}
-
-resource "google_monitoring_alert_policy" "health" {
-  count        = var.enable_uptime_check && length(var.alert_notification_channels) > 0 ? 1 : 0
-  project      = var.project_id
-  display_name = "${local.service_name} is down"
-  combiner     = "OR"
-
-  conditions {
-    display_name = "/health failing from all regions"
-    condition_threshold {
-      filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.type=\"uptime_url\" AND metric.label.check_id=\"${google_monitoring_uptime_check_config.health[0].uptime_check_id}\""
-      comparison      = "COMPARISON_GT"
-      threshold_value = 1
-      duration        = "600s"
-
-      aggregations {
-        alignment_period     = "1200s"
-        per_series_aligner   = "ALIGN_NEXT_OLDER"
-        cross_series_reducer = "REDUCE_COUNT_FALSE"
-        group_by_fields      = ["resource.label.*"]
-      }
-
-      trigger {
-        count = 1
-      }
-    }
-  }
-
-  notification_channels = var.alert_notification_channels
-}
+# Uptime checks and alerts: monitoring.tf (MUT-328).
 
 # ============================================================================
 # Attachments bucket (M6): private, uniform access, reached only through

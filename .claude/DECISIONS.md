@@ -4099,3 +4099,17 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 2. `make release web` / `make release server` call `scripts/ci-reminder.sh` just before the deploy confirmation. It prints the last run of that target's workflow on the release branch (result, commit, how far behind HEAD) and the command to start one. It is a reminder, never a gate: it exits 0 when gh is missing, signed out or offline (`SKIP_REMOTE=1`). After a successful push the target prints one more line: run `make ci <target>` on what was just pushed.
 3. `build-windows.yml` keeps its GitHub-release trigger. It is the desktop release build, not CI.
 **Consequences**: A red main is no longer announced on push. The reminder at release time is the prompt to run CI. Pull requests get no automatic checks.
+
+## ADR-154: Uptime Alerts Page on Two Failed Rounds From Two Regions, by Email + SMS, on a Host Variable (MUT-328)
+
+**Status**: Active (supersedes the optional single `/health` alert from ADR-026's first cut)
+**Date**: 2026-10-20
+**Context**: Pilot gate (MUT-322). Production's only uptime check had no alert channel. Basel chose email + SMS through Cloud Monitoring channels, with the phone number kept out of the repo (MUT-328 comment, 2026-10-19). The custom domain isn't chosen yet (MUT-112, prepared by MUT-326). There is no staging.
+**Decision**:
+1. Three uptime checks (`/health`, `/ready`, the portal `/` matched on `id="root"`) live in the API root's `monitoring.tf`, every 300 s from all six regions, on `local.uptime_host`: `var.uptime_host`, else the Cloud Run host. The domain input feeds that local.
+2. Each check's policy fires when **more than 1 region** fails for **360 s** (period + 60 s), on `ALIGN_NEXT_OLDER` + `REDUCE_COUNT_FALSE` aligned to the period. One failed round can't page, and two in a row do. Severity is CRITICAL. Cloud SQL disk > 80% and CPU > 90% for 900 s are WARNING.
+3. Channels come from `alert_email` and `alert_sms_number` (sensitive, E.164), plus any `alert_notification_channels`. With no channel there are no policies.
+4. Firing and closing are proven with an opt-in drill check (`uptime_drill_path`) passed only with `-var`, never by scaling production down.
+5. Monitoring changes are applied with a targeted plan (DEPLOYMENT.md §6b), separate from releases.
+**Consequences**: Expect about a 6 to 11 minute delay between an outage and the page. A one-region network problem never pages. The close notice depends on Cloud Monitoring's default until the provider is on 6.x (TD-185). Moving the domain may replace the checks (new ids), and their policies follow them.
+

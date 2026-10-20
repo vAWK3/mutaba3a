@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — Uptime checks and alerts for the API and portal (MUT-328, ADR-154)
+
+**Why:** Pilot gate (MUT-322). Production had one `/health` uptime check, and no alert reached anyone because no notification channel was set. An outage was found only when a user wrote in.
+
+### Added
+- `server/infrastructure/terraform/monitoring.tf`: uptime checks on `/health`, `/ready` and the portal `/` (matched on `id="root"`), every 5 min from all six regions. They probe `uptime_host`, falling back to the Cloud Run host so they can follow the custom domain (MUT-112/326). Email and SMS notification channels come from `alert_email` / `alert_sms_number` (the number is sensitive, set only in the operator's tfvars). One CRITICAL policy per check fires when more than one region fails for 360 s, which is two failed rounds in a row. Two WARNING Cloud SQL policies cover disk above 80% and CPU above 90% for 15 min. `uptime_drill_path` adds an opt-in drill check to fire and close a real alert without touching production.
+- `tests/monitoring.tftest.hcl`: 14 offline runs (mocked providers).
+- `server/DEPLOYMENT.md` §6b: apply (targeted plan, expect 9 to add), SMS verification, the drill, what each alert means, and the domain move.
+
+### Changed
+- The monitoring section moved from `main.tf` to `monitoring.tf`. `moved` blocks carry the existing `/health` check (and its policy, where one exists) to `endpoint["health"]` unchanged.
+
+### Technical
+- Prepared, **not applied**. Basel applies per §6b. `terraform fmt`/`validate`/`test` pass (17 runs including database_pool). TD-185: provider 5.x cannot pin the close notification.
+
 ## [Unreleased] - 2026-10-20 — MUT-354: each terms acceptance records the client release that showed it (API 1.39.0-mut354)
 
 **Why:** MUT-348 (Basel, 2026-10-20, comment 12222) decided that the evidence of what a person read is the frozen terms file (`textSha256`) plus the page code at the release that rendered it. Before this, nothing recorded that release. Plan: `.claude/designs/mut-354-terms-client-release.md`.

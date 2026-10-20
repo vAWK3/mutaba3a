@@ -92,7 +92,7 @@ prisma migrate deploy ──(proxy)────▶  Cloud SQL Postgres 16  mutab
 terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api  (min 1, max 1)  ◀── Malafat, Bearer mut_live_…
                                       Secret Manager  mutaba3a-api-database-url, mutaba3a-api-admin-token, mutaba3a-api-session-pepper
                                       Cloud Storage  <project>-mutaba3a-attachments (private; attachments + expense receipts)
-                                      Cloud Monitoring  uptime check GET /health (alert optional)
+                                      Cloud Monitoring  uptime checks /health /ready portal /, Cloud SQL alerts → email + SMS (MUT-328)
 ```
 
 | Setting | Production |
@@ -115,6 +115,7 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 - `server/infrastructure/terraform/` — everything on the GCP side of the
   diagram. `image_tag` is the deployed version; `SERVICE_VERSION` reports it on
   `/health`.
+- `server/infrastructure/terraform/monitoring.tf` — uptime checks, notification channels and alert policies (MUT-328, ADR-154). **Prepared 2026-10-20, not applied**: Basel applies it per `server/DEPLOYMENT.md` §6b (set `alert_email` / `alert_sms_number` in production.tfvars, targeted plan, verify the SMS channel, run the drill). Record the apply date here. The checks probe `uptime_host`, else the Cloud Run host, so they follow the custom domain (MUT-112).
 - `server/Dockerfile` — the one image.
 - `server/scripts/deploy.sh` — the only rollout path; runs on the operator's machine.
 - `.github/workflows/server-ci.yml` — verification only; never pushes or deploys.
@@ -148,7 +149,7 @@ Money M8.
 |---|---|
 | Cloud SQL | ~$50–60/mo (`db-g1-small`, REGIONAL) |
 | Cloud Run | ~$10–15/mo (1 min instance, 512Mi, cpu idle) |
-| Secret Manager, Artifact Registry, uptime check | < $1/mo |
+| Secret Manager, Artifact Registry, uptime checks + 5 alert conditions (MUT-328) | < $1/mo (checks within the 1M runs/month free; ~$0.10/condition/month if alerting charges apply) |
 
 ADR-005's "zero server costs" still holds for the desktop/PWA; the hosted API
 is the first paid infrastructure and exists only for firms that connect from
