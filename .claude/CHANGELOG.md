@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — deploy.sh step 0 bootstraps only on an empty state (ADR-161)
+
+### Fixed
+- `make release server` died at deploy.sh step 0 on every attempt since MUT-328 merged (api v0.3.16, v0.3.17 and v0.3.18 never deployed; production stayed on api-v0.3.15). The step's `terraform apply -target=…` refuses to plan while a `moved` block is pending in the configuration ("Moved resource instances excluded by targeting"), and MUT-328's rename of the uptime check had not been applied. Step 0 now runs the targeted apply only when one of its four resources is missing from state (first run on an empty project); otherwise it reads the outputs and moves on, and step 4's full apply reconciles everything.
+
+### Added
+- `server/scripts/lib/tf-bootstrap.sh`: `BOOTSTRAP_TARGETS`, `bootstrap_missing`, `ensure_bootstrap`, sourced by deploy.sh.
+- `server/src/scripts/__tests__/deploy-bootstrap.test.ts` (4): drives the helper through a fake `terraform` on PATH: skip when all four are in state; apply exactly the four targets when one is missing; apply with no state at all; exact-address match only.
+
+### Changed
+- `server/DEPLOYMENT.md` §6b: the monitoring plan targets the check's old address too (`google_monitoring_uptime_check_config.health`), which Terraform 1.15 requires for a targeted plan over a `moved` block; notes that the targets pull in the Cloud Run service and the attachments bucket, so §6c's 7 → 14 day change rides along.
+- `docs/operations/before-release.md`: the MUT-328 item says it blocks the release, not that it is optional.
+
+**Files**: `server/scripts/deploy.sh`, `server/scripts/lib/tf-bootstrap.sh`, `server/src/scripts/__tests__/deploy-bootstrap.test.ts`, `server/DEPLOYMENT.md`, `docs/operations/before-release.md`.
+
+---
+
 ## [Unreleased] - 2026-10-20 — `make create user` / `make create business` (guided account provisioning)
 
 ### Added
