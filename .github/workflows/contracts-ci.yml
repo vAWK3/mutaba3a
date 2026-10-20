@@ -1,34 +1,14 @@
 # CI for the cross-surface contracts (MUT-147 review, D12): the Sentry scrub contract
 # (docs/observability, ADR-091) and the analytics event contract (docs/analytics, ADR-090).
 #
-# web-ci.yml skips docs/** and server-ci.yml only watches server/**, so without this
-# workflow a pull request that edits only a contract file (drops a deny token, or changes
-# bytes without bumping the pinned version) would run no checks at all. Read-only: it never
-# deploys, pushes or contacts Sentry or PostHog.
+# Neither web-ci.yml nor server-ci.yml checks these files, so a change that edits only a
+# contract file (drops a deny token, or changes bytes without bumping the pinned version)
+# is checked only here. Read-only: it never deploys, pushes or contacts Sentry or PostHog.
 name: Contracts CI
 
+# Manual only (2026-10-20): start it with `make ci contracts` or from the Actions tab. `make release`
+# reminds you to run it after each push.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'docs/observability/**'
-      - 'docs/analytics/**'
-      - 'scripts/__tests__/sentry-rules.test.ts'
-      - 'scripts/__tests__/sentry-org-settings.test.ts'
-      - 'scripts/__tests__/analytics-taxonomy.test.ts'
-      - 'scripts/sentry-org-*.ts'
-      - '.gitattributes'
-      - '.github/workflows/contracts-ci.yml'
-  pull_request:
-    paths:
-      - 'docs/observability/**'
-      - 'docs/analytics/**'
-      - 'scripts/__tests__/sentry-rules.test.ts'
-      - 'scripts/__tests__/sentry-org-settings.test.ts'
-      - 'scripts/__tests__/analytics-taxonomy.test.ts'
-      - 'scripts/sentry-org-*.ts'
-      - '.gitattributes'
-      - '.github/workflows/contracts-ci.yml'
   workflow_dispatch:
 
 concurrency:

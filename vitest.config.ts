@@ -23,7 +23,7 @@ const PURE = { lines: 100, statements: 100, functions: 100, branches: 100 };
 const RISK = { lines: 95, statements: 95, functions: 95, branches: 95 };
 
 const COVERAGE_THRESHOLDS = {
-  // 2026-10-16 run: lines 91.69, statements 91.01, functions 88.74, branches 84.12.
+  // 2026-10-20 run (server/** excluded): lines 92.35, statements 91.50, functions 88.53, branches 84.73.
   lines: 91,
   statements: 91,
   functions: 88,
@@ -84,6 +84,8 @@ export default defineConfig({
         'src/test/**',
         'src/main.tsx',
         'src/vite-env.d.ts',
+        // `src/**` also matches server/src/**, which src/hosted/local (MUT-286) imports; the server suite owns its coverage.
+        'server/**',
       ],
     },
   },

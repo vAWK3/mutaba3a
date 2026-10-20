@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — CI back to green; CI manual-only with a release reminder (ADR-153)
+
+**Why:** Web CI and Server CI had failed on every main push since 2026-10-19. MUT-286's local mode makes the portal import the server's route modules, so the web typecheck (`tsconfig.hosted-local.json` pins `server/node_modules/@types`), its tests and `build:hosted` (`@hono/zod-openapi`) need server deps. Neither workflow installed them. Behind that, web coverage had fallen below its floors: server files were counted, the browser shims are only exercised by the server suite, and the HostedRequestForm tests were deleted with HostedOfferPage (7914685a).
+
+### Fixed
+- `web-ci.yml` and the server-ci Docker job also run `npm ci --prefix server`.
+- `vitest.config.ts` coverage excludes `server/**` (the `src/**` glob matched `server/src/**`; the server suite owns it). The coverage floors are unchanged.
+- Added `src/hosted/local/__tests__/platform.test.ts`: the crypto and Buffer shims against real `node:crypto`/`Buffer` from the web suite, including branches `server/src/__tests__/platform-shim.test.ts` never reaches (multi-block input, keys over one block, the randomUUID fallback, invalid hex).
+- Restored the 18 HostedRequestForm tests as `src/pages/landing/__tests__/HostedRequestForm.test.tsx`, against the form itself.
+- Added `src/hosted/local/__tests__/asyncHooksShim.test.ts`. No suite covered the AsyncLocalStorage shim.
+- Added tests for the demo time freeze (`src/demo/timeFreeze.ts`, previously untested) and `SeededRandom`'s remaining helpers.
+
+### Changed
+- web-ci, server-ci and contracts-ci run on `workflow_dispatch` only (ADR-153).
+- `make ci [web|server|contracts|all]` starts the workflows on origin/main.
+- `make release web|server` prints the target workflow's last result and the command to run it before the deploy confirmation (`scripts/ci-reminder.sh`), and ends with a reminder to run `make ci <target>` on what it pushed. `make help` lists the commands.
+
+### Technical
+- Verified under Node 22 with root and server deps installed as CI does: lint, typecheck, test:coverage (392 files, 5545 tests; statements 91.50 / branches 84.73 / functions 88.53 / lines 92.35) and build:hosted all pass. The Docker image build and /health probe were not run locally.
+
 ## [Unreleased] - 2026-10-19 — MUT-337: icon save-feedback animation runtime decision + web prototype (ADR-152)
 
 **Why:** MUT-338/339/340 (the epic's actual gamification features, the first marked highest-priority) are all blocked until an animation runtime is chosen for the MUT-335/336 icon system. This ticket decides and proves the mechanism; MUT-338 wires it into a real trigger.

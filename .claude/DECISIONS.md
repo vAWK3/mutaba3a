@@ -4075,3 +4075,16 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - No new dependency on either platform; the duration (0.4s, shared by both presets — only the curve differs) is this prototype's placeholder, not yet a Brand v2-reviewed number; MUT-338 may tune it.
 - A future change to either platform's curve numbers needs a matching change on the other side — nothing enforces this automatically yet (no parity test exists across the two repos the way `bloomLoaderData.ts`'s does against its Lottie JSON); flagged as a follow-up, not blocking this ticket.
 - The Flutter half (`AnimationController` + `CurvedAnimation(curve: MMotion.overshoot | .spring)`) is not built in mini-crm; needs its own mutaba3a-flutter worktree.
+
+---
+
+## ADR-153: GitHub CI Runs Only by Hand; `make release` Reminds the Operator
+
+**Status**: Active (amends MUT-24 §C D2 and TD-019's push/PR triggers for web-ci, server-ci and contracts-ci)
+**Date**: 2026-10-20
+**Context**: CI on main had been red since 2026-10-19 (MUT-286 made the web typecheck, tests and portal build need `server/node_modules`, which the workflows never installed). Every release push started a run nobody was waiting on. Releases are operator-run from `make release`, where the local gates already run.
+**Decision**:
+1. `web-ci.yml`, `server-ci.yml` and `contracts-ci.yml` trigger on `workflow_dispatch` only. Run them with `make ci [web|server|contracts|all]`, from the Actions tab, or `gh workflow run <file> --ref main`.
+2. `make release web` / `make release server` call `scripts/ci-reminder.sh` just before the deploy confirmation. It prints the last run of that target's workflow on the release branch (result, commit, how far behind HEAD) and the command to start one. It is a reminder, never a gate: it exits 0 when gh is missing, signed out or offline (`SKIP_REMOTE=1`). After a successful push the target prints one more line: run `make ci <target>` on what was just pushed.
+3. `build-windows.yml` keeps its GitHub-release trigger. It is the desktop release build, not CI.
+**Consequences**: A red main is no longer announced on push. The reminder at release time is the prompt to run CI. Pull requests get no automatic checks.
