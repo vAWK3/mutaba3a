@@ -1,6 +1,6 @@
 # Mutaba3a hosted pilot: the offer
 
-> **Status:** draft for Basel's sign-off (MUT-323, epic MUT-322). Internal document: none of it goes on the website. MUT-171/185 keep prices off the site until billing exists (MUT-332).
+> **Status:** ready for Basel's sign-off (MUT-323 AC1, epic MUT-322). Internal document: none of it goes on the website. MUT-171/185 keep prices off the site until billing exists (MUT-332).
 > **Seller:** Barmajiyat Ltd (UK).
 > **Decided 2026-10-19:**
 > - prices, currencies, the 12-month lock and yearly pricing;
@@ -9,7 +9,13 @@
 > - lapsed payment means read-only + export;
 > - Malafat firms pay through Malafat.
 >
-> **Defaults set here** are marked *(default)*. Change them before the first offer goes out.
+> **Decided 2026-10-20** (MUT-323 comment 12220):
+> - the pilot runs 3 months;
+> - feedback calls in week 2 and at the end;
+> - Stripe subscriptions created by hand in the dashboard from day one;
+> - the VAT wording: "Prices exclude VAT; VAT is added where the law requires it."
+>
+> The rate per country is open in MUT-355. It blocks the first invoice, not this sign-off. §6 lists what else is open.
 
 ## 1. Who the pilot is for
 
@@ -34,8 +40,8 @@ Founder prices, monthly, excluding VAT:
 - Customers in Israel pay in **ILS**; everyone else (Jordan, the Gulf, elsewhere) pays in **USD**.
 - **The founder price stays locked for 12 months** from the day the account opens, whatever the list price becomes.
 - **A yearly plan costs 10× the monthly price.**
-- **VAT:** prices exclude VAT. Whether VAT is added, and at what rate, depends on where the customer is. Confirm with Barmajiyat Ltd's accountant before the first invoice; Stripe Tax takes this over in MUT-332.
-- **Pilot length:** the cohort runs **3 months** *(default)*. After that the founder price simply continues until its 12 months are up.
+- **VAT:** say exactly this: "Prices exclude VAT; VAT is added where the law requires it." Don't name a rate. The rate for each customer country is MUT-355 (Barmajiyat Ltd's accountant), which must be settled before the first invoice. Stripe Tax takes this over in MUT-332.
+- **Pilot length:** the pilot runs **3 months**. After that the founder price continues until its 12 months are up.
 
 ## 3. What each tier includes
 
@@ -61,10 +67,10 @@ The table lists **only what has shipped** (the same rule as the /hosted copy). A
 
 ## 4. What the pilot promises
 
-- **Support:** email only, with a reply **within 2 working days**. No WhatsApp or phone support.
+- **Support:** email only, a reply within 2 working days. No WhatsApp or phone support.
 - **Moving in:** if you used the free app, we move your records into the hosted account with you, by hand. This promise already exists on /hosted.
 - **Feedback:**
-  - a 20-minute call in week 2 and another at the end of the pilot *(default)*;
+  - a 20-minute call in week 2 and another at the end of the pilot (the exit interview, `pilot-metrics.md`);
   - anything else by email, whenever you like.
 - **Your data is yours:**
   - **Before MUT-325 ships:** you can ask for your records at any time, and we send them to you as a file.
@@ -76,7 +82,7 @@ The table lists **only what has shipped** (the same rule as the /hosted copy). A
 
 ## 5. How pilot users are invoiced
 
-Use **Stripe from day one, with no code** *(default)*:
+Use **Stripe from day one, with no code**. Subscriptions are created by hand in the Stripe dashboard:
 
 1. Open the **Mutaba3a** Stripe account in the Barmajiyat Ltd Organization.
 2. Create two Products, **Freelancer** and **Firm**. Give each four prices: monthly and yearly, in ILS and in USD.
@@ -90,14 +96,14 @@ Why Stripe from day one, when the pilot could be invoiced by hand:
 
 The account itself is still provisioned by hand (pilot runbook, MUT-327).
 
-## 6. Decisions still open in this document
+## 6. Still open
 
-These have defaults. Change any of them before the first offer goes out:
-- the pilot length (3 months);
-- the feedback calls (week 2 and the end);
-- Stripe from day one;
-- the reply address (the request emails' reply-to; see the reply template).
-- **VAT treatment:** the one item with no default. Ask the accountant.
+- **The VAT rate per customer country:** MUT-355, for Barmajiyat Ltd's accountant. It blocks the first invoice, not this sign-off. Until then the wording in §2 is all we say.
+- **The reply address** *(default)*: replies go from the address the request emails' reply-to points at (see the reply template).
+- **Copy that waits on other tickets:**
+  - the Gulf currencies, until MUT-329's release is live;
+  - "download your records yourself", until MUT-325 ships;
+  - the terms link, until MUT-324's /terms is live.
 
 ---
 
@@ -129,7 +135,8 @@ These have defaults. Change any of them before the first offer goes out:
 - الدفع **بالشيكل** داخل إسرائيل، و**بالدولار** لبقية الدول.
 - **السعر ثابت 12 شهرًا** من يوم فتح الحساب.
 - السعر السنوي يعادل **10 أشهر**.
-- **ضريبة القيمة المضافة:** تُضاف حسب بلد العميل، ويُؤكَّد ذلك مع محاسب الشركة قبل أول فاتورة.
+- **ضريبة القيمة المضافة:** نقول هذا بالضبط: «الأسعار لا تشمل ضريبة القيمة المضافة، وتُضاف الضريبة حيث يفرضها القانون.» لا نذكر نسبة. نسبة كل بلد يحددها محاسب الشركة في MUT-355 قبل أول فاتورة.
+- **مدة التجربة:** **3 أشهر**. بعدها يستمر سعر المؤسسين حتى تكتمل أشهره الاثنا عشر.
 
 ## ٣. ما تشمله كل باقة
 
@@ -147,10 +154,17 @@ These have defaults. Change any of them before the first offer goes out:
 
 ## ٤. ما نَعِد به خلال التجربة
 
-- **الدعم:** بالبريد الإلكتروني فقط، ونرد **خلال يومَي عمل**.
+- **الدعم:** بالبريد الإلكتروني فقط، والرد خلال يومَي عمل.
 - **نقل سجلاتك:** ننقل سجلاتك من التطبيق المجاني معك، يدويًا.
+- **رأيك:** مكالمة مدتها 20 دقيقة في الأسبوع الثاني، وأخرى في نهاية التجربة. وما عدا ذلك بالبريد متى شئت.
 - **بياناتك لك:** نرسلها لك ملفًا متى طلبت، وقريبًا تنزّلها بنفسك.
 - **إذا توقف الدفع:** يصبح الحساب للقراءة فقط، ويبقى التنزيل متاحًا، ولا يُحذف شيء.
 - **إذا أغلقت حسابك:** أمامك **30 يومًا** للتراجع، ثم يُحذف كل شيء، وتُمحى النسخ الاحتياطية بعد 14 يومًا أخرى.
 - **مكان البيانات:** خوادم Google Cloud في تل أبيب، مع نسخ احتياطي يومي.
 - **لسنا محاسبك:** متابعة لا تقدّم إقراراتك الضريبية ولا تُصدر فواتير إلكترونية رسمية.
+
+## ٥. الفواتير
+
+- نستخدم **Stripe من اليوم الأول، دون برمجة**: ننشئ اشتراك كل عميل يدويًا من لوحة Stripe، في حساب **Mutaba3a** التابع لـ Barmajiyat Ltd.
+- تصل الفاتورة بالبريد، ويدفع العميل بالبطاقة.
+- حين يصل MUT-332 تكون الاشتراكات موجودة، فلا ننقل شيئًا.

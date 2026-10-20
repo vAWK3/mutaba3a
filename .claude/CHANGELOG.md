@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — Pilot offer: Basel's decisions applied (MUT-323, epic MUT-322)
+
+**Why:** Basel settled the draft's open defaults on 2026-10-20 (MUT-323 comment 12220). Internal docs only: no price words reach the site (MUT-171/185).
+
+### Changed
+- `docs/commercial/pilot-offer.md` (EN + AR) and `docs/commercial/hosted-request-reply.md` (EN + AR):
+  - the pilot runs 3 months;
+  - feedback calls in week 2 and at the end;
+  - Stripe subscriptions created by hand in the dashboard from day one;
+  - the VAT sentence, word for word: "Prices exclude VAT; VAT is added where the law requires it." The rate per country is MUT-355, which blocks the first invoice, not the sign-off;
+  - the support promise reads exactly "email only, a reply within 2 working days".
+- The Arabic offer gains the pilot length, the feedback calls and an invoicing section.
+- Prices, the seller (Barmajiyat Ltd, UK) and the 12-month lock are unchanged.
+
+### Verified
+- `npx vitest run src/pages/landing` (landing and /hosted honesty tests): 15 files, 223 tests pass.
+
 ## [Unreleased] - 2026-10-19 — Pilot offer and the /hosted reply template (MUT-323, epic MUT-322)
 
 **Why:** /hosted promises an offer by email within 2 working days, but no price or reply existed. These docs are internal. No price reaches the site: MUT-171/185 hold that rule until billing exists (MUT-332).

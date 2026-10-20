@@ -16,6 +16,7 @@
 - [ ] Does the request say they use the free app? Mention moving their records.
 - [ ] /terms is live (MUT-324). Until it is, leave out the terms line.
 - [ ] Mention the Gulf currencies only once MUT-329's release is live.
+- [ ] Keep the VAT sentence word for word. Don't name a rate: that's MUT-355, and it must be settled before the first invoice goes out.
 
 ---
 
@@ -31,7 +32,9 @@ Thanks for asking about a hosted Mutaba3a account. We're opening hosted accounts
 
 **B. Firm.** The **Firm** plan is **{₪299 / $80} a month for the whole firm**, or **{₪2,990 / $800} a year** (two months free).
 
-Prices are before VAT. As one of the first users, your price stays the same for 12 months, whatever we charge later.
+Prices exclude VAT; VAT is added where the law requires it. As one of the first users, your price stays the same for 12 months, whatever we charge later.
+
+The pilot runs for 3 months. We'll call you in week 2 and again at the end to hear what works and what doesn't. Between calls, just email us.
 
 What you get:
 - Your records on every device you sign in on: the web, iPhone and Android.
@@ -46,9 +49,9 @@ What you get:
 How it works:
 1. Reply "yes" and tell us whether you'd like monthly or yearly.
 2. We set up your account and email you a link to choose your password.
-3. Stripe emails you the first invoice, and you pay by card.
+3. We start your subscription, and Stripe emails you each invoice. You pay by card.
 
-Support is by email, and we reply within 2 working days. Your records are yours. If you stop paying, your account becomes read-only, and you can still see and download everything. {Terms: {terms link}}
+Support: email only, a reply within 2 working days. Your records are yours. If you stop paying, your account becomes read-only, and you can still see and download everything. {Terms: {terms link}}
 
 Thanks,
 Basel
@@ -70,7 +73,9 @@ Mutaba3a, by Barmajiyat Ltd
 
 **ب. المكتب.** باقة **المكتب** بسعر **{‏299 ₪ / ‏80 $} شهريًا للمكتب كله**، أو **{‏2,990 ₪ / ‏800 $} سنويًا** (شهران مجانًا).
 
-الأسعار قبل ضريبة القيمة المضافة. ولأنك من أوائل المستخدمين، يبقى سعرك ثابتًا 12 شهرًا مهما تغيّرت أسعارنا لاحقًا.
+الأسعار لا تشمل ضريبة القيمة المضافة، وتُضاف الضريبة حيث يفرضها القانون. ولأنك من أوائل المستخدمين، يبقى سعرك ثابتًا 12 شهرًا مهما تغيّرت أسعارنا لاحقًا.
+
+تستمر التجربة 3 أشهر. نتصل بك في الأسبوع الثاني ثم في نهايتها لنسمع ما ينفع وما لا ينفع. وبين المكالمتين، راسلنا بالبريد متى شئت.
 
 ما تحصل عليه:
 - سجلاتك على كل جهاز تسجّل الدخول منه: الويب والآيفون والأندرويد.
@@ -85,9 +90,9 @@ Mutaba3a, by Barmajiyat Ltd
 الخطوات:
 ١. ردّ بـ«نعم»، وأخبرنا إن كنت تفضّل الدفع الشهري أو السنوي.
 ٢. نُنشئ حسابك ونرسل لك رابطًا لاختيار كلمة المرور.
-٣. تصلك الفاتورة الأولى من Stripe بالبريد، وتدفع بالبطاقة.
+٣. نبدأ اشتراكك، وتصلك كل فاتورة من Stripe بالبريد، وتدفع بالبطاقة.
 
-الدعم بالبريد الإلكتروني، ونرد خلال يومَي عمل. سجلاتك ملكك. إذا توقف الدفع يصبح الحساب للقراءة فقط، وتبقى قادرًا على رؤية كل شيء وتنزيله. {الشروط: {رابط الشروط}}
+الدعم: بالبريد الإلكتروني فقط، والرد خلال يومَي عمل. سجلاتك ملكك. إذا توقف الدفع يصبح الحساب للقراءة فقط، وتبقى قادرًا على رؤية كل شيء وتنزيله. {الشروط: {رابط الشروط}}
 
 مع الشكر،
 باسل
