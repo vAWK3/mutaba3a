@@ -89,3 +89,19 @@ features:
     expect:
       - '"You don''t have a profile yet" shows, with no section navigation'
       - New profile opens its drawer (newProfile=true); Back closes it; Sign out is beside it
+  - id: firm-enabled-banner
+    title: Once an operator turns firm features on, the Overview shows one "Firm features are on" note; Dismiss keeps it gone, in English and in Arabic (MUT-300, DR5)
+    tier: secondary
+    paths:
+      - src/hosted/components/FirmOnBanner.tsx
+      - src/hosted/data/firmBanner.ts
+      - src/hosted/pages/views/OverviewPage.tsx
+    steps:
+      - Sign in to a profile whose firm features are on
+      - Dismiss the note
+      - Reload the portal
+      - Open the portal in Arabic on another profile with firm features on
+    expect:
+      - The Overview shows "Firm features are on for Khatib Law. New tools show up here as they're released." with Dismiss
+      - Dismiss removes it, and it stays gone after the reload
+      - In Arabic the page is right to left and the note reads "ميزات المكتب مفعّلة لملف …" with إغلاق

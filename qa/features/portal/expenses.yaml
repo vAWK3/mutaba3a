@@ -86,3 +86,42 @@ features:
     expect:
       - PATCH /v1/expenses/<id> carries the new occurredOn with If-Match 1
       - The row shows the new day
+  - id: save-feedback-animation
+    title: A successful expense save shows the animated save-feedback icon in SavedNotice (MUT-338)
+    tier: tertiary
+    legacy: [MUT-338]
+    paths:
+      - src/components/icons/SaveFeedbackIcon.tsx
+      - src/lib/motion/saveFeedbackPreset.ts
+    steps:
+      - Open Expenses and add a new expense
+      - Save it
+    expect:
+      - The saved-flash notice includes the animated save-feedback icon
+      - On a business profile the icon grows in without overshooting (restrained)
+  - id: save-feedback-personal
+    title: On a personal profile, a saved expense's icon plays the playful pop (MUT-338)
+    tier: tertiary
+    legacy: [MUT-338]
+    paths:
+      - src/components/icons/SaveFeedbackIcon.tsx
+      - src/lib/motion/saveFeedbackPreset.ts
+      - src/lib/motion/iconMotion.ts
+    steps:
+      - On a personal profile, open Expenses and add a new expense
+      - Save it
+    expect:
+      - The saved-flash notice's icon overshoots past full size, then settles (playful)
+  - id: save-feedback-reduced-motion
+    title: With Reduce Motion on, the save-feedback icon shows settled with no pop (MUT-338)
+    tier: tertiary
+    legacy: [MUT-338]
+    paths:
+      - src/components/icons/SaveFeedbackIcon.tsx
+      - src/lib/motion/iconMotion.ts
+      - src/lib/motion/mediaQuery.ts
+    steps:
+      - Turn on Reduce Motion
+      - On a personal profile, open Expenses and save a new expense
+    expect:
+      - The saved-flash notice's icon is full size from its first frame and never moves

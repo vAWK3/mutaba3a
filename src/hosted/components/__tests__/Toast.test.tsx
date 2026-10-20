@@ -72,6 +72,40 @@ function ActionTrigger({ tone }: { tone: 'error' | 'info' }) {
   );
 }
 
+function IconTrigger() {
+  const show = useToast();
+  return (
+    <button
+      type="button"
+      onClick={() => show('Saved', { tone: 'info', icon: <span data-testid="save-feedback-icon" /> })}
+    >
+      go
+    </button>
+  );
+}
+
+describe('Toast icon override (MUT-338)', () => {
+  it('renders the caller-supplied icon instead of the default InfoIcon when provided', async () => {
+    render(
+      <ToastProvider>
+        <IconTrigger />
+      </ToastProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'go' }));
+    expect(screen.getByTestId('toast-live').querySelector('[data-testid="save-feedback-icon"]')).not.toBeNull();
+  });
+
+  it('falls back to the default InfoIcon when no icon is supplied', async () => {
+    render(
+      <ToastProvider>
+        <Trigger tone="info" />
+      </ToastProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'go' }));
+    expect(screen.getByTestId('toast-live').querySelector('[data-testid="save-feedback-icon"]')).toBeNull();
+  });
+});
+
 describe('Toast actions (MUT-268)', () => {
   it.each(['info', 'error'] as const)('offers a pressable action in the %s tone and closes once it is used', async (tone) => {
     render(

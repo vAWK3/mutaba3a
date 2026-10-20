@@ -92,4 +92,24 @@ describe('ToastContainer', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
     expect(toast()).toBeNull();
   });
+
+  it('renders an icon when the toast carries one (MUT-338)', () => {
+    render(<ToastContainer />);
+    act(() => {
+      useToastStore.getState().addToast({
+        message: 'Recorded $100',
+        duration: DURATION,
+        icon: <span data-testid="save-feedback-icon" />,
+      });
+    });
+
+    expect(toast()!.querySelector('[data-testid="save-feedback-icon"]')).not.toBeNull();
+  });
+
+  it('renders no icon wrapper when the toast carries none', () => {
+    render(<ToastContainer />);
+    show();
+
+    expect(toast()!.querySelector('.toast-icon')).toBeNull();
+  });
 });

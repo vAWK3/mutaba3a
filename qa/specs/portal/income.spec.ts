@@ -20,6 +20,27 @@ async function pickClient(page: Page, label: string | RegExp, name: string) {
   await expect(field).toHaveValue(name);
 }
 
+test('a successful income save shows the animated save-feedback icon in its toast', { tag: '@portal.income.save-feedback-animation' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 2 });
+  const drawer = page.getByRole('dialog', { name: 'New income' });
+
+  await step('Open Payments and choose + Add income', async () => {
+    await api.open(page, `/p/${OFFICE_A}/payments`);
+    await page.locator('[data-income-add]').click();
+    await expect(drawer).toBeVisible();
+  });
+
+  await step('Save a received income entry', async () => {
+    await drawer.getByLabel('Amount').fill('500');
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  const toast = page.getByTestId('toast-live');
+  await expect(toast).toContainText('Saved');
+  await expect(toast.locator('[data-part]').first()).toBeVisible();
+});
+
 test('Add income, Received: amount, client and method go to the server, and the payment is listed', { tag: '@portal.income.add-received' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 2 });
   const drawer = page.getByRole('dialog', { name: 'New income' });

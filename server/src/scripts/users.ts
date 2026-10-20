@@ -14,6 +14,16 @@ import { pathToFileURL } from 'node:url';
  *   npm run disable:user    -- --email nour@firm.ps
  *   npm run enable:user     -- --email nour@firm.ps
  *   npm run revoke:sessions -- --email nour@firm.ps   (sign out everywhere)
+ *   npm run terms:report                                        (MUT-354: who is behind the current terms)
+ *   npm run firm:requests                                       (MUT-300: pending requests for firm features)
+ *   npm run firm:enable  -- --organization-id <uuid> [--owner nour@firm.ps,omar@firm.ps]
+ *   npm run firm:disable -- --organization-id <uuid>
+ *   npm run firm:decline -- --organization-id <uuid>
+ *
+ * MUT-300 (ADR-099): `firm-enable` turns firm features on in place. An owned
+ * Business profile stays its owner's, who becomes OWNER; an operator firm
+ * needs at least one --owner, each already a member. Everyone else becomes
+ * BOOKKEEPER.
  *
  * MUT-235 (ADR-088): nobody here ever sees a password. `create` and `rotate`
  * print a one-time setup link instead, on a line of its own after a "shown
@@ -34,7 +44,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -51,6 +61,11 @@ const USAGE = [
   '  enable  --email <email>',
   '  revoke-sessions --email <email>',
   '  terms   lists every user with the terms version they last accepted and the client release that showed it, flagging who is behind the current terms',
+  '  firm-requests   (pending requests for firm features, oldest first)',
+  '  firm-enable  --organization-id <uuid> [--owner <email>[,<email>]]',
+  '          on in place; an owned Business profile needs no --owner (its owner is OWNER); an operator firm needs at least one member',
+  '  firm-disable --organization-id <uuid>',
+  '  firm-decline --organization-id <uuid>',
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
 ].join('\n');
 
@@ -85,6 +100,7 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
         timezone: { type: 'string' },
         'valid-hours': { type: 'string' },
         lock: { type: 'boolean' },
+        owner: { type: 'string' },
       },
     }).values;
   } catch (e) {
@@ -114,13 +130,13 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
 }
 
 export interface AdminClient {
-  call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T>;
+  call<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T>;
   userByEmail(email: string): Promise<UserSummary>;
 }
 
 /** Exported for seed-demo-account.ts (MUT-136), the admin-API half of seeding a local test account. */
 export function adminClient(fetchFn: typeof fetch, baseUrl: string, token: string): AdminClient {
-  const call = async <T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> => {
+  const call = async <T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> => {
     const res = await fetchFn(`${baseUrl}${path}`, {
       method,
       headers: { 'content-type': 'application/json', 'x-admin-token': token },
@@ -168,6 +184,54 @@ function printSetupLink(out: HandlerContext['out'], link: SetupLink): void {
   out(`${SHOWN_ONCE} Valid until ${link.expiresAt} (UTC).`);
   out(link.url);
 }
+
+/** MUT-300: the organization fields the firm verbs print. */
+interface FirmOrganization {
+  id: string;
+  name: string;
+}
+
+interface FirmRequestRow {
+  organizationId: string;
+  name: string;
+  requestedAt: string;
+  requestedByEmail: string | null;
+  owned: boolean;
+}
+
+const FIRM_HANDLERS: Record<Extract<Command, `firm-${string}`>, (ctx: HandlerContext) => Promise<void>> = {
+  'firm-requests': async ({ client, out }) => {
+    let cursor: string | null = null;
+    let printed = 0;
+    do {
+      const query: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+      const page: { data: FirmRequestRow[]; nextCursor: string | null } = await client.call('GET', `/admin/v1/firm-requests${query}`);
+      for (const r of page.data) {
+        out(`${r.organizationId} ${r.name} — requested ${r.requestedAt} by ${r.requestedByEmail ?? 'an unknown user'} (${r.owned ? 'owned' : 'operator firm'})`);
+      }
+      printed += page.data.length;
+      cursor = page.nextCursor;
+    } while (cursor);
+    if (printed === 0) out('no pending firm requests');
+  },
+  'firm-enable': async ({ client, need, optional, out }) => {
+    const emails = (optional('owner') ?? '').split(',').map((e) => e.trim()).filter(Boolean);
+    const ownerUserIds = [];
+    for (const email of emails) ownerUserIds.push((await client.userByEmail(email)).id);
+    const organizationId = need('organization-id');
+    const body = { firmEnabled: true, ...(ownerUserIds.length > 0 ? { ownerUserIds } : {}) };
+    const { organization } = await client.call<{ organization: FirmOrganization }>('PATCH', `/admin/v1/organizations/${organizationId}`, body);
+    out(`${organization.id} ${organization.name}: firm features on`);
+  },
+  'firm-disable': async ({ client, need, out }) => {
+    const { organization } = await client.call<{ organization: FirmOrganization }>('PATCH', `/admin/v1/organizations/${need('organization-id')}`, { firmEnabled: false });
+    out(`${organization.id} ${organization.name}: firm features off`);
+  },
+  'firm-decline': async ({ client, need, out }) => {
+    const { organization } = await client.call<{ organization: FirmOrganization }>('DELETE', `/admin/v1/organizations/${need('organization-id')}/firm-request`);
+    out(`${organization.id} ${organization.name}: firm request declined`);
+  },
+};
 
 const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> = {
   create: async ({ client, need, optional, out }) => {
@@ -239,7 +303,9 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
     const { revoked } = await client.call<{ revoked: number }>('POST', `/admin/v1/users/${user.id}/sessions/revoke`);
     out(`${user.email}: ${revoked} ${revoked === 1 ? 'session' : 'sessions'} revoked`);
   },
+  ...FIRM_HANDLERS,
 };
+
 
 async function setStatus({ client, need, out }: HandlerContext, verb: 'disable' | 'enable'): Promise<void> {
   const target = await client.userByEmail(need('email'));

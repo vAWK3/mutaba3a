@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { create } from 'zustand';
 
 export interface ToastAction {
@@ -18,6 +19,8 @@ export interface Toast {
    * (MUT-82: one Undo at a time). Toasts with no group stack.
    */
   group?: string;
+  /** A decorative leading icon (MUT-338's SaveFeedbackIcon); none by default. */
+  icon?: ReactNode;
 }
 
 interface ToastState {
@@ -57,10 +60,17 @@ export function useToast() {
 
   const showToast = (
     message: string,
-    options?: { action?: ToastAction; duration?: number; type?: ToastType; group?: string }
+    options?: { action?: ToastAction; duration?: number; type?: ToastType; group?: string; icon?: ReactNode }
   ) => {
     const duration = options?.duration ?? (options?.action ? 5000 : 3000);
-    return addToast({ message, type: options?.type, action: options?.action, duration, group: options?.group });
+    return addToast({
+      message,
+      type: options?.type,
+      action: options?.action,
+      duration,
+      group: options?.group,
+      icon: options?.icon,
+    });
   };
 
   return { showToast, removeToast };

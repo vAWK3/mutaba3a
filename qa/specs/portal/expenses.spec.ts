@@ -1,5 +1,7 @@
-import { test, expect } from '../../support/qa';
-import { OFFICE_A, customer, office } from '../../support/portal';
+import type { Page } from '@playwright/test';
+import { test, expect, type Step } from '../../support/qa';
+import { OFFICE_A, customer, office, type StubProfile } from '../../support/portal';
+import { traceIconScale, readIconScale } from '../../support/motion';
 import { FakeApi, STORAGE, apiError, category, expense, todayInJerusalem } from '../../support/portalApi';
 
 /**
@@ -12,6 +14,60 @@ import { FakeApi, STORAGE, apiError, category, expense, todayInJerusalem } from 
 const C1 = customer(0).id;
 const office_ = category(1, 'Office supplies');
 const travel = category(2, 'Travel');
+
+/**
+ * Save an expense on `profile` and follow the save-feedback icon's pop until it
+ * settles at scale 1 (MUT-338). The preset is the profile's: BUSINESS is
+ * restrained, PERSONAL is playful.
+ */
+async function saveExpenseAndTraceIcon(page: Page, step: Step, profile: StubProfile) {
+  const api = new FakeApi({ profiles: [profile], clients: 1, categories: [office_] });
+  const drawer = page.getByRole('dialog', { name: 'Record expense' });
+
+  await step('Open Expenses and add a new expense', async () => {
+    await api.open(page, `/p/${profile.id}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await expect(drawer).toBeVisible();
+  });
+
+  await step('Save it', async () => {
+    await drawer.getByLabel('Amount').fill('12.50');
+    await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
+    await traceIconScale(page);
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  const notice = page.getByRole('status');
+  await expect(notice).toBeVisible();
+  await expect(notice.locator('[data-part]').first()).toBeVisible();
+  await expect.poll(async () => (await readIconScale(page)).last).toBe(1);
+  return readIconScale(page);
+}
+
+test('a successful expense save shows the animated save-feedback icon in the saved notice', { tag: '@portal.expenses.save-feedback-animation' }, async ({ page, step }) => {
+  const trace = await saveExpenseAndTraceIcon(page, step, office(OFFICE_A, 'Nour Studio'));
+  // A business profile is restrained: it grows from nothing and never overshoots
+  expect(trace.min).toBeLessThan(0.5);
+  expect(trace.max).toBeLessThanOrEqual(1);
+});
+
+test('on a personal profile the save-feedback icon plays the playful pop', { tag: '@portal.expenses.save-feedback-personal' }, async ({ page, step }) => {
+  const trace = await saveExpenseAndTraceIcon(page, step, { ...office(OFFICE_A, 'Personal'), type: 'PERSONAL' });
+  // Playful overshoots past full size before settling (MMotion.overshoot)
+  expect(trace.min).toBeLessThan(0.5);
+  expect(trace.max).toBeGreaterThan(1.02);
+  // It pops from the icon's centre, not its top-left corner
+  expect(trace.maxOffCenter).toBeLessThan(0.5);
+});
+
+test('with Reduce Motion on the save-feedback icon shows settled, with no pop', { tag: '@portal.expenses.save-feedback-reduced-motion' }, async ({ page, step }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const trace = await saveExpenseAndTraceIcon(page, step, { ...office(OFFICE_A, 'Personal'), type: 'PERSONAL' });
+  // Even the playful preset paints full size from its first frame
+  expect(trace.min).toBe(1);
+  expect(trace.max).toBe(1);
+});
 
 test('Record an expense: the drawer says what is missing, a currency’s own decimals are accepted, and the expense is listed', { tag: '@portal.expenses.create' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, categories: [office_, travel] });

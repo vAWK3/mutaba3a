@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, type FocusEvent } from 'react';
 import { useLanguage } from '../../lib/i18n/core';
 import { Button } from '../../components/ui/Button';
 import { useSavedFlashResolution } from '../../lib/useSavedFlash';
-import { useSavedFlashStore, type SavedFlash } from '../../lib/savedFlashStore';
+import { useSavedFlashStore, FLASH_MS, type SavedFlash } from '../../lib/savedFlashStore';
+import { SaveFeedbackIcon } from '../../components/icons/SaveFeedbackIcon';
+import type { IconFeedbackPreset } from '../../lib/motion/iconMotion';
 
 /**
  * The portal's view of an after-save (R1 via HP1, MUT-91). The store and the
@@ -40,14 +42,17 @@ export interface SavedNoticeProps {
   filtersKey: string;
   /** The list shows its Unreachable card: a save it claimed is out of sight, so say it anyway (D4). */
   listInError?: boolean;
+  /** MUT-338: playful for a PERSONAL profile, restrained for BUSINESS - resolved by the page, which already holds the full profile via useProfile(). */
+  preset: IconFeedbackPreset;
 }
 
-export function SavedNotice({ kind, message, profileId, onShow, anchor, filtersKey, listInError = false }: SavedNoticeProps) {
+export function SavedNotice({ kind, message, profileId, onShow, anchor, filtersKey, listInError = false, preset }: SavedNoticeProps) {
   const { t } = useLanguage();
   const { pending, claimed } = useSavedFlashResolution();
   const ours = pending && pending.kind === kind && pending.profileId === profileId ? pending : null;
   const outOfSight = claimed === false || (claimed === true && listInError);
   const candidate = ours && outOfSight && !ours.messaged ? ours : null;
+  const claimedVisible = ours && claimed === true && !listInError && (!ours.messaged || anchor === ours.ids[0]) ? ours : null;
 
   // Leaving the page settles whatever save of ours is still pending.
   useEffect(
@@ -67,11 +72,28 @@ export function SavedNotice({ kind, message, profileId, onShow, anchor, filtersK
     store.rearm(shown);
   }, [filtersKey, anchor, kind, profileId]);
 
-  if (ours && claimed === true && !listInError && (!ours.messaged || anchor === ours.ids[0])) {
+  // A brief flash (FLASH_MS, same window as the row tint) rather than a
+  // permanent banner - re-fires per new claimed save, by object identity.
+  // Render-time adjustment (not a setState-in-effect) to start the flash;
+  // the effect below only owns the timer that ends it.
+  const [shownFor, setShownFor] = useState<SavedFlash | null>(null);
+  const [flashVisible, setFlashVisible] = useState(false);
+  if (claimedVisible && shownFor !== claimedVisible) {
+    setShownFor(claimedVisible);
+    setFlashVisible(true);
+  }
+  useEffect(() => {
+    if (!flashVisible) return;
+    const timer = setTimeout(() => setFlashVisible(false), FLASH_MS);
+    return () => clearTimeout(timer);
+  }, [flashVisible, shownFor]);
+
+  if (claimedVisible && flashVisible) {
     return (
-      <span className="sr-only" role="status" aria-live="polite">
-        {t('hosted.savedFlash.saved')}
-      </span>
+      <div key={claimedVisible.ids[0]} className="hp-toast hp-toast-info" role="status" aria-live="polite">
+        <SaveFeedbackIcon preset={preset} />
+        <span>{t('hosted.savedFlash.saved')}</span>
+      </div>
     );
   }
   if (!candidate) return null;
@@ -83,11 +105,23 @@ export function SavedNotice({ kind, message, profileId, onShow, anchor, filtersK
     else store.settleMessage(candidate);
     onShow(candidate.ids[0]);
   };
-  return <NoticeBox key={candidate.ids[0]} flash={candidate} message={message} showLabel={t('hosted.savedFlash.show')} onShow={show} />;
+  return <NoticeBox key={candidate.ids[0]} flash={candidate} message={message} showLabel={t('hosted.savedFlash.show')} onShow={show} preset={preset} />;
 }
 
 /** One notice's lifetime: its own countdown, paused while hovered or focused. */
-function NoticeBox({ flash, message, showLabel, onShow }: { flash: SavedFlash; message: string; showLabel: string; onShow: () => void }) {
+function NoticeBox({
+  flash,
+  message,
+  showLabel,
+  onShow,
+  preset,
+}: {
+  flash: SavedFlash;
+  message: string;
+  showLabel: string;
+  onShow: () => void;
+  preset: IconFeedbackPreset;
+}) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const remaining = useRef(NOTICE_MS);
@@ -117,6 +151,7 @@ function NoticeBox({ flash, message, showLabel, onShow }: { flash: SavedFlash; m
       onFocus={() => setFocused(true)}
       onBlur={onBlur}
     >
+      <SaveFeedbackIcon preset={preset} />
       <span>{message}</span>
       <Button variant="ghost" size="sm" onClick={onShow}>
         {showLabel}

@@ -1,4 +1,5 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
+import type { MembershipRecord, Organization } from '../../../../server/src/repositories/ports.js';
 
 /**
  * The portal's local-mode migrations key off `CURRENT_STORE_SNAPSHOT_VERSION`
@@ -28,14 +29,33 @@ export interface Migration {
 }
 
 /**
- * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
- * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5).
- * Empty at first ship (version 1, nothing to migrate yet) — the mechanism
- * exists before it is needed, so the first real shape change only has to add
- * a function here, never invent the runner or the fingerprint test that
- * catches a forgotten one (`__tests__/format-fingerprint.test.ts`).
+ * MUT-300 (ADR-099), 1 → 2: profiles gain the firm switch and memberships a
+ * role. A device has no operator, so firm features are off and nothing is
+ * requested; its one person owns every profile (ADR-097 §2.2), so every
+ * membership is OWNER, the column's own default. New maps, never edits in
+ * place: a migration doesn't touch the snapshot it was given.
  */
-export const MIGRATIONS: readonly Migration[] = [];
+function addFirmFields(snapshot: StoredSnapshot): StoredSnapshot {
+  type Stored<T> = Omit<T, 'firmEnabledAt' | 'firmRequestedAt' | 'firmRequestedByUserId' | 'role'>;
+  const orgs = snapshot.maps.orgs as Map<string, Stored<Organization>>;
+  const members = snapshot.maps.members as Map<string, Stored<MembershipRecord>>;
+  return {
+    ...snapshot,
+    maps: {
+      ...snapshot.maps,
+      orgs: new Map([...orgs].map(([id, org]) => [id, { ...org, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null }])),
+      members: new Map([...members].map(([key, membership]) => [key, { ...membership, role: 'OWNER' as const }])),
+    },
+  };
+}
+
+/**
+ * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
+ * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
+ * shape change adds a function here; the fingerprint test catches a
+ * forgotten one (`__tests__/format-fingerprint.test.ts`).
+ */
+export const MIGRATIONS: readonly Migration[] = [{ from: 1, to: 2, migrate: addFirmFields }];
 
 /**
  * Applies every migration in order starting from `snapshot.formatVersion`

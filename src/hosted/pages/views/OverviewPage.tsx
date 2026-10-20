@@ -1,5 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { MalafatCreatedNote } from '../../components/MalafatPortal';
+import { FirmOnBanner } from '../../components/FirmOnBanner';
 import { Link } from '@tanstack/react-router';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -58,6 +59,8 @@ export function OverviewPage({ filters, setFilters }: OverviewPageProps) {
       <PageHeader title={t('hosted.overview.title')} headingRef={heading} />
       {/* Right after a business profile is created, once (MUT-191); dismissed, focus goes to the heading */}
       <MalafatCreatedNote onGone={() => heading.current?.focus()} />
+      {/* MUT-300 (DR5): once firm features are on, until dismissed */}
+      <FirmOnBanner />
       <QueryView
         queries={[summary, directory]}
         data={data}

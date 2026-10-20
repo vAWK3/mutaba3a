@@ -8,7 +8,7 @@ import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { decodeTagged, HOSTED_EXPORT_ORIGIN, RECORDS_FILE_KIND } from '../records-file/codec.js';
 import { EXPORT_PAGE_SIZE } from '../records-file/export.js';
 import { LOCAL_PERSON_EMAIL } from '../records-file/local-person.js';
-import { MemoryLedgerStore } from '../repositories/memory.js';
+import { CURRENT_STORE_SNAPSHOT_VERSION, MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
 
 /** MUT-325: GET /v1/records-export and its file route — a signed-in person's own profile, as a local-mode records file. */
@@ -92,7 +92,7 @@ describe('GET /v1/records-export', () => {
     expect(res.headers.get('content-type')).toMatch(/^application\/json/);
     expect(res.headers.get('cache-control')).toMatch(/no-store/);
     const { file, maps } = await recordsOf(res);
-    expect(file).toMatchObject({ kind: RECORDS_FILE_KIND, formatVersion: 1, origin: HOSTED_EXPORT_ORIGIN });
+    expect(file).toMatchObject({ kind: RECORDS_FILE_KIND, formatVersion: CURRENT_STORE_SNAPSHOT_VERSION, origin: HOSTED_EXPORT_ORIGIN });
     expect([...maps.custs!.values()].map((c) => c.name)).toEqual(['Ramallah Bakery']);
     expect([...maps.orgs!.keys()]).toEqual([a.id]);
     expect([...maps.people!.values()].map((u) => [u.id, u.email, u.passwordHash])).toEqual([[p.userId, LOCAL_PERSON_EMAIL, null]]);

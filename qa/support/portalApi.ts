@@ -330,6 +330,9 @@ export function customerSummary(
   };
 }
 
+/** MUT-300: when the fake server records a firm request. */
+export const FIRM_REQUESTED_AT = '2026-10-20T09:00:00.000Z';
+
 interface ProfileState {
   stub: StubProfile;
   defaultCurrency: Currency;
@@ -639,6 +642,11 @@ export class FakeApi {
       return json(this.me().profiles[0], 201);
     }
     if (!state) return notFound();
+    if (e.method === 'POST' && sub === 'firm-request') {
+      // MUT-300: idempotent like the server; the version stays put (eng review O3).
+      state.stub = { ...state.stub, firmRequestedAt: state.stub.firmRequestedAt ?? FIRM_REQUESTED_AT };
+      return json({ firmRequest: { requestedAt: state.stub.firmRequestedAt } }, 202);
+    }
     if (e.method === 'GET' && sub === 'type-change') {
       const to = e.query.get('to');
       return json({ uncategorizedExpenses: this.uncategorized, deletedCategories: 6, preset: to === 'BUSINESS' ? 'general' : 'personal' });

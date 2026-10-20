@@ -22,6 +22,21 @@ const PERSONAL = profile({
   timezone: 'Asia/Jerusalem',
   defaultCurrency: 'ILS',
 });
+const BUSINESS = profile({
+  writerOfRecord: null,
+  isPersonalDefault: false,
+  owned: true,
+  type: 'BUSINESS',
+  access: { payments: 'read-write', capture: 'read-write', expenses: 'read-write' },
+  income: { received: true, owed: true, customer: 'optional' },
+  timezone: 'Asia/Jerusalem',
+  defaultCurrency: 'ILS',
+});
+
+function scaleOf(el: Element): number {
+  const match = /scale\(([-\d.]+)\)/.exec((el as HTMLElement).style.transform);
+  return match ? Number(match[1]) : 0;
+}
 
 const strip = (text: string | null) => (text ?? '').replace(/[⁦-⁩]/g, '');
 
@@ -147,6 +162,31 @@ describe('IncomeCaptureDrawer (MUT-133)', () => {
     expect(posts[0].headers.get('Idempotency-Key')).toBeTruthy();
     expect(posts[0].body).toEqual({ kind: 'owed', amount: '1200.00', currency: 'ILS', occurredOn: '2026-10-14', customerId: C1, title: 'Logo redesign' });
     expect(strip(screen.getByTestId('toast-live').textContent)).toBe('Saved · ₪1,200.00 owed by Nour Studio');
+  });
+
+  it('plays the playful (overshooting) icon preset on a PERSONAL profile save (MUT-338)', async () => {
+    const posts = stub((r) => created(r.body));
+    const { user } = renderDrawer({ defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '100');
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+
+    const parts = Array.from(screen.getByTestId('toast-live').querySelectorAll('[data-part]'));
+    expect(parts.length).toBeGreaterThan(0);
+    await waitFor(() => parts.forEach((part) => expect(scaleOf(part)).toBeGreaterThan(1)), { timeout: 2000 });
+    await waitFor(() => parts.forEach((part) => expect(scaleOf(part)).toBe(1)), { timeout: 2000 });
+  });
+
+  it('plays the restrained icon preset on a BUSINESS profile save (MUT-338)', async () => {
+    const posts = stub((r) => created(r.body));
+    const { user } = renderDrawer({ profile: BUSINESS, defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '100');
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+
+    const parts = Array.from(screen.getByTestId('toast-live').querySelectorAll('[data-part]'));
+    expect(parts.length).toBeGreaterThan(0);
+    await waitFor(() => parts.forEach((part) => expect(scaleOf(part)).toBe(1)), { timeout: 2000 });
   });
 
   it('needs a client for Owed before anything is sent', async () => {

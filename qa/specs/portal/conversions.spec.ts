@@ -8,6 +8,28 @@ import { FakeApi, conversion, todayInJerusalem } from '../../support/portalApi';
  * (qa/support/portalApi.ts) answers a stale If-Match with 409, as the server does.
  */
 
+test('a successful conversion save shows the animated save-feedback icon in the saved notice', { tag: '@portal.conversions.save-feedback-animation' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });
+  const drawer = page.getByRole('dialog', { name: 'Log conversion' });
+
+  await step('Open Conversions and add a new conversion', async () => {
+    await api.open(page, `/p/${OFFICE_A}/conversions`);
+    await page.getByRole('button', { name: 'Log conversion' }).first().click();
+    await expect(drawer).toBeVisible();
+  });
+
+  await step('Save it', async () => {
+    await drawer.getByLabel('From amount').fill('100');
+    await drawer.getByLabel('To amount').fill('370');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  const notice = page.getByRole('status');
+  await expect(notice).toBeVisible();
+  await expect(notice.locator('[data-part]').first()).toBeVisible();
+});
+
 test('Log a conversion: the drawer shows the implied rate, refuses one currency to itself, and the conversion is listed', { tag: '@portal.conversions.log' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });
   const drawer = page.getByRole('dialog', { name: 'Log conversion' });

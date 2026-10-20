@@ -243,3 +243,32 @@ test('an account with no profile yet is offered New profile and Sign out', { tag
     await expect(page.getByRole('main').getByRole('button', { name: 'Sign out' })).toBeVisible();
   });
 });
+
+test('once firm features are on, the Overview shows one note that Dismiss keeps gone, in English and Arabic', { tag: '@portal.shell.firm-enabled-banner' }, async ({ page, step }) => {
+  const TEXT = "Firm features are on for Khatib Law. New tools show up here as they're released.";
+  const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'Khatib Law'), firm: true }, { ...office(OFFICE_B, 'Sader Office'), firm: true }] });
+
+  await step('Sign in to the firm profile: the Overview shows the note', async () => {
+    await api.open(page, `/p/${OFFICE_A}`);
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('note').filter({ hasText: TEXT })).toBeVisible();
+  });
+
+  await step('Dismiss it', async () => {
+    await page.getByRole('button', { name: 'Dismiss' }).click();
+    await expect(page.getByText(TEXT)).toHaveCount(0);
+  });
+
+  await step('Reload the portal: it stays gone', async () => {
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    await expect(page.getByText(TEXT)).toHaveCount(0);
+  });
+
+  await step('In Arabic, on the other firm profile: right to left, and the note in Arabic', async () => {
+    await api.open(page, `/p/${OFFICE_B}`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('note').filter({ hasText: 'ميزات المكتب مفعّلة لملف Sader Office' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'إغلاق' })).toBeVisible();
+  });
+});

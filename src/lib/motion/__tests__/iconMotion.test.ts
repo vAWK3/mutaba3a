@@ -32,6 +32,12 @@ describe('ICON_OVERSHOOT_EASE / ICON_RESTRAINED_EASE', () => {
 });
 
 describe('playIconFeedback', () => {
+  it('scales each part around the icon\'s centre, not the SVG origin (MUT-338)', () => {
+    const target = part();
+    playIconFeedback([target], { preset: 'playful', reducedMotion: false });
+    expect(target.style.transformOrigin).toBe('center');
+  });
+
   it('starts a playful target at scale(0) and settles at scale(1)', async () => {
     const target = part();
     playIconFeedback([target], { preset: 'playful', reducedMotion: false });

@@ -18,6 +18,7 @@ export type Me = Schemas['Me'];
 export type MeTermsMayBeNull = AssertTrue<null extends Me['terms'] ? true : false>;
 type AssertTrue<T extends true> = T;
 export type HostedProfile = Schemas['HostedProfile'];
+export type FirmRequestResponse = Schemas['FirmRequestResponse'];
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];
 export type Currency = Schemas['Currency'];
@@ -463,6 +464,9 @@ export const api = {
     request<UpdateProfileResponse>('PATCH', `/v1/profiles/${encodeURIComponent(profileId)}`, { body, ifMatchVersion: String(version) }),
   profileTypeChangePreview: (profileId: string, to: ProfileType) =>
     request<ProfileTypeChange>('GET', `/v1/profiles/${encodeURIComponent(profileId)}/type-change`, { query: { to } }),
+  // MUT-300: the owner asks for firm features; idempotent on the server, attempt-scoped key like create.
+  requestFirm: (profileId: string, idempotencyKey: string) =>
+    request<FirmRequestResponse>('POST', `/v1/profiles/${encodeURIComponent(profileId)}/firm-request`, { idempotencyKey }),
 
   // Conversions (MUT-161); edit and delete since MUT-194 (ADR-075), the same shape as expenses.
   conversions: (profileId: string, query: Query<'/v1/conversions'> = {}) =>

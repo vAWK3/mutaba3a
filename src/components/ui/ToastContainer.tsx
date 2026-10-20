@@ -67,6 +67,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
           <circle cx="8" cy="11" r="0.75" fill="currentColor"/>
         </svg>
       )}
+      {toast.icon && <span className="toast-icon">{toast.icon}</span>}
       <span className="toast-message">{toast.message}</span>
       {toast.action && (
         <button

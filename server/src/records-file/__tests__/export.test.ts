@@ -32,6 +32,19 @@ async function collect(pages: AsyncIterable<RecordsFilePage>) {
 }
 
 describe('profile export pages', () => {
+  it("writes the exporter's membership as OWNER, whatever their role on a firm (MUT-300)", async () => {
+    const { store, rana, firm } = await twoPeopleOneFirm();
+    const owners = await store.memberships.listByOrganization(firm.id);
+    await store.organizations.setFirm(firm.id, { enabled: true, ownerUserIds: owners.filter((m) => m.userId !== rana.id).map((m) => m.userId) }, AT, { actorId: null, requestId: null });
+    const membership = (await store.memberships.find(rana.id, firm.id))!;
+    expect(membership.role).toBe('BOOKKEEPER');
+
+    const maps = await collect(profileExportPages(store, { person: rana, organization: (await store.organizations.getById(firm.id))!, membership }));
+
+    expect([...maps.members!.values()]).toEqual([{ ...membership, role: 'OWNER' }]);
+    expect([...maps.orgs!.values()][0]).toMatchObject({ firmEnabledAt: null });
+  });
+
   it("holds the profile's own rows and nobody else's", async () => {
     const { store, rana, firm, membership } = await twoPeopleOneFirm();
 
@@ -92,7 +105,7 @@ describe('profile export pages', () => {
 });
 
 describe('localProfileOf', () => {
-  const base: Organization = { id: 'org', name: 'X', slug: 'x', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', personalOwnerUserId: null, ownerUserId: null, profileType: null, version: 1, createdAt: AT };
+  const base: Organization = { id: 'org', name: 'X', slug: 'x', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', personalOwnerUserId: null, ownerUserId: null, profileType: null, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, version: 1, createdAt: AT };
 
   it("keeps the exporter's own profiles as they are", () => {
     const personal = { ...base, personalOwnerUserId: 'me', ownerUserId: 'me', profileType: 'PERSONAL' as const };
@@ -101,9 +114,14 @@ describe('localProfileOf', () => {
     expect(localProfileOf(owned, 'me')).toEqual(owned);
   });
 
-  it('drops any column the record type does not name (a later role or firm field never reaches a device)', () => {
-    const withExtra = { ...base, ownerUserId: 'me', profileType: 'BUSINESS' as const, updatedAt: AT, firmEnabledAt: AT } as Organization;
+  it('drops any column the record type does not name (a later column never reaches a device)', () => {
+    const withExtra = { ...base, ownerUserId: 'me', profileType: 'BUSINESS' as const, updatedAt: AT } as Organization;
     expect(Object.keys(localProfileOf(withExtra, 'me')).sort()).toEqual(Object.keys(base).sort());
+  });
+
+  it('arrives with firm features off and nothing requested: a device has no operator (MUT-300)', () => {
+    const firmOn = { ...base, ownerUserId: 'me', profileType: 'BUSINESS' as const, firmEnabledAt: AT, firmRequestedAt: AT, firmRequestedByUserId: 'me' };
+    expect(localProfileOf(firmOn, 'me')).toMatchObject({ firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null });
   });
 
   it('makes a firm the exporter belongs to theirs, as a business profile', () => {

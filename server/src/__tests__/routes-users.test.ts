@@ -76,8 +76,9 @@ describe('POST /admin/v1/users', () => {
     expect(body.personalProfile.name).toBe('شخصي');
     expect(body.user).not.toHaveProperty('passwordHash');
     expect(body.memberships).toEqual([
-      { organizationId: body.personalProfile.id, createdAt: '2026-10-11T09:00:00.000Z' },
-      { organizationId: org.id, createdAt: '2026-10-11T09:00:00.000Z' },
+      // MUT-300: OWNER is the default role, inert until the organization's firm features are on.
+      { organizationId: body.personalProfile.id, role: 'OWNER', createdAt: '2026-10-11T09:00:00.000Z' },
+      { organizationId: org.id, role: 'OWNER', createdAt: '2026-10-11T09:00:00.000Z' },
     ]);
     expect(body).not.toHaveProperty('initialPassword');
     expect(body.setupLink).toEqual({ url: expect.stringMatching(/^http:\/\/localhost\/setup#[A-Za-z0-9_-]{43}$/), expiresAt: '2026-10-14T09:00:00.000Z', purpose: 'SETUP' });
@@ -170,7 +171,7 @@ describe('personal profile (MUT-120)', () => {
     const res = await h.app.request('/admin/v1/users', send('POST', { email: 'solo@firm.ps', displayName: 'Solo', defaultCurrency: 'EUR', timezone: 'Europe/Berlin' }));
     expect(res.status).toBe(201);
     const body = await read(res);
-    expect(body.memberships).toEqual([{ organizationId: body.personalProfile.id, createdAt: '2026-10-11T09:00:00.000Z' }]);
+    expect(body.memberships).toEqual([{ organizationId: body.personalProfile.id, role: 'OWNER', createdAt: '2026-10-11T09:00:00.000Z' }]);
     expect(await h.store.organizations.getById(body.personalProfile.id)).toMatchObject({ defaultCurrency: 'EUR', timezone: 'Europe/Berlin', personalOwnerUserId: body.user.id });
   });
 

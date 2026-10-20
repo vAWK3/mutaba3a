@@ -14,6 +14,7 @@ import { useAnchoredList } from '../../data/anchoredList';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { useProfile } from '../../session/me';
+import { saveFeedbackPreset } from '../../../lib/motion/saveFeedbackPreset';
 import { NoMatch, PageHeader, ShowMore } from './shared';
 
 /**
@@ -125,7 +126,7 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
           </>
         )}
       </QueryView>
-      <SavedNotice kind="conversion" message={t('hosted.savedFlash.conversionSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} listInError={list.isError} />
+      <SavedNotice kind="conversion" message={t('hosted.savedFlash.conversionSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} listInError={list.isError} preset={saveFeedbackPreset(profile)} />
       {filters.newConversion && <ConversionDrawer profileId={profile.id} timezone={profile.timezone} onClose={closeDrawer} />}
       {filters.conversion && (
         <ConversionDrawer key={filters.conversion} profileId={profile.id} mode="edit" conversionId={filters.conversion} timezone={profile.timezone} onClose={closeDrawer} onDeleted={afterDelete} />

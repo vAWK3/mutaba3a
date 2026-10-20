@@ -66,6 +66,37 @@ Basel asked for one command that fetches the URL and admin token itself and prom
 
 ---
 
+---
+
+## [Unreleased] - 2026-10-20 — Firm switch: an operator turns firm features on; the owner requests it (MUT-300, epic MUT-298)
+
+**Why:** every firm feature (MUT-301..314) checks one entitlement, and an owner needs a way to ask for it. The first requests are the pilot candidates (D13).
+
+### Added
+- **Server (API `1.41.0-mut300`; built as 1.37.0, renumbered when main was merged in at 1.40.0-mut325):**
+  - migration `20261020150000_mut300_firm_flag`: `MembershipRole` (OWNER default, inert until firm features are on), `organizations.firmEnabledAt`, `firmRequestedAt` + `firmRequestedByUserId` (pair CHECK, RESTRICT FK), and CHECK `organizations_firm_not_personal_check`;
+  - store methods `requestFirm`, `setFirm`, `declineFirmRequest`, `listFirmRequests` on both stores, each audited in its transaction; shared rules in `server/src/firm.ts`;
+  - `POST /v1/profiles/{id}/firm-request` (owner of an owned Business profile, idempotent, 202);
+  - admin `PATCH /admin/v1/organizations/{id}` (enable in place / disable), `DELETE …/firm-request` (decline), `GET /admin/v1/firm-requests`; the organization detail lists members with roles;
+  - `/v1/me` profiles gain `firm`, `role`, `firmRequestedAt` (owner only); the admin routes answer with `AdminOrganization` (`Organization` + `firm`), while Malafat's `/v1/integration` keeps the plain `Organization`, so the requester's id never reaches an API key; `Membership` gains `role`;
+  - CLI `firm-requests`, `firm-enable`, `firm-disable`, `firm-decline` (npm `firm:*`).
+- **Portal:** `FirmRequestSection` at the foot of a Business profile's edit pane (offer → Requested), and `FirmOnBanner` on the Overview (one dismissible note, DR5); ar/en strings; the firm copy guard `scripts/__tests__/firm-copy-guard.test.ts`.
+- **Release-QA:** `portal.profiles.firm-request`, `portal.shell.firm-enabled-banner`, both passing on a preview build.
+
+### Changed
+- **D4:** firm features are on **in place** on an owned Business profile; brief §3.1/§3.3/§11/§12.1/§16 and ADR-099 decision 1 amended, and the ADR-037 MUT-182 override withdrawn. Sharing an owned profile is a v3 decision.
+- **D5:** the portal's read-only reason `'FIRM'` is now `'OPERATOR'` (`hosted.profiles.readOnly.operator`, same text); the 403 message and API docs no longer call a non-owned profile "a firm".
+- A new membership in an organization with firm features on is BOOKKEEPER (D3).
+- **Merged with main's local mode (MUT-286/287) and records export (MUT-325), 2026-10-20:**
+  - The local snapshot format is now **2** (`CURRENT_STORE_SNAPSHOT_VERSION`). The 1 → 2 migration (`src/hosted/local/migrations/index.ts`) gives every profile on a device the firm switch off with nothing requested, and every membership OWNER. The fingerprint test watches the new fields.
+  - The signed-in records export writes the firm switch off and the exporter's membership as OWNER: a device has no operator, and its one person owns every profile (ADR-097 §2.2).
+  - Signed out on this device, the edit pane never offers firm features: no operator would see a request saved there.
+  - A portal still on format 1 that downloads a format-2 export reads "Mutaba3a has been updated. Reload the page…" (the existing too-new path). The portal and the API ship together, so this only lasts until a reload.
+
+### Technical
+- Files: `server/prisma/{schema.prisma,migrations/20261020150000_mut300_firm_flag}`, `server/src/{firm.ts,repositories/{ports,memory,prisma}.ts,auth/store-guard.ts,routes/{profiles,admin,me}.ts,serializers.ts,schemas.ts,app.ts,scripts/users.ts,records-file/export.ts}`, `src/hosted/local/migrations/index.ts`, `server/openapi/openapi.yaml`, `src/hosted/{api/client.ts,api/schema.d.ts,components/{FirmRequestSection,FirmOnBanner,ProfileEditForm,ProfilesManageDrawer}.tsx,data/{firmBanner,profileQueries,profileRules}.ts,pages/views/OverviewPage.tsx,i18n/*.json,hosted.css}`, `qa/{features,specs,support}/portal/*`.
+- Ratchets updated on purpose: the store guard's operator list, the session-route surface (`route-security.test.ts`), the membership shape (`routes-users.test.ts`) and the API version pins.
+
 ## [Unreleased] - 2026-10-20 — Decision: self-service signup, business-email review, forgot-password and Resend (MUT-331, ADR-159)
 
 **Why:** GA (epic MUT-322) needs anyone to sign up, pay and leave without the operator. Accounts were operator-issued only (ADR-037 §1, ADR-088), and the server had no email provider. Planning only; no code changed.
@@ -369,6 +400,27 @@ Basel asked for one command that fetches the URL and admin token itself and prom
 
 ### Changed
 - `.claude/INFRA.md`: operator-held row for the Mutaba3a Stripe account.
+
+## [Unreleased] - 2026-10-19 — MUT-338: animated save-feedback wired into every web save surface (ADR-158)
+
+**Why:** MUT-337 proved the animation mechanism headlessly; nothing used it. This is the first real consumer — the epic's (MUT-334) highest-priority mechanic — across all five save surfaces that exist on the web side (legacy app: income, expense; portal: income, expense, conversion). Flutter is a separate ticket (MUT-351, filed during planning) in its own repo.
+
+### Added
+- `src/lib/motion/saveFeedbackPreset.ts` — resolves playful/restrained from a profile's `type` (always playful for the legacy app, which has no firm concept per MUT-299 B11).
+- `src/components/icons/SaveFeedbackIcon.tsx` — wraps the generated `SuccessIcon` in a plain `<span>` ref, wires `playIconFeedback` on mount, respects `prefers-reduced-motion` itself.
+- Toast icon override: `toastStore.ts`'s `Toast.icon` and hosted `Toast.tsx`'s `ToastOptions.icon` (both default to the existing tone icon when absent — no other caller changes).
+- Legacy `ExpenseDrawer.tsx` gains a save-success toast — it had none before (create/update produced no confirmation at all; only delete did). New i18n keys `expenses.saveSuccess`/`expenses.recurringSaveSuccess` (en/ar).
+- release-qa: a `save-feedback-animation` scenario in `qa/features/{web,portal}/{income,expenses}.yaml` and `portal/conversions.yaml`, with passing-locally specs in `qa/specs/{web,portal}/*.spec.ts` (live run blocked by an unrelated pre-existing landing-content bug — see Technical).
+
+### Changed
+- `SavedFlashAnnouncer.tsx` (legacy income): the claimed-save path was a permanent `sr-only` span; now a brief (`FLASH_MS`) visible "Saved" toast carrying the icon, same surface as the unclaimed path — decided with Basel over inventing new floating UI with no pinned-down position.
+- `SavedNotice.tsx` (portal expense/conversion): same change, via a render-time state adjustment (not `setState`-in-effect) for the brief flash; gained a required `preset` prop, resolved once by `ExpensesList.tsx`/`ConversionsList.tsx` (which already hold the full profile via `useProfile()` — no new `useMe()` lookup needed in the leaf components).
+- `IncomeCaptureDrawer.tsx` (portal income): its existing `tone: 'info'` toast now also carries the icon, preset from its own `profile` prop.
+
+### Technical
+- `src/hosted/pages/__tests__/afterSave.test.tsx` updated (it also asserted the old `.sr-only` claimed-path text — a second integration test for the same behavior `SavedNotice.test.tsx` covers at the unit level).
+- Full suite verified clean twice (`npm run test:run`): 9 pre-existing failing files (`scripts/__tests__/{i18n-keys,legal-terms,vite-config}.test.ts`, 6 `src/pages/landing/__tests__/*`), all a pre-existing, unrelated landing-content gap (`ar/landing.json` missing `hostedOffer`, crashing `vite.config.ts`'s social-preview step) — confirmed present before this branch's commits and independent of every file this ticket touched. The same bug also blocked bringing up a live `release-qa` env to actually execute the new specs; they're written and `release-qa lint`-clean but unexecuted pending that unrelated fix.
+- ADR-158 (`.claude/DECISIONS.md`): reuse existing Toast/SavedNotice surfaces for the claimed-save path rather than invent new floating UI.
 
 ## [Unreleased] - 2026-10-19 — MUT-337: icon save-feedback animation runtime decision + web prototype (ADR-152)
 

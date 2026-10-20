@@ -138,11 +138,15 @@ import { CAPTURE_UNDO_REASON } from './ports.js';
 import { isBeforeCursor, mergeNewestFirst } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
+import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 
-/** Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it. */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 1;
+/**
+ * Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it.
+ * 2 (MUT-300): `orgs` gained `firmEnabledAt`, `firmRequestedAt` and `firmRequestedByUserId`; `members` gained `role`.
+ */
+export const CURRENT_STORE_SNAPSHOT_VERSION = 2;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -247,7 +251,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (input.personalOwnerUserId && !this.people.has(input.personalOwnerUserId)) {
         throw new ForeignKeyViolation('organizations.personalOwnerUserId');
       }
-      const org: Organization = { id: randomUUID(), ...input, personalOwnerUserId: input.personalOwnerUserId ?? null, ownerUserId: null, profileType: null, version: 1, createdAt: new Date() };
+      const org: Organization = { id: randomUUID(), ...input, personalOwnerUserId: input.personalOwnerUserId ?? null, ownerUserId: null, profileType: null, version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, createdAt: new Date() };
       this.orgs.set(org.id, org);
       return { ...org };
     },
@@ -260,8 +264,8 @@ export class MemoryLedgerStore implements LedgerStore {
       const count = this.ownedCount(ownerUserId);
       if (count >= cap) return { kind: 'limit', count };
       const { at, ...fields } = input;
-      const organization: Organization = { id: randomUUID(), ...fields, personalOwnerUserId: null, ownerUserId, version: 1, createdAt: at };
-      const membership: MembershipRecord = { userId: ownerUserId, organizationId: organization.id, createdAt: at };
+      const organization: Organization = { id: randomUUID(), ...fields, personalOwnerUserId: null, ownerUserId, version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, createdAt: at };
+      const membership: MembershipRecord = { userId: ownerUserId, organizationId: organization.id, role: 'OWNER', createdAt: at };
       this.orgs.set(organization.id, organization);
       this.members.set(membershipKey(ownerUserId, organization.id), membership);
       for (const event of ownedProfileCreatedAudit(organization, audit)) await this.audit.append(event);
@@ -290,6 +294,47 @@ export class MemoryLedgerStore implements LedgerStore {
       return { kind: 'updated', record: { ...org }, typeChange: typeChange?.impact ?? null };
     },
     typeChangeImpact: async (id) => this.typeChangeImpactOf(id),
+    requestFirm: async (id, userId, at, audit) => {
+      const org = this.orgs.get(id);
+      if (!org) return { kind: 'not_found' };
+      if (org.firmEnabledAt) return { kind: 'already_firm' };
+      if (org.firmRequestedAt) return { kind: 'requested', organization: { ...org }, created: false };
+      if (!this.people.has(userId)) throw new ForeignKeyViolation('organizations.firmRequestedByUserId');
+      Object.assign(org, { firmRequestedAt: at, firmRequestedByUserId: userId });
+      await this.audit.append(firmAuditRow(id, 'firm.requested', audit));
+      return { kind: 'requested', organization: { ...org }, created: true };
+    },
+    setFirm: async (id, input, at, audit) => {
+      const org = this.orgs.get(id);
+      if (!org) return { kind: 'not_found' };
+      if (firmUnchanged(org, input)) return { kind: 'updated', organization: { ...org }, changed: false };
+      if (!input.enabled) {
+        Object.assign(org, { firmEnabledAt: null, version: org.version + 1 });
+        await this.audit.append(firmAuditRow(id, 'firm.disabled', audit));
+        return { kind: 'updated', organization: { ...org }, changed: true };
+      }
+      const members = [...this.members.values()].filter((m) => m.organizationId === id);
+      const refusal = firmEnableRefusal(org, input.ownerUserIds, new Set(members.map((m) => m.userId)));
+      if (refusal) return refusal;
+      const owners = firmOwnersOf(org, input.ownerUserIds);
+      for (const m of members) m.role = owners.includes(m.userId) ? 'OWNER' : 'BOOKKEEPER';
+      Object.assign(org, { firmEnabledAt: at, firmRequestedAt: null, firmRequestedByUserId: null, version: org.version + 1 });
+      await this.audit.append(firmAuditRow(id, 'firm.enabled', audit, { ownerUserIds: owners }));
+      return { kind: 'updated', organization: { ...org }, changed: true };
+    },
+    declineFirmRequest: async (id, _at, audit) => {
+      const org = this.orgs.get(id);
+      if (!org?.firmRequestedAt) return { kind: 'not_found' };
+      Object.assign(org, { firmRequestedAt: null, firmRequestedByUserId: null });
+      await this.audit.append(firmAuditRow(id, 'firm.request_declined', audit));
+      return { kind: 'declined', organization: { ...org } };
+    },
+    listFirmRequests: async (page) => {
+      // The keyset runs on (firmRequestedAt, id): `paginate` reads it as createdAt, then the rows go back as they are.
+      const pending = [...this.orgs.values()].filter((o) => o.firmRequestedAt && !o.firmEnabledAt);
+      const keyed = paginate(pending.map((o) => ({ id: o.id, createdAt: o.firmRequestedAt! })), page);
+      return { items: keyed.items.map((k) => ({ ...this.orgs.get(k.id)! })), nextCursor: keyed.nextCursor };
+    },
   };
 
   private ownedCount(userId: string): number {
@@ -395,10 +440,11 @@ export class MemoryLedgerStore implements LedgerStore {
         updatedAt: input.at,
       };
       // Every check above runs before the first write, so a refusal leaves nothing behind (the Prisma transaction's guarantee).
-      const personalOrganization: Organization = { id: randomUUID(), ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL', version: 1, createdAt: new Date() };
+      const personalOrganization: Organization = { id: randomUUID(), ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL', version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, createdAt: new Date() };
       const memberships: MembershipRecord[] = [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])].map((organizationId) => ({
         userId: user.id,
         organizationId,
+        role: roleForNewMembership(this.orgs.get(organizationId) ?? personalOrganization),
         createdAt: input.at,
       }));
       this.people.set(user.id, user);
@@ -590,7 +636,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const key = membershipKey(userId, organizationId);
       const existing = this.members.get(key);
       if (existing) return { membership: { ...existing }, created: false };
-      const membership: MembershipRecord = { userId, organizationId, createdAt: at };
+      const membership: MembershipRecord = { userId, organizationId, role: roleForNewMembership(this.orgs.get(organizationId)!), createdAt: at };
       this.members.set(key, membership);
       return { membership: { ...membership }, created: true };
     },

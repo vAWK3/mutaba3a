@@ -3736,3 +3736,8 @@ a.project-tag:hover {
 .print-header {
   display: none;
 }
+
+/* MUT-338: the animated save-feedback icon in a toast or saved notice. It sits
+   on the text's line without a baseline gap and keeps the success colour the
+   InfoIcon it replaced had. */
+.save-feedback-icon { display: inline-flex; flex: none; color: var(--success); }

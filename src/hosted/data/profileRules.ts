@@ -13,11 +13,26 @@ export function canCreateProfile(me: Me): boolean {
   return me.limits.ownedProfiles < me.limits.maxOwnedProfiles;
 }
 
-export type ProfileEditability = { editable: false; reason: 'MALAFAT' | 'FIRM' } | { editable: true; typeLocked: boolean };
+/** OPERATOR: set up for the user by an operator (MUT-300 D5: "firm" now means firm features are on, owned or not). */
+export type ProfileEditability = { editable: false; reason: 'MALAFAT' | 'OPERATOR' } | { editable: true; typeLocked: boolean };
 
 export function profileEditability(profile: HostedProfile): ProfileEditability {
-  if (!profile.owned) return { editable: false, reason: profile.writerOfRecord === 'MALAFAT' ? 'MALAFAT' : 'FIRM' };
+  if (!profile.owned) return { editable: false, reason: profile.writerOfRecord === 'MALAFAT' ? 'MALAFAT' : 'OPERATOR' };
   return { editable: true, typeLocked: profile.isPersonalDefault };
+}
+
+export type FirmRequestState = 'hidden' | 'offer' | 'requested';
+
+/**
+ * MUT-300: what the edit pane shows about firm features. Only the owner of a
+ * Business profile (not the built-in one) may ask; once firm features are on
+ * there is nothing to ask for. A server older than 1.41.0-mut300 sends no
+ * `firm` and has no route to take the request, so nothing shows.
+ */
+export function firmRequestState(profile: HostedProfile): FirmRequestState {
+  if (profile.firm !== false) return 'hidden';
+  if (!profile.owned || profile.isPersonalDefault || profile.type !== 'BUSINESS') return 'hidden';
+  return profile.firmRequestedAt ? 'requested' : 'offer';
 }
 
 /**

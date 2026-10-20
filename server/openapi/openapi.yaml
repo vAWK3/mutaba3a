@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.40.0-mut325
+  version: 1.41.0-mut300
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -291,6 +291,14 @@ components:
         version:
           type: integer
           minimum: 1
+        firm:
+          type: boolean
+        role:
+          $ref: "#/components/schemas/MembershipRole"
+        firmRequestedAt:
+          type: string
+          nullable: true
+          format: date-time
       required:
         - id
         - name
@@ -304,6 +312,9 @@ components:
         - owned
         - type
         - version
+        - firm
+        - role
+        - firmRequestedAt
     Currency:
       type: string
       enum:
@@ -332,6 +343,14 @@ components:
         - received
         - owed
         - customer
+    MembershipRole:
+      type: string
+      nullable: true
+      enum:
+        - OWNER
+        - BOOKKEEPER
+        - SUBMITTER
+        - null
     ProfileLimits:
       type: object
       properties:
@@ -5535,6 +5554,19 @@ components:
         - uncategorizedExpenses
         - deletedCategories
         - preset
+    FirmRequestResponse:
+      type: object
+      properties:
+        firmRequest:
+          type: object
+          properties:
+            requestedAt:
+              type: string
+              format: date-time
+          required:
+            - requestedAt
+      required:
+        - firmRequest
     RecordsFile:
       type: object
       properties:
@@ -5599,6 +5631,34 @@ components:
         - perEur
         - fetchedAt
         - source
+    AdminOrganization:
+      allOf:
+        - $ref: "#/components/schemas/Organization"
+        - type: object
+          properties:
+            firm:
+              $ref: "#/components/schemas/OrganizationFirm"
+          required:
+            - firm
+    OrganizationFirm:
+      type: object
+      properties:
+        enabledAt:
+          type: string
+          nullable: true
+          format: date-time
+        requestedAt:
+          type: string
+          nullable: true
+          format: date-time
+        requestedByUserId:
+          type: string
+          nullable: true
+          format: uuid
+      required:
+        - enabledAt
+        - requestedAt
+        - requestedByUserId
     CreateOrganizationRequest:
       type: object
       properties:
@@ -5622,7 +5682,7 @@ components:
       type: object
       properties:
         organization:
-          $ref: "#/components/schemas/Organization"
+          $ref: "#/components/schemas/AdminOrganization"
         apiKeys:
           type: array
           items:
@@ -5631,10 +5691,29 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Integration"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrganizationMember"
       required:
         - organization
         - apiKeys
         - integrations
+        - members
+    OrganizationMember:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        role:
+          $ref: "#/components/schemas/MembershipRole"
+      required:
+        - userId
+        - email
+        - role
     CreateApiKeyResponse:
       type: object
       properties:
@@ -5682,6 +5761,78 @@ components:
             $ref: "#/components/schemas/AuditEvent"
       required:
         - events
+    OrganizationResponse:
+      type: object
+      properties:
+        organization:
+          $ref: "#/components/schemas/AdminOrganization"
+      required:
+        - organization
+    UpdateOrganizationRequest:
+      anyOf:
+        - type: object
+          properties:
+            firmEnabled:
+              type: boolean
+              enum:
+                - true
+            ownerUserIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+              maxItems: 50
+          required:
+            - firmEnabled
+          additionalProperties: false
+        - type: object
+          properties:
+            firmEnabled:
+              type: boolean
+              enum:
+                - false
+          required:
+            - firmEnabled
+          additionalProperties: false
+    FirmRequestList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/FirmRequest"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - data
+        - nextCursor
+    FirmRequest:
+      type: object
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+        requestedByUserId:
+          type: string
+          format: uuid
+        requestedByEmail:
+          type: string
+          nullable: true
+        owned:
+          type: boolean
+      required:
+        - organizationId
+        - name
+        - requestedAt
+        - requestedByUserId
+        - requestedByEmail
+        - owned
     CreateUserResponse:
       type: object
       properties:
@@ -5751,11 +5902,14 @@ components:
         organizationId:
           type: string
           format: uuid
+        role:
+          $ref: "#/components/schemas/MembershipRole"
         createdAt:
           type: string
           format: date-time
       required:
         - organizationId
+        - role
         - createdAt
     SetupLink:
       type: object
@@ -12780,7 +12934,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
-          description: "READ_ONLY_PROFILE with details.reason NOT_OWNER: a firm the caller belongs to but does not own"
+          description: "READ_ONLY_PROFILE with details.reason NOT_OWNER: a profile the caller belongs to but does not own"
           content:
             application/json:
               schema:
@@ -12844,7 +12998,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
-          description: "READ_ONLY_PROFILE with details.reason NOT_OWNER: a firm the caller belongs to but does not own"
+          description: "READ_ONLY_PROFILE with details.reason NOT_OWNER: a profile the caller belongs to but does not own"
           content:
             application/json:
               schema:
@@ -12863,6 +13017,68 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profiles/{profileId}/firm-request:
+    post:
+      tags:
+        - Profiles
+      summary: Ask for firm features on a Business profile you own
+      description: "MUT-300 (ADR-099): records the request for an operator, who turns firm features on in place: the profile stays yours. Idempotent: a repeat answers with the first request. Refused on your built-in personal profile (409 CONFLICT, details.reason PERSONAL_PROFILE), on a profile typed PERSONAL (NOT_BUSINESS) and once firm features are on (ALREADY_FIRM)."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      responses:
+        "202":
+          description: Requested (now or earlier)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirmRequestResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: "READ_ONLY_PROFILE with details.reason NOT_OWNER: a profile the caller belongs to but does not own"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
           content:
             application/json:
               schema:
@@ -13045,7 +13261,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Organization"
+                $ref: "#/components/schemas/AdminOrganization"
         "401":
           description: Missing or invalid admin token
           content:
@@ -13093,6 +13309,57 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      tags:
+        - Admin
+      summary: Turn firm features on or off (MUT-300)
+      description: "Enabling works in place (ADR-099, MUT-300 eng review D4): an owned Business profile stays owned and its owner becomes OWNER; an operator firm needs `ownerUserIds` (422 without), each already a member (409 CONFLICT, details.reason NOT_A_MEMBER). Every other member becomes BOOKKEEPER, and a pending request is cleared. Disabling keeps roles. The same state again changes nothing. Refused on the built-in personal profile (409 PERSONAL_PROFILE) and on an owned Personal profile (409 NOT_BUSINESS)."
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrganizationRequest"
+      responses:
+        "200":
+          description: Updated, or already in that state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT with details.reason PERSONAL_PROFILE, NOT_BUSINESS or NOT_A_MEMBER
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed, or an operator firm enabled with no owner named
           content:
             application/json:
               schema:
@@ -13224,6 +13491,78 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Unknown organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/organizations/{organizationId}/firm-request:
+    delete:
+      tags:
+        - Admin
+      summary: Decline a pending request for firm features (MUT-300)
+      description: Clears the request (eng review D6), audited firm.request_declined. The owner sees the offer again and may ask again. 404 when nothing is pending.
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+      responses:
+        "200":
+          description: Declined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown organization, or no pending request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/firm-requests:
+    get:
+      tags:
+        - Admin
+      summary: List pending requests for firm features, oldest first (MUT-300)
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: integer
+            nullable: true
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+      responses:
+        "200":
+          description: Pending requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirmRequestList"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
           content:
             application/json:
               schema:
