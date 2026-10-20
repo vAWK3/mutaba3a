@@ -190,10 +190,10 @@ check: check-web check-server
 check-e2e:
 	@release-qa release --no-open
 
-# Opens the latest release-qa report (qa/runs/<slug>/index.html) in the
-# browser. Just opens the file — run `make check-e2e` first to refresh it.
+# Review page for release-qa (qa/runs/<slug>/): served in the background on this repo's own
+# port, with a Run & record button per feature. Run `release-qa release` to refresh it.
 qa-view:
-	@release-qa open
+	@release-qa serve --detach
 
 migrate-status:
 	@cd server && TF_STATE_BUCKET=$${TF_STATE_BUCKET:?set TF_STATE_BUCKET} npm run --silent db:migrate:status
