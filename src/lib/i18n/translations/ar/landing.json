@@ -7,12 +7,7 @@
     "header": {
       "wordmark": "Mutaba3a · متابعة",
       "wordmarkShort": "متابعة",
-      "signIn": "سجّل الدخول",
-      "cta": {
-        "web": "افتح البوابة",
-        "ios": "iPhone",
-        "android": "Android"
-      }
+      "signIn": "سجّل الدخول"
     },
     "langToggle": {
       "en": "EN",
