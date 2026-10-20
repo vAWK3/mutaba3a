@@ -2,27 +2,13 @@
 # Vitest suite under coverage, with the coverage thresholds in vitest.config.ts
 # enforced and the numbers written to the job summary.
 #
-# One job and the npm cache keep it cheap. It skips changes that touch only the
-# hosted API (server-ci.yml covers those) or only docs. Nothing here builds a
-# release, deploys or pushes: releases stay operator-run (scripts/release.ts).
+# One job and the npm cache keep it cheap. Nothing here builds a release,
+# deploys or pushes: releases stay operator-run (scripts/release.ts).
 name: Web CI
 
+# Manual only (2026-10-20): start it with `make ci web` or from the Actions tab. `make release`
+# reminds you to run it after each push.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - 'server/**'
-      - 'docs/**'
-      - '**/*.md'
-      - '.github/workflows/server-ci.yml'
-      - '.github/workflows/build-windows.yml'
-  pull_request:
-    paths-ignore:
-      - 'server/**'
-      - 'docs/**'
-      - '**/*.md'
-      - '.github/workflows/server-ci.yml'
-      - '.github/workflows/build-windows.yml'
   workflow_dispatch:
 
 concurrency:
@@ -44,7 +30,13 @@ jobs:
           # Node 22, like server-ci.yml: Node 25+ breaks every localStorage test (TD-054).
           node-version: '22'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
       - run: npm ci --no-audit --no-fund
+      # src/hosted/local/** (MUT-286) imports the server's route modules, so the typecheck
+      # (tsconfig.hosted-local.json pins server/node_modules/@types) and its tests need server deps.
+      - run: npm ci --prefix server --no-audit --no-fund
       - run: npm run lint
       - run: npm run typecheck
       - name: Tests with coverage (fails below the thresholds in vitest.config.ts)
