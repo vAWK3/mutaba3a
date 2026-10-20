@@ -20,7 +20,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl } from '../../components/filters';
-import { EmptyState, RowActionsMenu, RowActionsHeader, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton, TruncatedTitle } from '../../components/ui';
+import { EmptyState, RowActionsMenu, RowActionsHeader, AmountWithConversion, PaymentStatusBadge, RecordPaymentButton, TruncatedTitle, CompactDate } from '../../components/ui';
 import { CheckIcon, CopyIcon, PencilIcon } from '../../components/icons';
 import { useOverviewTotalsByCurrency } from '../../hooks/useQueries';
 import { useIncome } from '../../hooks/useIncomeQueries';
@@ -32,7 +32,6 @@ import { useIsCompactTable } from '../../hooks/useMediaQuery';
 import { useDrawerStore } from '../../lib/stores';
 import {
   formatDate,
-  formatDateCompact,
   formatAmount,
   cn,
   EMPTY_CELL,
@@ -42,12 +41,14 @@ import { resolveIncomeFilters, type IncomeStatusFilter } from '../../lib/incomeS
 import { toIncomeRow, incomeColumns, type IncomeColumnKey, type IncomeRow } from './incomeRows';
 import { CurrencySummaryPopup } from '../../components/ui/CurrencySummaryPopup';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
+import { useTp } from '../../lib/i18n/plural';
 
 const STATUS_TABS: IncomeStatusFilter[] = ['all', 'unpaid', 'received', 'overdue'];
 
 export function IncomePage() {
   const { openTransactionDrawer, openPartialPaymentDrawer } = useDrawerStore();
   const t = useT();
+  const tp = useTp();
   const { language } = useLanguage();
   const locale = getLocale(language);
   const isCompact = useIsCompactTable();
@@ -158,7 +159,7 @@ export function IncomePage() {
   const renderCell = (key: IncomeColumnKey, row: IncomeRow): ReactNode => {
     switch (key) {
       case 'date':
-        return isCompact ? formatDateCompact(row.date) : formatDate(row.date, locale);
+        return isCompact ? <CompactDate iso={row.date} /> : formatDate(row.date, locale);
       case 'work':
         return row.title ? (
           <TruncatedTitle title={row.title} onOpen={() => handleRowClick(row.id)} />
@@ -185,7 +186,7 @@ export function IncomePage() {
             )}
             {row.overdueDays !== undefined && (
               <div style={{ fontSize: 'var(--text-label)', color: 'var(--error)', marginTop: 'var(--space-0-5)' }}>
-                {t('transactions.status.overdue', { days: row.overdueDays })}
+                {tp('transactions.status.overdue', row.overdueDays)}
               </div>
             )}
           </>

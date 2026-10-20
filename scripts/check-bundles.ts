@@ -17,6 +17,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { HOSTS } from '../config/hosts';
 import {
   HOSTED_RULES,
   LOCAL_RULES,
@@ -24,6 +25,9 @@ import {
   bootSplashProblems,
   extractOrigins,
   findForbidden,
+  jszipInEntryGraph,
+  localBackendInEntryGraph,
+  indexedDbOutsideLocalBackend,
   fontProblems,
   newOrigins,
   posthogInEntryGraph,
@@ -35,7 +39,9 @@ import {
 const TEXT_FILE = /\.(js|mjs|html|css|json|webmanifest)$/;
 const FONT_FILE = /\.(otf|ttf|woff2?)$/;
 const THMANYAH_PINS = 'src/assets/fonts/thmanyah.sha256.json';
-const allowlist = JSON.parse(readFileSync('scripts/bundle-origins.json', 'utf8')) as { local: string[]; hosted: string[] };
+const reviewed = JSON.parse(readFileSync('scripts/bundle-origins.json', 'utf8')) as { local: string[]; hosted: string[] };
+// Our own hosts come from the one hosts config (MUT-326), new and legacy, so moving the domain needs no allowlist edit
+const allowlist = { local: [...reviewed.local, ...HOSTS.allOrigins], hosted: [...reviewed.hosted, ...HOSTS.allOrigins] };
 
 function allFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -69,9 +75,9 @@ function checkBrandFonts(dir: string): string[] {
   return problems;
 }
 
-/** The entry HTML files each dist serves: the web build also emits the /hosted page's copy of index.html. */
+/** The entry HTML files each dist serves. */
 const ENTRY_HTML: Record<string, string[]> = {
-  'dist-web': ['index.html', 'hosted-offer.html'],
+  'dist-web': ['index.html'],
   'dist-desktop': ['index.html'],
   'dist-hosted': ['index.html'],
 };
@@ -120,6 +126,26 @@ function checkPosthog(): string[] {
   return problems;
 }
 
+/** ADR-097: the local backend stays a lazy chunk, out of every page a signed-in person loads. */
+function checkLocalBackendLazy(): string[] {
+  const dir = 'dist-hosted';
+  if (!existsSync(dir)) return [];
+  const read = (path: string) => (existsSync(join(dir, path)) ? readFileSync(join(dir, path), 'utf8') : '');
+  const outside = indexedDbOutsideLocalBackend(
+    files(dir).filter((file) => file.endsWith('.js')).map((file) => file.slice(dir.length + 1)),
+    read,
+  ).map((path) => `${dir}/${path}: touches IndexedDB but is not the local backend (no mut-local database); only it may (ADR-100)`);
+  return [
+    ...ENTRY_HTML[dir].flatMap((name) =>
+      localBackendInEntryGraph(read(name), read).map((path) => `${dir}/${path}: IndexedDB is statically reachable from ${name}; only the lazy local backend may open it (ADR-097)`),
+    ),
+    ...ENTRY_HTML[dir].flatMap((name) =>
+      jszipInEntryGraph(read(name), read).map((path) => `${dir}/${path}: jszip is statically reachable from ${name}; only Your data's Download/Restore may load it (MUT-287)`),
+    ),
+    ...outside,
+  ];
+}
+
 function check(dir: string, rules: Rule[], origins: string[]): string[] {
   if (!existsSync(dir)) return [`${dir} is missing: build it first`];
   const problems: string[] = [];
@@ -140,6 +166,7 @@ const problems = [
   ...['dist-web', 'dist-desktop', 'dist-hosted'].flatMap(checkBrandFonts),
   ...['dist-web', 'dist-desktop', 'dist-hosted'].flatMap(checkBootSplash),
   ...checkPosthog(),
+  ...checkLocalBackendLazy(),
 ];
 
 if (problems.length > 0) {
@@ -147,5 +174,5 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(
-  'Bundle check passed: dist-web and dist-desktop carry no portal code; PostHog is unreachable from the local app (lazy landing chunks only, never precached), lazy in the portal, and absent from desktop; dist-hosted carries no local storage and no self-service account door; every dist ships Thmanyah unmodified, preloads no font, resolves every CSS url(), and opens on a boot splash whose assets resolve.',
+  'Bundle check passed: dist-web and dist-desktop carry no portal code; PostHog is unreachable from the local app (lazy landing chunks only, never precached), lazy in the portal, and absent from desktop; dist-hosted opens IndexedDB only from its lazy local backend, loads jszip only on demand, and carries no self-service account door; every dist ships Thmanyah unmodified, preloads no font, resolves every CSS url(), and opens on a boot splash whose assets resolve.',
 );

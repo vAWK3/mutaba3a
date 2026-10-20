@@ -14,7 +14,7 @@
 | **Forms** | Input, Select, DatePicker, CurrencyInput, Textarea, Switch |
 | **Buttons** | Button, IconButton, RowActionsMenu, RecordPaymentButton |
 | **Table headers** | SortableHeader, RowActionsHeader |
-| **Table cells** | TruncatedTitle (a row's title: one line, opens the record, full text on hover and focus), `EMPTY_CELL` (the dash), `toIncomeRow` / `incomeColumns` (`/income`'s rows and columns) |
+| **Table cells** | TruncatedTitle (a row's title: one line, opens the record, full text on hover and focus), CompactDate (a compact table's dd/mm/yyyy in the tabular figure face), `EMPTY_CELL` (the dash), `toIncomeRow` / `incomeColumns` (`/income`'s rows and columns) |
 | **Display** | Card, Badge, StatusBadge, EmptyState |
 | **Home** | HomeNeedsAttention (rows: HomeAttentionRow), HomeRecentPayments (with OwedNowSummary), usePaymentUndo |
 | **Expenses** | RecurringAttentionList (+ `recurringAttention` helpers), RecurringOccurrenceCard (read-only, forecast) |
@@ -558,7 +558,8 @@ Unmount it whenever you like: the exit animation plays after it has gone (ADR-04
 **Behaviour**: springs in from its edge (response 0.3, damping 1.0). It follows a horizontal drag 1:1, rubber-banding past open. A release past half the width, after projecting momentum, dismisses. A press catches any live motion where it is. Every other close leaves as an inert snapshot along the same edge. In RTL the edge is mirrored. Reduced motion gives 150ms cross-fades.
 **Opt-out**: put `data-drawer-no-drag` on a region that needs horizontal pointer gestures of its own. Form fields, editable content and horizontally scrolling regions are already excluded.
 **Snapshots carry no ids** (MUT-82): `exitSnapshot` strips every `id` from the clone, so a drawer opened while another is still playing out never resolves an id (the payment drawer's `form=` button, a label) to the clone.
-**Tests**: `src/components/ui/drawer/__tests__/` (`DrawerFrame`, `drawerGesture`, `exitSnapshot`); `qa/specs/web/drawer-motion.spec.ts`.
+**Width** (MUT-357): `--drawer-width` (480px), capped at the viewport (`max-width: 100%` on `.drawer`), so on a phone it fills the screen in either direction. Motion measures the rendered `offsetWidth`, never the variable.
+**Tests**: `src/components/ui/drawer/__tests__/` (`DrawerFrame`, `drawerGesture`, `exitSnapshot`); `qa/specs/web/drawer-motion.spec.ts`; `src/styles/__tests__/drawerFit.test.ts` and `@portal.direction.drawer-phone-*` (width).
 
 ### Motion physics and focusables (MUT-80)
 - `src/lib/motion/physics.ts`: `springFromResponse(response, dampingRatio)`, `projectMomentum(velocity, rate = 0.998)`, `rubberband` / `rubberbandInverse`, `velocityFromSamples(samples, windowMs = 100)`. Reuse these for anything draggable or flickable.
@@ -1075,6 +1076,16 @@ ProjectDetailPage, HomeAttentionRow (`compact`, MUT-82).
 
 ---
 
+### CompactDate
+**Location**: `src/components/ui/CompactDate.tsx` (exported from `components/ui`)
+**Purpose**: A compact table's date (`dd/mm/yyyy`, `formatDateCompact`) set in the figure face: the `.num` utility, i.e. IBM Plex Mono with tabular digits. Thmanyah's digits are proportional, so a date column set in it changed width with the date: Income at 375px measured 718px on 11/11 and 736px on 08/08 (MUT-250). In the figure face every date is one width. The wide tables' long dates ("Oct 19, 2026") stay in the body face.
+**Used by**: Income, the Expenses ledger (flat and grouped), Conversions — wherever `isCompact` switches to the short date.
+**Tests**: `src/components/ui/__tests__/CompactDate.test.tsx`; `IncomePage.test.tsx` › compact date; QA `@web.brand.date-width`.
+
+```tsx
+<td>{isCompact ? <CompactDate iso={tx.occurredAt} /> : formatDate(tx.occurredAt, locale)}</td>
+```
+
 ### TruncatedTitle
 **Location**: `src/components/ui/TruncatedTitle.tsx` (+ `.css`)
 **Purpose**: A record's title in a table row (MUT-62). It sits on one line and is cut with an ellipsis. It is a `<button>` that opens the record, so a keyboard can reach the row; its click stops propagation, so the row's own click doesn't open the record a second time. When the text is cut (`scrollWidth > clientWidth`), hover or keyboard focus shows the whole title in a tooltip. The tooltip:
@@ -1588,7 +1599,7 @@ The parts always add up to `total`. It takes entries and clients rather than a b
 
 ### CurrencyAmounts
 **Location**: `src/components/ui/CurrencyAmounts.tsx` (+ `.css`); entries from `orderCurrencyAmounts` in `src/lib/currencyAmounts.ts`
-**Purpose**: Amounts in several currencies side by side, one `<bdi dir="ltr">` per currency, never converted or combined (ADR-004), like Owed now but without its label and overdue lines (MUT-87). `orderCurrencyAmounts(totals)` keeps the non-zero currencies in USD → ILS → EUR order; its order is a `Record<Currency, number>`, so a new currency without a place fails to compile.
+**Purpose**: Amounts in several currencies side by side, one `<bdi dir="ltr">` per currency (left to right in Arabic too, kept by MUT-109 D2), never converted or combined (ADR-004), like Owed now but without its label and overdue lines (MUT-87). `orderCurrencyAmounts(totals)` keeps the non-zero currencies in USD → ILS → EUR order; its order is a `Record<Currency, number>`, so a new currency without a place fails to compile.
 
 ```tsx
 <CurrencyAmounts amounts={orderCurrencyAmounts({ USD: 24000, ILS: 350000 })} />
@@ -1686,6 +1697,30 @@ import {
 <IconButton icon={<CloseIcon />} label="Close" />
 ```
 
+### Generated icons (MUT-336)
+
+**Location**: `src/components/icons/generated/` — a second, separate barrel.
+Every file in it, including `index.ts` and `types.ts`, is produced by
+`npm run icons:generate` from `assets/icons/source/*.svg` (the MUT-335
+canonical set) and overwritten on every run — never hand-edit anything here.
+`npm run icons:check` fails on missing/stale/orphaned drift between source and
+generated output. Full flow: `assets/icons/README.md`. Logic:
+`scripts/icon-set.ts` (tested directly, `scripts/__tests__/icon-set.test.ts`).
+
+These are **not yet consumed anywhere except one pilot** (`LanguageIcon` in
+`SettingsPage.tsx`) — migrating the 16 hand-written components above, or the
+scattered inline SVGs (`XIcon`, `MoreIcon`, `PlusIcon` duplicates, etc.), to
+the generated set is explicitly out of MUT-336's scope.
+
+```tsx
+import { LanguageIcon } from '../../components/icons/generated';
+<LanguageIcon size={16} className="settings-label-icon" />
+```
+
+A named sub-part survives codegen as `data-part="<name>"` (never a raw `id` —
+collides across repeated instances of the same icon on one page), for
+MUT-337's future animation runtime to target.
+
 ---
 
 ## Component Ownership
@@ -1731,7 +1766,7 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `src/lib/i18n/plural.ts` (**shared**) | `tp` via `useTp()`, `createPluralTranslator`, `pluralKey` (CLDR forms through `Intl.PluralRules`) | portal (`hosted.auth.rateLimited`); available to the app |
 | `src/components/expenses/` (**shared**, MUT-44; `RecurringAttentionList` and `recurringAttention` there are app-only, MUT-87) | `ExpenseFormFields<T>` (presentational: amount/currency/date/title/category/notes, vendor/client/project as host-supplied slots, `amountInputMode: 'number' \| 'decimalText'`), `expenseFormFieldsSchema`, `DECIMAL_AMOUNT` | local `ExpenseDrawer`, hosted `ExpenseDrawer` |
 | `api/client.ts` | `api.*` (one function per operation, now incl. expense CRUD + categories + summary + receipt start/complete/download/delete), `request` (GET/POST/PATCH/DELETE, `idempotencyKey`/`ifMatchVersion` options), `ApiError` (`status`, `code`, `details`, `retryAfterSeconds`), `setUnauthorisedHandler`, schema type aliases | every portal hook and page |
-| `format/DecimalAmount.tsx` | `DecimalAmount` (`<bdi dir="ltr">`), `formatDecimal(value, currency, language)`, `isZeroDecimal` | every money cell and strip |
+| `format/DecimalAmount.tsx` | `DecimalAmount` (a plain `<bdi>`, MUT-109), `formatDecimal(value, currency, language)`, `isZeroDecimal` | every money cell and strip |
 | `format/dates.ts` | `formatDay` (calendar date, never shifted), `formatInstant` (in the organization's zone), `formatSize`, `todayLocalISO` (MUT-44, browser-local calendar date — the expense drawer's default `occurredOn`) | views |
 | `components/QueryView.tsx` | `QueryView` (loading / empty / error / populated; a view in error renders no data; a 404 re-checks `/v1/me`), `Unreachable`, `Skeleton`, `Empty` (now takes `action`) | every view |
 | `components/HostedTable.tsx` | `HostedTable<Row>` (`columns`, pre-shaped `rows`, `rowKey`, `label`, optional `detail` row, optional `onRowClick` — MUT-44, opt-in, reuses `Table.css`'s `.clickable`). MUT-194 (D8/D11): with `onRowClick` the first cell's content sits in a `<button type="button" class="row-link press">` (Tab, Enter/Space; `stopPropagation` so the row's mouse click never double-fires); the `<tr>` gets no role or tabIndex. `.row-link` in `hosted.css` reads as plain cell text with the `--focus-ring` | every list; clickable in `ExpensesList`, `ConversionsList` |
@@ -1741,12 +1776,13 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `components/Drawer.tsx` (MUT-44) | `Drawer` (title/onClose/children/footer/closeLabel; Escape + overlay-click close) on the app's `.drawer`/`.drawer-overlay` classes from shared `src/index.css` — not an import of `src/components/drawers/Drawer.tsx` | `ExpenseDrawer` |
 | `components/ExpenseDrawer.tsx` (MUT-44) | `ExpenseDrawer` (create/edit, `ExpenseFormFields` + pickers + vendor text + `ReceiptUploader`, MUT-42 error-code → field/toast mapping) | `ExpensesList` |
 | `components/ClientPicker.tsx`, `ProjectPicker.tsx` (MUT-44) | `EntityTypeahead` fed by the read-only `useCustomerDirectory`/`useProjectDirectory`; no create-new branch (MUT-42 D6: existing org records only) | `ExpenseDrawer` |
-| `components/ReceiptUploader.tsx` (MUT-44) | `ReceiptUploader` (start → PUT the signed URL → complete; PDF/JPEG/PNG, 10 MB, 10-receipt cap counting only READY) | `ExpenseDrawer` (edit mode only) |
+| `components/ReceiptUploader.tsx` (MUT-44) | `ReceiptUploader` (start → PUT the signed URL → complete; PDF/JPEG/PNG, 10 MB, 10-receipt cap counting only READY). Signed out (MUT-287) the server signs `local-blob:` and the file goes to this device (`localFiles.put`); download passes the filename | `ExpenseDrawer` (edit mode only) |
+| `data/download.ts` (MUT-287) | `downloadNavigator.open(url, filename)` (signed URL: top-level navigation; `local-blob:`: object URL + `<a download>`), `localFiles.put`/`read` (the local backend's receipt files) | `ReceiptUploader`, `DocumentsList`, `expenseQueries.putToSignedUrl` |
 | `components/expenseApiErrors.ts` (MUT-44) | `applyExpenseApiError` (MUT-42's `VALIDATION_FAILED`/`CONFLICT` reasons → `setError(..., {type:'manual'})` or a toast) | `ExpenseDrawer` |
 | `components/Brand.tsx`, `Icons.tsx` | `Wordmark`, `LanguageSwitch` (explicit, persisted), `InfoIcon`, `AlertIcon`, `LockIcon` | sign-in, shell |
 | `shell/` | `HostedShell` (nav now incl. Expenses, MUT-44), `ProfileSwitcher`, `UserMenu`, `usePopover` (the portal's twin of `useMenuButton`, which it may not import) | `ProfileLayout` |
 | `session/` | `meQuery`, `profileKey(id, …)`, `useMe`, `useProfile`, `AuthGate`, `HomeRedirect`, `CaptureRedirect` (MUT-111, shares `FirstProfileRedirect` with `HomeRedirect`), `ProfileLayout`, `SessionBridge`, `endSession`, `useSignOut`, `safeNext`, `announceSignedOut` / `onSignedOutElsewhere` | router |
-| `data/queries.ts` | query hooks (`useOrganizationSummary`, `useCustomerSummary`, `useCustomer`, `useCustomerDirectory`, `useProjectDirectory`, `useReceivables`, `usePayments`, `useAttachments`), `useCursorList` (exported for reuse), filter models and parsers, `downloadNavigator` | views, router, `data/expenseQueries.ts` |
+| `data/queries.ts` | query hooks (`useOrganizationSummary`, `useCustomerSummary`, `useCustomer`, `useCustomerDirectory`, `useProjectDirectory`, `useReceivables`, `usePayments`, `useAttachments`), `useCursorList` (exported for reuse), filter models and parsers | views, router, `data/expenseQueries.ts` |
 | `components/ConversionDrawer.tsx` (MUT-161, edit/delete MUT-194) | `ConversionDrawer` (`mode?: 'create' \| 'edit'`, `conversionId`, `onDeleted`; two legs + implied rate; edit prefills from `useConversion`, PATCHes both legs at the loaded version, on 409 refetches and refills via a reset effect keyed on id + version; Delete confirms with `hosted.conversions.drawer.deleteConfirm` naming both legs via `formatDecimal`; a load error shows `Unreachable`) | `ConversionsList` |
 | `components/conversionFormSchema.ts` (MUT-161, JOD MUT-194) | `conversionFormSchema` (USD/ILS/EUR/JOD, per-leg decimals by `currencyExponent`, SAME_CURRENCY), `CURRENCY_OPTIONS`, `impliedRate` | `ConversionDrawer` |
 | `data/conversionQueries.ts` (MUT-161, MUT-194) | `useConversions`, `useConversion`, `conversionKey`, `useCreateConversion`, `useUpdateConversion`, `useDeleteConversion` | `ConversionsList`, `ConversionDrawer` |
@@ -1857,6 +1893,8 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `income/compose.ts` — MUT-61 additions | `incomeCaptureRulesFor(writer)` → `{ received, owed, customer: 'optional' \| 'linked-required' }` (the one source for `POST /v1/income` and `GET /v1/me`'s `profiles[].income`); `resolveIncomeLinks(…, rules)` now takes the rules and, under `linked-required`, requires a client with a `MALAFAT`/`CUSTOMER` ExternalReference | `routes/income.ts`, `routes/inbox.ts`, `routes/sessions.ts` |
 | `payments/allocation-state.ts` (MUT-61) | `allocationStateOf({ amountMinor, allocatedMinor })` → `'unallocated' \| 'partial' \| 'allocated'` — the one definition the memory filter, the Prisma `allocationStateWhere` and the payment view follow | `serializers.ts`, `repositories/memory.ts` |
 | `PaymentRepository.capture` / `.undoCapture` (MUT-61) | a person's own Received (no allocations by type, `origin: CAPTURE`); atomic undo returning `reversed \| already-reversed \| allocated \| not-found` — the `capture` row's whole write surface | `routes/income.ts` |
+| `server/scripts/restore-drill.sh` (MUT-327, ADR-157) | `--project <id> [--receipt-id] [--pitr-minutes 60] [--only backup\|pitr] [--keep] [--dry-run]`, `teardown [--name]`; every mutating gcloud call goes through `mutate <scratch>` (refuses non-`mutaba3a-pg-drill-*` names and the source) | the operator, runbook §8 |
+| `server/scripts/profile-rows.sh` (MUT-327, ADR-157) | `export --organization-id --out`, `restore --organization-id` (`SOURCE_DATABASE_URL` → `DATABASE_URL`), `purge-user --user-id`; profile tables from the catalog, FK order through `tsort`, `--dry-run` = one transaction rolled back | the operator through `npm run db:run --`, runbook §4.2, §7 |
 | `scripts/users.ts` (MUT-37) | `runUsersCommand(argv, { fetch, url, token, out, err })` behind `npm run provision:user` / `grant:user` / `revoke:user` / `rotate:password` / `disable:user` / `enable:user` | operator CLIs; tested against `app.request` as the fetch |
 
 ---
@@ -2020,3 +2058,74 @@ Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
 ### Toast action — `src/hosted/components/Toast.tsx`
 `show(message, { tone, action: { label, onAction } })`: a `.press` link-button in either tone; using it closes the toast; hover/focus holds the 6 s timer.
 
+## Local mode (portal) — MUT-286
+
+### useMode / useIsLocalMode / setMode — `src/hosted/session/mode.ts`
+**Purpose**: the portal's mode hint (`mut-mode`: `local` | `remote`, ADR-100). `currentMode()` is the hint or the unhinted fallback (`probe` in production, `remote` pinned by `src/test/setup.ts`); `useIsLocalMode()` gates account-only UI. Tests: `session/__tests__/mode.test.ts`.
+
+### localBackend() — `src/hosted/api/client.ts`
+**Purpose**: the memoized lazy local backend (`@mut/local-backend`), for UI that needs it directly (Your data, cross-tab refresh). A failed boot is forgotten so the next call retries. Tests: `api/__tests__/client-mode.test.ts`.
+
+### YourDataDrawer — `src/hosted/components/YourDataDrawer.tsx`
+**Purpose**: Download my records (since MUT-287 a `.zip`: records.json + receipt files) / Restore from file (a zip, or a MUT-286 `.json`), signed out only, opened by `?yourData=true` from the account menu (`AccountDrawers`). Tests: `session/__tests__/local-mode.test.tsx` › Your data.
+Since MUT-325 its Restore confirm also says when the file came from an account (`exportedFromAccountAt`).
+
+### HostedYourDataDrawer — `src/hosted/components/HostedYourDataDrawer.tsx` (new, MUT-325)
+**Purpose**: Your data signed in, the same `?yourData=true` drawer key (`AccountDrawers` picks by mode). Profile checklist (all ticked), the "export, not a backup" note, Download my records with a progress bar (`role=progressbar`) and Cancel (closing the drawer cancels too), and the missing-receipt-files count. Loads the export code lazily from `@mut/records-export` and passes `recordsExportTransport` (`data/recordsExportTransport.ts`). Tests: `components/__tests__/HostedYourDataDrawer.test.tsx`; QA `portal.your-data.*`.
+
+### exportHostedRecords — `src/hosted/local/hostedExport.ts` (new, MUT-325)
+**Purpose**: builds the local-mode records file from the signed-in export routes: per-profile `records.json` merged, receipts fetched 4 at a time (429 waited out, two failed tries or a wrong size → left out and counted), zipped by `zipRecordsArchive`. Typed by `session/recordsExportContract.ts`. Tests: `local/__tests__/hostedExport.test.ts`, `hosted-export-parity.test.ts`, `hosted-export-large.test.ts`.
+
+### Records-file codec — `server/src/records-file/` (new, MUT-325)
+**Purpose**: the one records-file text for both modes: `codec.ts` (`encodeTagged`/`decodeTagged`, `encodeRecordsFileText`, the pulled `recordsFileChunks`, `SNAPSHOT_FIELDS`, `HOSTED_EXPORT_ORIGIN`), `export.ts` (`profileExportPages`, `localPersonOf`, `localProfileOf`, `localMembershipOf`), `local-person.ts` (`LOCAL_PERSON_EMAIL`). Local mode's `recordsFile.ts` builds on it. Tests: `server/src/records-file/__tests__/`.
+
+### send — `src/hosted/api/client.ts` (extended, MUT-325)
+**Purpose**: `request()`'s routing and error handling without reading the body, for responses read as text or bytes; `request()` is `send()` + JSON.
+
+### ReloadToContinue — `src/hosted/pages/auth/BootScreens.tsx`
+**Purpose**: the D1 screen when another tab saved this device's records with a newer build (`ApiError` code `LOCAL_FORMAT_TOO_NEW`), shown by `AuthGate`.
+
+### ProjectPicker `canCreate` / `currency` — `src/hosted/components/ProjectPicker.tsx` (extended, MUT-318)
+**Purpose**: the portal's matter field offers "Add matter: «name»" when `canCreate` (`canAddClient(profile)`), a client is chosen (`customerId`) and the client has no matter of that name; picking creates it in `currency` through `useCreateProject` (`data/projectQueries.ts`) and picks it. With no client chosen: no Add row, a polite hint (`describedBy`), and each row names its client. Used by IncomeCaptureDrawer and ExpenseDrawer. Tests: `components/__tests__/ProjectPicker.test.tsx`.
+
+### usePendingPicks — `src/hosted/components/usePendingPicks.ts` (new, MUT-318 reconcile)
+**Purpose**: holds a hosted drawer's Save while a picker's Add «name» is in flight. Returns `{ pending, track, guard }`: pass `track` as the pickers' `onCreatingChange`, `pending` to Save's disabled/aria-disabled, and wrap the form's submit in `guard(...)`. ClientPicker and ProjectPicker take `onCreatingChange`. Tests: `IncomeCaptureDrawer.test.tsx` › holds Save / Enter held; `ExpenseDrawer.test.tsx` › holds Save.
+
+### useMatterCascade — `src/hosted/components/useMatterCascade.ts` (new, MUT-318)
+**Purpose**: the hosted drawers' wiring of `useClientProjectCascade` over every client's matters (`ownerOf: customerId`); returns the client field's `flashSignal`. Tests: drawer tests (`IncomeCaptureDrawer.test.tsx` › matters).
+
+### useClientProjectCascade — `src/lib/forms/useClientProjectCascade.ts` (moved from `src/hooks/`, MUT-318)
+**Purpose**: client ↔ project cascade for any react-hook-form form; generic project type, `ownerOf` (default `clientId`), `onAutoFill`. Used by the local Income/Expense drawers and the portal's (via useMatterCascade). Tests: `src/lib/forms/__tests__/useClientProjectCascade.test.tsx`.
+
+### EntityTypeahead `describedBy` / `flashSignal` (extended, MUT-318)
+**Purpose**: `describedBy` sets the input's `aria-describedby`; `flashSignal` plays the cascade flash when it changes. Internally: read-only (never disabled) while an async pick saves, and the `create-success` pulse when a create resolves picked. ClientTypeahead (local) and ClientPicker (portal) pass `flashSignal` through. Tests: `EntityTypeahead.test.tsx` › saving and cues.
+
+### ClientPicker `canCreate` — `src/hosted/components/ClientPicker.tsx` (extended, MUT-286)
+**Purpose**: the portal's client field now offers "Add client: «name»" when `canCreate` (`canAddClient(profile)`, `data/incomeAffordances.ts`) and no client has the typed name; picking creates it through `useCreateCustomer` (`data/customerQueries.ts`) and picks it. Without `canCreate` it is unchanged. Used by IncomeCaptureDrawer and ExpenseDrawer (`canAddClient` prop). Tests: `components/__tests__/ClientPicker.test.tsx`.
+
+## Terms of service — MUT-324 (ADR-102)
+
+### LegalPage — `src/pages/landing/LegalPage.tsx` (new, extracted from PrivacyPolicyPage)
+Landing chrome plus a dated, titled-sections legal document. `sections: { title, paragraphs[] }[]`, optional `updated`/`intro`, `after` slot, `loading` (sets `aria-busy`), and `textLanguage` (sets lang/dir on the text when it differs from the page's, as in /terms?lang; MUT-324 review). Used by `PrivacyPolicyPage` and `TermsPage`. Usage: `<LegalPage title={…} updated={…} intro={…} sections={…} />`. Tests: `PrivacyPolicyPage.test.tsx`, `TermsPage.test.tsx`.
+
+### TermsPage — `src/pages/landing/TermsPage.tsx`
+`/terms` (latest) and `/terms/<version>`: loads the frozen text through `src/content/legal/terms.ts` (`loadTerms`, `TERMS_VERSIONS`, `LATEST_TERMS_VERSION`, `termsVersionOf`), in the page language unless a portal link names one (`?lang=en|ar`, read by `legalLanguageOf`). That language applies to the text only (LegalPage `textLanguage`) and is never stored. An unknown version says so and links `/terms`, keeping `?lang`.
+
+### legalLanguageOf — `src/content/legal/language.ts` (MUT-356)
+`legalLanguageOf(search)`: the `?lang=en|ar` a link to `/terms` or `/privacy` names, or null (absent or unknown). Shared by `TermsPage` and `PrivacyPolicyPage` (lifted from MUT-324's `termsLanguageOf`). Tests: `src/content/legal/__tests__/language.test.ts`.
+
+### useTIn — `src/lib/i18n/context.tsx` (MUT-356)
+`useTIn(language | null)`: `t` over the app dictionaries for a text that names its own language, else the page's `t`. Reads dictionaries only, so the page language and the stored choice stay as they are. App and landing only (the portal has its own dictionaries). Used by `PrivacyPolicyPage` for `/privacy?lang`. Tests: `PrivacyPolicyPage.test.tsx` (`?lang`).
+
+### termsManifest — `src/content/legal/termsManifest.ts` (Node only)
+Builds `/legal/terms-versions.json` (version + sha256 per language) for the web build's `legalTermsManifest()` Vite plugin and the pin test. Never import it from page code.
+
+### TermsUpdatePage — `src/hosted/pages/auth/TermsUpdatePage.tsx`
+The portal's "We've updated our terms" step, rendered by `AuthGate` (prop `version` only) when `Me.terms.accepted === false`: read the version (new tab, `?lang` = page language), I agree (`api.acceptTerms`), Sign out, and the support line (a mailto link). It keeps the version it showed: a different one from a /v1/me refetch, or named by a 409 `TERMS_VERSION_STALE`, replaces it and shows "the terms changed". A success cancels in-flight /v1/me fetches and writes through an updater.
+
+### termsHref / TERMS_CLIENT_RELEASE / SUPPORT_EMAIL — `src/hosted/terms.ts`
+`termsHref(language, version?)` reads the `__TERMS_URL__` build define (ADR-076 typeof guard; '' when unset) and always adds `?lang=<language>`, the language the acceptance records. Used by SetupPage, TermsUpdatePage, UserMenu and SignInPage.
+`TERMS_CLIENT_RELEASE` (MUT-354) is `web-v<APP_VERSION>`, the `clientRelease` SetupPage and TermsUpdatePage send with each acceptance.
+
+### termsAcceptanceOf / termsAcceptedAudit — `server/src/terms-acceptance.ts`
+The acceptance row for the current terms (sha256 by locale, surface from `Session.kind`, MUT-354 the request's `clientRelease` or null), and its `user.terms_accepted` audit on owned profiles only. Shared by the setup redeem and `POST /v1/me/terms-acceptance`.

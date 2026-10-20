@@ -223,7 +223,7 @@ test('a client billed by two businesses shows an entry count for each', { tag: '
     await page.goto('/app/clients');
     const row = main.getByRole('row', { name: /Acme Studio/ });
     await expect(row).toHaveCount(1);
-    await expect(row.getByTitle(FIRST)).toHaveText('D1 entries');
-    await expect(row.getByTitle(SECOND)).toHaveText('N1 entries');
+    await expect(row.getByTitle(FIRST)).toHaveText('D1 entry');
+    await expect(row.getByTitle(SECOND)).toHaveText('N1 entry');
   });
 });

@@ -149,3 +149,13 @@ features:
       - Every marketing page is in Arabic, right to left, and no language is stored
       - The web app opens in Arabic too, and nothing is stored (MUT-209)
       - Pressing EN switches to English, stores it, and it stays English after a reload
+  - id: arabic-day-counts
+    title: "The landing page's Clients and client-profile mocks word their overdue ages correctly in Arabic (MUT-179)"
+    tier: secondary
+    legacy: [MUT-179]
+    paths:
+      - src/pages/landing/components/mocks/**
+    steps:
+      - Open the landing page in Arabic, its default, and scroll to the Clients and client-profile pictures
+    expect:
+      - 'The ages read "الأقدم 3 أيام", "الأقدم 227 يومًا", "الأقدم 158 يومًا" and "متأخر 34 يومًا"; no count above 2 is followed by a bare "يوم"'

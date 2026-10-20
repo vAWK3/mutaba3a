@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useLanguage, getLocale, type LanguageContextValue } from '../../lib/i18n';
+import { useTp, type PluralTranslate } from '../../lib/i18n/plural';
 import { useToast } from '../../lib/toastStore';
 import { getRepositories } from '../../db/provider';
 import { exportAllProfilesReceiptsAsZip } from '../../lib/zipExport';
@@ -22,9 +23,9 @@ type PendingRestore = { backupJson: string; summary: Extract<DataFileKind, { kin
  * The integrity row's description after a run. Kept as numbers and worded at
  * render, so switching language on this page rewords it.
  */
-function describeIntegrity(t: LanguageContextValue['t'], { total, issues }: IntegritySummary): string {
+function describeIntegrity(t: LanguageContextValue['t'], tp: PluralTranslate, { total, issues }: IntegritySummary): string {
   if (issues === 0) return t('integrity.checkClean', { total });
-  return t(issues === 1 ? 'integrity.checkIssuesSingular' : 'integrity.checkIssuesPlural', { count: issues, total });
+  return tp('integrity.checkIssues', issues, { total });
 }
 
 /** Open the OS file picker and hand the chosen file, if any, to `onPick`. */
@@ -48,6 +49,7 @@ function pickFile(accept: string, onPick: (file: File) => void) {
  */
 export function YourDataSection() {
   const { t, language } = useLanguage();
+  const tp = useTp();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const { data: settings } = useSettings();
@@ -88,8 +90,7 @@ export function YourDataSection() {
     });
 
   const handleRestored = ({ recordsRestored: count, backupVersion: version }: { recordsRestored: number; backupVersion: number }) => {
-    const key = count === 1 ? 'settings.importBackupDoneSingular' : 'settings.importBackupDonePlural';
-    showToast(t(key, { count, version }), { type: 'success' });
+    showToast(tp('settings.importBackupDone', count, { version }), { type: 'success' });
     window.location.reload();
   };
 
@@ -104,7 +105,7 @@ export function YourDataSection() {
     setIsExportingReceipts(true);
     try {
       const count = await exportAllProfilesReceiptsAsZip();
-      showToast(t('settings.exportReceiptsDone', { count }), { type: 'success' });
+      showToast(tp('settings.exportReceiptsDone', count), { type: 'success' });
     } catch {
       showToast(t('settings.exportReceiptsFailed'), { type: 'error' });
     } finally {
@@ -123,8 +124,7 @@ export function YourDataSection() {
       if (issues === 0) {
         showToast(t('integrity.toastClean'), { type: 'success' });
       } else {
-        const key = issues === 1 ? 'integrity.toastIssuesSingular' : 'integrity.toastIssuesPlural';
-        showToast(t(key, { count: issues }), { type: 'error' });
+        showToast(tp('integrity.toastIssues', issues), { type: 'error' });
       }
     } catch {
       setIntegritySummary(null);
@@ -180,7 +180,7 @@ export function YourDataSection() {
         <div>
           <div className="settings-label">{t('settings.exportReceipts')}</div>
           <div className="settings-description">
-            {receiptCount === 0 ? t('settings.exportReceiptsNone') : t('settings.exportReceiptsDesc', { count: receiptCount })}
+            {receiptCount === 0 ? t('settings.exportReceiptsNone') : tp('settings.exportReceiptsDesc', receiptCount)}
           </div>
         </div>
         <button
@@ -196,7 +196,7 @@ export function YourDataSection() {
         <div>
           <div className="settings-label">{t('settings.integrityCheck')}</div>
           <div className="settings-description">
-            {integritySummary ? describeIntegrity(t, integritySummary) : t('settings.integrityCheckDesc')}
+            {integritySummary ? describeIntegrity(t, tp, integritySummary) : t('settings.integrityCheckDesc')}
           </div>
         </div>
         <button className="btn btn-secondary" onClick={handleIntegrityCheck} disabled={isChecking}>

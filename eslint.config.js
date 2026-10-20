@@ -51,6 +51,44 @@ const STORAGE_SEAM_PATTERNS = [
   },
 ]
 
+/** The portal's import bans (MUT-43, hosted-portal.md §8), shared by the portal and its local backend (ADR-097). */
+const PORTAL_RESTRICTED_PATHS = [{ name: 'dexie', message: 'The portal never uses Dexie; local mode stores API-shaped records itself (ADR-097).' }]
+const PORTAL_RESTRICTED_PATTERNS = [
+  { regex: '(^|/)(db|sync|hooks)(/|$)', message: 'The portal never imports the local data layer, sync or local hooks (hosted-portal.md §8).' },
+  { regex: '(^|/)components/(layout|drawers)(/|$)', message: 'The portal has its own shell and no drawers (hosted-portal.md §2).' },
+  { regex: '(^|/)lib/(stores|toastStore)', message: 'The portal keeps no app store state (hosted-portal.md §8).' },
+  { regex: '(^|/)lib/i18n(/index|/context)?$', message: 'Import lib/i18n/core (and plural): the app provider bundles the app dictionaries.' },
+]
+const PORTAL_DECIMAL_SYNTAX = [
+  { selector: "CallExpression[callee.name='Number']", message: 'No Number() in the portal: amounts are decimal strings (hosted-portal.md §7.3).' },
+  { selector: "CallExpression[callee.name=/^parse(Float|Int)$/]", message: 'No parseFloat/parseInt in the portal: amounts are decimal strings.' },
+  { selector: "CallExpression[callee.object.name='Number'][callee.property.name=/^parse(Float|Int)$/]", message: 'No Number.parseFloat/parseInt in the portal: amounts are decimal strings.' },
+  { selector: "UnaryExpression[operator='+']", message: 'No unary + in the portal: amounts are decimal strings.' },
+]
+/** The server modules src/hosted/local may import (ADR-097 §9). Everything they import in turn is the server's business. */
+const LOCAL_SERVER_ALLOWLIST = [
+  'app-shell',
+  'attachments/rules',
+  'attachments/storage',
+  'auth/middleware',
+  'auth/sessions',
+  'auth/store-guard',
+  'fx-rates',
+  'logger',
+  'personal-profile',
+  'rate-limit',
+  // MUT-325: the records file's text and the device person's address, shared with the hosted export
+  'records-file/codec',
+  'records-file/local-person',
+  'repositories/memory',
+  'repositories/ports',
+  'routes/fx-rates',
+  'routes/me',
+  'routes/portal-routes',
+  'routes/profiles',
+  'schemas',
+]
+
 export default defineConfig([
   globalIgnores(['dist', 'dev-dist', 'src-tauri', 'server', '.claude/worktrees', 'coverage']),
   {
@@ -165,28 +203,51 @@ export default defineConfig([
     // only: nothing from the local data layer, sync, local hooks, shell,
     // drawers or stores, and not the app's i18n provider (it carries the app's
     // full dictionaries). Amounts are decimal strings end to end.
+    // Since ADR-097 (MUT-286) the server's own routes run in the page signed
+    // out, but only from src/hosted/local (next block); everything else reaches
+    // them lazily through client.ts's dynamic import of @mut/local-backend.
     files: ['src/hosted/**/*.{ts,tsx}'],
-    ignores: ['src/hosted/**/__tests__/**'],
+    ignores: ['src/hosted/**/__tests__/**', 'src/hosted/local/**'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
-          paths: [{ name: 'dexie', message: 'The portal opens no IndexedDB (hosted-portal.md §8).' }],
+          paths: [
+            ...PORTAL_RESTRICTED_PATHS,
+            { name: '@mut/local-backend', message: 'Load the local backend only through client.ts localBackend(): a static import puts it in every signed-in page (ADR-097 §2.7).' },
+          ],
           patterns: [
-            { regex: '(^|/)(db|sync|hooks)(/|$)', message: 'The portal never imports the local data layer, sync or local hooks (hosted-portal.md §8).' },
-            { regex: '(^|/)components/(layout|drawers)(/|$)', message: 'The portal has its own shell and no drawers (hosted-portal.md §2).' },
-            { regex: '(^|/)lib/(stores|toastStore)', message: 'The portal keeps no app store state (hosted-portal.md §8).' },
-            { regex: '(^|/)lib/i18n(/index|/context)?$', message: 'Import lib/i18n/core (and plural): the app provider bundles the app dictionaries.' },
+            ...PORTAL_RESTRICTED_PATTERNS,
+            { regex: '(^|/)server/src(/|$)', message: 'Only src/hosted/local runs server code in the page (ADR-097).' },
           ],
         },
       ],
-      'no-restricted-syntax': [
+      'no-restricted-syntax': ['error', ...PORTAL_DECIMAL_SYNTAX],
+    },
+  },
+  {
+    // The portal's local backend (MUT-286, ADR-097 §9): the portal's rules,
+    // plus an allowlist of server modules — the route list, the in-memory
+    // store, the auth middleware, the shell, and the session-token
+    // primitives. Anything else in server/src (Prisma, argon2, Node-only I/O)
+    // stays out of the browser.
+    files: ['src/hosted/local/**/*.ts'],
+    ignores: ['src/hosted/local/**/__tests__/**'],
+    rules: {
+      'no-restricted-imports': [
         'error',
-        { selector: "CallExpression[callee.name='Number']", message: 'No Number() in the portal: amounts are decimal strings (hosted-portal.md §7.3).' },
-        { selector: "CallExpression[callee.name=/^parse(Float|Int)$/]", message: 'No parseFloat/parseInt in the portal: amounts are decimal strings.' },
-        { selector: "CallExpression[callee.object.name='Number'][callee.property.name=/^parse(Float|Int)$/]", message: 'No Number.parseFloat/parseInt in the portal: amounts are decimal strings.' },
-        { selector: "UnaryExpression[operator='+']", message: 'No unary + in the portal: amounts are decimal strings.' },
+        {
+          paths: PORTAL_RESTRICTED_PATHS,
+          patterns: [
+            ...PORTAL_RESTRICTED_PATTERNS,
+            {
+              regex: `(^|/)server/src/(?!(${LOCAL_SERVER_ALLOWLIST.join('|')})\\.js$)`,
+              message: 'The local backend imports only the allowlisted server modules (eslint.config.js LOCAL_SERVER_ALLOWLIST, ADR-097 §9).',
+            },
+          ],
+        },
       ],
+      'no-restricted-syntax': ['error', ...PORTAL_DECIMAL_SYNTAX],
     },
   },
 ])

@@ -47,7 +47,7 @@ import { useLanguage, useT } from '../../lib/i18n';
 import { useToast } from '../../lib/toastStore';
 import { ClientTypeahead } from '../ui/ClientTypeahead';
 import { ProjectTypeahead } from '../ui/ProjectTypeahead';
-import { useClientProjectCascade } from '../../hooks/useClientProjectCascade';
+import { useClientProjectCascade } from '../../lib/forms/useClientProjectCascade';
 import type { TxStatus } from '../../types';
 import { CURRENCIES, INCOME_STATUSES, schema, type FormData } from './incomeFormSchema';
 import { paymentLocalDay } from '../../lib/dates';
@@ -264,7 +264,10 @@ export function IncomeDrawer() {
   }, [mode, form]);
 
   // Bi-directional cascade between client and project fields
-  useClientProjectCascade({ form, projectsData });
+  // The client field flashes when picking a project fills it (MUT-318 A3)
+  const [clientFlash, setClientFlash] = useState(0);
+  const flashClient = useCallback(() => setClientFlash((n) => n + 1), []);
+  useClientProjectCascade({ form, projectsData, onAutoFill: flashClient });
 
   const handleClientDraft = useCallback(
     (text: string) => setValue('clientDraft', text, { shouldValidate: !!form.formState.errors.clientDraft }),
@@ -565,6 +568,7 @@ export function IncomeDrawer() {
                 onPendingTextChange={handleClientDraft}
                 onCreatingChange={setClientCreating}
                 canCreate={!businessStillAsked}
+                flashSignal={clientFlash}
               />
             )}
           />

@@ -27,8 +27,10 @@
       "lastActivity": "Last Activity"
     },
     "summary": {
-      "projectsCount": "{count} projects",
-      "projectsCountOne": "1 project",
+      "projectsCount": {
+        "one": "{count} project",
+        "other": "{count} projects"
+      },
       "totalReceived": "Total Received",
       "totalUnpaid": "Total Unpaid",
       "totalExpenses": "Total Expenses",

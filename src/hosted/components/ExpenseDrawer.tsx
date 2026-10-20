@@ -13,6 +13,8 @@ import { useToast } from './Toast';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { ClientPicker } from './ClientPicker';
 import { ProjectPicker } from './ProjectPicker';
+import { useMatterCascade } from './useMatterCascade';
+import { usePendingPicks } from './usePendingPicks';
 import { ReceiptUploader } from './ReceiptUploader';
 import { Drawer } from './Drawer';
 import { applyExpenseApiError } from './expenseApiErrors';
@@ -79,9 +81,11 @@ export interface ExpenseDrawerProps {
   timezone?: string;
   /** Called instead of `onClose` after a delete, so the list can drop an anchor on the deleted record (MUT-91). */
   onDeleted?: (expenseId: string) => void;
+  /** The client field offers "Add client: «name»" (`canAddClient(profile)`, MUT-286). */
+  canAddClient?: boolean;
 }
 
-export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted }: ExpenseDrawerProps) {
+export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted, canAddClient = false }: ExpenseDrawerProps) {
   // After-save feedback (R1 via HP1, MUT-91): always from the drawer, the one
   // place that knows a save happened (ADR-057 §4). Delete marks nothing.
   const markSaved = (id: string) => useSavedFlashStore.getState().markSaved({ kind: 'expense', ids: [id], profileId });
@@ -102,7 +106,9 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
     defaultValues: emptyValues(timezone),
   });
   const { control, handleSubmit, reset, setError, formState } = form;
-  const selectedClientId = useWatch({ control, name: 'clientId' });
+  const [selectedClientId, selectedCurrency] = useWatch({ control, name: ['clientId', 'currency'] });
+  const clientFlash = useMatterCascade(form, profileId, 'clientId');
+  const picks = usePendingPicks();
 
   // (Re)fill the form when a genuinely new version arrives: the first load, or
   // the refetch after a 409 (MUT-221, as ConversionDrawer's D6). Keyed on id and
@@ -236,14 +242,14 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
             <Button type="button" variant="secondary" onClick={onClose}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" form="hosted-expense-form" disabled={isSubmitting}>
+            <Button type="submit" form="hosted-expense-form" disabled={isSubmitting || picks.pending}>
               {isSubmitting ? t('common.saving') : t('common.save')}
             </Button>
           </div>
         </>
       }
     >
-      <form id="hosted-expense-form" onSubmit={handleSubmit(onSubmit)}>
+      <form id="hosted-expense-form" onSubmit={picks.guard(handleSubmit(onSubmit))}>
         <ExpenseFormFields
           control={control}
           errors={formState.errors}
@@ -282,10 +288,14 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
                 control={control}
                 render={({ field }) => (
                   <ClientPicker
+                    id="hosted-expense-client"
                     profileId={profileId}
                     value={field.value || ''}
                     onChange={field.onChange}
                     placeholder={t('hosted.expenses.drawer.clientPlaceholder')}
+                    canCreate={canAddClient}
+                    flashSignal={clientFlash}
+                    onCreatingChange={picks.track}
                   />
                 )}
               />
@@ -302,11 +312,15 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
                 control={control}
                 render={({ field }) => (
                   <ProjectPicker
+                    id="hosted-expense-matter"
                     profileId={profileId}
                     customerId={selectedClientId || undefined}
                     value={field.value || ''}
                     onChange={field.onChange}
                     placeholder={t('hosted.expenses.drawer.matterPlaceholder')}
+                    canCreate={canAddClient}
+                    currency={selectedCurrency}
+                    onCreatingChange={picks.track}
                   />
                 )}
               />

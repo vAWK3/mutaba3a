@@ -1,0 +1,49 @@
+// src/hosted/local/** (MUT-286) runs the server's own route modules in the
+// page. Those files are written and tested against server/tsconfig.json's
+// strictness (exactOptionalPropertyTypes, noUncheckedIndexedAccess); checking
+// them under tsconfig.hosted.json's plainer settings collapses zod's heavily
+// generic `createRoute` types to `never` throughout (observed directly: every
+// route file in PORTAL_ROUTES failed with "SecurityRequirementObject"/"never"
+// errors that do not occur under `server`'s own `tsc`). This program mirrors
+// server/tsconfig.json's relevant flags instead of loosening the server's own
+// contract or tightening tsconfig.hosted.json for every other portal file
+// that was never written against this strictness.
+//
+// tsconfig.hosted.json excludes src/hosted/local/** so the two programs never
+// double-check the same files under different rules.
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.hosted-local.tsbuildinfo",
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    // server/src references Node's ambient globals (chiefly `Buffer`) by name, the same way server/tsconfig.json sees
+    // them. `typeRoots` pins this program to the exact `@types/node` server's own program uses (its `node_modules`,
+    // not the repo root's newer major version) — a version-skew between the two otherwise produces spurious
+    // `Buffer<ArrayBuffer>` / `ArrayBufferView` incompatibilities that don't exist under `server`'s own `tsc`.
+    "typeRoots": ["./server/node_modules/@types"],
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "resolveJsonModule": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    "paths": {
+      "node:crypto": ["./src/hosted/local/platform/crypto.ts"],
+      "node:async_hooks": ["./src/hosted/local/platform/async-hooks.ts"]
+    }
+  },
+  "include": ["src/hosted/local"],
+  "exclude": ["src/hosted/local/__tests__/**"]
+}

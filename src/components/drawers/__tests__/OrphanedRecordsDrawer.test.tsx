@@ -126,6 +126,10 @@ describe('OrphanedRecordsDrawer', () => {
     expect(incomeRow).toHaveTextContent('Acme');
     expect(incomeRow).toHaveTextContent('Oct 1, 2026');
     expect(incomeRow).toHaveTextContent('$100');
+    // MUT-109: a plain <bdi>, so an Arabic amount resolves from its own leading RLM
+    const amount = within(incomeRow).getByText('$100');
+    expect(amount.tagName).toBe('BDI');
+    expect(amount).not.toHaveAttribute('dir');
   });
 
   describe('with one profile', () => {
@@ -274,8 +278,14 @@ describe('OrphanedRecordsDrawer', () => {
 });
 
 describe('orphanedRecords copy', () => {
+  const PLURAL_FORMS = ['zero', 'one', 'two', 'few', 'many', 'other'];
+  /** A CLDR plural object is one string with per-language forms (MUT-179): compare it as a leaf. */
+  function isPlural(value: object): boolean {
+    return 'other' in value && Object.keys(value).every((k) => PLURAL_FORMS.includes(k));
+  }
+
   function keys(value: unknown, prefix = ''): string[] {
-    if (typeof value !== 'object' || value === null) return [prefix];
+    if (typeof value !== 'object' || value === null || isPlural(value)) return [prefix];
     return Object.entries(value as Dict).flatMap(([k, v]) => keys(v, prefix ? `${prefix}.${k}` : k));
   }
 
@@ -291,8 +301,8 @@ describe('orphanedRecords copy', () => {
     const groups = copy.groups as Record<string, string>;
     expect(String(copy.assignAllTo)).toContain('{profile}');
     expect(String(copy.profileFor)).toContain('{record}');
-    expect(String(copy.assignedPlural)).toContain('{count}');
-    expect(String(copy.partialFailurePlural)).toContain('{count}');
+    expect((copy.assigned as Record<string, string>).other).toContain('{count}');
+    expect((copy.partialFailure as Record<string, string>).other).toContain('{count}');
     for (const group of ['clients', 'projects', 'transactions', 'expenses']) {
       expect(groups[group], group).toContain('{count}');
     }

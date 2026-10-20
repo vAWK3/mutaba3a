@@ -13,8 +13,22 @@
       "paid": "مدفوع",
       "unpaid": "غير مدفوع",
       "partial": "جزئي ({percent}%)",
-      "overdue": "متأخر {days} يوم",
-      "dueIn": "مستحق خلال {days} يوم",
+      "overdue": {
+        "zero": "متأخر {count} يوم",
+        "one": "متأخر يومًا واحدًا",
+        "two": "متأخر يومين",
+        "few": "متأخر {count} أيام",
+        "many": "متأخر {count} يومًا",
+        "other": "متأخر {count} يوم"
+      },
+      "dueIn": {
+        "zero": "مستحق خلال {count} يوم",
+        "one": "مستحق خلال يوم واحد",
+        "two": "مستحق خلال يومين",
+        "few": "مستحق خلال {count} أيام",
+        "many": "مستحق خلال {count} يومًا",
+        "other": "مستحق خلال {count} يوم"
+      },
       "dueToday": "مستحق اليوم"
     },
     "partialPayment": {

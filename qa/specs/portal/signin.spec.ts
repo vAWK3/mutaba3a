@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { CANVAS_HEX, SCHEMES, bootMarkBox, computedFont, hexToRgb, loadedFaces, watchFontRequests } from '../../support/brand';
+import { MODE_KEY } from '../../support/portal';
 
 /**
  * The hosted portal's sign-in page in Brand v2 (MUT-102). Every /v1 call is
@@ -21,6 +22,7 @@ type AuthCopy = { hosted: { auth: { title: string; checking: string; connectingS
 const auth = (language: 'en' | 'ar') => (JSON.parse(fs.readFileSync(path.join(portalI18n, `${language}.json`), 'utf8')) as AuthCopy).hosted.auth;
 const AUTH = { en: auth('en'), ar: auth('ar') } as const;
 const HEADING = { en: AUTH.en.title, ar: AUTH.ar.title } as const;
+const TERMS_LINK = { en: 'Terms of service', ar: 'شروط الخدمة' } as const;
 const REQUEST = { en: AUTH.en.request, ar: AUTH.ar.request } as const;
 const AUTH_CHECKING = { en: AUTH.en.checking, ar: AUTH.ar.checking } as const;
 const AUTH_CONNECTING_SLOW = { en: AUTH.en.connectingSlow, ar: AUTH.ar.connectingSlow } as const;
@@ -90,13 +92,15 @@ for (const language of ['en', 'ar'] as const) {
         await openSignIn(page, language);
       });
 
-      await step('One outward link, same tab, under the help line', async () => {
+      await step('One outward link to /hosted, same tab, under the help line; the only other is the terms (MUT-324)', async () => {
         const link = page.getByRole('link', { name: REQUEST[language].link });
         await expect(link).toBeVisible();
         await expect(link).toHaveAttribute('href', /^https:\/\/[^/]+\/hosted$/);
         await expect(link).not.toHaveAttribute('target', /./);
         await expect(page.getByText(REQUEST[language].lead)).toBeVisible();
-        await expect(page.getByRole('link')).toHaveCount(1);
+        // No self-service door: besides /hosted, the page links only the terms of service
+        await expect(page.getByRole('link')).toHaveCount(2);
+        await expect(page.getByRole('link', { name: TERMS_LINK[language] })).toHaveAttribute('href', new RegExp(`^https://[^/]+/terms\\?lang=${language}$`));
       });
 
       await step('Still accessible', async () => {
@@ -154,6 +158,8 @@ async function openWithSlowSession(page: Page, ms: number) {
     await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
   });
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [PORTAL_LANGUAGE_KEY, 'en'] as const);
+  // A browser that has used an account here (MUT-286): its 401 means "sign in again". A first visit opens local mode.
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MODE_KEY, 'remote'] as const);
   return () => cspErrors;
 }
 

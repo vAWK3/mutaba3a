@@ -1403,14 +1403,18 @@ that can compare something currency-free (days late, dates, names) do that
 instead. Every comparator ends with a name-then-id tie-break so equal rows
 never reshuffle.
 
-### Amounts stay LTR inside RTL text (MUT-3)
-A standalone amount renders in `<bdi dir="ltr">` (or a cell the RTL rules
-already isolate, like `.amount-cell`). An amount *inside a translated sentence*
+### Amounts stay LTR inside RTL text (MUT-3; standalone amounts amended by MUT-109)
+A standalone locale-formatted amount renders in a **plain `<bdi>`** (MUT-109,
+ADR-101): the Arabic `Intl` string starts with RLM, so `dir=auto` resolves it
+right to left, the order Arabic amounts have always had on screen
+(`$US 1,300`). Never `<bdi dir="ltr">` around `formatAmount`/`formatDecimal`;
+`direction.test.ts` refuses it. An amount *inside a translated sentence*
 ("{amount} overdue") is passed to `t()` wrapped in U+2066 … U+2069 (LEFT-TO-RIGHT
 ISOLATE … POP DIRECTIONAL ISOLATE), so translators keep control of word order
 and the number still reads left to right in Arabic. Tests that assert the
-sentence strip `[\u2066-\u2069]` first. Phone numbers and e-mail addresses in
-an RTL header get the same `<bdi dir="ltr">`.
+sentence strip `[\u2066-\u2069]` first. Phone numbers, e-mail addresses,
+version and invoice numbers get `<bdi dir="ltr">`: text that reads left to
+right in any language.
 
 ### Operator CLIs are functions over an injected fetch (MUT-37)
 `smoke.ts` started it; `scripts/users.ts` makes it the rule. The script exports
@@ -1527,6 +1531,14 @@ A plural string is an object of CLDR forms (`zero|one|two|few|many|other`);
 `tp(key, count, vars)` picks the form `Intl.PluralRules` names, falling back to
 `other`, with `{count}` always available. English needs `one` + `other`; Arabic
 all six (parity-tested in `src/hosted/i18n`).
+
+**The count's placeholder is `{count}`, never `{days}` or `{n}` (MUT-179).** Arabic
+`one`/`two` name the count in words ("يوم واحد", "يومان") and drop the digit; `few`
+(3–10) takes the plural ("أيام"), `many` (11–99) the accusative singular ("يومًا").
+No `count === 1 ? …Singular : …Plural` ternaries and no `…One` keys: one plural
+object per string. **Tests:** a test that mocks `lib/i18n` or `lib/i18n/core`
+must also mock `lib/i18n/plural` (route `useTp` through its mocked `t`), or
+`useTp` reaches the real `useLanguage` and the render throws.
 
 ### Relative time goes through `Intl.RelativeTimeFormat` (MUT-92, ADR-019)
 "3 days ago", "1 week ago" come from `formatRelativeDate(iso, t, locale)`
@@ -1704,8 +1716,8 @@ Dexie's `table.update(id, changes)` deletes a key whose value is `undefined`, an
 - Unit-test the contract instead: Enter is not `defaultPrevented`.
 - Cover the real path with a Playwright spec (`qa/specs/web/income.spec.ts`, `@web.income.fast-path`).
 
-### Amounts stay left-to-right inside Arabic; set it in CSS, not only with `dir`
-theme.css sets `:lang(ar) { direction: rtl }` on every element, which out-ranks a `dir="ltr"` attribute. An LTR island (an amount with its currency prefix) needs `direction: ltr` from a selector that out-ranks `:lang(ar)` (`div.input-with-prefix`, `.input-with-prefix > .input`; see also `.num-input`). A summary line that mixes LTR codes and Arabic text wraps each part in `<bdi>`.
+### Direction comes from `<html dir>` and the `dir` attribute (MUT-109, ADR-101)
+No CSS rule sets `direction` on `:lang()`: such a rule matches every element and beats the `dir` attribute (TD-048, how every `dir="ltr"` came to be ignored in Arabic). `I18nProvider` sets `<html lang dir>`; every element inherits it. Use the attribute for intent: `dir="ltr"` on an LTR island (an amount input or its currency-prefix group, an email, a password, a date), `dir="auto"` for user text, a plain `<bdi>` for a locale-formatted amount (above). A `dir="ltr"` input or select in the Arabic UI keeps its text on the right (`:where([dir="rtl"]) :is(input, select)[dir="ltr"]` in index.css), so only typing order differs. A new `dir` site must be classified in `src/styles/__tests__/direction.test.ts` (`DIR_SITES`). A summary line that mixes LTR codes and Arabic text wraps each part in `<bdi>`. Rendering is proved in a browser (`qa/support/bidi.ts` `readBidi`/`readField`), never in jsdom, which runs no cascade.
 
 ### Typeahead Enter: pick, hold, or submit (MUT-5)
 In `EntityTypeahead`, Enter does one of three things:
@@ -2488,3 +2500,87 @@ When an endpoint has no If-Match and the last arrival wins, chain each entity's 
 ### Pattern: Batches save one at a time and refetch once
 `runSequential(items, save)` returns `{ done, failed }`; the UI moves every item at once, suppresses per-save invalidation while the batch runs, refetches at the end, and offers Retry for `failed` only.
 
+## Patterns added by MUT-286 (2026-10-19, ADR-097, ADR-100)
+
+### Pattern: A lazy chunk the main program can't type-check is reached through a module alias with a contract file
+When a lazily loaded module can't live in the importer's TypeScript program (the portal can't check `server/src`'s route modules), give it one alias (`@mut/local-backend`). The importer's tsconfig `paths` maps the alias to a small contract file of types plus a `declare const` for the entry. The bundler (and Vitest) maps it to the real module, which implements the same contract type under its own program. ESLint forbids a static import of the alias, so the chunk stays lazy. First instance: `src/hosted/session/localBackendContract.ts`.
+
+### Pattern: After replacing who the person is, navigate to an explicit target read from a fresh answer
+A redirect (`/` → first profile) decides once, from whatever the observer last rendered, and a cache reset reaches observers a tick later. After swapping identity data (Restore), `fetchQuery` the new `/v1/me` and navigate straight to its first profile; pages that read `/v1/me` on every render correct themselves, a redirect doesn't. First instance: `YourDataDrawer.replace`.
+
+## Patterns added by MUT-318 (2026-10-19, ADR-100 decision 10)
+
+### Pattern: A typeahead saving a pick is read-only, never disabled
+A focused input that becomes `disabled` loses focus (HTML focus fixup): the keyboard drops to `<body>` and anything that checks `activeElement` (EntityTypeahead's "Enter held while saving submits once saved") silently stops working. While an async `onSelect` runs, EntityTypeahead sets `readOnly` beside `aria-busy`; callers must not pass their mutation's `isPending` into `disabled`. First instance: `EntityTypeahead` (`selecting`), ClientPicker/ProjectPicker.
+
+### Pattern: One-shot field cues are a class toggled on the DOM, restarted by a signal
+A cue (a field filled by another, a record just created) is a class on the typeahead root: removed, reflowed, re-added, and taken off by a timer after its span, so it never touches React state and a reduced-motion still tint (which fires no `animationend`) still ends. Callers bump a number (`flashSignal`) to play it; never on mount. Durations live beside the keyframes (`CASCADE_FLASH_MS`/`CREATE_SUCCESS_MS` ↔ the CSS vars). First instance: `EntityTypeahead` `playCue`.
+
+### Pattern: A form-only hook both apps need lives in `src/lib/forms/`
+The portal's lint bans `src/hooks/` (Dexie-backed hooks live there). A hook that only reads a react-hook-form `form` and plain arrays moves to `src/lib/forms/` and takes the app-specific shape through options (`ownerOf`), so the local app and the portal run one rule. First instance: `useClientProjectCascade` (local drawers; portal via `src/hosted/components/useMatterCascade.ts`).
+
+### Pattern: A conditional field hint is an always-mounted polite region the input describes
+A hint that appears while typing ("Choose a client first to add a matter.") is rendered always, empty when it doesn't apply, with `aria-live="polite"` and the input's `aria-describedby` (EntityTypeahead `describedBy`): a live region must exist before its text changes to be announced, and the description is read on focus. Collapse its margin while empty. First instance: ProjectPicker.
+
+### Pattern: A drawer holds Save while a picker is still adding (MUT-318 reconcile)
+A picker that creates on pick (Add «name») reports `onCreatingChange(true/false)` around its mutation (`finally`). The drawer's `usePendingPicks()` counts them: `pending` drives Save's look, `guard(handleSubmit(onSubmit))` drops a submit while any is in flight, before validation. The guard reads a ref, not state, because the picker reports done just before EntityTypeahead submits for an Enter held during the save, ahead of React's re-render. First instance: the hosted IncomeCaptureDrawer and ExpenseDrawer; the local IncomeDrawer's `clientCreating` is the same idea.
+
+## Patterns added by MUT-324 (2026-10-19, ADR-102)
+
+### Pattern: A legal text people accept is a frozen, versioned file, fingerprinted where it's accepted
+Each version is its own content file, never edited once released. The side that records acceptance (the server) pins the version and the sha256 of each language's file, and stores the hash with every acceptance. A root test keeps the pin and the files in step, so a changed text that kept its version fails CI.
+
+### Pattern: Prove a static file is live with a build-emitted manifest, not a page fetch
+Netlify's SPA fallback answers 200 for every path, so a release guard can't fetch a page to learn whether it exists. The web build emits a small JSON manifest (`legal/terms-versions.json`), like `__forms.html`. The guard (`server/src/scripts/check-terms-live.ts`, run by `scripts/preflight.sh server` before the version bump and again by `deploy.sh`) reads that file and compares it to what the release is about to name.
+## Patterns added by MUT-287 (2026-10-19, ADR-100 decision 11)
+
+### Pattern: Two local databases are kept consistent by order, not by one transaction
+When records (`mut-local`) and their files (`mut-local-blobs`) live apart, never delete a file before the records that stop naming it are saved: stage removals during the request and flush them inside the same lock right after the save; on Restore add the new files, save, then sweep files no live record names; sweep on boot for whatever a crash left. A crash at any step leaves records whose files all exist. First instance: `LocalAttachmentStorage` + `transport.ts`, `restore.ts` `applyRestore`.
+
+### Pattern: A Node stand-in for server modules is bound per module, never on `globalThis`
+Server code that runs in the page (`server/src` in the local chunk) gets its Node globals as module bindings injected at build time (`scopeServerBufferShim`, like the `node:crypto` alias), not as a global: libraries sniff `typeof Buffer` and take a Node path a partial stand-in can't serve (jszip did). Verify such paths in a real browser (release-QA): unit tests run on Node's real globals and can't see the difference.
+
+### Pattern: Every local IndexedDB database opens through `LocalDatabase` (MUT-287 review D12)
+A database the page owns must let go when a newer build upgrades it (`onversionchange`: close, then refuse further use so the reload screen shows) and must not hang when an older tab won't (`onblocked` rejects). Both rules live in `src/hosted/local/idb.ts`; `persistence.ts` and `blobStore.ts` use it, and so must any later local database. Tabs running a build are the old tabs of the next one.
+
+## Patterns added by MUT-336 (2026-10-19)
+
+### Pattern: Generated output is pure logic + a thin fs wrapper, named `<name>.ts` / `check-<name>.ts`
+Following `scripts/i18n-keys.ts` + `scripts/check-i18n-keys.ts`: the logic (parsing, naming, codegen, drift-detection) takes and returns plain data — strings, `Record<string, string>` — never touches `node:fs` itself, so `scripts/__tests__/*.test.ts` exercises the exact logic the real run uses, with vitest picking the test up automatically (it only globs `scripts/**/*.test.ts`, not `.mjs` — `validate_illustrations.mjs`'s sibling `.test.mjs` predates this and isn't wired into any script, a pre-existing gap, not a convention to copy). The CLI file does only `readdirSync`/`readFileSync`/`writeFileSync` and exits non-zero on error. First instance: `scripts/icon-set.ts` + `scripts/generate-icons.ts` / `scripts/validate-icon-set.ts` (MUT-336).
+
+### Pattern: A generated directory is wholly owned — nothing in it is hand-edited, ever
+`src/components/icons/generated/` (barrel, shared types module, every component) is rewritten in full by its generator every run; the validator (`icons:check`) regenerates each source in memory and diffs it against what's on disk to catch hand-edited-then-forgotten-to-regenerate drift, plus orphaned generated files with no matching source. The generator itself computes and validates everything before writing anything — one bad input fails the whole run with nothing written, never a silent partial regenerate. First instance: MUT-336's icon codegen.
+
+### Pattern: A named sub-part survives codegen as `data-part`, never a raw `id`
+A source asset's named sub-element (`id="nuqta"`) exists for something downstream to target one part of it later (an animation runtime, in this case). Emitting it as a raw DOM `id` breaks the instant the same generated component renders twice on one page — two elements can't share an `id`, and a global `id` selector would just find the first. Emit `data-part="<name>"` instead and scope the lookup to one instance's root (`rootRef.current.querySelector('[data-part="nuqta"]')`). First instance: the icon codegen pipeline (MUT-336); applies to any future SVG/asset codegen with named internal parts.
+
+## Patterns added by MUT-337 (2026-10-19)
+
+### Pattern: A playful/restrained split is one transform through one of two named curves, never two engines
+When a feature needs a "playful" and a "restrained" version of the same motion, don't reach for two different animation mechanisms (e.g. a bounce library for one, CSS for the other) — play the identical transform through a different easing curve. `ICON_OVERSHOOT_EASE`/`ICON_RESTRAINED_EASE` (`src/lib/motion/iconMotion.ts`) are the exact four control points as Flutter's `MMotion.overshoot`/`.spring` (`mutaba3a_theme.dart:74-76`) — a cubic-bezier with y > 1 overshoots before settling (playful); one that stays within [0,1] doesn't (restrained). Proven in `iconMotion.test.ts`: the playful preset's live value is asserted `> 1` at some point mid-flight, not just "which constant was passed." First instance: MUT-337's icon save-feedback prototype.
+
+### Pattern: Before adding a dependency, check if this app already rejected its category (ADR search)
+MUT-337 almost evaluated Rive from scratch; `.claude/DECISIONS.md`'s ADR-079/080 had already rejected `lottie-web` for the same shape of reason (new runtime, new CSP grant, new asset pipeline, to buy capability a simpler existing tool already covers) — the comparison this time started from "does our existing CSP-proven, zero-new-dependency motion tooling (`motion`, ADR-044) already cover this" instead of re-litigating general-purpose-engine tradeoffs. Search `DECISIONS.md` for the capability category (not the specific library name) before comparing candidates for anything animation/media/rendering-runtime shaped.
+
+
+## Patterns added by MUT-325 (2026-10-20, ADR-156)
+
+### Pattern: A large download is pulled a page at a time, never built whole
+`GET /v1/records-export` returns a `ReadableStream` whose `pull()` asks an async generator for the next chunk (`recordsFileChunks` over `profileExportPages`): each page is one 500-row query, read only when the reader wants more, so a slow client slows the reads and the server holds one page. A failure mid-stream calls `controller.error()`, cutting the response off (and logging it) instead of ending it as if whole; the portal decodes before saving, so a cut file is refused.
+
+### Pattern: A Prisma read that must match a record exactly selects `Columns<R>`
+`prisma-records-export.ts` types each `select` as exactly the record's keys (`cols<R>()({...})`: every key, nothing extra), so a column the record lacks never leaks and a field it has is never dropped. Prisma can't check a select passed through a shared delegate, so `prisma-records-export-columns.test.ts` holds every selected column to `Prisma.dmmf` without a database.
+
+### Pattern: Code that runs server modules in the page is a lazy alias with a contract file
+Like `@mut/local-backend`: `@mut/records-export` maps to `session/recordsExportContract.ts` for the portal's types (tsconfig.hosted.json) and to `src/hosted/local/hostedExport.ts` for code (vite/vitest), so the portal program never type-checks server files and the chunk loads on click. Dependencies the chunk can't import (the portal's `send()`) are injected (`RecordsExportTransport`).
+
+## Patterns added by MUT-326 (2026-10-20, ADR-155)
+
+### Pattern: A public host is read from `config/hosts.json`, never written down
+Our own hosts (landing, portal/API, legacy and new) live only in `config/hosts.json`. TypeScript reads `HOSTS` from `config/hosts.ts`; shell scripts read `npm run --silent hosts -- get <landingOrigin|portalOrigin|domain>`; Terraform reads the file with `jsondecode(file("${path.module}/${var.hosts_file}"))` (tests point `hosts_file` at `config/fixtures/`). `scripts/__tests__/no-hardcoded-hosts.test.ts` fails otherwise. Tests and examples that need *an* origin use neutral ones (`example.com`, `*.example.test`), never ours. The Malafat CIMD client id is the one deliberate exception.
+
+### Pattern: A move that needs DNS is staged in config, not in branches
+"The value is known" and "the value is live" are separate fields (`domain` vs `stage`). Infrastructure keys on the first; builds and links key on the second, so a commit can name the domain without the next release pointing anyone at a host that doesn't resolve yet. `npm run domain:plan -- --stage <s>` shows each stage's effect before it's committed.
+
+### Pattern: A second path to the service proves itself with a token, not a hop count
+When the same service is reached both directly and through a proxy, don't raise `TRUSTED_PROXY_HOPS`: that trusts a forged `X-Forwarded-For` entry on the direct path. The proxy sends a shared secret (Secret Manager, a `secret_text` binding) plus the client IP it read. The server uses those only when the secret matches (digest + `timingSafeEqual`) and otherwise keeps its old rules (`auth/sessions.ts` `requestClientIp`, `isSamePortalOrigin`).

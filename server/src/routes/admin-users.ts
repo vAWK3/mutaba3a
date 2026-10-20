@@ -5,6 +5,7 @@ import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { sessionDigest } from '../auth/sessions.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
+import { termsAccepted, type CurrentTerms } from '../legal.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
 import { ForeignKeyViolation, StateConflict, UniqueViolation } from '../repositories/memory.js';
@@ -22,6 +23,7 @@ import {
   UserDetailSchema,
   UserListSchema,
   UserStatusResponseSchema,
+  TermsReportSchema,
 } from '../schemas.js';
 import { serializeMembership, serializeUser } from '../serializers.js';
 
@@ -43,6 +45,8 @@ export interface AdminUserOptions {
   logger: Logger;
   /** The session pepper digests link tokens; the portal origin is where links point. */
   sessions: Pick<SessionSettings, 'pepper' | 'portalOrigin'>;
+  /** MUT-324: the current terms, for the operator's acceptance report. */
+  terms: CurrentTerms;
 }
 
 const adminErrors = {
@@ -71,7 +75,7 @@ function resolvePersonalSettings(
 }
 
 export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> {
-  const { store, logger, sessions } = options;
+  const { store, logger, sessions, terms } = options;
   const app = new OpenAPIHono<AppEnv>();
 
   function auditEvents(c: Context<AppEnv>, organizationIds: string[], userId: string, action: AuditAction, metadata?: JsonObject): AuditEventInput[] {
@@ -232,6 +236,33 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     async (c) => {
       const user = await store.users.findByEmail(normalizeEmail(c.req.valid('query').email));
       return c.json({ users: user ? [serializeUser(user)] : [] }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/admin/v1/terms-acceptance',
+      tags: ['Admin'],
+      summary: 'Every user, the terms version they last accepted and the client release that showed it (MUT-324, MUT-354)',
+      description: 'For the operator to see who has not yet accepted the current terms, for example someone who only uses the phone app.',
+      security: [{ adminToken: [] }],
+      responses: {
+        200: { description: 'The terms report', content: { 'application/json': { schema: TermsReportSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const rows = await store.users.listLatestTermsVersions();
+      const users = rows.map((r) => ({
+        id: r.userId,
+        email: r.email,
+        status: r.status,
+        latestVersion: r.latestVersion,
+        clientRelease: r.latestClientRelease,
+        accepted: termsAccepted(r.latestVersion, terms.version),
+      }));
+      return c.json({ current: terms.version, users }, 200);
     },
   );
 

@@ -54,6 +54,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export interface EcbSnapshot {
   rateDate: string;
   perEur: { USD: number; ILS: number };
+  /**
+   * Set by a source that relays another cache's reading (the portal's
+   * signed-out source reads this server's GET /v1/public/fx-rates, MUT-287):
+   * that cache's fetch time and staleness are what the reading reports. This
+   * cache's own window still runs on when *it* fetched.
+   */
+  upstream?: { fetchedAt: Date; stale: boolean };
 }
 
 /** Units of `currency` per 1 base. `derived` = a USD peg was used (either side is pegged, not base→base). */
@@ -139,6 +146,12 @@ export interface CachedFxRatesOptions {
   logger?: Logger;
 }
 
+/** This cache's view, or the relayed cache's when the snapshot carries one: whichever is staler wins. */
+function reading(cached: { snapshot: EcbSnapshot; fetchedAt: Date }, source: 'live' | 'stale'): FxRatesReading {
+  const upstream = cached.snapshot.upstream;
+  return { snapshot: cached.snapshot, fetchedAt: upstream?.fetchedAt ?? cached.fetchedAt, source: source === 'stale' || upstream?.stale ? 'stale' : 'live' };
+}
+
 export class CachedFxRates {
   private cached: { snapshot: EcbSnapshot; fetchedAt: Date } | null = null;
   private lastFailureAt: number | null = null;
@@ -148,7 +161,7 @@ export class CachedFxRates {
 
   async get(): Promise<FxRatesReading> {
     const now = this.now().getTime();
-    if (this.cached && now - this.cached.fetchedAt.getTime() < this.options.ttlMs && !this.isUnservable(this.cached.snapshot)) return { ...this.cached, source: 'live' };
+    if (this.cached && now - this.cached.fetchedAt.getTime() < this.options.ttlMs && !this.isUnservable(this.cached.snapshot)) return reading(this.cached, 'live');
     if (this.lastFailureAt !== null && now - this.lastFailureAt < (this.options.failureBackoffMs ?? DEFAULT_FX_FAILURE_BACKOFF_MS)) return this.staleOrRefuse();
     return this.shared(true);
   }
@@ -175,7 +188,7 @@ export class CachedFxRates {
       if (this.isUnservable(snapshot)) throw new Error(`FX provider rate date ${snapshot.rateDate} is unusable (more than ${MAX_RATE_AGE_DAYS} days old, in the future, or not a date)`);
       this.cached = { snapshot, fetchedAt: this.now() };
       this.lastFailureAt = null;
-      return { ...this.cached, source: 'live' };
+      return reading(this.cached, 'live');
     } catch (error) {
       if (recordFailure) this.lastFailureAt = this.now().getTime();
       const hasServableRates = this.cached !== null && !this.isUnservable(this.cached.snapshot);
@@ -185,7 +198,7 @@ export class CachedFxRates {
   }
 
   private staleOrRefuse(): FxRatesReading {
-    if (this.cached && !this.isUnservable(this.cached.snapshot)) return { ...this.cached, source: 'stale' };
+    if (this.cached && !this.isUnservable(this.cached.snapshot)) return reading(this.cached, 'stale');
     throw new ApiError('FX_RATES_UNAVAILABLE', 'Exchange rates are unavailable right now. Try again shortly.');
   }
 

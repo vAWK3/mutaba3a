@@ -5,6 +5,8 @@ import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import type {
   AccountSetupRepository,
   AccountSetupTokenRecord,
+  TermsAcceptanceInput,
+  TermsAcceptanceRecord,
   AttachmentFilter,
   AttachmentRecord,
   AttachmentRepository,
@@ -126,6 +128,10 @@ import type {
   UpdateExpenseGroupPatch,
   EntriesRepository,
   EntryRow,
+  ExportPage,
+  ProfileExportField,
+  ProfileExportRecords,
+  RecordsExportRepository,
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON } from './ports.js';
@@ -137,9 +143,59 @@ import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 
 /**
- * In-memory LedgerStore for tests. Mirrors every uniqueness constraint the
- * Prisma schema declares so a route test fails here for the same reasons it
- * would fail in Postgres.
+ * Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it.
+ * 2 (MUT-300): `orgs` gained `firmEnabledAt`, `firmRequestedAt` and `firmRequestedByUserId`; `members` gained `role`.
+ */
+export const CURRENT_STORE_SNAPSHOT_VERSION = 2;
+
+/**
+ * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
+ * `private readonly` Map except the six ephemeral ones (`idem`, `userIdem`,
+ * `sessionsById`, `setupLinks`, `events`, `keys`): idempotency keys, sessions
+ * and setup links are a server-identity concern that never survives a
+ * restore, and the audit log and API keys are not portal-local-mode concerns
+ * either. `counters` is included (payment/charge numbering must resume where
+ * it left off).
+ */
+export interface LocalSnapshotMaps {
+  orgs: Map<string, Organization>;
+  ints: Map<string, IntegrationRecord>;
+  custs: Map<string, CustomerRecord>;
+  projs: Map<string, ProjectRecord>;
+  refs: Map<string, ExternalReferenceRecord>;
+  rates: Map<string, VatRateRecord>;
+  agrs: Map<string, AgreementRecord>;
+  insts: Map<string, InstallmentRecord>;
+  charges: Map<string, RetainerChargeRecord>;
+  recs: Map<string, ReceivableRecord>;
+  supps: Map<string, SupplementRecord>;
+  versions: Map<string, RetainerVersionRecord>;
+  files: Map<string, AttachmentRecord>;
+  pays: Map<string, PaymentRecord>;
+  allocs: Map<string, AllocationRecord>;
+  credits: Map<string, CreditRecord>;
+  counters: Map<string, number>;
+  props: Map<string, FeeProposalRecord>;
+  people: Map<string, UserRecord>;
+  members: Map<string, MembershipRecord>;
+  exps: Map<string, ExpenseRecord>;
+  expCats: Map<string, ExpenseCategoryRecord>;
+  expReceipts: Map<string, ExpenseReceiptRecord>;
+  convs: Map<string, ConversionRecord>;
+  expGroups: Map<string, ExpenseGroupRecord>;
+  groupMarks: Map<string, ExpenseGroupOverrideRecord>;
+  inbox: Map<string, InboxEntryRecord>;
+}
+
+export interface LocalSnapshot {
+  formatVersion: number;
+  maps: LocalSnapshotMaps;
+}
+
+/**
+ * In-memory LedgerStore for tests and the portal's local mode. Mirrors every
+ * uniqueness constraint the Prisma schema declares so a route test fails
+ * here for the same reasons it would fail in Postgres.
  */
 export class MemoryLedgerStore implements LedgerStore {
   private readonly orgs = new Map<string, Organization>();
@@ -170,6 +226,11 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly members = new Map<string, MembershipRecord>();
   private readonly sessionsById = new Map<string, SessionRecord>();
   private readonly setupLinks = new Map<string, AccountSetupTokenRecord>();
+  /**
+   * MUT-324, keyed `${userId}:${version}`. Deliberately not in snapshot()/restore(): the portal's signed-out mode
+   * has no terms (its /v1/me says `terms: null`), and a new snapshot map would change the shipped local format.
+   */
+  private readonly termsAcceptances = new Map<string, TermsAcceptanceRecord>();
   private readonly exps = new Map<string, ExpenseRecord>();
   private readonly expCats = new Map<string, ExpenseCategoryRecord>();
   private readonly expReceipts = new Map<string, ExpenseReceiptRecord>();
@@ -426,6 +487,25 @@ export class MemoryLedgerStore implements LedgerStore {
       Object.assign(u, { malafatSuggestions: applyMalafatChange(u.malafatSuggestions, change), updatedAt: at });
       return { ...u, malafatSuggestions: u.malafatSuggestions && { ...u.malafatSuggestions, dismissed: [...u.malafatSuggestions.dismissed] } };
     },
+    latestTermsAcceptance: async (userId) => {
+      let latest: TermsAcceptanceRecord | undefined;
+      for (const a of this.termsAcceptances.values()) if (a.userId === userId && (!latest || a.version > latest.version)) latest = a;
+      return latest ? { ...latest } : null;
+    },
+    listLatestTermsVersions: async () =>
+      [...this.people.values()]
+        .sort((a, b) => (a.email < b.email ? -1 : a.email > b.email ? 1 : 0))
+        .map((u) => {
+          let latest: TermsAcceptanceRecord | undefined;
+          for (const a of this.termsAcceptances.values()) if (a.userId === u.id && (!latest || a.version > latest.version)) latest = a;
+          return { userId: u.id, email: u.email, status: u.status, latestVersion: latest?.version ?? null, latestClientRelease: latest?.clientRelease ?? null };
+        }),
+    acceptTerms: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('terms_acceptances.userId');
+      const { created } = this.recordTermsAcceptance(input.userId, input, input.at);
+      if (created) for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return { created };
+    },
     changePassword: async (input) => {
       const u = this.people.get(input.userId);
       if (!u) return null;
@@ -542,6 +622,9 @@ export class MemoryLedgerStore implements LedgerStore {
       Object.assign(person, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
       this.revokeSessionsOf(person.id, 'password_set', input.at);
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      if (this.recordTermsAcceptance(person.id, input.terms, input.at).created) {
+        for (const event of input.termsAudit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      }
       return { ...person };
     },
   };
@@ -1666,6 +1749,32 @@ export class MemoryLedgerStore implements LedgerStore {
 
   // ---- MUT-270: the entries feed -------------------------------------------
 
+  readonly recordsExport: RecordsExportRepository = {
+    profilePage: async (organizationId, field, afterKey, limit) => {
+      const map = this.exportMaps()[field] as Map<string, unknown>;
+      const owned = field === 'counters'
+        ? (key: string) => key.startsWith(`${organizationId}:`)
+        : (_key: string, row: unknown) => (row as { organizationId: string }).organizationId === organizationId;
+      return pageOfMap(map, (key, row) => owned(key, row), afterKey, limit) as never;
+    },
+    inboxPage: async (userId, afterKey, limit) => pageOfMap(this.inbox, (_key, row) => row.userId === userId, afterKey, limit),
+    findExportableReceipt: async (organizationId, id) => {
+      const row = this.expReceipts.get(id);
+      if (!row || row.organizationId !== organizationId || row.status !== 'READY' || row.deletedAt || !row.storageKey) return null;
+      return { storageKey: row.storageKey, mimeType: row.mimeType, sizeBytes: row.sizeBytes };
+    },
+  };
+
+  /** The profile-owned maps by snapshot field name (MUT-325), so an export page names its map the way the file does. */
+  private exportMaps(): { [F in ProfileExportField]: Map<string, ProfileExportRecords[F]> } {
+    const m = this.snapshot().maps;
+    return {
+      custs: m.custs, projs: m.projs, refs: m.refs, rates: m.rates, agrs: m.agrs, insts: m.insts, charges: m.charges, recs: m.recs, supps: m.supps, versions: m.versions,
+      pays: m.pays, allocs: m.allocs, credits: m.credits, counters: m.counters, props: m.props, exps: m.exps, expCats: m.expCats, expReceipts: m.expReceipts,
+      convs: m.convs, expGroups: m.expGroups, groupMarks: m.groupMarks,
+    };
+  }
+
   readonly entries: EntriesRepository = {
     list: async (organizationIds, page) => {
       const inScope = (row: { organizationId: string; createdAt: Date; id: string }) => organizationIds.includes(row.organizationId) && (!page.cursor || isBeforeCursor(row, page.cursor));
@@ -1787,6 +1896,116 @@ export class MemoryLedgerStore implements LedgerStore {
   auditCount(organizationId: string): number {
     return this.events.filter((e) => e.organizationId === organizationId).length;
     }
+
+  /** MUT-324: the (userId, version) unique key; an existing acceptance is kept as it is. */
+  private recordTermsAcceptance(userId: string, terms: TermsAcceptanceInput, at: Date): { acceptance: TermsAcceptanceRecord; created: boolean } {
+    const key = `${userId}:${terms.version}`;
+    const existing = this.termsAcceptances.get(key);
+    if (existing) return { acceptance: { ...existing }, created: false };
+    const { version, locale, textSha256, surface, clientRelease } = terms;
+    const acceptance: TermsAcceptanceRecord = { userId, version, locale, textSha256, surface, clientRelease, acceptedAt: at };
+    this.termsAcceptances.set(key, acceptance);
+    return { acceptance: { ...acceptance }, created: true };
+  }
+
+  /**
+   * The business-data half of this store (MUT-286): every field in
+   * `LocalSnapshotMaps`, by reference. Safe to pass by reference because the
+   * only caller outside tests — the portal's local-mode persistence layer
+   * (Phase B) — structured-clones it into IndexedDB immediately, rather than
+   * holding the live Maps.
+   */
+  snapshot(): LocalSnapshot {
+    return {
+      formatVersion: CURRENT_STORE_SNAPSHOT_VERSION,
+      maps: {
+        orgs: this.orgs,
+        ints: this.ints,
+        custs: this.custs,
+        projs: this.projs,
+        refs: this.refs,
+        rates: this.rates,
+        agrs: this.agrs,
+        insts: this.insts,
+        charges: this.charges,
+        recs: this.recs,
+        supps: this.supps,
+        versions: this.versions,
+        files: this.files,
+        pays: this.pays,
+        allocs: this.allocs,
+        credits: this.credits,
+        counters: this.counters,
+        props: this.props,
+        people: this.people,
+        members: this.members,
+        exps: this.exps,
+        expCats: this.expCats,
+        expReceipts: this.expReceipts,
+        convs: this.convs,
+        expGroups: this.expGroups,
+        groupMarks: this.groupMarks,
+        inbox: this.inbox,
+      },
+    };
+  }
+
+  /**
+   * Replaces every business-data field with the snapshot's rows. The six
+   * ephemeral fields (idempotency keys, sessions, setup links, the audit log,
+   * API keys) are left exactly as they are on this instance — a restored
+   * store never replays old idempotency keys or sessions (ADR-097 §2.3.4);
+   * the portal's local-mode boot mints a fresh device session afterward.
+   * Mutates each field's own Map in place (`clear()` then repopulate) rather
+   * than reassigning, since every field is `private readonly`.
+   */
+  restore(snapshot: LocalSnapshot): void {
+    const { maps } = snapshot;
+    replaceMap(this.orgs, maps.orgs);
+    replaceMap(this.ints, maps.ints);
+    replaceMap(this.custs, maps.custs);
+    replaceMap(this.projs, maps.projs);
+    replaceMap(this.refs, maps.refs);
+    replaceMap(this.rates, maps.rates);
+    replaceMap(this.agrs, maps.agrs);
+    replaceMap(this.insts, maps.insts);
+    replaceMap(this.charges, maps.charges);
+    replaceMap(this.recs, maps.recs);
+    replaceMap(this.supps, maps.supps);
+    replaceMap(this.versions, maps.versions);
+    replaceMap(this.files, maps.files);
+    replaceMap(this.pays, maps.pays);
+    replaceMap(this.allocs, maps.allocs);
+    replaceMap(this.credits, maps.credits);
+    replaceMap(this.counters, maps.counters);
+    replaceMap(this.props, maps.props);
+    replaceMap(this.people, maps.people);
+    replaceMap(this.members, maps.members);
+    replaceMap(this.exps, maps.exps);
+    replaceMap(this.expCats, maps.expCats);
+    replaceMap(this.expReceipts, maps.expReceipts);
+    replaceMap(this.convs, maps.convs);
+    replaceMap(this.expGroups, maps.expGroups);
+    replaceMap(this.groupMarks, maps.groupMarks);
+    replaceMap(this.inbox, maps.inbox);
+  }
+}
+
+/** One page of `map`'s matching rows in ascending key order, strictly after `afterKey` (MUT-325 export). Copies, like every other read. */
+function pageOfMap<T>(map: Map<string, T>, matches: (key: string, row: T) => boolean, afterKey: string | null, limit: number): ExportPage<T> {
+  const keys = [...map.keys()].filter((key) => (afterKey === null || key > afterKey) && matches(key, map.get(key) as T)).sort();
+  const page = keys.slice(0, limit);
+  const entries = page.map((key): [string, T] => {
+    const row = map.get(key) as T;
+    return [key, typeof row === 'object' && row !== null ? (structuredClone(row) as T) : row];
+  });
+  return { entries, nextKey: keys.length > limit ? (page[page.length - 1] ?? null) : null };
+}
+
+/** `target.clear()` then repopulate from `source` — `target` is a `private readonly` field, so it is mutated in place, never reassigned. */
+function replaceMap<K, V>(target: Map<K, V>, source: Map<K, V>): void {
+  target.clear();
+  for (const [key, value] of source) target.set(key, value);
 }
 
 function membershipKey(userId: string, organizationId: string): string {
@@ -1849,14 +2068,17 @@ function clone<T extends object>(value: T | undefined): T | null {
 }
 
 function matchesExpense(e: ExpenseRecord, f: ExpenseFilter): boolean {
+  // MUT-286: mirrors Prisma's where-object spread (prisma.ts expenseWhere), where a later `customerId: null` key
+  // (from `unlinked`) overwrites an earlier `customerId: f.customerId` key — `unlinked` wins whenever both are set,
+  // rather than ANDing them (which was never true: a real customerId can never equal null).
+  const customerMatches = f.unlinked ? e.customerId === null : !f.customerId || e.customerId === f.customerId;
   return (
     (!f.from || e.occurredOn >= f.from) &&
     (!f.to || e.occurredOn <= f.to) &&
     (!f.currency || e.currency === f.currency) &&
     (!f.categoryId || e.categoryId === f.categoryId) &&
-    (!f.customerId || e.customerId === f.customerId) &&
-    (!f.projectId || e.projectId === f.projectId) &&
-    (!f.unlinked || e.customerId === null)
+    customerMatches &&
+    (!f.projectId || e.projectId === f.projectId)
   );
 }
 

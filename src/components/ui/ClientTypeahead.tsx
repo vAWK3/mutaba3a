@@ -27,6 +27,8 @@ export interface ClientTypeaheadProps {
    * default business by accident (MUT-89).
    */
   canCreate?: boolean;
+  /** Flash the field when the form filled it from a picked project (MUT-318, Apple design review A3). */
+  flashSignal?: number;
 }
 
 export function ClientTypeahead({
@@ -39,6 +41,7 @@ export function ClientTypeahead({
   onPendingTextChange,
   onCreatingChange,
   canCreate = true,
+  flashSignal,
 }: ClientTypeaheadProps) {
   const t = useT();
   const [inputValue, setInputValue] = useState('');
@@ -181,6 +184,7 @@ export function ClientTypeahead({
       className={className}
       createLabel={t('client.createNew')}
       onBlur={handleBlur}
+      flashSignal={flashSignal}
     />
   );
 }

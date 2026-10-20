@@ -82,3 +82,15 @@ features:
       - Record the full amount on a Needs attention row
     expect:
       - The row's copy slides more than 100 px to the left, then goes
+  - id: attention-day-plurals
+    title: "Needs attention says how late or how soon in the count's own form, in English and Arabic (MUT-179)"
+    tier: secondary
+    legacy: [MUT-179]
+    paths:
+      - src/lib/i18n/translations/**
+    steps:
+      - Log income overdue by 3 days, overdue by 11 days, and due tomorrow
+      - Open Home in English, then switch to Arabic and open Home again
+    expect:
+      - 'English reads "3d overdue", "11d overdue" and "Due in 1d"'
+      - 'Arabic reads "متأخر 3 أيام", "متأخر 11 يومًا" and "مستحق خلال يوم واحد", never "3 يوم"'

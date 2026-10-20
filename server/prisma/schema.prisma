@@ -276,16 +276,18 @@ model User {
   createdAt          DateTime
   updatedAt          DateTime
 
-  memberships     Membership[]
-  sessions        Session[]
+  memberships      Membership[]
+  sessions         Session[]
   /// MUT-235: one-time setup links; at most one open at a time.
-  setupLinks      AccountSetupToken[]
+  setupLinks       AccountSetupToken[]
+  /// MUT-324: every terms version this person accepted.
+  termsAcceptances TermsAcceptance[]
   /// MUT-120: the organization created with this user as their personal profile.
-  personalProfile Organization?       @relation("PersonalProfile")
+  personalProfile  Organization?       @relation("PersonalProfile")
   /// MUT-182: every profile this user owns, the personal one included.
-  ownedProfiles   Organization[]      @relation("OwnedProfiles")
+  ownedProfiles    Organization[]      @relation("OwnedProfiles")
   /// MUT-300: firm-feature requests this user made (RESTRICT: users are never hard-deleted).
-  firmRequests    Organization[]      @relation("FirmRequests")
+  firmRequests     Organization[]      @relation("FirmRequests")
 
   expenses            Expense[]
   expenseReceipts     ExpenseReceipt[]
@@ -385,6 +387,34 @@ model AccountSetupToken {
 
   @@index([userId])
   @@map("account_setup_tokens")
+}
+
+/// MUT-324: where a terms acceptance happened; a session knows only cookie or device.
+enum TermsSurface {
+  portal
+  phone
+}
+
+/// MUT-324 (ADR-102): one person's acceptance of one terms version. `textSha256`
+/// fingerprints the frozen text in the language read (server/src/legal.ts).
+/// Deleted with the person (D3): the schema's one cascade, chosen by the owner,
+/// so closing an account (MUT-333) also removes the record of its agreement.
+model TermsAcceptance {
+  id            String       @id @default(uuid()) @db.Uuid
+  userId        String       @db.Uuid
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// An ISO date; string order is release order.
+  version       String       @db.VarChar(10)
+  /// 'en' | 'ar', validated by the API.
+  locale        String       @db.VarChar(5)
+  textSha256    String       @db.Char(64)
+  surface       TermsSurface
+  /// MUT-354: the client release that showed the terms (`web-v<x>`), as sent; null for older clients and rows.
+  clientRelease String?      @db.VarChar(64)
+  acceptedAt    DateTime
+
+  @@unique([userId, version])
+  @@map("terms_acceptances")
 }
 
 /// A server-side session (MUT-38 cookie, MUT-64 device). Only the

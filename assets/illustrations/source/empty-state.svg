@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+  <g id="box">
+    <rect x="30" y="70" width="100" height="70" rx="16" fill="#F4F2FB" stroke="#795DBA" stroke-width="3"/>
+    <path d="M30 86 L80 100 L130 86" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <circle id="nuqta" cx="80" cy="45" r="7" fill="#E89960"/>
+</svg>

@@ -35,8 +35,8 @@
 
 /* A title takes its direction from its own first letter, like dir="auto":
    an English title in the Arabic UI starts at its beginning and ends in the
-   ellipsis, and the reverse. dir="auto" alone loses to theme.css's
-   ":lang(ar) { direction: rtl }" (TD-048), which plaintext sidesteps. */
+   ellipsis, and the reverse. The markup says dir="auto" too; plaintext keeps it
+   per paragraph. */
 .truncated-title-text,
 .truncated-title-tooltip {
   unicode-bidi: plaintext;

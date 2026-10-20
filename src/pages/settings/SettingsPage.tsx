@@ -21,6 +21,7 @@ import { goHostedEnabled } from '../../lib/goHosted';
 import { useDrawerStore } from '../../lib/stores';
 import { Select } from '../../components/ui';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
+import { LanguageIcon } from '../../components/icons/generated';
 import { ProfileBadge } from '../../components/ui/ProfileBadge';
 import type { Currency, BusinessProfile } from '../../types';
 import type { Language } from '../../lib/i18n/types';
@@ -299,7 +300,10 @@ export function SettingsPage() {
             </div>
 
             <div className="settings-row">
-              <div className="settings-label" id={languageLabelId}>{t('settings.language.title')}</div>
+              <div className="settings-label" id={languageLabelId}>
+                <LanguageIcon size={16} className="settings-label-icon" />
+                {t('settings.language.title')}
+              </div>
               <SegmentedControl
                 labelledBy={languageLabelId}
                 value={language}

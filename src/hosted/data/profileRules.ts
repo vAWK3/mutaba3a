@@ -26,7 +26,7 @@ export type FirmRequestState = 'hidden' | 'offer' | 'requested';
 /**
  * MUT-300: what the edit pane shows about firm features. Only the owner of a
  * Business profile (not the built-in one) may ask; once firm features are on
- * there is nothing to ask for. A server older than 1.37.0-mut300 sends no
+ * there is nothing to ask for. A server older than 1.41.0-mut300 sends no
  * `firm` and has no route to take the request, so nothing shows.
  */
 export function firmRequestState(profile: HostedProfile): FirmRequestState {

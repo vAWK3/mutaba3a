@@ -18,6 +18,81 @@
 
 ## Open Debt
 
+### TD-190: Receipt files aren't covered by the database backups
+**Status**: Resolved in code (2026-10-20: `soft_delete_policy` of 14 days on `google_storage_bucket.attachments`, tied to `retained_backups` by `local.db_retained_backups`; `tests/attachments_bucket.tftest.hcl`). **Not applied yet**: Basel approves it in the next `make release server` (which prints the reminder from `docs/operations/before-release.md`) or applies it alone per `server/DEPLOYMENT.md` §6c, and records the date in INFRA.md §2
+**Ticket**: none (MUT-327, 2026-10-20)
+**Added**: 2026-10-20
+**Priority**: Medium (pilot data; a restored receipt row can point at a deleted file)
+**Impact**: Deleting a receipt deletes its object (`routes/expenses.ts`), and `google_storage_bucket.attachments` has `versioning { enabled = false }` and no `soft_delete_policy`. A database restored to before the delete brings the row back, and the file is only recoverable within GCS's default soft-delete window (7 days on buckets created since 2024; the drill prints the bucket's real window). Past that, the file is gone.
+**Fix**: set an explicit `soft_delete_policy { retention_duration_seconds = 1209600 }` (14 days, matching the backups) on the bucket in Terraform. Or turn on versioning with a lifecycle rule that keeps non-current versions 14 days. Basel applies either. Then the runbook's §4.4 window matches the backups.
+
+### TD-191: A free-app user's data can't be moved into a hosted account without retyping
+**Status**: Open (decision for Basel, runbook §3)
+**Ticket**: MUT-290 (Backlog) is the in-app move
+**Added**: 2026-10-20
+**Priority**: High for the pilot's promise
+**Impact**: /hosted and `docs/commercial/pilot-offer.md` §4 say "We'll move them into your hosted account with you, by hand. Nothing to type again." Nothing imports a records file into a hosted profile, so the by-hand move today is re-entering with the person.
+**Fix**: build MUT-290 before the first free-app user moves in, or change the copy to drop "nothing to type again" (landing honesty tests, ADR-037).
+
+### TD-188: The signed-in Download holds the whole zip in the tab
+**Status**: Open
+**Ticket**: none (MUT-325, 2026-10-20, ADR-156)
+**Added**: 2026-10-20
+**Priority**: Low. The same ceiling local mode's own Download has; a pilot account's receipts are far below it.
+**Impact**: `hostedExport.ts` keeps every receipt's bytes and then the zip (`zipRecordsArchive`, jszip) in memory. Receipts are at most 10 MB each; an account with a few hundred large photos could exhaust a phone browser's tab.
+**Fix**: stream the zip to disk (File System Access API where available, a service-worker download elsewhere) with a streaming zip writer, for both Downloads.
+
+### TD-189: A long export is not one snapshot
+**Status**: Open
+**Ticket**: none (MUT-325, 2026-10-20, ADR-156)
+**Added**: 2026-10-20
+**Priority**: Low. Only a write made on another device during the seconds an export reads can land between pages.
+**Impact**: `GET /v1/records-export` reads 500 rows a query, field by field, outside one transaction. A payment recorded mid-export can appear without its allocation (or the reverse), so `paidMinor` and the allocations disagree in that file.
+**Fix**: run the reads in one read-only `REPEATABLE READ` transaction (with a longer timeout, sized against the pool), or stamp the export's start and re-read rows changed after it.
+
+### TD-186: The front-door Worker fails closed past the Cloudflare free tier, and every portal asset counts
+**Status**: Open
+**Ticket**: none (MUT-326 adversarial review, 2026-10-20; ADR-155)
+**Added**: 2026-10-20
+**Priority**: Low until the pilot grows (10 users are far below it)
+**Impact**: Once the custom domain is live, every request to `app.<apex>` goes through the Worker, hashed `/assets/*` files included. Past 100,000 requests a day per Cloudflare account, the Worker answers error 1027 until UTC midnight. The free tier is shared with anything else on the account, such as `malafat-router` if it's Malafat's.
+**Fix**: Workers Paid ($5/month, 10M requests) before a usage alert says it's close, or serve `/assets/*` from Cloudflare's cache (a Cache Rule on the route, or `cf: { cacheEverything }` for that prefix) so repeats never reach the Worker.
+
+### TD-187: The phone repo still writes the run.app and netlify.app hosts in tests and defaults
+**Status**: Open
+**Ticket**: none (MUT-326 inventory, 2026-10-20)
+**Added**: 2026-10-20
+**Priority**: Medium (MUT-112 step 5 edits these by hand)
+**Impact**: mutaba3a-flutter has no equivalent of `config/hosts.json` or the guard test. Its `.env` sets `MUTABA3A_API_BASE_URL` (fastlane requires it), while `lib/core/env.dart` defaults it to `https://api.mutaba3a.app`, which has no DNS. `MUTABA3A_PUBLIC_ORIGIN` defaults to the Netlify origin. The link host sits in `AssociatedDomains.xcconfig`, three `AndroidManifest.xml` hosts and `strings.xml`. About ten tests (links, legal links, settings) hardcode run.app or netlify.app.
+**Fix**: in that repo, derive the manifest and strings hosts from one Gradle property, point the QA and unit tests at `Env`, and add a guard test like mini-crm's. `npm run domain:plan` prints the values meanwhile.
+
+### TD-185: Uptime alerts can't pin "notify on close" (google provider 5.x)
+**Status**: Open
+**Ticket**: none (MUT-328, 2026-10-20)
+**Added**: 2026-10-20
+**Priority**: Low. Cloud Monitoring is expected to notify on close by default for metric policies, and the drill in `server/DEPLOYMENT.md` §6b confirms it.
+**Impact**: `alert_strategy.notification_prompts = ["OPENED", "CLOSED"]` exists only in hashicorp/google 6.x. `server/infrastructure/terraform` is locked to 5.45.2 (`~> 5.0`). If the default ever changes, recovery is silent. The runbook's fallback is the console's "Notify on incident closure" setting, which Terraform doesn't track.
+**Fix**: with the provider 6.x upgrade of this root (its own ticket: check every resource's plan for drift), add `notification_prompts = ["OPENED", "CLOSED"]` to both policy resources in `monitoring.tf` and assert it in `tests/monitoring.tftest.hcl`.
+
+### TD-184: An acceptance's `clientRelease` names the portal's built web version, which can lag the live landing that showed the terms text
+**Status**: Open (Q1 in `.claude/designs/mut-354-terms-client-release.md`, Basel's call)
+**Ticket**: MUT-354 (2026-10-20, eng review)
+**Added**: 2026-10-20
+**Priority**: Low (the file hash `textSha256` still pins the exact words; only the page code around them can differ)
+**Impact**:
+- The terms text renders on the landing, the Netlify `web-v<x>` deploy.
+- The portal sends `web-v<APP_VERSION>` (`src/hosted/terms.ts`). `APP_VERSION` is the root `package.json` version at the commit the API image was built from, because the portal ships inside it (ADR-081).
+- Web releases first (ADR-102), so normally that version is the live landing's. But a web release that isn't followed by a server release leaves the recorded release one behind the landing that actually showed the text.
+**Fix**: if Basel wants the exact landing release, the landing's `legal/terms-versions.json` gains its release, and the portal reads it when it shows the terms link. That's a cross-origin fetch with its own failure mode. Otherwise, close this as accepted.
+
+### TD-182: `scripts/*.ts` are never type-checked by any npm script
+**Status**: Open
+**Ticket**: none (found 2026-10-19, MUT-336)
+**Added**: 2026-10-19
+**Priority**: Low. Pre-existing across every file in `scripts/` (release.ts, check-bundles.ts, i18n-keys.ts, the new icon-set.ts, …), not introduced by MUT-336 — noted while building MUT-336's codegen scripts.
+**Impact**: `npm run typecheck` only checks `tsconfig.app.json`/`tsconfig.hosted.json`/`tsconfig.hosted-local.json`. `tsconfig.node.json` (the only config with `types: ["node"]`, which `scripts/` would need) includes only `vite.config.ts`. `npm run build`'s `tsc -b` builds every referenced project, but `tsconfig.node.json`'s narrow include means it still never typechecks `scripts/`. `vitest` transpiles via esbuild without type-checking. A type error in any `scripts/*.ts` file (including this ticket's `icon-set.ts`/`generate-icons.ts`/`validate-icon-set.ts`) would only surface as a runtime failure the next time someone runs that script, not in CI.
+**Fix**: add `"scripts"` (or `"scripts/**/*.ts"`, excluding `__tests__`) to `tsconfig.node.json`'s `include`, confirm it builds clean, then add `tsconfig.node.json` to `npm run typecheck`'s chain.
+
 ### TD-159: The Sentry alerts use the deprecated `sentry_issue_alert` resource
 **Status**: Open
 **Ticket**: none (MUT-147, 2026-10-17)
@@ -143,6 +218,91 @@
 **Priority**: Low (no group code reads categories; it holds by construction)
 **Impact**: a profile type change (MUT-182) deletes categories and nulls `categoryId`. Groups and marks are untouched, and the summary shows the spending as uncategorized, but nothing asserts it.
 **Fix**: a store-contract case: create a group with a categorized member, run the type change, and assert the group, its mark and a `null` category bucket.
+
+### TD-175: Typed-over picker text can still save the earlier client or matter
+**Status**: Open
+**Ticket**: none (MUT-318 reconcile, adversarial review finding 3, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Low (pre-dates MUT-318; the Add row makes it easier to reach)
+**Impact**: ClientPicker and ProjectPicker clear their value only when the box is emptied. Typing "Foo" over a picked matter and clicking Save (not picking) saves the earlier matter while the box shows "Foo". The local IncomeDrawer guards this with `clientDraft`.
+**Fix**: clear the value when the text stops matching the picked label, or refuse Save with an unresolved draft as the local drawer does.
+
+### TD-176: Add matter's failures all say "Try again", even when a retry can't help
+**Status**: Open
+**Ticket**: none (MUT-318 reconcile, API-contract review, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Low
+**Impact**: the client directory includes archived clients, and POST /v1/projects refuses them (`CUSTOMER_ARCHIVED`); a name over 200 characters fails validation. Both end in "Couldn't add the matter. Try again." The same holds for Add client.
+**Fix**: map `CUSTOMER_ARCHIVED` and the name-length refusal to their own messages, cap the input at 200, and offer no Add row under an archived client.
+
+### TD-181: The OpenAPI document says 3.1.0 but is written in 3.0's `nullable` style, and a nullable `$ref` reads as never null
+**Status**: Open
+**Ticket**: none yet (found in MUT-324 review pass 2, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Low (the runtime is right; only the published contract and the portal's generated types are wrong)
+**Impact**:
+- `server/src/app.ts` publishes `openapi: '3.1.0'`, but the generator writes `nullable: true` (157 places), which 3.1 has no keyword for, so a strict 3.1 validator or client generator reads those fields as non-null.
+- Where the nullable field is a registered schema, the generator writes `allOf: [$ref, {nullable: true}]`, and openapi-typescript makes it `X & unknown`: the portal's type loses the null. On main that hits VatRate `current`, Currency and PaymentTerms fields (about 18 `& unknown` sites in `src/hosted/api/schema.d.ts`).
+- MUT-324 avoided it for `Me.terms` by making that field an inline object (pinned by `server/src/__tests__/terms.test.ts` and a type assertion in `src/hosted/api/client.ts`).
+**Fix**: generate with the 3.1 generator (`doc31` / `OpenApiGeneratorV31`), so null is `type: [..., 'null']` / `oneOf` with `{type: 'null'}`, regenerate `schema.d.ts`, and fix any caller the restored nulls expose.
+
+### TD-180: Terms acceptance is enforced on the portal only; a phone-only person can keep saving without accepting
+**Status**: Open
+**Ticket**: MUT-344 (phone: Terms link + Updated-terms step); the enforcement question stays open after it
+**Added**: 2026-10-19
+**Priority**: Medium (pilot users all accept at their setup link; this bites only accounts that predate the terms, or a later version bump)
+**Impact**:
+- ADR-102 decision 7 (D7): the server never refuses a write for missing acceptance, so installed phone builds don't break.
+- An account that predates the terms and only uses the phone isn't asked until MUT-344 ships. After a bump, a phone user who never opens the portal keeps saving under the old version.
+- `npm --prefix server run terms:report` makes them visible; nothing stops them.
+**Fix**: ship MUT-344. Then decide whether writes from a session behind on the terms answer 409 (gated on MUT-293's minimum app version so old builds are told to update first).
+### TD-179: "Download my records" holds the whole zip in memory
+**Status**: Open
+**Ticket**: MUT-287 (2026-10-19, eng review R2)
+**Added**: 2026-10-19
+**Priority**: Low (only a device with hundreds of MB of receipts gets near a tab's memory limit)
+**Impact**: `src/hosted/local/recordsArchive.ts` builds the zip with jszip's `generateAsync({ type: 'blob' })` and Restore reads the file into one ArrayBuffer, so every receipt is in memory at once on both sides. The zip removed the ~512 MB string ceiling of a base64 JSON file, but not memory as the bound.
+**Fix**: stream the zip (jszip `generateInternalStream`, or a streaming writer) into the download, and read entries one at a time on Restore, writing each to `mut-local-blobs` before the next.
+
+### TD-178: Signed out, a stale FX answer reads as live
+**Status**: Resolved (MUT-287 pre-landing review D7, 2026-10-19: `EcbSnapshot.upstream` relays the server's source and fetch time)
+**Ticket**: MUT-287 (2026-10-19, plan §1c)
+**Added**: 2026-10-19
+**Priority**: Low (the rate date shown is still the true ECB date)
+**Impact**: `PublicFxRateSource.latest()` returns only the snapshot (`FxRateSource` has no room for `source`), so when the server answers `source: 'stale'` the local `CachedFxRates` caches it as a fresh fetch and its `/v1/fx-rates` says `live`. The ≈ line shows the snapshot's own rate date, so nothing false is shown, but the stale/live distinction is lost signed out.
+**Fix**: let `FxRateSource.latest()` return an optional `{ stale: true }` the cache carries through, or treat the public snapshot's `fetchedAt` as the reading's `fetchedAt`.
+
+### TD-177: A session may write clients and matters on a writer-null firm it doesn't own
+**Status**: Open
+**Ticket**: none (MUT-318 reconcile, adversarial review finding 9, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Medium (server policy; pre-dates MUT-286/318, which hide the Add rows there)
+**Impact**: `mayWriteFor` grants `customers:write` and `projects:write` to any session on a profile with no writer of record, and POST /v1/customers and /v1/projects check no ownership. ADR-066 says a writer-null firm is nobody's own; the portal gate (`canAddClient`) only hides the rows, so a firm member can still create them by calling the API.
+**Fix**: decide the firm rule (MUT-305 firm roles is the natural home) and enforce it in the routes, with a server test per route.
+
+### TD-174: Clicking a typeahead option drops focus to the page
+**Status**: Open
+**Ticket**: none (found during MUT-318, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Low (keyboard picks keep focus; a mouse user rarely needs it)
+**Impact**: EntityTypeahead's options are `<button>`s: a click moves focus to the option, and the list then unmounts it, so focus lands on `<body>`. After a mouse pick, Tab starts from the top of the drawer and a screen reader on a touch device loses its place. Seen while writing `@portal.local.matter-owed` (the spec now picks by Enter, the path A1 covers).
+**Fix**: `onMouseDown={(e) => e.preventDefault()}` on options (focus never leaves the input), or return focus to the input after a pick; add a test for both mouse and keyboard picks.
+
+### TD-173: The animated slow-session release-QA spec fails on a preview build, on main too
+**Status**: Open
+**Ticket**: none (found during MUT-286, 2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Low (the reduced-motion variant passes; the screen itself works)
+**Impact**: `@portal.signin.boot-slow-session` ("a slow session check … then Still connecting…") never sees "Still connecting…" within its 5 s window on a `vite preview` build; the reduced-motion test of the same screen passes. Reproduced on main 58f68b95 with the same spec, so it predates MUT-286. With two Playwright workers the reduced-motion variant fails the same way too (it passes with one): the 5 s window is tight under load.
+**Fix**: Check whether the bloom loader's slow caption timer restarts when the loader blooms in place (the static mark is swapped for the loader at 400 ms), and fix the timer or the spec's window.
+
+### TD-171: The local snapshot fingerprint covers 3 of 27 record types
+**Status**: Resolved (MUT-287, 2026-10-19: every map fingerprinted from `helpers/everyRecord.ts`, plus an every-key and a non-empty assertion)
+**Ticket**: MUT-286 (2026-10-19)
+**Added**: 2026-10-19
+**Priority**: Medium (a silent shape change in an uncovered record breaks restores of saved local data)
+**Impact**: `src/hosted/local/__tests__/format-fingerprint.test.ts` (D1) only fingerprints organizations, customers and receivables. A field added, removed or retyped on any of the other 24 persisted maps (projects, payments, allocations, expenses, groups…) does not fail CI. A browser holding an older snapshot would then restore records missing the field without a migration.
+**Fix**: add a fingerprint case per persisted map in `LocalSnapshotMaps`, built from a real `MemoryLedgerStore` record. Better still, assert that every key of `LocalSnapshotMaps` has a case, so a new map can't be added uncovered.
 
 ### TD-170: The portal's typed API client lags the spec until MUT-281
 **Status**: Resolved (MUT-281, 2026-10-19)
@@ -693,6 +853,8 @@
 **Impact**: At 375px the 240px sidebar stays open and the content beside it is clipped inside `<main>`. Income scrolls sideways: its top bar, status tabs and table are about 680px wide (714px with Brand v2's body 16). Every drawer is `--drawer-width` 480px, so it starts 105px off-screen (or ends 105px past the edge in Arabic). `qa/specs/web/brand.spec.ts` annotates the two overflows (`KNOWN_OVERFLOW`) instead of failing; it fails on any other.
 **Remediation**: Collapse the sidebar to the rail or a menu below a breakpoint; let the Income table scroll inside its own container and wrap the top bar and tabs; cap drawers at `min(var(--drawer-width), 100vw)`. Remove each `KNOWN_OVERFLOW` entry as it fits. Needs a ticket (the app is desktop-first; the iPhone app is Flutter).
 **Effort**: Medium
+**Update (2026-10-19, MUT-250):** the Income cap was flaky, not the layout. The compact date column took its width from its widest date, and Thmanyah's digits are proportional, so Income at 375px in Arabic measured 718–736px depending on today's date (726 on 12/10, 727 on 19/10, 734 on 28/09). Compact dates now render through `CompactDate` (Plex Mono, tabular digits): 735px on every date across nine dates spanning the year. `Income@375` and `Income drawer@375` caps are 735 (was 726), and `@web.brand.date-width` pins the width across three dates. The overflow itself (this TD) is unchanged and still open; the local web app is due to retire (MUT-292).
+**Update (2026-10-20, MUT-357):** drawers fit now (TD-070 resolved): `Payment drawer@375` is gone from `KNOWN_OVERFLOW`. `Income drawer@375` stays, because Income behind it is still wider than a phone. The sidebar and Income remain open.
 
 ### TD-082: The portal sign-in page's language switch sits outside any landmark
 **Status**: Open
@@ -900,12 +1062,13 @@
 **Effort**: Small once decided
 
 ### TD-070: The shared drawer is 480 px wide on a 375 px phone
-**Status**: Open
+**Status**: Resolved 2026-10-20 (MUT-357)
 **Added**: 2026-10-12 (found while checking MUT-87 at 375 px)
 **Priority**: Medium
 **Impact**: `.drawer` takes `width: var(--drawer-width)` (480 px) with no `max-width`, so at phone width every drawer is wider than the screen. In LTR its start edge (the title, the checkboxes) is cut off; in RTL its end edge is. `document.scrollWidth` stays 375, so nothing scrolls to reveal it. Seen on `RecurringMarkPaidDrawer` (MUT-87), and the same for the income, expense and payment drawers. MUT-87 may not touch the shared `Drawer` (MUT-80 rewrote its internals in parallel), so it is logged here.
 **Remediation**: In the shared drawer CSS, `width: min(var(--drawer-width), 100vw)` (and check MUT-80's drag offsets use the rendered width, not the variable). Verify at 375 px in English and Arabic on the income drawer and the mark-paid drawer.
 **Effort**: Small
+**Resolution**: MUT-357 (2026-10-20) found it again in the hosted portal, where Arabic is the default (ADR-077): the RTL drawer lost its title and Save. `.drawer` in `src/index.css` now has `max-width: 100%` (the viewport, for a fixed panel; unlike `100vw` it leaves out a desktop scrollbar). MUT-80's motion already measures `offsetWidth`, so drag, release and exit follow the rendered width. Guarded by `src/styles/__tests__/drawerFit.test.ts` and `@portal.direction.drawer-phone-ar`/`-en`; `qa/specs/web/brand.spec.ts` no longer allows the payment drawer's 480px at 375px.
 
 ### TD-072: The portal's vendored API types have been stale since MUT-65
 **Status**: Resolved 2026-10-12
@@ -1054,13 +1217,14 @@ addition to this one. Explicitly not folded in here (scope guard).
 **Effort**: Small
 
 ### TD-048: `theme.css` sets `font-family` on every `:lang()` element, so inline elements inside headings lose the heading face
-**Status**: Open (font half resolved by MUT-102; direction half → MUT-109)
+**Status**: Resolved 2026-10-19 (font half by MUT-102; direction half by MUT-109, ADR-101)
 **Added**: 2026-10-11 (MUT-75)
 **Priority**: Low
 **Impact**: `html:lang(en), html:lang(en) body, :lang(en) { font-family: var(--font-en) }` (and the `:lang(ar)` twin, which also sets `direction`) matches *every* element, not just the root, so a `<span>` inside an `<h1>`/`<h2>` renders in Inter instead of inheriting the serif heading. Found when the landing hero's two `<span>` lines rendered sans while the `<h1>` computed Source Serif. Worked around locally with `font-family: inherit` on `.hero-headline-line`.
 **Remediation**: scope the rules to `html:lang(..)` and let inheritance do the rest; then sweep for any component that relied on the per-element reset (likely none — the root rule already sets the same family). Pairs with MUT-77 (type pairing).
 **Update (2026-10-12, MUT-102): font half resolved.** `theme.css` now sets the face on `<html>` only (`html:lang(..)`), so inline elements inherit; `brand.test.ts` › `tokens` forbids a `:lang()` font-family rule whose subject is not `html`, and `brand.spec.ts` checks the landing headline's inner lines compute Serif Display in EN and AR. The `.hero-headline-line { font-family: inherit }` workaround is removed. **The direction half below is open and is MUT-109** (20 `dir="ltr"` sites, five of them inputs).
 **Also (MUT-79):** the `:lang(ar)` rule's `direction: rtl` beats the `dir` attribute, so every `<bdi dir="ltr">` renders right to left in Arabic. Three amount spans depend on that today: `OwedNowSummary`, `ClientWorkSection` and `HomeNeedsAttention`. Their Arabic-locale strings (`‏2,400 US$`) only look right, in CLDR's order, *because* the attribute loses. Scoping `direction` to the root therefore has to drop their `dir="ltr"` in the same change, leaving plain `<bdi>` (auto). The top bar's FX formula is the one span that must stay LTR; it states `.fx-formula[dir='ltr'] { direction: ltr }`. Tried and reverted in MUT-79.
+**Resolved (2026-10-19, MUT-109, ADR-101): direction half.** Both `:lang()` direction rules are gone; `<html dir>` is inherited. Measured in Chromium first: a plain `<bdi>` renders an Arabic amount exactly as the old `<bdi dir="ltr">` did under `:lang(ar)`, so the seven amount spans (the three above plus `ClientsPage`, `HomeRecentPayments`, `OrphanedRecordsDrawer`, portal `DecimalAmount`) dropped `dir` in the same change and nothing flipped. The two Expenses amounts that were LTR through CSS (`CurrencyAmounts`, `RecurringAttentionList`) keep `dir="ltr"` and lost their CSS workaround. `src/styles/__tests__/direction.test.ts` forbids a `:lang()` direction rule and classifies all 45 `dir` sites. Arabic before/after on preview builds: 0 changed pixels on the income and payment drawers, both expense forms, portal sign-in, Home, Clients and the client profile. Follow-up: one amount order for the whole app (standalone RTL `$US 1,300` vs in-sentence LRI `1,300 US$`, MUT-110), a product call.
 
 ### TD-047: The expense drawer reads amounts with the lenient parsers
 **Status**: Open
@@ -1823,6 +1987,15 @@ empty option and list the profiles only), with a drawer test for each.
 ---
 
 ## Resolved Debt
+
+### TD-172: Signed out, a person can't record money owed: the portal can't create a client
+**Status**: Resolved (2026-10-19, MUT-286; Basel chose the picker option)
+**Ticket**: MUT-286 (2026-10-19)
+**Added**: 2026-10-19
+**Priority**: High for MUT-284 (the brief's `local.income-persists` QA scenario can't be met)
+**Impact**: Owed income needs a client, and the portal's `ClientPicker` only lists existing ones. Hosted clients come from the phone app or Malafat; signed out there is neither, so a local person can record money received but never money owed. The API already allows a session to create a customer on an owned profile (`POST /v1/customers`, MUT-65), and it runs locally. The release-QA catalog covers money received (`portal.local.received-persists`) until this is decided.
+**Fix**: Basel to decide where a client is created in the portal (an "Add «name»" option in the picker, a New client drawer on Clients, or both), for both modes, since signed in and signed out are the same portal. Then extend `local-mode.spec.ts` with the brief's owed + part-paid scenario.
+**Resolution**: the client picker offers "Add client: «name»" for a typed name no client has, on a profile the person owns (`canAddClient`: owned and writer-null, so every local profile and no Malafat-fed one), in both the income and the expense drawers, signed in and signed out. Picking it calls `POST /v1/customers` (attempt-scoped Idempotency-Key, `useCreateCustomer`) and picks the new client; a refusal keeps the name unpicked with a toast. Release-QA: `portal.local.owed-part-paid` (signed out, owed + part paid + reload) and `portal.income.add-client` (signed in; none on a Malafat-fed profile).
 
 ### TD-151: A `--lock` that lands mid-change is overwritten by the new password
 **Status**: Resolved (2026-10-16, MUT-237 review fixes from MUT-238's pre-landing review)

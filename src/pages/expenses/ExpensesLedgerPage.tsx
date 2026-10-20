@@ -10,7 +10,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { TopBar } from '../../components/layout';
 import { SearchInput, DateRangeControl, type SearchInputRef } from '../../components/filters';
-import { EmptyState, RowActionsMenu, AmountWithConversion, RecurringOccurrenceList } from '../../components/ui';
+import { EmptyState, RowActionsMenu, AmountWithConversion, RecurringOccurrenceList, CompactDate } from '../../components/ui';
 import { RecurringAttentionList } from '../../components/expenses/RecurringAttentionList';
 import { groupOccurrencesByRule, formatMonthList, type RecurringAttentionGroup } from '../../components/expenses/recurringAttention';
 import { RecurringMarkPaidDrawer, type RecurringDrawerView } from '../../components/drawers/RecurringMarkPaidDrawer';
@@ -27,7 +27,6 @@ import { useDrawerStore } from '../../lib/stores';
 import {
   formatAmount,
   formatDate,
-  formatDateCompact,
   getDateRangePreset,
   cn,
 } from '../../lib/utils';
@@ -407,6 +406,7 @@ function ExpenseListView({
   onEditRule,
   t,
 }: ExpenseListViewProps) {
+  const tp = useTp();
   return (
     <div className="data-table">
       <table>
@@ -428,7 +428,7 @@ function ExpenseListView({
             >
               <td>
                 {isCompact
-                  ? formatDateCompact(expense.occurredAt)
+                  ? <CompactDate iso={expense.occurredAt} />
                   : formatDate(expense.occurredAt, locale)}
               </td>
               <td>
@@ -440,7 +440,7 @@ function ExpenseListView({
                     </span>
                   )}
                   {expense.receiptCount > 0 && (
-                    <span className="receipt-badge" title={t('expenses.receiptsAttached', { count: expense.receiptCount })}>
+                    <span className="receipt-badge" title={tp('expenses.receiptsAttached', expense.receiptCount)}>
                       📎 {expense.receiptCount}
                     </span>
                   )}
@@ -542,7 +542,7 @@ function ExpenseGroupedView({
                   >
                     <td style={{ width: 100 }}>
                       {isCompact
-                        ? formatDateCompact(expense.occurredAt)
+                        ? <CompactDate iso={expense.occurredAt} />
                         : formatDate(expense.occurredAt, locale)}
                     </td>
                     <td>

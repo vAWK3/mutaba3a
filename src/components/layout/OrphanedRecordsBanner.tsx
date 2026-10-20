@@ -3,11 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { getRepositories } from '../../db';
 import { useDrawerStore } from '../../lib/stores';
 import { useT } from '../../lib/i18n';
+import { useTp } from '../../lib/i18n/plural';
 
 const DISMISSED_KEY = 'banner-dismissed-orphans';
 
 export function OrphanedRecordsBanner() {
   const t = useT();
+  const tp = useTp();
   const openOrphanedRecordsDrawer = useDrawerStore((s) => s.openOrphanedRecordsDrawer);
   const [dismissed, setDismissed] = useState(() =>
     localStorage.getItem(DISMISSED_KEY) === 'true'
@@ -57,7 +59,7 @@ export function OrphanedRecordsBanner() {
         </svg>
       </span>
       <span className="orphaned-banner-text">
-        {t(count === 1 ? 'integrity.orphanedRecordSingular' : 'integrity.orphanedRecordPlural', { count })}
+        {tp('integrity.orphanedRecord', count)}
       </span>
       <button type="button" className="orphaned-banner-action" onClick={openOrphanedRecordsDrawer}>
         {t('integrity.reviewNow')}

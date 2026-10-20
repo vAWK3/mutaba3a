@@ -54,7 +54,7 @@ test(
 const ROW_EXIT = '.row-exit';
 
 const attention = (page: Page, name = 'Needs Attention') => page.getByRole('region', { name });
-const attentionRow = (page: Page, client: string) => attention(page).getByRole('row').filter({ hasText: client });
+const attentionRow = (page: Page, client: string, name?: string) => attention(page, name).getByRole('row').filter({ hasText: client });
 const owedNow = (page: Page) => page.getByRole('region', { name: 'Owed now' }).getByTestId('owed-now-amount');
 
 /** Home with two entries on Needs attention: Acme Studio $1,200 overdue, Beta Labs $300 due in 2 days */
@@ -198,6 +198,37 @@ test(
     await step('Check the row slid out to the left', async () => {
       await expect.poll(() => readExitTrace(page), { timeout: 3000 }).toMatchObject({ added: true, removed: true });
       expect((await readExitTrace(page)).minX).toBeLessThan(-100);
+    });
+  },
+);
+
+// MUT-179: day counts go through tp(), so Arabic says "3 أيام" (few) and "11 يومًا" (many), never "3 يوم".
+test(
+  "Needs attention says how late or how soon in the count's own form, in English and Arabic",
+  { tag: '@web.home.attention-day-plurals' },
+  async ({ page, step }) => {
+    await step('Log income overdue by 3 days, overdue by 11 days, and due tomorrow', async () => {
+      await openFreshApp(page, '/income');
+      await logIncome(page, { title: 'Logo redesign', amount: '1200', client: 'Acme Studio', dueDate: localDateFromToday(-3) });
+      await logIncome(page, { title: 'Brand book', amount: '800', client: 'Beta Labs', dueDate: localDateFromToday(-11) });
+      await logIncome(page, { title: 'Site audit', amount: '300', client: 'Cedar Co', dueDate: localDateFromToday(1) });
+    });
+
+    await step('Open Home in English: "3d overdue", "11d overdue" and "Due in 1d"', async () => {
+      await page.goto('/app/');
+      await expect(attentionRow(page, 'Acme Studio')).toContainText('3d overdue');
+      await expect(attentionRow(page, 'Beta Labs')).toContainText('11d overdue');
+      await expect(attentionRow(page, 'Cedar Co')).toContainText('Due in 1d');
+    });
+
+    await step('Switch to Arabic and open Home: each count in its own form', async () => {
+      await switchToArabic(page);
+      await page.goto('/app/');
+      const region = attention(page, ar.overview.needsAttention);
+      await expect(attentionRow(page, 'Acme Studio', ar.overview.needsAttention)).toContainText('متأخر 3 أيام');
+      await expect(attentionRow(page, 'Beta Labs', ar.overview.needsAttention)).toContainText('متأخر 11 يومًا');
+      await expect(attentionRow(page, 'Cedar Co', ar.overview.needsAttention)).toContainText('مستحق خلال يوم واحد');
+      await expect(region).not.toContainText(/\d+ يوم(?!ًا)/);
     });
   },
 );

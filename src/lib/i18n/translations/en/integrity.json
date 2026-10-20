@@ -1,16 +1,22 @@
 {
   "integrity": {
-    "orphanedRecordSingular": "{count} record isn't assigned to any profile.",
-    "orphanedRecordPlural": "{count} records aren't assigned to any profile.",
+    "orphanedRecord": {
+      "one": "{count} record isn't assigned to any profile.",
+      "other": "{count} records aren't assigned to any profile."
+    },
     "reviewNow": "Review now",
     "dismiss": "Dismiss",
     "checkClean": "No issues found. Records checked: {total}.",
-    "checkIssuesSingular": "Found {count} issue. Records checked: {total}.",
-    "checkIssuesPlural": "Found {count} issues. Records checked: {total}.",
+    "checkIssues": {
+      "one": "Found {count} issue. Records checked: {total}.",
+      "other": "Found {count} issues. Records checked: {total}."
+    },
     "checkFailed": "Integrity check failed",
     "toastClean": "Data integrity check passed",
-    "toastIssuesSingular": "{count} data integrity issue found",
-    "toastIssuesPlural": "{count} data integrity issues found"
+    "toastIssues": {
+      "one": "{count} data integrity issue found",
+      "other": "{count} data integrity issues found"
+    }
   },
   "orphanedRecords": {
     "title": "Unassigned records",
@@ -28,9 +34,13 @@
     "untitledExpense": "Expense",
     "noProfiles": "Add a business profile first, then assign these records to it.",
     "allAssigned": "Every record belongs to a profile.",
-    "assignedSingular": "{count} record assigned.",
-    "assignedPlural": "{count} records assigned.",
-    "partialFailureSingular": "{count} record couldn't be assigned. It's still listed below.",
-    "partialFailurePlural": "{count} records couldn't be assigned. They're still listed below."
+    "assigned": {
+      "one": "{count} record assigned.",
+      "other": "{count} records assigned."
+    },
+    "partialFailure": {
+      "one": "{count} record couldn't be assigned. It's still listed below.",
+      "other": "{count} records couldn't be assigned. They're still listed below."
+    }
   }
 }

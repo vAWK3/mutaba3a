@@ -1,7 +1,7 @@
 {
   "name": "mutaba3a",
   "private": true,
-  "version": "0.1.13",
+  "version": "0.1.15",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,7 @@
     "build:desktop": "tsc -b && vite build --mode desktop",
     "build:hosted": "tsc -b && vite build --mode hosted",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.hosted.json",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.hosted.json && tsc --noEmit -p tsconfig.hosted-local.json",
     "preview": "vite preview",
     "preview:web": "vite preview --mode web --outDir dist-web",
     "preview:desktop": "vite preview --mode desktop --outDir dist-desktop",
@@ -26,11 +26,15 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:tz": "TZ=America/New_York vitest run",
+    "hosts": "tsx scripts/hosts.ts",
+    "domain:plan": "tsx scripts/hosts.ts plan",
     "test:bundles": "vite build --mode web && vite build --mode desktop && vite build --mode hosted && tsx scripts/check-bundles.ts",
     "hosted:types": "openapi-typescript server/openapi/openapi.yaml -o src/hosted/api/schema.d.ts",
     "hosted:types:check": "tsx scripts/check-hosted-types.ts",
     "i18n:check": "tsx scripts/check-i18n-keys.ts",
-    "release:notes": "tsx scripts/check-release-notes.ts"
+    "release:notes": "tsx scripts/check-release-notes.ts",
+    "icons:generate": "tsx scripts/generate-icons.ts",
+    "icons:check": "tsx scripts/validate-icon-set.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.2.7",

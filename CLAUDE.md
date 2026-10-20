@@ -541,3 +541,15 @@ Claude CAN:
 	10.	Never merge with failing tests
 	11.	Never auto-deploy
 	12.	Never auto-push
+
+---
+
+## 💾 Disk-space gate: 20 GB free before any worktree or work
+
+Before creating a git worktree or starting any work in this repo (installs, builds, test runs, simulators, Docker, code changes), check free space on the root volume:
+
+```bash
+df -g / | awk 'NR==2 {print $4}'
+```
+
+If it prints a number **under 20** (GB), do not create the worktree and do not start. Stop, tell the user how much is free, and ask them to free space first. Start only once free space is 20 GB or more, or the user explicitly says to go ahead anyway. This also applies before spawning sessions or subagents.

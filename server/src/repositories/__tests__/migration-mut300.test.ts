@@ -22,7 +22,7 @@ const url = process.env.MUTABA3A_TEST_DATABASE_URL;
 const SERVER = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const MIGRATIONS = join(SERVER, 'prisma/migrations');
 const PRISMA = join(SERVER, 'node_modules/.bin/prisma');
-const MUT300 = '20261020090000_mut300_firm_flag';
+const MUT300 = '20261020150000_mut300_firm_flag';
 
 const migrationDirs = () => readdirSync(MIGRATIONS, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
 const sqlOf = (dir: string) => readFileSync(join(MIGRATIONS, dir, 'migration.sql'), 'utf8');

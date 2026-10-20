@@ -51,7 +51,7 @@
 | ADR-040 | Local Queries and Saves Run Offline (networkMode 'always'); Only Network-Bound Queries Wait for a Connection | Active | 2026-10 |
 | ADR-041 | The Landing Page Claims Only What Ships: Free During Early Access, Platform Claims Gated on the Release, Capability Copy Built From Code | Active | 2026-10 |
 | ADR-042 | A Visitor Sample Session Seeds Only an Empty Database and Leaves Nothing Behind | Active | 2026-10 |
-| ADR-043 | Deploys Go Through `make`, Which Refuses to Release From a Tree That Does Not Describe Itself | Active | 2026-10 |
+| ADR-043 | Deploys Go Through `make`, Which Refuses to Release From a Tree That Does Not Describe Itself | Active; 2026-10-12 server-first addendum overridden by ADR-102 (2026-10-19) | 2026-10 |
 | ADR-044 | Drawers Move on Springs; a Close Is Immediate and Its Exit Is a Snapshot; `motion` Is a Dependency | Active | 2026-10 |
 | ADR-047 | The Record Payment Drawer Has One Action, and It Closes the Drawer; Mark Fully Paid Is Removed (Supersedes ADR-038 §5) | Active | 2026-10 |
 | ADR-048 | The Unsorted Inbox Is Owned by the User, and Filing Is One Cross-Repository Transaction | Active | 2026-10 |
@@ -2175,6 +2175,8 @@ One gap remains, ticketed: an entry saved as Received in the drawer still has no
 
 **Addendum (2026-10-12)**: Added `make release full`, a third entry point that runs `release-server` then `release-web` as two ordinary prerequisites — server first, so the API a release ships is already live before the frontend that calls it goes out. It reimplements nothing: each half keeps its own preflight, gates, version bump and confirmation, and declining one does not block the other. Desktop stays excluded, per the decision above — raised and confirmed with Basel when `full` was requested, not reopened.
 
+**Overridden (2026-10-19, ADR-102 override log)**: `make release full` now runs `release-web` then `release-server`; web ships the terms text the server release checks for.
+
 **Alternatives Considered**: npm scripts instead of a Makefile (rejected: `package.json` is the frontend's, and the server deploy is not a frontend concern); extend `deploy.sh`'s menu (rejected: its `git add .` and fixed patch bump are the behaviour being replaced, and the file already carries the desktop pipeline); checks inside each `deploy.sh` (rejected: the two would drift, and the checks are most useful before `make` even starts a build).
 
 ---
@@ -3974,5 +3976,223 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **C1, the role column lands in MUT-300.** `Membership.role` (`OWNER` default, inert until the flag is on, O10) is written by enable; MUT-305 adds enforcement only.
 - **C2/C4, request refusals.** 403 `READ_ONLY_PROFILE {reason: NOT_OWNER}` through the shared `ownedBy` helper (not a 409), and 409 `NOT_BUSINESS` for an owned profile typed PERSONAL; `ALREADY_FIRM` is reachable again under D4.
 - **C5, admin conventions.** The admin PATCH and decline take no If-Match or Idempotency-Key: same state is a no-op 200, like every admin route.
-- **C6/C7, `/v1/me`.** Profiles gain `firm`, `role` and `firmRequestedAt` (owner only) in API `1.37.0-mut300`. The v1 banner copy names no Members page until MUT-306 ships one.
+- **C6/C7, `/v1/me`.** Profiles gain `firm`, `role` and `firmRequestedAt` (owner only) in API `1.41.0-mut300` (built as 1.37.0, renumbered at the merge after main reached 1.40.0-mut325). The v1 banner copy names no Members page until MUT-306 ships one.
 - **O3.** A request doesn't bump the profile's `version`, so the owner's open edit form keeps its If-Match.
+
+---
+
+## ADR-100: How the Portal Chooses Local or Remote, and Where the Local Backend Shows (MUT-286 Phase C; Amends ADR-097 §9)
+
+**Status**: Active (amends ADR-097 §9 and the brief's "first visit / no hint → LOCAL", `.claude/designs/mut-285-portal-local-mode.md` §2.6)
+**Date**: 2026-10-19
+**Context**: MUT-286 Phase C wires ADR-097's local backend into the portal. Three things the brief left open or got wrong surfaced while building it. First, a person signed in before this release has a live cookie but no mode hint, so "no hint → local" would show them an empty device app instead of their account. Second, the portal has no Settings page for "Settings › Your data". Third, the portal's TypeScript program can't type-check the server's route modules (`erasableSyntaxOnly`, zod route generics). Numbered 100 because MUT-299's plan reserves 099.
+
+**Decision**:
+1. **Mode hint + one check (`src/hosted/session/mode.ts`, `client.ts send()`).** `mut-mode` in localStorage (`local` | `remote`), wrapped in try/catch. With no hint, the portal asks the server once, `GET /v1/me`: a 200 saves `remote` (a session from before local mode keeps its account), and a 401 saves `local`. Any other answer, or no answer (offline, 5xx), saves nothing and uses the server for that request, so an outage never strands a signed-in person in an empty local app. The check is the one `/v1` request a signed-out person ever makes; everything after it runs in the page (AC4 test: `local/__tests__/no-network.test.ts`). Sign-in and setup set `remote`; sign-out and "Continue on this device" set `local`. `/v1/sessions*` and `/v1/account-setup*` always go to the server.
+2. **The session-expired choice is the sign-in page.** It gains "Continue on this device" under its existing "You've been signed out" note, so an expired session offers both doors and never switches by itself. There is no separate SessionExpired screen. Signed out, `/sign-in` skips its "already signed in?" check, which would otherwise find the local person and bounce straight back into the app.
+3. **Your data is an account-menu drawer** (`?yourData=true`, `YourDataDrawer`), beside Change password, in local mode only. Restore confirms the record count, replaces everything, and lands on the restored person's first profile.
+4. **The lazy chunk is reached through the alias `@mut/local-backend`.** For types, `tsconfig.hosted.json` maps it to `session/localBackendContract.ts`. For code, `vite.config.ts` (hosted) and `vitest.config.ts` map it to `local/index.ts`, which implements that contract and is checked under `tsconfig.hosted-local.json`. ESLint forbids a static import of the alias and any `server/src` import outside `src/hosted/local`, which itself may import only `LOCAL_SERVER_ALLOWLIST`. The server's ESLint forbids importing the app's `src/`.
+5. **Signed out, account-only and phone-only UI hides:** sign out, change password, Malafat suggestions (AC5), the usage switch and prompt (no telemetry), the "Hosted" chip and old local-app note, and the store links (the phone can't see this device's records, MUT-186 9A). Expenses and Conversions were hidden from the nav until MUT-287 brought receipts and FX; since MUT-287 (decision 11) the nav is the same in both modes.
+6. **Bundle guard:** `indexedDB` is no longer banned in all of `dist-hosted`. It is banned in every file the entry loads statically (`localBackendInEntryGraph`), which proves both that only the lazy local chunk opens IndexedDB and that signed-in pages never download it. Measured 112.7 KB gzip (115.7 KB with MUT-287; jszip is its own lazy chunk, 30.1 KB).
+7. **Local route failures go to the browser console** (`consoleLogger`); signed out there is no Sentry or server log.
+8. **The client picker adds clients** (Basel, 2026-10-19, resolving TD-172): a typed name no client has gets "Add client: «name»" on a profile the person owns (`canAddClient`), in both modes, so a signed-out person can record money owed. It is the portal's 50th API call (`POST /v1/customers`, already in `PORTAL_ROUTES`).
+9. **Pre-landing review fixes** (Basel approved all, 2026-10-19):
+   - **Another tab's mode change** (it signed in, or continued on this device) clears this tab's cache and reopens it at `/`, so account and device data never share a screen (`onModeChangedElsewhere`). A tab on sign-in or setup is left alone.
+   - **Stop states.** A save the browser refuses (`LOCAL_SAVE_FAILED`) or another tab's newer format (`LOCAL_FORMAT_TOO_NEW`) stops the page: every later request rejects, and the root layout shows "reload to continue" in place of the route. A reload rebuilds memory from disk, so a write that never reached disk can't replay as saved. Restore saves to disk before switching memory.
+   - **`LOCAL_UNAVAILABLE`.** A local backend that can't run (storage blocked) gets its own screen with Try again and Sign in, never "Can't reach Mutaba3a".
+   - **Download** takes the lock and reloads first if another tab wrote, so the file holds every save on this device.
+   - **The minted session is never older than the person**, so a clock that moved back can't lock them out.
+   - **The bundle guard** allows IndexedDB only in the chunk that opens `mut-local` (`indexedDbOutsideLocalBackend`).
+10. **The matter picker adds matters** (MUT-318, Basel, 2026-10-19; brief `.claude/designs/mut-318-add-matter.md`): a typed name the chosen client has no matter for gets "Add matter: «name»", gated by the same `canAddClient(profile)` (`projects` is profile-dependent exactly like `customers` in `writability.ts`), in both modes; the 51st portal call (`POST /v1/projects`, already in `PORTAL_ROUTES`). A matter needs a client: with none chosen there is no Add row and a hint says why. A new matter opens in the drawer's currency. The portal reuses the local app's client ↔ matter cascade (moved to `src/lib/forms/`), so a picked matter fills its client and a client change empties a matter of another client. Picker inputs are never disabled while a pick saves (read-only, so focus and Enter-held submit survive); the list stays shut meanwhile, so no second pick can race the first. Reconcile (Basel, 2026-10-19): **D1** a hosted drawer holds Save while a picker's Add is in flight (`usePendingPicks`); **D2** a CURRENCY_MISMATCH (Malafat capture vs its matter) is said under Matter, and the expense drawer's USD default is MUT-319, not this ticket.
+
+11. **Expenses, receipts, FX and documents signed out** (MUT-287, Basel, 2026-10-19; plan + eng review `.claude/designs/mut-287-local-expenses-plan.md`, answers D1–D4):
+    - **Public FX snapshot:** `GET /v1/public/fx-rates` returns the cached ECB snapshot itself (not cross rates), anonymous, 120/min per address (shared mobile and office addresses; review D8), outside `PORTAL_ROUTES`, its limiter built in `index.ts` and pruned each minute (review D1). The local backend's `PublicFxRateSource` feeds the server's own `CachedFxRates`, so `crossRates`, the JOD peg and the age rules run unchanged, and relays the server's `source`/`fetchedAt` (`EcbSnapshot.upstream`), so stale rates read as stale signed out too (review D7, TD-178 resolved). It is the one request signed-out mode sends after the first-visit check, only while a group's ≈ line asks; the page warms its rate cache before taking the cross-tab lock, so a slow network never holds up a save (review D2), and the last snapshot is remembered in localStorage (`mut-local-fx`) for an hour across page loads (review D8).
+    - **Receipt files live in their own database** (D2): `mut-local-blobs`, never a store inside `mut-local`, because `mut-local` already holds MUT-286 data on devices (tag api-v0.3.14) and upgrading it would let an old open tab hang a new one. Files are `{ type, bytes }` (ArrayBuffer), never base64 and never in the snapshot, with a `{ type, size }` record beside each so a size check never loads the bytes (review D11). Routes sign `local-blob:<key>`; the portal's upload and download branch on it.
+    - **Two databases, crash-safe by order:** a receipt file is deleted only after its request's snapshot saved (removals staged, flushed inside the same lock); Restore adds the backup's files, saves the records, then sweeps files no live record names (a refused save sweeps the added files back out); boot sweeps too. Live means READY receipts, documents, and a pending upload only while its 15-minute link is valid (review D6).
+    - **The records file is a zip** (D3): `records.json` + `receipts/<key>` (READY files only, STOREd); jszip by dynamic import only on Download/Restore; the files are copied under the lock and zipped after it (review D3). A MUT-286 `.json`, or a zip re-made from the folder Safari extracted it into, still restores. The confirm names how many receipt files the file can't supply before anything is replaced (review D4). Receipt files unpack only on Replace and must pass the upload rules (receipt type, <= 10 MB, the declared size; review D5). Held in memory whole (TD-179).
+    - **Fingerprint every map** (D4): all 27 `LocalSnapshotMaps` keys, union of field kinds across a fixture filled through the store's own repositories, every nullable field set once (review D10); TD-171 resolved.
+    - **Both local databases step aside for upgrades** (review D12): `LocalDatabase` (`local/idb.ts`) closes this tab's connection when a newer build upgrades it (later use → `LocalDatabaseSupersededError` → the reload screen) and rejects a blocked upgrade instead of hanging.
+    - **`Buffer` is bound per module, never global:** `scopeServerBufferShim` (vite, hosted) appends `import { bufferShim as Buffer }` to `server/src` modules that use it (imports hoist, so source maps stay exact). A global partial `Buffer` made jszip take its Node path and break; no third-party library should see a stand-in. Amends ADR-097 §2.4 ("installs a Buffer shim before the backend loads").
+
+**Consequences**: Existing release-QA portal specs model a browser that has used an account (`openSignedInPortal` sets `mut-mode=remote` when absent); `qa/specs/portal/local-mode.spec.ts` covers the signed-out side. The portal's client list now grows from the picker (decision 8 below).
+
+---
+
+## ADR-101: Direction Comes From `<html dir>` and the `dir` Attribute Only; a Locale-Formatted Amount Is a Plain `<bdi>` (MUT-109)
+
+**Status**: Active (amends MUT-110's note that a standalone amount uses `<bdi dir="ltr">`)
+**Date**: 2026-10-19
+**Context**: TD-048's direction half. `theme.css` set `direction` on every `:lang(ar)` and `:lang(en)` element. An author rule beats the `dir` attribute, so every `dir="ltr"` was ignored in Arabic and every `dir="rtl"`/`"auto"` in English. Five CSS files out-ranked `:lang(ar)` to get LTR back. MUT-79 scoped the rule to the root and reverted, because three amount spans flipped: their `dir="ltr"` started working. Brief `.claude/designs/mut-109-rtl-direction.md`, approved by Basel 2026-10-19 with D1–D4.
+
+**Decision**:
+1. **No CSS rule sets `direction` on a `:lang()` selector** (both languages, D1). `I18nProvider` sets `<html lang dir>`; direction is inherited.
+2. **A locale-formatted amount is a plain `<bdi>`** (`dir=auto`). The Arabic `Intl` currency string starts with RLM, so it resolves right to left, which is the order those amounts already had on screen (`$US 1,300`, `₪ 1,500.00`). This was measured in Chromium before the change.
+3. **`dir="ltr"` means content that reads left to right in any language**: emails, passwords, dates, version, invoice and payment numbers, the FX formula, amount inputs and their currency groups.
+4. **Expenses' two amounts that were LTR through CSS** (`CurrencyAmounts`, `RecurringAttentionList`) keep `dir="ltr"`, and their CSS workaround goes (D2: zero visible change).
+5. **A `dir="ltr"` input or select in the Arabic UI keeps its text on the right** (`:where([dir="rtl"]) :is(input, select)[dir="ltr"]`, 0,1,1, under the income and payment drawers' left-aligned groups), so only the typing order changes (D3).
+6. **Every `dir` site is classified** in `src/styles/__tests__/direction.test.ts` (45 on 2026-10-19), and a new one fails until classified.
+
+**Consequences**: The `dir` attribute is the single source of truth, and new LTR content needs no CSS. Arabic before/after on preview builds showed 0 changed pixels on the ticket's eight screens. English `dir="rtl"`/`"auto"` now work: the Arabic business-name input is RTL in the English UI, and a user-typed name takes its own direction. The app still shows two amount orders: standalone (RTL, point 2) and in-sentence (LRI, MUT-110). Picking one is a product follow-up, not this ADR.
+
+## ADR-102: Terms of Service Are Frozen, Versioned Texts; Acceptance Is Recorded at Setup and Re-asked on the Portal (MUT-324)
+
+**Status**: Active (amends ADR-088: a setup-link redeem also records the terms the person accepted; addendum 2026-10-20, MUT-348)
+**Date**: 2026-10-19
+**Context**: The pilot (epic MUT-322) needs terms of service that a paying person accepts. The terms text ships with the landing page (Netlify, web build) and the version people must accept ships with the API image, two separate deploys. Accounts are operator-issued, so everyone passes a setup link once. Accounts that already have passwords never pass one again. Plan `.claude/designs/mut-324-terms-plan.md` §0 records Basel's answers D1–D12 (2026-10-19).
+
+**Decision**:
+1. **Each terms version is a frozen file per language**, `src/content/legal/terms/<YYYY-MM-DD>.<en|ar>.json`. A released file is never edited; a new text is a new version.
+   - `/terms` shows the latest; `/terms/<version>` shows that version forever.
+   - The English text prevails over the Arabic (D4, the terms say so). The governing law is England & Wales; the contracting party is Barmajiyat Ltd.
+2. **The server owns which version people accept**: `server/src/legal.ts` `CURRENT_TERMS`, with the sha256 of the EN and AR files. `scripts/__tests__/legal-terms.test.ts` pins it to the files and to the landing's latest version.
+3. **An acceptance is a row**: `terms_acceptances (userId, version, locale, textSha256, surface portal|phone, acceptedAt)`, unique on (userId, version).
+   - It is written idempotently: an operator reset after acceptance still works.
+   - It **cascades with the person** (D3, the schema's one cascade). Closing an account (MUT-333) removes the record of its agreement.
+4. **"Accepted" means the latest accepted version is ≥ the current one** (D10, ISO-date string order). An API rollback, or two revisions answering side by side, never asks again.
+5. **Acceptance happens in two places**:
+   - The setup redeem requires `acceptedTermsVersion` equal to the current version. The check comes after the link-state check and before hashing; the answer is 409 `TERMS_VERSION_STALE` with `details.current`. The acceptance is recorded in the redeem's transaction.
+   - `POST /v1/me/terms-acceptance` (cookie or device session, organization-independent) covers people who are behind. `Me.terms {version, accepted}` drives the portal's Updated-terms step. That step offers a way out (D6): sign out, or write to support to take your records or close the account.
+6. **Each person accepts for themselves and, as owner, for the profiles they own** (D2). `user.terms_accepted` is audited on owned profiles only, never on a firm the person is merely a member of.
+7. **Only the portal enforces acceptance** (D7). The server does not refuse writes, so installed phone builds keep working (TD-180). The phone's link and update step are MUT-344.
+8. **Web first, checked at release** (D11). The web build emits `/legal/terms-versions.json` (version + sha256 per language). The server release refuses a server whose `CURRENT_TERMS` the public site doesn't list with the same fingerprints. Netlify answers every path with the app shell, so a page fetch can't prove the version is live.
+   - **Where it runs** (review fix 3, 2026-10-19): `scripts/preflight.sh server` runs `terms:check-live`, so `make release server` refuses before the version bump, commit and push. `server/scripts/deploy.sh` checks again every time (one fetch), so nothing a caller passes can turn the guard off. Only `SKIP_TERMS_CHECK=1` skips it; `SKIP_REMOTE=1` does not (review pass 2). A failure names the HTTP status or the fetch error; only a reachable manifest that lacks the version says "release web first".
+9. **The signed-out portal has no terms.** `PortalRouteDependencies.terms` is null, `Me.terms` is null and nothing asks. Acceptances are kept out of `MemoryLedgerStore.snapshot()`, so the shipped local format is unchanged.
+
+**Consequences**:
+- Every acceptance can be tied to the exact words accepted, in the language read.
+- Bumping the terms means three steps: add the new files and update `CURRENT_TERMS` and its hashes (the pin test fails until they match); release web; then release the server.
+- `npm --prefix server run terms:report` (GET /admin/v1/terms-acceptance) lists who is behind, which covers phone-only users until MUT-344 ships.
+
+**Override log (2026-10-19, MUT-324 review fix 2)**: this ADR overrides **ADR-043's 2026-10-12 addendum** ("`make release full` runs `release-server` then `release-web` … server first"). `make release full` is now `release-web release-server`.
+- **Why:** server first could never pass decision 8: the server leg refused whenever the terms changed, and web never ran. The server-first reason (the API is live before the frontend that calls it) no longer holds for this split: the portal ships inside the server image, and the web build (landing + local web app) calls no API a server release adds.
+- **What replaces it:** web, then server. After a terms bump Netlify must finish building before the server preflight passes, so the server half refuses cleanly (before its bump) and is rerun once the build is live.
+- Decided by Basel through the review's must-fix list.
+
+**Addendum (2026-10-20, MUT-348): how strong the acceptance evidence must be.** MUT-324's first review pass left two questions open. Basel decided both on 2026-10-20 (MUT-348 comment 12222).
+1. **The evidence is the frozen file plus the release that rendered it.** `textSha256` fingerprints the JSON content file, not the page `TermsPage` builds from it.
+   - That's enough: the frozen `/terms/<version>` file, plus the `TermsPage` code at the release that rendered it, show what the person read.
+   - Each acceptance should record that release, so it maps to a git tag. Nothing stores it today. **MUT-354** adds a nullable `clientRelease` column to `terms_acceptances`, written per acceptance.
+   - Until MUT-354 ships, an acceptance maps to a release only through its `acceptedAt` and the release history. Rows written before it keep `clientRelease` null.
+   - We won't hash the rendered text or keep HTML snapshots.
+2. **Firm-only members need nothing more for now.** A person who owns no profile gets no `user.terms_accepted` audit row (decision 6). Their `terms_acceptances` row is the only evidence, and it's deleted with the account (decision 3). That matches the published promise.
+   - Such a person can't exist during the pilot: every pilot user is an owner (MUT-322), and staff invites only come with firm-v3 roles (MUT-305/306).
+   - **MUT-305/306 must revisit this** before the first member who owns no profile is invited, for example with an audit row on the firm or an operator log.
+   - No code now.
+
+## ADR-152: Icon Save-Feedback Animation Reuses `motion` and Mirrors Flutter's `MMotion` Curves Byte-for-Byte — No New Runtime
+
+**Status**: Active
+**Date**: 2026-10-19
+**Context**: MUT-337 (epic MUT-334). The MUT-335 icon set is drawn multi-part specifically so an animation runtime can target one part independently, with a playful preset for personal accounts and a restrained one for firms; MUT-338/339/340 are blocked on this decision. The ticket named Rive as a candidate to evaluate. Two prior decisions already bounded the answer: ADR-044 (MUT-80/82) put this app's motion on the `motion` package (no `lottie-web`, no `gsap`); ADR-079/080 (MUT-203/206) rejected the `lottie-web` *runtime* specifically because the portal CSP (`default-src 'self'`, no `unsafe-inline`) blocks the inline `<style>`/shadow-root markup it needs — not animation in general. The MUT-335 inventory doc's own style sheet already named the mechanism: "their playful/restrained distinction is carried entirely by easing curve and transform… reusing Flutter's existing `MMotion.overshoot` for playful, `MMotion.spring` for restrained." `MMotion` is real, shipping Dart (`mutaba3a/lib/presentation/theme/mutaba3a_theme.dart:74-76`): `spring = Cubic(0.32, 0.72, 0, 1)`, `overshoot = Cubic(0.34, 1.56, 0.64, 1)` — cubic-bezier control points, portable byte-for-byte to CSS/`motion`'s `ease` array/Flutter's `Cubic`. Brief and comparison: `.claude/designs/mut-337-icon-animation-runtime.md`.
+
+**Decision**:
+1. **One transform, two curves, not two engines.** `src/lib/motion/iconMotion.ts`'s `playIconFeedback(targets, { preset, reducedMotion })` plays a single scale(0→1) `motionValue` through `ICON_OVERSHOOT_EASE` (playful) or `ICON_RESTRAINED_EASE` (restrained) — the exact same four numbers as `MMotion.overshoot`/`.spring`. The overshoot curve's y > 1 midpoint is what produces the "playful" bounce; the restrained curve stays within [0,1].
+2. **Rejected: Rive.** Same shape of reason as ADR-079's `lottie-web` rejection — a new runtime (`rive-react`/`@rive-app/canvas` web, `rive` Flutter package) plus a `.riv` binary asset pipeline, to buy state-machine capability this requirement (swap one of two known curves on a transform) doesn't need. Its WASM runtime would also need a new CSP grant (`'wasm-unsafe-eval'`) `PORTAL_CSP` doesn't have today.
+3. **Rejected: CSS keyframes via toggled class.** CSP-clean and viable, but loses interruptibility — a re-trigger before settle restarts from the keyframe's 0%, not the element's live position, unless hand-rolled with FLIP (not built anywhere in this app). `motion`'s `motionValue`/`animate()` already gives this for free (same mechanism `rowEnter`/`rowExit` use) and `playIconFeedback` proves it: a re-trigger `stop()`s the prior play and restarts from its live value.
+4. **Caller passes explicit target elements**, never an icon name the function resolves internally — keeps the function decoupled from any one icon's `data-part` vocabulary (MUT-336's codegen already emits `data-part`, not `id`, for exactly this kind of external targeting).
+5. **Reduced motion jumps straight to the end state** (scale 1, no overshoot) on either preset, same fallback shape as `REDUCED_MOTION_FADE_SECONDS`/`captureExitSnapshot`.
+6. **Scope boundary**: this ticket proves the mechanism (headless, unit-tested — `iconMotion.test.ts` asserts the playful preset's live value genuinely exceeds 1 mid-flight, not just which constant was passed) and records the decision. Wiring it into a real save trigger, in either app, is MUT-338's job — no new UI ships from MUT-337.
+
+**Consequences**:
+- No new dependency on either platform; the duration (0.4s, shared by both presets — only the curve differs) is this prototype's placeholder, not yet a Brand v2-reviewed number; MUT-338 may tune it.
+- A future change to either platform's curve numbers needs a matching change on the other side — nothing enforces this automatically yet (no parity test exists across the two repos the way `bloomLoaderData.ts`'s does against its Lottie JSON); flagged as a follow-up, not blocking this ticket.
+- The Flutter half (`AnimationController` + `CurvedAnimation(curve: MMotion.overshoot | .spring)`) is not built in mini-crm; needs its own mutaba3a-flutter worktree.
+
+---
+
+## ADR-153: GitHub CI Runs Only by Hand; `make release` Reminds the Operator
+
+**Status**: Active (amends MUT-24 §C D2 and TD-019's push/PR triggers for web-ci, server-ci and contracts-ci)
+**Date**: 2026-10-20
+**Context**: CI on main had been red since 2026-10-19 (MUT-286 made the web typecheck, tests and portal build need `server/node_modules`, which the workflows never installed). Every release push started a run nobody was waiting on. Releases are operator-run from `make release`, where the local gates already run.
+**Decision**:
+1. `web-ci.yml`, `server-ci.yml` and `contracts-ci.yml` trigger on `workflow_dispatch` only. Run them with `make ci [web|server|contracts|all]`, from the Actions tab, or `gh workflow run <file> --ref main`.
+2. `make release web` / `make release server` call `scripts/ci-reminder.sh` just before the deploy confirmation. It prints the last run of that target's workflow on the release branch (result, commit, how far behind HEAD) and the command to start one. It is a reminder, never a gate: it exits 0 when gh is missing, signed out or offline (`SKIP_REMOTE=1`). After a successful push the target prints one more line: run `make ci <target>` on what was just pushed.
+3. `build-windows.yml` keeps its GitHub-release trigger. It is the desktop release build, not CI.
+**Consequences**: A red main is no longer announced on push. The reminder at release time is the prompt to run CI. Pull requests get no automatic checks.
+
+## ADR-154: Uptime Alerts Page on Two Failed Rounds From Two Regions, by Email + SMS, on a Host Variable (MUT-328)
+
+**Status**: Active (supersedes the optional single `/health` alert from ADR-026's first cut)
+**Date**: 2026-10-20
+**Context**: Pilot gate (MUT-322). Production's only uptime check had no alert channel. Basel chose email + SMS through Cloud Monitoring channels, with the phone number kept out of the repo (MUT-328 comment, 2026-10-19). The custom domain isn't chosen yet (MUT-112, prepared by MUT-326). There is no staging.
+**Decision**:
+1. Three uptime checks (`/health`, `/ready`, the portal `/` matched on `id="root"`) live in the API root's `monitoring.tf`, every 300 s from all six regions, on `local.uptime_host`: `var.uptime_host`, else the Cloud Run host. The domain input feeds that local.
+2. Each check's policy fires when **more than 1 region** fails for **360 s** (period + 60 s), on `ALIGN_NEXT_OLDER` + `REDUCE_COUNT_FALSE` aligned to the period. One failed round can't page, and two in a row do. Severity is CRITICAL. Cloud SQL disk > 80% and CPU > 90% for 900 s are WARNING.
+3. Channels come from `alert_email` and `alert_sms_number` (sensitive, E.164), plus any `alert_notification_channels`. With no channel there are no policies.
+4. Firing and closing are proven with an opt-in drill check (`uptime_drill_path`) passed only with `-var`, never by scaling production down.
+5. Monitoring changes are applied with a targeted plan (DEPLOYMENT.md §6b), separate from releases.
+**Consequences**: Expect about a 6 to 11 minute delay between an outage and the page. A one-region network problem never pages. The close notice depends on Cloud Monitoring's default until the provider is on 6.x (TD-185). Moving the domain may replace the checks (new ids), and their policies follow them.
+
+---
+
+## ADR-155: The Custom Domain Is One Input: `config/hosts.json`, a Cloudflare Worker Front Door, a Front-Door Token, Staged Cut-Over
+
+**Status**: Active (amends DEPLOYMENT.md §4c "PORTAL_ORIGIN intentionally unset" and §5's deferred-domain note; the front-door choice can be overridden, see 2)
+**Date**: 2026-10-20
+**Context**: MUT-326 (epic MUT-322, blocks MUT-112). The domain isn't chosen, but it must be live before the pilot (Basel, 2026-10-19). On 2026-10-20 Basel listed the apex, the subdomain and the front door as undecided on MUT-112; MUT-326's own text says to pick the cheapest front door that keeps `TRUSTED_PROXY_HOPS` correct. The legacy hosts were hardcoded in vite, the bundle allowlist, the terms release guard, provisioning, Sentry tfvars and the phone. Cloud Run domain mapping isn't offered in me-west1. Brief: `.claude/designs/mut-326-domain-move.md`; adversarial review folded in.
+**Decision**:
+1. **One file per repo, `config/hosts.json`**, holding `domain` (null until chosen), `portalSubdomain` (`app`), the `legacy` origins and a `stage`: `legacy` → `proxy` (the front door exists; builds unchanged) → `live` (builds, links and the phone use the new hosts) → `redirect` (old-host pages are sent on). `config/hosts.ts` (TS) and the Terraform `locals` (HCL) derive the same values, pinned to the same fixtures. `stage` exists because committing the domain must not re-point the next release before DNS works. `scripts/__tests__/no-hardcoded-hosts.test.ts` fails on our hosts anywhere else, and rehearses `mutaba3a.app` as the domain. The Malafat OAuth `CIMD_CLIENT_ID` keeps its own value.
+2. **Front door: a Cloudflare Worker** on `app.<apex>/*` forwarding to the run.app origin (`server/infrastructure/frontdoor`, its own operator-applied stack). This follows Malafat's `malafat-router`. It costs $0 on the Workers free tier, against about $18/month for a Google external HTTPS load balancer, and the certificate is automatic. Apex and `www` are DNS-only to Netlify. Swapping to a load balancer later changes only that stack and where the server reads the client IP.
+3. **A front-door token instead of a second hop count.** run.app stays reachable directly for old phones, Malafat and the carry-over, so one `TRUSTED_PROXY_HOPS` can't fit both paths. The Worker sends `x-mutaba3a-front-door: <FRONT_DOOR_TOKEN>` and `x-mutaba3a-client-ip: <CF-Connecting-IP>`, overwriting the caller's copies. The server:
+   - takes that IP and judges `Origin` against `PORTAL_ORIGIN` only when the token matches (sha256 digests, `timingSafeEqual`);
+   - judges every other request exactly as before.
+
+   The token is Terraform `random_password` in Secret Manager, a `secret_text` binding in the Worker, and mounted by reference in Cloud Run.
+4. **The frontdoor stack owns the token secret.** The API stack reads it with a data source, so its plan fails loudly when the frontdoor stack wasn't applied first. The zone and the secret are `prevent_destroy`.
+5. **Redirects are staged and 302.**
+   - From `live`, Netlify sends `<apex>/app/*` back to netlify.app, where the free web app's IndexedDB is.
+   - At `redirect`, Netlify sends the old host's landing pages to the apex.
+   - At `redirect`, the server sends direct run.app page visits to the same-origin `/carry-over?next=…` page. It never touches the API, admin, association files, health checks, assets, static files or writes.
+   - `PORTAL_LEGACY_REDIRECT` parses only `"true"`/`"false"`.
+6. **The phone repo is not edited here.** `npm run domain:plan` prints its exact lines, and it claims both hosts for at least one release.
+**Rejected**: a Google external HTTPS LB plus serverless NEG (cost; two hop counts during the transition); a Cloudflare proxied CNAME with an Origin Rule host override (no place to inject the token and client IP that is as testable as a Worker); a hop-count bump (`TRUSTED_PROXY_HOPS=2` would trust a forged `X-Forwarded-For` entry on direct run.app traffic).
+**Consequences**:
+- While `domain` is null, nothing changes, and the plans and the builds are as before (snapshot masked, tests pin it).
+- Past 100k requests/day per Cloudflare account the Worker fails closed until UTC midnight (TD-186).
+- Browser-saved passwords don't follow the host: people sign in once on the new host (MUT-112 release note). Google Password Manager affiliation through web↔web `assetlinks.json` statements is left to MUT-112 (it changes the API contract).
+- `cloudflare_zone_setting` can't be destroyed from Terraform.
+
+## ADR-156: Signed In, "Download My Records" Writes the Local-Mode Records File — Built in the Portal From a Streamed Per-Profile Export (MUT-325)
+
+**Date:** 2026-10-20 · **Status:** Accepted (D1–D5 reviewed and accepted by Basel, 2026-10-20; see the members note under Consequences) · **Epic:** MUT-322 (pilot gate) · **Format owner:** MUT-286/287
+
+**Context.** A paying user must be able to leave with their records. Signed out, Your data already writes a versioned records file (a zip of `records.json` — a `MemoryLedgerStore` snapshot — and `receipts/<storageKey>`) and restores it. Signed in there was no export at all.
+
+**Decision.**
+1. **Same file, by construction (D1).** The signed-in Download produces exactly the file local mode writes: the portal fetches each chosen profile's `records.json` from `GET /v1/records-export` (X-Mutaba3a-Profile), merges them, fetches each READY receipt's bytes from `GET /v1/records-export/receipts/{id}`, and zips with local mode's own `zipRecordsArchive`. The `$map/$date/$bigint` codec moved to `server/src/records-file/codec.ts`, shared by both sides. Restore, migrations and the format fingerprint are unchanged.
+2. **Streamed, not a job (D1).** The server reads a profile 500 rows a query (`RecordsExportRepository`, memory + Prisma with exact per-record selects) and writes the JSON as it is pulled (gzip when accepted), so memory holds one page whatever the profile's size. Receipts are one short request each (4 at a time; a 429 is waited out; a file that fails twice or arrives the wrong size is left out and counted). No request carries the whole export, so Cloud Run's request timeout never applies to it; no queue, bucket object or Terraform is needed. The cost is the zip in the tab's memory, the same ceiling local mode's own Download already has (TD-188).
+3. **Re-homed to the device's person (D2).** The file holds one person — the exporter, under `local@device.invalid`, with no password, lockout or sign-in state — and their membership only. A profile they belong to but don't own becomes theirs on the device (BUSINESS, or PERSONAL for someone's personal one): ADR-097 §2.2, the local person owns every local profile. Organization, person and membership rows are copied field by field, so a column added later (ADR-099's roles, firm fields) never reaches a device unasked. No other person's row or email is written; other people's ids on rows stay as opaque UUIDs (locally `capturedBy` reads null for a colleague's capture).
+4. **Malafat stays with Malafat (D4).** No integration row (they hold the connection) and no Malafat document (`files`) is written; `refs` (opaque Malafat ids) are kept. On the device the firm has no other writer, so its income arrives as the person's own records. The file is labelled `origin: "hosted-export"` beside `maps` (not a format change), named `mutaba3a-export-<date>.zip`, and both the drawer and the Restore confirm say it is an export, not a backup: nothing restores into an account (MUT-290 is later).
+5. **Faithful to what reads show.** Due installments and charges are posted before the export (ADR-037 decision 8), so a device never posts them again with new ids. The export is audited `records.exported` on the profile, as the person.
+6. **Signed-in only, a lazy chunk.** The routes are session-only and outside `PORTAL_ROUTES`; local mode never serves them. The portal reaches the export code through the alias `@mut/records-export` (types: `session/recordsExportContract.ts`; code: `src/hosted/local/hostedExport.ts`), loaded only on Download, the same split as `@mut/local-backend`.
+
+**Override log.**
+
+| Overridden | What it said | Replaced by | Why | Date |
+|---|---|---|---|---|
+| ADR-097 override note ("no shared ids, no hosted row stored locally") | Hosted and local data stay apart | A person may restore their own hosted rows, ids kept, onto a device (§3–4 above) | The pilot gate: a paying user can leave with their records, in the format the free app already reads | 2026-10-20 |
+| ADR-028 §2 (downloads are a 302 to a signed URL) | The API never passes bytes on | `GET /v1/records-export/receipts/{id}` streams a receipt as `application/octet-stream`, `Content-Disposition: attachment`, `nosniff` | The portal must read the bytes to zip them, and the bucket has no CORS in IaC; still a download, never rendered | 2026-10-20 |
+
+**Consequences.** MUT-290 (moving a device's records into an account) will meet hosted ids already on devices. A write from another device during a long export can leave the file a moment inconsistent across pages (TD-189). The cap of 6 owned profiles isn't enforced on restore: re-owning firms can leave a device owning more than 6, which only stops it creating new ones.
+
+**Members (Basel, 2026-10-20).** Exporting a profile the person belongs to but doesn't own is accepted only while every user is an owner (the pilot). Before the first member invite (MUT-305/306), export must be limited to profiles the person owns, or to what their firm role allows. MUT-305 carries this as a requirement.
+
+## ADR-157: Restores Go Through a Scratch Copy; a Profile Restore Never Rolls Back Access or Audit (MUT-327)
+
+**Status**: Active
+**Date**: 2026-10-20
+**Context**: Pilot gate (MUT-322). Backups had never been restored. A pilot user's mistake is far likelier than a lost database, and a whole-database restore costs every other user their recent work. Claude never touches production; Basel runs the drill.
+**Decision**:
+1. **Every restore reads from a scratch copy first.** That's a backup restored into, or a point-in-time clone to, an instance named `mutaba3a-pg-drill-<stamp>-b|p`. Nothing restores in place, except a whole-database restore from a daily backup (runbook §4.3 A), and that only after an on-demand backup (the undo point) with ingress closed.
+2. **One profile is restored on its own** (`scripts/profile-rows.sh restore`), in one transaction:
+   - Its rows in every table with an `organizationId` are replaced by the copy's.
+   - `api_keys`, `memberships`, `integrations` and `idempotency_keys` keep their live rows, so a restore never re-grants revoked access.
+   - `audit_events` are merged, never removed, and a `SYSTEM` `organization.restored` event is appended.
+3. **The schema comes from the catalog**, so the tools follow migrations without edits. Profile tables are those with `organizationId`; foreign keys give the order. A copy whose columns differ from live is refused.
+4. **The drill's safety is structural.** Every create, change or delete passes `mutate <scratch name>`, which refuses the source and any non-drill name. The copies get their own password for `mutaba3a_api`, so the drill never reads production's.
+5. **Until MUT-333, the operator's hard delete** (`purge-user`) deletes only what the person owns. It refuses while they're a member of, or referenced from, someone else's profile: that's MUT-333's decision. A later whole-database restore must replay the purge log (runbook §4.3).
+**Consequences**:
+- Receipt files aren't in the database backups: the bucket keeps no versions, only the soft-delete window (TD-190).
+- A profile restore loses that profile's changes after the restore point, and access changes since then need a manual check.
+- Whole-database dumps need Postgres 16 client tools.

@@ -53,8 +53,8 @@ export function ReceiptUploader({ profileId, expenseId, receipts }: ReceiptUploa
   const handleDownload = async (receipt: ExpenseReceipt) => {
     setPreparing(receipt.id);
     try {
-      const { url } = await api.receiptDownload(profileId, expenseId, receipt.id);
-      downloadNavigator.open(url);
+      const { url, filename } = await api.receiptDownload(profileId, expenseId, receipt.id);
+      await downloadNavigator.open(url, filename);
     } catch {
       showToast(t('hosted.expenses.drawer.receipts.downloadFailed'));
     } finally {

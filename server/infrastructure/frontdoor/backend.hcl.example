@@ -1,0 +1,4 @@
+# For `terraform init -backend-config=backend.production.hcl` (server/DEPLOYMENT.md §5a).
+# Same private bucket as the API stack, its own prefix: the state holds the front-door token.
+bucket = "mutaba3a-terraform-state"
+prefix = "mutaba3a-frontdoor/production"

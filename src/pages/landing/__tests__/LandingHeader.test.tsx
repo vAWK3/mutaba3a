@@ -2,65 +2,23 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
-import type { ReleaseInfo } from '../../../hooks/useLatestRelease';
 import { LandingHeader } from '../components/LandingHeader';
-import { HeroSection } from '../components/HeroSection';
 import { FakeIntersectionObserver, installFakeIntersectionObserver } from '../../../test/intersectionObserver';
 import en from '../../../lib/i18n/translations/en';
 
 /**
  * The frosted bar (MUT-77, brief L9): wordmark, language switch, and a
- * device-matched button that only shows once the hero's has scrolled away.
- * Visibility itself is CSS (proved in qa/specs/web/landing.spec.ts); these
- * prove the contract the CSS keys off and that both buttons always agree.
+ * "Request an account" button that only shows once the hero's has scrolled
+ * away. Visibility itself is CSS (proved in qa/specs/web/landing.spec.ts);
+ * these prove the contract the CSS keys off.
  */
 
-const releaseHook = vi.hoisted(() => ({ calls: 0 }));
-
-const release = vi.hoisted(() => ({
-  current: {
-    release: { version: '0.1.4', releaseNotesUrl: 'https://example.test/notes', hasMacBuild: true, hasWindowsBuild: true } as ReleaseInfo | null,
-    isLoading: false,
-    error: null as string | null,
-  },
-}));
-
-vi.mock('../../../hooks/useLatestRelease', () => ({
-  useLatestRelease: () => {
-    releaseHook.calls += 1;
-    return release.current;
-  },
-}));
-
-vi.mock('../../../hooks/usePrefersReducedMotion', () => ({
-  usePrefersReducedMotion: () => true,
-}));
-
-const AGENTS = {
-  mac: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 0 },
-  windows: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 Safari/537.36', platform: 'Win32', maxTouchPoints: 0 },
-  iphone: { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148 Safari/604.1', platform: 'iPhone', maxTouchPoints: 5 },
-};
-
-const originals = {
-  userAgent: Object.getOwnPropertyDescriptor(window.navigator, 'userAgent'),
-  platform: Object.getOwnPropertyDescriptor(window.navigator, 'platform'),
-  maxTouchPoints: Object.getOwnPropertyDescriptor(window.navigator, 'maxTouchPoints'),
-};
-
-function asDevice(device: keyof typeof AGENTS) {
-  for (const [key, value] of Object.entries(AGENTS[device])) {
-    Object.defineProperty(window.navigator, key, { value, configurable: true });
-  }
-}
-
-function renderHeader({ language = 'en', showCta = true, withHero = false }: { language?: 'en' | 'ar'; showCta?: boolean; withHero?: boolean } = {}) {
+function renderHeader({ language = 'en', showCta = true }: { language?: 'en' | 'ar'; showCta?: boolean } = {}) {
   localStorage.setItem('mutaba3a-language', language);
   return render(
     <ThemeProvider>
       <LanguageProvider>
         <LandingHeader showCta={showCta} />
-        {withHero && <HeroSection />}
       </LanguageProvider>
     </ThemeProvider>,
   );
@@ -71,17 +29,12 @@ function headerCta(): HTMLAnchorElement {
 }
 
 beforeEach(() => {
-  releaseHook.calls = 0;
   localStorage.clear();
   installFakeIntersectionObserver();
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  for (const [key, descriptor] of Object.entries(originals)) {
-    if (descriptor) Object.defineProperty(window.navigator, key, descriptor);
-    else delete (window.navigator as unknown as Record<string, unknown>)[key];
-  }
 });
 
 describe('LandingHeader', () => {
@@ -119,34 +72,19 @@ describe('LandingHeader', () => {
     expect(headerCta()).toHaveAttribute('data-visible', 'true');
   });
 
-  it.each([
-    ['mac', 'Download', 'Download for Mac'],
-    ['windows', 'Download', 'Download for Windows'],
-    ['iphone', 'Web app', 'Open the web app'],
-  ] as const)('on %s it goes where the hero button goes, with a short label and the full name', (device, short, full) => {
-    asDevice(device);
-    renderHeader({ withHero: true });
-    const hero = document.querySelector<HTMLAnchorElement>('.hero-cta-primary')!;
-    expect(headerCta()).toHaveAttribute('href', hero.getAttribute('href'));
-    expect(headerCta()).toHaveTextContent(short);
-    expect(headerCta()).toHaveAccessibleName(full);
+  it('always offers "Request an account" — there is no self-serve signup, so this is the one way in', () => {
+    renderHeader();
+    expect(headerCta()).toHaveAttribute('href', '#get-it');
+    expect(headerCta()).toHaveTextContent(en.landing.hero.ctaRequest);
   });
 
-  it.each(['mac', 'windows', 'iphone'] as const)(
-    'on %s the visible label is part of the accessible name, in both languages (WCAG 2.5.3, voice control)',
-    (device) => {
-      asDevice(device);
-      for (const language of ['en', 'ar'] as const) {
-        const { unmount } = renderHeader({ language });
-        const name = headerCta().getAttribute('aria-label')!.toLowerCase();
-        const visible = headerCta().textContent!.trim().toLowerCase();
-        expect(name).toContain(visible);
-        unmount();
-      }
-    },
-  );
+  it('labels its button in Arabic too', () => {
+    renderHeader({ language: 'ar' });
+    expect(document.querySelector('.landing-wordmark-short')).toHaveTextContent('متابعة');
+    expect(headerCta()).toHaveTextContent('اطلب حسابًا');
+  });
 
-  it('on a page with no hero: no button, no GitHub lookup, and the wordmark goes home', () => {
+  it('on a page with no hero: no button, and the wordmark goes home', () => {
     localStorage.setItem('mutaba3a-language', 'en');
     render(
       <ThemeProvider>
@@ -156,7 +94,6 @@ describe('LandingHeader', () => {
       </ThemeProvider>,
     );
     expect(document.querySelector('[data-part="header-cta"]')).toBeNull();
-    expect(releaseHook.calls).toBe(0);
     expect(document.querySelector('.landing-header-brand')).toHaveAttribute('href', '/');
   });
 
@@ -194,7 +131,7 @@ describe('LandingHeader', () => {
 
   it('leaves out the sign-in link when the build set no portal URL', () => {
     renderHeader();
-    expect(screen.queryByRole('link', { name: /Sign in now/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Sign in/ })).not.toBeInTheDocument();
   });
 
   it('shows the scroll-edge fade only once the top of the page has scrolled away', () => {
@@ -206,13 +143,5 @@ describe('LandingHeader', () => {
     expect(banner).toHaveAttribute('data-scrolled', 'true');
     FakeIntersectionObserver.reportFor(top, true);
     expect(banner).toHaveAttribute('data-scrolled', 'false');
-  });
-
-  it('labels its button, and names the product for phones, in Arabic too', () => {
-    asDevice('mac');
-    renderHeader({ language: 'ar' });
-    expect(document.querySelector('.landing-wordmark-short')).toHaveTextContent('متابعة');
-    expect(headerCta()).toHaveTextContent('تحميل');
-    expect(headerCta()).toHaveAccessibleName('تحميل لـ Mac');
   });
 });

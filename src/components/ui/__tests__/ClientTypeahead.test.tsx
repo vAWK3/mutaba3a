@@ -405,4 +405,16 @@ describe('ClientTypeahead', () => {
       expect(onPendingTextChange).toHaveBeenLastCalledWith('');
     });
   });
+
+  it('flashes when the form fills it from a picked project (MUT-318 A3)', () => {
+    const { container, rerender } = renderClientTypeahead({ flashSignal: 0 });
+    const root = container.querySelector('.entity-typeahead');
+    expect(root).not.toHaveClass('cascade-flash');
+    rerender(
+      <TestWrapper>
+        <ClientTypeahead value="" onChange={vi.fn()} flashSignal={1} />
+      </TestWrapper>
+    );
+    expect(container.querySelector('.entity-typeahead')).toHaveClass('cascade-flash');
+  });
 });

@@ -245,12 +245,13 @@ const VIEWPORTS = [
  * is annotated too, so its entry can go.
  */
 const KNOWN_OVERFLOW: Record<string, { note: string; maxContentWidth: number }> = {
-  // 678px on main; up to 726px with Brand v2's body 16 (Arabic, measured 2026-10-12). Fails if it grows.
-  'Income@375': { note: 'TD-083: the Income top bar, status tabs and table are wider than a phone', maxContentWidth: 726 },
-  // --drawer-width is 480px: the drawer is 105px wider than the window, same on main
-  'Payment drawer@375': { note: 'TD-083: drawers are a fixed 480px (--drawer-width), wider than a phone', maxContentWidth: 480 },
+  // 678px on main; 726px with Brand v2's body 16 (Arabic, 2026-10-12). Its date column then followed the date
+  // (718–736px across a year: Thmanyah's digits are proportional). MUT-250 sets compact dates in the figure face
+  // (CompactDate: Plex Mono, tabular digits), so it is 735px on every date (Arabic, 9 dates, 2026-10-19). Fails if it grows.
+  'Income@375': { note: 'TD-083: the Income top bar, status tabs and table are wider than a phone', maxContentWidth: 735 },
   // MUT-103 baseline, measured on main a48f72d (2026-10-13) before the sweep: opened over Income, so Income's width shows through
-  'Income drawer@375': { note: 'TD-083: opens over Income, which is wider than a phone; drawers are a fixed 480px', maxContentWidth: 726 },
+  // Re-measured with Income for MUT-250: 735px. The drawer itself fits since MUT-357 (TD-070); Income behind it does not
+  'Income drawer@375': { note: 'TD-083: opens over Income, which is wider than a phone', maxContentWidth: 735 },
 };
 
 /** The widest thing sticking out: the page's content width, or a dialog's width. */
@@ -564,4 +565,33 @@ test.describe('before JavaScript', () => {
       }
     });
   }
+});
+
+/**
+ * MUT-250: the date column sets its width from its widest date, so with proportional
+ * digits Income's width followed today's date (718px on 11/11, 736px on 08/08).
+ * Compact dates are set in the tabular figure face (CompactDate), so the width is the same on any day.
+ */
+test('Income at 375px in Arabic is the same width on any date', { tag: '@web.brand.date-width' }, async ({ browser, step }) => {
+  const widths: number[] = [];
+  for (const date of ['2026-11-11', '2026-08-08', '2026-10-01']) {
+    await step(`On ${date}, log two entries and open Income in Arabic at 375px`, async () => {
+      // A fresh device per date: the entries are dated today, and today is the clock's date
+      const context = await browser.newContext({ baseURL: test.info().project.use.baseURL, viewport: { width: 1280, height: 720 } });
+      const page = await context.newPage();
+      await page.clock.setFixedTime(new Date(`${date}T10:00:00`));
+      await logTwoClients(page);
+      await switchToArabic(page);
+      await page.setViewportSize({ width: 375, height: 812 });
+      await page.goto('/app/income');
+      await expect(page.getByRole('main').getByText('Logo redesign')).toBeVisible();
+      widths.push(await contentWidth(page));
+      await context.close();
+    });
+  }
+
+  await step('Every date gives the same width, within the known overflow', async () => {
+    expect(new Set(widths).size, `widths ${widths.join(', ')}`).toBe(1);
+    expect(widths[0]).toBeLessThanOrEqual(KNOWN_OVERFLOW['Income@375'].maxContentWidth);
+  });
 });

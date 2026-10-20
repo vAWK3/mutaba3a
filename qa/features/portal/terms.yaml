@@ -1,0 +1,88 @@
+app: portal
+area: terms
+title: Accepting the terms of service on the portal
+tier: core
+paths:
+  - src/hosted/pages/auth/TermsUpdatePage.tsx
+  - src/hosted/terms.ts
+features:
+  - id: setup-requires-accept
+    title: A setup link can't be finished without ticking "I agree to the terms of service"; the tick links the exact version and the save records it (MUT-324)
+    tier: core
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/pages/auth/SetupPage.tsx
+      - src/hosted/pages/auth/setupLink.ts
+    steps:
+      - Open a valid setup link, type a password and press Save and sign in without ticking the terms
+      - Tick "I agree to the terms of service" and save again
+    expect:
+      - Without the tick the page asks to agree and sends nothing
+      - The terms link opens the version being accepted, in the page language (?lang), in a new tab
+      - Saving sends that version, the page language and the web release that showed it (MUT-354), and the person lands signed in on Overview
+  - id: language-switch-clears-tick
+    title: Switching the setup page's language clears the terms tick, so the agreement follows a read in the language recorded (MUT-324 review pass 2)
+    tier: secondary
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/pages/auth/SetupPage.tsx
+    steps:
+      - Open a valid setup link in English, type a password and tick the terms
+      - Switch the page to Arabic
+      - Tick again and save
+    expect:
+      - The switch clears the tick and the terms link opens the Arabic text
+      - Saving records Arabic and lands signed in
+  - id: updated-terms-step
+    title: A signed-in person behind on the terms sees the Updated-terms step before the portal, agrees once, and is not asked again (MUT-324)
+    tier: core
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/session/AuthGate.tsx
+      - src/hosted/api/client.ts
+    steps:
+      - Open the portal signed in as someone who accepted an older version of the terms
+      - Press I agree
+      - Reload the page
+    expect:
+      - The step shows before any navigation, with Read the terms (that version, ?lang in the page language), I agree, Sign out and the support email
+      - Agreeing records the version in the page language with the web release that showed it (MUT-354), and opens Overview
+      - After reloading, the step doesn't come back
+  - id: changed-mid-step
+    title: If the terms change again while the Updated-terms step is open, I agree says so, the step names the new version, and the retry accepts it (MUT-324 review fix 4)
+    tier: secondary
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/pages/auth/TermsUpdatePage.tsx
+    steps:
+      - Open the portal behind on the terms
+      - A server release names newer terms while the step is open
+      - Press I agree, then I agree again
+    expect:
+      - The first I agree says the terms changed and the link names the new version
+      - The second records the new version and opens Overview
+  - id: step-sign-out
+    title: Sign out on the Updated-terms step signs out without accepting the terms (MUT-324)
+    tier: secondary
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/pages/auth/TermsUpdatePage.tsx
+      - src/hosted/session/useSignOut.ts
+    steps:
+      - Open the portal behind on the terms
+      - Press Sign out
+    expect:
+      - The session ends and the step is gone
+      - Nothing is accepted
+  - id: links
+    title: The account menu and the sign-in page link the terms of service (MUT-324)
+    tier: secondary
+    legacy: [MUT-324]
+    paths:
+      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/pages/auth/SignInPage.tsx
+    steps:
+      - Open the account menu while signed in
+      - Open the sign-in page
+    expect:
+      - Both link the terms of service in the page language, in a new tab

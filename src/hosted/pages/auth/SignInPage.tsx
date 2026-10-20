@@ -1,13 +1,15 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useT } from '../../../lib/i18n/core';
+import { useLanguage, useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import { api, ApiError, retryMinutes } from '../../api/client';
 import { LanguageSwitch, Wordmark } from '../../components/Brand';
 import { ME_KEY, meQuery } from '../../session/me';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
 import { safeNext } from '../../session/safeNext';
+import { setMode, useMode } from '../../session/mode';
+import { termsHref } from '../../terms';
 import { CheckingSession } from './BootScreens';
 import { AlertIcon, InfoIcon } from '../../components/Icons';
 
@@ -15,6 +17,10 @@ import { AlertIcon, InfoIcon } from '../../components/Icons';
  * `/sign-in` (hosted-portal.md §7.6, mut-43-auth-states.md S3–S10). Email and
  * password only: no signup, reset, invite or third-party door exists anywhere.
  * Every refusal the server can give for bad credentials reads the same.
+ *
+ * Since MUT-286 the page is also the session-expired choice (brief §2.6):
+ * sign in again, or continue on this device without an account. Never a
+ * silent switch.
  */
 
 export type ArrivalReason = 'expired' | 'signed_out';
@@ -44,9 +50,12 @@ function bannerFor(error: unknown): Banner {
 }
 
 export function SignInPage({ next, reason }: SignInPageProps) {
-  const session = useQuery(meQuery);
+  // "Already signed in?" is a question for the server only: signed out, /v1/me is the local person (MUT-286).
+  const remote = useMode() === 'remote';
+  const session = useQuery({ ...meQuery, enabled: remote });
   // After a sign-out the next person on this machine starts at `/`, not where the last one was.
   const target = reason === 'signed_out' ? undefined : next;
+  if (!remote) return <SignInForm next={target} reason={reason} />;
   if (session.isPending) return <CheckingSession />;
   if (session.data) return <Navigate to={safeNext(target)} replace />;
   return <SignInForm next={target} reason={reason} />;
@@ -54,6 +63,7 @@ export function SignInPage({ next, reason }: SignInPageProps) {
 
 function SignInForm({ next, reason }: SignInPageProps) {
   const t = useT();
+  const { language } = useLanguage();
   const tp = useTp();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -71,6 +81,9 @@ function SignInForm({ next, reason }: SignInPageProps) {
   const signIn = useMutation({
     mutationFn: api.signIn,
     onSuccess: (me) => {
+      setMode('remote');
+      // Nothing cached on this device (the local person, their figures) belongs to the account.
+      queryClient.removeQueries();
       queryClient.setQueryData(ME_KEY, me);
       // The account's language before the first signed-in frame (MUT-209)
       adoptAccountLocale(me.user.locale);
@@ -105,8 +118,15 @@ function SignInForm({ next, reason }: SignInPageProps) {
     signIn.mutate({ email: email.trim(), password });
   }
 
+  function continueOnThisDevice() {
+    setMode('local');
+    queryClient.clear();
+    void navigate({ to: '/', replace: true });
+  }
+
   const pending = signIn.isPending;
   const offerUrl = hostedOfferHref();
+  const termsLink = termsHref(language);
   const bannerId = `${ids}-banner`;
   const describedBy = (field: string, error?: FieldError) =>
     [error ? `${ids}-${field}-error` : null, banner ? bannerId : null].filter(Boolean).join(' ') || undefined;
@@ -209,6 +229,19 @@ function SignInForm({ next, reason }: SignInPageProps) {
             {t('hosted.auth.request.lead')} <a href={offerUrl}>{t('hosted.auth.request.link')}</a>
           </p>
         )}
+        {termsLink && (
+          <p className="hp-help">
+            <a href={termsLink} target="_blank" rel="noopener">
+              {t('hosted.terms.link')}
+            </a>
+          </p>
+        )}
+        <p className="hp-help">
+          {t('hosted.local.continueLead')}{' '}
+          <button type="button" className="hp-link-button press" onClick={continueOnThisDevice}>
+            {t('hosted.local.continue')}
+          </button>
+        </p>
       </main>
     </div>
   );

@@ -2,17 +2,12 @@
   "landing": {
     "skipToContent": "Skip to main content",
     "meta": {
-      "title": "Mutaba3a — Track your finances, securely"
+      "title": "Mutaba3a — Log it before you forget it"
     },
     "header": {
       "wordmark": "Mutaba3a · متابعة",
       "wordmarkShort": "Mutaba3a",
-      "signIn": "Sign in now",
-      "cta": {
-        "mac": "Download",
-        "windows": "Download",
-        "web": "Web app"
-      }
+      "signIn": "Sign in"
     },
     "langToggle": {
       "en": "EN",
@@ -20,17 +15,14 @@
       "label": "Switch language"
     },
     "hero": {
-      "headlineLine1": "Track your finances,",
-      "headlineLine2": "securely.",
-      "subheadline": "Every client, every job, every payment — what's owed and what's paid, in dollars, shekels and euros. Stored on your device. No account. No tracking.",
-      "ctaMac": "Download for Mac",
-      "ctaMacHint": "Apple Silicon (M1 or later)",
-      "ctaWindows": "Download for Windows",
-      "ctaWindowsHint": "Windows 10 or later",
-      "ctaWeb": "Open the web app",
-      "ctaWebHint": "Works offline after your first visit",
-      "altWeb": "Or use it in your browser",
-      "altDesktop": "Desktop apps for Mac and Windows"
+      "headlineLine1": "Log it before",
+      "headlineLine2": "you forget it.",
+      "subheadline": "Every client, every payment, every expense — captured in seconds on your phone, visible instantly in your hosted portal. Built for growing businesses that move fast.",
+      "ctaRequest": "Request an account",
+      "ctaSignIn": "Sign in",
+      "ctaIos": "iPhone, on the App Store",
+      "ctaAndroid": "Android, on Google Play",
+      "altNote": "Accounts are set up for your organization — there's no public sign-up."
     },
     "chapters": {
       "clients": {
@@ -59,60 +51,57 @@
       "today": "Today"
     },
     "privacy": {
-      "title": "On your device. No account. No tracking.",
-      "body": "Your data lives in your browser or on your computer, and nothing is sent anywhere unless you export it. Export everything, any time."
+      "title": "Your records, on every device you sign in on.",
+      "body": "A Mutaba3a account keeps everything behind your sign-in — the same numbers on your phone and in the portal, backed up every day and restorable to any point in the last week."
     },
     "getIt": {
       "title": "Get Mutaba3a",
-      "free": "Free during early access.",
-      "freeNote": "We'll tell you before that changes — and your data stays yours either way.",
-      "mac": "Download for Mac",
-      "macHint": "Apple Silicon",
-      "windows": "Download for Windows",
-      "windowsHint": "Windows 10 or later",
-      "windowsExe": "Prefer an .exe installer?",
-      "windowsUnavailable": "The Windows installer isn't in this release yet. Use the web app meanwhile.",
-      "webApp": "Open the web app",
-      "webAppHint": "Works offline after your first visit, on any device.",
-      "version": "Version {version}",
-      "releaseNotes": "Release notes",
-      "paid": {
-        "lead": "Unlike the apps above, a hosted account and the phone app come with a paid plan.",
-        "hint": "Your records on our servers, on every device you sign in on. Tell us what you need and we'll reply with an offer.",
-        "cta": "See hosted accounts"
-      }
+      "lead": "One account for your whole business — the portal in your browser, and the app on your phone.",
+      "requestCta": "Request an account",
+      "requestHint": "Tell us about your work and we'll reply within 2 working days with an offer.",
+      "signInCta": "Already have an account? Sign in",
+      "appsLabel": "Already set up? Get the app",
+      "appsIos": "iPhone, on the App Store",
+      "appsAndroid": "Android, on Google Play",
+      "note": "Accounts are set up for your organization — there's no public sign-up."
     },
     "phone": {
       "title": "Log it on your phone. See it all in your hosted account.",
       "body": "The phone app is for logging: an income or an expense in seconds, even with no signal. The portal, your hosted account in a browser, is where you see it all: every client, what they owe and what they’ve paid, on any computer.",
-      "hint": "Both come with a hosted account.",
-      "hintLink": "See hosted accounts",
+      "hint": "Both come with the same account.",
+      "hintLink": "Request an account",
       "storesLabel": "Phone apps",
       "store": {
         "ios": "iPhone, on the App Store",
         "android": "Android, on Google Play"
       },
-      "withAccount": "with your hosted account"
+      "withAccount": "with your account",
+      "devicesCaption": "Logged on the phone, there in the portal.",
+      "platform": {
+        "ios": "iPhone",
+        "android": "Android",
+        "comingSoon": "{platform} coming soon"
+      }
     },
     "malafat": {
       "title": "Run a law firm or accounting office on Malafat? Mutaba3a connects to it.",
-      "body": "Malafat keeps each firm's fee proposals and agreements, and what every client owes and has paid. With a hosted account linked to your firm's Malafat, a payment you log in the Mutaba3a phone app reaches Malafat under its client, unallocated, for the firm to apply to what's owed.",
+      "body": "Malafat keeps each firm's fee proposals and agreements, and what every client owes and has paid. Link your firm's Malafat to your account, and a payment you log in the Mutaba3a phone app reaches Malafat under its client, unallocated, for the firm to apply to what's owed.",
       "link": "See Malafat"
     },
     "faq": {
       "headline": "Questions",
-      "q1": "Is it free?",
-      "a1": "Yes — the web app and the desktop apps, during early access. If that changes, we'll announce the price first, and nothing you've entered will be locked away.",
+      "q1": "Is there a free plan?",
+      "a1": "No — accounts are set up for your organization, with pricing based on what you need. Request an account and we'll reply with an offer.",
       "q2": "Where is my data stored?",
-      "a2": "On your device. The web app keeps it in your browser's storage; the desktop app keeps it on your computer. There's no account and no copy on a server.",
+      "a2": "On Mutaba3a's servers, behind your sign-in — not only on one device. We back up every day and can restore your records to any point in the last 7 days.",
       "q3": "How do I back up, or move to another device?",
-      "a3": "Export a backup from Settings, then import it on the other device. Your data lives only on your device, so clearing your browser data or uninstalling the app deletes it — export a backup first.",
+      "a3": "Nothing to do — your account is the backup. Sign in on a new device and everything you've logged is already there.",
       "q4": "Can I track more than one business?",
       "a4": "Yes. Give each business its own profile, with its own clients and income, and switch between them in one click.",
       "q5": "Which currencies does it support?",
       "a5": "{currencies}. Each amount keeps the currency it was earned in, and totals are shown per currency — never converted behind your back.",
-      "q6": "Web app or desktop — and does it work offline, or on my phone?",
-      "a6": "It's the same app either way. The web app works offline after your first visit and runs on phones. The desktop apps for Mac with Apple Silicon and for Windows keep your data outside the browser and update themselves."
+      "q6": "Does it work offline, or on my phone?",
+      "a6": "The hosted portal works in any browser — sign in and your records are there. The phone app is built for offline capture: log an expense with no signal, and it uploads the moment you're back online."
     },
     "currency": {
       "USD": "US dollars",
@@ -128,37 +117,38 @@
     "footer": {
       "copyright": "Mutaba3a",
       "privacy": "Privacy",
+      "terms": "Terms",
       "buyMeACoffee": "Buy Me a Coffee",
       "kofi": "Ko-fi"
     },
     "privacyPolicy": {
       "title": "Privacy Policy",
-      "updated": "Last updated October 17, 2026",
-      "intro": "This policy covers Mutaba3a's apps for Mac, Windows, the browser, iPhone, and Android, and the hosted portal you sign in to in a browser. They handle your data in different ways, so we explain each one. It does not cover any other product.",
+      "updated": "Last updated October 19, 2026",
+      "intro": "This policy covers Mutaba3a's hosted web portal and its iPhone and Android apps. They all work the same way: you sign in with an account, and what you enter is saved to Mutaba3a's servers. It does not cover any other product.",
       "backLink": "Back to the homepage",
       "scope": {
         "title": "The short version",
-        "body": "On Mac, Windows, and in the browser, Mutaba3a keeps your business data on your own device. There's no account, and nothing you enter in the app is sent to us. Our website sends us what you type in the hosted-account request form, only if you fill it in and press Send, and it counts visits anonymously, as described under \"Anonymous usage counts\". The iPhone and Android apps work differently: you sign in with an account, and what you enter is saved to Mutaba3a's servers. None of our apps use ads or tracking. The free apps on Mac, Windows, and in the browser, which need no account, never send usage data, and we never sell your data."
-      },
-      "dataStorage": {
-        "title": "Mac, Windows, and the browser: your data stays on your device",
-        "body": "Everything you enter — clients, projects, income, expenses, and receipts — is stored locally: in your browser's storage when you use the web app, or in a local database file when you use the Mac or Windows app. We never see it, and it never leaves your device unless you choose to export it."
+        "body": "Mutaba3a is a hosted product. You sign in with an account, and what you enter — clients, projects, income, expenses, receipts — is saved to our servers so it's there on every device you sign in on. Our website sends us what you type in the account-request form, only if you fill it in and press Send, and it counts visits anonymously, as described under \"Anonymous usage counts\". None of our apps use ads or tracking, and we never sell your data."
       },
       "mobile": {
         "title": "iPhone and Android: your account and our servers",
         "body": "The mobile apps need an account, which your organization or we set up for you. There's no public sign-up. When you sign in, we keep your email address, display name, language, and which business profiles you can use. What you enter is stored on Mutaba3a's servers, and a copy is kept on your phone so the app works offline. Entries you make while offline are saved on your phone and uploaded once you're back online. Signing out ends your session on our servers. Entries that haven't uploaded yet stay on the phone and upload after you sign in again."
       },
+      "hostedAccounts": {
+        "title": "Where your records live",
+        "body": "Your account (the web portal, and the iPhone and Android apps when you're signed in) keeps your records on Mutaba3a's servers in Google Cloud's Tel Aviv region (me-west1). We back them up every day and keep each backup for 14 days, and we can restore your records to any moment in the last 7 days. When something breaks, an error report goes to Sentry in the EU with the content of your records removed. Usage counts go to PostHog in the EU only if you agree. Our team opens your records only when you ask us to help, to fix a fault, or when the law requires it. When you close your account, we delete it and its records after 30 days, including the record that you accepted our terms, and our backups clear 14 days later. Accounts are also covered by our terms of service."
+      },
       "whatYouEnter": {
         "title": "What you enter",
-        "body": "You control what goes into Mutaba3a: client names and contact details, projects, income records, optional expenses, notes, and any receipts you attach. On Mac, Windows, and in the browser, none of this is sent to us. In the mobile apps, it's sent to our servers so it can be stored with your account. On iPhone, you can share a photo or PDF of a receipt into Mutaba3a. It's uploaded to private cloud storage and attached to the expense."
+        "body": "You control what goes into Mutaba3a: client names and contact details, projects, income records, optional expenses, notes, and any receipts you attach. It's sent to our servers so it can be stored with your account. On iPhone, you can share a photo or PDF of a receipt into Mutaba3a. It's uploaded to private cloud storage and attached to the expense."
       },
       "network": {
         "title": "What reaches the network",
-        "body": "On Mac, Windows, and in the browser, the app makes two kinds of outbound requests, and neither includes anything you've entered: it asks a public exchange-rate service (Frankfurter) for currency conversion rates, and the download page checks GitHub for the latest release version. Separately, the website's hosted-account request form sends what you type in it to Netlify when you press Send. The website also sends the anonymous visit counts described under \"Anonymous usage counts\" to PostHog. The hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog. The mobile apps connect to Mutaba3a's servers, to the private storage that holds your receipts, and, if you turned on anonymous usage, to PostHog, always over encrypted connections."
+        "body": "The website's account-request form sends what you type in it to Netlify when you press Send. The website also sends the anonymous visit counts described under \"Anonymous usage counts\" to PostHog. The hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog. The mobile apps connect to Mutaba3a's servers, to the private storage that holds your receipts, and, if you turned on anonymous usage, to PostHog, always over encrypted connections."
       },
       "sharing": {
         "title": "Who else handles your data",
-        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Our website runs on Netlify, which receives the hosted-account request form and checks each request for spam with Akismet (made by Automattic). PostHog, hosted in the EU, processes the anonymous usage counts described under \"Anonymous usage counts\" for us. If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
+        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Our website runs on Netlify, which receives the account-request form and checks each request for spam with Akismet (made by Automattic). PostHog, hosted in the EU, processes the anonymous usage counts described under \"Anonymous usage counts\" for us. If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
       },
       "security": {
         "title": "Keeping the mobile apps secure",
@@ -166,19 +156,15 @@
       },
       "noTracking": {
         "title": "No ads, no tracking",
-        "body": "None of Mutaba3a's apps use advertising, crash reporting, or tracking that follows you across sites or apps, and the free apps on Mac, Windows, and in the browser use no analytics at all. The anonymous usage counts we do keep are described under \"Anonymous usage counts\". The Mac, Windows, and browser apps have no sign-up or login at all. Our servers keep standard technical logs (such as when a request arrived, its IP address, and whether it succeeded) so we can run the service. We don't use them to profile you."
+        "body": "None of Mutaba3a's apps use advertising, crash reporting, or tracking that follows you across sites or apps. The anonymous usage counts we do keep are described under \"Anonymous usage counts\". Our servers keep standard technical logs (such as when a request arrived, its IP address, and whether it succeeded) so we can run the service. We don't use them to profile you."
       },
       "usageAnalytics": {
         "title": "Anonymous usage counts",
-        "body": "The free apps on Mac, Windows, and in the browser never send usage data. Where we do count usage, we use PostHog, hosted in the EU. We never send amounts, names, notes, contact details, your location, or anything you type, and nothing we send is linked to your account. Our website counts page visits and which buttons are pressed, without cookies and without storing anything on your device. To tell visits apart for a single day, PostHog combines your IP address and browser details into a code that changes every day and keeps neither, so a visit can't be linked to you or to visits on other days. The hosted portal asks you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, it sends a short note when you turn it on (saying whether you did so from the prompt or the account menu), each time you open the portal, and each time you save an income or an expense. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the portal's version and its analytics library's version, its language, your browser's type, your device's operating system and its version, and whether it's a computer, tablet, or phone. Notes are sent under a random ID kept only in your browser, not linked to your account, and replaced when you sign out. If you turn it off from the account menu, we send one last note saying you turned it off, then stop and delete the random ID. The iPhone and Android apps ask you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, they send a short note each time you turn it on (saying whether you did so from the prompt or Settings), once more the first time you turn it on after signing in, and each time you add a client or save an income or an expense. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the app's version and its analytics library's version, its language, your phone's operating system and its version, and whether it's a phone or a tablet. Notes are sent under a random ID kept only on your phone, not linked to your account, and replaced when you sign out. If you turn it off in Settings, we send one last note saying you turned it off, then stop and delete the random ID. These counts are used only to understand which parts of Mutaba3a people use. They're never used for advertising, and no one but PostHog, which processes them for us, receives them."
-      },
-      "yourControl": {
-        "title": "Mac, Windows, and the browser: exporting and deleting your data",
-        "body": "You can export a full backup of your data as a file at any time, and import it back in. Deleting your data is just as direct: clearing the app's storage (or uninstalling the desktop app) removes it completely, because there's no copy anywhere else."
+        "body": "Where we count usage, we use PostHog, hosted in the EU. We never send amounts, names, notes, contact details, your location, or anything you type, and nothing we send is linked to your account. Our website counts page visits and which buttons are pressed, without cookies and without storing anything on your device. To tell visits apart for a single day, PostHog combines your IP address and browser details into a code that changes every day and keeps neither, so a visit can't be linked to you or to visits on other days. The hosted portal asks you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, it sends a short note when you turn it on (saying whether you did so from the prompt or the account menu), each time you open the portal, and each time you save an income or an expense. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the portal's version and its analytics library's version, its language, your browser's type, your device's operating system and its version, and whether it's a computer, tablet, or phone. Notes are sent under a random ID kept only in your browser, not linked to your account, and replaced when you sign out. If you turn it off from the account menu, we send one last note saying you turned it off, then stop and delete the random ID. The iPhone and Android apps ask you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, they send a short note each time you turn it on (saying whether you did so from the prompt or Settings), once more the first time you turn it on after signing in, and each time you add a client or save an income or an expense. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the app's version and its analytics library's version, its language, your phone's operating system and its version, and whether it's a phone or a tablet. Notes are sent under a random ID kept only on your phone, not linked to your account, and replaced when you sign out. If you turn it off in Settings, we send one last note saying you turned it off, then stop and delete the random ID. These counts are used only to understand which parts of Mutaba3a people use. They're never used for advertising, and no one but PostHog, which processes them for us, receives them."
       },
       "mobileDeletion": {
-        "title": "Deleting your account and mobile data",
-        "body": "You can delete individual entries in the mobile apps. To delete your whole account and everything stored with it, email info@malafat.app from your account's email address, and we'll do it within 30 days. Records in a business profile that belongs to your organization are your organization's, so we handle those together with them. Copies in our backups expire within 14 days of deletion. Signing out and uninstalling the app removes Mutaba3a's data from your phone."
+        "title": "Deleting your account and data",
+        "body": "You can delete individual entries in the mobile apps. To delete your whole account and everything stored with it, email info@malafat.app from your account's email address, and we'll do it within 30 days. Records in a business profile that belongs to your organization are your organization's, so we handle those together with them. Copies in our backups expire within 14 days of deletion. Signing out and uninstalling the mobile app removes Mutaba3a's data from your phone."
       },
       "children": {
         "title": "Children's privacy",
@@ -189,7 +175,7 @@
         "body": "If this policy changes, we'll update this page and the \"Last updated\" date above."
       },
       "hostedRequest": {
-        "title": "When you ask for a hosted account",
+        "title": "When you ask for an account",
         "body": "If you send the request form on our website, Netlify, which hosts the website, receives what you type: your name, your email and anything else you choose to add, plus the language the page was in and a random request number. Netlify also records technical details such as your IP address and browser, and checks the request for spam with Akismet. Netlify then emails it to us. We use it only to reply with an offer and, if you go ahead, to set up your account. We delete requests within 12 months; write to info@malafat.app and we'll delete yours sooner."
       },
       "contact": {
@@ -197,71 +183,14 @@
         "body": "Questions about this policy can be sent to info@malafat.app. Mutaba3a is made by Barmajiyat Ltd."
       }
     },
-    "hostedOffer": {
-      "meta": {
-        "title": "Hosted accounts"
-      },
-      "hero": {
-        "title": "Your records, on every device.",
-        "sub": "The free app keeps everything on this one device. Hosted keeps it on our servers, behind your sign-in, so your phone and your laptop show the same numbers.",
-        "cta": "Request an account",
-        "noPrice": "No price list. Tell us what you need and we'll send you an offer."
-      },
-      "devices": {
-        "caption": "Logged on the phone, there on the laptop."
-      },
-      "compare": {
-        "title": "Free or hosted",
-        "lead": "Same app, same screens. What changes is where your records live.",
-        "colTopic": "What changes",
-        "colFree": "Free app",
-        "colHosted": "Hosted",
-        "none": "Not included",
-        "rows": {
-          "where": {
-            "label": "Where your records live",
-            "free": "In this browser or on this computer",
-            "hosted": "On our servers, behind your sign-in"
-          },
-          "devices": {
-            "label": "Devices",
-            "free": "This one device",
-            "hosted": "Every device you sign in on"
-          },
-          "phone": {
-            "label": "Phone app",
-            "hosted": "An app for logging income and expenses in seconds"
-          },
-          "lost": {
-            "label": "If your laptop is lost",
-            "free": "Your records go with it, unless you exported them",
-            "hosted": "Sign in anywhere and they're there"
-          },
-          "malafat": {
-            "label": "Malafat",
-            "hosted": "Connected to Malafat, for lawyers and accountants"
-          },
-          "account": {
-            "label": "Account",
-            "free": "None",
-            "hosted": "We set one up for you"
-          },
-          "price": {
-            "label": "Price",
-            "free": "Free",
-            "hosted": "An offer for what you need"
-          }
-        }
-      },
-      "platform": {
-        "ios": "iPhone",
-        "android": "Android",
-        "comingSoon": "{platform} coming soon"
-      },
-      "band": {
-        "title": "Already using the free app? Your records come with you.",
-        "body": "We'll move them into your hosted account with you, by hand. Nothing to type again."
-      },
+    "terms": {
+      "title": "Terms of service",
+      "missingTitle": "This version of the terms doesn't exist",
+      "missingBody": "Check the address, or read",
+      "currentLink": "the current terms",
+      "otherVersions": "Other versions"
+    },
+    "requestAccount": {
       "form": {
         "title": "Request an account",
         "lead": "Tell us about your work. We'll reply by email within 2 working days with an offer.",
@@ -293,13 +222,14 @@
         "errTooLong": "Use {max} characters or fewer.",
         "errorAlert": "Couldn't send. Check your connection and try again. Your answers are still here.",
         "notice": "We use these details only to reply with an offer.",
-        "privacyLink": "Privacy policy"
+        "privacyLink": "Privacy policy",
+        "termsLink": "Terms of service"
       },
       "success": {
         "title": "Request sent.",
         "body": "Thanks, {name}. We'll reply to {email} within 2 working days with an offer.",
         "edit": "Wrong email? Edit and send again",
-        "freeApp": "Keep using the free app meanwhile"
+        "backHome": "Back to the homepage"
       }
     }
   }

@@ -17,4 +17,23 @@ export default defineConfig([
       '@typescript-eslint/consistent-type-imports': 'error',
     },
   },
+  {
+    // ADR-097 (MUT-286): the portal's local backend imports server modules, never the reverse — the server
+    // stays deployable on its own. These are the app's top-level src/ directories; none exists under server/src.
+    files: ['src/**/*.ts'],
+    ignores: ['src/__tests__/platform-shim.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '(^|/)src/(assets|components|content|db|demo|hooks|hosted|lib|pages|services|styles|test|types|utils)(/|$)',
+              message: 'The server never imports the web app (ADR-097).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);

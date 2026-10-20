@@ -10,6 +10,7 @@ import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
 import { USD_PEGS } from './fx-rates.js';
 import { IMPORT_MAX_ROWS } from './import/plan.js';
 import { SUPPORTED_CURRENCIES } from './money.js';
+import { CLIENT_RELEASE_MAX, CLIENT_RELEASE_PATTERN, TERMS_VERSION_PATTERN } from './legal.js';
 import { ITEM_STATUSES } from './agreements/status.js';
 import { MAX_BILLING_DAY } from './retainers/schedule.js';
 import { PRICING_BASES, VAT_TREATMENTS } from './vat.js';
@@ -46,7 +47,7 @@ export const OrganizationSchema = z
     ownerUserId: z.string().uuid().nullable(),
     /** MUT-182: PERSONAL or BUSINESS on an owned profile; null on an operator-provisioned organization. */
     profileType: z.enum(['PERSONAL', 'BUSINESS']).nullable(),
-    /** MUT-300 (ADR-099): the firm switch. Additive since 1.37.0-mut300. */
+    /** MUT-300 (ADR-099): the firm switch. Additive since 1.41.0-mut300. */
     firm: z
       .object({
         /** Firm features are on from this instant; null = off. */
@@ -244,7 +245,7 @@ export const OrganizationDetailSchema = z
     organization: OrganizationSchema,
     apiKeys: z.array(ApiKeySummarySchema),
     integrations: z.array(IntegrationSchema),
-    /** MUT-300: everyone with access, oldest membership first, with their firm role. Additive since 1.37.0-mut300. */
+    /** MUT-300: everyone with access, oldest membership first, with their firm role. Additive since 1.41.0-mut300. */
     members: z.array(OrganizationMemberSchema),
   })
   .openapi('OrganizationDetail');
@@ -269,6 +270,20 @@ export const AuditListSchema = z.object({ events: z.array(AuditEventSchema) }).o
 
 export const UserLocaleSchema = z.enum(['en', 'ar']).openapi('UserLocale');
 
+/** MUT-324: a terms version, named by its ISO date (server/src/legal.ts). */
+export const TermsVersionSchema = z.string().regex(TERMS_VERSION_PATTERN, 'must be a terms version (YYYY-MM-DD)').openapi('TermsVersion', { example: '2026-10-19' });
+
+/**
+ * MUT-354: the client release that showed the terms (`web-v<x>` from the portal), stored as sent with the acceptance.
+ * Optional: a client from before the field still accepts.
+ */
+const ClientReleaseSchema = z
+  .string()
+  .min(1)
+  .max(CLIENT_RELEASE_MAX)
+  .regex(CLIENT_RELEASE_PATTERN, 'must be printable ASCII with no spaces')
+  .openapi({ description: 'The client release that showed the terms, e.g. the portal’s `web-v<x>` tag (MUT-354). Stored as sent.', example: 'web-v0.1.16' });
+
 /** Never includes the password hash. */
 export const UserSummarySchema = z
   .object({
@@ -287,7 +302,7 @@ export const UserSummarySchema = z
 export const MembershipSchema = z
   .object({
     organizationId: z.string().uuid(),
-    /** MUT-300: read only while the organization's firm features are on. Additive since 1.37.0-mut300. */
+    /** MUT-300: read only while the organization's firm features are on. Additive since 1.41.0-mut300. */
     role: MembershipRoleSchema,
     createdAt: z.string().datetime(),
   })
@@ -413,11 +428,11 @@ export const HostedProfileSchema = z
     type: z.enum(['PERSONAL', 'BUSINESS']).nullable(),
     /** MUT-182: send as If-Match on PATCH /v1/profiles/{id}. */
     version: z.number().int().min(1),
-    /** MUT-300 (ADR-099): true while an operator has firm features on for this profile, owned or not. Additive since 1.37.0-mut300. */
+    /** MUT-300 (ADR-099): true while an operator has firm features on for this profile, owned or not. Additive since 1.41.0-mut300. */
     firm: z.boolean(),
-    /** MUT-300: the caller's role while `firm` is true; null otherwise. Additive since 1.37.0-mut300. */
+    /** MUT-300: the caller's role while `firm` is true; null otherwise. Additive since 1.41.0-mut300. */
     role: MembershipRoleSchema.nullable(),
-    /** MUT-300: the owner's pending request for firm features; null when none is pending, and always null for anyone but the owner. Additive since 1.37.0-mut300. */
+    /** MUT-300: the owner's pending request for firm features; null when none is pending, and always null for anyone but the owner. Additive since 1.41.0-mut300. */
     firmRequestedAt: z.string().datetime().nullable(),
   })
   .openapi('HostedProfile');
@@ -450,6 +465,35 @@ export const MalafatSuggestionsChangeSchema = z
   // The generated spec says what the refinements enforce, so a client built from it sends nothing the server refuses
   .openapi('MalafatSuggestionsChange', { minProperties: 1 });
 
+/** MUT-324 T1: GET /admin/v1/terms-acceptance — every user and the terms version they last accepted. */
+export const TermsReportSchema = z
+  .object({
+    current: TermsVersionSchema,
+    users: z.array(
+      z.object({
+        id: z.string().uuid(),
+        email: z.string(),
+        status: z.enum(['ACTIVE', 'DISABLED']),
+        latestVersion: TermsVersionSchema.nullable(),
+        /** MUT-354: the client release that showed the latest accepted version; null when none was recorded. */
+        clientRelease: z.string().nullable(),
+        /** The latest accepted version is the current one or newer. */
+        accepted: z.boolean(),
+      }),
+    ),
+  })
+  .openapi('TermsReport');
+
+/** MUT-324: whether the signed-in person has accepted the current terms (latest accepted version ≥ current). */
+const TERMS_STATUS_SHAPE = { version: TermsVersionSchema, accepted: z.boolean() };
+export const TermsStatusSchema = z.object(TERMS_STATUS_SHAPE).openapi('TermsStatus');
+
+/** MUT-324: POST /v1/me/terms-acceptance — the version the person agreed to, the language they read it in, and (MUT-354) the client release. */
+export const TermsAcceptanceRequestSchema = z
+  .object({ version: TermsVersionSchema, locale: UserLocaleSchema, clientRelease: ClientReleaseSchema.optional() })
+  .strict()
+  .openapi('TermsAcceptanceRequest');
+
 export const MeSchema = z
   .object({
     user: z.object({
@@ -475,6 +519,13 @@ export const MeSchema = z
           'Every currency code this server accepts, in its supported order. Clients offer only the codes they also know and ignore the rest. Servers older than MUT-280 omit the field.',
         example: [...SUPPORTED_CURRENCIES],
       }),
+    /**
+     * MUT-324: the current terms and whether this person accepted them. Null where no terms apply (the portal's
+     * signed-out mode). Servers older than MUT-324 omit the field; clients treat that like null.
+     */
+    // Inline, not the TermsStatus ref: the generator writes a ref's null as `nullable`, which OpenAPI 3.1 ignores,
+    // so the portal's generated type lost the null (review pass 2). Inline, it is `type: [object, null]`.
+    terms: z.object(TERMS_STATUS_SHAPE).nullable(),
   })
   .openapi('Me');
 
@@ -567,12 +618,28 @@ export const SetupLinkCheckResponseSchema = z
       locale: UserLocaleSchema,
       purpose: SetupLinkPurposeSchema,
       expiresAt: z.string().datetime(),
+      /** MUT-324: the terms version the setup page shows and sends back as `acceptedTermsVersion`. */
+      termsVersion: TermsVersionSchema,
     }),
     z.object({ state: z.enum(['expired', 'used', 'superseded', 'invalid']) }),
   ])
   .openapi('SetupLinkCheckResponse');
 
-export const SetupLinkRedeemRequestSchema = z.object({ token: SetupTokenSchema, password: NewPasswordSchema }).openapi('SetupLinkRedeemRequest');
+export const SetupLinkRedeemRequestSchema = z
+  .object({
+    token: SetupTokenSchema,
+    password: NewPasswordSchema,
+    /**
+     * MUT-324: the terms version the person ticked "I agree" to (the check's `termsVersion`). Optional in the schema
+     * so a page opened before the terms existed gets 409 TERMS_VERSION_STALE, not a password-policy 422.
+     */
+    acceptedTermsVersion: TermsVersionSchema.optional(),
+    /** The language of the terms text the person read; the account's language when omitted. */
+    termsLocale: UserLocaleSchema.optional(),
+    /** MUT-354: the client release that showed the setup page. */
+    clientRelease: ClientReleaseSchema.optional(),
+  })
+  .openapi('SetupLinkRedeemRequest');
 
 /** The portal signs in with this email and the password just set, through POST /v1/sessions. */
 export const SetupLinkRedeemResponseSchema = z.object({ email: z.string() }).openapi('SetupLinkRedeemResponse');
@@ -965,6 +1032,18 @@ export const FxRatesResponseSchema = z
     rates: z.array(FxRateSchema).openapi({ description: 'Every supported currency, base included (rate 1), in the supported-currency order' }),
   })
   .openapi('FxRatesResponse');
+
+/** MUT-287 (MUT-285 D3): the raw ECB snapshot behind /v1/fx-rates, for the portal's signed-out mode to run the same crossRates in the page. */
+export const PublicFxRatesResponseSchema = z
+  .object({
+    rateDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).openapi({ description: 'The ECB reference date (its last business day), YYYY-MM-DD', example: '2026-10-15' }),
+    perEur: z
+      .object({ USD: z.number().positive(), ILS: z.number().positive() })
+      .openapi({ description: 'Units of each currency per 1 EUR, as the ECB publishes them. Every other supported currency derives from these and the USD pegs.' }),
+    fetchedAt: z.string().datetime().openapi({ description: 'When this server instance read the rates from the provider' }),
+    source: z.enum(['live', 'stale']).openapi({ description: 'live = inside the cache window; stale = the last refresh failed and these are the last good rates' }),
+  })
+  .openapi('PublicFxRatesResponse');
 
 export const VatRateSchema = z
   .object({ id: uuid, rateBasisPoints: z.number().int().min(0).max(10000), effectiveFrom: IsoDateSchema, createdAt: z.string().datetime() })

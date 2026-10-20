@@ -5,10 +5,12 @@ import { useT } from '../../lib/i18n/core';
 import { Button } from '../../components/ui/Button';
 import { ApiError } from '../api/client';
 import { useAdoptAccountLocale } from '../i18n/HostedLanguageProvider';
-import { BootUnreachable, CheckingSession } from '../pages/auth/BootScreens';
+import { BootUnreachable, CheckingSession, LocalUnavailable, ReloadToContinue } from '../pages/auth/BootScreens';
+import { TermsUpdatePage } from '../pages/auth/TermsUpdatePage';
 import { HostedShell } from '../shell/HostedShell';
 import { useProfileDrawers } from '../shell/ProfileDrawers';
 import { MeProvider, ProfileProvider, meQuery, useMe } from './me';
+import { useIsLocalMode } from './mode';
 import { useSignOut } from './useSignOut';
 
 /**
@@ -18,14 +20,19 @@ import { useSignOut } from './useSignOut';
  */
 export function AuthGate() {
   const me = useQuery(meQuery);
+  const navigate = useNavigate();
   const adoptAccountLocale = useAdoptAccountLocale();
-  const locale = me.data?.user.locale;
+  // Signed out there is no account to take a language from: a choice here, else Arabic (MUT-286 AC1)
+  const local = useIsLocalMode();
+  const locale = local ? undefined : me.data?.user.locale;
 
   // Before paint, so the signed-in view never shows a frame in the wrong language (MUT-209)
   useLayoutEffect(() => {
     if (locale) adoptAccountLocale(locale);
   }, [locale, adoptAccountLocale]);
 
+  // MUT-324: someone behind on the terms reads and accepts them before anything else; null (signed out) never asks
+  if (me.data?.terms?.accepted === false) return <TermsUpdatePage version={me.data.terms.version} />;
   if (me.data) {
     return (
       <MeProvider me={me.data}>
@@ -35,6 +42,12 @@ export function AuthGate() {
   }
   if (me.isPending) return <CheckingSession />;
   if (me.error instanceof ApiError && me.error.status === 401) return <RedirectToSignIn />;
+  if (me.error instanceof ApiError && (me.error.code === 'LOCAL_FORMAT_TOO_NEW' || me.error.code === 'LOCAL_SAVE_FAILED')) {
+    return <ReloadToContinue stop={me.error.code} />;
+  }
+  if (me.error instanceof ApiError && me.error.code === 'LOCAL_UNAVAILABLE') {
+    return <LocalUnavailable onRetry={() => void me.refetch()} onSignIn={() => void navigate({ to: '/sign-in' })} />;
+  }
   return <BootUnreachable onRetry={() => void me.refetch()} retrying={me.isFetching} />;
 }
 

@@ -36,7 +36,7 @@ features:
     expect:
       - '"Couldn''t sign out. Check your connection and try again." shows and the page stays'
       - Sign-in reads "You've signed out." at /sign-in?reason=signed_out
-      - The payments page asks to sign in first and shows no figure
+      - The payments page opens this device's own app (MUT-286), with no figure of the account and no request to the server
       - After a sign-out the next sign-in lands on the portal's home, not the old page
   - id: other-tab
     title: Signing out in one tab signs the other tab out at once, leaving no figure on screen

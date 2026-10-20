@@ -84,6 +84,17 @@ vi.mock('../../../lib/i18n', () => ({
   getLocale: () => 'en-US',
 }));
 
+// MUT-179: counted strings go through tp(); route them through the mocked t() above
+vi.mock('../../../lib/i18n/plural', async () => {
+  const { useT } = await import('../../../lib/i18n');
+  return {
+    useTp: () => {
+      const t = useT();
+      return (key: string, count: number, vars?: Record<string, string | number>) => t(key, { ...vars, count });
+    },
+  };
+});
+
 // SearchInput imports useT from core directly (MUT-43: the hosted bundle must
 // never carry the app's full translation dictionary), so it isn't covered by
 // the barrel mock above.
@@ -1226,6 +1237,16 @@ describe('IncomePage', () => {
       expect(headers()).toEqual(['Date', 'What', 'Client', 'Status', 'Amount', 'Actions']);
       for (const row of screen.getAllByRole('row').slice(1)) {
         expect(within(row).getAllByRole('cell')).toHaveLength(6);
+      }
+    });
+
+    it('sets the compact date in the tabular figure face, so the column is one width on any day (MUT-250)', async () => {
+      media.compact = true;
+      await renderEntries();
+
+      for (const row of screen.getAllByRole('row').slice(1)) {
+        const date = within(row).getAllByRole('cell')[0].querySelector('.num');
+        expect(date?.textContent).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
       }
     });
 

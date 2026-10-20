@@ -1234,8 +1234,8 @@ td {
 
 /* Amount with a currency code in front (income + payment drawers). Amounts
    stay left-to-right inside RTL, so "USD | 1,200" reads the same in Arabic.
-   The selectors out-rank theme.css's ":lang(ar) { direction: rtl }", which
-   would otherwise beat the markup's dir="ltr". */
+   The income and payment drawers also say dir="ltr"; the recurring drawer's
+   group relies on this rule alone. */
 div.input-with-prefix {
   display: flex;
   align-items: stretch;
@@ -2318,6 +2318,9 @@ div.input-with-prefix {
   right: 0;
   bottom: 0;
   width: var(--drawer-width);
+  /* Never wider than the screen: on a phone the drawer fills it rather than
+     hanging off its anchored edge, in either direction (MUT-357). */
+  max-width: 100%;
   background: var(--surface);
   box-shadow: var(--drawer-shadow);
   z-index: 201;
@@ -3125,6 +3128,12 @@ a.project-tag:hover {
   font-weight: var(--weight-medium);
 }
 
+.settings-label-icon {
+  margin-inline-end: var(--space-2);
+  vertical-align: -3px;
+  color: var(--text-secondary);
+}
+
 .settings-description {
   font-size: var(--text-label);
   color: var(--muted);
@@ -3434,6 +3443,14 @@ a.project-tag:hover {
 /* Currency amounts in inputs should stay LTR */
 [dir="rtl"] .amount-input input {
   direction: ltr;
+  text-align: right;
+}
+
+/* A dir="ltr" field in the Arabic UI (an amount, an email, a password, a date, the
+   portal's timezone select) is typed left to right but keeps its place on the right,
+   as it sat before MUT-109 made the attribute work (brief D3). :where() keeps this at
+   0,1,1, under the income and payment drawers' left-aligned currency groups (0,2,0). */
+:where([dir="rtl"]) :is(input, select)[dir="ltr"] {
   text-align: right;
 }
 

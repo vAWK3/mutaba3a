@@ -5,6 +5,7 @@ import { firmRequestState } from '../data/profileRules';
 import { useRequestFirm } from '../data/profileQueries';
 import { formatInstant } from '../format/dates';
 import { useMe } from '../session/me';
+import { useIsLocalMode } from '../session/mode';
 import { ProfileBanner } from './ProfileBanner';
 
 /**
@@ -13,14 +14,16 @@ import { ProfileBanner } from './ProfileBanner';
  * copy the pane opened with, so Requested shows the moment the server has it
  * and after any reload. No modal: one button, then one line. The request
  * doesn't bump the profile's version (eng review O3), so the pane's Save
- * keeps working.
+ * keeps working. Never signed out on this device (MUT-286): no operator
+ * would ever see a request saved there.
  */
 export function FirmRequestSection({ profileId }: { profileId: string }) {
   const { t, language } = useLanguage();
   const headingId = useId();
   const profile = useMe().profiles.find((p) => p.id === profileId);
   const request = useRequestFirm(profileId);
-  if (!profile) return null;
+  const local = useIsLocalMode();
+  if (!profile || local) return null;
   const state = firmRequestState(profile);
   if (state === 'hidden') return null;
 

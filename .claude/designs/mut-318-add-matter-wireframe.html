@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MUT-318 Add Matter Wireframe</title>
+<style>
+
+/* Brand v2 primitives copied from src/styles/brand/mutaba3a-theme.css (MUT-102), mapped the way src/styles/theme.css maps them. */
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Regular.otf");font-weight:400;font-display:swap}
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Medium.otf");font-weight:500;font-display:swap}
+@font-face{font-family:"Thmanyah Sans";src:url("../../src/assets/fonts/thmanyahsans-Bold.otf");font-weight:700;font-display:swap}
+@font-face{font-family:"Thmanyah Serif Display";src:url("../../src/assets/fonts/thmanyah-serif-display-bold.otf");font-weight:700;font-display:swap}
+:root{
+  --m-canvas:oklch(0.975 0.014 80);--m-surface:oklch(0.993 0.008 80);--m-line:oklch(0.92 0.015 300);--m-field-bg:oklch(0.965 0.012 300);
+  --m-ink:oklch(0.33 0.05 300);--m-ink2:oklch(0.442 0.043 298.7);--m-primary:oklch(0.55 0.14 295);--m-primary-hover:oklch(0.46 0.142 293.8);
+  --m-on-primary:oklch(0.98 0.012 80);--m-focus:oklch(0.6 0.13 295);--m-lavender:oklch(0.9 0.06 295);--m-lavender-ink:oklch(0.401 0.114 294.5);
+  --m-mint:oklch(0.9 0.06 165);--m-mint-ink:oklch(0.387 0.076 170.2);--m-rose:oklch(0.9 0.06 10);--m-rose-ink:oklch(0.398 0.103 14.8);
+  --m-peach:oklch(0.9 0.06 55);--m-peach-ink:oklch(0.4 0.104 50.8);--m-butter:oklch(0.93 0.07 95);--m-butter-ink:oklch(0.419 0.083 74.8);
+  --m-shadow-tint:oklch(0.45 0.08 300);
+  --font-body:"Thmanyah Sans",system-ui,sans-serif;--font-display:"Thmanyah Serif Display",serif;--font-num:"IBM Plex Mono","Thmanyah Sans",ui-monospace,monospace;
+  --text-micro:.6875rem;--text-label:.8125rem;--text-body:1rem;--text-headline:1.25rem;--text-title:2rem;
+  --space-1:.25rem;--space-2:.5rem;--space-3:.75rem;--space-4:1rem;--space-5:1.25rem;--space-6:1.5rem;--space-8:2rem;
+  --radius-xs:4px;--radius-sm:12px;--radius-md:14px;--radius-lg:18px;--radius-pill:999px;
+  --bg:var(--m-canvas);--surface:var(--m-surface);--surface-2:var(--m-field-bg);--text:var(--m-ink);--muted:var(--m-ink2);--border:var(--m-line);
+  --error:var(--m-rose-ink);--error-subtle:var(--m-rose);--btn-fill:var(--m-primary-hover);
+  --shadow-drawer:0 1px 2px color-mix(in oklch,var(--m-shadow-tint) 6%,transparent),0 12px 40px color-mix(in oklch,var(--m-shadow-tint) 12%,transparent);
+}
+[data-theme="dark"]{
+  --m-canvas:oklch(0.24 0.035 300);--m-surface:oklch(0.29 0.04 300);--m-line:oklch(0.4 0.04 300);--m-field-bg:oklch(0.34 0.045 300);
+  --m-ink:oklch(0.95 0.015 80);--m-ink2:oklch(0.78 0.03 300);--m-primary:oklch(0.78 0.11 295);--m-primary-hover:oklch(0.82 0.1 295);
+  --m-on-primary:oklch(0.27 0.06 300);--m-focus:oklch(0.75 0.12 295);--m-lavender:oklch(0.38 0.07 295);--m-lavender-ink:oklch(0.88 0.08 295);
+  --m-mint:oklch(0.38 0.07 165);--m-mint-ink:oklch(0.88 0.08 165);--m-rose:oklch(0.38 0.07 10);--m-rose-ink:oklch(0.88 0.08 10);
+  --m-peach:oklch(0.38 0.07 55);--m-peach-ink:oklch(0.88 0.08 55);--m-butter:oklch(0.4 0.06 85);--m-butter-ink:oklch(0.9 0.09 95);
+  --m-shadow-tint:oklch(0.15 0.03 300);
+}
+
+:root{--bg-subtle:color-mix(in oklab,var(--m-line) 20%,var(--m-canvas));--surface-hover:color-mix(in oklab,var(--m-field-bg) 60%,var(--m-surface));
+  --shadow-3:0 4px 12px color-mix(in oklab,var(--m-shadow-tint) 8%,transparent),0 20px 48px color-mix(in oklab,var(--m-shadow-tint) 12%,transparent)}
+[data-theme="dark"]{--shadow-3:0 4px 12px color-mix(in oklab,var(--m-shadow-tint) 40%,transparent),0 20px 48px color-mix(in oklab,var(--m-shadow-tint) 45%,transparent)}
+*{box-sizing:border-box}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:var(--text-body);line-height:1.5}
+::selection{background:var(--m-lavender);color:var(--m-lavender-ink)}
+.wrap{max-width:1240px;margin:0 auto;padding:var(--space-6) var(--space-4) var(--space-8)}
+.toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;padding:var(--space-3) var(--space-4);background:var(--surface);border-bottom:1px solid var(--border)}
+.toolbar strong{margin-inline-end:auto;font-size:var(--text-label)}
+.toolbar button{font:inherit;font-size:var(--text-label);padding:var(--space-1) var(--space-3);border:1px solid var(--border);border-radius:var(--radius-pill);background:var(--surface-2);color:var(--text);cursor:pointer}
+h1.doc{font-family:var(--font-display);font-size:var(--text-title);font-weight:700;margin:var(--space-4) 0 var(--space-1)}
+.lede{color:var(--muted);max-width:72ch;margin:0 0 var(--space-6)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:var(--space-5);align-items:start}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-5);min-height:320px}
+.card h2{font-family:var(--font-display);font-size:var(--text-headline);font-weight:700;margin:0 0 var(--space-1)}
+.note{color:var(--muted);font-size:var(--text-label);margin:0 0 var(--space-4)}
+.tag{display:inline-block;font-size:var(--text-micro);font-weight:500;padding:0 var(--space-2);border-radius:var(--radius-pill);background:var(--m-lavender);color:var(--m-lavender-ink);margin-inline-start:var(--space-1)}
+.fg{margin-bottom:var(--space-4)}
+.fg label{display:block;font-size:var(--text-label);font-weight:500;margin-bottom:var(--space-1)}
+.input{width:100%;font:inherit;font-size:var(--text-body);color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);min-height:44px}
+.input.focus{box-shadow:inset 0 0 0 2px var(--m-focus)}
+.input:disabled{opacity:.6}
+.input.filled{background:var(--surface-2)}
+@keyframes cascade-flash{0%{background-color:transparent}30%{background-color:color-mix(in oklab,var(--m-primary) 8%,transparent)}100%{background-color:transparent}}
+.input.cascaded{animation:cascade-flash 1.2s ease-out infinite}
+@media (prefers-reduced-motion:reduce){.input.cascaded{animation:none}}
+/* EntityTypeahead.css values */
+.ta{position:relative}
+.dd{position:relative;margin-top:var(--space-1);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-3);max-height:200px;overflow-y:auto}
+.opt{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);width:100%;padding:var(--space-3);border:0;background:transparent;text-align:start;font:inherit;font-size:var(--text-label);color:var(--text)}
+.opt.hl{background:var(--surface-hover)}
+.opt.new{border-top:1px solid var(--border);background:var(--bg-subtle)}
+.opt.new.hl{background:var(--surface-hover)}
+.cl{color:var(--muted);font-weight:500}
+.nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sec{font-size:var(--text-label);color:var(--muted);padding:2px var(--space-2);background:var(--bg-subtle);border-radius:var(--radius-xs);white-space:nowrap}
+.hint{font-size:var(--text-label);color:var(--muted);margin-top:var(--space-1)}
+.toast{display:flex;gap:var(--space-2);align-items:center;font-size:var(--text-label);background:var(--m-rose);color:var(--m-rose-ink);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-4);margin-top:var(--space-3)}
+code{font-size:.75rem}
+</style>
+</head>
+<body>
+<div class="toolbar" role="toolbar" aria-label="Wireframe controls">
+  <strong>MUT-318 · Add matter from the matter picker · after design review</strong>
+  <button type="button" id="theme">Toggle dark</button>
+  <button type="button" id="dir">Toggle RTL (العربية)</button>
+</div>
+<main class="wrap">
+  <h1 class="doc" data-en="The matter picker, signed in or out" data-ar="منتقي القضية، مع تسجيل الدخول أو بدونه">The matter picker, signed in or out</h1>
+  <p class="lede" data-en="Each panel is one state of the matter field in the New income or Record expense drawer. Values are EntityTypeahead.css and theme.css tokens. Lavender tags name the review decision." data-ar="كل لوحة حالة واحدة لحقل القضية في درج «دخل جديد» أو «تسجيل مصروف». القيم من رموز EntityTypeahead.css وtheme.css. الوسوم البنفسجية تشير إلى قرار المراجعة.">Each panel is one state of the matter field in the New income or Record expense drawer. Values are EntityTypeahead.css and theme.css tokens. Lavender tags name the review decision.</p>
+
+  <div class="grid">
+    <section class="card" aria-label="Add row">
+      <h2><span data-en="1 · Add matter" data-ar="١ · إضافة قضية">1 · Add matter</span><span class="tag">canCreate</span></h2>
+      <p class="note" data-en="Client chosen, typed name no matter of this client has. The Add row comes last, divided, like Add client." data-ar="العميل محدد، والاسم المكتوب لا يطابق أي قضية لهذا العميل. صف الإضافة في الأسفل مفصولاً، مثل «إضافة عميل».">Client chosen, typed name no matter of this client has. The Add row comes last, divided, like Add client.</p>
+      <div class="fg"><label data-en="Client" data-ar="العميل">Client</label><input class="input" value="Ramallah Bakery" data-en-value="Ramallah Bakery" data-ar-value="مخبز رام الله" readonly></div>
+      <div class="fg"><label><span data-en="Matter (optional)" data-ar="القضية (اختياري)">Matter (optional)</span><span class="tag">4A</span></label>
+        <div class="ta"><input class="input focus" value="Lease dispute" data-en-value="Lease dispute" data-ar-value="قضية الإيجار" readonly>
+          <div class="dd" role="listbox">
+            <div class="opt" role="option"><span class="nm" data-en="Lease renewal 2025" data-ar="تجديد الإيجار ٢٠٢٥">Lease renewal 2025</span></div>
+            <div class="opt new hl" role="option" aria-selected="true"><span class="cl" data-en="Add matter:" data-ar="إضافة قضية:">Add matter:</span><span class="nm" data-en="Lease dispute" data-ar="قضية الإيجار">Lease dispute</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="No client hint">
+      <h2><span data-en="2 · No client yet" data-ar="٢ · لا عميل بعد">2 · No client yet</span><span class="tag">5A</span></h2>
+      <p class="note" data-en="No client chosen, typed name matches no matter: no list, no Add row. The hint is the input's aria-describedby and sits in a polite live region, so it is read on focus and announced when it appears." data-ar="لا عميل محدد، والاسم لا يطابق أي قضية: لا قائمة ولا صف إضافة. التلميح مرتبط بالحقل عبر aria-describedby وفي منطقة إعلان مهذبة.">No client chosen, typed name matches no matter: no list, no Add row. The hint is the input's aria-describedby and sits in a polite live region, so it is read on focus and announced when it appears.</p>
+      <div class="fg"><label data-en="Client" data-ar="العميل">Client</label><input class="input" value="" placeholder="Choose a client" data-en-ph="Choose a client" data-ar-ph="اختر عميلاً" readonly></div>
+      <div class="fg"><label data-en="Matter (optional)" data-ar="القضية (اختياري)">Matter (optional)</label>
+        <input class="input focus" value="Lease dispute" data-en-value="Lease dispute" data-ar-value="قضية الإيجار" aria-describedby="h2" readonly>
+        <p class="hint" id="h2" aria-live="polite" data-en="Choose a client first to add a matter." data-ar="اختر عميلاً أولاً لإضافة قضية.">Choose a client first to add a matter.</p>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Client chips">
+      <h2><span data-en="3 · Whose matter" data-ar="٣ · قضية من؟">3 · Whose matter</span><span class="tag">1A</span></h2>
+      <p class="note" data-en="No client chosen, field focused: every matter, each with its client as the muted secondary chip. Once a client is chosen the list is that client's and the chips go." data-ar="لا عميل محدد والحقل مركّز: كل القضايا، ولكل منها اسم عميلها في الشارة الثانوية. عند اختيار عميل تصبح القائمة لعميله وتختفي الشارات.">No client chosen, field focused: every matter, each with its client as the muted secondary chip. Once a client is chosen the list is that client's and the chips go.</p>
+      <div class="fg"><label data-en="Matter (optional)" data-ar="القضية (اختياري)">Matter (optional)</label>
+        <div class="ta"><input class="input focus" value="" placeholder="Choose a matter" data-en-ph="Choose a matter" data-ar-ph="اختر قضية" readonly>
+          <div class="dd" role="listbox">
+            <div class="opt hl" role="option"><span class="nm" data-en="Retainer" data-ar="أتعاب شهرية">Retainer</span><span class="sec" data-en="Ramallah Bakery" data-ar="مخبز رام الله">Ramallah Bakery</span></div>
+            <div class="opt" role="option"><span class="nm" data-en="Retainer" data-ar="أتعاب شهرية">Retainer</span><span class="sec" data-en="Nablus Textiles" data-ar="نسيج نابلس">Nablus Textiles</span></div>
+            <div class="opt" role="option"><span class="nm" data-en="Menu design" data-ar="تصميم القائمة">Menu design</span><span class="sec" data-en="Ramallah Bakery" data-ar="مخبز رام الله">Ramallah Bakery</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Cascade">
+      <h2><span data-en="4 · Matter fills the client" data-ar="٤ · القضية تملأ العميل">4 · Matter fills the client</span><span class="tag">2A</span></h2>
+      <p class="note" data-en="Picking “Retainer · Nablus Textiles” with no client fills Client (cascade-flash, A3; a static tint under reduced motion). Changing Client later to another one empties Matter silently." data-ar="اختيار «أتعاب شهرية · نسيج نابلس» دون عميل يملأ حقل العميل. تغيير العميل لاحقاً إلى آخر يفرّغ القضية بصمت.">Picking “Retainer · Nablus Textiles” with no client fills Client (the local app's cascade-flash, none under reduced motion). Changing Client later to another one empties Matter silently.</p>
+      <div class="fg"><label data-en="Client" data-ar="العميل">Client</label><input class="input cascaded" value="Nablus Textiles" data-en-value="Nablus Textiles" data-ar-value="نسيج نابلس" readonly></div>
+      <div class="fg"><label><span data-en="Matter (optional)" data-ar="القضية (اختياري)">Matter (optional)</span><span class="tag">3A</span></label><input class="input" value="Retainer" data-en-value="Retainer" data-ar-value="أتعاب شهرية" readonly></div>
+    </section>
+
+    <section class="card" aria-label="Saving">
+      <h2 data-en="5 · Adding" data-ar="٥ · جارٍ الإضافة">5 · Adding</h2>
+      <p class="note" data-en="While POST /v1/projects runs the field is readOnly and aria-busy, focus kept (A1); Enter waits, then submits. On success the new matter is picked and the border pulses --success once (A2); no toast." data-ar="أثناء الإضافة يكون الحقل للقراءة فقط وaria-busy مع بقاء التركيز. عند النجاح تُختار القضية ويومض الإطار مرة واحدة.">While POST /v1/projects runs the field is disabled and aria-busy; Enter waits for it. On success the new matter is picked, no toast (as Add client).</p>
+      <div class="fg"><label data-en="Matter (optional)" data-ar="القضية (اختياري)">Matter (optional)</label><input class="input" value="Lease dispute" data-en-value="Lease dispute" data-ar-value="قضية الإيجار" readonly aria-busy="true" style="box-shadow:inset 0 0 0 2px var(--m-focus);border-color:var(--m-mint-ink)"></div>
+    </section>
+
+    <section class="card" aria-label="Failed">
+      <h2 data-en="6 · Couldn't add" data-ar="٦ · تعذّرت الإضافة">6 · Couldn't add</h2>
+      <p class="note" data-en="Refused or offline: the name stays in the box, unpicked (the field value is cleared so the form can't save under an earlier matter), and the alert toast says so." data-ar="عند الرفض أو انقطاع الاتصال: يبقى الاسم في الحقل دون اختيار، ويظهر تنبيه.">Refused or offline: the name stays in the box, unpicked (the field value is cleared so the form can't save under an earlier matter), and the alert toast says so.</p>
+      <div class="fg"><label data-en="Matter (optional)" data-ar="القضية (اختياري)">Matter (optional)</label><input class="input" value="Lease dispute" data-en-value="Lease dispute" data-ar-value="قضية الإيجار" readonly></div>
+      <div class="toast" role="alert" data-en="Couldn't add the matter. Try again." data-ar="تعذّرت إضافة القضية. حاول مجدداً.">Couldn't add the matter. Try again.</div>
+    </section>
+  </div>
+</main>
+<script>
+(function(){
+  var root=document.documentElement;
+  document.getElementById('theme').addEventListener('click',function(){root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';});
+  document.getElementById('dir').addEventListener('click',function(){
+    var rtl=root.dir!=='rtl';root.dir=rtl?'rtl':'ltr';root.lang=rtl?'ar':'en';
+    document.querySelectorAll('[data-en]').forEach(function(el){el.textContent=rtl?el.dataset.ar:el.dataset.en;});
+    document.querySelectorAll('[data-en-value]').forEach(function(el){el.value=rtl?el.dataset.arValue:el.dataset.enValue;});
+    document.querySelectorAll('[data-en-ph]').forEach(function(el){el.placeholder=rtl?el.dataset.arPh:el.dataset.enPh;});
+  });
+})();
+</script>
+</body>
+</html>

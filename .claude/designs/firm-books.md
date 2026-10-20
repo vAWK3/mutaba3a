@@ -374,7 +374,7 @@ Candidates: Amazon SES, Postmark, Resend. **MUT-306's planning picks one**, with
 
 ### 12.1 v1 — full contracts
 
-**MUT-300 · firm flag and request** (as built, API `1.37.0-mut300`; amended by the MUT-300 eng review D3–D6 and plan C2/C5/C6)
+**MUT-300 · firm flag and request** (as built, API `1.41.0-mut300`; amended by the MUT-300 eng review D3–D6 and plan C2/C5/C6)
 
 | Method & path | Principal | Request | Success | Errors |
 |---|---|---|---|---|

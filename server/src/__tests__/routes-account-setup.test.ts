@@ -4,6 +4,7 @@ import { createApp } from '../app.js';
 import { generateDeviceSessionToken, sessionDigest, SIGN_IN_POLICY } from '../auth/sessions.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from '../auth/users.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
+import { CURRENT_TERMS } from '../legal.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 import { setupTokenOf } from './helpers/provision.js';
 
@@ -66,19 +67,26 @@ async function provision(h: Harness, extra: Record<string, unknown> = {}) {
 
 const check = (h: Harness, token: string, headers: Record<string, string> = SAME_ORIGIN) => h.app.request('/v1/account-setup/check', json({ token }, headers));
 const redeem = (h: Harness, token: string, password = NEW_PASSWORD, headers: Record<string, string> = SAME_ORIGIN) =>
-  h.app.request('/v1/account-setup', json({ token, password }, headers));
+  h.app.request('/v1/account-setup', json({ token, password, acceptedTermsVersion: CURRENT_TERMS.version }, headers));
 const signIn = (h: Harness, email: string, password: string) => h.app.request('/v1/sessions', json({ email, password }, SAME_ORIGIN));
 const deviceSignIn = (h: Harness, email: string, password: string) => h.app.request('/v1/device-sessions', json({ email, password }));
 const resetLink = async (h: Harness, userId: string, body: Record<string, unknown> = {}) =>
   setupTokenOf((await read(await h.app.request(`/admin/v1/users/${userId}/setup-link`, json(body, admin)))).setupLink.url);
 
 describe('POST /v1/account-setup/check (MUT-235)', () => {
-  it('a valid link names the email, locale, purpose and expiry, and nothing else', async () => {
+  it('a valid link names the email, locale, purpose, expiry and terms version, and nothing else', async () => {
     const h = harness();
     const p = await provision(h);
     const res = await check(h, p.token);
     expect(res.status).toBe(200);
-    expect(await read(res)).toEqual({ state: 'valid', email: p.email, locale: 'ar', purpose: 'SETUP', expiresAt: '2026-10-23T09:00:00.000Z' });
+    expect(await read(res)).toEqual({
+      state: 'valid',
+      email: p.email,
+      locale: 'ar',
+      purpose: 'SETUP',
+      expiresAt: '2026-10-23T09:00:00.000Z',
+      termsVersion: CURRENT_TERMS.version,
+    });
   });
 
   it('says expired, used, superseded or invalid — and only that', async () => {

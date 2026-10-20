@@ -141,6 +141,19 @@ Every money rule runs on both stores (memory and `test:db`).
 | `scripts/__tests__/firm-copy-guard.test.ts` | unit | banned compliance phrases in every `hosted.firm.*` / `hosted.profiles.firm.*` string, ar and en |
 | `qa/specs/portal/profiles.spec.ts` `@portal.profiles.firm-request`, `shell.spec.ts` `@portal.shell.firm-enabled-banner` | release-QA | the two user flows, RTL |
 
+## Signed-in records export (MUT-325, added 2026-10-20)
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit | `server/src/records-file/__tests__/codec.test.ts`, `export.test.ts` | streamed JSON equals the one-shot encoder at any page size; every field once and in order; re-homing (one person, no foreign email, no integrations or documents, firms owned, extra columns dropped); page bound |
+| Route | `server/src/__tests__/routes-records-export.test.ts` | auth (member only, header required, key refused), audit, gzip, lazy posting first, paging, mid-stream abort; receipt route bytes/headers/404s/503 |
+| Schema | `server/src/repositories/__tests__/prisma-records-export-columns.test.ts` | every selected column exists in the Prisma schema (no DB) |
+| Postgres (`test:db`) | `store-records-export-parity.test.ts` | Prisma export reads every field and the inbox exactly as the memory store does; key cursors over 2-row pages; receipt lookup |
+| Parity (AC1) | `src/hosted/local/__tests__/hosted-export-parity.test.ts` | hosted export → local restore: every portal read equal field for field (personal + Malafat-fed firm), inbox rows, receipt bytes; documented re-homing differences |
+| Scale (AC2) | `hosted-export-large.test.ts` | 10k entries + 200 receipts through the real routes; progress to 200/200; cancel partway |
+| Component | `HostedYourDataDrawer.test.tsx`, `local-mode.test.tsx` | menu/URL, checklist, progress, cancel, missing files, too-new reload, Arabic RTL; Restore confirm names an account export |
+| Release-QA | `qa/specs/portal/your-data.spec.ts` | `portal.your-data.download-signed-in`, `portal.your-data.download-cancel` |
+
 ## Current Test Coverage
 
 ### Landing header and motion (MUT-77, added 2026-10-14)
@@ -185,6 +198,31 @@ Every money rule runs on both stores (memory and `test:db`).
 | `src/pages/clients/__tests__/ClientDetailPage.test.tsx` | Component | Client Payments row on its own day west of UTC |
 | `src/db/__tests__/paymentRecords.test.ts` › update | Integration (Dexie) | Moving a payment's date re-dates a fully paid entry (stays paid, same received); a part-paid entry stays part-paid |
 | `qa/specs/web/record-payment.spec.ts` | E2E (release-qa) | `@web.record-payment.edit-payment-date` (row menu → date focused → Enter updates, never a second payment) and `-rtl` |
+
+### Compact date width (MUT-250, added 2026-10-19)
+| File | Type | Covers |
+|------|------|--------|
+| `src/components/ui/__tests__/CompactDate.test.tsx` (new) | Component | `dd/mm/yyyy` inside `.num` (the tabular figure face) |
+| `src/pages/income/__tests__/IncomePage.test.tsx` › compact date | Component | Every compact row's date cell holds a `.num` `dd/mm/yyyy` |
+| QA `@web.brand.date-width` (new) | Browser (Playwright, mocked clock) | Income at 375px in Arabic is one width on 11/11, 08/08 and 01/10 |
+| QA `@web.brand.layout` | Browser | `Income@375` / `Income drawer@375` caps re-measured to 735px; all 8 cells pass |
+
+**Run (2026-10-19, preview build, Node 22):** a throwaway probe measured 9 dates across the year: 735px on each (it was 718–736px before). Brand, Expenses, Conversions and Income specs: 39/39.
+
+### Plural counts (MUT-179, added 2026-10-19)
+| File | Type | Covers |
+|------|------|--------|
+| `src/lib/i18n/__tests__/pluralCountKeys.test.ts` (new) | Unit | All 18 counted strings are plural objects (en one/other, ar six forms, `{count}` in every numeric form, `{total}`/`{version}` kept); the 14 retired Singular/Plural/One keys are gone; `orphanedRecords.groups` stays; `tp` gives "1 project", "Due in 1d", "متأخر 3 أيام", "متأخر 11 يومًا", "الأقدم 227 يومًا", and words 1 and 2 in Arabic |
+| `src/components/home/__tests__/HomeAttentionRow.plurals.test.tsx` (new) | Component (real dictionaries) | "Due in 1d" in EN; 3 and 11 days overdue in the AR few/many forms |
+| `src/pages/landing/__tests__/landingMockPlurals.test.tsx` (new) | Component (real dictionaries) | AR Clients mock 3/227/158 days and profile badge 34 days in their forms; no "{n} يوم" past 2; EN stays "oldest 3d" |
+| `src/components/expenses/__tests__/RecurringAttentionList.test.tsx` › MUT-179 | Component | AR lateness −3, −11, +3 in few/many forms (/expenses) |
+| `src/components/ui/__tests__/RecurringOccurrenceCard.test.tsx` (new, qa-reconcile) | Component (real dictionaries) | Due/overdue in EN one form and AR few/many/two; these branches are unreachable from the ledger today (it passes only projected occurrences) |
+| `src/pages/projects/__tests__/ProjectsPage.searchEmpty.test.tsx` › summary strip | Component (real dictionaries) | One project reads "1 project" |
+| `YourDataSection`, `OrphanedRecordsBanner`, `OrphanedRecordsDrawer`, `ClientsPage`, `ClientDetailPage`, `ProjectDetailPage`, `IncomePage` tests | Updated | Pick the CLDR form via `pluralKey` instead of the Singular/Plural keys; the "label: {count}" Arabic workaround test now asserts few ≠ many; i18n mocks also mock `plural` |
+| QA `@web.home.attention-day-plurals`, `@web.clients.count-plurals`, `@web.landing.arabic-day-counts` | Browser (Playwright) | EN and AR on Home, Clients and the landing page with real day counts |
+| QA `@web.businesses.shared-client`, `@web.data.older-backup` | Updated | They asserted the old wording ("D1 entries", "1 uploaded receipt files", "1 receipts exported"); now the singular |
+
+**Run (2026-10-19, preview build, Node 22):** full web QA suite, 133/135 passed. The 2 failures are `@web.brand.layout` at 375px in Arabic, light and dark: Income measures 727px against the 726px `KNOWN_OVERFLOW` cap. That is MUT-250, already measured on main on 2026-10-16. What's New needs `MUTABA3A_APP_VERSION` set to a version with notes (0.1.10 used here).
 
 ### Craft-fix bundle (MUT-92, added 2026-10-14)
 | File | Type | Covers |
@@ -693,6 +731,17 @@ test.describe('Transaction Management', () => {
 | Server anchor | `server/src/repositories/__tests__/store-contract-{expenses,conversions}.ts` (+1 each, memory + Prisma), `server/src/__tests__/routes-{expenses,conversions}.test.ts` (+2 each) | inclusive start with a same-day tie, exclusive continuation, filters apply, 422 with cursor, 404 unknown/deleted/other org, 422 non-uuid |
 | MUT-43 (AC3) | `src/hosted/session/__tests__/auth-states.test.tsx` | unchanged byte-for-byte, green |
 | Browser | throwaway Playwright on preview builds | toggle 0.96 with translate kept; app Button 0.96; AR hidden save (1.6s refetch) → notice → Show → anchored, tinted, rail on the right |
+
+## MUT-109 — direction from `<html dir>` and the `dir` attribute (added 2026-10-19)
+
+| Area | Tests | Proves |
+|---|---|---|
+| CSS guard | `src/styles/__tests__/direction.test.ts` | no rule in any `src/**/*.css` declares `direction` on a `:lang()` selector |
+| Site ratchet | same file | every `dir="ltr|rtl|auto"` in `src/**/*.tsx` matches `DIR_SITES` (45 on 2026-10-19, by file and count); no `dir={…}`; the seven amount files wrap the amount in a plain `<bdi>` |
+| Amount markup | `OwedNowSummary`, `format` (DecimalAmount), `ClientsPage`, `ClientDetailPage`, `HomeAttentionRow.plurals`, `OrphanedRecordsDrawer` tests | the amount is a `<bdi>` with no `dir`; the Arabic string starts with RLM |
+| Field markup | `ConversionDrawer`, `PartialPaymentDrawer`, `RecordPaymentDrawer` tests (+ existing pins in `IncomeDrawer`, `ExpenseFormFields`, hosted `ExpenseDrawer`, `ConversionDrawer`, `IncomeCaptureDrawer`, `SetupPage`, `HostedOfferPage`) | amount and LTR inputs carry `dir="ltr"` |
+| Browser | `qa/specs/web/direction.spec.ts` (`@web.direction.*`), `qa/specs/portal/direction.spec.ts` (`@portal.direction.*`) | Arabic amounts read `$US 1,300` / `₪ 1,500.00` on screen with no `dir`; the FX formula, emails, payment and invoice numbers compute `ltr`; LTR fields sit on the right in Arabic; English unchanged; the Arabic business name is `rtl` in English. Red on main, green on the branch (preview builds) |
+| Before/after | throwaway capture on preview builds of main and the branch | 0 changed pixels on the income and payment drawers, the local and portal expense forms, portal sign-in, Home, Clients and the client profile (a 3 px Add-button edge also differs between two runs of main) |
 
 ## Critical Test Scenarios
 
@@ -3102,3 +3151,185 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` › PATCHes on edit | the currency select is disabled on edit (MUT-272 review; MUT-277 enables it) |
 | `server/src/__tests__/routes-expense-groups.test.ts` › MUT-272 | a moved member sums under JOD only, day buckets add up to the total, `?currency=JOD` lists it and `?currency=ILS` doesn't |
 | `server/src/repositories/__tests__/store-contract-expenses.ts` › MUT-272 | both stores write `currency` with `amountMinor` |
+
+## MUT-286 — Use the portal without an account (2026-10-19, ADR-097, ADR-100)
+
+| Test | Covers |
+|---|---|
+| existing server suite, unmodified | `createApiShell` / `routes/me.ts` / `PORTAL_ROUTES` extraction changed no behavior |
+| `server/src/__tests__/portal-routes-coverage.test.ts` | every one of the portal's 49 client calls is answered by `PORTAL_ROUTES` |
+| `server/src/repositories/__tests__/store-contract-snapshot.test.ts` | snapshot → fresh store → restore answers identically |
+| `store-contract-expenses.ts` › unlinked + customerId | memory lets `unlinked` win, like Prisma |
+| `server/src/__tests__/platform-shim.test.ts` (8) | SHA-256, HMAC, base64url/hex/utf8 and the three cursor formats byte-identical to Node across 10,000 seeded inputs |
+| `src/hosted/local/__tests__/createLocalApp.test.ts` (3) | `/v1/me` answers for the minted person; no token → 401; a fresh session every boot, same person, old token dead after restore |
+| `src/hosted/local/__tests__/format-fingerprint.test.ts` (3) | organization/customer/receivable shapes pinned (D1; the other 24 maps are TD-171) |
+| `src/hosted/local/__tests__/locks.test.ts` (3) | two and three tabs racing a write: the later one sees stale, reloads, and no write is lost |
+| `src/hosted/local/__tests__/transport.test.ts` (5) | a 2xx write persists and bumps stateVersion; a read and a refused write write nothing; a restored store answers with what was saved; a newer stored format refuses the request and is never written over |
+| `src/hosted/local/__tests__/parity.test.ts` (2) | AC3: the same records through `createApp` and `createLocalApp` give identical answers (ids normalized, per-side ticking clock); the script hits a part-paid OVERDUE receivable and a 422 |
+| `src/hosted/local/__tests__/no-network.test.ts` | AC4: a whole signed-out session through the portal's `api` with `fetch` booby-trapped: never called |
+| `src/hosted/local/__tests__/boot.test.ts` (9) | first boot answers /v1/me; same person and profile across reloads with nothing entered; records across reloads (AC2); two empty tabs become one person; a write in one tab is in the other's next answer; restore replaces and persists; a tab whose person was replaced re-mints; a non-records file changes nothing; a newer stored format refuses to boot and retries next time |
+| `src/hosted/local/__tests__/recordsFile.test.ts` (6) | Maps/Dates/bigints round-trip; restored store answers; record count; refuses non-JSON, missing maps, newer format |
+| `src/hosted/local/__tests__/createLocalApp.test.ts` › console | a route failure goes to `console.error` |
+| `src/hosted/session/__tests__/mode.test.ts` (5) | no hint → probe; stored modes; junk hint ignored; blocked storage keeps the mode for the page; readers re-render |
+| `src/hosted/api/__tests__/client-mode.test.ts` (11) | remote → fetch only; local → backend with a page-origin Request; sign-in/setup always remote; probe 401 → local saved, 200 → remote saved, 503/offline → nothing saved; a local 401 never ends a session; newer format → `LOCAL_FORMAT_TOO_NEW`; a failed boot retries |
+| `src/hosted/session/__tests__/local-mode.test.tsx` (21) | through the real router: first visit (one request, Arabic, pre-existing session kept); account menu, nav, switcher, Malafat hidden (AC5); cross-tab refresh; reload screen; sign-in "Continue on this device", expired choice, sign-in → remote + local cache dropped, sign-out → local; Your data download, restore lands on the restored profile, cancel, refusals, absent signed in |
+| `scripts/__tests__/hosted-lint.test.ts` › local mode | portal ⊄ server/src; no static `@mut/local-backend`; allowlist admits route list + store, refuses sessions routes, app.ts, prisma; portal bans hold in the local backend |
+| `scripts/__tests__/check-bundles.test.ts` › local backend stays lazy | IndexedDB allowed lazily, flagged in a statically loaded file |
+| `src/hosted/components/__tests__/ClientPicker.test.tsx` › Add «name» (4) | offered only for a name no client has (any case) and only with `canCreate`; picking POSTs `{ name }` with Idempotency-Key and profile header and picks the new client; a refusal keeps the name unpicked with a toast; directory and summaries refetch |
+| `incomeAffordances.test.ts` › canAddClient (3) | owned personal/business yes; Malafat-fed and writer-null firm no |
+| `ExpenseDrawer.test.tsx` › client label | the Client label names the picker; no Add row without `canAddClient` |
+| `no-network.test.ts` › client + owed + part paid | createCustomer → Owed 900 → settle 400 → PARTIALLY_PAID, 500.00 outstanding, no fetch |
+| `portal-routes-coverage.test.ts` | 50 portal calls (MUT-286 adds `POST /v1/customers`) |
+| Review fixes (ADR-100 §9) | `boot.test.ts`: Download includes another tab's save; a refused save rejects and stops the page, reload shows disk; a refused Restore keeps memory; local profiles to the cap of 6. `createLocalApp.test.ts`: clock moved back still signs in. `client-mode.test.ts`: LOCAL_SAVE_FAILED / LOCAL_FORMAT_TOO_NEW call the stop handler; LOCAL_UNAVAILABLE for a backend that can't run; server failures stay NETWORK. `local-mode.test.tsx`: another tab's sign-in / continue-on-device reopens this tab; sign-in page left alone; refused save replaces the route with the reload screen; blocked-storage screen with Sign in; slow earlier Restore pick; post-apply hiccup still says restored. `ClientPicker.test.tsx`: failed add clears the earlier client. `check-bundles.test.ts`: IndexedDB outside the `mut-local` chunk flagged |
+| Release-QA `qa/specs/portal/local-mode.spec.ts` (`@portal.local.*`) | first-visit, received-persists, owed-part-paid (Add client in the picker), two-tabs, download-restore, session-expired — all pass on a preview build |
+| Release-QA `qa/specs/portal/income.spec.ts` › `@portal.income.add-client` | signed in: Add client creates and picks the client, the income goes to it; no Add row on a Malafat-fed profile |
+
+## MUT-318 — Add a matter from the portal's matter picker (2026-10-19, ADR-100 decision 10)
+
+| Test | Covers |
+|---|---|
+| `src/hosted/components/__tests__/ProjectPicker.test.tsx` (12) | Add row only with `canCreate` + a client + an unknown name (any case; another client's name is new here); POST `{customerId, name, currency}` with Idempotency-Key and profile header, then picked; no client → no Add row, polite hint in the input's `aria-describedby`; no hint without `canCreate`; client chips only with no client chosen; refused create keeps the name unpicked, value `''`, toast; enabled + read-only + focused while saving; directory and summaries refetch |
+| `src/components/ui/__tests__/EntityTypeahead.test.tsx` › saving and cues (4) | read-only not disabled while a pick saves, focus kept (A1); `create-success` after a resolved create, not after a refused one (A2); cascade flash on a new `flashSignal`, never on mount (A3); `describedBy` → `aria-describedby` (5A) |
+| `src/lib/forms/__tests__/useClientProjectCascade.test.tsx` (moved, +3) | hosted `ownerOf` fills the client and reports the fill; a client change clears a matter of another client without a fill; a matter not yet in the list is left alone |
+| `ClientPicker.test.tsx` › enabled while adding | A1 for the client picker |
+| `ClientTypeahead.test.tsx` › flash | the local client field flashes on a new `flashSignal` |
+| `IncomeCaptureDrawer.test.tsx` › matters (4) | Add matter in the drawer currency, then Owed carries `projectId`; picking a matter with no client fills it and Owed saves; clearing the client clears its matter; no Add row on a Malafat-fed profile |
+| `ExpenseDrawer.test.tsx` › add matter | Matter label names the field; hint with no client; Add matter in the expense currency once a client is picked |
+| `no-network.test.ts` › client → matter → owed | createCustomer → createProject → Owed on the matter: receivable names both, no fetch |
+| `portal-routes-coverage.test.ts` | 51 portal calls (MUT-318 adds `POST /v1/projects`) |
+| Release-QA `@portal.local.matter-owed` | signed out: Add client, Add matter by Enter (focus kept), save, reload: listed under both; only the first-visit request |
+| Release-QA `@portal.income.add-matter` | signed in: hint with no client; Add matter POST body + headers; income names it; nothing offered on a Malafat-fed profile |
+| Release-QA `@portal.income.matter-fills-client` | client chips; picking Client 2's Retainer fills Client 2; switching to Client 1 empties Matter |
+| Reconcile additions (2026-10-19) | `EntityTypeahead.test.tsx`: no second pick while one saves (list shut on ArrowDown/refocus); cascade flash comes off after its span and replays. `useClientProjectCascade.test.tsx`: `onAutoFill` with the default owner, not when the client already owns it. `IncomeCaptureDrawer.test.tsx`: Save held while a matter is added; Enter held still saves once it lands; CURRENCY_MISMATCH under Matter; Malafat no-Add check now waits for the open list (was vacuous). `ExpenseDrawer.test.tsx`: Save held while a matter is added; picking a matter fills the client, changing the client empties it. `incomeApiErrors.test.ts`: CURRENCY_MISMATCH → `matterCurrency` with the matter's currency. Release-QA `@portal.income.add-matter`: the Malafat step waits for the open list before asserting no Add row |
+
+## MUT-356 — /privacy honours ?lang, like /terms (2026-10-20)
+
+- **Landing:** `src/content/legal/__tests__/language.test.ts` (`legalLanguageOf`: en, ar, among other params; absent, empty, unknown, upper case and other names ignored). `PrivacyPolicyPage.test.tsx` `?lang` (English text on an Arabic site and the reverse, `lang`/`dir` on the text, `<html dir>` and the stored language unchanged; an unknown value falls back to the page language).
+- **Release-QA:** `@web.legal.privacy-linked-language` (new); `@web.legal.links` now reads the hosted-accounts heading from the translation files (it had gone stale when the heading became "Where your records live").
+- **Phone (mutaba3a-flutter):** `legal_links_test.dart` (`privacyUri` `?lang=en|ar`); `ios.settings.terms-link` taps Privacy in English and in Arabic.
+
+## MUT-354 — The client release on each terms acceptance (2026-10-20)
+
+- **Server:**
+  - `server/src/__tests__/terms.test.ts` "the client release on each acceptance":
+    - the redeem and the accept route record it; the audit and the admin report show it, with the release of the latest version;
+    - an old client that sends none succeeds and records null;
+    - a repeat keeps the first release;
+    - an empty, 65-character, spaced, control-character or non-ASCII value gets 422 on both routes, with nothing written;
+    - a 64-character value and a phone-style `phone-1.4.0+52` are accepted;
+    - the OpenAPI document states the optional field with its limits.
+  - `store-contract-account-setup.ts` (memory + Postgres): the release is kept on a repeat; `listLatestTermsVersions` returns `latestClientRelease`; a redeem records it, or null.
+  - `users-cli.test.ts`: `terms` prints the release, or `-`.
+  - The migration has no drift against `schema.prisma` (`prisma migrate diff --exit-code` on a fresh database).
+- **Portal:** `src/hosted/__tests__/terms.test.ts` (`TERMS_CLIENT_RELEASE` = `web-v0.0.0` under tests); the `SetupPage.test.tsx` and `TermsUpdatePage.test.tsx` request bodies carry it.
+- **Release-QA:** the bodies in `@portal.terms.setup-requires-accept`, `.language-switch-clears-tick`, `.updated-terms-step`, `.changed-mid-step` and `@portal.setup.set-password` carry `clientRelease` matching `web-v<x.y.z>` (`QA_CLIENT_RELEASE`). 11/11 `@portal.terms.*` + `@portal.setup.*` pass on a hosted preview build (Node 22, 2026-10-20).
+
+## MUT-324 — Terms of service, accepted at setup (2026-10-19, ADR-102)
+
+- **Server:**
+  - `server/src/__tests__/terms.test.ts`: the version in the check; a missing or stale version is refused before hashing; a dead link says why first; version, locale, sha256 and surface are recorded; audit on owned profiles only; a reset after acceptance; `Me.terms` on every sign-in surface; a bump asks again; null signed out; the accept route is idempotent, phone surface, stale, 401.
+  - `store-contract-account-setup.ts` (memory + Postgres): idempotent accept, the latest by version, FK, redeem + reset keep one row, and a refused redeem records nothing.
+  - `check-terms-live.test.ts`, the `users-cli` terms report, route-security lists, the store-guard operator list.
+- **Landing:** `TermsPage.test.tsx` (EN/AR, versions, unknown version, English prevails); `PrivacyPolicyPage.test.tsx` (hosted-accounts section, footer link); `HostedOfferPage.test.tsx` (terms link); `termsManifest.test.ts`; `scripts/__tests__/legal-terms.test.ts` (server pin = files = landing latest; deploy-check origin = Vite's).
+- **Portal:**
+  - `SetupPage.test.tsx`: the tick is required, sends the version and the language, links the exact version, terms changed. The existing setup behaviours are kept (R5); `save()` ticks.
+  - `setupLink.test.ts` (termsChanged), `TermsUpdatePage.test.tsx`, `UserMenu.terms.test.tsx`.
+- **Release-QA:** `qa/features/web/legal.yaml` (terms-page, links, terms-manifest) and `qa/features/portal/terms.yaml` (setup-requires-accept, updated-terms-step, links); specs in `qa/specs/{web/legal,portal/terms}.spec.ts`. `setup.spec.ts` now ticks the terms.
+- **Review fixes (2026-10-19, `fix/mut-324-review-fixes`):**
+  - Fix 1, the link language: `src/hosted/__tests__/terms.test.ts` (termsHref `?lang`); `TermsPage.test.tsx` `?lang` (wins over the page language, lang/dir on the text, never stored, unknown language ignored, kept on the current-terms link); the portal link hrefs in `SetupPage`/`TermsUpdatePage`/`UserMenu.terms` tests, both languages.
+  - Fixes 2–3, release order: `legal-terms.test.ts` (release-full is web then server; the server preflight runs `terms:check-live` before bump-version; deploy.sh checks only when run alone). `check-terms-live.test.ts` `checkTermsLive` (HTTP status, fetch error, not JSON, missing version).
+  - Fix 4: `TermsUpdatePage.test.tsx` (a 409 refetches Me, and the retry sends the new version; Sign out on the step).
+  - Fix 5: `legal-terms.test.ts` privacy promise = terraform (14 backups, 7 PITR).
+  - Should-fix: a `RELEASED_TERMS` frozen table; `termsManifest` skips non-JSON; the Arabic governing law; Arabic setup (`?lang=ar`, `termsLocale: 'ar'`); a setup 409 without `details.current` asks the check again; `aria-busy` while loading only. Server: accept-route cross-site 403 and 422; a contract test (memory + Postgres) for `listLatestTermsVersions`.
+  - Release-QA: `@web.legal.terms-linked-language`, `@portal.terms.changed-mid-step`, `@portal.terms.step-sign-out`; `?lang` assertions in `portal/terms` and `portal/signin`; the privacy facts list includes "the last 7 days".
+- **Review pass 2 (2026-10-19):** `legal-terms.test.ts` (no TERMS_CHECKED_BY_PREFLIGHT; only SKIP_TERMS_CHECK skips the preflight check); `TermsUpdatePage.test.tsx` (a refetch naming newer terms shows "changed"; an in-flight /v1/me can't bring the step back, which fails without cancelQueries; a 409 uses details.current when the refetch fails); `SetupPage.test.tsx` (a language switch clears the tick; after a 409 with no version, a dead re-check shows the refusal and a failed one the unreachable banner); `server terms.test.ts` (TermsStatus non-null, Me.terms an inline nullable object) plus a compile-time `MeTermsMayBeNull` in `client.ts`; `termsManifest.test.ts` (misnamed files refused, dotfiles skipped); `store-contract-account-setup.ts` (`acceptTerms` → `{ created }`). Release-QA `@portal.terms.language-switch-clears-tick`.
+## MUT-287 — Signed out: expenses, groups, conversions, receipts and documents on this device (2026-10-19, ADR-100 decision 11)
+
+| Test | Covers |
+|---|---|
+| `server/src/__tests__/routes-fx-rates.test.ts` › public (5) | 200 with no session or profile header, the raw snapshot; same cache as `/v1/fx-rates` (one provider call); 503 with no source / provider down; 429 + Retry-After past the per-address limit, other addresses unaffected |
+| `route-security.test.ts`, `no-self-registration.test.ts` | `GET /v1/public/fx-rates` is the one new public operation |
+| `src/hosted/local/__tests__/blobStore.test.ts` (4) | type and size kept; keys/delete; survives a new connection; its own `mut-local-blobs` database, never `mut-local` |
+| `attachments.test.ts` (7) | `local-blob:` upload/download URLs; head size/type (untyped → null); removal staged until flush, forgotten on discard; sweep deletes only unnamed files |
+| `receipts.test.ts` (8) | start → putBlob → complete READY → reload → same bytes; UPLOAD_INCOMPLETE / UPLOAD_MISMATCH; deleting the expense removes the file after the save; non-local URLs refused; boot sweep keeps a pending upload; Documents lists an empty page (AC3); export zip → cleared device → restore → receipt downloads |
+| `transport.test.ts` › staged removals (3) | flush after a saved write; discard on a refused write; discard and no flush when the save fails |
+| `fxSource.test.ts` (8) | no credentials, no redirects; non-2xx / bad body / offline fail; local `/v1/fx-rates` runs `crossRates`; offline → 503; one fetch per cache window; the local app never serves the public route |
+| `no-network.test.ts` (+3) | expense + receipt + documents + categories, and group + mark + conversion, with no fetch (AC1, AC4); reference rates: exactly one fetch, to `/v1/public/fx-rates`, `credentials: 'omit'` (D3) |
+| `recordsArchive.test.ts` (6) | zip of `records.json` + binary receipt entries; round trip typed from the receipt; MUT-286 `.json` restores; missing receipt entry named, records restored; unnamed entries ignored; refusals |
+| `restore.test.ts` (2) | backup replaces records and files and sweeps the old; a refused save leaves this device's records and files intact (R1) |
+| `format-fingerprint.test.ts` (29) | every snapshot map has a case and a record; per-map field kinds (TD-171) |
+| `src/hosted/data/__tests__/download.test.ts` (2) | local-blob download via object URL + `<a download>` named after the file, released later; missing file rejects |
+| `ReceiptUploader.test.tsx` (+2, 1 changed) | local-blob upload goes to `localFiles.put`, never fetched; a refused store shows the upload-failed toast; download passes the filename |
+| `local-mode.test.tsx`, `views.test.tsx` | nav shows Expenses and Conversions signed out; Your data downloads a `.zip`; Documents download passes the filename |
+| `scripts/__tests__/check-bundles.test.ts` (+2) | jszip only in a lazy chunk |
+| Release-QA `@portal.local.expense-receipt` (core) | record, attach a PDF, reload, download by name, same bytes; only the first-visit request |
+| Release-QA `@portal.local.fx-line` | USD + ILS group shows the ≈ line with the ECB date; offline it hides; only `/v1/me` and `/v1/public/fx-rates` |
+| Release-QA `@portal.local.conversion`, `@portal.local.documents-empty` | log, reload, edit a conversion; Documents empty state with no error |
+| Release-QA `@portal.local.download-restore` (extended) | zip with `records.json` and the receipt as its own file; after Restore the receipt downloads again byte for byte |
+| Review (2026-10-19) | `routes-fx-rates.test.ts` default limiter at 120/min; `fx-rates.test.ts` relayed upstream staleness; `fx-outside-lock.test.ts` a save never waits on a stuck FX fetch; `fxSource.test.ts` relay + device memory (1 h) + unreadable storage; `idb.test.ts` superseded and blocked upgrades; `blobStore.test.ts` `stat`; `attachments.test.ts` live vs backed-up keys (pending expiry); `recordsArchive.test.ts` damaged zip, Safari-folder zip, two folders refused, upload-rule refusal, `.json` missing count; `restore.test.ts` refused save leaves no backup files; `parity.test.ts` expense/receipt/group/conversion script; `format-fingerprint.test.ts` no null-only field; `vite-config.test.ts` Buffer plugin; `local-mode.test.tsx` missing-receipts confirm line; release-QA `@portal.local.restore-missing-receipts`, `fx-line` remembered rates |
+
+
+## MUT-336 — SVG → React icon codegen pipeline (2026-10-19)
+
+| Test | Covers |
+|---|---|
+| `scripts/__tests__/icon-set.test.ts` (21) | `kebabToComponentName` (single-word, hyphenated, 3-part); `parseSvg` (simple path children, nested `<g>` groups, throws on unrecognized element/attribute naming the file, throws on unclosed tag); `generateComponent` (imports shared `IconProps`, injects `size`/`className`/drops `xmlns`, numeric `strokeWidth`, `id` → `data-part` never raw `id`, nested groups preserved, a quote/backslash in an attribute value round-trips as a safe JS expression); `generateBarrel` (sorted, one line per name); `ICON_PROPS_MODULE`; `findIconSetProblems` (clean, missing, stale, orphaned, ignores `index.ts`/`types.ts`) |
+| `src/pages/settings/__tests__/SettingsPage.icons.test.tsx` | Pilot (AC #3): the generated `LanguageIcon` renders next to the language setting, asserted via its `data-part="nuqta"` sub-element |
+| Existing `src/pages/settings/__tests__/*` (116 tests) | Re-run unchanged after the pilot edit — no regression |
+| Manual: `npm run icons:generate` then `npm run icons:check` | 61/61 source icons generate; validator reports clean |
+
+## MUT-337 — Icon save-feedback animation runtime decision + web prototype (2026-10-19, ADR-152)
+
+| Test | Covers |
+|---|---|
+| `src/lib/motion/__tests__/iconMotion.test.ts` (7) | `ICON_OVERSHOOT_EASE`/`ICON_RESTRAINED_EASE` match `MMotion.overshoot`/`.spring` exactly; playful and restrained both settle at scale(1); the playful preset's live value exceeds 1 mid-flight (the actual "bounce," not just which constant was selected); reduced motion jumps straight to scale(1) on either preset; every target in a list animates; re-triggering mid-flight doesn't throw and still settles cleanly |
+| Manual | No dev-server CSP check performed — the mechanism writes `element.style.transform` directly via JS, the same pattern `playRowEnter`/`playRowExit` already use under the portal's CSP (ADR-044), so it's CSP-safe by construction, not by inspection |
+
+## MUT-328 — Uptime checks and alerts (2026-10-20, ADR-154)
+
+| Test | Covers |
+|---|---|
+| `server/infrastructure/terraform/tests/monitoring.tftest.hcl` (14 runs, mocked Google + random, server-ci `terraform test`) | Defaults: `health`/`ready`/`portal` on the Cloud Run host, every 300 s over validated HTTPS, all regions, no channel or policy, `/health` keeps its display name; the portal matcher `id="root"`; `uptime_host` moves every check; a host with a scheme, path or port is refused; email + SMS create 2 channels and 5 policies, each notifying both plus existing ids; uptime policy > 1 region for 360 s at 300 s `ALIGN_NEXT_OLDER` + `REDUCE_COUNT_FALSE`, its own check id, CRITICAL; Cloud SQL disk > 0.8 / CPU > 0.9 for 900 s on `<project>:mutaba3a-pg`, WARNING; non-E.164 SMS refused; existing channel ids alone still alert; the drill adds a check + policy, and a path without `/` is refused; `enable_uptime_check = false` keeps the SQL alerts |
+| `tests/database_pool.tftest.hcl` (3) | Unchanged, still green after the monitoring section moved out of `main.tf` |
+| Not automatable here | The real plan against production (expected: 9 to add, the `/health` check moved) and the drill (fire, then close) are Basel's steps in `server/DEPLOYMENT.md` §6b |
+
+## MUT-326 — The custom domain is one input (2026-10-20, ADR-155)
+
+| Test | Covers |
+|---|---|
+| `scripts/__tests__/hosts.test.ts` (24) | `parseHostsConfig` refuses each bad field by name (domain shape, subdomain label, unknown stage, stage/domain mismatch, http or pathful legacy origins, a domain the legacy hosts live under); `resolveHosts` per stage: legacy (legacy hosts, no front door), proxy (front door built, builds unchanged), live (apex + `app.` subdomain, both hosts for the phone), redirect; the fixtures shared with Terraform |
+| `scripts/__tests__/hosts-cli.test.ts` (18) | `get` per key and an unknown key; `withDomain` previews without touching the file; `domain:plan` names every consumer, shows before → after, keeps both hosts in the phone lines, the Netlify rules per stage, the proxy stage leaving builds alone; `main` exit codes and usage |
+| `scripts/__tests__/no-hardcoded-hosts.test.ts` (3) | AC1: no legacy host, `mutaba3a*.a.run.app` / `*.netlify.app` or chosen domain outside `config/hosts.json` (prose and the CIMD files exempt); the pattern catches a planted literal; a rehearsal with `mutaba3a.app` as the domain stays green |
+| `scripts/__tests__/front-door-worker.test.ts` (7) | The Worker forwards path and query, sends the token and the edge-read client IP, overwrites forged copies, passes `X-Mutaba3a-Profile`/cookies/`Sec-Fetch-Site`/`Origin` through but not Host, never gives GET/HEAD a body, keeps the server's 302 and both `Set-Cookie`s (`redirect: manual`), fails closed when unconfigured |
+| `scripts/__tests__/vite-config.test.ts` (+5) | Defaults equal `HOSTS`; the Netlify rules: none before live, `<apex>/app*` back to netlify.app from live, the old landing pages (and only those) to the apex at redirect, never `/app` or assets on the old host; web build only. The web snapshot masks the config-derived portal URL |
+| `scripts/__tests__/legal-terms.test.ts` | The terms guard's npm script reads the landing origin from the config, the same value vite builds for |
+| `server/src/auth/__tests__/front-door.test.ts` (10) | Token match exact, absent without a configured token; client IP from the front door only with the token, `unknown` for a missing/odd/listed value, `X-Forwarded-For` with the configured hops on the direct path (forged headers ignored); same-origin per path; no token = today's rules |
+| `server/src/__tests__/config.test.ts` (+9) | `FRONT_DOOR_TOKEN` length and its need for `PORTAL_ORIGIN`; `PORTAL_LEGACY_REDIRECT` reads only "true"/"false" ("false" is off) and needs the token |
+| `server/src/__tests__/legacy-redirect.test.ts` (17) | Old-host page visits 302 to `/carry-over?next=…` with no-store; the carry-over page itself, the API, admin, health, readiness, assets, static files, association files and writes are never redirected; through the front door never; off unless the stage says so and without a front door |
+| `server/src/__tests__/check-terms-live.test.ts` (+4) | `publicOrigin` takes the env value without a trailing slash and refuses to guess when it's unset |
+| `server/infrastructure/terraform/tests/domain.tftest.hcl` (4) | No domain: no front-door env or IAM, today's plan unchanged; the checked-in config; a live domain: `PORTAL_ORIGIN`, `FRONT_DOOR_TOKEN` as a secret ref, no redirect env, the IAM grant, `public_portal_origin`; an unnamed environment |
+| `server/infrastructure/frontdoor/tests/frontdoor.tftest.hcl` (5) | No domain: zero resources; the checked-in config; a domain: zone, apex/www DNS-only to Netlify, proxied portal host, Worker route, upstream and secret bindings, strict TLS and no edge challenge, token secret name, Netlify domain, output; staging names; missing account ids flagged |
+| `server/infrastructure/sentry/tests/sentry.tftest.hcl` (+2) | DSN origins come from the config (no extras still allows them); a chosen domain adds its origins and keeps the legacy ones |
+| Manual (offline) | `terraform plan` of the frontdoor stack with the placeholder fixture, a local backend and dummy tokens: **16 to add, 0 to change, 0 to destroy**, all `create` |
+| Manual (operator, MUT-112) | DEPLOYMENT.md §5a's checks per stage (curl of `/health`, `/ready`, both association files and a sign-in through `app.<apex>`; the redirect check at stage redirect) |
+| Release-QA | None added: nothing is user-visible while `domain` is null (builds byte-identical, pinned by the snapshot and the guard). The carry-over's `web.bridge`, `portal.carry-over` and `portal.carry-over-fallback` belong to MUT-112/MUT-291 (design §7) |
+
+## MUT-327 — Restore drill and pilot operator runbook (2026-10-20, ADR-157)
+
+| Test | Covers |
+|---|---|
+| `server/src/scripts/__tests__/restore-drill.test.ts` (8, no database, fake `gcloud`/`cloud-sql-proxy`/`psql` that fail if called) | Usage without `--project`; the dry run prints backup list, create, backup restore, PITR clone, receipt checks and teardown, and calls nothing; every create/clone/patch/restore/set-password/delete targets only a `mutaba3a-pg-drill-<stamp>-b\|p` name; `--only pitr`; teardown refuses `mutaba3a-pg` and non-drill names; a drill name as the source is refused; `--pitr-minutes` outside 1 to 7 days is refused |
+| `server/src/scripts/__tests__/profile-rows.test.ts` (7, `MUTABA3A_TEST_DATABASE_URL` + `psql`, two databases built from the migrations) | export: one CSV per table, no `api_keys`/`idempotency_keys`, other profiles excluded, receipt copy lines; restore refuses the same database and a schema mismatch; restore puts back a renamed customer, a deleted expense and receipt, removes a later customer, leaves another profile, memberships and later audit rows, adds `organization.restored`, and a dry run changes nothing; purge-user refuses a shared membership and a reference from someone else's profile, then deletes the user, owned profiles and their rows, terms rows and `user.terms_accepted` everywhere, and nothing else |
+| Shellcheck | Both scripts clean |
+| Local walk (runbook §9) | Every locally walkable step against the local API and copies of `mutaba3a_dev` |
+| Not automatable here | The drill against production backups (AC1), in-place restore, ingress close and reopen, bucket soft-delete restore: Basel's steps |
+
+## MUT-357 — Drawers fit a phone (2026-10-20, TD-070)
+
+| Test | Covers |
+|---|---|
+| `src/styles/__tests__/drawerFit.test.ts` (2) | `.drawer` in `src/index.css` declares `max-width: 100%`; its only `width` is `var(--drawer-width)`, and no `.drawer` rule (plain, `[dir="rtl"]`, dark) sets another `width` or a `min-width` |
+| `qa/specs/portal/direction.spec.ts` (`@portal.direction.drawer-phone-ar`, `-en`) | At 375×812, Change password in Arabic and English: once its spring settles the dialog's box is 0..375 (fills the screen) and `scrollWidth` does not exceed `clientWidth`. Both red on main (Arabic 0..480, English −105..375), green on the branch (preview build) |
+| `qa/specs/web/brand.spec.ts` (`@web.brand.layout`) | The payment drawer at 375px now has to fit outright (its `KNOWN_OVERFLOW` entry is gone), English and Arabic, light and dark |
+| Re-run, unchanged | `@portal.account.*`, `@portal.your-data.*`, `@web.drawer-motion.*` (incl. `rtl-mirror`): desktop drawers, drag-to-dismiss and the RTL mirror still pass |
+

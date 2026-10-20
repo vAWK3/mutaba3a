@@ -1,20 +1,30 @@
 import type { components, paths } from './schema';
+import type { LocalBackend } from '../session/localBackendContract';
+import { currentMode, setMode } from '../session/mode';
 
 /**
  * The portal's only door to data (hosted-portal.md §7.1): same-origin `fetch`
  * with the session cookie, typed by `schema.d.ts` (generated from the server's
  * OpenAPI document; `npm run hosted:types:check` fails on drift). The active
  * hosted profile travels as `X-Mutaba3a-Profile`; the identity routes carry none.
+ *
+ * Signed out (MUT-286, ADR-097), the same requests go to the local backend, the
+ * server's own routes running in this page: see `goesRemote()` and `sendLocal()` below.
  */
 
 export type Schemas = components['schemas'];
 export type Me = Schemas['Me'];
+/** MUT-324: Me.terms is null where no terms apply (signed out); the generated type must keep that null, or callers lose the check. */
+export type MeTermsMayBeNull = AssertTrue<null extends Me['terms'] ? true : false>;
+type AssertTrue<T extends true> = T;
 export type HostedProfile = Schemas['HostedProfile'];
 export type FirmRequestResponse = Schemas['FirmRequestResponse'];
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];
 export type Currency = Schemas['Currency'];
 export type Customer = Schemas['Customer'];
+export type CreateCustomerRequest = Schemas['CreateCustomerRequest'];
+export type CreateProjectRequest = Schemas['CreateProjectRequest'];
 export type Project = Schemas['Project'];
 export type Receivable = Schemas['Receivable'];
 export type Payment = Schemas['Payment'];
@@ -63,7 +73,14 @@ export type SetupLinkCheck = Schemas['SetupLinkCheckResponse'];
 export type SetupLinkRefusal = Exclude<SetupLinkCheck['state'], 'valid'>;
 
 type ServerErrorCode = Schemas['ErrorEnvelope']['error']['code'];
-export type ApiErrorCode = ServerErrorCode | 'NETWORK' | 'UNKNOWN';
+/**
+ * Signed out (MUT-286), the local backend's own failures, never dressed up as NETWORK:
+ * - `LOCAL_FORMAT_TOO_NEW`: another tab saved this device's records with a newer build; reload (D1);
+ * - `LOCAL_SAVE_FAILED`: the browser refused a save (storage full); this page stops until a reload;
+ * - `LOCAL_UNAVAILABLE`: the local backend can't run here (storage blocked, private browsing).
+ */
+export type LocalStopCode = 'LOCAL_FORMAT_TOO_NEW' | 'LOCAL_SAVE_FAILED';
+export type ApiErrorCode = ServerErrorCode | 'NETWORK' | 'UNKNOWN' | LocalStopCode | 'LOCAL_UNAVAILABLE';
 
 type Query<P extends keyof paths> = paths[P] extends { get: { parameters: { query?: infer Q } } } ? NonNullable<Q> : never;
 type OkJson<P extends keyof paths, M extends 'get' | 'post'> = paths[P][M] extends {
@@ -148,6 +165,90 @@ interface RequestOptions {
 }
 
 const SIGN_IN_PATH = '/v1/sessions';
+/** Signing in and redeeming a setup link always talk to the server, whatever the mode (brief §2.6). */
+const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup)(\/|\?|$)/;
+/** The local backend's errors that stop the page, by class name: the classes live in the lazy chunk (transport.ts). */
+const LOCAL_STOPS: Readonly<Record<string, LocalStopCode>> = {
+  LocalFormatTooNewError: 'LOCAL_FORMAT_TOO_NEW',
+  // MUT-287 review D12: a newer build upgraded a local database under this page (src/hosted/local/idb.ts); same screen.
+  LocalDatabaseSupersededError: 'LOCAL_FORMAT_TOO_NEW',
+  LocalSaveFailedError: 'LOCAL_SAVE_FAILED',
+};
+
+type LocalStopHandler = (code: LocalStopCode) => void;
+let localStopHandler: LocalStopHandler | null = null;
+
+/** Registers the one place a stopped local backend is shown (SessionBridge); returns the unregister function. */
+export function setLocalStopHandler(handler: LocalStopHandler): () => void {
+  localStopHandler = handler;
+  return () => {
+    if (localStopHandler === handler) localStopHandler = null;
+  };
+}
+
+/** What a thrown local-backend error means to the portal. */
+function localFailure(cause: unknown): ApiError {
+  const code = cause instanceof Error ? LOCAL_STOPS[cause.name] : undefined;
+  if (code) {
+    localStopHandler?.(code);
+    return new ApiError(0, code, cause instanceof Error ? cause.message : code);
+  }
+  return new ApiError(0, 'LOCAL_UNAVAILABLE', 'The records on this device could not be opened');
+}
+
+let localBackendPromise: Promise<LocalBackend> | null = null;
+
+/** The lazy local chunk (brief §2.7): imported on the first signed-out request, never by a signed-in page. */
+export function localBackend(): Promise<LocalBackend> {
+  localBackendPromise ??= import('@mut/local-backend')
+    .then((module) => module.bootLocalBackend())
+    .catch((error: unknown) => {
+      localBackendPromise = null;
+      throw error;
+    });
+  return localBackendPromise;
+}
+
+let unhintedProbe: Promise<boolean> | null = null;
+
+/**
+ * No mode hint (first visit, or a session from before local mode): ask the
+ * server once whether this browser is signed in. Only a 200 or a 401 is an
+ * answer, and only an answer is saved; anything else uses the server for this
+ * request and asks again next time, so an outage never sends a signed-in
+ * person to an empty local app. Resolves true when the server should answer.
+ */
+function probeRemote(): Promise<boolean> {
+  unhintedProbe ??= fetch('/v1/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+    .then((response) => {
+      // Only the request in flight is shared; once answered, the saved hint is the answer.
+      unhintedProbe = null;
+      if (response.status === 200) setMode('remote');
+      else if (response.status === 401) setMode('local');
+      return response.status !== 401;
+    })
+    .catch((error: unknown) => {
+      unhintedProbe = null;
+      throw error;
+    });
+  return unhintedProbe;
+}
+
+/**
+ * Whether a request goes to the server (cookie) or to the local backend (this page), by mode. Decided at once
+ * whenever the mode is known, so a request starts in the same tick it always did; a promise only during the
+ * first-visit check, which rejects when that check can't reach the server.
+ */
+function goesRemote(url: string): boolean | Promise<boolean> {
+  const mode = currentMode();
+  if (ALWAYS_REMOTE.test(url) || mode === 'remote') return true;
+  return mode === 'probe' ? probeRemote() : false;
+}
+
+async function sendLocal(url: string, init: RequestInit): Promise<Response> {
+  const backend = await localBackend();
+  return backend.fetch(new Request(new URL(url, window.location.origin), init));
+}
 
 function withQuery(path: string, query?: Record<string, QueryValue>): string {
   const params = new URLSearchParams();
@@ -189,33 +290,63 @@ async function toApiError(response: Response): Promise<ApiError> {
   );
 }
 
-export async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, options: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+/**
+ * The request, its routing and its errors, without reading the body: `request` reads it as JSON; MUT-325's export
+ * reads a records file and receipt bytes as they stream. Throws `ApiError` for any non-2xx, as `request` always has.
+ */
+export async function send(method: Method, path: string, options: RequestOptions & { accept?: string } = {}): Promise<Response> {
+  const headers: Record<string, string> = { Accept: options.accept ?? 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (options.profileId) headers['X-Mutaba3a-Profile'] = options.profileId;
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
   if (options.ifMatchVersion) headers['If-Match'] = options.ifMatchVersion;
 
+  const url = withQuery(path, options.query);
+  const init: RequestInit = {
+    method,
+    credentials: 'same-origin',
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    signal: options.signal,
+  };
+  const isAbort = (cause: unknown) => cause instanceof DOMException && cause.name === 'AbortError';
+  const unreachable = () => new ApiError(0, 'NETWORK', 'The request did not reach the server');
+
+  const decided = goesRemote(url);
+  let wentRemote: boolean;
+  if (typeof decided === 'boolean') {
+    wentRemote = decided;
+  } else {
+    try {
+      wentRemote = await decided;
+    } catch (cause) {
+      if (isAbort(cause)) throw cause;
+      throw unreachable();
+    }
+  }
+
   let response: Response;
   try {
-    response = await fetch(withQuery(path, options.query), {
-      method,
-      credentials: 'same-origin',
-      headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: options.signal,
-    });
+    response = await (wentRemote ? fetch(url, init) : sendLocal(url, init));
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === 'AbortError') throw cause;
-    throw new ApiError(0, 'NETWORK', 'The request did not reach the server');
+    if (isAbort(cause)) throw cause;
+    throw wentRemote ? unreachable() : localFailure(cause);
   }
 
   if (!response.ok) {
     const error = await toApiError(response);
     const isSignIn = method === 'POST' && path === SIGN_IN_PATH;
-    if (error.status === 401 && !isSignIn) unauthorisedHandler?.(error);
+    // A local 401 is the local backend's own business (it re-mints its session); only the server's ends a session.
+    if (error.status === 401 && !isSignIn && wentRemote) unauthorisedHandler?.(error);
     throw error;
   }
+  return response;
+}
+
+export async function request<T>(method: Method, path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await send(method, path, options);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
@@ -236,6 +367,8 @@ export const api = {
     request<OkJson<'/v1/account-setup', 'post'>>('POST', '/v1/account-setup', { body, signal }),
   /** MUT-191: off replaces; dismissals are added to what the account holds. */
   changeMalafatSuggestions: (body: MalafatSuggestionsChange) => request<MalafatSuggestions>('PATCH', '/v1/me/malafat-suggestions', { body }),
+  /** MUT-324: the signed-in person accepts the current terms, read in `locale`. Idempotent per version. */
+  acceptTerms: (body: Schemas['TermsAcceptanceRequest']) => request<Schemas['TermsStatus']>('POST', '/v1/me/terms-acceptance', { body }),
 
   organizationSummary: (profileId: string, query: Query<'/v1/summaries/organization'> = {}) =>
     request<Get<'/v1/summaries/organization'>>('GET', '/v1/summaries/organization', { profileId, query }),
@@ -243,10 +376,16 @@ export const api = {
     request<Get<'/v1/summaries/customers/{customerId}'>>('GET', `/v1/summaries/customers/${encodeURIComponent(customerId)}`, { profileId }),
   customers: (profileId: string, query: Query<'/v1/customers'> = {}) =>
     request<Get<'/v1/customers'>>('GET', '/v1/customers', { profileId, query }),
+  /** MUT-286: the client picker's Add «name», on a profile the person owns (session `customers:write`, MUT-65). */
+  createCustomer: (profileId: string, body: CreateCustomerRequest, idempotencyKey: string) =>
+    request<Customer>('POST', '/v1/customers', { profileId, body, idempotencyKey }),
   customer: (profileId: string, customerId: string) =>
     request<Get<'/v1/customers/{customerId}'>>('GET', `/v1/customers/${encodeURIComponent(customerId)}`, { profileId }),
   projects: (profileId: string, query: Query<'/v1/projects'> = {}) =>
     request<Get<'/v1/projects'>>('GET', '/v1/projects', { profileId, query }),
+  /** MUT-318: the matter picker's Add «name», on a profile the person owns (session `projects:write`, MUT-65). */
+  createProject: (profileId: string, body: CreateProjectRequest, idempotencyKey: string) =>
+    request<Project>('POST', '/v1/projects', { profileId, body, idempotencyKey }),
   receivables: (profileId: string, query: Query<'/v1/receivables'> = {}) =>
     request<Get<'/v1/receivables'>>('GET', '/v1/receivables', { profileId, query }),
   receivable: (profileId: string, receivableId: string) =>

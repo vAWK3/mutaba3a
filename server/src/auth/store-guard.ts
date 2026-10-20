@@ -73,6 +73,11 @@ export const STORE_ACCESS: StoreAccess = {
     updateMalafatSuggestions: { write: 'identity' },
     // MUT-237: a person's own password, same identity-row write as updateMalafatSuggestions above.
     changePassword: { write: 'identity' },
+    // MUT-324: a person's own acceptance of the terms, the same identity-row write.
+    latestTermsAcceptance: 'read',
+    acceptTerms: { write: 'identity' },
+    // MUT-324 T1: the operator's "who is behind on the terms" list.
+    listLatestTermsVersions: 'operator',
   },
   memberships: { grant: 'operator', revoke: 'operator', find: 'read', listByUser: 'read', listByOrganization: 'read' },
   sessions: { create: { write: 'identity' }, findByDigest: 'read', touch: 'control', revoke: { write: 'identity' }, revokeAllForUser: 'operator' },
@@ -237,6 +242,8 @@ export const STORE_ACCESS: StoreAccess = {
    * no person behind it and so no feed.
    */
   entries: { list: 'sessionOnly', settledOwedIds: 'sessionOnly' },
+  // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
+  recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };
 
 export interface StoreGuard {

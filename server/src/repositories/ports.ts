@@ -1,6 +1,7 @@
 import type { ApiKeyEnvironment } from '../auth/api-key.js';
 import type { KeyScope } from '../auth/scopes.js';
 import type { SessionKind } from '../auth/sessions.js';
+import type { TermsLocale, TermsSurface } from '../legal.js';
 import type { IsoDate, IsoMonth, PaymentTerms } from '../dates.js';
 import type { ContingencyOutcome, UpfrontTreatment } from '../agreements/contingency.js';
 import type { PricingBasis, VatTreatment } from '../vat.js';
@@ -1284,6 +1285,50 @@ export interface UserRepository {
    * session: another change (or an operator lock) committed first (MUT-238 review).
    */
   changePassword(input: ChangePasswordInput): Promise<UserRecord | null>;
+  /** MUT-324: the person's acceptance of the highest terms version they accepted; null if they never accepted any. */
+  latestTermsAcceptance(userId: string): Promise<TermsAcceptanceRecord | null>;
+  /**
+   * MUT-324: idempotent on (userId, version): an existing acceptance is kept unchanged (`created: false`) and
+   * `audit` is not written; otherwise the row and `audit` are written in one transaction. It answers only whether
+   * the row is new: nobody reads the row back (review pass 2; `latestTermsAcceptance` reads it).
+   * ForeignKeyViolation on an unknown user.
+   */
+  acceptTerms(input: AcceptTermsInput): Promise<{ created: boolean }>;
+  /**
+   * MUT-324 T1 (operator only): every user, ordered by email, with the highest terms version they accepted (null if
+   * none) and, MUT-354, the client release recorded with that acceptance (null if none).
+   */
+  listLatestTermsVersions(): Promise<Array<{ userId: string; email: string; status: UserStatus; latestVersion: string | null; latestClientRelease: string | null }>>;
+}
+
+/** MUT-324 (ADR-102): one person's acceptance of one terms version, tied to the exact text by its sha256. */
+export interface TermsAcceptanceRecord {
+  userId: string;
+  /** An ISO date: the version's name and its release order. */
+  version: string;
+  /** The language of the text the person read. */
+  locale: TermsLocale;
+  /** sha256 of that language's frozen content file (server/src/legal.ts). */
+  textSha256: string;
+  surface: TermsSurface;
+  /** MUT-354: the client release that showed the terms, as the client sent it; null from a client that sent none. */
+  clientRelease: string | null;
+  acceptedAt: Date;
+}
+
+export interface TermsAcceptanceInput {
+  version: string;
+  locale: TermsLocale;
+  textSha256: string;
+  surface: TermsSurface;
+  clientRelease: string | null;
+}
+
+export interface AcceptTermsInput extends TermsAcceptanceInput {
+  userId: string;
+  at: Date;
+  /** Written in the same transaction, only when the acceptance is new. */
+  audit: AuditEventInput[];
 }
 
 export interface ChangePasswordInput {
@@ -1400,6 +1445,13 @@ export interface RedeemSetupLinkInput {
   at: Date;
   /** Written in the same transaction, only when the claim wins. */
   audit: AuditEventInput[];
+  /**
+   * MUT-324: the terms the person accepted on the setup page, recorded in the same transaction as the password.
+   * Idempotent like `users.acceptTerms` (a reset link after acceptance must still work); `termsAudit` is written
+   * only when the acceptance is new.
+   */
+  terms: TermsAcceptanceInput;
+  termsAudit: AuditEventInput[];
 }
 
 export interface AccountSetupRepository {
@@ -1454,6 +1506,8 @@ export interface LedgerStore {
   expenseGroups: ExpenseGroupRepository;
   /** MUT-270: one newest-first feed across a person's profiles; session-only (store guard `sessionOnly`). */
   entries: EntriesRepository;
+  /** MUT-325: one profile's rows for its records file; session-only (store guard `sessionOnly`). */
+  recordsExport: RecordsExportRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------
@@ -1881,6 +1935,61 @@ export interface EntriesRepository {
    * made it. Other payments are absent. Same trust in `organizationIds` as `list`.
    */
   settledOwedIds(organizationIds: readonly string[], paymentIds: readonly string[]): Promise<Map<string, string>>;
+}
+
+// ---- MUT-325: the records-file export ---------------------------------------
+
+/**
+ * Each profile-owned snapshot field (`LocalSnapshotMaps`, memory.ts) and the record it holds. The person-level
+ * fields (`orgs`, `ints`, `people`, `members`, `inbox`) are not here: the export builds or omits those itself. Nor
+ * is `files`: Malafat's documents stay with Malafat (ADR-097 §7: local profiles have none; ADR-156).
+ */
+export interface ProfileExportRecords {
+  custs: CustomerRecord;
+  projs: ProjectRecord;
+  refs: ExternalReferenceRecord;
+  rates: VatRateRecord;
+  agrs: AgreementRecord;
+  insts: InstallmentRecord;
+  charges: RetainerChargeRecord;
+  recs: ReceivableRecord;
+  supps: SupplementRecord;
+  versions: RetainerVersionRecord;
+  pays: PaymentRecord;
+  allocs: AllocationRecord;
+  credits: CreditRecord;
+  /** The last payment number used in a year; keyed `${organizationId}:${year}`. */
+  counters: number;
+  props: FeeProposalRecord;
+  exps: ExpenseRecord;
+  expCats: ExpenseCategoryRecord;
+  expReceipts: ExpenseReceiptRecord;
+  convs: ConversionRecord;
+  expGroups: ExpenseGroupRecord;
+  /** Keyed `${groupId}:${expenseId}`. */
+  groupMarks: ExpenseGroupOverrideRecord;
+}
+
+export type ProfileExportField = keyof ProfileExportRecords;
+
+/** One page of a field: `[key, record]` exactly as `MemoryLedgerStore` keys that map, ascending by key. */
+export interface ExportPage<T> {
+  entries: Array<[string, T]>;
+  /** Pass back as `afterKey` for the next page; null on the last one. */
+  nextKey: string | null;
+}
+
+/**
+ * MUT-325: a profile's rows for "Download my records", read in key order a page at a time so an export never holds
+ * a whole profile. Every row, soft-deleted ones included, exactly as stored: the file is the store, not a view of it.
+ * Trusts its ids: the route resolves the profile from the session's membership.
+ */
+export interface RecordsExportRepository {
+  profilePage<F extends ProfileExportField>(organizationId: string, field: F, afterKey: string | null, limit: number): Promise<ExportPage<ProfileExportRecords[F]>>;
+  /** The person's unsorted inbox (MUT-66), which belongs to no profile. */
+  inboxPage(userId: string, afterKey: string | null, limit: number): Promise<ExportPage<InboxEntryRecord>>;
+  /** A READY, undeleted receipt of this profile: the only files the export hands out bytes for. */
+  findExportableReceipt(organizationId: string, id: string): Promise<{ storageKey: string; mimeType: string; sizeBytes: number } | null>;
 }
 
 // ---- MUT-66: the unsorted inbox ---------------------------------------------

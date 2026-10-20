@@ -20,8 +20,10 @@
       "overdue": "Overdue"
     },
     "summary": {
-      "clientsCount": "{count} clients",
-      "clientsCountOne": "1 client"
+      "clientsCount": {
+        "one": "{count} client",
+        "other": "{count} clients"
+      }
     },
     "detail": {
       "noReceivables": "No receivables",
@@ -49,17 +51,26 @@
       }
     },
     "emptyFiltered": "No clients match your search",
-    "emptyFilteredCount": "{count} clients in total.",
+    "emptyFilteredCount": {
+      "one": "{count} client in total.",
+      "other": "{count} clients in total."
+    },
     "clearSearch": "Clear search",
     "split": {
       "profile": "Client profile",
       "showing": "Showing {name}"
     },
-    "crossProfileTxCount": "{count} entries",
+    "crossProfileTxCount": {
+      "one": "{count} entry",
+      "other": "{count} entries"
+    },
     "index": {
       "settled": "Settled",
       "neverPaid": "Never paid",
-      "oldestOverdue": "oldest {days}d",
+      "oldestOverdue": {
+        "one": "oldest {count}d",
+        "other": "oldest {count}d"
+      },
       "owedOrderHint": "Ordered by today's exchange rate. Amounts are never converted.",
       "bucket": {
         "noClient": {

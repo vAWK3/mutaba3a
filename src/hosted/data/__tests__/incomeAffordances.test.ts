@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { HostedProfile, Payment, Receivable } from '../../api/client';
 import { profile } from '../../__tests__/harness';
 import { payment, receivable } from '../../pages/__tests__/fixtures';
-import { canRedateOwed, canRedatePayment, incomeAffordancesFor, isSettleable, redateAffordancesFor } from '../incomeAffordances';
+import { canAddClient, canRedateOwed, canRedatePayment, incomeAffordancesFor, isSettleable, redateAffordancesFor } from '../incomeAffordances';
 
 const PERSONAL_RULES = { received: true, owed: true, customer: 'optional' } as const;
 const MALAFAT_RULES = { received: true, owed: false, customer: 'linked-required' } as const;
@@ -106,5 +106,20 @@ describe('redateAffordancesFor (MUT-224)', () => {
   it('offers neither on a Malafat-fed profile or a firm the user does not own', () => {
     expect(redateAffordancesFor(profile())).toEqual({ owed: false, payments: false });
     expect(redateAffordancesFor(personal({ owned: false }))).toEqual({ owed: false, payments: false });
+  });
+});
+
+describe('canAddClient (MUT-286)', () => {
+  it('lets the owner add a client on their personal or business profile', () => {
+    expect(canAddClient(personal())).toBe(true);
+    expect(canAddClient(personal({ isPersonalDefault: false, type: 'BUSINESS' }))).toBe(true);
+  });
+
+  it('never on a Malafat-fed profile: Malafat writes its clients', () => {
+    expect(canAddClient(profile({ writerOfRecord: 'MALAFAT', owned: false }))).toBe(false);
+  });
+
+  it('never on a writer-null firm the person does not own (ADR-066)', () => {
+    expect(canAddClient(personal({ owned: false, isPersonalDefault: false, type: null }))).toBe(false);
   });
 });

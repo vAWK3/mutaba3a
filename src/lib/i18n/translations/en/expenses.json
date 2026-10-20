@@ -33,9 +33,15 @@
         "state": {
           "projected": "Projected"
         },
-        "dueIn": "Due in {days} days",
+        "dueIn": {
+          "one": "Due in {count} day",
+          "other": "Due in {count} days"
+        },
         "dueToday": "Due today",
-        "overdueDays": "Overdue by {days} days",
+        "overdueDays": {
+          "one": "Overdue by {count} day",
+          "other": "Overdue by {count} days"
+        },
         "snoozedUntil": "Snoozed until {date}",
         "empty": "No upcoming recurring expenses",
         "needsAttention": "Needs Attention",
@@ -82,6 +88,9 @@
       "forecast": "Upcoming Expenses",
       "editRule": "Edit recurring rule"
     },
-    "receiptsAttached": "{count} receipt(s) attached"
+    "receiptsAttached": {
+      "one": "{count} receipt attached",
+      "other": "{count} receipts attached"
+    }
   }
 }

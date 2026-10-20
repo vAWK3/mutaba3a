@@ -8,6 +8,7 @@ import { GcsAttachmentStorage } from './attachments/storage.js';
 import { SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
 import { createArgon2Hasher } from './auth/users.js';
 import { CachedFxRates, FrankfurterSource } from './fx-rates.js';
+import { PUBLIC_FX_POLICY } from './routes/fx-rates.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -15,6 +16,8 @@ const store = PrismaLedgerStore.connect(config.DATABASE_URL);
 const rateLimiter = new SlidingWindowRateLimiter(config.RATE_LIMIT_PER_MINUTE);
 const signInThrottle = new SignInThrottle();
 const signInIpLimiter = new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute);
+// MUT-287: the anonymous GET /v1/public/fx-rates keys one window per address; built here so the timer below prunes it.
+const publicFxIpLimiter = new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute);
 
 const fxRates = new CachedFxRates({
   source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
@@ -46,9 +49,12 @@ const app = createApp({
     secureCookie: config.NODE_ENV !== 'development',
     ...(config.PORTAL_ORIGIN ? { portalOrigin: config.PORTAL_ORIGIN } : {}),
     trustedProxyHops: config.TRUSTED_PROXY_HOPS,
+    ...(config.FRONT_DOOR_TOKEN ? { frontDoorToken: config.FRONT_DOOR_TOKEN } : {}),
+    legacyRedirect: config.PORTAL_LEGACY_REDIRECT,
   },
   signInThrottle,
   signInIpLimiter,
+  publicFxIpLimiter,
   portal: config.PORTAL_DIST_DIR ? { distDir: config.PORTAL_DIST_DIR } : null,
   appAssociation:
     config.APPLE_TEAM_ID && config.APPLE_BUNDLE_ID && config.ANDROID_PACKAGE_NAME && config.ANDROID_SHA256_FINGERPRINTS
@@ -82,6 +88,7 @@ const pruneTimer = setInterval(() => {
   rateLimiter.prune(now);
   signInThrottle.prune(now);
   signInIpLimiter.prune(now);
+  publicFxIpLimiter.prune(now);
 }, 60_000);
 pruneTimer.unref();
 

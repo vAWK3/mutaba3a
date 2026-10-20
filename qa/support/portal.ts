@@ -8,6 +8,8 @@ import type { Page, Request, Route } from '@playwright/test';
 
 /** PORTAL_LANGUAGE_KEY in src/hosted/i18n/HostedLanguageProvider.tsx */
 const PORTAL_LANGUAGE_KEY = 'mutaba3a-portal-language';
+/** MODE_KEY in src/hosted/session/mode.ts (MUT-286): `remote` once this browser has used an account, `local` signed out. */
+export const MODE_KEY = 'mut-mode';
 
 const STAMP = '2026-10-01T09:00:00.000Z';
 export const OFFICE_A = '11111111-1111-4111-8111-111111111111';
@@ -77,11 +79,25 @@ export interface PortalStub {
 }
 
 /** The signed-in person's `/v1/me` answer for these profiles (the shape openSignedInPortal serves). */
-export function meBody(profiles: StubProfile[], language: 'en' | 'ar' = 'en', suggestions = { off: false, dismissed: [] as string[] }) {
+/** MUT-324: the terms version the QA fake reports, and the one the setup page is asked to accept. */
+export const QA_TERMS_VERSION = '2026-10-19';
+/**
+ * MUT-354: the release each portal acceptance sends, `web-v<the version the build reports>`. A pattern, not a
+ * value: a QA build may run as another version (MUTABA3A_APP_VERSION).
+ */
+export const QA_CLIENT_RELEASE = /^web-v\d+\.\d+\.\d+$/;
+
+export function meBody(
+  profiles: StubProfile[],
+  language: 'en' | 'ar' = 'en',
+  suggestions = { off: false, dismissed: [] as string[] },
+  terms: { version: string; accepted: boolean } | null = { version: QA_TERMS_VERSION, accepted: true },
+) {
   return {
     user: { id: '99999999-9999-4999-8999-999999999999', email: 'nour@office.ps', displayName: 'Nour Haddad', locale: language, malafatSuggestions: suggestions },
     profiles: profiles.map(hostedProfile),
     limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },
+    terms,
   };
 }
 
@@ -100,6 +116,7 @@ export async function openSignedInPortal(
     path,
     handle,
     chooseLanguage = true,
+    mode = 'remote',
   }: {
     profiles: StubProfile[];
     clients?: number;
@@ -108,6 +125,12 @@ export async function openSignedInPortal(
     handle?: PortalHandler;
     /** false: store no language choice, so the portal's own default and the account's locale apply (MUT-209, MUT-236). */
     chooseLanguage?: boolean;
+    /**
+     * MUT-286: `remote` (the default) is a browser that has used an account here before, so a 401 means "sign in
+     * again", not "use this device". Set only when the page has no hint yet, so the portal's own switch to local
+     * (sign-out, "Continue on this device") survives a reload. null: a first visit, with no hint at all.
+     */
+    mode?: 'remote' | 'local' | null;
   },
 ): Promise<PortalStub> {
   const stub: PortalStub = { malafatChanges: [] };
@@ -152,6 +175,16 @@ export async function openSignedInPortal(
       }
     },
     [PORTAL_LANGUAGE_KEY, language] as const,
+  );
+  if (mode) await page.addInitScript(
+    ([key, value]) => {
+      try {
+        if (localStorage.getItem(key) === null) localStorage.setItem(key, value);
+      } catch {
+        // storage blocked: the portal asks the server once instead
+      }
+    },
+    [MODE_KEY, mode] as const,
   );
   await page.goto(path);
   return stub;

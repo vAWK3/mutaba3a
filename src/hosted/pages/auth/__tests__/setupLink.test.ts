@@ -52,6 +52,12 @@ describe('redeemFailure', () => {
     expect(redeemFailure(unusable('expired'), true)).toEqual({ kind: 'refused', state: 'expired' });
   });
 
+  it('a changed terms version is its own state, naming the current one, never the password rule (MUT-324)', () => {
+    const stale = new ApiError(409, 'TERMS_VERSION_STALE', 'changed', { current: '2027-01-01' });
+    expect(redeemFailure(stale, false)).toEqual({ kind: 'termsChanged', current: '2027-01-01' });
+    expect(redeemFailure(new ApiError(409, 'TERMS_VERSION_STALE', 'changed'), false)).toEqual({ kind: 'termsChanged', current: null });
+  });
+
   it('maps a policy refusal, a rate limit (in whole minutes) and an unreachable server', () => {
     expect(redeemFailure(new ApiError(422, 'VALIDATION_FAILED', 'bad'), false)).toEqual({ kind: 'policy' });
     expect(redeemFailure(new ApiError(429, 'RATE_LIMITED', 'slow', null, null, 61), false)).toEqual({ kind: 'rateLimited', minutes: 2 });

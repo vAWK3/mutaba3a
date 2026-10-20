@@ -76,6 +76,99 @@ describe('ExpenseDrawer (hosted)', () => {
     expect(amount.getAttribute('inputmode')).toBe('decimal');
   });
 
+  it('names the client field by its label, and offers Add client only when the profile allows it (MUT-286)', async () => {
+    const user = userEvent.setup();
+    renderDrawer({ canAddClient: false });
+    const client = await screen.findByLabelText('Client');
+    await user.type(client, 'Ramallah Bakery');
+    expect(screen.queryByRole('option', { name: /Add client/ })).toBeNull();
+  });
+
+  it('adds a matter for the chosen client in the expense currency, and names the field by its label (MUT-318)', async () => {
+    const user = userEvent.setup();
+    const created: unknown[] = [];
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok({ items: [{ id: 'c1', name: 'Haddad & Partners' }], nextCursor: null }),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'POST /v1/projects': ({ body }) => {
+        created.push(body);
+        return ok({ id: 'p9', ...(body as object) }, 201);
+      },
+    });
+    renderDrawer({ canAddClient: true });
+    const matter = await screen.findByLabelText('Matter');
+    await user.type(matter, 'Lease dispute');
+    expect(screen.queryByRole('option', { name: /Add matter/ })).toBeNull();
+    expect(screen.getByText('Choose a client first to add a matter.')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Client'), 'Haddad');
+    await user.click(await screen.findByRole('option', { name: 'Haddad & Partners' }));
+    await user.clear(matter);
+    await user.type(matter, 'Lease dispute');
+    await user.click(await screen.findByRole('option', { name: /Add matter.*Lease dispute/ }));
+
+    await waitFor(() => expect(created).toEqual([{ customerId: 'c1', name: 'Lease dispute', currency: 'USD' }]));
+    expect(matter).toHaveValue('Lease dispute');
+  });
+
+  it('holds Save while a matter is being added (review D1)', async () => {
+    const user = userEvent.setup();
+    let land!: () => void;
+    const gate = new Promise<void>((resolve) => (land = resolve));
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok({ items: [{ id: 'c1', name: 'Haddad & Partners' }], nextCursor: null }),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+    });
+    const fallback = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      if ((init.method ?? 'GET').toUpperCase() === 'POST' && String(input).includes('/v1/projects')) {
+        await gate;
+        return ok({ id: 'p9', name: 'Lease dispute', customerId: 'c1', currency: 'USD' }, 201);
+      }
+      return fallback(input, init);
+    });
+    renderDrawer({ canAddClient: true });
+    const matter = await screen.findByLabelText('Matter');
+    await user.type(screen.getByLabelText('Client'), 'Haddad');
+    await user.click(await screen.findByRole('option', { name: 'Haddad & Partners' }));
+    await user.type(matter, 'Lease dispute');
+    await user.click(await screen.findByRole('option', { name: /Add matter.*Lease dispute/ }));
+
+    const save = screen.getByRole('button', { name: 'Save' });
+    await waitFor(() => expect(save).toBeDisabled());
+    land();
+    await waitFor(() => expect(save).not.toBeDisabled());
+    expect(matter).toHaveValue('Lease dispute');
+  });
+
+  it('picking a matter with no client fills the client, and changing the client empties a matter of another one (MUT-318 2A)', async () => {
+    const user = userEvent.setup();
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () =>
+        ok({ items: [{ id: 'c1', name: 'Haddad & Partners' }, { id: 'c2', name: 'Nablus Textiles' }], nextCursor: null }),
+      'GET /v1/projects': ({ url }) => {
+        const customerId = url.searchParams.get('customerId');
+        const items = [{ id: 'p1', name: 'Retainer', customerId: 'c1' }].filter((p) => !customerId || p.customerId === customerId);
+        return ok({ items, nextCursor: null });
+      },
+    });
+    renderDrawer({ canAddClient: true });
+    const matter = await screen.findByLabelText('Matter');
+    const client = screen.getByLabelText('Client');
+    await user.click(matter);
+    await user.click(await screen.findByRole('option', { name: /Retainer/ }));
+    await waitFor(() => expect(client).toHaveValue('Haddad & Partners'));
+    expect(matter).toHaveValue('Retainer');
+
+    await user.clear(client);
+    await user.type(client, 'Nablus');
+    await user.click(await screen.findByRole('option', { name: 'Nablus Textiles' }));
+    await waitFor(() => expect(matter).toHaveValue(''));
+  });
+
   it('creates an expense with an Idempotency-Key and closes on success', async () => {
     const user = userEvent.setup();
     let createCall: { body: unknown; headers: Headers } | null = null;

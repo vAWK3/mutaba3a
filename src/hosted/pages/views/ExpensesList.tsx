@@ -15,6 +15,7 @@ import { useExpenseCategories, useExpenses } from '../../data/expenseQueries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { useProfile } from '../../session/me';
+import { canAddClient } from '../../data/incomeAffordances';
 import { NoMatch, PageHeader, ShowMore } from './shared';
 import { SectionTabs } from '../../components/SectionTabs';
 import { useExpensesTabs } from './ExpenseGroupsList';
@@ -162,6 +163,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
           expenseId={filters.expense}
           onClose={closeDrawer}
           onDeleted={afterDelete}
+          canAddClient={canAddClient(profile)}
         />
       )}
     </>

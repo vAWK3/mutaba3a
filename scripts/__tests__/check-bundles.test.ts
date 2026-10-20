@@ -11,6 +11,9 @@ import {
   fontProblems,
   newOrigins,
   posthogInEntryGraph,
+  localBackendInEntryGraph,
+  jszipInEntryGraph,
+  indexedDbOutsideLocalBackend,
   posthogPrecached,
   precachedUrls,
   staticGraph,
@@ -46,7 +49,11 @@ describe('local bundle rules', () => {
 });
 
 describe('hosted bundle rules', () => {
-  it.each(['indexedDB.open("x")', 'new Dexie("db")', 'navigator.serviceWorker.register("/sw.js")'])('flags local storage or offline machinery: %s', (code) => {
+  it('allows IndexedDB itself: only the entry graph is checked for it (ADR-097, localBackendInEntryGraph)', () => {
+    expect(findForbidden('indexedDB.open("mut-local")', HOSTED_RULES)).toEqual([]);
+  });
+
+  it.each(['new Dexie("db")', 'navigator.serviceWorker.register("/sw.js")'])('flags Dexie or offline machinery: %s', (code) => {
     expect(findForbidden(code, HOSTED_RULES)).not.toEqual([]);
   });
 
@@ -240,6 +247,35 @@ describe('PostHog stays out of the local app (ADR-090, MUT-154)', () => {
   it('fails when a statically reachable chunk mentions PostHog', () => {
     const leaky = { ...files, 'assets/util-d4.js': 'const h="https://eu.i.posthog.com";' };
     expect(posthogInEntryGraph(leaky['index.html'], reader(leaky))).toEqual(['assets/util-d4.js']);
+  });
+
+  describe('the portal\'s local backend stays lazy (ADR-097, MUT-286)', () => {
+    it('passes when IndexedDB is opened only from a lazily loaded chunk', () => {
+      const lazy = { ...files, 'assets/LandingPage-e5.js': 'const r=indexedDB.open("mut-local",1);' };
+      expect(localBackendInEntryGraph(lazy['index.html'], reader(lazy))).toEqual([]);
+    });
+
+    it('fails when any other lazy chunk opens IndexedDB: only the local backend (its mut-local database) may (review)', () => {
+      const files = { 'assets/local-a1.js': 'indexedDB.open("mut-local",1)', 'assets/other-b2.js': 'indexedDB.open("cache",1)', 'assets/plain-c3.js': 'x' };
+      expect(indexedDbOutsideLocalBackend(Object.keys(files), (path) => files[path as keyof typeof files])).toEqual(['assets/other-b2.js']);
+    });
+
+    it('fails when a statically loaded file opens IndexedDB', () => {
+      const leaky = { ...files, 'assets/app-shell-c3.js': 'const r=indexedDB.open("mut-local",1);' };
+      expect(localBackendInEntryGraph(leaky['index.html'], reader(leaky))).toEqual(['assets/app-shell-c3.js']);
+    });
+  });
+
+  describe('the records zip library stays lazy (MUT-287)', () => {
+    it('passes when jszip lives only in a lazily loaded chunk', () => {
+      const lazy = { ...files, 'assets/jszip.min-f6.js': 'throw new Error("see https://stuk.github.io/jszip/documentation/howto/read_zip.html")' };
+      expect(jszipInEntryGraph(lazy['index.html'], reader(lazy))).toEqual([]);
+    });
+
+    it('fails when a statically loaded file carries jszip', () => {
+      const leaky = { ...files, 'assets/util-d4.js': 'var e="https://stuk.github.io/jszip/documentation/howto/read_zip.html";' };
+      expect(jszipInEntryGraph(leaky['index.html'], reader(leaky))).toEqual(['assets/util-d4.js']);
+    });
   });
 
   it.each(['https://eu.i.posthog.com', 'https://us.i.posthog.com/e/', 'PostHogPersistence', '$posthog_cookieless', 'posthog-js'])(

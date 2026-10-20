@@ -71,6 +71,15 @@ const rowFor = (title: string) => rows().find((row) => within(row).queryByText(t
 const text = (el: HTMLElement) => (el.textContent ?? '').replace(/[\u2066-\u2069]/g, '');
 
 describe('RecurringAttentionList (MUT-87)', () => {
+  it.each([
+    [-3, 'متأخر 3 أيام'],
+    [-11, 'متأخر 11 يومًا'],
+    [3, 'مستحق خلال 3 أيام'],
+  ])('words lateness %i in its Arabic plural form (MUT-179)', (daysUntilDue, text) => {
+    renderList([occurrence({ daysUntilDue, isOverdue: daysUntilDue < 0 })], 'ar');
+    expect(screen.getByText(text)).toBeInTheDocument();
+  });
+
   it('shows one row per rule with its months, period amount, total and lateness (T17)', () => {
     renderList(HOSTING);
 

@@ -9,6 +9,7 @@
  */
 
 import { useT } from '../../lib/i18n';
+import { useTp } from '../../lib/i18n/plural';
 import { formatAmount, formatDate } from '../../lib/utils';
 import type { VirtualOccurrenceDisplay } from '../../types';
 import { USER_COLOR_INK } from './profileAvatarStyle';
@@ -24,6 +25,7 @@ export function RecurringOccurrenceCard({
   compact = false,
 }: RecurringOccurrenceCardProps) {
   const t = useT();
+  const tp = useTp();
 
   const getStateLabel = (): string => {
     const persisted = occurrence.persistedOccurrence;
@@ -36,16 +38,12 @@ export function RecurringOccurrenceCard({
 
     switch (occurrence.computedState) {
       case 'overdue':
-        return t('expenses.recurring.occurrence.overdueDays', {
-          days: Math.abs(occurrence.daysUntilDue),
-        });
+        return tp('expenses.recurring.occurrence.overdueDays', Math.abs(occurrence.daysUntilDue));
       case 'due':
         if (occurrence.daysUntilDue === 0) {
           return t('expenses.recurring.occurrence.dueToday');
         }
-        return t('expenses.recurring.occurrence.dueIn', {
-          days: occurrence.daysUntilDue,
-        });
+        return tp('expenses.recurring.occurrence.dueIn', occurrence.daysUntilDue);
       case 'projected':
       default:
         return t('expenses.recurring.occurrence.state.projected');

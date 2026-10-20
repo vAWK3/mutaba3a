@@ -99,8 +99,10 @@
   --landing-section-pad: 112px;
   --landing-section-pad-compact: 80px;
   --landing-hero-pad-end: 96px;
-  --landing-page-top: 160px;
-  --landing-page-top-compact: 120px;
+  /* /privacy's top room matches the hero's (MUT-251): the sticky bar sits in the flow since MUT-77,
+     so the old 160/120 made room for a bar that no longer floats over the page */
+  --landing-page-top: var(--space-16);
+  --landing-page-top-compact: var(--space-10);
 }
 
 /* ============================================
@@ -341,19 +343,9 @@ html:lang(en) {
   font-family: var(--font-en);
 }
 
-/* Direction still matches every element, and so still beats a dir attribute in Arabic. Twenty
-   dir="ltr" sites depend on that today; MUT-109 scopes it to the root (TD-048, direction half). */
-html:lang(ar),
-html:lang(ar) body,
-:lang(ar) {
-  direction: rtl;
-}
-
-html:lang(en),
-html:lang(en) body,
-:lang(en) {
-  direction: ltr;
-}
+/* No direction rule here: <html dir> (I18nProvider) sets it and every element inherits it, so a
+   dir attribute works in both languages (MUT-109, TD-048 direction half). A :lang() rule would
+   match every element and beat the attribute. */
 
 /* Headings: Thmanyah Serif Display 700 */
 h1, h2, h3, h4, h5, h6,
@@ -377,7 +369,15 @@ h6, .h6 { font-size: var(--text-body); }
 :lang(ar) .h1, :lang(ar) .h2, :lang(ar) .h3,
 :lang(ar) .h4, :lang(ar) .h5, :lang(ar) .h6 {
   font-family: var(--font-heading-ar);
-  letter-spacing: 0; /* Arabic doesn't use tight tracking */
+}
+
+/* Arabic doesn't use tight tracking. Keyed on the heading's own language, so an English heading inside an
+   Arabic page (a /terms?lang=en text, MUT-324) keeps its tracking. */
+h1:lang(ar), h2:lang(ar), h3:lang(ar),
+h4:lang(ar), h5:lang(ar), h6:lang(ar),
+.h1:lang(ar), .h2:lang(ar), .h3:lang(ar),
+.h4:lang(ar), .h5:lang(ar), .h6:lang(ar) {
+  letter-spacing: 0;
 }
 
 /* Numeric utility class */

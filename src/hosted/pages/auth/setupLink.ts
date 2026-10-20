@@ -36,6 +36,8 @@ export type RedeemFailure =
   /** "used" after an attempt whose answer never arrived: that attempt most likely set the password (TD-149, D3). */
   | { kind: 'trySignIn' }
   | { kind: 'policy' }
+  /** MUT-324: the terms changed since the page asked; `current` is the version to show and accept now. */
+  | { kind: 'termsChanged'; current: string | null }
   | { kind: 'rateLimited'; minutes: number }
   | { kind: 'unreachable' };
 
@@ -58,6 +60,10 @@ export function redeemFailure(error: unknown, answerLost: boolean): RedeemFailur
   if (error.status === 410) {
     const state = refusalState(error);
     return state === 'used' && answerLost ? { kind: 'trySignIn' } : { kind: 'refused', state };
+  }
+  if (error.code === 'TERMS_VERSION_STALE') {
+    const current = (error.details as { current?: unknown } | null)?.current;
+    return { kind: 'termsChanged', current: typeof current === 'string' ? current : null };
   }
   if (error.status === 422) return { kind: 'policy' };
   if (error.status === 429) return { kind: 'rateLimited', minutes: retryMinutes(error) };

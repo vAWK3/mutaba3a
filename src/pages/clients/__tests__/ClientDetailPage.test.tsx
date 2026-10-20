@@ -70,8 +70,8 @@ vi.mock('../../../lib/i18n', () => {
     'transactions.status.paid': 'Paid',
     'transactions.status.unpaid': 'Unpaid',
     'transactions.status.partial': 'Partial ({percent}%)',
-    'transactions.status.overdue': '{days}d overdue',
-    'transactions.status.dueIn': 'Due in {days}d',
+    'transactions.status.overdue': '{count}d overdue',
+    'transactions.status.dueIn': 'Due in {count}d',
     'transactions.status.dueToday': 'Due today',
     'transactions.partialPayment.recordPayment': 'Record Payment',
     'transactions.partialPayment.remaining': 'Remaining',
@@ -92,6 +92,17 @@ vi.mock('../../../lib/i18n', () => {
     useLanguage: () => ({ language: 'en' }),
     useDirection: () => 'ltr',
     getLocale: () => 'en-US',
+  };
+});
+
+// MUT-179: counted strings go through tp(); route them through the mocked t() above
+vi.mock('../../../lib/i18n/plural', async () => {
+  const { useT } = await import('../../../lib/i18n');
+  return {
+    useTp: () => {
+      const t = useT();
+      return (key: string, count: number, vars?: Record<string, string | number>) => t(key, { ...vars, count });
+    },
   };
 });
 
@@ -378,6 +389,10 @@ describe('ClientDetailPage', () => {
       const partial = rowOf(workSection(), 'Homepage');
       expect(partial).toHaveTextContent('Partial (40%)');
       expect(within(partial).getByText(/^Remaining/)).toHaveTextContent('Remaining: $300');
+      // MUT-109: a plain <bdi>, so an Arabic amount resolves from its own leading RLM
+      const remaining = within(within(partial).getByText(/^Remaining/)).getByText('$300');
+      expect(remaining.tagName).toBe('BDI');
+      expect(remaining).not.toHaveAttribute('dir');
       expect(partial).toHaveTextContent('Due in 9d');
 
       expect(within(rowOf(workSection(), 'Design sprint')).queryByText(/^Remaining/)).toBeNull();

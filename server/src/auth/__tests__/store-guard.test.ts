@@ -91,6 +91,8 @@ describe('STORE_ACCESS', () => {
       'organizations.setFirm',
       'sessions.revokeAllForUser',
       'users.create',
+      // MUT-324 T1: the operator's terms report.
+      'users.listLatestTermsVersions',
       'users.setPassword',
       'users.setStatus',
     ]);

@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import 'fake-indexeddb/auto';
 import { afterEach, vi } from 'vitest';
 import { configure } from '@testing-library/react';
+import { setUnhintedMode } from '../hosted/session/mode';
 
 // Page tests that render against fake-indexeddb take ~1 s each under the full
 // suite's parallel load; the library's 1 s default for waitFor/findBy then
@@ -38,6 +39,18 @@ if (typeof window !== 'undefined') {
   // Mock URL.createObjectURL and URL.revokeObjectURL
   URL.createObjectURL = vi.fn(() => 'blob:mock-url');
   URL.revokeObjectURL = vi.fn();
+
+  // jsdom's Blob has no text() (every browser the portal targets has); the local backend's Restore reads a file with it.
+  if (typeof Blob.prototype.text !== 'function') {
+    Blob.prototype.text = function text(this: Blob): Promise<string> {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error ?? new Error('Blob read failed'));
+        reader.readAsText(this);
+      });
+    };
+  }
 }
 
 // Tests never reach the network. The top bar's exchange rate (MUT-79) renders
@@ -47,7 +60,13 @@ if (typeof window !== 'undefined') {
 globalThis.fetch = (input: RequestInfo | URL) =>
   Promise.reject(new TypeError(`Network disabled in tests: ${String(input)}`));
 
+// The portal with no mode hint asks the server once whether anyone is signed in (MUT-286). Portal tests stub
+// `fetch` for the requests they make and clear localStorage freely, so a missing hint means "the server" here;
+// local-mode tests set the hint or call setUnhintedMode themselves.
+setUnhintedMode('remote');
+
 // Clean up after each test
 afterEach(() => {
+  setUnhintedMode('remote');
   vi.clearAllMocks();
 });

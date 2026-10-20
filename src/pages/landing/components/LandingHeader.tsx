@@ -2,13 +2,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useT, useLanguage } from '../../../lib/i18n';
 import { Wordmark } from '../../../components/brand/Wordmark';
 import { useInView } from '../../../hooks/useInView';
-import { useHeroCta } from '../useHeroCta';
 import { hostedPortalUrl } from '../../../lib/goHosted';
 
 /** The mark's size in the bar, about the cap height of the name beside it. */
 const BAR_MARK_SIZE = 24;
-/** The platform icon in the bar's button, sized to its label. */
-const BAR_ICON_SIZE = 16;
 
 interface LandingHeaderProps {
   /**
@@ -21,14 +18,12 @@ interface LandingHeaderProps {
   homeHref?: string;
 }
 
-/** The hero's button in the bar. Its own component, so only a page that shows it asks for the release. */
+/** The hero's primary button, mirrored in the bar once the hero's own has scrolled away. */
 function HeaderCta({ visible }: { visible: boolean }) {
   const t = useT();
-  const { href, Icon, label, shortLabel } = useHeroCta();
   return (
-    <a href={href} className="landing-header-cta" data-part="header-cta" data-visible={visible} aria-label={t(label)}>
-      <Icon size={BAR_ICON_SIZE} />
-      <span className="landing-header-cta-label">{t(shortLabel)}</span>
+    <a href="#get-it" className="landing-header-cta" data-part="header-cta" data-visible={visible}>
+      <span className="landing-header-cta-label">{t('landing.hero.ctaRequest')}</span>
     </a>
   );
 }

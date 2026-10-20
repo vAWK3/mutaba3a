@@ -6,6 +6,7 @@ import type { HostedProfile } from '../api/client';
 import { Wordmark } from '../components/Brand';
 import { UsagePrompt } from '../components/UsagePrompt';
 import { useMe } from '../session/me';
+import { useIsLocalMode } from '../session/mode';
 import { AccountDrawers } from './AccountDrawers';
 import { ProfileDrawers } from './ProfileDrawers';
 import { ProfileSwitcher } from './ProfileSwitcher';
@@ -17,7 +18,8 @@ import { UserMenu } from './UserMenu';
  * menu, and the page. There is still no "+ Add" menu: the one create action
  * in the portal is the expense drawer, opened from the Expenses list itself.
  * One DOM for every width; CSS turns the sidebar into a top bar on a phone,
- * so nothing is duplicated for assistive tech.
+ * so nothing is duplicated for assistive tech. Signed in or out, the sections
+ * are the same (MUT-287, epic MUT-284 decision 4).
  */
 
 const SECTIONS = [
@@ -34,10 +36,11 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
   const t = useT();
   const me = useMe();
   const userId = me.user.id;
-  // MUT-155: another account's choice is reset; a stored "on" starts counting this visit
+  const local = useIsLocalMode();
+  // MUT-155: another account's choice is reset; a stored "on" starts counting this visit. Never signed out (brief §10).
   useEffect(() => {
-    void syncPortalUsage(userId);
-  }, [userId]);
+    if (!local) void syncPortalUsage(userId);
+  }, [userId, local]);
 
   return (
     <div className="hp-shell">
@@ -62,7 +65,7 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
         <UserMenu profile={profile} />
       </aside>
       <main className="hp-page">
-        <UsagePrompt />
+        {!local && <UsagePrompt />}
         {children}
       </main>
       {/* MUT-183: New profile / Manage profiles, opened by URL from the switcher or the empty state. */}

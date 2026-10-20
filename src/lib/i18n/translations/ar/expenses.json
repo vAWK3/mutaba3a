@@ -33,9 +33,23 @@
         "state": {
           "projected": "متوقع"
         },
-        "dueIn": "مستحق خلال {days} أيام",
+        "dueIn": {
+          "zero": "مستحق خلال {count} يوم",
+          "one": "مستحق خلال يوم واحد",
+          "two": "مستحق خلال يومين",
+          "few": "مستحق خلال {count} أيام",
+          "many": "مستحق خلال {count} يومًا",
+          "other": "مستحق خلال {count} يوم"
+        },
         "dueToday": "مستحق اليوم",
-        "overdueDays": "متأخر {days} أيام",
+        "overdueDays": {
+          "zero": "متأخر {count} يوم",
+          "one": "متأخر يومًا واحدًا",
+          "two": "متأخر يومين",
+          "few": "متأخر {count} أيام",
+          "many": "متأخر {count} يومًا",
+          "other": "متأخر {count} يوم"
+        },
         "snoozedUntil": "مؤجل حتى {date}",
         "empty": "لا توجد مصروفات متكررة قادمة",
         "needsAttention": "تحتاج انتباه",
@@ -102,6 +116,13 @@
       "forecast": "المصروفات القادمة",
       "editRule": "تعديل القاعدة المتكررة"
     },
-    "receiptsAttached": "{count} إيصال مرفق"
+    "receiptsAttached": {
+      "zero": "لا إيصالات مرفقة",
+      "one": "إيصال واحد مرفق",
+      "two": "إيصالان مرفقان",
+      "few": "{count} إيصالات مرفقة",
+      "many": "{count} إيصالًا مرفقًا",
+      "other": "{count} إيصال مرفق"
+    }
   }
 }

@@ -8,6 +8,7 @@ import { useOrphanedRecords, useAssignOrphanedRecords, type OrphanAssignment } f
 import { startingProfileId, type OrphanTable, type OrphanedRecordSet } from '../../db/orphanedRecords';
 import { formatAmount, formatDate } from '../../lib/utils';
 import { useT, useLanguage, getLocale } from '../../lib/i18n';
+import { useTp } from '../../lib/i18n/plural';
 import type { BusinessProfile, Currency } from '../../types';
 import { BrandLoader } from '../brand/BrandLoader';
 
@@ -77,6 +78,7 @@ function shapeRows(records: OrphanedRecordSet, selectable: ReadonlySet<string>, 
  */
 export function OrphanedRecordsDrawer() {
   const t = useT();
+  const tp = useTp();
   const { showToast } = useToast();
   const { closeOrphanedRecordsDrawer } = useDrawerStore();
   const { data: records, isLoading: recordsLoading } = useOrphanedRecords();
@@ -119,8 +121,7 @@ export function OrphanedRecordsDrawer() {
         setFailedCount(failedIds.length);
         return;
       }
-      const message = assigned === 1 ? 'orphanedRecords.assignedSingular' : 'orphanedRecords.assignedPlural';
-      showToast(t(message, { count: assigned }), { type: 'success' });
+      showToast(tp('orphanedRecords.assigned', assigned), { type: 'success' });
       closeOrphanedRecordsDrawer();
     } catch (error) {
       console.error('Failed to assign records to profiles:', error);
@@ -171,9 +172,7 @@ export function OrphanedRecordsDrawer() {
           {!defaultProfile && <p className="orphaned-records-notice">{t('orphanedRecords.noProfiles')}</p>}
           {failedCount > 0 && (
             <p className="orphaned-records-notice orphaned-records-notice-error" role="alert">
-              {t(failedCount === 1 ? 'orphanedRecords.partialFailureSingular' : 'orphanedRecords.partialFailurePlural', {
-                count: failedCount,
-              })}
+              {tp('orphanedRecords.partialFailure', failedCount)}
             </p>
           )}
           {actions && canChoose && (
@@ -255,7 +254,7 @@ function RowDetail({ row, locale }: { row: OrphanRow; locale: string }) {
   const parts: ReactNode[] = [];
   if (row.clientName) parts.push(row.clientName);
   if (row.date) parts.push(formatDate(row.date, locale));
-  if (row.amount) parts.push(<bdi dir="ltr">{formatAmount(row.amount.minor, row.amount.currency, locale)}</bdi>);
+  if (row.amount) parts.push(<bdi>{formatAmount(row.amount.minor, row.amount.currency, locale)}</bdi>);
   if (parts.length === 0) return null;
 
   return (

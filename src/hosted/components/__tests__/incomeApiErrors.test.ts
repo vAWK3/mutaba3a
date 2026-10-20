@@ -22,6 +22,12 @@ describe('mapIncomeError (MUT-133)', () => {
     expect(mapIncomeError(v('DATE_INVALID', { field: 'occurredOn' })).fields).toEqual([{ field: 'occurredOn', key: 'hosted.income.errors.dateFuture' }]);
   });
 
+  it('says a Malafat capture must be in its matter\'s currency, under the matter, naming that currency (MUT-318 review D2)', () => {
+    expect(mapIncomeError(v('CURRENCY_MISMATCH', { field: 'currency', projectCurrency: 'USD' })).fields).toEqual([
+      { field: 'projectId', key: 'hosted.income.errors.matterCurrency', params: { currency: 'USD' } },
+    ]);
+  });
+
   it('uses the §7.4 sentence for a stale read-only profile', () => {
     expect(mapIncomeError(new ApiError(403, 'READ_ONLY_PROFILE', 'x', { writerOfRecord: 'MALAFAT' })).toast).toBe('hosted.readOnly.malafat');
     expect(mapIncomeError(new ApiError(403, 'READ_ONLY_PROFILE', 'x', { writerOfRecord: null })).toast).toBe('hosted.readOnly.none');

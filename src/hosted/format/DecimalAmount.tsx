@@ -46,7 +46,7 @@ export function DecimalAmount({ value, currency, className = '' }: { value: stri
   const { language } = useLanguage();
   const negative = value.startsWith('-') && !isZeroDecimal(value);
   return (
-    <bdi dir="ltr" className={`hp-amount ${negative ? 'hp-amount-negative' : ''} ${className}`}>
+    <bdi className={`hp-amount ${negative ? 'hp-amount-negative' : ''} ${className}`}>
       {formatDecimal(value, currency, language)}
     </bdi>
   );

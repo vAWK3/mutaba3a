@@ -2,17 +2,26 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { signIn, warmDummyHash } from '../auth/sign-in.js';
-import { clientIp, isSameOriginRequest, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
+import { isSamePortalOrigin, requestClientIp, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
 import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
+import type { CurrentTerms } from '../legal.js';
 import type { RateLimiter } from '../rate-limit.js';
 import { StateConflict } from '../repositories/memory.js';
 import type { AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
-import { ChangePasswordRequestSchema, ErrorEnvelopeSchema, MalafatSuggestionsChangeSchema, MalafatSuggestionsSchema, MeSchema, SignInRequestSchema } from '../schemas.js';
+import {
+  ChangePasswordRequestSchema,
+  ErrorEnvelopeSchema,
+  MalafatSuggestionsChangeSchema,
+  MalafatSuggestionsSchema,
+  MeSchema,
+  SignInRequestSchema,
+  TermsAcceptanceRequestSchema,
+  TermsStatusSchema,
+} from '../schemas.js';
+import { staleTerms, termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
-import { SUPPORTED_CURRENCIES } from '../money.js';
-import { hostedProfileFor } from '../serializers.js';
-import { MAX_OWNED_PROFILES } from './profiles.js';
+import { buildMe } from './me.js';
 
 /**
  * Sign-in, sign-out and the signed-in person (MUT-38, hosted-portal.md §4, §6).
@@ -28,12 +37,14 @@ export interface SessionRouteOptions {
   settings: SessionSettings;
   throttle: SignInThrottle;
   ipLimiter: RateLimiter;
+  /** MUT-324: the current terms, reported by sign-in's Me and accepted through POST /v1/me/terms-acceptance. */
+  terms: CurrentTerms;
 }
 
 /** Session routes that act on the person rather than an organization: no X-Mutaba3a-Profile. */
 export const ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
-  'GET /v1/me',
   'PATCH /v1/me/malafat-suggestions',
+  'POST /v1/me/terms-acceptance',
   'DELETE /v1/sessions/current',
   'POST /v1/me/password',
 ]);
@@ -41,7 +52,7 @@ export const ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv> {
-  const { store, passwordHasher, settings, throttle, ipLimiter } = options;
+  const { store, passwordHasher, settings, throttle, ipLimiter, terms } = options;
   const app = new OpenAPIHono<AppEnv>();
   const cookieName = sessionCookieName(settings.secureCookie);
   const cookieOptions = { path: '/', httpOnly: true, secure: settings.secureCookie, sameSite: 'Strict' } as const;
@@ -64,11 +75,11 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       },
     }),
     async (c) => {
-      if (!isSameOriginRequest(c.req, settings.portalOrigin)) {
+      if (!isSamePortalOrigin(c.req, settings)) {
         throw new ApiError('CROSS_SITE_REQUEST', 'Sign in from the Mutaba3a portal itself');
       }
       const now = c.get('now')();
-      const ip = await ipLimiter.check(`sign-in:${clientIp((name) => c.req.header(name), settings.trustedProxyHops)}`, now);
+      const ip = await ipLimiter.check(`sign-in:${requestClientIp((name) => c.req.header(name), settings)}`, now);
       if (!ip.allowed) {
         c.header('Retry-After', String(ip.retryAfterSeconds));
         throw new ApiError('RATE_LIMITED', 'Too many sign-in attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
@@ -83,7 +94,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         { idleMs: settings.idleMinutes * 60_000, absoluteMs: settings.absoluteHours * 3_600_000 },
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user), 201);
+      return c.json(await buildMe(store, user, terms), 201);
     },
   );
 
@@ -109,22 +120,6 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
 
   app.openapi(
     createRoute({
-      method: 'get',
-      path: '/v1/me',
-      tags: ['Sessions'],
-      summary: 'The signed-in person and the hosted profiles they may open',
-      security: [{ session: [] }, { deviceSession: [] }],
-      responses: {
-        200: { description: 'Me', content: { 'application/json': { schema: MeSchema } } },
-        401: errorResponse('No valid session'),
-        403: errorResponse('PRINCIPAL_NOT_ACCEPTED'),
-      },
-    }),
-    async (c) => c.json(await buildMe(store, c.get('identity').user), 200),
-  );
-
-  app.openapi(
-    createRoute({
       method: 'patch',
       path: '/v1/me/malafat-suggestions',
       tags: ['Sessions'],
@@ -145,6 +140,36 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       const change = { ...(body.off === undefined ? {} : { off: body.off }), ...(body.dismiss === undefined ? {} : { dismiss: body.dismiss }) };
       const user = await store.users.updateMalafatSuggestions(c.get('identity').user.id, change, c.get('now')());
       return c.json(resolveMalafatSuggestions(user?.malafatSuggestions ?? null), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/me/terms-acceptance',
+      tags: ['Sessions'],
+      summary: 'Accept the current terms of service (MUT-324)',
+      description:
+        'Records that the signed-in person accepted `version`, read in `locale`, from the portal or the phone, with the optional `clientRelease` that showed it (MUT-354, stored as sent). Idempotent per version: accepting again changes nothing and writes no second audit row. The person accepts for themselves and, as owner, for their own profiles, so `user.terms_accepted` is audited on each profile they own.',
+      security: [{ session: [] }, { deviceSession: [] }],
+      request: { body: { required: true, content: { 'application/json': { schema: TermsAcceptanceRequestSchema } } } },
+      responses: {
+        200: { description: 'The terms status after accepting', content: { 'application/json': { schema: TermsStatusSchema } } },
+        409: errorResponse('TERMS_VERSION_STALE — `version` is not the current terms; details.current names it'),
+        422: errorResponse('Invalid body'),
+        401: errorResponse('No valid session'),
+        403: errorResponse('PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST'),
+      },
+    }),
+    async (c) => {
+      const { version, locale, clientRelease } = c.req.valid('json');
+      if (version !== terms.version) throw staleTerms(terms);
+      const { user, session } = c.get('identity');
+      const acceptance = termsAcceptanceOf(terms, locale, session.kind, clientRelease);
+      const audit = await termsAcceptedAudit(store, user, acceptance, c.get('requestId'));
+      await store.users.acceptTerms({ userId: user.id, ...acceptance, at: c.get('now')(), audit });
+      // The version is the current one, so the person's latest now covers it (D10): no need to read it back
+      return c.json({ version: terms.version, accepted: true }, 200);
     },
   );
 
@@ -228,26 +253,4 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       requestId,
     }));
   }
-}
-
-/** Exported for routes/device-sessions.ts (MUT-64): both sign-in surfaces return the same Me shape. */
-export async function buildMe(store: LedgerStore, user: UserRecord) {
-  const profiles = [];
-  for (const membership of await store.memberships.listByUser(user.id)) {
-    const organization = await store.organizations.getById(membership.organizationId);
-    if (!organization) continue;
-    const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
-    profiles.push(hostedProfileFor(organization, malafat?.status === 'CONNECTED' ? 'MALAFAT' : null, user.id, membership));
-  }
-  // MUT-120: the personal membership is created in the same instant as the firm's, so membership order alone ties on a
-  // random id. A stable sort on rank keeps membership order (oldest first) inside each group: firms, then the profiles
-  // the caller created (MUT-182), then the caller's personal profile last. The portal opens profiles[0].
-  const rank = (p: { isPersonalDefault: boolean; owned: boolean }) => (p.isPersonalDefault ? 2 : p.owned ? 1 : 0);
-  profiles.sort((a, b) => rank(a) - rank(b));
-  return {
-    user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale, malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions) },
-    profiles,
-    limits: { ownedProfiles: await store.organizations.countOwnedBy(user.id), maxOwnedProfiles: MAX_OWNED_PROFILES },
-    currencies: [...SUPPORTED_CURRENCIES],
-  };
 }
