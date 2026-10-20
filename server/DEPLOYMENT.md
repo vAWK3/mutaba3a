@@ -530,6 +530,7 @@ branded URL becomes a real requirement, not before.
 | Roll back past MUT-235 | Harmless while `SELECT count(*) FROM users WHERE "passwordHash" IS NULL` is 0 (the new table stays unused). **Once any exists, roll forward only:** every account created since, and every `--lock`, has a NULL password, which an older revision's Prisma client cannot read (P2032), so sign-in and every lookup of those people fail with a 500 and the old admin reset cannot fix them. If a rollback is unavoidable, first set those rows to the argon2id hash of a random throwaway password (still unusable), then reissue links after rolling forward |
 | Roll back past MUT-182 | Safe for the schema: the old revision writes personal profiles without `ownerUserId`/`profileType`, the CHECKs allow that, and the next deploy's post-roll `repairPersonalOwnership` stamps them. But once any user has created a profile (`SELECT count(*) FROM organizations WHERE "ownerUserId" IS NOT NULL AND "personalOwnerUserId" IS NULL` > 0), an older revision treats those as operator firms: it would issue them API keys, bind them to Malafat or share them on request. **Roll forward only** once that count is above 0, or refuse every such operator request while the old revision serves |
 | Delete a user who owns profiles (a privacy request) | Users are normally disabled, never deleted. If one must go, first remove (or hand to an operator) every organization with `"ownerUserId" = '<user id>'` and its rows: `organizations.ownerUserId` is `ON DELETE RESTRICT` (MUT-182), exactly as `personalOwnerUserId` is (MUT-120), so the user delete is refused while any remain |
+| Pilot counts (MUT-330) | Entries per profile and per pilot user, read-only, never sent anywhere: §6a |
 | Backups | Cloud SQL automated daily at 03:00 + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg` |
 | Scale beyond one instance | blocked by Terraform validation until TD-017; do not raise `max_instances` by hand |
 | Add staging later | `ENVIRONMENT=staging ./scripts/deploy.sh` with a `staging.tfvars` (`environment = "staging"`, ZONAL, no backups, `deletion_protection = false`); it would issue `test` keys and need its own Malafat URL secret. Not planned for now |
@@ -539,6 +540,129 @@ tests, the Postgres contract suite, the OpenAPI drift check, a Docker build
 with a `/health` probe, and `terraform validate` on every change under
 `server/`. Nothing in CI pushes or deploys. A red `Server CI` means do not run
 `deploy.sh`.
+
+### 6a. Pilot: entries per profile and per user (MUT-330)
+
+The weekly pilot review (`docs/commercial/pilot-reviews.md`) and the GA
+go/no-go (`docs/commercial/pilot-metrics.md`) need two numbers per pilot user:
+did they record a first income or expense within 7 days of setup, and in how
+many of the last 4 weeks did they record anything. This is the record of
+those numbers. PostHog dashboard 1031822 only sees people who opted in, so it
+undercounts.
+
+**Rules (ADR-024):**
+- The session is **read-only**: `PGOPTIONS` makes every transaction read-only,
+  so a slip can't write. `SHOW default_transaction_read_only;` must say `on`.
+- The output stays on your screen. **Never send it anywhere:** not into chat,
+  a ticket, a spreadsheet, PostHog or this repository. Only the pilot codes
+  and counts go into `pilot-reviews.md`, never an email or a profile name.
+
+**Pilot codes.** Keep the ten pilot emails, in signup order, in a file outside
+the repository, for example `~/.mutaba3a/pilot-users.psql`:
+
+```
+\set emails 'first@example.com,second@example.com'
+```
+
+The first email is `P01`, the second `P02`, and so on. Only append to the
+list; never reorder it, or the codes in past reviews change meaning. No
+spaces between emails.
+
+**Run it:**
+
+```bash
+cd server && PGOPTIONS='-c default_transaction_read_only=on' TF_STATE_BUCKET=<bucket> npm run db:psql
+```
+
+Then, in psql:
+
+```
+SHOW default_transaction_read_only;
+SET TIME ZONE 'UTC';
+\i ~/.mutaba3a/pilot-users.psql
+\set as_of now
+```
+
+`as_of` is the end of the window. Leave it at `now` for the weekly review. For
+the GA verdict, set it to the pilot's last day, for example
+`\set as_of '2027-01-31 23:59'`.
+
+What counts as an entry (the same three kinds the entries feed shows as
+income or expense, MUT-270):
+- an expense that isn't deleted;
+- a captured payment (Received: `payments.origin = 'CAPTURE'`, still
+  `POSTED`; an undone one is `REVERSED`);
+- an Owed entry (`receivables.origin = 'ADJUSTMENT'`, not deleted).
+
+Malafat's payments (`INTEGRATION`), conversions and unsorted inbox entries
+don't count. An entry counts in the week it was **logged** (`createdAt`), not
+the date it's for. **Setup** is the person's first terms acceptance, which the
+setup link records (ADR-102), or the account's creation if there's none.
+
+```sql
+-- 1. Entries per profile (organization), pilot users' profiles only.
+WITH pilot AS (
+  SELECT u.id, u.email, 'P' || lpad(array_position(string_to_array(:'emails', ','), u.email)::text, 2, '0') AS code
+  FROM users u
+  WHERE u.email = ANY (string_to_array(:'emails', ','))
+),
+entries AS (
+  SELECT "organizationId" AS org_id, "createdByUserId" AS user_id, "createdAt" AS at, 'expense' AS kind
+    FROM expenses WHERE "deletedAt" IS NULL
+  UNION ALL
+  SELECT "organizationId", "createdByUserId", "createdAt", 'income'
+    FROM payments WHERE origin = 'CAPTURE' AND status = 'POSTED'
+  UNION ALL
+  SELECT "organizationId", "createdByUserId", "createdAt", 'income'
+    FROM receivables WHERE origin = 'ADJUSTMENT' AND "deletedAt" IS NULL
+)
+SELECT p.code, o.name AS profile,
+       count(e.at) FILTER (WHERE e.kind = 'income')  AS income,
+       count(e.at) FILTER (WHERE e.kind = 'expense') AS expenses,
+       count(e.at) FILTER (WHERE e.at > :'as_of'::timestamptz - interval '7 days') AS last_7_days,
+       max(e.at)::date AS last_entry_on
+FROM pilot p
+JOIN memberships m ON m."userId" = p.id
+JOIN organizations o ON o.id = m."organizationId"
+LEFT JOIN entries e ON e.org_id = o.id AND e.at <= :'as_of'::timestamptz
+GROUP BY p.code, o.id, o.name
+ORDER BY p.code, o.name;
+
+-- 2. One row per pilot user: activation and weekly use.
+WITH pilot AS (
+  SELECT u.id, 'P' || lpad(array_position(string_to_array(:'emails', ','), u.email)::text, 2, '0') AS code,
+         COALESCE((SELECT min(t."acceptedAt") FROM terms_acceptances t WHERE t."userId" = u.id), u."createdAt") AS setup_at
+  FROM users u
+  WHERE u.email = ANY (string_to_array(:'emails', ','))
+),
+entries AS (
+  SELECT "createdByUserId" AS user_id, "createdAt" AS at FROM expenses WHERE "deletedAt" IS NULL
+  UNION ALL
+  SELECT "createdByUserId", "createdAt" FROM payments WHERE origin = 'CAPTURE' AND status = 'POSTED'
+  UNION ALL
+  SELECT "createdByUserId", "createdAt" FROM receivables WHERE origin = 'ADJUSTMENT' AND "deletedAt" IS NULL
+)
+SELECT p.code,
+       p.setup_at::date AS setup_on,
+       min(e.at)::date AS first_entry_on,
+       COALESCE(min(e.at) < p.setup_at + interval '7 days', false) AS activated,
+       count(DISTINCT floor(extract(epoch FROM :'as_of'::timestamptz - e.at) / 604800))
+         FILTER (WHERE e.at > :'as_of'::timestamptz - interval '28 days') AS weeks_with_entries_of_last_4,
+       count(e.at) AS entries_total
+FROM pilot p
+LEFT JOIN entries e ON e.user_id = p.id AND e.at <= :'as_of'::timestamptz
+GROUP BY p.id, p.code, p.setup_at
+ORDER BY p.code;
+```
+
+Reading it:
+- **Query 1** lists each pilot user's profiles with income and expense counts,
+  the count in the last 7 days and the last entry date. It counts every entry
+  in the profile, whoever logged it.
+- **Query 2** is one row per pilot user, counting only what that person
+  logged. `activated` is the activation bar. `weeks_with_entries_of_last_4`
+  of 3 or 4 meets the weekly-use bar. The weeks are the four 7-day windows
+  ending at `as_of`.
 
 ## 7. Production record
 

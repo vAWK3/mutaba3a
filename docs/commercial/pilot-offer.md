@@ -70,7 +70,7 @@ The table lists **only what has shipped** (the same rule as the /hosted copy). A
 - **Support:** email only, a reply within 2 working days. No WhatsApp or phone support.
 - **Moving in:** if you used the free app, we move your records into the hosted account with you, by hand. This promise already exists on /hosted.
 - **Feedback:**
-  - a 20-minute call in week 2 and another at the end of the pilot (the exit interview, `pilot-metrics.md`);
+  - a 20-minute call in week 2, and a 30-minute call at the end of the pilot (the exit interview in `pilot-metrics.md` §3);
   - anything else by email, whenever you like.
 - **Your data is yours:**
   - **Before MUT-325 ships:** you can ask for your records at any time, and we send them to you as a file.
@@ -156,7 +156,7 @@ The account itself is still provisioned by hand (pilot runbook, MUT-327).
 
 - **الدعم:** بالبريد الإلكتروني فقط، والرد خلال يومَي عمل.
 - **نقل سجلاتك:** ننقل سجلاتك من التطبيق المجاني معك، يدويًا.
-- **رأيك:** مكالمة مدتها 20 دقيقة في الأسبوع الثاني، وأخرى في نهاية التجربة. وما عدا ذلك بالبريد متى شئت.
+- **رأيك:** مكالمة مدتها 20 دقيقة في الأسبوع الثاني، وأخرى مدتها 30 دقيقة في نهاية التجربة. وما عدا ذلك بالبريد متى شئت.
 - **بياناتك لك:** نرسلها لك ملفًا متى طلبت، وقريبًا تنزّلها بنفسك.
 - **إذا توقف الدفع:** يصبح الحساب للقراءة فقط، ويبقى التنزيل متاحًا، ولا يُحذف شيء.
 - **إذا أغلقت حسابك:** أمامك **30 يومًا** للتراجع، ثم يُحذف كل شيء، وتُمحى النسخ الاحتياطية بعد 14 يومًا أخرى.
