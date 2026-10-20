@@ -44,11 +44,64 @@ export const OrganizationSchema = z
     personalOwnerUserId: z.string().uuid().nullable(),
     /** MUT-182: the user who owns this profile (their personal one or one they created); null on an operator firm. An owned profile is never keyed, bound or shared. */
     ownerUserId: z.string().uuid().nullable(),
-    /** MUT-182: PERSONAL or BUSINESS on an owned profile; null on a firm. */
+    /** MUT-182: PERSONAL or BUSINESS on an owned profile; null on an operator-provisioned organization. */
     profileType: z.enum(['PERSONAL', 'BUSINESS']).nullable(),
+    /** MUT-300 (ADR-099): the firm switch. Additive since 1.37.0-mut300. */
+    firm: z
+      .object({
+        /** Firm features are on from this instant; null = off. */
+        enabledAt: z.string().datetime().nullable(),
+        /** The owner's pending request; null when none is pending. */
+        requestedAt: z.string().datetime().nullable(),
+        requestedByUserId: z.string().uuid().nullable(),
+      })
+      .openapi('OrganizationFirm'),
     createdAt: z.string().datetime(),
   })
   .openapi('Organization');
+
+/** MUT-300 (ADR-099): a member's role in a firm. Read only while the organization's firm features are on. */
+export const MembershipRoleSchema = z.enum(['OWNER', 'BOOKKEEPER', 'SUBMITTER']).openapi('MembershipRole');
+
+/** MUT-300: one member as the operator sees them on the organization detail. */
+export const OrganizationMemberSchema = z
+  .object({ userId: z.string().uuid(), email: z.string(), role: MembershipRoleSchema })
+  .openapi('OrganizationMember');
+
+/**
+ * MUT-300 (eng review D4): turn firm features on in place, or off. `ownerUserIds` names an operator firm's owners
+ * (at least one, each already a member; 422 without); it is ignored on an owned profile, whose owner is the OWNER.
+ */
+export const UpdateOrganizationRequestSchema = z
+  .union([
+    z.object({ firmEnabled: z.literal(true), ownerUserIds: z.array(z.string().uuid()).max(50).optional() }).strict(),
+    z.object({ firmEnabled: z.literal(false) }).strict(),
+  ])
+  .openapi('UpdateOrganizationRequest');
+
+export const OrganizationResponseSchema = z.object({ organization: OrganizationSchema }).openapi('OrganizationResponse');
+
+/** MUT-300: one pending request for firm features, as the operator lists them. */
+export const FirmRequestSchema = z
+  .object({
+    organizationId: z.string().uuid(),
+    name: z.string(),
+    requestedAt: z.string().datetime(),
+    requestedByUserId: z.string().uuid(),
+    requestedByEmail: z.string().nullable(),
+    /** True on a profile a person owns (enabled in place, D4); false on an operator firm. */
+    owned: z.boolean(),
+  })
+  .openapi('FirmRequest');
+
+export const FirmRequestListSchema = z
+  .object({ data: z.array(FirmRequestSchema), nextCursor: z.string().nullable() })
+  .openapi('FirmRequestList');
+
+/** MUT-300: what POST /v1/profiles/{profileId}/firm-request answers, the first time and on every repeat. */
+export const FirmRequestResponseSchema = z
+  .object({ firmRequest: z.object({ requestedAt: z.string().datetime() }) })
+  .openapi('FirmRequestResponse');
 
 /** Never includes the secret or its hash. */
 export const ApiKeySummarySchema = z
@@ -191,6 +244,8 @@ export const OrganizationDetailSchema = z
     organization: OrganizationSchema,
     apiKeys: z.array(ApiKeySummarySchema),
     integrations: z.array(IntegrationSchema),
+    /** MUT-300: everyone with access, oldest membership first, with their firm role. Additive since 1.37.0-mut300. */
+    members: z.array(OrganizationMemberSchema),
   })
   .openapi('OrganizationDetail');
 
@@ -230,7 +285,12 @@ export const UserSummarySchema = z
   .openapi('UserSummary');
 
 export const MembershipSchema = z
-  .object({ organizationId: z.string().uuid(), createdAt: z.string().datetime() })
+  .object({
+    organizationId: z.string().uuid(),
+    /** MUT-300: read only while the organization's firm features are on. Additive since 1.37.0-mut300. */
+    role: MembershipRoleSchema,
+    createdAt: z.string().datetime(),
+  })
   .openapi('Membership');
 
 /** MUT-235: SETUP is a person's first password; RESET an operator reset of an existing one. */
@@ -349,10 +409,16 @@ export const HostedProfileSchema = z
     isPersonalDefault: z.boolean(),
     /** MUT-182: true on a profile the caller owns (their personal one and any they created) — theirs to rename and retype with PATCH /v1/profiles/{id}. */
     owned: z.boolean(),
-    /** MUT-182: PERSONAL or BUSINESS on an owned profile (it picks the expense categories); null on a firm. Unnamed, so the request-side ProfileType component stays non-null. */
+    /** MUT-182: PERSONAL or BUSINESS on an owned profile (it picks the expense categories); null on a profile you don't own. Unnamed, so the request-side ProfileType component stays non-null. */
     type: z.enum(['PERSONAL', 'BUSINESS']).nullable(),
     /** MUT-182: send as If-Match on PATCH /v1/profiles/{id}. */
     version: z.number().int().min(1),
+    /** MUT-300 (ADR-099): true while an operator has firm features on for this profile, owned or not. Additive since 1.37.0-mut300. */
+    firm: z.boolean(),
+    /** MUT-300: the caller's role while `firm` is true; null otherwise. Additive since 1.37.0-mut300. */
+    role: MembershipRoleSchema.nullable(),
+    /** MUT-300: the owner's pending request for firm features; null when none is pending, and always null for anyone but the owner. Additive since 1.37.0-mut300. */
+    firmRequestedAt: z.string().datetime().nullable(),
   })
   .openapi('HostedProfile');
 

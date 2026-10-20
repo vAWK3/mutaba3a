@@ -68,8 +68,8 @@ const INBOX_OPERATIONS = [
   'POST /v1/inbox/{entryId}/file-as-income',
 ];
 
-/** MUT-182: a person's own standalone profiles — session-only, naming no X-Mutaba3a-Profile (like /v1/me). */
-const PROFILE_OPERATIONS = ['POST /v1/profiles', 'PATCH /v1/profiles/{profileId}', 'GET /v1/profiles/{profileId}/type-change'];
+/** MUT-182: a person's own standalone profiles — session-only, naming no X-Mutaba3a-Profile (like /v1/me). MUT-300: the owner's firm request. */
+const PROFILE_OPERATIONS = ['POST /v1/profiles', 'PATCH /v1/profiles/{profileId}', 'GET /v1/profiles/{profileId}/type-change', 'POST /v1/profiles/{profileId}/firm-request'];
 
 /** MUT-228: reference exchange rates — session-only, naming no X-Mutaba3a-Profile (like /v1/me). */
 const FX_OPERATIONS = ['GET /v1/fx-rates'];

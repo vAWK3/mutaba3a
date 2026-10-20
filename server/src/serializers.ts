@@ -55,6 +55,7 @@ export function serializeOrganization(o: Organization) {
     personalOwnerUserId: o.personalOwnerUserId,
     ownerUserId: o.ownerUserId,
     profileType: o.profileType,
+    firm: { enabledAt: iso(o.firmEnabledAt), requestedAt: iso(o.firmRequestedAt), requestedByUserId: o.firmRequestedByUserId },
     createdAt: o.createdAt.toISOString(),
   };
 }
@@ -65,7 +66,9 @@ export function serializeOrganization(o: Organization) {
  * can never drift). `writerOfRecord` is MALAFAT when a CONNECTED Malafat
  * integration feeds the organization; an owned profile never has one.
  */
-export function hostedProfileFor(organization: Organization, writerOfRecord: ProfileWriter, userId: string) {
+export function hostedProfileFor(organization: Organization, writerOfRecord: ProfileWriter, userId: string, membership: Pick<MembershipRecord, 'role'> | null) {
+  const owned = profileOwnerOf(organization) === userId;
+  const firm = organization.firmEnabledAt !== null;
   return {
     id: organization.id,
     name: organization.name,
@@ -81,9 +84,14 @@ export function hostedProfileFor(organization: Organization, writerOfRecord: Pro
     isPersonalDefault: organization.personalOwnerUserId === userId,
     // MUT-182: the caller's own (theirs to rename and retype), its type, and the If-Match for doing so.
     // profileOwnerOf / profileTypeOf: an unstamped MUT-120 profile the old revision wrote is still the caller's, PERSONAL (qa-reconcile D1).
-    owned: profileOwnerOf(organization) === userId,
+    owned,
     type: profileTypeOf(organization),
     version: organization.version,
+    // MUT-300: firm features are on in place (eng review D4), so an owned profile can be a firm too. The role only
+    // means something while they are; the request is the owner's to see.
+    firm,
+    role: firm ? (membership?.role ?? null) : null,
+    firmRequestedAt: owned ? iso(organization.firmRequestedAt) : null,
   };
 }
 
@@ -128,7 +136,7 @@ export function serializeUser(u: UserRecord) {
 }
 
 export function serializeMembership(m: MembershipRecord) {
-  return { organizationId: m.organizationId, createdAt: m.createdAt.toISOString() };
+  return { organizationId: m.organizationId, role: m.role, createdAt: m.createdAt.toISOString() };
 }
 
 export function serializeAuditEvent(e: AuditEventRecord) {

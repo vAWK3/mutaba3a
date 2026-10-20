@@ -237,7 +237,7 @@ export async function buildMe(store: LedgerStore, user: UserRecord) {
     const organization = await store.organizations.getById(membership.organizationId);
     if (!organization) continue;
     const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
-    profiles.push(hostedProfileFor(organization, malafat?.status === 'CONNECTED' ? 'MALAFAT' : null, user.id));
+    profiles.push(hostedProfileFor(organization, malafat?.status === 'CONNECTED' ? 'MALAFAT' : null, user.id, membership));
   }
   // MUT-120: the personal membership is created in the same instant as the firm's, so membership order alone ties on a
   // random id. A stable sort on rank keeps membership order (oldest first) inside each group: firms, then the profiles

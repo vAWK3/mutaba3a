@@ -6,9 +6,13 @@ import type { AppEnv } from '../auth/middleware.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
 import { profileOwnerOf } from '../personal-profile.js';
 import { UniqueViolation } from '../repositories/memory.js';
-import type { LedgerStore } from '../repositories/ports.js';
+import { decodeCursor, encodeCursor, parseLimit } from '../pagination.js';
+import type { LedgerStore, Organization, SetFirmResult } from '../repositories/ports.js';
 import {
   AuditListSchema,
+  FirmRequestListSchema,
+  OrganizationResponseSchema,
+  UpdateOrganizationRequestSchema,
   CreateApiKeyRequestSchema,
   CreateApiKeyResponseSchema,
   CreateOrganizationRequestSchema,
@@ -113,12 +117,17 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
       const { organizationId } = c.req.valid('param');
       const org = await store.organizations.getById(organizationId);
       if (!org) throw new ApiError('NOT_FOUND', 'Organization not found');
-      const [keys, integrations] = await Promise.all([
+      const [keys, integrations, memberships] = await Promise.all([
         store.apiKeys.listByOrganization(org.id),
         store.integrations.listByOrganization(org.id),
+        store.memberships.listByOrganization(org.id),
       ]);
+      // MUT-300: who the operator is naming owners from. Organizations have a handful of members; one read each.
+      const members = await Promise.all(
+        memberships.map(async (m) => ({ userId: m.userId, email: (await store.users.getById(m.userId))?.email ?? '', role: m.role })),
+      );
       return c.json(
-        { organization: serializeOrganization(org), apiKeys: keys.map(serializeApiKey), integrations: integrations.map(serializeIntegration) },
+        { organization: serializeOrganization(org), apiKeys: keys.map(serializeApiKey), integrations: integrations.map(serializeIntegration), members },
         200,
       );
     },
@@ -238,7 +247,106 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
     },
   );
 
+  app.openapi(
+    createRoute({
+      method: 'patch',
+      path: '/admin/v1/organizations/{organizationId}',
+      tags: ['Admin'],
+      summary: 'Turn firm features on or off (MUT-300)',
+      description:
+        'Enabling works in place (ADR-099, MUT-300 eng review D4): an owned Business profile stays owned and its owner becomes OWNER; an operator firm needs `ownerUserIds` (422 without), each already a member (409 CONFLICT, details.reason NOT_A_MEMBER). Every other member becomes BOOKKEEPER, and a pending request is cleared. Disabling keeps roles. The same state again changes nothing. Refused on the built-in personal profile (409 PERSONAL_PROFILE) and on an owned Personal profile (409 NOT_BUSINESS).',
+      security: [{ adminToken: [] }],
+      request: { params: OrganizationIdParam, body: { required: true, content: { 'application/json': { schema: UpdateOrganizationRequestSchema } } } },
+      responses: {
+        200: { description: 'Updated, or already in that state', content: { 'application/json': { schema: OrganizationResponseSchema } } },
+        404: { description: 'Unknown organization', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        409: { description: 'CONFLICT with details.reason PERSONAL_PROFILE, NOT_BUSINESS or NOT_A_MEMBER', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        422: { description: 'Validation failed, or an operator firm enabled with no owner named', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const { organizationId } = c.req.valid('param');
+      const body = c.req.valid('json');
+      const input = body.firmEnabled ? { enabled: true as const, ownerUserIds: body.ownerUserIds ?? [] } : { enabled: false as const };
+      // Audited inside the write's transaction, so a failed audit can't leave an unrecorded change.
+      const result = await store.organizations.setFirm(organizationId, input, c.get('now')(), { actorId: null, requestId: c.get('requestId') });
+      return c.json({ organization: serializeOrganization(firmUpdated(result)) }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/admin/v1/organizations/{organizationId}/firm-request',
+      tags: ['Admin'],
+      summary: 'Decline a pending request for firm features (MUT-300)',
+      description: 'Clears the request (eng review D6), audited firm.request_declined. The owner sees the offer again and may ask again. 404 when nothing is pending.',
+      security: [{ adminToken: [] }],
+      request: { params: OrganizationIdParam },
+      responses: {
+        200: { description: 'Declined', content: { 'application/json': { schema: OrganizationResponseSchema } } },
+        404: { description: 'Unknown organization, or no pending request', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const result = await store.organizations.declineFirmRequest(c.req.valid('param').organizationId, c.get('now')(), { actorId: null, requestId: c.get('requestId') });
+      if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No pending firm request for this organization');
+      return c.json({ organization: serializeOrganization(result.organization) }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/admin/v1/firm-requests',
+      tags: ['Admin'],
+      summary: 'List pending requests for firm features, oldest first (MUT-300)',
+      security: [{ adminToken: [] }],
+      request: { query: z.object({ limit: z.coerce.number().int().optional(), cursor: z.string().optional() }) },
+      responses: {
+        200: { description: 'Pending requests', content: { 'application/json': { schema: FirmRequestListSchema } } },
+        422: { description: 'Validation failed', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const query = c.req.valid('query');
+      const page = await store.organizations.listFirmRequests({ limit: parseLimit(query.limit), cursor: query.cursor ? decodeCursor(query.cursor) : null });
+      const data = await Promise.all(
+        page.items.map(async (o) => ({
+          organizationId: o.id,
+          name: o.name,
+          requestedAt: o.firmRequestedAt!.toISOString(),
+          requestedByUserId: o.firmRequestedByUserId!,
+          requestedByEmail: (await store.users.getById(o.firmRequestedByUserId!))?.email ?? null,
+          owned: profileOwnerOf(o) !== null,
+        })),
+      );
+      return c.json({ data, nextCursor: page.nextCursor ? encodeCursor(page.nextCursor) : null }, 200);
+    },
+  );
+
   return app;
+}
+
+/** The organization a firm-switch write left, or the refusal as the operator should read it. */
+function firmUpdated(result: SetFirmResult): Organization {
+  switch (result.kind) {
+    case 'updated':
+      return result.organization;
+    case 'not_found':
+      throw new ApiError('NOT_FOUND', 'Organization not found');
+    case 'personal_profile':
+      throw new ApiError('CONFLICT', 'A built-in personal profile never gets firm features', { reason: 'PERSONAL_PROFILE' });
+    case 'not_business':
+      throw new ApiError('CONFLICT', 'Firm features are for Business profiles; this one is typed Personal', { reason: 'NOT_BUSINESS' });
+    case 'owners_required':
+      throw new ApiError('VALIDATION_FAILED', 'Name at least one owner (ownerUserIds) when enabling firm features on an operator firm', { field: 'ownerUserIds' });
+    case 'not_a_member':
+      throw new ApiError('CONFLICT', 'Every owner must already be a member of the organization', { reason: 'NOT_A_MEMBER', userIds: result.userIds });
+  }
 }
 
 export function slugify(name: string): string {
