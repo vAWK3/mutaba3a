@@ -28,6 +28,51 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — Decision: self-service signup, business-email review, forgot-password and Resend (MUT-331, ADR-159)
+
+**Why:** GA (epic MUT-322) needs anyone to sign up, pay and leave without the operator. Accounts were operator-issued only (ADR-037 §1, ADR-088), and the server had no email provider. Planning only; no code changed.
+
+### Added
+- `.claude/designs/mut-331-self-service-signup.md`. It covers:
+  - signup: verify first, then set a password and accept the terms on the existing `/setup` page;
+  - forgot-password: a mailed RESET link;
+  - the business-email check and operator review queue;
+  - the provider comparison;
+  - abuse controls;
+  - passkeys, terms, pilot and phone interactions;
+  - QA scenarios;
+  - build stories S1–S7.
+- ADR-159 (Accepted, Basel's Q1–Q5 + Q4b): open signup behind `SELF_SIGNUP_ENABLED`; instant only for verified business domains (webmail and unverified domains wait for approval); Resend as the one mailer; a password is required and a passkey is suggested after MUT-115; Freelancer by default.
+
+### Changed
+- ADR-037 §1 and ADR-088 carry override notes pointing to ADR-159.
+- firm-books §10.3 notes that the email provider is now picked (Resend), superseding MUT-299 D14.
+## [Unreleased] - 2026-10-20 — Billing spike: Stripe Billing + Stripe Tax, per-profile entitlements (MUT-332, ADR-160)
+
+**Why:** The GA gate (MUT-322) needs people to pay without the operator. The spike compares Stripe with merchants of record (Paddle, Stripe Managed Payments, Lemon Squeezy) on fees, tax, currencies and Arabic, and costs them at 10, 100 and 1000 users. It designs entitlements, the pilot carry-over, and when prices may reach the site. Basel picked the provider, the country rule, the trial and what happens when the founder lock ends.
+
+### Added
+- `docs/commercial/billing-spike.md`: the comparison with dated sources, the cost model, the entitlements design (person pays, profile entitled; ACTIVE/GRACE/READ_ONLY/LOCKED; one gate in `store-guard.ts`), webhooks and reconciliation, pilot carry-over, the gate for prices on the site, and Basel's decisions D1–D4.
+- ADR-160.
+- Build stories under MUT-322, labelled `ga-gate`: MUT-358 (core), MUT-360 (webhook), MUT-361 (lapse gate), MUT-362 (self-service), MUT-363 (Firm tier), MUT-364 (phone), MUT-365 (prices on the site).
+
+### Changed
+- `docs/commercial/pilot-offer.md` §5: a pilot subscription's Stripe Customer gets `metadata.mutaba3a_user_id`, and a Firm subscription `mutaba3a_organization_id`, so MUT-360 links it without migrating anything.
+
+## [Unreleased] - 2026-10-20 — The web release commits its notes; the server release refuses a dirty tree before it pushes
+
+**Why:** `make release web` v0.1.16 wrote the 0.1.16 entry into `release-notes.json` (ADR-151) but committed only the version files, so the pushed commit, the Netlify build and the `web-v0.1.16` tag all lacked the notes. `make release server` then asked "continue with 1 uncommitted change?", committed and pushed `release: api v0.3.16`, and deploy.sh refused the dirty tree — a pushed version commit that deployed nothing. Basel committed the notes by hand (4fc2c799).
+
+### Fixed
+- **`release-web` stages `release-notes.json`** with the version bump, so the release commit, the Netlify build and the web tag carry the notes. The failure hint no longer says "commit it".
+- **`preflight.sh server` fails on a dirty tree** without asking: deploy.sh refuses one anyway, and it runs after the commit and push. `ALLOW_DIRTY` is web-only now (header comment). The web preflight still asks.
+- **`release-server` re-checks the tree** right before the version commit (`git status --porcelain` minus the two bumped package files) and stops with the stray paths listed, so nothing is committed or pushed that deploy.sh will refuse.
+- `release-notes.json` 0.1.16: the Arabic line had been typed in English; now "إصلاحات طفيفة للأخطاء".
+
+### Technical
+- `scripts/__tests__/tag-release.test.ts`: `release-web` stages `release-notes.json` before the release commit; a dirty tree never reaches deploy.sh (deploy.sh still refuses one unless `IMAGE_TAG` is set, the server preflight fails instead of asking and names deploy.sh, `release-server` checks the tree before the commit and the push).
+- Verified by running `scripts/preflight.sh server` on this dirty tree with no terminal: 1 failure, no prompt. Files: `Makefile`, `scripts/preflight.sh`, `release-notes.json`, `server/DEPLOYMENT.md`, knowledge files.
+
 ## [Unreleased] - 2026-10-20 — Drawers fit a phone, in Arabic and English (MUT-357, TD-070)
 
 **Why:** The portal opens in Arabic (ADR-077), and pilot users (MUT-322) will see it on phones. At 375px every drawer was 480px wide: in Arabic it ran 105px off the right edge, cutting off the title and Save; in English it ran off the left edge. Found with MUT-325's Your data drawer; the shared drawer was the cause, so every drawer had it.

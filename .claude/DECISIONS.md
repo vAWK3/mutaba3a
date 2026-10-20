@@ -1746,6 +1746,14 @@ even expressible today.
 > test are unchanged. `mut-43-auth-states.md` §4 and `hosted-portal.md`
 > §7.6 carry the same amendment.
 
+> **Override note (2026-10-20, ADR-159, MUT-331).** Decision 1's "no signup,
+> invite or password-reset route" no longer holds for GA. Open signup
+> (`POST /v1/signups`, behind `SELF_SIGNUP_ENABLED`) and self-service recovery
+> (`POST /v1/account-recovery`) mail ADR-088 setup links. Only verified business
+> domains are instant; the rest wait for operator approval. Operator issuance
+> stays. Decision 4 (accounts are never revealed) is kept and extended to both
+> routes.
+
 **ADR-024's guarantee is demonstrated, not asserted**: the desktop/PWA bundles
 are checked to contain none of the portal's endpoints, cookie name or headers,
 and no new network origins; Dexie schema, profile types, profile store,
@@ -3415,6 +3423,8 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Issuing a session on redeem: a second way to mint one, with its own cookie and CSRF surface.
 - Plain SHA-256 of the token (the ticket's wording): the session HMAC is the same cost, one helper instead of two, and stronger.
 
+> **Override note (2026-10-20, ADR-159, MUT-331).** Decision 4's "only public routes" list gains `POST /v1/signups` and `POST /v1/account-recovery`. The "emailing the link" alternative is no longer rejected: self-requested links are mailed through Resend. Both new routes end on this ADR's `/setup` page and redeem; a new SIGNUP purpose is bound to an email, not a user.
+
 **Consequences**: MUT-236 (portal `/setup` page) is served by the same server build, so both ship in one `make release server`, and no server release should go out between their merges. MUT-237/238 (change your own password) reuse `NEW_PASSWORD_POLICY`. Old token rows are never pruned (TD-146).
 
 ## ADR-089: One Spacing Scale, the Union, Canonical in the Brand JSON; Sizes Past It Are Named Layout Tokens; Spacing Joins the Literal Guard
@@ -3447,7 +3457,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 1. **`release-notes.json`** at the repo root maps `x.y.z` to `{ en: string[], ar: string[] }`, with the same number of non-empty lines in each language (`releaseNotesProblems`, tested). It is the only place notes are written.
 2. **Three readers**:
    - The web app bundles it (`RELEASE_NOTES`).
-   - `make release-web` refuses a bumped version without an entry (`npm run release:notes -- <v>`, between the bump and the build).
+   - `make release-web` refuses a bumped version without an entry (`npm run release:notes -- <v>`, between the bump and the build) and commits `release-notes.json` with the version bump (2026-10-20: v0.1.16 shipped without its notes because only the version files were committed, and the dirty tree then broke the server release).
    - `tag-release.sh` writes the English lines into the `web-v*` tag's message, from the file as it stood in the tagged commit.
 3. **What shows.** `whats-new-seen-version` (localStorage) is the newest version this browser dismissed. The app shows every entry newer than it and no newer than the running version, newest first. `app-last-known-version` is not used for this, because `handleVersionChange` rewrites it on every start, so a tab closed without dismissing would lose the notes.
 4. **Seeding.** Seeded once at start (`seedSeenVersion`):
@@ -4203,3 +4213,92 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Every claimed save now also produces a transient toast/notice, not just the row tint — slightly more feedback than before, intentionally (that was the point: there was no icon-bearing surface to animate otherwise).
 - `SavedNotice`'s `preset: IconFeedbackPreset` prop is resolved once by the page (`ExpensesList.tsx`/`ConversionsList.tsx`, which already hold the full `HostedProfile` via `useProfile()`), not looked up inside `SavedNotice`/`ExpenseDrawer`/`ConversionDrawer` via `useMe()` — those three only ever held `profileId: string`, and adding `useMe()` there would have broken their existing tests (none wrap a `Me` context) for no benefit over a one-line prop threaded from where the data already lives.
 - MUT-339/340 (streaks, milestones) inherit this precedent: reuse the existing toast/notice surface for new icon-bearing feedback before inventing new floating UI.
+
+---
+
+## ADR-159: Open Signup Verifies the Email First and Ends on the Setup-Link Page; Only Business Email Is Instant, the Rest Waits for the Operator; Forgot-Password Mails a RESET Link; Resend Is the One Mailer (Overrides ADR-037 §1's "Operator-Issued Only")
+
+**Status**: Accepted (Basel, 2026-10-20, Q1–Q5 + Q4b in `.claude/designs/mut-331-self-service-signup.md` §10). Overrides ADR-037 §1 and ADR-088's "no signup or forgot-password route" for GA. Supersedes firm-books §10.3 / MUT-299 D14 ("MUT-306 picks the email provider"). Partly overrides Basel's own 2026-10-19 "no approval step" (MUT-331 comment 12133).
+**Date**: 2026-10-20
+**Context**: GA needs anyone to sign up, pay and leave without the operator (epic MUT-322). Basel decided open signup with email verification on 2026-10-19. The server has no email provider, and firm invites (MUT-306, firm-books D10) need one. The ticket says "ADR-037 decision 4" because "accounts are operator-issued only" was the fourth of Basel's 2026-10-10 decisions that ADR-037's context records. The rule itself is ADR-037 §1. ADR-037 §4 (sign-in doesn't reveal accounts) is **kept** and extended to the new routes.
+
+**Decision**:
+1. **Signup verifies the email first (Q2).** `POST /v1/signups {email, locale, turnstileToken}` mails a link. The link opens the existing `/setup` page, where the person sets a password (required) and accepts the terms (ADR-102 §5), and the existing redeem creates the account and the personal profile.
+   - No User row exists until redemption: the SIGNUP token is bound to the email, as firm-books D10 binds invites.
+   - SIGNUP links last 24 h and work once. Redeeming sets `emailVerifiedAt` and issues no session (ADR-088 §5).
+2. **Only business email is instant; everything else waits for the operator (Q4, Q4b).**
+   - **Refused outright** (400 `EMAIL_NOT_ACCEPTED`): disposable domains, on a vendored public list, and domains that can't receive mail.
+   - **Instant:** a domain that is not free webmail, has MX, resolves, and is ≥ 90 days old by RDAP. The account is `ACTIVE` at once.
+   - **Waits for review:** free webmail (Gmail, Outlook, iCloud…), or a domain whose checks fail or can't be completed. The account is created `PENDING_REVIEW`. Signing in with the right password answers 403 `ACCOUNT_UNDER_REVIEW` until the operator approves or declines through `/admin/v1/signup-reviews` or `signups:review`. Both outcomes mail the person, and a decline deletes the empty account.
+   - The check is DNS and RDAP only. The server never fetches the domain's website.
+3. **Forgot-password reuses ADR-088 unchanged.** `POST /v1/account-recovery {email, turnstileToken}` mails a RESET link (1 h) to an ACTIVE or PENDING_REVIEW account, or a fresh SETUP link to a pending operator-created one. Nothing changes until the link is used. A "your password was changed" notice follows every password set or change.
+4. **Accounts are never revealed.** Both routes answer `202 {status:"sent"}` for every address that passes the input-only checks, no earlier than a fixed floor (3 s for signup, 1.5 s for recovery). An existing address gets a "you already have an account" mail instead of a signup link.
+5. **Resend is the one mailer (Q1),** through Barmajiyat's existing account, behind a `Mailer` port:
+   - Mutaba3a has its own verified domain on the MUT-112 apex, sending from `eu-west-1`, and its own domain-restricted sending key.
+   - It sends from `no-reply@<apex>`, with no interim sender domain.
+   - Open and click tracking are off, and `email:check` enforces that.
+   - Templates are server-rendered in en/ar, with Arabic RTL HTML and plain text.
+   - Svix-signed bounce and complaint webhooks suppress the address.
+   - Resend stores records in the US, and the privacy policy says so. Money records never enter an email.
+   - The same mailer serves MUT-306 invites and the operator's review digest.
+6. **Abuse controls.** The server verifies Turnstile and fails closed. Limits: 10/h per IP; 1/min and 5/day per address, whether or not an account exists; a 500/day global send cap, kept below the shared Resend plan's limit. Unredeemed SIGNUP tokens are pruned.
+7. **Switches.** `SELF_SIGNUP_ENABLED` (default false) gates signup until GA. Recovery ships as soon as email works, pilot accounts included. Operator issuance stays.
+8. **Tier at signup (Q5): Freelancer by default.** Firm comes through MUT-300's request. Signup writes no plan; billing (MUT-332) owns entitlements and the step after the first sign-in, and never charges a PENDING_REVIEW account. With ADR-160's 14-day trial, a reviewed account's trial starts when it becomes `ACTIVE` (approval), not at signup, so time spent waiting for the operator never eats the trial.
+9. **Passkeys (Q3).** A password is required at signup. A passkey is optional and suggested as the more secure way, through a dismissible card after the first sign-in, once MUT-115 ships. Passkey-only accounts are out of scope.
+
+**Override log**:
+
+| Overridden | What it said | Replaced by | Why | Date |
+|---|---|---|---|---|
+| ADR-037 §1 ("decision 4" in MUT-331) | "No signup, invite or password-reset route exists in any environment"; accounts are operator-issued only | Decisions 1, 3 and 7: open signup (switchable) and self-service recovery beside operator issuance | GA requires self-service (MUT-322); Basel's 2026-10-19 decision | 2026-10-20 |
+| ADR-088 §4 and the ADR-037 override note | The only public account routes are sign-in and the setup-link pair | Adds `POST /v1/signups` and `POST /v1/account-recovery`; `no-self-registration.test.ts` re-pinned deliberately | Same | 2026-10-20 |
+| ADR-088 "Alternatives rejected: emailing the link — there is no email provider" | Links are delivered by hand | Self-requested links are mailed; operator links stay copyable | A provider now exists (decision 5) | 2026-10-20 |
+| firm-books §10.3 / MUT-299 D14 | MUT-306 picks the provider | This ADR picks Resend; MUT-306 uses the mailer | Signup and recovery need it first, and before MUT-306 | 2026-10-20 |
+| Basel's 2026-10-19 "no waitlist, no approval step" (MUT-331 comment 12133) | Anyone who verifies their email is in | Instant only for verified business domains; webmail and unverified domains wait for operator approval (decision 2). Still no waitlist. | Basel, Q4/Q4b, 2026-10-20: accept business email only, review the rest | 2026-10-20 |
+| `HOSTED_RULES` (MUT-37/43 bundle rule) | The portal never says create account / forgot / reset | Those phrases are allowed; "invite" and "subscribe" stay banned until MUT-306 and billing | Signup and recovery pages need the words | 2026-10-20 |
+
+**Rejected**:
+- Amazon SES in Tel Aviv. It was recommended for Israeli residency and price; Basel chose reuse of Resend. An SES adapter stays a one-file change.
+- Scaleway, Postmark, Mailgun.
+- Password-first signup.
+- Passkey-at-signup.
+- Allowing disposable addresses.
+- Accepting webmail instantly.
+- Refusing webmail.
+- Asking the tier at signup.
+- An interim sender on a Barmajiyat or Malafat domain (it looks like phishing and mixes reputations).
+- Fetching the domain's website (SSRF).
+- Malafat SSO (rejected 2026-10-11).
+
+**Consequences**:
+- A new operator-applied `email` Terraform stack (DNS records only). Live sending waits on MUT-112.
+- `AccountSetupToken.userId` becomes nullable, with a bound `email`.
+- New `users.emailVerifiedAt`, `UserStatus.PENDING_REVIEW`, `signup_reviews` and `email_suppressions`.
+- A Resend webhook outside `/v1`.
+- The in-process limiters keep TD-017's single-instance assumption.
+- The privacy policy names Resend (US records), Cloudflare Turnstile and the RDAP lookup.
+- At GA most freelancer signups (webmail) wait for review, about 5 a day at 1,000 users. Moving a webmail provider to instant is a list edit and a recorded decision.
+- The phone's "Create an account" link waits on in-app account deletion (MUT-333, App Store 5.1.1(v)).
+- Build stories MUT-359, MUT-366..371 (brief §12).
+## ADR-160: Billing Is Stripe Billing + Stripe Tax; the Person Pays and Each Profile Is Entitled; Unpaid Trials Lock, Paid Lapses Stay Read-Only (MUT-332)
+
+**Status**: Active (spike decision; built by MUT-358, MUT-360…365)
+**Date**: 2026-10-20
+**Context**: GA gate (MUT-322). People must be able to pay without the operator. The seller is Barmajiyat Ltd (UK), and the pilot is already billed with Stripe subscriptions made by hand in the dashboard. Malafat firms pay through Malafat (MAL-870). The full comparison, costs and sources are in `docs/commercial/billing-spike.md`.
+**Decision** (Basel, 2026-10-20):
+1. **Provider: Stripe Billing + Stripe Tax** on the Mutaba3a Stripe account. Barmajiyat Ltd is the seller of record and owns registration and filing (MUT-355). We looked at Paddle, Stripe Managed Payments and Lemon Squeezy as merchants of record and turned them down: the pilot's subscriptions would have had to migrate or couldn't join, Managed Payments still leaves the UAE, Bahrain, Oman and Jordan to us, Lemon Squeezy charges everyone in USD, and they cost more. We revisit Paddle if consumer sales in the Gulf or Jordan become real.
+2. **The person pays, and each profile is entitled.** The Stripe Customer is the `User`. A Freelancer subscription covers the person's own profiles. A Firm subscription covers one organization (`firmEnabledAt`, MUT-300) and the owner's own profiles. Coverage is checked in this order: MALAFAT (a CONNECTED integration), OPERATOR (a grant), STRIPE, TRIAL. The tier comes from `product.metadata.tier`, never from the amount.
+3. **States are ACTIVE, GRACE, READ_ONLY and LOCKED.**
+   - `past_due` is GRACE.
+   - A paid subscription that lapses becomes READ_ONLY for good: reads and records export keep working, and nothing is deleted.
+   - A trial is 14 days with no card, then 14 days READ_ONLY, then LOCKED. LOCKED leaves only Subscribe and Download my records, and applies only to people who never paid.
+4. **One gate.** `SUBSCRIPTION_LAPSED` is enforced in `store-guard.ts` and `authenticate()`, next to READ_ONLY_PROFILE. The `identity` row, `/v1/billing/*` and `GET /v1/records-export*` are always open. Malafat API-key writes are never billing-gated.
+5. **Stripe is the source of truth.** Webhooks are idempotent through `StripeEvent`, re-fetch the object rather than trusting the payload, and a nightly reconcile repairs anything missed. Pilot subscriptions are linked by `metadata.mutaba3a_user_id`, so nothing migrates.
+6. **Consumer checkout opens country by country** (`config/billing-countries.json`). Anywhere else, checkout needs a business tax ID until Barmajiyat Ltd registers there.
+7. **Founder prices are their own Stripe Prices** (`*_founder_*`). A subscription schedule moves each one to the GA list price (`*_list_*`) after its 12-month lock.
+8. **Prices reach the site** only when the MUT-332 §6 gate holds (MUT-365).
+**Consequences**:
+- Stripe's Checkout, Customer Portal and invoices have no Arabic. Our own Arabic Billing page explains everything before the English card form.
+- Stripe Tax can't calculate Israel or Jordan, so those take manual tax rates if MUT-355 says tax is due.
+- A firm member's own profile isn't covered by the firm's subscription until firm v3 decides otherwise (MUT-305/306).
+- The ADR-037 no-self-signup rule is MUT-331's override (ADR-159 on its branch), not this one's.

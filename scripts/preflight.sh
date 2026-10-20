@@ -13,7 +13,8 @@
 # Escape hatches (set to 1 to downgrade a FAIL to a WARN without asking), for
 # the cases where you know better than the check. Left unset, each of these
 # asks interactively whether to continue or stop instead of hard-failing:
-#   ALLOW_DIRTY        uncommitted changes in the working tree
+#   ALLOW_DIRTY        uncommitted changes in the working tree (web only: the server
+#                      release always fails on them, because deploy.sh refuses them)
 #   ALLOW_UNMERGED     local branches not merged into the release branch
 #   ALLOW_WORKTREES    extra git worktrees still checked out
 #   ALLOW_NODE_MAJOR   a node major other than the supported one
@@ -167,10 +168,18 @@ else
     printf '%s\n' "$DIRTY" | sed 's/^/        /' | head -10
     [[ "$(printf '%s\n' "$DIRTY" | wc -l)" -gt 10 ]] && hint "… and more; run: git status --short"
     hint "the image tag / release commit must name exactly what you deploy"
-    fail_or_confirm ALLOW_DIRTY \
-      "Continue the release with $DIRTY_COUNT uncommitted change(s) in the working tree?" \
-      "working tree has $DIRTY_COUNT uncommitted change(s)" \
-      "working tree has $DIRTY_COUNT uncommitted change(s)"
+    if [[ "$MODE" == "server" ]]; then
+      # deploy.sh refuses a dirty tree outright (the image tag must name what
+      # ships), and it runs after the version commit and push. Asking here
+      # would only let a pushed version commit deploy nothing (2026-10-20).
+      bad "working tree has $DIRTY_COUNT uncommitted change(s) — deploy.sh refuses a dirty tree"
+      hint "commit or stash them first; ALLOW_DIRTY does not apply to the server release"
+    else
+      fail_or_confirm ALLOW_DIRTY \
+        "Continue the release with $DIRTY_COUNT uncommitted change(s) in the working tree?" \
+        "working tree has $DIRTY_COUNT uncommitted change(s)" \
+        "working tree has $DIRTY_COUNT uncommitted change(s)"
+    fi
   fi
 
   # Unmerged work: branches whose commits are not in the release branch.

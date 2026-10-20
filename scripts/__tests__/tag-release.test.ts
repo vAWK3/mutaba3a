@@ -196,6 +196,13 @@ describe('release tags are wired end to end', () => {
     expect(body.indexOf('release:notes')).toBeLessThan(body.indexOf('test:bundles'));
   });
 
+  it('make release web commits release-notes.json with the version bump, so the pushed commit and the tag carry the notes (2026-10-20 release)', () => {
+    const body = recipe('release-web');
+    const add = body.match(/git add ([^;]+);/);
+    expect(add?.[1].split(/\s+/)).toContain('release-notes.json');
+    expect(body.indexOf('git add')).toBeLessThan(body.indexOf('git commit -m "release: web v$$version"'));
+  });
+
   it('make release server tags the API release after deploy.sh succeeds', () => {
     const body = recipe('release-server');
     expect(body).toMatch(/scripts\/tag-release\.sh api "\$\$version" --push/);
@@ -205,5 +212,46 @@ describe('release tags are wired end to end', () => {
   it('release-qa reads the web app from web-v* and the portal from api-v*', () => {
     expect(qaConfig).toMatch(/web: \{[\s\S]*?release: \{ strategy: 'tag', pattern: 'web-v\*'/);
     expect(qaConfig).toMatch(/portal: \{[\s\S]*?release: \{ strategy: 'tag', pattern: 'api-v\*'/);
+  });
+});
+
+/**
+ * 2026-10-20: `make release server` committed and pushed `release: api v0.3.16`,
+ * then deploy.sh refused the dirty tree the web release had left behind
+ * (release-notes.json), so a pushed version commit shipped nothing. The
+ * preflight had asked "continue with 1 uncommitted change?" — a question whose
+ * yes could only end there. A dirty tree must stop the server release before
+ * anything is committed or pushed, without asking.
+ */
+describe('a dirty tree never reaches deploy.sh', () => {
+  const makefile = readFileSync(resolve(ROOT, 'Makefile'), 'utf-8');
+  const preflight = readFileSync(resolve(ROOT, 'scripts/preflight.sh'), 'utf-8');
+  const deploySh = readFileSync(resolve(ROOT, 'server/scripts/deploy.sh'), 'utf-8');
+
+  function dirtyBlock(): string {
+    const start = preflight.indexOf('DIRTY="$(git status --porcelain');
+    if (start === -1) throw new Error('preflight.sh has no dirty-tree check');
+    return preflight.slice(start, preflight.indexOf('\n\n', start));
+  }
+
+  it('deploy.sh still refuses uncommitted changes unless IMAGE_TAG names the image', () => {
+    expect(deploySh).toMatch(/git -C "\$\{REPO_ROOT\}" status --porcelain[^\n]*IMAGE_TAG/);
+  });
+
+  it('the server preflight fails on a dirty tree instead of asking, and says why', () => {
+    const block = dirtyBlock();
+    const serverBranch = block.slice(block.indexOf('"$MODE" == "server"'));
+    expect(serverBranch).toMatch(/\bbad "/);
+    expect(serverBranch).toMatch(/deploy\.sh/);
+    // The web release still asks: the push ships the commit and nothing else.
+    expect(block).toMatch(/fail_or_confirm ALLOW_DIRTY/);
+  });
+
+  it('make release server re-checks the tree right before the version commit, so nothing is committed or pushed that deploy.sh will refuse', () => {
+    const body = makefile.slice(makefile.indexOf('\nrelease-server:'), makefile.indexOf('\n# ----', makefile.indexOf('\nrelease-server:')));
+    const check = body.indexOf('git status --porcelain');
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(body.indexOf('git commit -m "release: api v$$version"'));
+    expect(check).toBeLessThan(body.indexOf('git push origin'));
   });
 });

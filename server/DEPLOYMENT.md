@@ -203,8 +203,9 @@ then, that origin's errors are dropped.
 
 ## 2. Deploy
 
-From a clean checkout of `main` (the script refuses uncommitted changes in
-`server/`, so the image tag always names a commit):
+From a clean checkout of `main` (the script refuses uncommitted changes
+anywhere in the repo, so the image tag always names a commit; `make release
+server` fails its preflight on them before anything is committed or pushed):
 
 ```bash
 cd server
