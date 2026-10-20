@@ -90,6 +90,12 @@ Use **Stripe from day one, with no code**. Subscriptions are created by hand in 
 2. Create two Products, **Freelancer** and **Firm**. Give each four prices: monthly and yearly, in ILS and in USD.
 3. Create the customer's subscription from the Stripe dashboard, with "email invoice" collection. Stripe emails a hosted invoice page, and the customer pays by card.
 4. Set the statement descriptor to `MUTABA3A`.
+5. **Link the subscription to the person** (MUT-332 §5):
+   - On the Customer, set metadata `mutaba3a_user_id` = the person's user id (from the admin listing).
+   - On a Firm subscription, also set `mutaba3a_organization_id`.
+   - Use the catalog's lookup keys (`freelancer_founder_monthly_ils` …) when creating the Prices.
+   - Give the subscription a schedule: 12 months at the founder price. The phase that moves it to the list price is added once the GA list prices exist (MUT-332 D4).
+   - MUT-360's webhook then picks the subscription up with no migration.
 
 Why Stripe from day one, when the pilot could be invoiced by hand:
 - The subscriptions already exist when MUT-332's code lands, so there is nothing to migrate.

@@ -4185,3 +4185,26 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Receipt files aren't in the database backups: the bucket keeps no versions, only the soft-delete window (TD-190).
 - A profile restore loses that profile's changes after the restore point, and access changes since then need a manual check.
 - Whole-database dumps need Postgres 16 client tools.
+
+## ADR-160: Billing Is Stripe Billing + Stripe Tax; the Person Pays and Each Profile Is Entitled; Unpaid Trials Lock, Paid Lapses Stay Read-Only (MUT-332)
+
+**Status**: Active (spike decision; built by MUT-358, MUT-360…365)
+**Date**: 2026-10-20
+**Context**: GA gate (MUT-322). People must be able to pay without the operator. The seller is Barmajiyat Ltd (UK), and the pilot is already billed with Stripe subscriptions made by hand in the dashboard. Malafat firms pay through Malafat (MAL-870). The full comparison, costs and sources are in `docs/commercial/billing-spike.md`.
+**Decision** (Basel, 2026-10-20):
+1. **Provider: Stripe Billing + Stripe Tax** on the Mutaba3a Stripe account. Barmajiyat Ltd is the seller of record and owns registration and filing (MUT-355). We looked at Paddle, Stripe Managed Payments and Lemon Squeezy as merchants of record and turned them down: the pilot's subscriptions would have had to migrate or couldn't join, Managed Payments still leaves the UAE, Bahrain, Oman and Jordan to us, Lemon Squeezy charges everyone in USD, and they cost more. We revisit Paddle if consumer sales in the Gulf or Jordan become real.
+2. **The person pays, and each profile is entitled.** The Stripe Customer is the `User`. A Freelancer subscription covers the person's own profiles. A Firm subscription covers one organization (`firmEnabledAt`, MUT-300) and the owner's own profiles. Coverage is checked in this order: MALAFAT (a CONNECTED integration), OPERATOR (a grant), STRIPE, TRIAL. The tier comes from `product.metadata.tier`, never from the amount.
+3. **States are ACTIVE, GRACE, READ_ONLY and LOCKED.**
+   - `past_due` is GRACE.
+   - A paid subscription that lapses becomes READ_ONLY for good: reads and records export keep working, and nothing is deleted.
+   - A trial is 14 days with no card, then 14 days READ_ONLY, then LOCKED. LOCKED leaves only Subscribe and Download my records, and applies only to people who never paid.
+4. **One gate.** `SUBSCRIPTION_LAPSED` is enforced in `store-guard.ts` and `authenticate()`, next to READ_ONLY_PROFILE. The `identity` row, `/v1/billing/*` and `GET /v1/records-export*` are always open. Malafat API-key writes are never billing-gated.
+5. **Stripe is the source of truth.** Webhooks are idempotent through `StripeEvent`, re-fetch the object rather than trusting the payload, and a nightly reconcile repairs anything missed. Pilot subscriptions are linked by `metadata.mutaba3a_user_id`, so nothing migrates.
+6. **Consumer checkout opens country by country** (`config/billing-countries.json`). Anywhere else, checkout needs a business tax ID until Barmajiyat Ltd registers there.
+7. **Founder prices are their own Stripe Prices** (`*_founder_*`). A subscription schedule moves each one to the GA list price (`*_list_*`) after its 12-month lock.
+8. **Prices reach the site** only when the MUT-332 §6 gate holds (MUT-365).
+**Consequences**:
+- Stripe's Checkout, Customer Portal and invoices have no Arabic. Our own Arabic Billing page explains everything before the English card form.
+- Stripe Tax can't calculate Israel or Jordan, so those take manual tax rates if MUT-355 says tax is due.
+- A firm member's own profile isn't covered by the firm's subscription until firm v3 decides otherwise (MUT-305/306).
+- The ADR-037 no-self-signup rule is MUT-331's override (ADR-159 on its branch), not this one's.

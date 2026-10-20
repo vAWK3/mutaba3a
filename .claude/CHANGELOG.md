@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — Billing spike: Stripe Billing + Stripe Tax, per-profile entitlements (MUT-332, ADR-160)
+
+**Why:** The GA gate (MUT-322) needs people to pay without the operator. The spike compares Stripe with merchants of record (Paddle, Stripe Managed Payments, Lemon Squeezy) on fees, tax, currencies and Arabic, and costs them at 10, 100 and 1000 users. It designs entitlements, the pilot carry-over, and when prices may reach the site. Basel picked the provider, the country rule, the trial and what happens when the founder lock ends.
+
+### Added
+- `docs/commercial/billing-spike.md`: the comparison with dated sources, the cost model, the entitlements design (person pays, profile entitled; ACTIVE/GRACE/READ_ONLY/LOCKED; one gate in `store-guard.ts`), webhooks and reconciliation, pilot carry-over, the gate for prices on the site, and Basel's decisions D1–D4.
+- ADR-160.
+- Build stories under MUT-322, labelled `ga-gate`: MUT-358 (core), MUT-360 (webhook), MUT-361 (lapse gate), MUT-362 (self-service), MUT-363 (Firm tier), MUT-364 (phone), MUT-365 (prices on the site).
+
+### Changed
+- `docs/commercial/pilot-offer.md` §5: a pilot subscription's Stripe Customer gets `metadata.mutaba3a_user_id`, and a Firm subscription `mutaba3a_organization_id`, so MUT-360 links it without migrating anything.
+
 ## [Unreleased] - 2026-10-20 — The web release commits its notes; the server release refuses a dirty tree before it pushes
 
 **Why:** `make release web` v0.1.16 wrote the 0.1.16 entry into `release-notes.json` (ADR-151) but committed only the version files, so the pushed commit, the Netlify build and the `web-v0.1.16` tag all lacked the notes. `make release server` then asked "continue with 1 uncommitted change?", committed and pushed `release: api v0.3.16`, and deploy.sh refused the dirty tree — a pushed version commit that deployed nothing. Basel committed the notes by hand (4fc2c799).
