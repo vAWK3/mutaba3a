@@ -4,6 +4,7 @@ import { parseScopes } from '../auth/scopes.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
+import { prismaRecordsExport } from './prisma-records-export.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import type { TermsLocale } from '../legal.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
@@ -1461,6 +1462,8 @@ export class PrismaLedgerStore implements LedgerStore {
   };
 
   // ---- MUT-270: the entries feed -------------------------------------------
+
+  readonly recordsExport = prismaRecordsExport(() => this.prisma);
 
   readonly entries: EntriesRepository = {
     // D3: one typed, index-bounded query per organization and kind (limit + 1 rows each), merged in memory. Review D1:

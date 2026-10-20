@@ -81,44 +81,44 @@ export function encodeRecordsFileText(header: RecordsFileHeader, maps: LocalSnap
 }
 
 /**
- * The same file, written as its pages arrive (MUT-325): a hosted export never
- * holds a whole profile in memory, only the page being written. Every field
- * is written exactly once, in `SNAPSHOT_FIELDS` order, an empty map for a
- * field no page names; a page for a field already passed is a bug and throws.
+ * The same file, as its pages arrive (MUT-325): a hosted export never holds a
+ * whole profile in memory, only the page being written, and is pulled a chunk
+ * at a time so a slow reader slows the reads. Every field is written exactly
+ * once, in `SNAPSHOT_FIELDS` order, an empty map for a field no page names; a
+ * page for a field already passed is a bug and throws.
  */
-export async function writeRecordsFile(write: (chunk: string) => Promise<void>, header: RecordsFileHeader, pages: AsyncIterable<RecordsFilePage>): Promise<void> {
+export async function* recordsFileChunks(header: RecordsFileHeader, pages: AsyncIterable<RecordsFilePage>): AsyncGenerator<string> {
   const head = JSON.stringify(headerJson(header));
-  await write(`${head.slice(0, -1)},"maps":{`);
-  let next = 0; // index of the first field not yet opened
-  let open = false; // a field's map is open
-  let first = true; // no entry written yet in the open map
-
-  const closeOpen = async () => {
-    if (open) await write(']}');
-    open = false;
-  };
-  const openField = async (index: number) => {
-    await write(`${index === 0 ? '' : ','}${JSON.stringify(SNAPSHOT_FIELDS[index])}:{"${MAP_TAG}":[`);
-    open = true;
-    first = true;
-  };
+  yield `${head.slice(0, -1)},"maps":{`;
+  let next = 0; // the first field not yet written
+  let open = false; // the last written field's map is still open
+  let empty = true; // nothing written yet in the open map
+  const opening = (index: number) => `${index === 0 ? '' : ','}${JSON.stringify(SNAPSHOT_FIELDS[index])}:{"${MAP_TAG}":[`;
 
   for await (const page of pages) {
     const index = SNAPSHOT_FIELDS.indexOf(page.field);
-    if (index < next - 1 || index === -1 || (index === next - 1 && !open)) throw new Error(`records file pages out of order at ${String(page.field)}`);
-    if (index >= next) {
-      await closeOpen();
-      for (; next < index; next++) await write(`${next === 0 ? '' : ','}${JSON.stringify(SNAPSHOT_FIELDS[next])}:{"${MAP_TAG}":[]}`);
-      await openField(index);
+    const continuing = open && index === next - 1;
+    if (!continuing && index < next) throw new Error(`records file pages out of order at ${String(page.field)}`);
+    if (!continuing) {
+      let skipped = open ? ']}' : '';
+      for (; next < index; next++) skipped += `${opening(next)}]}`;
+      yield `${skipped}${opening(index)}`;
       next = index + 1;
+      open = true;
+      empty = true;
     }
     if (page.entries.length === 0) continue;
     const body = page.entries.map(([k, v]) => JSON.stringify([k, encodeTagged(v)])).join(',');
-    await write(first ? body : `,${body}`);
-    first = false;
+    yield empty ? body : `,${body}`;
+    empty = false;
   }
 
-  await closeOpen();
-  for (; next < SNAPSHOT_FIELDS.length; next++) await write(`${next === 0 ? '' : ','}${JSON.stringify(SNAPSHOT_FIELDS[next])}:{"${MAP_TAG}":[]}`);
-  await write('}}');
+  let tail = open ? ']}' : '';
+  for (; next < SNAPSHOT_FIELDS.length; next++) tail += `${opening(next)}]}`;
+  yield `${tail}}}`;
+}
+
+/** `recordsFileChunks`, pushed to `write` (tests, and callers with a sink rather than a reader). */
+export async function writeRecordsFile(write: (chunk: string) => Promise<void>, header: RecordsFileHeader, pages: AsyncIterable<RecordsFilePage>): Promise<void> {
+  for await (const chunk of recordsFileChunks(header, pages)) await write(chunk);
 }

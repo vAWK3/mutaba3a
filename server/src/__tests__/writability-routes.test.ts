@@ -307,6 +307,7 @@ describe('the escape hatch', () => {
       'routes/agreements.ts',
       'routes/agreements.ts',
       'routes/receivables.ts',
+      'routes/records-export.ts',
       'routes/retainers.ts',
       'routes/summaries.ts',
       'routes/summaries.ts',

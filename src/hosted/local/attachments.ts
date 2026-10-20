@@ -38,6 +38,12 @@ export class LocalAttachmentStorage implements AttachmentStorage {
     this.staged.add(key);
   }
 
+  /** The interface's, for the hosted export (MUT-325); local mode never registers those routes. */
+  async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
+    const file = await this.blobs.get(key);
+    return file ? file.stream() : null;
+  }
+
   /** After the snapshot saved. A failed delete only leaves an orphan, which the next boot sweeps. */
   async flushRemovals(): Promise<void> {
     const keys = [...this.staged];
