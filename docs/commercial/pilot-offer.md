@@ -13,7 +13,8 @@
 > - the pilot runs 3 months;
 > - feedback calls in week 2 and at the end;
 > - Stripe subscriptions created by hand in the dashboard from day one;
-> - the VAT wording: "Prices exclude VAT; VAT is added where the law requires it."
+> - the VAT wording: "Prices exclude VAT; VAT is added where the law requires it.";
+> - firms pay the Freelancer price until firm books v1 ships, then move to the Firm founder price (§2).
 >
 > The rate per country is open in MUT-355. It blocks the first invoice, not this sign-off. §6 lists what else is open.
 
@@ -42,6 +43,7 @@ Founder prices, monthly, excluding VAT:
 - **A yearly plan costs 10× the monthly price.**
 - **VAT:** say exactly this: "Prices exclude VAT; VAT is added where the law requires it." Don't name a rate. The rate for each customer country is MUT-355 (Barmajiyat Ltd's accountant), which must be settled before the first invoice. Stripe Tax takes this over in MUT-332.
 - **Pilot length:** the pilot runs **3 months**. After that the founder price continues until its 12 months are up.
+- **Firms during the pilot:** until firm books v1 ships, the Firm tier has nothing the Freelancer tier lacks (staff invites come later, MUT-305/306). So a firm joins at the **Freelancer price** (₪39 / $10). When firm books v1 ships, tell the firm first, then move it to the **Firm founder price** (₪299 / $80), locked for 12 months from that day.
 
 ## 3. What each tier includes
 
@@ -137,6 +139,7 @@ The account itself is still provisioned by hand (pilot runbook, MUT-327).
 - السعر السنوي يعادل **10 أشهر**.
 - **ضريبة القيمة المضافة:** نقول هذا بالضبط: «الأسعار لا تشمل ضريبة القيمة المضافة، وتُضاف الضريبة حيث يفرضها القانون.» لا نذكر نسبة. نسبة كل بلد يحددها محاسب الشركة في MUT-355 قبل أول فاتورة.
 - **مدة التجربة:** **3 أشهر**. بعدها يستمر سعر المؤسسين حتى تكتمل أشهره الاثنا عشر.
+- **المكاتب خلال التجربة:** يدفع المكتب **سعر باقة المستقل** (‏39 ₪ / ‏10 $) حتى تصدر النسخة الأولى من دفاتر المكتب. عندها نُبلغه أولًا، ثم ينتقل إلى سعر المؤسسين لباقة المكتب (‏299 ₪ / ‏80 $)، ثابتًا 12 شهرًا من ذلك اليوم.
 
 ## ٣. ما تشمله كل باقة
 
@@ -147,7 +150,7 @@ The account itself is still provisioned by hand (pilot runbook, MUT-327).
   - حتى 6 ملفات شخصية وتجارية.
   - الدخل المستلم والمستحق والدفعات، والعملاء والقضايا.
   - المصاريف مع صور الإيصالات، ومجموعات المصاريف للرحلات.
-  - تسع عملات، كلٌّ يبقى بعملته.
+  - تسع عملات، كلٌّ يبقى بعملته. **قبل الإرسال:** لا نذكر عملات الخليج إلا بعد إطلاق MUT-329؛ وحتى ذلك الحين القائمة: الشيكل والدولار واليورو والدينار الأردني.
   - العربية والإنجليزية، والعربية هي الأساس.
 - **باقة المكتب تضيف:** دفاتر المكتب عند صدورها: مكتبة الإيصالات، والمورّدين، وضريبة القيمة المضافة على المصاريف.
 - **قادم دون موعد محدد:** أدوار الموظفين، والفواتير المستحقة على المكتب، وإغلاق الشهر، وملف المحاسب.

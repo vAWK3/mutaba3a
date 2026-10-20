@@ -30,7 +30,7 @@ Thanks for asking about a hosted Mutaba3a account. We're opening hosted accounts
 
 **A. Freelancer.** The **Freelancer** plan is **{₪39 / $10} a month**, or **{₪390 / $100} a year** (two months free).
 
-**B. Firm.** The **Firm** plan is **{₪299 / $80} a month for the whole firm**, or **{₪2,990 / $800} a year** (two months free).
+**B. Firm.** Until our firm books ship, firms join at the **Freelancer price: {₪39 / $10} a month**, or **{₪390 / $100} a year** (two months free). When firm books ship, we'll tell you first, and your firm moves to the **Firm founder price: {₪299 / $80} a month for the whole firm**, or **{₪2,990 / $800} a year**.
 
 Prices exclude VAT; VAT is added where the law requires it. As one of the first users, your price stays the same for 12 months, whatever we charge later.
 
@@ -42,7 +42,7 @@ What you get:
 - Who owes you, what they've paid, and your expenses with their receipts.
 - Each amount kept in its own currency (ILS, USD, EUR, JOD{, and the Gulf currencies}).
 
-{B only:} Firm books are coming to the Firm plan first: a receipts library, vendors and VAT on expenses. You'll get them as they ship, at no extra cost.
+{B only:} Firm books come to the Firm plan first: a receipts library, vendors and VAT on expenses. You'll have them as soon as they ship.
 
 {If they use the free app:} We'll move your records from the free app into your account with you, so you don't type anything twice.
 
@@ -71,7 +71,7 @@ Mutaba3a, by Barmajiyat Ltd
 
 **أ. المستقل.** باقة **المستقل** بسعر **{‏39 ₪ / ‏10 $} شهريًا**، أو **{‏390 ₪ / ‏100 $} سنويًا** (شهران مجانًا).
 
-**ب. المكتب.** باقة **المكتب** بسعر **{‏299 ₪ / ‏80 $} شهريًا للمكتب كله**، أو **{‏2,990 ₪ / ‏800 $} سنويًا** (شهران مجانًا).
+**ب. المكتب.** حتى تصدر دفاتر المكتب، تنضم المكاتب **بسعر باقة المستقل: {‏39 ₪ / ‏10 $} شهريًا**، أو **{‏390 ₪ / ‏100 $} سنويًا** (شهران مجانًا). وعند صدور دفاتر المكتب نُبلغك أولًا، ثم ينتقل مكتبك إلى **سعر المؤسسين لباقة المكتب: {‏299 ₪ / ‏80 $} شهريًا للمكتب كله**، أو **{‏2,990 ₪ / ‏800 $} سنويًا**.
 
 الأسعار لا تشمل ضريبة القيمة المضافة، وتُضاف الضريبة حيث يفرضها القانون. ولأنك من أوائل المستخدمين، يبقى سعرك ثابتًا 12 شهرًا مهما تغيّرت أسعارنا لاحقًا.
 
@@ -83,7 +83,7 @@ Mutaba3a, by Barmajiyat Ltd
 - من يدين لك، وما دفعه، ومصاريفك مع إيصالاتها.
 - كل مبلغ بعملته (الشيكل والدولار واليورو والدينار الأردني{، وعملات الخليج}).
 
-{ب فقط:} دفاتر المكتب تصل إلى باقة المكتب أولًا: مكتبة الإيصالات، والمورّدون، وضريبة القيمة المضافة على المصاريف. تحصل عليها عند صدورها دون تكلفة إضافية.
+{ب فقط:} دفاتر المكتب تصل إلى باقة المكتب أولًا: مكتبة الإيصالات، والمورّدون، وضريبة القيمة المضافة على المصاريف. تحصل عليها فور صدورها.
 
 {إن كان يستخدم التطبيق المجاني:} ننقل سجلاتك من التطبيق المجاني إلى حسابك معك، فلا تعيد كتابة شيء.
 
