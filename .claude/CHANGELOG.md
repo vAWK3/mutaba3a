@@ -48,6 +48,70 @@
 ### Technical
 - Verified under Node 22 with root and server deps installed as CI does: lint, typecheck, test:coverage (392 files, 5545 tests; statements 91.50 / branches 84.73 / functions 88.53 / lines 92.35) and build:hosted all pass. The Docker image build and /health probe were not run locally.
 
+## [Unreleased] - 2026-10-20 — Terms-acceptance evidence: ADR-102 addendum (MUT-348, epic MUT-322)
+
+**Why:** MUT-324's first review pass left two questions open: does the hash have to cover the rendered page, and do firm-only members need more evidence? Basel decided both on 2026-10-20 (MUT-348 comment 12222).
+
+### Changed
+- `.claude/DECISIONS.md` ADR-102 gets an addendum, and its status line names it.
+  1. The evidence is the frozen terms file (`textSha256`) plus the release that rendered it. MUT-354 records that release per acceptance in a nullable `clientRelease` column. Rows from before it stay null. No rendered-text hash and no HTML snapshots.
+  2. Firm-only members need nothing more for now, because every pilot user is an owner. MUT-305/306 must revisit this before the first member who owns no profile is invited. No code.
+
+## [Unreleased] - 2026-10-20 — Pilot success bars, weekly review and the operator count (MUT-330, epic MUT-322)
+
+**Why:** without bars agreed in advance, the pilot ends with impressions, not a GA go/no-go. Basel signed off the bars on 2026-10-20 (MUT-330 comment 12221).
+
+### Added
+- `docs/commercial/pilot-metrics.md`:
+  - the five GA bars across the 10 pilot users at pilot end: activation ≥ 8/10 within 7 days of setup; weekly use ≥ 6/10 with entries in 3 of the last 4 weeks; paid conversion ≥ 7/10 (paid the month-3 invoice, hasn't asked to leave); Sean Ellis "very disappointed" ≥ 40%; support ≤ 0.5 tickets per user per week;
+  - the verdict: all met is GO, one missed extends the pilot, two or more is no-go;
+  - where each number comes from;
+  - a 30-minute exit interview script in EN + AR that ends with the Sean Ellis question.
+- `docs/commercial/pilot-reviews.md`: the Monday review. It's written, with no meeting: the numbers, users at risk and one action. Pilot users appear only as codes `P01`…`P10`, never by email or name, because the file is in the repository.
+- `server/DEPLOYMENT.md` §6a (and a §6 row): the operator's count of entries per profile and per pilot user.
+  - It runs read-only (`PGOPTIONS='-c default_transaction_read_only=on'`), and the output is never sent anywhere (ADR-024).
+  - Entries are live expenses, `POSTED` captured payments and live `ADJUSTMENT` receivables, counted by `createdAt`.
+  - Setup is the first terms acceptance (ADR-102), or the account's creation if there's none.
+  - The email list that maps to the codes lives outside the repository.
+
+### Changed
+- `docs/commercial/pilot-offer.md` (EN + AR): the end-of-pilot call is 30 minutes, matching the exit interview.
+
+### Verified
+- The runbook SQL, exactly as written, ran read-only against the local dev schema (`mutaba3a_dev` on the test Postgres container): both queries return, and `default_transaction_read_only` is `on`.
+
+## [Unreleased] - 2026-10-20 — Pilot offer: Basel's decisions applied (MUT-323, epic MUT-322)
+
+**Why:** Basel settled the draft's open defaults on 2026-10-20 (MUT-323 comment 12220). Internal docs only: no price words reach the site (MUT-171/185).
+
+### Changed
+- `docs/commercial/pilot-offer.md` (EN + AR) and `docs/commercial/hosted-request-reply.md` (EN + AR):
+  - the pilot runs 3 months;
+  - feedback calls in week 2 and at the end;
+  - Stripe subscriptions created by hand in the dashboard from day one;
+  - the VAT sentence, word for word: "Prices exclude VAT; VAT is added where the law requires it." The rate per country is MUT-355, which blocks the first invoice, not the sign-off;
+  - the support promise reads exactly "email only, a reply within 2 working days".
+- The Arabic offer gains the pilot length, the feedback calls and an invoicing section.
+- Prices, the seller (Barmajiyat Ltd, UK) and the 12-month lock are unchanged.
+
+### Verified
+- `npx vitest run src/pages/landing` (landing and /hosted honesty tests): 15 files, 223 tests pass.
+
+## [Unreleased] - 2026-10-19 — Pilot offer and the /hosted reply template (MUT-323, epic MUT-322)
+
+**Why:** /hosted promises an offer by email within 2 working days, but no price or reply existed. These docs are internal. No price reaches the site: MUT-171/185 hold that rule until billing exists (MUT-332).
+
+### Added
+- `docs/commercial/pilot-offer.md` (EN + AR) covers:
+  - founder prices, excluding VAT: Freelancer ₪39 / $10 a month, Firm ₪299 / $80 a month per firm, billed in ILS in Israel and USD elsewhere, locked 12 months, yearly at 10× monthly;
+  - what each tier includes (shipped features only);
+  - the pilot's promises: email support within 2 working days, read-only + export when a payment lapses, 30 days before a closed account is deleted;
+  - pilot invoicing through the Barmajiyat Ltd **Mutaba3a** Stripe account from the dashboard, with no code. The subscriptions carry over to MUT-332.
+- `docs/commercial/hosted-request-reply.md`: the reply to a /hosted request, in EN and AR. It has blocks for freelancers, firms and Malafat firms (who are sent to the Malafat add-on, MAL-870), and a checklist to go through before sending.
+
+### Changed
+- `.claude/INFRA.md`: operator-held row for the Mutaba3a Stripe account.
+
 ## [Unreleased] - 2026-10-19 — MUT-337: icon save-feedback animation runtime decision + web prototype (ADR-152)
 
 **Why:** MUT-338/339/340 (the epic's actual gamification features, the first marked highest-priority) are all blocked until an animation runtime is chosen for the MUT-335/336 icon system. This ticket decides and proves the mechanism; MUT-338 wires it into a real trigger.

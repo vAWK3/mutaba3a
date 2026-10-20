@@ -4025,7 +4025,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 ## ADR-102: Terms of Service Are Frozen, Versioned Texts; Acceptance Is Recorded at Setup and Re-asked on the Portal (MUT-324)
 
-**Status**: Active (amends ADR-088: a setup-link redeem also records the terms the person accepted)
+**Status**: Active (amends ADR-088: a setup-link redeem also records the terms the person accepted; addendum 2026-10-20, MUT-348)
 **Date**: 2026-10-19
 **Context**: The pilot (epic MUT-322) needs terms of service that a paying person accepts. The terms text ships with the landing page (Netlify, web build) and the version people must accept ships with the API image, two separate deploys. Accounts are operator-issued, so everyone passes a setup link once. Accounts that already have passwords never pass one again. Plan `.claude/designs/mut-324-terms-plan.md` §0 records Basel's answers D1–D12 (2026-10-19).
 
@@ -4056,6 +4056,17 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Why:** server first could never pass decision 8: the server leg refused whenever the terms changed, and web never ran. The server-first reason (the API is live before the frontend that calls it) no longer holds for this split: the portal ships inside the server image, and the web build (landing + local web app) calls no API a server release adds.
 - **What replaces it:** web, then server. After a terms bump Netlify must finish building before the server preflight passes, so the server half refuses cleanly (before its bump) and is rerun once the build is live.
 - Decided by Basel through the review's must-fix list.
+
+**Addendum (2026-10-20, MUT-348): how strong the acceptance evidence must be.** MUT-324's first review pass left two questions open. Basel decided both on 2026-10-20 (MUT-348 comment 12222).
+1. **The evidence is the frozen file plus the release that rendered it.** `textSha256` fingerprints the JSON content file, not the page `TermsPage` builds from it.
+   - That's enough: the frozen `/terms/<version>` file, plus the `TermsPage` code at the release that rendered it, show what the person read.
+   - Each acceptance should record that release, so it maps to a git tag. Nothing stores it today. **MUT-354** adds a nullable `clientRelease` column to `terms_acceptances`, written per acceptance.
+   - Until MUT-354 ships, an acceptance maps to a release only through its `acceptedAt` and the release history. Rows written before it keep `clientRelease` null.
+   - We won't hash the rendered text or keep HTML snapshots.
+2. **Firm-only members need nothing more for now.** A person who owns no profile gets no `user.terms_accepted` audit row (decision 6). Their `terms_acceptances` row is the only evidence, and it's deleted with the account (decision 3). That matches the published promise.
+   - Such a person can't exist during the pilot: every pilot user is an owner (MUT-322), and staff invites only come with firm-v3 roles (MUT-305/306).
+   - **MUT-305/306 must revisit this** before the first member who owns no profile is invited, for example with an audit row on the firm or an operator log.
+   - No code now.
 
 ## ADR-152: Icon Save-Feedback Animation Reuses `motion` and Mirrors Flutter's `MMotion` Curves Byte-for-Byte — No New Runtime
 
