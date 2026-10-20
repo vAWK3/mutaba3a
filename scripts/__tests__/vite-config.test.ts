@@ -14,6 +14,8 @@ import configFn, {
   POSTHOG_PRECACHE_IGNORES,
   appVersion,
   netlifyFormsHtml,
+  netlifyRedirects,
+  LEGACY_LANDING_PATHS,
   portalUrl,
   posthogKey,
   scopeServerBufferShim,
@@ -32,6 +34,7 @@ import tokens from '../../src/styles/brand/mutaba3a.tokens.json';
 import pkg from '../../package.json';
 import { repoPath } from '../../src/test/css/brandCss';
 import { pngSize } from '../../src/test/pngSize';
+import { HOSTS, parseHostsConfig, resolveHosts } from '../../config/hosts';
 
 /**
  * hosted-portal.md §8: the hosted build target is additive. The `web` and
@@ -57,8 +60,17 @@ function pluginNames(plugins: PluginOption[] | undefined): string[] {
   return names;
 }
 
+/** The portal origin comes from config/hosts.json (MUT-326), so picking the domain doesn't rewrite this snapshot. */
+function maskPortalUrl(define: UserConfig['define']) {
+  return define?.__PORTAL_URL__ === JSON.stringify(HOSTS.portalOrigin) ? { __PORTAL_URL__: '<config/hosts.json portalOrigin>' } : {};
+}
+
 function comparable(config: UserConfig) {
-  return { ...config, define: { ...config.define, __APP_VERSION__: '<package.json version>' }, plugins: pluginNames(config.plugins) };
+  return {
+    ...config,
+    define: { ...config.define, __APP_VERSION__: '<package.json version>', ...maskPortalUrl(config.define) },
+    plugins: pluginNames(config.plugins),
+  };
 }
 
 
@@ -111,6 +123,47 @@ describe('vite.config', () => {
         expect.arrayContaining(['favicon.svg', 'favicon-32.png', 'favicon-16.png', 'apple-touch-icon.png']),
       );
       for (const asset of PWA_INCLUDE_ASSETS) expect(existsSync(repoPath(`public/${asset}`)), asset).toBe(true);
+    });
+  });
+
+  describe('Netlify domain-move redirects (MUT-326, ADR-155 D5)', () => {
+    const LEGACY = { landing: 'https://old.netlify.example', portal: 'https://old-portal.run.example' };
+    const hosts = (env: Record<string, unknown>) =>
+      resolveHosts(parseHostsConfig({ production: { domain: null, portalSubdomain: 'app', stage: 'legacy', legacy: LEGACY, ...env } }));
+    const lines = (stage: string) => netlifyRedirects(hosts({ domain: 'placeholder.example', stage })).trim().split('\n');
+
+    it('emits nothing before the domain is live', () => {
+      expect(netlifyRedirects(hosts({}))).toBe('');
+      expect(netlifyRedirects(hosts({ domain: 'placeholder.example', stage: 'proxy' }))).toBe('');
+    });
+
+    it('live: the apex sends /app back to the old host, where the free web app\'s data is', () => {
+      expect(lines('live')).toEqual([
+        'https://placeholder.example/app https://old.netlify.example/app 302!',
+        'https://placeholder.example/app/* https://old.netlify.example/app/:splat 302!',
+      ]);
+    });
+
+    it('redirect: also sends the old host\'s landing pages, and only those, on to the apex', () => {
+      expect(lines('redirect').slice(2)).toEqual([
+        'https://old.netlify.example/ https://placeholder.example/ 302!',
+        'https://old.netlify.example/download https://placeholder.example/download 302!',
+        'https://old.netlify.example/privacy https://placeholder.example/privacy 302!',
+        'https://old.netlify.example/terms https://placeholder.example/terms 302!',
+        'https://old.netlify.example/terms/* https://placeholder.example/terms/:splat 302!',
+      ]);
+    });
+
+    it('never sends the old host\'s free web app, assets or service worker anywhere (their data lives there until MUT-291)', () => {
+      for (const line of lines('redirect')) expect(line).not.toMatch(/^https:\/\/old\.netlify\.example\/(app|assets|sw\.js|workbox|manifest)/);
+      for (const path of LEGACY_LANDING_PATHS) expect(path).not.toMatch(/^\/(app|assets)/);
+    });
+
+    it('builds the checked-in config\'s rules into the web build only', () => {
+      expect(pluginNames(resolve('web').plugins)).toContain('mutaba3a:domain-move-redirects');
+      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:domain-move-redirects');
+      expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:domain-move-redirects');
+      expect(netlifyRedirects(HOSTS)).toBe(HOSTS.stage === 'legacy' || HOSTS.stage === 'proxy' ? '' : expect.stringContaining('/app'));
     });
   });
 
@@ -216,9 +269,9 @@ describe('vite.config', () => {
       expect(resolve('desktop').define?.__PORTAL_URL__).toBe(JSON.stringify(''));
     });
 
-    it('defaults to the Cloud Run service that serves the portal', () => {
+    it('defaults to the portal origin config/hosts.json names (MUT-326)', () => {
       expect(portalUrl(undefined)).toBe(DEFAULT_PORTAL_URL);
-      expect(DEFAULT_PORTAL_URL).toMatch(/^https:\/\/[^/]+\.run\.app$/);
+      expect(DEFAULT_PORTAL_URL).toBe(HOSTS.portalOrigin);
     });
 
     it('takes MUTABA3A_PORTAL_URL over the default and drops a trailing slash', () => {
@@ -247,9 +300,10 @@ describe('vite.config', () => {
       expect(() => termsUrl('http://x.example')).toThrow();
     });
 
-    it('defaults to the Netlify origin until the custom domain has DNS (MUT-112)', () => {
+    it('defaults to the landing origin config/hosts.json names (MUT-326)', () => {
       expect(hostedOfferUrl(undefined)).toBe(`${DEFAULT_PUBLIC_ORIGIN}/hosted`);
-      expect(DEFAULT_PUBLIC_ORIGIN).toMatch(/^https:\/\/[^/]+\.netlify\.app$/);
+      expect(DEFAULT_PUBLIC_ORIGIN).toBe(HOSTS.landingOrigin);
+      expect(DEFAULT_PORTAL_URL).toBe(HOSTS.portalOrigin);
     });
 
     it('takes MUTABA3A_PUBLIC_ORIGIN over the default and drops a trailing slash', () => {

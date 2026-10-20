@@ -15,21 +15,29 @@ variable "team_slug" {
   default     = "mutaba3a"
 }
 
+variable "hosts_file" {
+  description = "MUT-326: the one hosts config, relative to this module. The portal and landing DSNs accept its origins, new and legacy, so the domain move needs no edit here."
+  type        = string
+  default     = "../../../config/hosts.json"
+}
+
 variable "portal_origins" {
-  description = "Origins the portal DSN accepts events from (R2): today the Cloud Run URL. Add the custom domain when MUT-112 ships."
+  description = "Extra origins the portal DSN accepts events from (R2), beyond the ones config/hosts.json names (e.g. the project-number run.app URL if anyone uses it)."
   type        = list(string)
+  default     = []
   validation {
-    condition     = length(var.portal_origins) > 0 && alltrue([for origin in var.portal_origins : can(regex("^https://[a-z0-9.-]+$", origin))])
-    error_message = "portal_origins must be one or more https origins with no path, never \"*\"."
+    condition     = alltrue([for origin in var.portal_origins : can(regex("^https://[a-z0-9.-]+$", origin))])
+    error_message = "portal_origins must be https origins with no path, never \"*\"."
   }
 }
 
 variable "landing_origins" {
-  description = "Origins the landing DSN accepts events from (R2): today the Netlify origin. Add the custom domain when MUT-112 ships."
+  description = "Extra origins the landing DSN accepts events from (R2), beyond the ones config/hosts.json names."
   type        = list(string)
+  default     = []
   validation {
-    condition     = length(var.landing_origins) > 0 && alltrue([for origin in var.landing_origins : can(regex("^https://[a-z0-9.-]+$", origin))])
-    error_message = "landing_origins must be one or more https origins with no path, never \"*\"."
+    condition     = alltrue([for origin in var.landing_origins : can(regex("^https://[a-z0-9.-]+$", origin))])
+    error_message = "landing_origins must be https origins with no path, never \"*\"."
   }
 }
 

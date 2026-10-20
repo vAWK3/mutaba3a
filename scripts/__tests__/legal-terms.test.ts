@@ -3,7 +3,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { CURRENT_TERMS } from '../../server/src/legal';
-import { DEFAULT_PUBLIC_ORIGIN as DEPLOY_CHECK_ORIGIN } from '../../server/src/scripts/check-terms-live';
+import serverPkg from '../../server/package.json';
+import { HOSTS } from '../../config/hosts';
+import { getValue } from '../hosts';
 import { DEFAULT_PUBLIC_ORIGIN } from '../../vite.config';
 import { termsManifest } from '../../src/content/legal/termsManifest';
 import { LATEST_TERMS_VERSION, TERMS_VERSIONS } from '../../src/content/legal/terms';
@@ -50,8 +52,9 @@ describe('legal terms (MUT-324)', () => {
     }
   });
 
-  it('the deploy check reads the same public site the landing is built for', () => {
-    expect(DEPLOY_CHECK_ORIGIN).toBe(DEFAULT_PUBLIC_ORIGIN);
+  it('the deploy check reads the same public site the landing is built for (both from config/hosts.json, MUT-326)', () => {
+    expect(serverPkg.scripts['terms:check-live']).toContain('hosts -- get landingOrigin');
+    expect(getValue(HOSTS, 'landingOrigin')).toBe(DEFAULT_PUBLIC_ORIGIN);
   });
 });
 

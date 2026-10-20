@@ -5,7 +5,7 @@ import { parseBaseUrl, runSmoke } from '../smoke.js';
  * Post-deploy smoke test against a running service. Exit code 0 only when every
  * check passes. Prints no secrets.
  *
- *   npm run smoke -- --url https://mutaba3a-api-xxxx.a.run.app [--expect-version <sha>]
+ *   npm run smoke -- --url https://<service>.a.run.app [--expect-version <sha>]
  *
  * Without MUTABA3A_ADMIN_TOKEN it checks the unauthenticated surface only
  * (health, readiness, contract, auth rejections). With it, it also provisions
