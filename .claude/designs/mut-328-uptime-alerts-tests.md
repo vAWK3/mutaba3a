@@ -11,7 +11,7 @@ server-ci runs the same (`terraform fmt -check -recursive`, `validate`, `test`).
 3. **Host follows `uptime_host`**: `uptime_host = "app.example.com"` → every check's `monitored_resource.labels.host` is it; `output.uptime_host` reports it.
 4. **A host with a scheme, path or port is refused** (`expect_failures = [var.uptime_host]`).
 5. **Email + SMS create two channels and five policies**: types `email` / `sms`; each uptime policy and both SQL policies list both channels plus an extra id from `alert_notification_channels`.
-6. **Uptime policy pages on 2 failed rounds, not 1**: threshold `> 1` region, duration `360s`, alignment `300s` `ALIGN_NEXT_OLDER` + `REDUCE_COUNT_FALSE`; `notification_prompts` OPENED + CLOSED; severity CRITICAL.
+6. **Uptime policy pages on 2 failed rounds, not 1**: threshold `> 1` region, duration `360s`, alignment `300s` `ALIGN_NEXT_OLDER` + `REDUCE_COUNT_FALSE`; `auto_close` 1800s; severity CRITICAL (`notification_prompts` needs provider 6.x, so it is not settable here, TD-185).
 7. **SQL alerts**: disk `> 0.8` and CPU `> 0.9`, duration `900s`, filtered to `test-project:mutaba3a-pg`; severity WARNING.
 8. **An SMS number not in E.164 is refused** (`expect_failures = [var.alert_sms_number]`).
 9. **Existing channel ids alone still alert** (backward compatible with today's variable).

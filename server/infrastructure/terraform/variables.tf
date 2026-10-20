@@ -103,15 +103,56 @@ variable "log_level" {
 }
 
 variable "enable_uptime_check" {
-  description = "Create a Cloud Monitoring uptime check on GET /health."
+  description = "Create the Cloud Monitoring uptime checks on GET /health, /ready and the portal page (MUT-328, monitoring.tf)."
   type        = bool
   default     = true
 }
 
 variable "alert_notification_channels" {
-  description = "Cloud Monitoring notification channel ids that receive the uptime alert. Empty = check only, no alert policy."
+  description = "Existing Cloud Monitoring notification channel ids that receive every alert, on top of alert_email / alert_sms_number. With no channel at all: checks only, no alert policy."
   type        = list(string)
   default     = []
+}
+
+variable "uptime_host" {
+  description = "Bare hostname the uptime checks probe (no scheme, path or port). Empty (default) = the Cloud Run service's own host. The custom domain (MUT-112) moves the checks with it."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.uptime_host == "" || can(regex("^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", var.uptime_host))
+    error_message = "uptime_host must be a bare hostname such as app.example.com: no https://, path or port."
+  }
+}
+
+variable "uptime_drill_path" {
+  description = "Alert drill (MUT-328, DEPLOYMENT.md §6b): a path here adds a fourth check and its alert. /v1/uptime-drill (a 404) fires a real alert; /health makes it recover and close; empty (default) removes it."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.uptime_drill_path == "" || startswith(var.uptime_drill_path, "/")
+    error_message = "uptime_drill_path must start with / (for example /v1/uptime-drill), or be empty."
+  }
+}
+
+variable "alert_email" {
+  description = "Email address that receives every alert (MUT-328). Empty = no email channel. Set it in production.tfvars."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.alert_email == "" || can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.alert_email))
+    error_message = "alert_email must be an email address, or empty."
+  }
+}
+
+variable "alert_sms_number" {
+  description = "Phone number in E.164 (+972…) that receives every alert by SMS (MUT-328). Kept out of the repo: set it only in the git-ignored production.tfvars. Empty = no SMS channel."
+  type        = string
+  default     = ""
+  sensitive   = true
+  validation {
+    condition     = var.alert_sms_number == "" || can(regex("^\\+[1-9][0-9]{6,14}$", var.alert_sms_number))
+    error_message = "alert_sms_number must be in E.164 form: + then the country code and number, digits only."
+  }
 }
 
 variable "attachments_url_ttl_seconds" {
