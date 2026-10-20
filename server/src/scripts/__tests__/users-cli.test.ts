@@ -158,6 +158,69 @@ describe('users CLI (npm run provision:user and friends)', () => {
     expect(h.err.join('\n')).toContain('NOT_FOUND');
   });
 
+  describe('firm switch (MUT-300)', () => {
+    const AUDIT = { requestId: null };
+    async function ownedBusiness(h: ReturnType<typeof harness>, email: string) {
+      const { user } = await h.store.users.create({
+        email,
+        displayName: 'Rana',
+        passwordHash: null,
+        locale: 'en',
+        personal: { name: 'Personal', slug: `personal-${email}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
+        at: new Date('2026-10-20T09:00:00Z'),
+      });
+      const created = await h.store.organizations.createOwned(user.id, { name: 'Studio', slug: `studio-${email}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', profileType: 'BUSINESS', at: new Date('2026-10-20T09:00:00Z') }, 6, { actorId: user.id, requestId: null });
+      if (created.kind !== 'created') throw new Error('expected a profile');
+      return { user, profile: created.organization };
+    }
+
+    it('firm-requests lists every pending request with the requester, or says there are none', async () => {
+      const h = harness();
+      expect(await h.run(['firm-requests'])).toBe(0);
+      expect(h.out).toEqual(['no pending firm requests']);
+      const { user, profile } = await ownedBusiness(h, 'rana@studio.ps');
+      await h.store.organizations.requestFirm(profile.id, user.id, new Date('2026-10-20T10:00:00Z'), { actorId: user.id, ...AUDIT });
+      h.out.length = 0;
+      expect(await h.run(['firm-requests'])).toBe(0);
+      expect(h.out).toEqual([`${profile.id} Studio — requested 2026-10-20T10:00:00.000Z by rana@studio.ps (owned)`]);
+    });
+
+    it('firm-enable turns firm features on in place for an owned profile, with no owner needed', async () => {
+      const h = harness();
+      const { user, profile } = await ownedBusiness(h, 'rana@studio.ps');
+      expect(await h.run(['firm-enable', '--organization-id', profile.id])).toBe(0);
+      expect(h.out).toEqual([`${profile.id} Studio: firm features on`]);
+      expect(await h.store.organizations.getById(profile.id)).toMatchObject({ ownerUserId: user.id, firmEnabledAt: expect.any(Date) });
+    });
+
+    it('firm-enable names an operator firm’s owners by email; firm-disable turns it off', async () => {
+      const h = harness();
+      const o = await org(h.store, 'Sader Law');
+      expect(await h.run(['create', '--email', 'nour@firm.ps', '--name', 'Nour', '--organization-id', o.id])).toBe(0);
+      expect(await h.run(['create', '--email', 'omar@firm.ps', '--name', 'Omar', '--organization-id', o.id])).toBe(0);
+      h.out.length = 0;
+      expect(await h.run(['firm-enable', '--organization-id', o.id])).not.toBe(0);
+      expect(h.err.join('\n')).toContain('VALIDATION_FAILED');
+      expect(await h.run(['firm-enable', '--organization-id', o.id, '--owner', 'Nour@Firm.ps'])).toBe(0);
+      const nour = (await h.store.users.findByEmail('nour@firm.ps'))!;
+      const omar = (await h.store.users.findByEmail('omar@firm.ps'))!;
+      expect(await h.store.memberships.find(nour.id, o.id)).toMatchObject({ role: 'OWNER' });
+      expect(await h.store.memberships.find(omar.id, o.id)).toMatchObject({ role: 'BOOKKEEPER' });
+      expect(await h.run(['firm-disable', '--organization-id', o.id])).toBe(0);
+      expect(h.out).toEqual([`${o.id} Sader Law: firm features on`, `${o.id} Sader Law: firm features off`]);
+    });
+
+    it('firm-decline clears a pending request, and fails readably when none is pending', async () => {
+      const h = harness();
+      const { user, profile } = await ownedBusiness(h, 'rana@studio.ps');
+      await h.store.organizations.requestFirm(profile.id, user.id, new Date('2026-10-20T10:00:00Z'), { actorId: user.id, ...AUDIT });
+      expect(await h.run(['firm-decline', '--organization-id', profile.id])).toBe(0);
+      expect(h.out).toEqual([`${profile.id} Studio: firm request declined`]);
+      expect(await h.run(['firm-decline', '--organization-id', profile.id])).not.toBe(0);
+      expect(h.err.join('\n')).toContain('NOT_FOUND');
+    });
+  });
+
   it('rejects an unknown subcommand with usage', async () => {
     const h = harness();
     expect(await h.run(['delete', '--email', 'x@y.z'])).not.toBe(0);
