@@ -18,6 +18,17 @@
 
 ## Open Debt
 
+### TD-184: An acceptance's `clientRelease` names the portal's built web version, which can lag the live landing that showed the terms text
+**Status**: Open (Q1 in `.claude/designs/mut-354-terms-client-release.md`, Basel's call)
+**Ticket**: MUT-354 (2026-10-20, eng review)
+**Added**: 2026-10-20
+**Priority**: Low (the file hash `textSha256` still pins the exact words; only the page code around them can differ)
+**Impact**:
+- The terms text renders on the landing, the Netlify `web-v<x>` deploy.
+- The portal sends `web-v<APP_VERSION>` (`src/hosted/terms.ts`). `APP_VERSION` is the root `package.json` version at the commit the API image was built from, because the portal ships inside it (ADR-081).
+- Web releases first (ADR-102), so normally that version is the live landing's. But a web release that isn't followed by a server release leaves the recorded release one behind the landing that actually showed the text.
+**Fix**: if Basel wants the exact landing release, the landing's `legal/terms-versions.json` gains its release, and the portal reads it when it shows the terms link. That's a cross-origin fetch with its own failure mode. Otherwise, close this as accepted.
+
 ### TD-182: `scripts/*.ts` are never type-checked by any npm script
 **Status**: Open
 **Ticket**: none (found 2026-10-19, MUT-336)
