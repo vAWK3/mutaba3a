@@ -42,7 +42,7 @@ export interface SavedNoticeProps {
   filtersKey: string;
   /** The list shows its Unreachable card: a save it claimed is out of sight, so say it anyway (D4). */
   listInError?: boolean;
-  /** MUT-338: playful for a PERSONAL profile, restrained for BUSINESS - resolved by the page, which already holds the full profile via useProfile(). */
+  /** MUT-338: restrained once the profile's firm features are on (MUT-300), playful otherwise - resolved by the page, which already holds the full profile via useProfile(). */
   preset: IconFeedbackPreset;
 }
 

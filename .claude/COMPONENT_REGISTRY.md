@@ -1747,9 +1747,10 @@ import { saveFeedbackPreset } from '../../lib/motion/saveFeedbackPreset';
 ```
 
 `saveFeedbackPreset` (`src/lib/motion/saveFeedbackPreset.ts`) is the one
-source of truth for playful-vs-restrained: `profile?.type === 'BUSINESS'` →
-restrained, everything else (including `undefined` — the legacy app, which has
-no firm concept, MUT-299 B11) → playful. Five call sites wire it today:
+source of truth for playful-vs-restrained: `profile?.firm === true` (MUT-300's
+firm switch on `/v1/me`) → restrained, everything else → playful. That includes
+a BUSINESS profile without firm features (Basel, MUT-338 comment 12272) and
+`undefined`, which is the legacy app: it has no firm concept (MUT-299 B11). Five call sites wire it today:
 `SavedFlashAnnouncer.tsx` and `ExpenseDrawer.tsx` (legacy, always playful),
 `IncomeCaptureDrawer.tsx`, `Toast.tsx`'s icon override, and `SavedNotice.tsx`
 (portal, resolved by the page via `useProfile()`).

@@ -98,7 +98,18 @@ features:
       - Save it
     expect:
       - The saved-flash notice includes the animated save-feedback icon
-      - On a business profile the icon grows in without overshooting (restrained)
+      - On a profile with firm features on, the icon grows in without overshooting (restrained)
+  - id: save-feedback-business-playful
+    title: On a business profile without firm features, a saved expense's icon still plays the playful pop (MUT-338)
+    tier: tertiary
+    legacy: [MUT-338]
+    paths:
+      - src/lib/motion/saveFeedbackPreset.ts
+    steps:
+      - On a business profile whose firm features are off, open Expenses and add a new expense
+      - Save it
+    expect:
+      - The saved-flash notice's icon overshoots past full size, then settles (playful)
   - id: save-feedback-personal
     title: On a personal profile, a saved expense's icon plays the playful pop (MUT-338)
     tier: tertiary

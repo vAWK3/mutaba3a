@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-20 — Restrained save feedback follows the firm switch (MUT-338, Basel's comment 12272)
+
+**Why:** the restrained icon is meant for firms. With MUT-300 merged, "firm" means firm features are on. A freelancer's BUSINESS profile is not a firm, and an operator organization only is once its switch is on.
+
+### Changed
+- `saveFeedbackPreset` (`src/lib/motion/saveFeedbackPreset.ts`): restrained when `profile.firm === true`, playful otherwise. It used to be restrained for `type === 'BUSINESS'`.
+- ADR-158 amended. COMPONENT_REGISTRY's SaveFeedbackIcon entry and SavedNotice's prop doc are updated.
+
+### Tests
+- `saveFeedbackPreset.test.ts` asserts the new rule, including an older server with no `firm`.
+- `IncomeCaptureDrawer.test.tsx`: BUSINESS without firm plays; firm-enabled is restrained.
+- Release-QA: `portal.expenses.save-feedback-animation` now saves on a firm-enabled profile. New `portal.expenses.save-feedback-business-playful` saves on a plain BUSINESS profile.
+
+---
+
 ## [Unreleased] - 2026-10-20 — deploy.sh step 0 bootstraps only on an empty state (ADR-161)
 
 ### Fixed
