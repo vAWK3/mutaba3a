@@ -942,7 +942,7 @@ Before this, the bucket had no explicit policy and kept GCS's default of 7 days.
 
 #### Apply (Basel, once)
 
-The bucket change is in place: no object, the bucket's name and the API are untouched. Plan only the bucket, so it's reviewed on its own and not inside a release:
+The bucket change is in place: no object, the bucket's name and the API are untouched. The next `make release server` applies it anyway: deploy.sh's `terraform apply` shows it as one in-place change, and the release prints a reminder (`docs/operations/before-release.md`). To apply it before then, on its own, plan only the bucket:
 
 ```bash
 cd infrastructure/terraform
@@ -953,7 +953,7 @@ terraform plan -var-file=production.tfvars -var image_tag="$TAG" -target=google_
 
 Expect **`Plan: 0 to add, 1 to change, 0 to destroy`**: `google_storage_bucket.attachments` updated in place, with `soft_delete_policy` `retention_duration_seconds = 604800 -> 1209600`. Anything else marked change, or any replace or destroy, means stop and ask. Then apply the same command with `apply` in place of `plan`.
 
-Check it, and record the date in INFRA.md §2:
+Check it, record the date in INFRA.md §2, and delete the TD-190 line from `docs/operations/before-release.md`:
 
 ```bash
 gcloud storage buckets describe "gs://$GCP_PROJECT_ID-mutaba3a-attachments" --format='yaml(soft_delete_policy)'
