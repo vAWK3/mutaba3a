@@ -136,6 +136,9 @@ if (!url || !hasPsql) {
       const files = readdirSync(out);
       expect(files).toEqual(expect.arrayContaining(['organizations.csv', 'customers.csv', 'expenses.csv', 'expense_receipts.csv', 'audit_events.csv', 'receipts.txt']));
       expect(files).not.toContain('api_keys.csv');
+      // MUT-358: billing follows Stripe and the operator; it is not the person's records.
+      expect(files).not.toContain('entitlement_grants.csv');
+      expect(files).not.toContain('billing_subscriptions.csv');
       expect(files).not.toContain('idempotency_keys.csv');
       expect(readFileSync(join(out, 'customers.csv'), 'utf8')).toContain('Client A');
       expect(readFileSync(join(out, 'customers.csv'), 'utf8')).not.toContain('Other client');
@@ -172,6 +175,8 @@ if (!url || !hasPsql) {
       await live.db.membership.create({ data: { userId: ids.other, organizationId: ids.business, createdAt: at } });
       await live.db.auditEvent.create({ data: { organizationId: ids.business, actorType: 'USER', actorId: ids.owner, action: 'expense.deleted', entityType: 'expense', entityId: ids.expense } });
       await live.db.customer.update({ where: { id: ids.otherCustomer }, data: { name: 'Other client, renamed' } });
+      // MUT-358: a grant made after the backup survives a restore; billing never rolls back.
+      const grant = await live.db.entitlementGrant.create({ data: { organizationId: ids.business, tier: 'FIRM', reason: 'after the backup', grantedBy: 'test' } });
 
       const before = await snapshot(live.db);
       const env = { DATABASE_URL: live.url, SOURCE_DATABASE_URL: backup.url };
@@ -191,6 +196,7 @@ if (!url || !hasPsql) {
       expect(after.receipts).toEqual(fromBackup.receipts);
       expect(after.customers.find((c) => c.id === ids.otherCustomer)?.name).toBe('Other client, renamed');
       expect(after.memberships).toEqual(before.memberships);
+      expect(await live.db.entitlementGrant.findUnique({ where: { id: grant.id } })).not.toBeNull();
       expect(after.audit).toBe(before.audit + 1);
       const restored = await live.db.auditEvent.findFirst({ where: { organizationId: ids.business, action: 'organization.restored' } });
       expect(restored?.actorType).toBe('SYSTEM');
