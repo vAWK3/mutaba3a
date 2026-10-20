@@ -174,6 +174,11 @@ describe('API key authentication', () => {
     expect((await read(again)).apiKey.lastUsedAt).toBe('2026-10-08T10:00:00.000Z');
   });
 
+  it("never shows Malafat the firm switch: the firm block, and the requester's id, are the operator's (MUT-300)", async () => {
+    const body = await read(await h.app.request('/v1/integration', bearer(secret)));
+    expect(Object.keys(body.organization).sort()).toEqual(['createdAt', 'defaultCurrency', 'id', 'name', 'ownerUserId', 'personalOwnerUserId', 'profileType', 'slug', 'timezone']);
+  });
+
   it.each([
     ['no header', {}, 'UNAUTHENTICATED'],
     ['wrong scheme', { authorization: 'Basic abc' }, 'UNAUTHENTICATED'],

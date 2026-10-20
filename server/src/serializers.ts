@@ -55,8 +55,15 @@ export function serializeOrganization(o: Organization) {
     personalOwnerUserId: o.personalOwnerUserId,
     ownerUserId: o.ownerUserId,
     profileType: o.profileType,
-    firm: { enabledAt: iso(o.firmEnabledAt), requestedAt: iso(o.firmRequestedAt), requestedByUserId: o.firmRequestedByUserId },
     createdAt: o.createdAt.toISOString(),
+  };
+}
+
+/** MUT-300: the operator's view, with the firm switch. Never on an API-key route: it names the requesting user. */
+export function serializeAdminOrganization(o: Organization) {
+  return {
+    ...serializeOrganization(o),
+    firm: { enabledAt: iso(o.firmEnabledAt), requestedAt: iso(o.firmRequestedAt), requestedByUserId: o.firmRequestedByUserId },
   };
 }
 

@@ -47,19 +47,27 @@ export const OrganizationSchema = z
     ownerUserId: z.string().uuid().nullable(),
     /** MUT-182: PERSONAL or BUSINESS on an owned profile; null on an operator-provisioned organization. */
     profileType: z.enum(['PERSONAL', 'BUSINESS']).nullable(),
-    /** MUT-300 (ADR-099): the firm switch. Additive since 1.41.0-mut300. */
-    firm: z
-      .object({
-        /** Firm features are on from this instant; null = off. */
-        enabledAt: z.string().datetime().nullable(),
-        /** The owner's pending request; null when none is pending. */
-        requestedAt: z.string().datetime().nullable(),
-        requestedByUserId: z.string().uuid().nullable(),
-      })
-      .openapi('OrganizationFirm'),
     createdAt: z.string().datetime(),
   })
   .openapi('Organization');
+
+/**
+ * MUT-300 (ADR-099): the organization as the operator sees it, with the firm
+ * switch. Only admin routes answer with it: the firm block names the
+ * requesting user, so Malafat's `/v1/integration` keeps the plain
+ * `Organization`. Additive since 1.41.0-mut300.
+ */
+export const AdminOrganizationSchema = OrganizationSchema.extend({
+  firm: z
+    .object({
+      /** Firm features are on from this instant; null = off. */
+      enabledAt: z.string().datetime().nullable(),
+      /** The owner's pending request; null when none is pending. */
+      requestedAt: z.string().datetime().nullable(),
+      requestedByUserId: z.string().uuid().nullable(),
+    })
+    .openapi('OrganizationFirm'),
+}).openapi('AdminOrganization');
 
 /** MUT-300 (ADR-099): a member's role in a firm. Read only while the organization's firm features are on. */
 export const MembershipRoleSchema = z.enum(['OWNER', 'BOOKKEEPER', 'SUBMITTER']).openapi('MembershipRole');
@@ -80,7 +88,7 @@ export const UpdateOrganizationRequestSchema = z
   ])
   .openapi('UpdateOrganizationRequest');
 
-export const OrganizationResponseSchema = z.object({ organization: OrganizationSchema }).openapi('OrganizationResponse');
+export const OrganizationResponseSchema = z.object({ organization: AdminOrganizationSchema }).openapi('OrganizationResponse');
 
 /** MUT-300: one pending request for firm features, as the operator lists them. */
 export const FirmRequestSchema = z
@@ -242,7 +250,7 @@ export const RevokeApiKeyRequestSchema = z
 
 export const OrganizationDetailSchema = z
   .object({
-    organization: OrganizationSchema,
+    organization: AdminOrganizationSchema,
     apiKeys: z.array(ApiKeySummarySchema),
     integrations: z.array(IntegrationSchema),
     /** MUT-300: everyone with access, oldest membership first, with their firm role. Additive since 1.41.0-mut300. */

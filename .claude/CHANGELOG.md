@@ -75,7 +75,7 @@ Basel asked for one command that fetches the URL and admin token itself and prom
   - store methods `requestFirm`, `setFirm`, `declineFirmRequest`, `listFirmRequests` on both stores, each audited in its transaction; shared rules in `server/src/firm.ts`;
   - `POST /v1/profiles/{id}/firm-request` (owner of an owned Business profile, idempotent, 202);
   - admin `PATCH /admin/v1/organizations/{id}` (enable in place / disable), `DELETE …/firm-request` (decline), `GET /admin/v1/firm-requests`; the organization detail lists members with roles;
-  - `/v1/me` profiles gain `firm`, `role`, `firmRequestedAt` (owner only); `Organization` gains `firm`, `Membership` gains `role`;
+  - `/v1/me` profiles gain `firm`, `role`, `firmRequestedAt` (owner only); the admin routes answer with `AdminOrganization` (`Organization` + `firm`), while Malafat's `/v1/integration` keeps the plain `Organization`, so the requester's id never reaches an API key; `Membership` gains `role`;
   - CLI `firm-requests`, `firm-enable`, `firm-disable`, `firm-decline` (npm `firm:*`).
 - **Portal:** `FirmRequestSection` at the foot of a Business profile's edit pane (offer → Requested), and `FirmOnBanner` on the Overview (one dismissible note, DR5); ar/en strings; the firm copy guard `scripts/__tests__/firm-copy-guard.test.ts`.
 - **Release-QA:** `portal.profiles.firm-request`, `portal.shell.firm-enabled-banner`, both passing on a preview build.

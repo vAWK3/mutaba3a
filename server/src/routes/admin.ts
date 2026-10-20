@@ -18,11 +18,11 @@ import {
   CreateOrganizationRequestSchema,
   ErrorEnvelopeSchema,
   OrganizationDetailSchema,
-  OrganizationSchema,
+  AdminOrganizationSchema,
   RevokeApiKeyRequestSchema,
   ApiKeySummarySchema,
 } from '../schemas.js';
-import { serializeApiKey, serializeAuditEvent, serializeIntegration, serializeOrganization } from '../serializers.js';
+import { serializeAdminOrganization, serializeApiKey, serializeAuditEvent, serializeIntegration } from '../serializers.js';
 
 /**
  * Operator provisioning (plan §3.1 "organization identification, scoped API
@@ -71,7 +71,7 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
       security: [{ adminToken: [] }],
       request: { body: { required: true, content: { 'application/json': { schema: CreateOrganizationRequestSchema } } } },
       responses: {
-        201: { description: 'Created', content: { 'application/json': { schema: OrganizationSchema } } },
+        201: { description: 'Created', content: { 'application/json': { schema: AdminOrganizationSchema } } },
         409: { description: 'Slug already in use', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         422: { description: 'Validation failed', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
@@ -91,7 +91,7 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
           entityId: org.id,
           requestId: c.get('requestId'),
         });
-        return c.json(serializeOrganization(org), 201);
+        return c.json(serializeAdminOrganization(org), 201);
       } catch (err) {
         if (err instanceof UniqueViolation) throw new ApiError('CONFLICT', `Slug "${slug}" is already in use`);
         throw err;
@@ -127,7 +127,7 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
         memberships.map(async (m) => ({ userId: m.userId, email: (await store.users.getById(m.userId))?.email ?? '', role: m.role })),
       );
       return c.json(
-        { organization: serializeOrganization(org), apiKeys: keys.map(serializeApiKey), integrations: integrations.map(serializeIntegration), members },
+        { organization: serializeAdminOrganization(org), apiKeys: keys.map(serializeApiKey), integrations: integrations.map(serializeIntegration), members },
         200,
       );
     },
@@ -271,7 +271,7 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
       const input = body.firmEnabled ? { enabled: true as const, ownerUserIds: body.ownerUserIds ?? [] } : { enabled: false as const };
       // Audited inside the write's transaction, so a failed audit can't leave an unrecorded change.
       const result = await store.organizations.setFirm(organizationId, input, c.get('now')(), { actorId: null, requestId: c.get('requestId') });
-      return c.json({ organization: serializeOrganization(firmUpdated(result)) }, 200);
+      return c.json({ organization: serializeAdminOrganization(firmUpdated(result)) }, 200);
     },
   );
 
@@ -293,7 +293,7 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
     async (c) => {
       const result = await store.organizations.declineFirmRequest(c.req.valid('param').organizationId, c.get('now')(), { actorId: null, requestId: c.get('requestId') });
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No pending firm request for this organization');
-      return c.json({ organization: serializeOrganization(result.organization) }, 200);
+      return c.json({ organization: serializeAdminOrganization(result.organization) }, 200);
     },
   );
 

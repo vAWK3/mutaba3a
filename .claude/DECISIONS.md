@@ -3986,8 +3986,9 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **C1, the role column lands in MUT-300.** `Membership.role` (`OWNER` default, inert until the flag is on, O10) is written by enable; MUT-305 adds enforcement only.
 - **C2/C4, request refusals.** 403 `READ_ONLY_PROFILE {reason: NOT_OWNER}` through the shared `ownedBy` helper (not a 409), and 409 `NOT_BUSINESS` for an owned profile typed PERSONAL; `ALREADY_FIRM` is reachable again under D4.
 - **C5, admin conventions.** The admin PATCH and decline take no If-Match or Idempotency-Key: same state is a no-op 200, like every admin route.
-- **C6/C7, `/v1/me`.** Profiles gain `firm`, `role` and `firmRequestedAt` (owner only) in API `1.41.0-mut300` (built as 1.37.0, renumbered at the merge after main reached 1.40.0-mut325). The v1 banner copy names no Members page until MUT-306 ships one.
+- **C6/C7, `/v1/me`.** Profiles gain `firm`, `role` and `firmRequestedAt` (owner only) in API `1.41.0-mut300` (built as 1.37.0, renumbered at the merge after main reached 1.40.0-mut325). The v1 banner copy names no Members page until MUT-306 ships one. The firm block (`enabledAt`, `requestedAt`, `requestedByUserId`) is on `AdminOrganization` only: API-key routes keep the plain `Organization`, because the block names a portal user. That was found at the merge review, where `/v1/integration` had carried it.
 - **O3.** A request doesn't bump the profile's `version`, so the owner's open edit form keeps its If-Match.
+- **Records export by firm members.** ADR-156 lets any member export a profile. A firm BOOKKEEPER can be created today (`firm-enable` + `grant`), so gating the export by role belongs to MUT-305 (Jira comment 12253), not to this ticket. Roles stay inert until then.
 - **Local mode (merge with MUT-286/287/325, 2026-10-20).** A device has no operator: its profiles always have firm features off and nothing requested, and its one person's memberships are all OWNER. The local snapshot format went 1 → 2 with a migration that writes exactly that, the signed-in export writes the same, and the portal hides the firm request signed out.
 
 ---

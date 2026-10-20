@@ -14,6 +14,7 @@ import { pathToFileURL } from 'node:url';
  *   npm run disable:user    -- --email nour@firm.ps
  *   npm run enable:user     -- --email nour@firm.ps
  *   npm run revoke:sessions -- --email nour@firm.ps   (sign out everywhere)
+ *   npm run terms:report                                        (MUT-354: who is behind the current terms)
  *   npm run firm:requests                                       (MUT-300: pending requests for firm features)
  *   npm run firm:enable  -- --organization-id <uuid> [--owner nour@firm.ps,omar@firm.ps]
  *   npm run firm:disable -- --organization-id <uuid>

@@ -630,8 +630,6 @@ components:
             - PERSONAL
             - BUSINESS
             - null
-        firm:
-          $ref: "#/components/schemas/OrganizationFirm"
         createdAt:
           type: string
           format: date-time
@@ -644,27 +642,7 @@ components:
         - personalOwnerUserId
         - ownerUserId
         - profileType
-        - firm
         - createdAt
-    OrganizationFirm:
-      type: object
-      properties:
-        enabledAt:
-          type: string
-          nullable: true
-          format: date-time
-        requestedAt:
-          type: string
-          nullable: true
-          format: date-time
-        requestedByUserId:
-          type: string
-          nullable: true
-          format: uuid
-      required:
-        - enabledAt
-        - requestedAt
-        - requestedByUserId
     ApiKeySummary:
       type: object
       properties:
@@ -5653,6 +5631,34 @@ components:
         - perEur
         - fetchedAt
         - source
+    AdminOrganization:
+      allOf:
+        - $ref: "#/components/schemas/Organization"
+        - type: object
+          properties:
+            firm:
+              $ref: "#/components/schemas/OrganizationFirm"
+          required:
+            - firm
+    OrganizationFirm:
+      type: object
+      properties:
+        enabledAt:
+          type: string
+          nullable: true
+          format: date-time
+        requestedAt:
+          type: string
+          nullable: true
+          format: date-time
+        requestedByUserId:
+          type: string
+          nullable: true
+          format: uuid
+      required:
+        - enabledAt
+        - requestedAt
+        - requestedByUserId
     CreateOrganizationRequest:
       type: object
       properties:
@@ -5676,7 +5682,7 @@ components:
       type: object
       properties:
         organization:
-          $ref: "#/components/schemas/Organization"
+          $ref: "#/components/schemas/AdminOrganization"
         apiKeys:
           type: array
           items:
@@ -5759,7 +5765,7 @@ components:
       type: object
       properties:
         organization:
-          $ref: "#/components/schemas/Organization"
+          $ref: "#/components/schemas/AdminOrganization"
       required:
         - organization
     UpdateOrganizationRequest:
@@ -13255,7 +13261,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Organization"
+                $ref: "#/components/schemas/AdminOrganization"
         "401":
           description: Missing or invalid admin token
           content:

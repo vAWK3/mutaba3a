@@ -10186,7 +10186,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Organization"];
+                        "application/json": components["schemas"]["AdminOrganization"];
                     };
                 };
                 /** @description Missing or invalid admin token */
@@ -11465,17 +11465,8 @@ export interface components {
             ownerUserId: string | null;
             /** @enum {string|null} */
             profileType: "PERSONAL" | "BUSINESS" | null;
-            firm: components["schemas"]["OrganizationFirm"];
             /** Format: date-time */
             createdAt: string;
-        };
-        OrganizationFirm: {
-            /** Format: date-time */
-            enabledAt: string | null;
-            /** Format: date-time */
-            requestedAt: string | null;
-            /** Format: uuid */
-            requestedByUserId: string | null;
         };
         ApiKeySummary: {
             /** Format: uuid */
@@ -13375,6 +13366,17 @@ export interface components {
              */
             source: "live" | "stale";
         };
+        AdminOrganization: components["schemas"]["Organization"] & {
+            firm: components["schemas"]["OrganizationFirm"];
+        };
+        OrganizationFirm: {
+            /** Format: date-time */
+            enabledAt: string | null;
+            /** Format: date-time */
+            requestedAt: string | null;
+            /** Format: uuid */
+            requestedByUserId: string | null;
+        };
         CreateOrganizationRequest: {
             name: string;
             slug?: string;
@@ -13382,7 +13384,7 @@ export interface components {
             timezone: string;
         };
         OrganizationDetail: {
-            organization: components["schemas"]["Organization"];
+            organization: components["schemas"]["AdminOrganization"];
             apiKeys: components["schemas"]["ApiKeySummary"][];
             integrations: components["schemas"]["Integration"][];
             members: components["schemas"]["OrganizationMember"][];
@@ -13410,7 +13412,7 @@ export interface components {
             events: components["schemas"]["AuditEvent"][];
         };
         OrganizationResponse: {
-            organization: components["schemas"]["Organization"];
+            organization: components["schemas"]["AdminOrganization"];
         };
         UpdateOrganizationRequest: {
             /** @enum {boolean} */
