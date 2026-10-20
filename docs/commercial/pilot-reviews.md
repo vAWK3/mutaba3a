@@ -6,7 +6,7 @@
 ## How to write one
 
 1. **Run the operator count** (`server/DEPLOYMENT.md` §6a) with `as_of` left at `now`. It's read-only, and the output is never sent anywhere (ADR-024).
-2. **Check PostHog dashboard 1031822.** It's opt-in only, so it undercounts. Note only what disagrees with the operator count.
+2. **Check PostHog dashboard 1031822**, mainly its two "Pilot" tiles. It's opt-in only, so it undercounts. Note only what disagrees with the operator count.
 3. **Check Stripe** for unpaid or failed invoices, and **the support inbox** for new tickets.
 4. **Add one dated section** at the top of the log below, copied from the template.
 

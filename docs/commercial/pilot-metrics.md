@@ -29,7 +29,11 @@ The bars are counts out of 10. If the cohort isn't 10 people when the first user
 - An entry is an expense, a Received payment or an Owed entry. It counts in the week it was logged.
 - Pilot users appear as codes (`P01`…`P10`). The list of who is who stays off the repository (runbook §6a).
 
-**PostHog dashboard 1031822** ("Acquisition and activation") is a cross-check only. It sees only people who opted in, so it undercounts. Use it for the surface split (portal or phone), never as the number of record.
+**PostHog dashboard 1031822** ("Acquisition and activation", EU project 304889) is a cross-check only. It sees only people who opted in, so it undercounts. It also can't tell pilot users from anyone else who opted in. Use it for the trend and the surface split (portal or phone), never as the number of record. Two tiles follow the bars:
+- **"Pilot activation: opt-in → first entry within 7 days"**: a funnel from `analytics_opted_in` to the action "Recorded an entry". It starts at opt-in, not at setup.
+- **"Pilot weekly use: weeks with an entry, last 4"**: cumulative stickiness over four 7-day periods. PostHog labels each bar "day", but each bar is one 7-day period. The bar at 3 is the one to read.
+
+The action **"Recorded an entry"** (170934) is any of `income_recorded`, `expense_recorded` or `payment_recorded`.
 
 **Paid conversion: Stripe.**
 - A user counts as **still paying** when they have paid the **month-3 invoice** and haven't asked to leave.
