@@ -48,6 +48,20 @@
 ### Technical
 - Verified under Node 22 with root and server deps installed as CI does: lint, typecheck, test:coverage (392 files, 5545 tests; statements 91.50 / branches 84.73 / functions 88.53 / lines 92.35) and build:hosted all pass. The Docker image build and /health probe were not run locally.
 
+## [Unreleased] - 2026-10-20 — Pilot tiles on PostHog dashboard 1031822 (MUT-330, epic MUT-322)
+
+**Why:** the dashboard's activation funnel counted income only, over 30 days, and nothing tracked weekly use. The MUT-330 bars count income or expense, within 7 days, and entries in 3 of the last 4 weeks.
+
+### Added (in PostHog, EU project 304889, at Basel's go)
+- The action "Recorded an entry" (170934): `income_recorded`, `expense_recorded` or `payment_recorded`.
+- The insight "Pilot activation: opt-in → first entry within 7 days" (`0Iw0a0uZ`): a funnel over 90 days with test accounts filtered out.
+- The insight "Pilot weekly use: weeks with an entry, last 4" (`hLRXPSk0`): cumulative stickiness over four 7-day periods.
+- Both are on dashboard 1031822. Both ran before saving: 4 people had opted in so far, and 1 had recorded an entry.
+
+### Changed
+- `docs/commercial/pilot-metrics.md` and `pilot-reviews.md` point at the two tiles. They stay a cross-check: opt-in only, and they include everyone who opted in, not just pilot users.
+- `.claude/INFRA.md`: the dashboard row lists the tiles and the action. The MCP starts in project 125127, so switch to 304889 first.
+
 ## [Unreleased] - 2026-10-20 — Terms-acceptance evidence: ADR-102 addendum (MUT-348, epic MUT-322)
 
 **Why:** MUT-324's first review pass left two questions open: does the hash have to cover the rendered page, and do firm-only members need more evidence? Basel decided both on 2026-10-20 (MUT-348 comment 12222).
