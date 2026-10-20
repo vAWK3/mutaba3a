@@ -9641,7 +9641,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description READ_ONLY_PROFILE with details.reason NOT_OWNER: a firm the caller belongs to but does not own */
+                /** @description READ_ONLY_PROFILE with details.reason NOT_OWNER: a profile the caller belongs to but does not own */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -9732,7 +9732,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description READ_ONLY_PROFILE with details.reason NOT_OWNER: a firm the caller belongs to but does not own */
+                /** @description READ_ONLY_PROFILE with details.reason NOT_OWNER: a profile the caller belongs to but does not own */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -9781,6 +9781,95 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/profiles/{profileId}/firm-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask for firm features on a Business profile you own
+         * @description MUT-300 (ADR-099): records the request for an operator, who turns firm features on in place: the profile stays yours. Idempotent: a repeat answers with the first request. Refused on your built-in personal profile (409 CONFLICT, details.reason PERSONAL_PROFILE), on a profile typed PERSONAL (NOT_BUSINESS) and once firm features are on (ALREADY_FIRM).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    profileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Requested (now or earlier) */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FirmRequestResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description READ_ONLY_PROFILE with details.reason NOT_OWNER: a profile the caller belongs to but does not own */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -10188,7 +10277,72 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Turn firm features on or off (MUT-300)
+         * @description Enabling works in place (ADR-099, MUT-300 eng review D4): an owned Business profile stays owned and its owner becomes OWNER; an operator firm needs `ownerUserIds` (422 without), each already a member (409 CONFLICT, details.reason NOT_A_MEMBER). Every other member becomes BOOKKEEPER, and a pending request is cleared. Disabling keeps roles. The same state again changes nothing. Refused on the built-in personal profile (409 PERSONAL_PROFILE) and on an owned Personal profile (409 NOT_BUSINESS).
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateOrganizationRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated, or already in that state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OrganizationResponse"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Unknown organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT with details.reason PERSONAL_PROFILE, NOT_BUSINESS or NOT_A_MEMBER */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed, or an operator firm enabled with no owner named */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/admin/v1/organizations/{organizationId}/api-keys": {
@@ -10370,6 +10524,122 @@ export interface paths {
                 };
                 /** @description Unknown organization */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/organizations/{organizationId}/firm-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Decline a pending request for firm features (MUT-300)
+         * @description Clears the request (eng review D6), audited firm.request_declined. The owner sees the offer again and may ask again. 404 when nothing is pending.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Declined */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OrganizationResponse"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Unknown organization, or no pending request */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/firm-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List pending requests for firm features, oldest first (MUT-300) */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number | null;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Pending requests */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FirmRequestList"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -11082,6 +11352,10 @@ export interface components {
             /** @enum {string|null} */
             type: "PERSONAL" | "BUSINESS" | null;
             version: number;
+            firm: boolean;
+            role: components["schemas"]["MembershipRole"];
+            /** Format: date-time */
+            firmRequestedAt: string | null;
         };
         /** @enum {string} */
         Currency: "ILS" | "USD" | "EUR" | "JOD" | "AED" | "SAR" | "QAR" | "BHD" | "OMR";
@@ -11091,6 +11365,8 @@ export interface components {
             /** @enum {string} */
             customer: "optional" | "linked-required";
         };
+        /** @enum {string|null} */
+        MembershipRole: "OWNER" | "BOOKKEEPER" | "SUBMITTER" | null;
         ProfileLimits: {
             ownedProfiles: number;
             maxOwnedProfiles: number;
@@ -11189,8 +11465,17 @@ export interface components {
             ownerUserId: string | null;
             /** @enum {string|null} */
             profileType: "PERSONAL" | "BUSINESS" | null;
+            firm: components["schemas"]["OrganizationFirm"];
             /** Format: date-time */
             createdAt: string;
+        };
+        OrganizationFirm: {
+            /** Format: date-time */
+            enabledAt: string | null;
+            /** Format: date-time */
+            requestedAt: string | null;
+            /** Format: uuid */
+            requestedByUserId: string | null;
         };
         ApiKeySummary: {
             /** Format: uuid */
@@ -13050,6 +13335,12 @@ export interface components {
             /** @enum {string} */
             preset: "lawFirm" | "personal" | "general";
         };
+        FirmRequestResponse: {
+            firmRequest: {
+                /** Format: date-time */
+                requestedAt: string;
+            };
+        };
         RecordsFile: {
             /** @enum {string} */
             kind: "mutaba3a-local-records";
@@ -13094,6 +13385,13 @@ export interface components {
             organization: components["schemas"]["Organization"];
             apiKeys: components["schemas"]["ApiKeySummary"][];
             integrations: components["schemas"]["Integration"][];
+            members: components["schemas"]["OrganizationMember"][];
+        };
+        OrganizationMember: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            role: components["schemas"]["MembershipRole"];
         };
         CreateApiKeyResponse: {
             apiKey: components["schemas"]["ApiKeySummary"];
@@ -13110,6 +13408,32 @@ export interface components {
         };
         AuditList: {
             events: components["schemas"]["AuditEvent"][];
+        };
+        OrganizationResponse: {
+            organization: components["schemas"]["Organization"];
+        };
+        UpdateOrganizationRequest: {
+            /** @enum {boolean} */
+            firmEnabled: true;
+            ownerUserIds?: string[];
+        } | {
+            /** @enum {boolean} */
+            firmEnabled: false;
+        };
+        FirmRequestList: {
+            data: components["schemas"]["FirmRequest"][];
+            nextCursor: string | null;
+        };
+        FirmRequest: {
+            /** Format: uuid */
+            organizationId: string;
+            name: string;
+            /** Format: date-time */
+            requestedAt: string;
+            /** Format: uuid */
+            requestedByUserId: string;
+            requestedByEmail: string | null;
+            owned: boolean;
         };
         CreateUserResponse: {
             user: components["schemas"]["UserSummary"];
@@ -13139,6 +13463,7 @@ export interface components {
         Membership: {
             /** Format: uuid */
             organizationId: string;
+            role: components["schemas"]["MembershipRole"];
             /** Format: date-time */
             createdAt: string;
         };

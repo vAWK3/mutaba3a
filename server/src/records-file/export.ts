@@ -33,14 +33,16 @@ export function localPersonOf(person: UserRecord): UserRecord {
 
 /** The membership as the device holds it, field by field for the same reason. */
 export function localMembershipOf(membership: MembershipRecord): MembershipRecord {
-  return { userId: membership.userId, organizationId: membership.organizationId, createdAt: membership.createdAt };
+  // MUT-300: the device's one person owns every profile (ADR-097 §2.2), whatever their role on the account.
+  return { userId: membership.userId, organizationId: membership.organizationId, role: 'OWNER', createdAt: membership.createdAt };
 }
 
 /**
  * Locally the one person owns every profile (ADR-097 §2.2): renaming, retyping and re-dating are the owner's
  * (`isOwnProfile`), so a profile the exporter belongs to but doesn't own (a firm, or anyone else's) becomes theirs:
  * a BUSINESS profile, or PERSONAL when it was someone's personal one. Their own profiles keep their ownership.
- * Field by field, so a column a firm gains later (ADR-099's) never reaches a device.
+ * Field by field, so a column a firm gains later (ADR-099's) never reaches a device. The firm switch (MUT-300)
+ * arrives off: a device has no operator to turn it on or to read a request.
  */
 export function localProfileOf(organization: Organization, personId: string): Organization {
   const own = organization.personalOwnerUserId === personId || (organization.personalOwnerUserId === null && organization.ownerUserId === personId);
@@ -50,6 +52,7 @@ export function localProfileOf(organization: Organization, personId: string): Or
     personalOwnerUserId: own ? organization.personalOwnerUserId : null,
     ownerUserId: own ? organization.ownerUserId : personId,
     profileType: own ? organization.profileType : wasPersonal ? 'PERSONAL' : (organization.profileType ?? 'BUSINESS'),
+    firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null,
     version: organization.version, createdAt: organization.createdAt,
   };
 }

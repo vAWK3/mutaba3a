@@ -674,7 +674,7 @@ The superseded ADRs keep their text in place, so numbers and links stay stable; 
 | Minimize-to-core decision 3, "expenses are optional, not core" (MUT-1 intake, not an ADR), for firm profiles only | ADR-099 | 2026-10-19 | MUT-298: on a firm, expenses, vendors and bills are core; personal and freelancer profiles keep expenses optional |
 | MUT-252 decision 5, "the portal does not auto-read receipts" (Jira, not an ADR), for firm profiles | ADR-099 | 2026-10-19 | MUT-298: the portal reads PDF text, QR codes and photos on the user's device; no server or LLM reading |
 | ADR-037 decision 1, "no signup, invite or password-reset route" (the invite part) | ADR-099 | 2026-10-19 | MUT-306: a firm owner invites by email; the link goes only to the invitee, who accepts as that email |
-| ADR-037 MUT-182 amendment, "an owned profile is never granted to or provisioned into another user" | ADR-099 | 2026-10-19 | MUT-300: an operator may convert an owned Business profile into a firm (ownership moves to an OWNER role) |
+| ADR-037 MUT-182 amendment, "an owned profile is never granted to or provisioned into another user" | ADR-099 | 2026-10-19 | MUT-300: an operator may convert an owned Business profile into a firm (ownership moves to an OWNER role). **Withdrawn 2026-10-20** (MUT-300 D4: firm features in place, no conversion; sharing decided in v3) |
 | MUT-298 intake decision 6, "the invite always yields a copyable link" (Jira, not an ADR) | ADR-099 | 2026-10-19 | MUT-299 D10: the link goes only to the invited email; the owner never sees it |
 
 ---
@@ -3913,8 +3913,8 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 **Decision**:
 1. **A firm is an organization with `firmEnabledAt` set,** enabled by an operator (ID3). The owner asks for it from the portal (MUT-300).
    - Firm features never key off `ProfileType`.
-   - An owned Business profile becomes a firm only through an operator **conversion**: ownership moves from `ownerUserId` to an OWNER role, `profileType` is cleared with it, and the profile leaves the cap of 6. The built-in personal profile never converts (B1).
-   - Enabling names at least one owner; other existing members become BOOKKEEPER (D4).
+   - ~~An owned Business profile becomes a firm only through an operator **conversion** (B1).~~ **Amended by MUT-300 (D4, see the amendment below):** the operator turns firm features on **in place**; the profile stays owned and its owner is OWNER. The built-in personal profile never gets them.
+   - Enabling an operator firm names at least one owner; other existing members become BOOKKEEPER (D4).
 2. **Roles fold into the one permissions derivation (D1).**
    - `Membership.role` is `OWNER | BOOKKEEPER | SUBMITTER`, and is inert while the flag is off.
    - `sessionScopesFor(writer, role)` drives `requireScope`, the store guard and `/v1/me` access alike.
@@ -3974,9 +3974,21 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 **Override log — ADR-037 decision 1 (partial)**: *What*: "no signup, invite or password-reset route". *Replaced by*: a firm owner may invite by email (MUT-306), the link reaching only the invitee, who accepts as that email. Public signup is still absent, and `no-self-registration.test.ts` is updated deliberately. *Why*: firms need to add their own staff. *Date*: 2026-10-19.
 
-**Override log — ADR-037, MUT-182 amendment (partial)**: *What*: "an owned profile is … never granted to or provisioned into another user". *Replaced by*: an operator may convert an owned Business profile into a firm, after which it follows firm rules. Unconverted owned profiles are unchanged. *Why*: a freelancer's business grows into a firm without starting a new profile. *Date*: 2026-10-19.
+**Override log — ADR-037, MUT-182 amendment (partial)**: *What*: "an owned profile is … never granted to or provisioned into another user". *Replaced by*: an operator may convert an owned Business profile into a firm, after which it follows firm rules. Unconverted owned profiles are unchanged. *Why*: a freelancer's business grows into a firm without starting a new profile. *Date*: 2026-10-19. **Withdrawn 2026-10-20 by the MUT-300 amendment (D4):** v1–v2 neither convert nor share an owned profile, so the MUT-182 rule stands unchanged; v3 decides sharing after the pilot.
 
 **Override log — MUT-298 intake decision 6 (partial)**: *What*: "the invite always yields a copyable setup link". *Replaced by*: the link goes only to the invited email; the owner never sees it (D10). *Why*: an owner holding the link could set a password on someone else's account and probe which emails exist (outside voice O5). *Date*: 2026-10-19.
+
+**MUT-300 amendment (2026-10-20; MUT-300 eng review D1–D6, Basel, 2026-10-19; built on `feature/mut-300-firm-flag`)**:
+- **D4, firm features in place (reverses B1 and decision 1's conversion bullet).** The operator sets `firmEnabledAt` on an owned Business profile without touching `ownerUserId` or `profileType`; the owner's membership becomes OWNER. Conversion would have removed income capture, settle and redate from the first pilot owner, since all three key on `owned` (outside voice O1). No convert route; CHECK `organizations_firm_not_personal_check` (`firmEnabledAt IS NULL OR personalOwnerUserId IS NULL`) replaces the planned `firm_not_owned_check`. Sharing an owned firm profile with staff is a **v3 decision after the pilot** (MUT-305/306). The ADR-037 MUT-182 override above is withdrawn.
+- **D6, decline.** `DELETE /admin/v1/organizations/{id}/firm-request` (CLI `firm-decline`) clears a pending request, audited `firm.request_declined`; the owner may ask again.
+- **D3, operator grants.** No role parameter: a new member of a firm is BOOKKEEPER, OWNER elsewhere (inert). SUBMITTER and extra owners come with MUT-306 invites and MUT-305 role changes.
+- **D5, one meaning for "firm".** "Firm" now means "firm features are on". The portal's read-only reason `'FIRM'` became `'OPERATOR'` and its key `hosted.profiles.readOnly.operator` (same text); API docs and the 403 message no longer call a non-owned profile "a firm".
+- **C1, the role column lands in MUT-300.** `Membership.role` (`OWNER` default, inert until the flag is on, O10) is written by enable; MUT-305 adds enforcement only.
+- **C2/C4, request refusals.** 403 `READ_ONLY_PROFILE {reason: NOT_OWNER}` through the shared `ownedBy` helper (not a 409), and 409 `NOT_BUSINESS` for an owned profile typed PERSONAL; `ALREADY_FIRM` is reachable again under D4.
+- **C5, admin conventions.** The admin PATCH and decline take no If-Match or Idempotency-Key: same state is a no-op 200, like every admin route.
+- **C6/C7, `/v1/me`.** Profiles gain `firm`, `role` and `firmRequestedAt` (owner only) in API `1.41.0-mut300` (built as 1.37.0, renumbered at the merge after main reached 1.40.0-mut325). The v1 banner copy names no Members page until MUT-306 ships one.
+- **O3.** A request doesn't bump the profile's `version`, so the owner's open edit form keeps its If-Match.
+- **Local mode (merge with MUT-286/287/325, 2026-10-20).** A device has no operator: its profiles always have firm features off and nothing requested, and its one person's memberships are all OWNER. The local snapshot format went 1 → 2 with a migration that writes exactly that, the signed-in export writes the same, and the portal hides the firm request signed out.
 
 ---
 

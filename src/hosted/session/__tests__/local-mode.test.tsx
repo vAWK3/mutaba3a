@@ -164,6 +164,17 @@ describe('the shell signed out', () => {
     expect(container.textContent).not.toMatch(/Malafat/);
   });
 
+  it('never offers firm features on an owned business profile: no operator sees a request made on this device (MUT-300)', async () => {
+    const business = profile({ id: ORG_A, name: 'Studio', writerOfRecord: null, owned: true, type: 'BUSINESS', isPersonalDefault: false });
+    useLocalRoutes({ 'GET /v1/me': () => ok({ ...localMe, profiles: [business] }) });
+    stubApi({});
+    renderPortal(`/p/${ORG_A}?editProfile=${ORG_A}`);
+    const dialog = await screen.findByRole('dialog', { name: 'Studio' });
+    expect(within(dialog).getByLabelText('Name')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Use this profile for a firm')).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Request firm features' })).toBeNull();
+  });
+
   it('another tab\'s save refreshes this tab', async () => {
     let payments = 0;
     useLocalRoutes({ 'GET /v1/payments': () => ok({ items: [], nextCursor: null }, 200, { 'x-count': String(++payments) }) });

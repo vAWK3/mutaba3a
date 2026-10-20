@@ -9,6 +9,7 @@ import { ifMatch } from '../if-match.js';
 import type { LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
 import {
   CreateProfileRequestSchema,
+  FirmRequestResponseSchema,
   HostedProfileSchema,
   IfMatchHeaderSchema,
   ProfileIdParamSchema,
@@ -31,11 +32,12 @@ export const PROFILE_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new 
   'POST /v1/profiles',
   'PATCH /v1/profiles/:profileId',
   'GET /v1/profiles/:profileId/type-change',
+  'POST /v1/profiles/:profileId/firm-request',
 ]);
 
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
-const forbiddenResponse = { 403: { description: 'READ_ONLY_PROFILE with details.reason NOT_OWNER: a firm the caller belongs to but does not own', content: errorResponses[403].content } } as const;
+const forbiddenResponse = { 403: { description: 'READ_ONLY_PROFILE with details.reason NOT_OWNER: a profile the caller belongs to but does not own', content: errorResponses[403].content } } as const;
 
 /**
  * /v1/profiles — a person's own standalone profiles (MUT-182, ADR-037
@@ -52,7 +54,7 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     const organization = await store.organizations.getById(profileId);
     if (!organization || !(await store.memberships.find(user.id, profileId))) throw new ApiError('NOT_FOUND', 'Profile not found');
     if (profileOwnerOf(organization) !== user.id) {
-      throw new ApiError('READ_ONLY_PROFILE', 'Only the person who owns a profile can change it; this one is your firm’s', { reason: 'NOT_OWNER' });
+      throw new ApiError('READ_ONLY_PROFILE', 'Only the person who owns a profile can change it; this one was set up for you by your account administrator', { reason: 'NOT_OWNER' });
     }
     return organization;
   }
@@ -89,7 +91,7 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (result.kind === 'limit') {
         throw new ApiError('CONFLICT', `You already have ${result.count} profiles, the most one person can own`, { reason: 'PROFILE_LIMIT', limit: MAX_OWNED_PROFILES });
       }
-      return c.json(hostedProfileFor(result.organization, null, user.id), 201);
+      return c.json(hostedProfileFor(result.organization, null, user.id, result.membership), 201);
     },
   );
 
@@ -134,7 +136,9 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'Profile not found');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
       const typeChange = result.typeChange && target ? { ...result.typeChange, preset: target.preset } : null;
-      return c.json({ profile: hostedProfileFor(result.record, null, user.id), typeChange }, 200);
+      // MUT-300: an owned profile can have firm features on (eng review D4); its owner's role comes with it.
+      const membership = await store.memberships.find(user.id, result.record.id);
+      return c.json({ profile: hostedProfileFor(result.record, null, user.id, membership), typeChange }, 200);
     },
   );
 
@@ -157,6 +161,41 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { preset } = presetFor({ writerOfRecord: null, profileType: to }, user.locale);
       const impact = to === profileTypeOf(current) ? { uncategorizedExpenses: 0, deletedCategories: 0 } : await store.organizations.typeChangeImpact(current.id);
       return c.json({ ...impact, preset }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/profiles/{profileId}/firm-request',
+      tags: ['Profiles'],
+      summary: 'Ask for firm features on a Business profile you own',
+      description:
+        'MUT-300 (ADR-099): records the request for an operator, who turns firm features on in place: the profile stays yours. Idempotent: a repeat answers with the first request. Refused on your built-in personal profile (409 CONFLICT, details.reason PERSONAL_PROFILE), on a profile typed PERSONAL (NOT_BUSINESS) and once firm features are on (ALREADY_FIRM).',
+      security: SESSION_ONLY,
+      middleware: [identityIdempotent(store, 'profiles.firmRequest')] as const,
+      request: { params: ProfileIdParamSchema, headers: IdempotencyHeaderSchema },
+      responses: {
+        202: { description: 'Requested (now or earlier)', content: { 'application/json': { schema: FirmRequestResponseSchema } } },
+        ...notFoundResponse,
+        ...conflictResponse,
+        ...errorResponses,
+        ...forbiddenResponse,
+      },
+    }),
+    async (c) => {
+      const { user } = c.get('identity');
+      const current = await ownedBy(user, c.req.valid('param').profileId);
+      if (current.personalOwnerUserId) {
+        throw new ApiError('CONFLICT', 'Your built-in personal profile can’t have firm features; create a Business profile for your firm', { reason: 'PERSONAL_PROFILE' });
+      }
+      if (profileTypeOf(current) !== 'BUSINESS') {
+        throw new ApiError('CONFLICT', 'Firm features are for Business profiles; change this profile’s type first', { reason: 'NOT_BUSINESS' });
+      }
+      const result = await store.organizations.requestFirm(current.id, user.id, c.get('now')(), { actorId: user.id, requestId: c.get('requestId') });
+      if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'Profile not found');
+      if (result.kind === 'already_firm') throw new ApiError('CONFLICT', 'Firm features are already on for this profile', { reason: 'ALREADY_FIRM' });
+      return c.json({ firmRequest: { requestedAt: result.organization.firmRequestedAt!.toISOString() } }, 202);
     },
   );
 

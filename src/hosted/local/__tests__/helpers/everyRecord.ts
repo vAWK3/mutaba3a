@@ -26,6 +26,15 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
   if (!membership) throw new Error('the fixture person has no profile');
   const org = membership.organizationId;
 
+  // orgs (MUT-300): an owned Business profile with a pending firm request, and one with firm features on
+  const audit = { actorId: user.id, requestId: null };
+  for (const slug of ['studio-requested', 'studio-firm']) {
+    const owned = await store.organizations.createOwned(user.id, { name: 'Studio', slug, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', profileType: 'BUSINESS', at: AT }, 6, audit);
+    if (owned.kind !== 'created') throw new Error('the fixture person is at the owned-profile cap');
+    if (slug === 'studio-requested') await store.organizations.requestFirm(owned.organization.id, user.id, AT, audit);
+    else await store.organizations.setFirm(owned.organization.id, { enabled: true, ownerUserIds: [] }, LATER, audit);
+  }
+
   // ints: a Malafat connection
   await store.integrations.connect({ organizationId: org, provider: 'MALAFAT', externalTenantId: 'tenant-1', displayName: 'Haddad Law', connectedByApiKeyId: 'key-1', at: AT });
 

@@ -12,6 +12,7 @@ import { changedFields, profileEditability } from '../data/profileRules';
 import { fetchTypeChangePreview, useUpdateProfile } from '../data/profileQueries';
 import { HOSTED_CURRENCIES } from '../format/currencies';
 import { ME_KEY, meQuery } from '../session/me';
+import { FirmRequestSection } from './FirmRequestSection';
 import { ProfileBanner } from './ProfileBanner';
 import { ProfileTypeCards } from './ProfileTypeCards';
 import { mapProfileError, type ProfileBanner as Banner } from './profileApiErrors';
@@ -248,6 +249,8 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave }: Profi
           </div>
         </form>
       )}
+      {/* MUT-300: outside the form, so asking for firm features never submits or dirties it */}
+      {step.kind !== 'confirm' && <FirmRequestSection profileId={profile.id} />}
     </>
   );
 }

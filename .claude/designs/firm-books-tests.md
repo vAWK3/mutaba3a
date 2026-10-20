@@ -31,13 +31,13 @@ How to read the value cards:
 
 ## 2. Per-ticket tests (minimum set; each eng-ticket may add)
 
-### MUT-300 · firm flag
-- Request: owned BUSINESS → 202; repeat → same body; built-in personal → 409 `PERSONAL_PROFILE`; not owner → 409 `NOT_OWNER`; API key → 403.
-- Enable: no owner named → 422; named owner not a member → 409 `NOT_A_MEMBER`; on an owned profile without convert → 409 `OWNED_PROFILE`; others become BOOKKEEPER.
-- Convert: `ownerUserId` and `profileType` both null afterwards (CHECK holds); the former owner is OWNER; the profile no longer counts toward the cap of 6.
-- `/v1/me` shows `firm` and `role`; audit actions are written.
-- Portal: the Manage drawer request row states (offer / requested / on); the DR5 banner shows once and stays dismissed.
-- Release-QA: `firm.request`, `firm.enabled-banner`.
+### MUT-300 · firm flag (as built 2026-10-20; MUT-300 eng review D3–D6)
+- Request: owned BUSINESS → 202; repeat (same or new key) → the first request, one audit row; no version bump (O3); built-in personal → 409 `PERSONAL_PROFILE`; owned PERSONAL → 409 `NOT_BUSINESS`; not owner → 403 `READ_ONLY_PROFILE NOT_OWNER`; already a firm → 409 `ALREADY_FIRM`; API key → 403.
+- Enable **in place** (D4): an owned Business profile stays owned and its owner is OWNER; an operator firm with no owner named → 422; named owner not a member → 409 `NOT_A_MEMBER`; built-in personal → 409 `PERSONAL_PROFILE` (and the DB CHECK); others become BOOKKEEPER; same state → no-op, no audit. No convert route.
+- Decline (D6): clears the request, audited; nothing pending → 404; the owner may ask again.
+- `/v1/me` shows `firm`, `role` and `firmRequestedAt` (owner only); audit actions are written.
+- Portal: the edit pane's request section (offer / requested / hidden); the DR5 banner shows once and stays dismissed.
+- Release-QA: `portal.profiles.firm-request`, `portal.shell.firm-enabled-banner`.
 
 ### MUT-301 · portal PDF + QR
 - Fixtures: text PDFs (ar/he/en), ZATCA QR images and PDFs, a malformed QR, a scanned PDF with no text layer.
