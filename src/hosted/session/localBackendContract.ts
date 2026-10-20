@@ -23,6 +23,8 @@ export interface PendingRestore {
   recordCount: number;
   /** Visible receipts whose file the records file can't supply; they restore without one. The confirm says so (MUT-287 review D4). */
   missingReceiptFiles: number;
+  /** When the file was downloaded from a Mutaba3a account (MUT-325) rather than a device: the confirm says it is an export, and from when. */
+  exportedFromAccountAt: Date | null;
   /** Replaces every local record with the file's. Resolves once the new data is saved on this device. */
   apply(): Promise<void>;
 }

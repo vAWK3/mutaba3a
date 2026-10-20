@@ -70,6 +70,18 @@ const envSchema = z.object({
   ANDROID_RECOMMENDED_BUILD: z.coerce.number().int().positive().optional(),
   /** Instant kill switch for the minimum-build gate, independent of the floor values — a misconfigured floor is undone by flipping this, not editing/redeploying the floor itself. */
   MIN_BUILD_CHECK_DISABLED: z.coerce.boolean().default(false),
+  /**
+   * MUT-326 (ADR-155 D3): the custom domain's front door proves itself with this secret
+   * (Secret Manager, written by server/infrastructure/frontdoor). Needs PORTAL_ORIGIN.
+   * Unset = no front door: every request is judged exactly as before.
+   */
+  FRONT_DOOR_TOKEN: z.string().min(32, 'FRONT_DOOR_TOKEN must be at least 32 characters').optional(),
+  /**
+   * MUT-326 stage "redirect": portal page visits that bypass the front door go to the
+   * same-origin carry-over page, which sends them on to PORTAL_ORIGIN. Only "true" turns
+   * it on (never z.coerce.boolean, which reads "false" as true). Needs FRONT_DOOR_TOKEN.
+   */
+  PORTAL_LEGACY_REDIRECT: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
 });
 
 const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
@@ -106,6 +118,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   // silently serving assetlinks.json with an empty fingerprint list.
   if (config.ANDROID_SHA256_FINGERPRINTS && !config.ANDROID_SHA256_FINGERPRINTS.split(',').some((fp) => fp.trim().length > 0)) {
     throw new ConfigError('Invalid configuration:\n  ANDROID_SHA256_FINGERPRINTS: must contain at least one non-blank fingerprint');
+  }
+  if (config.FRONT_DOOR_TOKEN && !config.PORTAL_ORIGIN) {
+    throw new ConfigError('Invalid configuration:\n  FRONT_DOOR_TOKEN: needs PORTAL_ORIGIN, the origin the front door serves the portal on');
+  }
+  if (config.PORTAL_LEGACY_REDIRECT && !config.FRONT_DOOR_TOKEN) {
+    throw new ConfigError('Invalid configuration:\n  PORTAL_LEGACY_REDIRECT: needs FRONT_DOOR_TOKEN, or every visit would be redirected, the new host\'s included');
   }
   for (const { min, recommended } of MIN_BUILD_PLATFORMS) {
     const floor = config[min];

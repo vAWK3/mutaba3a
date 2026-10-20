@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLanguage, useT } from '../../lib/i18n';
-import { LATEST_TERMS_VERSION, TERMS_VERSIONS, loadTerms, termsLanguageOf, termsVersionOf, type TermsText } from '../../content/legal/terms';
+import { LATEST_TERMS_VERSION, TERMS_VERSIONS, loadTerms, termsVersionOf, type TermsText } from '../../content/legal/terms';
+import { legalLanguageOf } from '../../content/legal/language';
 import { LegalPage } from './LegalPage';
 
 type Shown = { status: 'loading' } | { status: 'found'; text: TermsText } | { status: 'missing' };
@@ -15,7 +16,7 @@ type Shown = { status: 'loading' } | { status: 'found'; text: TermsText } | { st
 export function TermsPage({ path, search = '' }: { path: string; search?: string }) {
   const t = useT();
   const { language } = useLanguage();
-  const linked = termsLanguageOf(search);
+  const linked = legalLanguageOf(search);
   const textLanguage = linked ?? language;
   const withLang = (href: string) => (linked ? `${href}?lang=${linked}` : href);
   const version = termsVersionOf(path);

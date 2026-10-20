@@ -18,8 +18,75 @@
 
 ## Open Debt
 
-### TD-183: `vite.config.ts`'s social-preview step crashes the dev server — `ar/landing.json` is missing `hostedOffer`
+### TD-190: Receipt files aren't covered by the database backups
+**Status**: Resolved in code (2026-10-20: `soft_delete_policy` of 14 days on `google_storage_bucket.attachments`, tied to `retained_backups` by `local.db_retained_backups`; `tests/attachments_bucket.tftest.hcl`). **Not applied yet**: Basel approves it in the next `make release server` (which prints the reminder from `docs/operations/before-release.md`) or applies it alone per `server/DEPLOYMENT.md` §6c, and records the date in INFRA.md §2
+**Ticket**: none (MUT-327, 2026-10-20)
+**Added**: 2026-10-20
+**Priority**: Medium (pilot data; a restored receipt row can point at a deleted file)
+**Impact**: Deleting a receipt deletes its object (`routes/expenses.ts`), and `google_storage_bucket.attachments` has `versioning { enabled = false }` and no `soft_delete_policy`. A database restored to before the delete brings the row back, and the file is only recoverable within GCS's default soft-delete window (7 days on buckets created since 2024; the drill prints the bucket's real window). Past that, the file is gone.
+**Fix**: set an explicit `soft_delete_policy { retention_duration_seconds = 1209600 }` (14 days, matching the backups) on the bucket in Terraform. Or turn on versioning with a lifecycle rule that keeps non-current versions 14 days. Basel applies either. Then the runbook's §4.4 window matches the backups.
+
+### TD-191: A free-app user's data can't be moved into a hosted account without retyping
+**Status**: Open (decision for Basel, runbook §3)
+**Ticket**: MUT-290 (Backlog) is the in-app move
+**Added**: 2026-10-20
+**Priority**: High for the pilot's promise
+**Impact**: /hosted and `docs/commercial/pilot-offer.md` §4 say "We'll move them into your hosted account with you, by hand. Nothing to type again." Nothing imports a records file into a hosted profile, so the by-hand move today is re-entering with the person.
+**Fix**: build MUT-290 before the first free-app user moves in, or change the copy to drop "nothing to type again" (landing honesty tests, ADR-037).
+
+### TD-188: The signed-in Download holds the whole zip in the tab
 **Status**: Open
+**Ticket**: none (MUT-325, 2026-10-20, ADR-156)
+**Added**: 2026-10-20
+**Priority**: Low. The same ceiling local mode's own Download has; a pilot account's receipts are far below it.
+**Impact**: `hostedExport.ts` keeps every receipt's bytes and then the zip (`zipRecordsArchive`, jszip) in memory. Receipts are at most 10 MB each; an account with a few hundred large photos could exhaust a phone browser's tab.
+**Fix**: stream the zip to disk (File System Access API where available, a service-worker download elsewhere) with a streaming zip writer, for both Downloads.
+
+### TD-189: A long export is not one snapshot
+**Status**: Open
+**Ticket**: none (MUT-325, 2026-10-20, ADR-156)
+**Added**: 2026-10-20
+**Priority**: Low. Only a write made on another device during the seconds an export reads can land between pages.
+**Impact**: `GET /v1/records-export` reads 500 rows a query, field by field, outside one transaction. A payment recorded mid-export can appear without its allocation (or the reverse), so `paidMinor` and the allocations disagree in that file.
+**Fix**: run the reads in one read-only `REPEATABLE READ` transaction (with a longer timeout, sized against the pool), or stamp the export's start and re-read rows changed after it.
+
+### TD-186: The front-door Worker fails closed past the Cloudflare free tier, and every portal asset counts
+**Status**: Open
+**Ticket**: none (MUT-326 adversarial review, 2026-10-20; ADR-155)
+**Added**: 2026-10-20
+**Priority**: Low until the pilot grows (10 users are far below it)
+**Impact**: Once the custom domain is live, every request to `app.<apex>` goes through the Worker, hashed `/assets/*` files included. Past 100,000 requests a day per Cloudflare account, the Worker answers error 1027 until UTC midnight. The free tier is shared with anything else on the account, such as `malafat-router` if it's Malafat's.
+**Fix**: Workers Paid ($5/month, 10M requests) before a usage alert says it's close, or serve `/assets/*` from Cloudflare's cache (a Cache Rule on the route, or `cf: { cacheEverything }` for that prefix) so repeats never reach the Worker.
+
+### TD-187: The phone repo still writes the run.app and netlify.app hosts in tests and defaults
+**Status**: Open
+**Ticket**: none (MUT-326 inventory, 2026-10-20)
+**Added**: 2026-10-20
+**Priority**: Medium (MUT-112 step 5 edits these by hand)
+**Impact**: mutaba3a-flutter has no equivalent of `config/hosts.json` or the guard test. Its `.env` sets `MUTABA3A_API_BASE_URL` (fastlane requires it), while `lib/core/env.dart` defaults it to `https://api.mutaba3a.app`, which has no DNS. `MUTABA3A_PUBLIC_ORIGIN` defaults to the Netlify origin. The link host sits in `AssociatedDomains.xcconfig`, three `AndroidManifest.xml` hosts and `strings.xml`. About ten tests (links, legal links, settings) hardcode run.app or netlify.app.
+**Fix**: in that repo, derive the manifest and strings hosts from one Gradle property, point the QA and unit tests at `Env`, and add a guard test like mini-crm's. `npm run domain:plan` prints the values meanwhile.
+
+### TD-185: Uptime alerts can't pin "notify on close" (google provider 5.x)
+**Status**: Open
+**Ticket**: none (MUT-328, 2026-10-20)
+**Added**: 2026-10-20
+**Priority**: Low. Cloud Monitoring is expected to notify on close by default for metric policies, and the drill in `server/DEPLOYMENT.md` §6b confirms it.
+**Impact**: `alert_strategy.notification_prompts = ["OPENED", "CLOSED"]` exists only in hashicorp/google 6.x. `server/infrastructure/terraform` is locked to 5.45.2 (`~> 5.0`). If the default ever changes, recovery is silent. The runbook's fallback is the console's "Notify on incident closure" setting, which Terraform doesn't track.
+**Fix**: with the provider 6.x upgrade of this root (its own ticket: check every resource's plan for drift), add `notification_prompts = ["OPENED", "CLOSED"]` to both policy resources in `monitoring.tf` and assert it in `tests/monitoring.tftest.hcl`.
+
+### TD-184: An acceptance's `clientRelease` names the portal's built web version, which can lag the live landing that showed the terms text
+**Status**: Open (Q1 in `.claude/designs/mut-354-terms-client-release.md`, Basel's call)
+**Ticket**: MUT-354 (2026-10-20, eng review)
+**Added**: 2026-10-20
+**Priority**: Low (the file hash `textSha256` still pins the exact words; only the page code around them can differ)
+**Impact**:
+- The terms text renders on the landing, the Netlify `web-v<x>` deploy.
+- The portal sends `web-v<APP_VERSION>` (`src/hosted/terms.ts`). `APP_VERSION` is the root `package.json` version at the commit the API image was built from, because the portal ships inside it (ADR-081).
+- Web releases first (ADR-102), so normally that version is the live landing's. But a web release that isn't followed by a server release leaves the recorded release one behind the landing that actually showed the text.
+**Fix**: if Basel wants the exact landing release, the landing's `legal/terms-versions.json` gains its release, and the portal reads it when it shows the terms link. That's a cross-origin fetch with its own failure mode. Otherwise, close this as accepted.
+
+### TD-183: `vite.config.ts`'s social-preview step crashes the dev server — `ar/landing.json` is missing `hostedOffer`
+**Status**: Resolved on main (2026-10-20: `vite.config.ts` social meta now reads `ar.landing.hero.*`, not `hostedOffer`; confirmed when MUT-338 merged main)
 **Ticket**: none (found 2026-10-19/20, building MUT-338)
 **Added**: 2026-10-20
 **Priority**: High — blocks every local `npm run dev`/`dev:hosted` and any `release-qa env up` on the current local `main`, not just this ticket's worktree.
@@ -787,6 +854,7 @@
 **Remediation**: Collapse the sidebar to the rail or a menu below a breakpoint; let the Income table scroll inside its own container and wrap the top bar and tabs; cap drawers at `min(var(--drawer-width), 100vw)`. Remove each `KNOWN_OVERFLOW` entry as it fits. Needs a ticket (the app is desktop-first; the iPhone app is Flutter).
 **Effort**: Medium
 **Update (2026-10-19, MUT-250):** the Income cap was flaky, not the layout. The compact date column took its width from its widest date, and Thmanyah's digits are proportional, so Income at 375px in Arabic measured 718–736px depending on today's date (726 on 12/10, 727 on 19/10, 734 on 28/09). Compact dates now render through `CompactDate` (Plex Mono, tabular digits): 735px on every date across nine dates spanning the year. `Income@375` and `Income drawer@375` caps are 735 (was 726), and `@web.brand.date-width` pins the width across three dates. The overflow itself (this TD) is unchanged and still open; the local web app is due to retire (MUT-292).
+**Update (2026-10-20, MUT-357):** drawers fit now (TD-070 resolved): `Payment drawer@375` is gone from `KNOWN_OVERFLOW`. `Income drawer@375` stays, because Income behind it is still wider than a phone. The sidebar and Income remain open.
 
 ### TD-082: The portal sign-in page's language switch sits outside any landmark
 **Status**: Open
@@ -994,12 +1062,13 @@
 **Effort**: Small once decided
 
 ### TD-070: The shared drawer is 480 px wide on a 375 px phone
-**Status**: Open
+**Status**: Resolved 2026-10-20 (MUT-357)
 **Added**: 2026-10-12 (found while checking MUT-87 at 375 px)
 **Priority**: Medium
 **Impact**: `.drawer` takes `width: var(--drawer-width)` (480 px) with no `max-width`, so at phone width every drawer is wider than the screen. In LTR its start edge (the title, the checkboxes) is cut off; in RTL its end edge is. `document.scrollWidth` stays 375, so nothing scrolls to reveal it. Seen on `RecurringMarkPaidDrawer` (MUT-87), and the same for the income, expense and payment drawers. MUT-87 may not touch the shared `Drawer` (MUT-80 rewrote its internals in parallel), so it is logged here.
 **Remediation**: In the shared drawer CSS, `width: min(var(--drawer-width), 100vw)` (and check MUT-80's drag offsets use the rendered width, not the variable). Verify at 375 px in English and Arabic on the income drawer and the mark-paid drawer.
 **Effort**: Small
+**Resolution**: MUT-357 (2026-10-20) found it again in the hosted portal, where Arabic is the default (ADR-077): the RTL drawer lost its title and Save. `.drawer` in `src/index.css` now has `max-width: 100%` (the viewport, for a fixed panel; unlike `100vw` it leaves out a desktop scrollbar). MUT-80's motion already measures `offsetWidth`, so drag, release and exit follow the rendered width. Guarded by `src/styles/__tests__/drawerFit.test.ts` and `@portal.direction.drawer-phone-ar`/`-en`; `qa/specs/web/brand.spec.ts` no longer allows the payment drawer's 480px at 375px.
 
 ### TD-072: The portal's vendored API types have been stale since MUT-65
 **Status**: Resolved 2026-10-12

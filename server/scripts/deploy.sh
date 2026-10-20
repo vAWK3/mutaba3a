@@ -145,6 +145,8 @@ pushd "${TF_DIR}" >/dev/null
 info "applying the full stack at ${SHORT_SHA}"
 terraform apply "${TF_ARGS[@]}" "${APPROVE[@]}"
 SERVICE_URL="$(terraform output -raw service_url 2>/dev/null || true)"
+# MUT-326: where users reach the portal (the custom domain from config/hosts.json's stage "live" on).
+PUBLIC_PORTAL_ORIGIN="$(terraform output -raw public_portal_origin 2>/dev/null || true)"
 popd >/dev/null
 [[ -n "${SERVICE_URL}" ]] || die "terraform did not create the Cloud Run service (no service_url output); fix the error above and re-run this script — everything already created is kept"
 
@@ -154,6 +156,11 @@ popd >/dev/null
 info "smoke-testing ${SERVICE_URL}"
 pushd "${SERVER_DIR}" >/dev/null
 npm run --silent smoke -- --url "${SERVICE_URL}" --expect-version "${SHORT_SHA}"
+# Through the front door too, once users are sent there (ADR-155): same checks, the Worker's path.
+if [[ -n "${PUBLIC_PORTAL_ORIGIN}" && "${PUBLIC_PORTAL_ORIGIN}" != "${SERVICE_URL}" ]]; then
+  info "smoke-testing ${PUBLIC_PORTAL_ORIGIN} (the front door)"
+  npm run --silent smoke -- --url "${PUBLIC_PORTAL_ORIGIN}" --expect-version "${SHORT_SHA}"
+fi
 popd >/dev/null
 
 # ---------------------------------------------------------------------------

@@ -13,9 +13,9 @@ function leaves(node: unknown, prefix = ''): Record<string, string> {
 
 const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
-describe('/hosted copy (MUT-186)', () => {
-  const enKeys = leaves(en.landing.hostedOffer);
-  const arKeys = leaves(ar.landing.hostedOffer);
+describe('request-account copy', () => {
+  const enKeys = leaves(en.landing.requestAccount);
+  const arKeys = leaves(ar.landing.requestAccount);
 
   it('has the same keys in English and Arabic', () => {
     expect(Object.keys(arKeys).sort()).toEqual(Object.keys(enKeys).sort());
@@ -35,9 +35,9 @@ describe('/hosted copy (MUT-186)', () => {
   });
 
   it('promises a reply within 2 working days before and after sending (4A)', () => {
-    expect(en.landing.hostedOffer.form.lead).toContain('2 working days');
-    expect(en.landing.hostedOffer.success.body).toContain('2 working days');
-    expect(ar.landing.hostedOffer.form.lead).toContain('يومَي عمل');
-    expect(ar.landing.hostedOffer.success.body).toContain('يومَي عمل');
+    expect(en.landing.requestAccount.form.lead).toContain('2 working days');
+    expect(en.landing.requestAccount.success.body).toContain('2 working days');
+    expect(ar.landing.requestAccount.form.lead).toContain('يومَي عمل');
+    expect(ar.landing.requestAccount.success.body).toContain('يومَي عمل');
   });
 });

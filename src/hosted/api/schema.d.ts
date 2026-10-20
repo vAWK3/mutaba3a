@@ -294,7 +294,7 @@ export interface paths {
         put?: never;
         /**
          * Accept the current terms of service (MUT-324)
-         * @description Records that the signed-in person accepted `version`, read in `locale`, from the portal or the phone. Idempotent per version: accepting again changes nothing and writes no second audit row. The person accepts for themselves and, as owner, for their own profiles, so `user.terms_accepted` is audited on each profile they own.
+         * @description Records that the signed-in person accepted `version`, read in `locale`, from the portal or the phone, with the optional `clientRelease` that showed it (MUT-354, stored as sent). Idempotent per version: accepting again changes nothing and writes no second audit row. The person accepts for themselves and, as owner, for their own profiles, so `user.terms_accepted` is audited on each profile they own.
          */
         post: {
             parameters: {
@@ -9841,6 +9841,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/records-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The profile's records file
+         * @description Everything on the profile named by X-Mutaba3a-Profile, as the records file the signed-out portal restores (kind mutaba3a-local-records, origin hosted-export): every row as stored, the caller as the one person, without Malafat's connection or documents. Due items are posted first. Streamed; gzip when accepted. Receipt files come from GET /v1/records-export/receipts/{receiptId}. Audited as records.exported.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The records file */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RecordsFile"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/records-export/receipts/{receiptId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A receipt's file, for the records file
+         * @description The bytes of a READY receipt on the profile, as a download (ADR-028: never rendered in place). 404 for anything else. The one route that passes bytes on: the portal can't fetch the bucket itself.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    receiptId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The file */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": string;
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/fx-rates": {
         parameters: {
             query?: never;
@@ -10341,7 +10511,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Every user and the terms version they last accepted (MUT-324)
+         * Every user, the terms version they last accepted and the client release that showed it (MUT-324, MUT-354)
          * @description For the operator to see who has not yet accepted the current terms, for example someone who only uses the phone app.
          */
         get: {
@@ -10945,6 +11115,11 @@ export interface components {
         TermsAcceptanceRequest: {
             version: components["schemas"]["TermsVersion"];
             locale: components["schemas"]["UserLocale"];
+            /**
+             * @description The client release that showed the terms, e.g. the portal’s `web-v<x>` tag (MUT-354). Stored as sent.
+             * @example web-v0.1.16
+             */
+            clientRelease?: string;
         };
         ChangePasswordRequest: {
             currentPassword: string;
@@ -10981,6 +11156,11 @@ export interface components {
             password: components["schemas"]["NewPassword"];
             acceptedTermsVersion?: components["schemas"]["TermsVersion"];
             termsLocale?: components["schemas"]["UserLocale"];
+            /**
+             * @description The client release that showed the terms, e.g. the portal’s `web-v<x>` tag (MUT-354). Stored as sent.
+             * @example web-v0.1.16
+             */
+            clientRelease?: string;
         };
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];
@@ -12870,6 +13050,18 @@ export interface components {
             /** @enum {string} */
             preset: "lawFirm" | "personal" | "general";
         };
+        RecordsFile: {
+            /** @enum {string} */
+            kind: "mutaba3a-local-records";
+            formatVersion: number;
+            /** Format: date-time */
+            savedAt: string;
+            /** @enum {string} */
+            origin: "hosted-export";
+            maps: {
+                [key: string]: unknown;
+            };
+        };
         PublicFxRatesResponse: {
             /**
              * @description The ECB reference date (its last business day), YYYY-MM-DD
@@ -12980,6 +13172,7 @@ export interface components {
                 /** @enum {string} */
                 status: "ACTIVE" | "DISABLED";
                 latestVersion: components["schemas"]["TermsVersion"] & unknown;
+                clientRelease: string | null;
                 accepted: boolean;
             }[];
         };

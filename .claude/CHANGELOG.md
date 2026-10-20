@@ -28,7 +28,266 @@
 
 ---
 
-## [Unreleased] - 2026-10-19 — MUT-338: animated save-feedback wired into every web save surface (ADR-153)
+## [Unreleased] - 2026-10-20 — Drawers fit a phone, in Arabic and English (MUT-357, TD-070)
+
+**Why:** The portal opens in Arabic (ADR-077), and pilot users (MUT-322) will see it on phones. At 375px every drawer was 480px wide: in Arabic it ran 105px off the right edge, cutting off the title and Save; in English it ran off the left edge. Found with MUT-325's Your data drawer; the shared drawer was the cause, so every drawer had it.
+
+### Fixed
+- **`.drawer` is never wider than the viewport** (`max-width: 100%` in `src/index.css`). At or below 480px it fills the screen edge to edge in both directions; wider screens are unchanged. The local web app's drawers fit too. Drag, release and exit already use the rendered width (`useDrawerMotion` reads `offsetWidth`).
+
+### Technical
+- `src/styles/__tests__/drawerFit.test.ts`: `.drawer` keeps `max-width: 100%` and one `width`, with no direction or theme rule overriding them.
+- `qa/specs/portal/direction.spec.ts` + `qa/features/portal/direction.yaml`: `@portal.direction.drawer-phone-ar` / `-en` open Change password at 375×812 and assert the dialog's box is inside the viewport with no sideways scroll. Red on main, green on the branch (preview build).
+- `qa/specs/web/brand.spec.ts`: `Payment drawer@375` removed from `KNOWN_OVERFLOW`; `Income drawer@375` stays for Income behind it (TD-083).
+- TD-070 resolved; TD-083 updated.
+
+## [Unreleased] - 2026-10-20 — MAL-1137 backfill: skip never-seeded personal profiles; one read for all
+
+**Why:** `backfill-personal-expense-categories.test.ts` timed out (5000ms, all tests) under the full `test:db` run. The backfill read each personal profile's categories one query at a time, and the shared test DB never resets, so every test scanned 4,558 profiles: about 2s a test alone, more under parallel load. Behind the slowness was a real bug. A personal profile that had never listed its categories (none seeded yet) got the three new categories added, and then `GET /v1/expense-categories`'s "none yet → seed" check never seeded the full preset for it. 4,351 test-DB profiles were left with exactly those three.
+
+### Fixed
+- `server/src/scripts/backfill-personal-expense-categories.ts`: only seeded personal profiles (`expenseCategories: { some: {} }`) are considered, and their categories come back in the same query (no N+1). A never-seeded profile is left empty, so it seeds the current preset itself.
+- New test: a never-seeded personal profile stays empty and isn't reported. The file now runs in ~1.5s against the same 4,558 profiles (was ~9.8s).
+
+### Technical
+- Production: if `backfill:personal-categories` was ever run without `--dry`, never-seeded personal profiles there have only the three new categories and will never get the full preset. Not repaired here. Check before the next run (see the session notes).
+
+## [Unreleased] - 2026-10-20 — Receipt files kept as long as the backups (TD-190)
+
+**Why:** MUT-327 found that the database backups don't cover receipt files. Deleting a receipt deletes its object, and the attachments bucket had no versioning and no explicit soft-delete policy, so a database restored to an older backup could bring back a receipt row whose file GCS had already purged (default soft delete: 7 days; backups: 14).
+
+### Changed
+- `google_storage_bucket.attachments` gets `soft_delete_policy { retention_duration_seconds = 1209600 }` (14 days). `local.db_retained_backups` now sets both that and Cloud SQL's `retained_backups`, so the two can't drift. Soft delete over versioning + a non-current-version lifecycle rule: same storage cost, one block, and the runbook's `gcloud storage restore` and the drill's `soft_delete_policy` read already fit it.
+- `docs/operations/pilot-runbook.md` §4, §4.4, §7.4 and §8 step 5: the 14-day window, and the purge's files leaving soft delete on day 44 with the backups.
+- `server/DEPLOYMENT.md` §6c: why, cost, and the targeted plan/apply (`-target=google_storage_bucket.attachments`, expect 1 in-place change) Basel runs. `.claude/INFRA.md` §2 records it as prepared, not applied. TD-190 resolved in code.
+
+### Technical
+- `server/infrastructure/terraform/tests/attachments_bucket.tftest.hcl`: the window is 14 days and equals `retained_backups` × 86400 (mocked providers, offline). Seen failing with a 7-day window first.
+- **Not applied to production.** The next `make release server` applies it (deploy.sh's `terraform apply`), or Basel applies it alone per DEPLOYMENT.md §6c.
+- `docs/operations/before-release.md` + `scripts/before-release.sh`: operator steps still owed before a release, one line each under `## web` / `## server`. `make release web|server` prints its target's open items just before the deploy confirmation; a reminder, never a gate. Seeded with TD-190 and MUT-328's §6b apply. Tests: `scripts/__tests__/before-release.test.ts`.
+
+## [Unreleased] - 2026-10-20 — Restore drill and pilot operator runbook (MUT-327, ADR-157)
+
+**Why:** Pilot gate (MUT-322). Production keeps 14 daily backups and 7 days of point-in-time recovery, but nobody had ever restored one. The operator steps for 10 paying users were spread over DEPLOYMENT.md, INFRA.md and memory. Plan: `.claude/designs/mut-327-restore-drill-runbook.md`.
+
+### Added
+- `docs/operations/pilot-runbook.md`: onboard (provision:user, setup link, profiles, the firm switch once MUT-300 lands), password reset and `--lock`, the free-app move (no tool until MUT-290, flagged), restoring one profile vs the whole database, incident response, support (info@malafat.app, 2 working days), offboarding (export, 30-day grace, purge, backups gone 14 days later), the drill, a walk log and an empty "Drill results" section. Linked from `server/DEPLOYMENT.md` §6 and `.claude/INFRA.md` §2.
+- `server/scripts/restore-drill.sh`: restores last night's automated backup and a point-in-time clone (1 hour ago) into scratch Cloud SQL instances. Checks each copy read-only: row counts, migrations, the newest audit event, and that a receipt's file opens. Prints timings, then deletes the copies on every exit path. Every mutating call refuses anything but a `mutaba3a-pg-drill-*` name. `--dry-run` calls nothing; `teardown` removes leftovers.
+- `server/scripts/profile-rows.sh`:
+  - `export`: one profile as CSV, plus its receipt copy lines;
+  - `restore`: one profile back from a restored copy, in one transaction. Access tables keep their live rows, audit rows only grow, and an `organization.restored` event records it;
+  - `purge-user`: the offboarding hard delete until MUT-333. It refuses while the person is in a profile they don't own, or is still referenced from one.
+  - The schema is read from the catalog, and `--dry-run` rolls back.
+- Tests: `server/src/scripts/__tests__/restore-drill.test.ts` (8, dry run and refusals, fake gcloud on PATH) and `profile-rows.test.ts` (7, two scratch Postgres databases built from the migrations).
+
+### Technical
+- The drill against production is **not run**: it's Basel's step (AC1). Walked locally on 2026-10-20 against copies of `mutaba3a_dev` (runbook §9). Found: Homebrew's pg_dump 18 output fails on Postgres 16, so the runbook requires `postgresql@16` tools for whole-database dumps. TD-190: receipts aren't in the database backups. TD-191: the free-app move has no tool.
+
+## [Unreleased] - 2026-10-20 — Signed in, download all my records (MUT-325, ADR-156)
+
+**Why:** The pilot gate (MUT-322): a paying user must be able to leave with their records. Signed out, Your data already wrote a records file; signed in there was no export at all. The export is the same file local mode restores, so leaving never loses data.
+
+### Added
+- **`GET /v1/records-export`** (session-only, X-Mutaba3a-Profile): the profile as the local-mode records file, re-homed to the device's one person, without Malafat's connection or documents, labelled `origin: "hosted-export"`. Streamed 500 rows a query, gzip when accepted; due items posted first; audited `records.exported`. API 1.40.0-mut325.
+- **`GET /v1/records-export/receipts/{receiptId}`**: a READY receipt's bytes as a download (`octet-stream`, `attachment`, `nosniff`) — the API's one byte-passing route (ADR-156 override of ADR-028 §2).
+- **`RecordsExportRepository`** (`recordsExport` on `LedgerStore`; memory + `repositories/prisma-records-export.ts` with exact per-record selects), store guard `sessionOnly`; `AttachmentStorage.read()`.
+- **`server/src/records-file/`**: `codec.ts` (the `$map/$date/$bigint` codec, moved from `src/hosted/local/recordsFile.ts`, plus the pulled `recordsFileChunks` writer), `export.ts` (paging + re-homing), `local-person.ts`.
+- **Portal Your data, signed in** (`HostedYourDataDrawer`, account menu): profile checklist, "an export, not a backup", Download my records with progress and Cancel, missing-file count. Export code in `src/hosted/local/hostedExport.ts`, reached lazily through `@mut/records-export` (`session/recordsExportContract.ts`). EN + AR.
+- Restore's confirm says when a file came from an account (`PendingRestore.exportedFromAccountAt`).
+- Release-QA `portal.your-data.download-signed-in` and `portal.your-data.download-cancel`.
+
+### Changed
+- MUT-286's "Your data is not there signed in" test now asserts the signed-in drawer instead.
+- The hosted dev server ignores `qa/runs/**`: in-place release-QA runs write traces there, which reloaded pages mid-test. (The web dev server has the same exposure; its config is snapshot-guarded, so it is left for its own change.)
+
+### Files
+`server/src/records-file/*`, `server/src/routes/records-export.ts`, `server/src/repositories/{ports,memory,prisma,prisma-records-export}.ts`, `server/src/auth/store-guard.ts`, `server/src/attachments/storage.ts`, `server/src/app.ts`, `src/hosted/local/{hostedExport,recordsFile,recordsArchive,attachments,index,mintLocalSession}.ts`, `src/hosted/components/{HostedYourDataDrawer,YourDataDrawer}.tsx`, `src/hosted/data/recordsExportTransport.ts`, `src/hosted/session/{recordsExportContract,localBackendContract}.ts`, `src/hosted/shell/{AccountDrawers,UserMenu}.tsx`, `src/hosted/api/client.ts` (`send()`), i18n, `hosted.css`, `vite.config.ts`, `vitest.config.ts`, `tsconfig.hosted.json`, `eslint.config.js` (allowlist), `qa/features/portal/your-data.yaml`, `qa/specs/portal/your-data.spec.ts`.
+
+## [Unreleased] - 2026-10-20 — MUT-356: /privacy honours ?lang, like /terms
+
+**Why:** the phone's Settings › Privacy policy (MUT-344) opens `<site>/privacy`, which opened in the landing's stored language (Arabic by default, ADR-077), so English phone users read the Arabic policy.
+
+### Changed
+- `/privacy?lang=en|ar` shows the policy text in that language, marked with its own `lang`/`dir`; the chrome stays in the page language and nothing is stored, as on `/terms` (`PrivacyPolicyPage` takes `search`, `main.tsx` passes it). An unknown value is ignored.
+
+### Technical
+- `src/content/legal/language.ts`: `legalLanguageOf` + `LegalLanguage`, lifted from `termsLanguageOf` (removed) and shared by both legal pages.
+- `useTIn(language)` in `src/lib/i18n/context.tsx`: a translator for a text's own language that touches no state.
+- Release-QA: new `web.legal.privacy-linked-language`; the stale hosted-accounts heading in `@web.legal.links` now comes from the translation files.
+- No portal change: no portal surface links to `/privacy`.
+- Phone half (mutaba3a-flutter): `privacyUri(languageCode:)` adds `?lang`.
+
+## [Unreleased] - 2026-10-20 — The custom domain is one input (MUT-326, ADR-155)
+
+**Why:** The domain must be live before the pilot (MUT-322) but isn't chosen yet. The run.app and netlify.app hosts were written into vite, the bundle allowlist, the terms release guard, provisioning, Sentry tfvars and tests, so a move meant hunting for them. Now picking the domain is one edit, and MUT-112 shrinks to "pick, apply, release". Brief: `.claude/designs/mut-326-domain-move.md`.
+
+### Added
+- **`config/hosts.json` + `config/hosts.ts`.** `domain` (null), `portalSubdomain`, the legacy origins and a `stage` (`legacy` → `proxy` → `live` → `redirect`), resolved into the origins each consumer uses. Fixtures in `config/fixtures/` are shared with the Terraform tests.
+- **`npm run domain:plan [-- --domain <apex> --stage <stage>]`** (`scripts/hosts.ts`) prints every consumer's value now and with the domain: vite, Netlify redirects, Cloud Run env, front door, Sentry, uptime host, the phone's `.env` / entitlements / manifest lines, and Malafat. `npm run --silent hosts -- get <key>` serves shell scripts.
+- **`scripts/__tests__/no-hardcoded-hosts.test.ts`.** It fails on the legacy hosts, any `mutaba3a*.a.run.app` / `*.netlify.app`, or the chosen domain outside `config/hosts.json`, and rehearses `mutaba3a.app` as the domain. Prose and the CIMD files are exempt.
+- **`server/infrastructure/frontdoor/`.** A new operator-applied stack: Cloudflare zone and settings, DNS (apex/www DNS-only to Netlify, `app.` proxied), the front-door Worker (`worker/front-door.js`) and its route, the token secret, and the Netlify custom domain. It's empty while no domain is set. A placeholder domain plans 16 to add, 0 to change, 0 to destroy. Offline `terraform test`; joins the server-ci matrix.
+- **Server front-door awareness.**
+  - `FRONT_DOOR_TOKEN` and `PORTAL_LEGACY_REDIRECT` (`"true"`/`"false"` only) in `config.ts`.
+  - `isViaFrontDoor`, `requestClientIp` and `isSamePortalOrigin` in `auth/sessions.ts`, used by sign-in, device sign-in, account setup, the session middleware and the public FX limiter.
+  - The legacy-host redirect to `/carry-over?next=…` in `app.ts`.
+  - With no token, behaviour is unchanged.
+- **API stack `domain.tf`.** It reads the token secret, grants the service account, adds `PORTAL_ORIGIN` / `FRONT_DOOR_TOKEN` (and `PORTAL_LEGACY_REDIRECT` at stage redirect) to Cloud Run, and outputs `public_portal_origin` (for MUT-328's uptime checks).
+- **`server/DEPLOYMENT.md` §5a.** The operator runbook for the move: prerequisites, the six stages with commands and checks, and the rollback table.
+- **Web build `mutaba3a:domain-move-redirects`.** It emits Netlify `_redirects` from the config: from `live`, `<apex>/app/*` back to netlify.app; at `redirect`, the old host's landing pages to the apex.
+
+### Changed
+- `vite.config.ts` `DEFAULT_PUBLIC_ORIGIN` / `DEFAULT_PORTAL_URL` = `HOSTS.landingOrigin` / `HOSTS.portalOrigin`. The values are the same today; the web snapshot masks the portal URL and lists the new plugin.
+- `scripts/check-bundles.ts` adds `HOSTS.allOrigins` to both allowlists; `bundle-origins.json` no longer lists our own hosts.
+- `terms:check-live` takes `MUTABA3A_PUBLIC_ORIGIN` from the config through its npm script; the script itself has no default. `provision-account.sh` defaults its URL from the config.
+- **Sentry stack:** `portal_origins` / `landing_origins` are now extras. The DSNs accept the config's origins, new and legacy, by themselves.
+- `deploy.sh` also smoke-tests `public_portal_origin` once it differs from the service URL.
+- MUT-328's uptime checks (merged first) now default `uptime_host` to `local.public_portal_host`, as its own comment asked: the config's portal host, so they follow the domain at stage `live`. `monitoring.tftest.hcl` reads the no-domain fixture, plus one run for a live domain.
+- Test fixtures and comments use neutral example hosts instead of our real ones.
+
+### Files
+`config/{hosts.json,hosts.ts,fixtures/*}`, `scripts/{hosts.ts,check-bundles.ts,bundle-origins.json}`, `scripts/__tests__/{hosts,hosts-cli,no-hardcoded-hosts,front-door-worker,vite-config,legal-terms}.test.ts`, `vite.config.ts`, `package.json`, `server/src/{config.ts,index.ts,app.ts,auth/sessions.ts,auth/middleware.ts,routes/{sessions,account-setup,device-sessions,fx-rates}.ts,scripts/check-terms-live.ts}`, `server/src/__tests__/{legacy-redirect,config,check-terms-live,smoke}.test.ts`, `server/src/auth/__tests__/{front-door,sessions}.test.ts`, `server/infrastructure/{frontdoor/**,terraform/{domain.tf,main.tf,outputs.tf,tests/domain.tftest.hcl},sentry/**}`, `server/scripts/{deploy.sh,provision-account.sh}`, `server/package.json`, `.github/workflows/server-ci.yml`, `.env.example`, `server/.env.example`, `server/DEPLOYMENT.md`.
+
+## [Unreleased] - 2026-10-20 — Uptime checks and alerts for the API and portal (MUT-328, ADR-154)
+
+**Why:** Pilot gate (MUT-322). Production had one `/health` uptime check, and no alert reached anyone because no notification channel was set. An outage was found only when a user wrote in.
+
+### Added
+- `server/infrastructure/terraform/monitoring.tf`: uptime checks on `/health`, `/ready` and the portal `/` (matched on `id="root"`), every 5 min from all six regions. They probe `uptime_host`, falling back to the Cloud Run host so they can follow the custom domain (MUT-112/326). Email and SMS notification channels come from `alert_email` / `alert_sms_number` (the number is sensitive, set only in the operator's tfvars). One CRITICAL policy per check fires when more than one region fails for 360 s, which is two failed rounds in a row. Two WARNING Cloud SQL policies cover disk above 80% and CPU above 90% for 15 min. `uptime_drill_path` adds an opt-in drill check to fire and close a real alert without touching production.
+- `tests/monitoring.tftest.hcl`: 14 offline runs (mocked providers).
+- `server/DEPLOYMENT.md` §6b: apply (targeted plan, expect 9 to add), SMS verification, the drill, what each alert means, and the domain move.
+
+### Changed
+- The monitoring section moved from `main.tf` to `monitoring.tf`. `moved` blocks carry the existing `/health` check (and its policy, where one exists) to `endpoint["health"]` unchanged.
+
+### Technical
+- Prepared, **not applied**. Basel applies per §6b. `terraform fmt`/`validate`/`test` pass (17 runs including database_pool). TD-185: provider 5.x cannot pin the close notification.
+
+## [Unreleased] - 2026-10-20 — MUT-354: each terms acceptance records the client release that showed it (API 1.39.0-mut354)
+
+**Why:** MUT-348 (Basel, 2026-10-20, comment 12222) decided that the evidence of what a person read is the frozen terms file (`textSha256`) plus the page code at the release that rendered it. Before this, nothing recorded that release. Plan: `.claude/designs/mut-354-terms-client-release.md`.
+
+### Added
+- `terms_acceptances.clientRelease VARCHAR(64)`, nullable, from migration `20261020120000_mut354_terms_client_release`. It is additive, and existing rows stay null.
+- `POST /v1/me/terms-acceptance` and `POST /v1/account-setup` take an optional `clientRelease`.
+  - It must be printable ASCII with no spaces, 1–64 characters (`CLIENT_RELEASE_MAX` / `CLIENT_RELEASE_PATTERN` in `server/src/legal.ts`); anything else gets 422.
+  - It is stored as sent and never trusted. Clients that omit it still succeed and record null.
+  - A repeat accept keeps the release first recorded.
+- `user.terms_accepted` audit metadata carries `clientRelease`.
+- `GET /admin/v1/terms-acceptance` gains `users[].clientRelease`, the release on each person's latest accepted version. `npm --prefix server run terms:report` prints it after the version, or `-` when there is none.
+- The portal sends `clientRelease = web-v<APP_VERSION>` (`TERMS_CLIENT_RELEASE`, `src/hosted/terms.ts`) from the setup page and the Updated-terms step.
+
+### Changed
+- API `1.39.0-mut354`; `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+
+### Release note
+- **Ship the server before any phone build sends the field.** `TermsAcceptanceRequest` is `.strict()`, so a phone (MUT-344) that sends `clientRelease` to an older server gets 422. The portal ships inside the same image, so it is safe.
+
+### Technical
+- TD-184: the recorded web version can lag the live landing by one web release.
+- Files:
+  - server: `prisma/schema.prisma`, the migration, `legal.ts`, `schemas.ts`, `repositories/{ports,memory,prisma}.ts`, `terms-acceptance.ts`, `routes/{sessions,account-setup,admin-users}.ts`, `scripts/users.ts`, `app.ts`;
+  - portal: `src/hosted/terms.ts`, `SetupPage.tsx`, `TermsUpdatePage.tsx`;
+  - release-QA: `qa/support/portal.ts`, `qa/specs/portal/{terms,setup}.spec.ts`, `qa/features/portal/terms.yaml`.
+
+## [Unreleased] - 2026-10-20 — CI back to green; CI manual-only with a release reminder (ADR-153)
+
+**Why:** Web CI and Server CI had failed on every main push since 2026-10-19. MUT-286's local mode makes the portal import the server's route modules, so the web typecheck (`tsconfig.hosted-local.json` pins `server/node_modules/@types`), its tests and `build:hosted` (`@hono/zod-openapi`) need server deps. Neither workflow installed them. Behind that, web coverage had fallen below its floors: server files were counted, the browser shims are only exercised by the server suite, and the HostedRequestForm tests were deleted with HostedOfferPage (7914685a).
+
+### Fixed
+- `web-ci.yml` and the server-ci Docker job also run `npm ci --prefix server`.
+- `vitest.config.ts` coverage excludes `server/**` (the `src/**` glob matched `server/src/**`; the server suite owns it). The coverage floors are unchanged.
+- Added `src/hosted/local/__tests__/platform.test.ts`: the crypto and Buffer shims against real `node:crypto`/`Buffer` from the web suite, including branches `server/src/__tests__/platform-shim.test.ts` never reaches (multi-block input, keys over one block, the randomUUID fallback, invalid hex).
+- Restored the 18 HostedRequestForm tests as `src/pages/landing/__tests__/HostedRequestForm.test.tsx`, against the form itself.
+- Added `src/hosted/local/__tests__/asyncHooksShim.test.ts`. No suite covered the AsyncLocalStorage shim.
+- Added tests for the demo time freeze (`src/demo/timeFreeze.ts`, previously untested) and `SeededRandom`'s remaining helpers.
+
+### Changed
+- web-ci, server-ci and contracts-ci run on `workflow_dispatch` only (ADR-153).
+- `make ci [web|server|contracts|all]` starts the workflows on origin/main.
+- `make release web|server` prints the target workflow's last result and the command to run it before the deploy confirmation (`scripts/ci-reminder.sh`), and ends with a reminder to run `make ci <target>` on what it pushed. `make help` lists the commands.
+
+### Technical
+- Verified under Node 22 with root and server deps installed as CI does: lint, typecheck, test:coverage (392 files, 5545 tests; statements 91.50 / branches 84.73 / functions 88.53 / lines 92.35) and build:hosted all pass. The Docker image build and /health probe were not run locally.
+
+## [Unreleased] - 2026-10-20 — Pilot tiles on PostHog dashboard 1031822 (MUT-330, epic MUT-322)
+
+**Why:** the dashboard's activation funnel counted income only, over 30 days, and nothing tracked weekly use. The MUT-330 bars count income or expense, within 7 days, and entries in 3 of the last 4 weeks.
+
+### Added (in PostHog, EU project 304889, at Basel's go)
+- The action "Recorded an entry" (170934): `income_recorded`, `expense_recorded` or `payment_recorded`.
+- The insight "Pilot activation: opt-in → first entry within 7 days" (`0Iw0a0uZ`): a funnel over 90 days with test accounts filtered out.
+- The insight "Pilot weekly use: weeks with an entry, last 4" (`hLRXPSk0`): cumulative stickiness over four 7-day periods.
+- Both are on dashboard 1031822. Both ran before saving: 4 people had opted in so far, and 1 had recorded an entry.
+
+### Changed
+- `docs/commercial/pilot-metrics.md` and `pilot-reviews.md` point at the two tiles. They stay a cross-check: opt-in only, and they include everyone who opted in, not just pilot users.
+- `.claude/INFRA.md`: the dashboard row lists the tiles and the action. The MCP starts in project 125127, so switch to 304889 first.
+
+## [Unreleased] - 2026-10-20 — Terms-acceptance evidence: ADR-102 addendum (MUT-348, epic MUT-322)
+
+**Why:** MUT-324's first review pass left two questions open: does the hash have to cover the rendered page, and do firm-only members need more evidence? Basel decided both on 2026-10-20 (MUT-348 comment 12222).
+
+### Changed
+- `.claude/DECISIONS.md` ADR-102 gets an addendum, and its status line names it.
+  1. The evidence is the frozen terms file (`textSha256`) plus the release that rendered it. MUT-354 records that release per acceptance in a nullable `clientRelease` column. Rows from before it stay null. No rendered-text hash and no HTML snapshots.
+  2. Firm-only members need nothing more for now, because every pilot user is an owner. MUT-305/306 must revisit this before the first member who owns no profile is invited. No code.
+
+## [Unreleased] - 2026-10-20 — Pilot success bars, weekly review and the operator count (MUT-330, epic MUT-322)
+
+**Why:** without bars agreed in advance, the pilot ends with impressions, not a GA go/no-go. Basel signed off the bars on 2026-10-20 (MUT-330 comment 12221).
+
+### Added
+- `docs/commercial/pilot-metrics.md`:
+  - the five GA bars across the 10 pilot users at pilot end: activation ≥ 8/10 within 7 days of setup; weekly use ≥ 6/10 with entries in 3 of the last 4 weeks; paid conversion ≥ 7/10 (paid the month-3 invoice, hasn't asked to leave); Sean Ellis "very disappointed" ≥ 40%; support ≤ 0.5 tickets per user per week;
+  - the verdict: all met is GO, one missed extends the pilot, two or more is no-go;
+  - where each number comes from;
+  - a 30-minute exit interview script in EN + AR that ends with the Sean Ellis question.
+- `docs/commercial/pilot-reviews.md`: the Monday review. It's written, with no meeting: the numbers, users at risk and one action. Pilot users appear only as codes `P01`…`P10`, never by email or name, because the file is in the repository.
+- `server/DEPLOYMENT.md` §6a (and a §6 row): the operator's count of entries per profile and per pilot user.
+  - It runs read-only (`PGOPTIONS='-c default_transaction_read_only=on'`), and the output is never sent anywhere (ADR-024).
+  - Entries are live expenses, `POSTED` captured payments and live `ADJUSTMENT` receivables, counted by `createdAt`.
+  - Setup is the first terms acceptance (ADR-102), or the account's creation if there's none.
+  - The email list that maps to the codes lives outside the repository.
+
+### Changed
+- `docs/commercial/pilot-offer.md` (EN + AR): the end-of-pilot call is 30 minutes, matching the exit interview.
+
+### Verified
+- The runbook SQL, exactly as written, ran read-only against the local dev schema (`mutaba3a_dev` on the test Postgres container): both queries return, and `default_transaction_read_only` is `on`.
+
+## [Unreleased] - 2026-10-20 — Pilot offer: Basel's decisions applied (MUT-323, epic MUT-322)
+
+**Why:** Basel settled the draft's open defaults on 2026-10-20 (MUT-323 comment 12220). Internal docs only: no price words reach the site (MUT-171/185).
+
+### Changed
+- `docs/commercial/pilot-offer.md` (EN + AR) and `docs/commercial/hosted-request-reply.md` (EN + AR):
+  - the pilot runs 3 months;
+  - feedback calls in week 2 and at the end;
+  - Stripe subscriptions created by hand in the dashboard from day one;
+  - the VAT sentence, word for word: "Prices exclude VAT; VAT is added where the law requires it." The rate per country is MUT-355, which blocks the first invoice, not the sign-off;
+  - the support promise reads exactly "email only, a reply within 2 working days".
+- The Arabic offer gains the pilot length, the feedback calls and an invoicing section.
+- Prices, the seller (Barmajiyat Ltd, UK) and the 12-month lock are unchanged.
+
+### Verified
+- `npx vitest run src/pages/landing` (landing and /hosted honesty tests): 15 files, 223 tests pass.
+
+## [Unreleased] - 2026-10-19 — Pilot offer and the /hosted reply template (MUT-323, epic MUT-322)
+
+**Why:** /hosted promises an offer by email within 2 working days, but no price or reply existed. These docs are internal. No price reaches the site: MUT-171/185 hold that rule until billing exists (MUT-332).
+
+### Added
+- `docs/commercial/pilot-offer.md` (EN + AR) covers:
+  - founder prices, excluding VAT: Freelancer ₪39 / $10 a month, Firm ₪299 / $80 a month per firm, billed in ILS in Israel and USD elsewhere, locked 12 months, yearly at 10× monthly;
+  - what each tier includes (shipped features only);
+  - the pilot's promises: email support within 2 working days, read-only + export when a payment lapses, 30 days before a closed account is deleted;
+  - pilot invoicing through the Barmajiyat Ltd **Mutaba3a** Stripe account from the dashboard, with no code. The subscriptions carry over to MUT-332.
+- `docs/commercial/hosted-request-reply.md`: the reply to a /hosted request, in EN and AR. It has blocks for freelancers, firms and Malafat firms (who are sent to the Malafat add-on, MAL-870), and a checklist to go through before sending.
+
+### Changed
+- `.claude/INFRA.md`: operator-held row for the Mutaba3a Stripe account.
+
+## [Unreleased] - 2026-10-19 — MUT-338: animated save-feedback wired into every web save surface (ADR-158)
 
 **Why:** MUT-337 proved the animation mechanism headlessly; nothing used it. This is the first real consumer — the epic's (MUT-334) highest-priority mechanic — across all five save surfaces that exist on the web side (legacy app: income, expense; portal: income, expense, conversion). Flutter is a separate ticket (MUT-351, filed during planning) in its own repo.
 
@@ -47,7 +306,7 @@
 ### Technical
 - `src/hosted/pages/__tests__/afterSave.test.tsx` updated (it also asserted the old `.sr-only` claimed-path text — a second integration test for the same behavior `SavedNotice.test.tsx` covers at the unit level).
 - Full suite verified clean twice (`npm run test:run`): 9 pre-existing failing files (`scripts/__tests__/{i18n-keys,legal-terms,vite-config}.test.ts`, 6 `src/pages/landing/__tests__/*`), all a pre-existing, unrelated landing-content gap (`ar/landing.json` missing `hostedOffer`, crashing `vite.config.ts`'s social-preview step) — confirmed present before this branch's commits and independent of every file this ticket touched. The same bug also blocked bringing up a live `release-qa` env to actually execute the new specs; they're written and `release-qa lint`-clean but unexecuted pending that unrelated fix.
-- ADR-153 (`.claude/DECISIONS.md`): reuse existing Toast/SavedNotice surfaces for the claimed-save path rather than invent new floating UI.
+- ADR-158 (`.claude/DECISIONS.md`): reuse existing Toast/SavedNotice surfaces for the claimed-save path rather than invent new floating UI.
 
 ## [Unreleased] - 2026-10-19 — MUT-337: icon save-feedback animation runtime decision + web prototype (ADR-152)
 

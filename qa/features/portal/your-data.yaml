@@ -1,0 +1,41 @@
+app: portal
+area: your-data
+title: Your data, signed in
+tier: secondary
+# MUT-325 (epic MUT-322, ADR-155): signed in, Download my records writes the chosen profiles to the records file
+# the signed-out portal restores (the same zip as local mode's Download), receipt files included. An export, not a backup.
+paths:
+  - src/hosted/components/HostedYourDataDrawer.tsx
+  - src/hosted/local/hostedExport.ts
+  - src/hosted/data/recordsExportTransport.ts
+  - src/hosted/session/recordsExportContract.ts
+  - src/hosted/shell/AccountDrawers.tsx
+features:
+  - id: download-signed-in
+    title: Signed in, download my records from Your data, with progress, as one export file local mode restores
+    tier: secondary
+    paths:
+      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/local/recordsArchive.ts
+      - src/hosted/local/recordsFile.ts
+      - src/hosted/i18n/en.json
+      - src/hosted/i18n/ar.json
+      - src/hosted/hosted.css
+    steps:
+      - Sign in with two profiles and open Your data from the account menu
+      - Keep both profiles ticked and press Download my records
+      - Watch the progress while the receipt file comes in
+    expect:
+      - The drawer opens over the page (?yourData=true), both profiles ticked, and says the file is an export, not a backup
+      - A progress bar shows the receipt files arriving, and Download is disabled while it runs
+      - The download is a mutaba3a-export-<date>.zip holding records.json (kind mutaba3a-local-records, origin hosted-export) with both profiles, and the receipt as its own file
+      - A "Records downloaded." toast
+  - id: download-cancel
+    title: Cancel a signed-in download partway, and nothing is saved
+    tier: secondary
+    steps:
+      - Sign in, open Your data and press Download my records
+      - While a receipt file is still coming, press Cancel
+    expect:
+      - The drawer says the download was cancelled and nothing was saved; no file downloads
+      - Download my records is offered again

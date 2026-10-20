@@ -1,9 +1,9 @@
-import { useT } from '../../lib/i18n';
+import { useTIn } from '../../lib/i18n';
+import { legalLanguageOf } from '../../content/legal/language';
 import { LegalPage } from './LegalPage';
 
 const SECTION_KEYS = [
   'scope',
-  'dataStorage',
   'mobile',
   'hostedAccounts',
   'whatYouEnter',
@@ -12,7 +12,6 @@ const SECTION_KEYS = [
   'security',
   'noTracking',
   'usageAnalytics',
-  'yourControl',
   'mobileDeletion',
   'children',
   'changes',
@@ -21,13 +20,17 @@ const SECTION_KEYS = [
 ] as const;
 
 /**
- * The policy for every Mutaba3a app: the local-only Mac, Windows, and browser apps, and the
- * account-based portal and iPhone and Android apps that store data on the hosted API (Google Cloud).
+ * The policy for every Mutaba3a app: hosted-only, account-based — the web portal and the
+ * iPhone and Android apps, all storing data on the hosted API (Google Cloud).
+ * A link from the phone or the portal names its language (`?lang`, MUT-356), which wins
+ * over the page language for the policy text only and is never stored, as on /terms.
  */
-export function PrivacyPolicyPage() {
-  const t = useT();
+export function PrivacyPolicyPage({ search = '' }: { search?: string }) {
+  const linked = legalLanguageOf(search);
+  const t = useTIn(linked);
   return (
     <LegalPage
+      textLanguage={linked ?? undefined}
       title={t('landing.privacyPolicy.title')}
       updated={t('landing.privacyPolicy.updated')}
       intro={t('landing.privacyPolicy.intro')}

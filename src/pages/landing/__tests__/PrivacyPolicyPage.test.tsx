@@ -4,12 +4,12 @@ import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
 import { PrivacyPolicyPage } from '../PrivacyPolicyPage';
 
-function renderPage(language: 'en' | 'ar') {
+function renderPage(language: 'en' | 'ar', search = '') {
   localStorage.setItem('mutaba3a-language', language);
   return render(
     <ThemeProvider>
       <LanguageProvider>
-        <PrivacyPolicyPage />
+        <PrivacyPolicyPage search={search} />
       </LanguageProvider>
     </ThemeProvider>
   );
@@ -26,12 +26,12 @@ describe('PrivacyPolicyPage', () => {
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
   });
 
-  it('covers the iPhone and Android apps alongside Mac, Windows, and the browser', () => {
+  it('covers the hosted web portal and the iPhone and Android apps, not any retired local app', () => {
     renderPage('en');
     const intro = document.querySelector('.privacy-policy-intro')?.textContent ?? '';
-    for (const platform of ['Mac', 'Windows', 'browser', 'iPhone', 'Android']) {
-      expect(intro).toContain(platform);
-    }
+    expect(intro).toContain('iPhone');
+    expect(intro).toContain('Android');
+    expect(intro).not.toMatch(/\bMac\b|\bWindows\b/);
   });
 
   it('says the mobile apps use an account and store data on a server, and names the processor', () => {
@@ -50,7 +50,7 @@ describe('PrivacyPolicyPage', () => {
 
   it('says what the hosted-account request form collects, that Netlify receives it, and what it is for (MUT-186)', () => {
     renderPage('en');
-    const heading = screen.getByRole('heading', { level: 2, name: /ask for a hosted account/ });
+    const heading = screen.getByRole('heading', { level: 2, name: /ask for an account/ });
     const section = heading.parentElement?.textContent ?? '';
     expect(section).toContain('Netlify');
     expect(section).toMatch(/only to reply with an offer/);
@@ -75,7 +75,6 @@ describe('PrivacyPolicyPage', () => {
     expect(headings.indexOf('Anonymous usage counts')).toBe(headings.indexOf('No ads, no tracking') + 1);
     const body = (name: RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
     const usage = body(/Anonymous usage counts/);
-    expect(usage).toMatch(/free apps on Mac, Windows, and in the browser never send usage data/);
     expect(usage).toMatch(/PostHog, hosted in the EU/);
     expect(usage).toMatch(/without cookies/);
     expect(usage).toMatch(/your location/);
@@ -141,7 +140,7 @@ describe('PrivacyPolicyPage', () => {
 
   it('says where hosted records live, how they are backed up and processed, and when they are deleted (MUT-324)', () => {
     renderPage('en');
-    const heading = screen.getByRole('heading', { level: 2, name: /Hosted accounts/ });
+    const heading = screen.getByRole('heading', { level: 2, name: /Where your records live/ });
     const section = heading.parentElement?.textContent ?? '';
     for (const fact of ['me-west1', 'Tel Aviv', '14 days', 'Sentry', 'PostHog', 'only if you agree', '30 days', 'terms of service']) {
       expect(section).toContain(fact);
@@ -151,5 +150,35 @@ describe('PrivacyPolicyPage', () => {
   it('links the terms of service from the footer (MUT-324)', () => {
     renderPage('en');
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');
+  });
+});
+
+/** MUT-356: a link from the phone or the portal names its language (`?lang`), as /terms does. */
+describe('PrivacyPolicyPage ?lang', () => {
+  /** The element that carries the text's own language and direction. */
+  const textOf = (title: string) => screen.getByRole('heading', { level: 1, name: title }).parentElement;
+
+  it('?lang=en shows the English policy on an Arabic site, left to right, and changes nothing stored', () => {
+    renderPage('ar', '?lang=en');
+    expect(textOf('Privacy Policy')).toHaveAttribute('lang', 'en');
+    expect(textOf('Privacy Policy')).toHaveAttribute('dir', 'ltr');
+    expect(screen.getByRole('heading', { level: 2, name: 'Anonymous usage counts' })).toBeInTheDocument();
+    expect(document.documentElement.dir).toBe('rtl');
+    expect(localStorage.getItem('mutaba3a-language')).toBe('ar');
+  });
+
+  it('?lang=ar shows the Arabic policy on an English site, right to left', () => {
+    renderPage('en', '?lang=ar');
+    expect(textOf('سياسة الخصوصية')).toHaveAttribute('lang', 'ar');
+    expect(textOf('سياسة الخصوصية')).toHaveAttribute('dir', 'rtl');
+    expect(screen.getByRole('heading', { level: 2, name: 'إحصاءات استخدام مجهولة' })).toBeInTheDocument();
+    expect(document.documentElement.dir).toBe('ltr');
+    expect(localStorage.getItem('mutaba3a-language')).toBe('en');
+  });
+
+  it('an unknown ?lang falls back to the page language', () => {
+    renderPage('ar', '?lang=fr');
+    expect(textOf('سياسة الخصوصية')).not.toHaveAttribute('lang');
+    expect(document.body.textContent).not.toMatch(/\blanding\.[a-zA-Z]/);
   });
 });

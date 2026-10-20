@@ -44,3 +44,12 @@ export function termsAccepted(latestVersion: string | null, currentVersion: stri
 export type TermsSurface = 'portal' | 'phone';
 
 export const TERMS_SURFACE_OF: Readonly<Record<SessionKind, TermsSurface>> = { cookie: 'portal', device: 'phone' };
+
+/**
+ * MUT-354 (MUT-348 decision 1): the client release that showed the terms, recorded with each acceptance so it maps
+ * to the git tag holding the page code (`web-v0.1.16` from the portal; the phone's version+build, MUT-344). Stored as
+ * sent, never trusted for anything else. Printable ASCII with no spaces, so the operator's terms report can't be fed
+ * terminal escapes; at most CLIENT_RELEASE_MAX characters, the column's width.
+ */
+export const CLIENT_RELEASE_MAX = 64;
+export const CLIENT_RELEASE_PATTERN = /^[\x21-\x7E]+$/;

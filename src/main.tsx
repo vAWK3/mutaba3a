@@ -71,15 +71,6 @@ const TermsPage =
       )
     : null;
 
-const HostedOfferPage =
-  __BUILD_MODE__ === "web"
-    ? lazy(() =>
-        import("./pages/landing/HostedOfferPage").then((m) => ({
-          default: m.HostedOfferPage,
-        })),
-      )
-    : null;
-
 const queryClient = createAppQueryClient();
 
 function App() {
@@ -111,7 +102,7 @@ function App() {
       return (
         <LandingProviders>
           <Suspense fallback={<BootSplash />}>
-            <PrivacyPolicyPage />
+            <PrivacyPolicyPage search={window.location.search} />
           </Suspense>
         </LandingProviders>
       );
@@ -129,14 +120,11 @@ function App() {
       );
     }
 
-    if (path === HOSTED_OFFER_URL && HostedOfferPage) {
-      return (
-        <LandingProviders>
-          <Suspense fallback={<BootSplash />}>
-            <HostedOfferPage />
-          </Suspense>
-        </LandingProviders>
-      );
+    // /hosted is retired (the free-vs-hosted comparison): hosted is now the only
+    // plan, and its request form lives inline on the main landing page instead.
+    if (path === HOSTED_OFFER_URL) {
+      window.location.replace("/");
+      return null;
     }
   }
 

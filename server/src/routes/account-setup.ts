@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { setupLinkState, type SetupLinkState } from '../auth/account-setup.js';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
-import { clientIp, isSameOriginRequest, sessionDigest, type SignInThrottle } from '../auth/sessions.js';
+import { isSamePortalOrigin, requestClientIp, sessionDigest, type SignInThrottle } from '../auth/sessions.js';
 import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
@@ -46,11 +46,11 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
   const app = new OpenAPIHono<AppEnv>();
 
   async function guard(c: Context<AppEnv>): Promise<Date> {
-    if (!isSameOriginRequest(c.req, settings.portalOrigin)) {
+    if (!isSamePortalOrigin(c.req, settings)) {
       throw new ApiError('CROSS_SITE_REQUEST', 'Set your password from the Mutaba3a portal itself');
     }
     const now = c.get('now')();
-    const ip = await ipLimiter.check(`account-setup:${clientIp((name) => c.req.header(name), settings.trustedProxyHops)}`, now);
+    const ip = await ipLimiter.check(`account-setup:${requestClientIp((name) => c.req.header(name), settings)}`, now);
     if (!ip.allowed) {
       c.header('Retry-After', String(ip.retryAfterSeconds));
       throw new ApiError('RATE_LIMITED', 'Too many attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
@@ -111,7 +111,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     }),
     async (c) => {
       const now = await guard(c);
-      const { token, password, acceptedTermsVersion, termsLocale } = c.req.valid('json');
+      const { token, password, acceptedTermsVersion, termsLocale, clientRelease } = c.req.valid('json');
       const tokenDigest = sessionDigest(settings.pepper, token);
       const { link, person } = await lookUp(token);
       const state = setupLinkState(link, person, now);
@@ -122,7 +122,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       const passwordHash = await passwordHasher.hash(password);
       const audit = await passwordSetAudit(c, person, link);
       // The setup page is the portal: a cookie surface.
-      const acceptance = termsAcceptanceOf(terms, termsLocale ?? person.locale, 'cookie');
+      const acceptance = termsAcceptanceOf(terms, termsLocale ?? person.locale, 'cookie', clientRelease);
       const termsAudit = await termsAcceptedAudit(store, person, acceptance, c.get('requestId'));
       // A fresh instant after the slow hash: the expiry check and passwordChangedAt must not predate a sign-in that ran meanwhile.
       const at = c.get('now')();

@@ -128,6 +128,19 @@ The test plan for MUT-300..314 is `.claude/designs/firm-books-tests.md`. It cove
 
 Every money rule runs on both stores (memory and `test:db`).
 
+## Signed-in records export (MUT-325, added 2026-10-20)
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit | `server/src/records-file/__tests__/codec.test.ts`, `export.test.ts` | streamed JSON equals the one-shot encoder at any page size; every field once and in order; re-homing (one person, no foreign email, no integrations or documents, firms owned, extra columns dropped); page bound |
+| Route | `server/src/__tests__/routes-records-export.test.ts` | auth (member only, header required, key refused), audit, gzip, lazy posting first, paging, mid-stream abort; receipt route bytes/headers/404s/503 |
+| Schema | `server/src/repositories/__tests__/prisma-records-export-columns.test.ts` | every selected column exists in the Prisma schema (no DB) |
+| Postgres (`test:db`) | `store-records-export-parity.test.ts` | Prisma export reads every field and the inbox exactly as the memory store does; key cursors over 2-row pages; receipt lookup |
+| Parity (AC1) | `src/hosted/local/__tests__/hosted-export-parity.test.ts` | hosted export → local restore: every portal read equal field for field (personal + Malafat-fed firm), inbox rows, receipt bytes; documented re-homing differences |
+| Scale (AC2) | `hosted-export-large.test.ts` | 10k entries + 200 receipts through the real routes; progress to 200/200; cancel partway |
+| Component | `HostedYourDataDrawer.test.tsx`, `local-mode.test.tsx` | menu/URL, checklist, progress, cancel, missing files, too-new reload, Arabic RTL; Restore confirm names an account export |
+| Release-QA | `qa/specs/portal/your-data.spec.ts` | `portal.your-data.download-signed-in`, `portal.your-data.download-cancel` |
+
 ## Current Test Coverage
 
 ### Landing header and motion (MUT-77, added 2026-10-14)
@@ -3176,6 +3189,28 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Release-QA `@portal.income.matter-fills-client` | client chips; picking Client 2's Retainer fills Client 2; switching to Client 1 empties Matter |
 | Reconcile additions (2026-10-19) | `EntityTypeahead.test.tsx`: no second pick while one saves (list shut on ArrowDown/refocus); cascade flash comes off after its span and replays. `useClientProjectCascade.test.tsx`: `onAutoFill` with the default owner, not when the client already owns it. `IncomeCaptureDrawer.test.tsx`: Save held while a matter is added; Enter held still saves once it lands; CURRENCY_MISMATCH under Matter; Malafat no-Add check now waits for the open list (was vacuous). `ExpenseDrawer.test.tsx`: Save held while a matter is added; picking a matter fills the client, changing the client empties it. `incomeApiErrors.test.ts`: CURRENCY_MISMATCH → `matterCurrency` with the matter's currency. Release-QA `@portal.income.add-matter`: the Malafat step waits for the open list before asserting no Add row |
 
+## MUT-356 — /privacy honours ?lang, like /terms (2026-10-20)
+
+- **Landing:** `src/content/legal/__tests__/language.test.ts` (`legalLanguageOf`: en, ar, among other params; absent, empty, unknown, upper case and other names ignored). `PrivacyPolicyPage.test.tsx` `?lang` (English text on an Arabic site and the reverse, `lang`/`dir` on the text, `<html dir>` and the stored language unchanged; an unknown value falls back to the page language).
+- **Release-QA:** `@web.legal.privacy-linked-language` (new); `@web.legal.links` now reads the hosted-accounts heading from the translation files (it had gone stale when the heading became "Where your records live").
+- **Phone (mutaba3a-flutter):** `legal_links_test.dart` (`privacyUri` `?lang=en|ar`); `ios.settings.terms-link` taps Privacy in English and in Arabic.
+
+## MUT-354 — The client release on each terms acceptance (2026-10-20)
+
+- **Server:**
+  - `server/src/__tests__/terms.test.ts` "the client release on each acceptance":
+    - the redeem and the accept route record it; the audit and the admin report show it, with the release of the latest version;
+    - an old client that sends none succeeds and records null;
+    - a repeat keeps the first release;
+    - an empty, 65-character, spaced, control-character or non-ASCII value gets 422 on both routes, with nothing written;
+    - a 64-character value and a phone-style `phone-1.4.0+52` are accepted;
+    - the OpenAPI document states the optional field with its limits.
+  - `store-contract-account-setup.ts` (memory + Postgres): the release is kept on a repeat; `listLatestTermsVersions` returns `latestClientRelease`; a redeem records it, or null.
+  - `users-cli.test.ts`: `terms` prints the release, or `-`.
+  - The migration has no drift against `schema.prisma` (`prisma migrate diff --exit-code` on a fresh database).
+- **Portal:** `src/hosted/__tests__/terms.test.ts` (`TERMS_CLIENT_RELEASE` = `web-v0.0.0` under tests); the `SetupPage.test.tsx` and `TermsUpdatePage.test.tsx` request bodies carry it.
+- **Release-QA:** the bodies in `@portal.terms.setup-requires-accept`, `.language-switch-clears-tick`, `.updated-terms-step`, `.changed-mid-step` and `@portal.setup.set-password` carry `clientRelease` matching `web-v<x.y.z>` (`QA_CLIENT_RELEASE`). 11/11 `@portal.terms.*` + `@portal.setup.*` pass on a hosted preview build (Node 22, 2026-10-20).
+
 ## MUT-324 — Terms of service, accepted at setup (2026-10-19, ADR-102)
 
 - **Server:**
@@ -3236,3 +3271,52 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 |---|---|
 | `src/lib/motion/__tests__/iconMotion.test.ts` (7) | `ICON_OVERSHOOT_EASE`/`ICON_RESTRAINED_EASE` match `MMotion.overshoot`/`.spring` exactly; playful and restrained both settle at scale(1); the playful preset's live value exceeds 1 mid-flight (the actual "bounce," not just which constant was selected); reduced motion jumps straight to scale(1) on either preset; every target in a list animates; re-triggering mid-flight doesn't throw and still settles cleanly |
 | Manual | No dev-server CSP check performed — the mechanism writes `element.style.transform` directly via JS, the same pattern `playRowEnter`/`playRowExit` already use under the portal's CSP (ADR-044), so it's CSP-safe by construction, not by inspection |
+
+## MUT-328 — Uptime checks and alerts (2026-10-20, ADR-154)
+
+| Test | Covers |
+|---|---|
+| `server/infrastructure/terraform/tests/monitoring.tftest.hcl` (14 runs, mocked Google + random, server-ci `terraform test`) | Defaults: `health`/`ready`/`portal` on the Cloud Run host, every 300 s over validated HTTPS, all regions, no channel or policy, `/health` keeps its display name; the portal matcher `id="root"`; `uptime_host` moves every check; a host with a scheme, path or port is refused; email + SMS create 2 channels and 5 policies, each notifying both plus existing ids; uptime policy > 1 region for 360 s at 300 s `ALIGN_NEXT_OLDER` + `REDUCE_COUNT_FALSE`, its own check id, CRITICAL; Cloud SQL disk > 0.8 / CPU > 0.9 for 900 s on `<project>:mutaba3a-pg`, WARNING; non-E.164 SMS refused; existing channel ids alone still alert; the drill adds a check + policy, and a path without `/` is refused; `enable_uptime_check = false` keeps the SQL alerts |
+| `tests/database_pool.tftest.hcl` (3) | Unchanged, still green after the monitoring section moved out of `main.tf` |
+| Not automatable here | The real plan against production (expected: 9 to add, the `/health` check moved) and the drill (fire, then close) are Basel's steps in `server/DEPLOYMENT.md` §6b |
+
+## MUT-326 — The custom domain is one input (2026-10-20, ADR-155)
+
+| Test | Covers |
+|---|---|
+| `scripts/__tests__/hosts.test.ts` (24) | `parseHostsConfig` refuses each bad field by name (domain shape, subdomain label, unknown stage, stage/domain mismatch, http or pathful legacy origins, a domain the legacy hosts live under); `resolveHosts` per stage: legacy (legacy hosts, no front door), proxy (front door built, builds unchanged), live (apex + `app.` subdomain, both hosts for the phone), redirect; the fixtures shared with Terraform |
+| `scripts/__tests__/hosts-cli.test.ts` (18) | `get` per key and an unknown key; `withDomain` previews without touching the file; `domain:plan` names every consumer, shows before → after, keeps both hosts in the phone lines, the Netlify rules per stage, the proxy stage leaving builds alone; `main` exit codes and usage |
+| `scripts/__tests__/no-hardcoded-hosts.test.ts` (3) | AC1: no legacy host, `mutaba3a*.a.run.app` / `*.netlify.app` or chosen domain outside `config/hosts.json` (prose and the CIMD files exempt); the pattern catches a planted literal; a rehearsal with `mutaba3a.app` as the domain stays green |
+| `scripts/__tests__/front-door-worker.test.ts` (7) | The Worker forwards path and query, sends the token and the edge-read client IP, overwrites forged copies, passes `X-Mutaba3a-Profile`/cookies/`Sec-Fetch-Site`/`Origin` through but not Host, never gives GET/HEAD a body, keeps the server's 302 and both `Set-Cookie`s (`redirect: manual`), fails closed when unconfigured |
+| `scripts/__tests__/vite-config.test.ts` (+5) | Defaults equal `HOSTS`; the Netlify rules: none before live, `<apex>/app*` back to netlify.app from live, the old landing pages (and only those) to the apex at redirect, never `/app` or assets on the old host; web build only. The web snapshot masks the config-derived portal URL |
+| `scripts/__tests__/legal-terms.test.ts` | The terms guard's npm script reads the landing origin from the config, the same value vite builds for |
+| `server/src/auth/__tests__/front-door.test.ts` (10) | Token match exact, absent without a configured token; client IP from the front door only with the token, `unknown` for a missing/odd/listed value, `X-Forwarded-For` with the configured hops on the direct path (forged headers ignored); same-origin per path; no token = today's rules |
+| `server/src/__tests__/config.test.ts` (+9) | `FRONT_DOOR_TOKEN` length and its need for `PORTAL_ORIGIN`; `PORTAL_LEGACY_REDIRECT` reads only "true"/"false" ("false" is off) and needs the token |
+| `server/src/__tests__/legacy-redirect.test.ts` (17) | Old-host page visits 302 to `/carry-over?next=…` with no-store; the carry-over page itself, the API, admin, health, readiness, assets, static files, association files and writes are never redirected; through the front door never; off unless the stage says so and without a front door |
+| `server/src/__tests__/check-terms-live.test.ts` (+4) | `publicOrigin` takes the env value without a trailing slash and refuses to guess when it's unset |
+| `server/infrastructure/terraform/tests/domain.tftest.hcl` (4) | No domain: no front-door env or IAM, today's plan unchanged; the checked-in config; a live domain: `PORTAL_ORIGIN`, `FRONT_DOOR_TOKEN` as a secret ref, no redirect env, the IAM grant, `public_portal_origin`; an unnamed environment |
+| `server/infrastructure/frontdoor/tests/frontdoor.tftest.hcl` (5) | No domain: zero resources; the checked-in config; a domain: zone, apex/www DNS-only to Netlify, proxied portal host, Worker route, upstream and secret bindings, strict TLS and no edge challenge, token secret name, Netlify domain, output; staging names; missing account ids flagged |
+| `server/infrastructure/sentry/tests/sentry.tftest.hcl` (+2) | DSN origins come from the config (no extras still allows them); a chosen domain adds its origins and keeps the legacy ones |
+| Manual (offline) | `terraform plan` of the frontdoor stack with the placeholder fixture, a local backend and dummy tokens: **16 to add, 0 to change, 0 to destroy**, all `create` |
+| Manual (operator, MUT-112) | DEPLOYMENT.md §5a's checks per stage (curl of `/health`, `/ready`, both association files and a sign-in through `app.<apex>`; the redirect check at stage redirect) |
+| Release-QA | None added: nothing is user-visible while `domain` is null (builds byte-identical, pinned by the snapshot and the guard). The carry-over's `web.bridge`, `portal.carry-over` and `portal.carry-over-fallback` belong to MUT-112/MUT-291 (design §7) |
+
+## MUT-327 — Restore drill and pilot operator runbook (2026-10-20, ADR-157)
+
+| Test | Covers |
+|---|---|
+| `server/src/scripts/__tests__/restore-drill.test.ts` (8, no database, fake `gcloud`/`cloud-sql-proxy`/`psql` that fail if called) | Usage without `--project`; the dry run prints backup list, create, backup restore, PITR clone, receipt checks and teardown, and calls nothing; every create/clone/patch/restore/set-password/delete targets only a `mutaba3a-pg-drill-<stamp>-b\|p` name; `--only pitr`; teardown refuses `mutaba3a-pg` and non-drill names; a drill name as the source is refused; `--pitr-minutes` outside 1 to 7 days is refused |
+| `server/src/scripts/__tests__/profile-rows.test.ts` (7, `MUTABA3A_TEST_DATABASE_URL` + `psql`, two databases built from the migrations) | export: one CSV per table, no `api_keys`/`idempotency_keys`, other profiles excluded, receipt copy lines; restore refuses the same database and a schema mismatch; restore puts back a renamed customer, a deleted expense and receipt, removes a later customer, leaves another profile, memberships and later audit rows, adds `organization.restored`, and a dry run changes nothing; purge-user refuses a shared membership and a reference from someone else's profile, then deletes the user, owned profiles and their rows, terms rows and `user.terms_accepted` everywhere, and nothing else |
+| Shellcheck | Both scripts clean |
+| Local walk (runbook §9) | Every locally walkable step against the local API and copies of `mutaba3a_dev` |
+| Not automatable here | The drill against production backups (AC1), in-place restore, ingress close and reopen, bucket soft-delete restore: Basel's steps |
+
+## MUT-357 — Drawers fit a phone (2026-10-20, TD-070)
+
+| Test | Covers |
+|---|---|
+| `src/styles/__tests__/drawerFit.test.ts` (2) | `.drawer` in `src/index.css` declares `max-width: 100%`; its only `width` is `var(--drawer-width)`, and no `.drawer` rule (plain, `[dir="rtl"]`, dark) sets another `width` or a `min-width` |
+| `qa/specs/portal/direction.spec.ts` (`@portal.direction.drawer-phone-ar`, `-en`) | At 375×812, Change password in Arabic and English: once its spring settles the dialog's box is 0..375 (fills the screen) and `scrollWidth` does not exceed `clientWidth`. Both red on main (Arabic 0..480, English −105..375), green on the branch (preview build) |
+| `qa/specs/web/brand.spec.ts` (`@web.brand.layout`) | The payment drawer at 375px now has to fit outright (its `KNOWN_OVERFLOW` entry is gone), English and Arabic, light and dark |
+| Re-run, unchanged | `@portal.account.*`, `@portal.your-data.*`, `@web.drawer-motion.*` (incl. `rtl-mirror`): desktop drawers, drag-to-dismiss and the RTL mirror still pass |
+

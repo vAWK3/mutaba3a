@@ -13,6 +13,16 @@
 # is built, committed, pushed or rolled.
 #
 # Run `make doctor` any time for a read-only report of the same checks.
+#
+# GitHub Actions CI (web, server, contracts) runs only when started: `make ci`
+# (ADR-153). Each release target shows the last CI result before it asks to
+# deploy (scripts/ci-reminder.sh) and ends by reminding you to start CI on what
+# it pushed.
+#
+# Operator steps still owed before a release (an infra change to approve, a
+# tfvars value to set) live in docs/operations/before-release.md. Each release
+# target prints its open items before it asks to deploy
+# (scripts/before-release.sh). Delete an item there once it's done.
 
 SHELL      := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -65,8 +75,17 @@ ifeq (release,$(firstword $(MAKECMDGOALS)))
     $(eval $(RELEASE_ARGS):;@:)
   endif
 endif
+ifeq (ci,$(firstword $(MAKECMDGOALS)))
+  CI_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  ifneq ($(CI_ARGS),)
+    $(eval $(CI_ARGS):;@:)
+  endif
+endif
 
-.PHONY: help release release-web release-server release-full \
+# Printed at the end of each release: CI no longer starts on push.
+CI_REMINDER = printf '\n$(C_YEL)Reminder: CI runs only when started. Run it on what you just pushed: make ci %s$(C_OFF)\n\n'
+
+.PHONY: help release release-web release-server release-full ci \
         preflight-web preflight-server doctor \
         check-web check-server check check-e2e qa-view \
         bump-web bump-server \
@@ -80,6 +99,8 @@ help:
 	@printf '  $(C_GREEN)make release server$(C_OFF)    deploy the API + hosted portal to Cloud Run ($(ENVIRONMENT))\n'
 	@printf '  $(C_GREEN)make release full$(C_OFF)      web, then server — each gated and confirmed on its own\n'
 	@printf '  $(C_DIM)  after a terms bump: make release web, wait for Netlify, then make release server$(C_OFF)\n'
+	@printf '\n$(C_BOLD)GitHub Actions CI$(C_OFF) $(C_DIM)(manual only)$(C_OFF)\n'
+	@printf '  make ci [web|server|contracts|all]   start CI on origin/$(RELEASE_BRANCH) (default: all)\n'
 	@printf '\n$(C_BOLD)Checks only — change nothing$(C_OFF)\n'
 	@printf '  make doctor            run every preflight check for both targets\n'
 	@printf '  make preflight-web     release-readiness for the web target\n'
@@ -112,6 +133,23 @@ release:
 	  '')     printf 'usage: make release web | make release server | make release full\n' >&2; exit 2 ;; \
 	  *)      printf 'unknown release target "%s" — expected web, server, or full\n' '$(RELEASE_ARGS)' >&2; exit 2 ;; \
 	esac
+
+# ---------------------------------------------------------------------------
+# CI — the workflows run only when started (workflow_dispatch), on the pushed
+# $(RELEASE_BRANCH), so push first.
+# ---------------------------------------------------------------------------
+
+ci:
+	@case '$(CI_ARGS)' in \
+	  web|server|contracts) set -- '$(CI_ARGS)' ;; \
+	  all|'') set -- web server contracts ;; \
+	  *) printf 'unknown CI target "%s" — expected web, server, contracts, or all\n' '$(CI_ARGS)' >&2; exit 2 ;; \
+	esac; \
+	for wf in "$$@"; do \
+	  gh workflow run "$$wf-ci.yml" --ref $(RELEASE_BRANCH); \
+	  printf '$(C_GREEN)✓ %s CI started on %s$(C_OFF)\n' "$$wf" '$(RELEASE_BRANCH)'; \
+	done; \
+	printf '$(C_DIM)Follow it: gh run list --limit 5, or gh run watch$(C_OFF)\n'
 
 # ---------------------------------------------------------------------------
 # Preflight
@@ -157,10 +195,10 @@ check: check-web check-server
 check-e2e:
 	@release-qa release --no-open
 
-# Opens the latest release-qa report (qa/runs/<slug>/index.html) in the
-# browser. Just opens the file — run `make check-e2e` first to refresh it.
+# Review page for release-qa (qa/runs/<slug>/): served in the background on this repo's own
+# port, with a Run & record button per feature. Run `release-qa release` to refresh it.
 qa-view:
-	@release-qa open
+	@release-qa serve --detach
 
 migrate-status:
 	@cd server && TF_STATE_BUCKET=$${TF_STATE_BUCKET:?set TF_STATE_BUCKET} npm run --silent db:migrate:status
@@ -206,6 +244,8 @@ release-web: preflight-web
 	printf '  branch    %s → origin (Netlify builds it)\n' '$(RELEASE_BRANCH)'; \
 	printf '  commits   %s ahead of origin, plus the version bump\n' \
 	  "$$(git rev-list --count origin/$(RELEASE_BRANCH)..HEAD 2>/dev/null || echo '?')"; \
+	scripts/ci-reminder.sh web; \
+	scripts/before-release.sh web; \
 	if ! scripts/confirm.sh 'Push to $(RELEASE_BRANCH) and let Netlify deploy it?'; then \
 	  printf '$(C_YEL)The version bump is still in your working tree — undo it or re-run.$(C_OFF)\n'; \
 	  exit 0; \
@@ -215,7 +255,8 @@ release-web: preflight-web
 	git push origin $(RELEASE_BRANCH); \
 	scripts/tag-release.sh web "$$version" --push; \
 	printf '\n$(C_GREEN)✓ v%s pushed to %s — Netlify is building$(C_OFF)\n' "$$version" '$(RELEASE_BRANCH)'; \
-	printf '$(C_DIM)Watch the build, then hard-reload the site and confirm the version in Settings.$(C_OFF)\n\n'
+	printf '$(C_DIM)Watch the build, then hard-reload the site and confirm the version in Settings.$(C_OFF)\n'; \
+	$(CI_REMINDER) web
 
 # ---------------------------------------------------------------------------
 # release server — server/scripts/deploy.sh owns the rollout (image, migrate,
@@ -242,6 +283,8 @@ release-server: preflight-server
 	printf '  region      %s\n' "$${GCP_REGION:-me-west1}"; \
 	printf '  environment %s\n' '$(ENVIRONMENT)'; \
 	printf '\n$(C_DIM)deploy.sh will: build dist-hosted → push the image → prisma migrate deploy\n  → terraform apply → smoke. Migrations are forward-only.$(C_OFF)\n'; \
+	scripts/ci-reminder.sh server; \
+	scripts/before-release.sh server; \
 	if ! scripts/confirm.sh 'Deploy to Cloud Run now?'; then \
 	  if [ $$bumped = yes ]; then printf '$(C_YEL)The version bump is still in your working tree — undo it or re-run.$(C_OFF)\n'; fi; \
 	  exit 0; \
@@ -256,7 +299,8 @@ release-server: preflight-server
 	  git push origin $(RELEASE_BRANCH); \
 	fi; \
 	(cd server && ./scripts/deploy.sh) && \
-	scripts/tag-release.sh api "$$version" --push
+	scripts/tag-release.sh api "$$version" --push && \
+	$(CI_REMINDER) server
 
 # ---------------------------------------------------------------------------
 # release full — web then server, back to back (ADR-102 overrides ADR-043's

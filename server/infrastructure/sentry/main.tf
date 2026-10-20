@@ -12,11 +12,21 @@
 # store binaries, so rotating it silences every shipped phone version until users
 # update; ship a phone release with the new DSN first. (No prevent_destroy: the
 # offline `terraform test` creates and destroys mocked resources.)
+# MUT-326: the browser DSNs accept every origin config/hosts.json names for production, new and legacy
+# (the same derivation as config/hosts.ts), plus any extras from tfvars.
+locals {
+  hosts  = jsondecode(file("${path.module}/${var.hosts_file}"))["production"]
+  domain = local.hosts.domain
+
+  portal_origins  = distinct(concat(local.domain == null ? [] : ["https://${local.hosts.portalSubdomain}.${local.domain}"], [local.hosts.legacy.portal], var.portal_origins))
+  landing_origins = distinct(concat(local.domain == null ? [] : ["https://${local.domain}"], [local.hosts.legacy.landing], var.landing_origins))
+}
+
 locals {
   surfaces = {
     api           = { platform = "node", allowed_domains = ["*"], browser = false }
-    portal        = { platform = "javascript-react", allowed_domains = var.portal_origins, browser = true }
-    landing       = { platform = "javascript-react", allowed_domains = var.landing_origins, browser = true }
+    portal        = { platform = "javascript-react", allowed_domains = local.portal_origins, browser = true }
+    landing       = { platform = "javascript-react", allowed_domains = local.landing_origins, browser = true }
     "capture-app" = { platform = "flutter", allowed_domains = ["*"], browser = false }
   }
 

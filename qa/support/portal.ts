@@ -73,6 +73,11 @@ export interface PortalStub {
 /** The signed-in person's `/v1/me` answer for these profiles (the shape openSignedInPortal serves). */
 /** MUT-324: the terms version the QA fake reports, and the one the setup page is asked to accept. */
 export const QA_TERMS_VERSION = '2026-10-19';
+/**
+ * MUT-354: the release each portal acceptance sends, `web-v<the version the build reports>`. A pattern, not a
+ * value: a QA build may run as another version (MUTABA3A_APP_VERSION).
+ */
+export const QA_CLIENT_RELEASE = /^web-v\d+\.\d+\.\d+$/;
 
 export function meBody(
   profiles: StubProfile[],

@@ -2,7 +2,8 @@ import { useRef, useState, type ChangeEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '../../components/ui/Button';
-import { useT } from '../../lib/i18n/core';
+import { useLanguage } from '../../lib/i18n/core';
+import { formatDay } from '../format/dates';
 import { useTp } from '../../lib/i18n/plural';
 import { localBackend } from '../api/client';
 import { saveBlobAs } from '../data/download';
@@ -33,7 +34,7 @@ function recordsFileName(today: Date): string {
 }
 
 export function YourDataDrawer({ onClose }: { onClose: () => void }) {
-  const t = useT();
+  const { t, language } = useLanguage();
   const tp = useTp();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -136,6 +137,8 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
         {pending && (
           <div className="hp-card hp-your-data-confirm" role="alertdialog" aria-labelledby="your-data-confirm">
             <p id="your-data-confirm">{tp('hosted.local.data.confirm', pending.recordCount)}</p>
+            {/* MUT-325: a file from an account's Download says so, and from when */}
+            {pending.exportedFromAccountAt && <p>{t('hosted.local.data.fromAccount', { date: formatDay(pending.exportedFromAccountAt.toISOString().slice(0, 10), language) })}</p>}
             {/* MUT-287 review D4: said before Replace, while the person can still cancel. */}
             {pending.missingReceiptFiles > 0 && <p className="hp-your-data-missing">{tp('hosted.local.data.missingReceipts', pending.missingReceiptFiles)}</p>}
             <div className="hp-empty-actions">

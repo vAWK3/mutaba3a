@@ -27,11 +27,12 @@
   status = 302
   force = true
 
-# /hosted gets its own copy of index.html with its own link preview (MUT-186); before the fallback
+# /hosted (the free-vs-hosted comparison) is retired: hosted is the only plan now,
+# and its request form lives inline on the home page. Before the fallback.
 [[redirects]]
   from = "/hosted"
-  to = "/hosted-offer.html"
-  status = 200
+  to = "/"
+  status = 301
 
 # SPA fallback - serve index.html for all routes
 [[redirects]]

@@ -43,7 +43,7 @@ export const FORGED_KEY = 'mut_test_00000000_notarealkeynotarealkeynotarealkeyno
 export function parseBaseUrl(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed === '') {
-    throw new Error('--url is empty; pass the service URL (e.g. --url https://mutaba3a-api-xxxx.a.run.app). ' +
+    throw new Error('--url is empty; pass the service URL (e.g. --url https://<service>.a.run.app). ' +
       'If it came from `terraform output -raw service_url`, the Cloud Run service has not been created yet: re-run scripts/deploy.sh.');
   }
   let url: URL;

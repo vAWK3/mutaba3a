@@ -7,12 +7,7 @@
     "header": {
       "wordmark": "Mutaba3a · متابعة",
       "wordmarkShort": "Mutaba3a",
-      "signIn": "Sign in",
-      "cta": {
-        "web": "Open portal",
-        "ios": "iPhone",
-        "android": "Android"
-      }
+      "signIn": "Sign in"
     },
     "langToggle": {
       "en": "EN",
@@ -80,7 +75,13 @@
         "ios": "iPhone, on the App Store",
         "android": "Android, on Google Play"
       },
-      "withAccount": "with your account"
+      "withAccount": "with your account",
+      "devicesCaption": "Logged on the phone, there in the portal.",
+      "platform": {
+        "ios": "iPhone",
+        "android": "Android",
+        "comingSoon": "{platform} coming soon"
+      }
     },
     "malafat": {
       "title": "Run a law firm or accounting office on Malafat? Mutaba3a connects to it.",

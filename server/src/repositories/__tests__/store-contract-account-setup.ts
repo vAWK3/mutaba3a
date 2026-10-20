@@ -42,7 +42,7 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
     ...overrides,
   });
 
-  const TERMS = { version: '2026-10-19', locale: 'en' as const, textSha256: 'f'.repeat(64), surface: 'portal' as const };
+  const TERMS = { version: '2026-10-19', locale: 'en' as const, textSha256: 'f'.repeat(64), surface: 'portal' as const, clientRelease: 'web-v0.1.15' as string | null };
   /** Redeems that are about the link, not the terms: an acceptance with no audit rows. */
   const NO_NEW_TERMS = { terms: TERMS, termsAudit: [] as AuditEventInput[] };
 
@@ -307,9 +307,10 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       const audit = auditFor(orgIds.slice(0, 1), user.id, 'user.terms_accepted');
       // Review pass 2: the store answers only whether the row is new; nobody needs the row read back
       expect(await store.users.acceptTerms({ userId: user.id, ...TERMS, at: at(2), audit })).toEqual({ created: true });
-      expect(await store.users.acceptTerms({ userId: user.id, ...TERMS, locale: 'ar', at: at(3), audit })).toEqual({ created: false });
+      expect(await store.users.acceptTerms({ userId: user.id, ...TERMS, locale: 'ar', clientRelease: 'web-v9.9.9', at: at(3), audit })).toEqual({ created: false });
       const kept = await store.users.latestTermsAcceptance(user.id);
-      expect(kept).toMatchObject({ userId: user.id, ...TERMS, locale: 'en' });
+      // MUT-354: the release first recorded is kept with the rest of the row
+      expect(kept).toMatchObject({ userId: user.id, ...TERMS, locale: 'en', clientRelease: 'web-v0.1.15' });
       expect(kept?.acceptedAt.toISOString()).toBe(at(2).toISOString());
       expect(await termsAuditCount(store, orgIds[0]!)).toBe(1);
     });
@@ -323,16 +324,20 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       expect((await store.users.latestTermsAcceptance(user.id))?.version).toBe('2026-12-01');
     });
 
-    it('lists every person by email with their latest accepted version, null for someone who accepted none', async () => {
+    it('lists every person by email with their latest accepted version and its client release, null for someone who accepted none', async () => {
       const store = await makeStore();
       const { user: behind } = await person(store);
       const { user: never } = await person(store);
-      await store.users.acceptTerms({ userId: behind.id, ...TERMS, version: '2026-10-19', at: at(2), audit: [] });
-      await store.users.acceptTerms({ userId: behind.id, ...TERMS, version: '2026-12-01', at: at(3), audit: [] });
-      const rows = (await store.users.listLatestTermsVersions()).filter((r) => r.userId === behind.id || r.userId === never.id);
+      const { user: oldClient } = await person(store);
+      await store.users.acceptTerms({ userId: behind.id, ...TERMS, version: '2026-10-19', clientRelease: 'web-v0.1.15', at: at(2), audit: [] });
+      await store.users.acceptTerms({ userId: behind.id, ...TERMS, version: '2026-12-01', clientRelease: 'web-v0.1.20', at: at(3), audit: [] });
+      // MUT-354: a client from before the field records no release
+      await store.users.acceptTerms({ userId: oldClient.id, ...TERMS, clientRelease: null, at: at(2), audit: [] });
+      const rows = (await store.users.listLatestTermsVersions()).filter((r) => [behind.id, never.id, oldClient.id].includes(r.userId));
       const expected = [
-        { userId: behind.id, email: behind.email, status: behind.status, latestVersion: '2026-12-01' },
-        { userId: never.id, email: never.email, status: never.status, latestVersion: null },
+        { userId: behind.id, email: behind.email, status: behind.status, latestVersion: '2026-12-01', latestClientRelease: 'web-v0.1.20' },
+        { userId: never.id, email: never.email, status: never.status, latestVersion: null, latestClientRelease: null },
+        { userId: oldClient.id, email: oldClient.email, status: oldClient.status, latestVersion: TERMS.version, latestClientRelease: null },
       ].sort((a, b) => (a.email < b.email ? -1 : 1));
       expect(rows).toEqual(expected);
     });
@@ -353,8 +358,18 @@ export function describeLedgerStoreAccountSetupContract(name: string, makeStore:
       const reset = await store.accountSetup.issue(issueInput(user.id, { purpose: 'RESET', at: at(3) }));
       expect(await store.accountSetup.redeem({ tokenDigest: reset.tokenDigest, passwordHash: NEW_HASH, at: at(4), audit: [], terms: TERMS, termsAudit })).not.toBeNull();
       expect((await store.users.getById(user.id))?.passwordHash).toBe(NEW_HASH);
-      expect((await store.users.latestTermsAcceptance(user.id))?.acceptedAt.toISOString()).toBe(at(2).toISOString());
+      const kept = await store.users.latestTermsAcceptance(user.id);
+      expect(kept?.acceptedAt.toISOString()).toBe(at(2).toISOString());
+      expect(kept?.clientRelease).toBe(TERMS.clientRelease);
       expect(await termsAuditCount(store, orgIds[0]!)).toBe(1);
+    });
+
+    it('a redeem from a client that sends no release records null (MUT-354)', async () => {
+      const store = await makeStore();
+      const { user } = await person(store);
+      const setup = await store.accountSetup.issue(issueInput(user.id));
+      expect(await store.accountSetup.redeem({ tokenDigest: setup.tokenDigest, passwordHash: HASH, at: at(2), audit: [], terms: { ...TERMS, clientRelease: null }, termsAudit: [] })).not.toBeNull();
+      expect((await store.users.latestTermsAcceptance(user.id))?.clientRelease).toBeNull();
     });
 
     it('a refused redeem records no acceptance', async () => {

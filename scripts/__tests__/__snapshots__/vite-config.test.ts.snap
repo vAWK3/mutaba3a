@@ -116,7 +116,7 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
   "define": {
     "__APP_VERSION__": "<package.json version>",
     "__BUILD_MODE__": ""web"",
-    "__PORTAL_URL__": ""https://mutaba3a-api-t5bzsudmja-zf.a.run.app"",
+    "__PORTAL_URL__": "<config/hosts.json portalOrigin>",
     "__POSTHOG_KEY__": """",
   },
   "plugins": [
@@ -126,8 +126,8 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
     "mutaba3a:social-meta",
     "mutaba3a:netlify-forms",
     "mutaba3a:legal-terms-manifest",
+    "mutaba3a:domain-move-redirects",
     "mutaba3a:hosted-offer-dev-route",
-    "mutaba3a:hosted-offer-html",
     "vite-plugin-pwa",
     "vite-plugin-pwa:info",
     "vite-plugin-pwa:build",

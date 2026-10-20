@@ -6,10 +6,11 @@ import type { AuditEventInput, LedgerStore, Organization, TermsAcceptanceInput, 
 
 /**
  * MUT-324 (ADR-102): what one acceptance of the current terms records, shared
- * by the setup-link redeem and POST /v1/me/terms-acceptance.
+ * by the setup-link redeem and POST /v1/me/terms-acceptance. MUT-354: plus the
+ * client release the request named, kept as sent (null when it named none).
  */
-export function termsAcceptanceOf(terms: CurrentTerms, locale: UserLocale, kind: SessionKind): TermsAcceptanceInput {
-  return { version: terms.version, locale, textSha256: terms.sha256[locale], surface: TERMS_SURFACE_OF[kind] };
+export function termsAcceptanceOf(terms: CurrentTerms, locale: UserLocale, kind: SessionKind, clientRelease: string | undefined): TermsAcceptanceInput {
+  return { version: terms.version, locale, textSha256: terms.sha256[locale], surface: TERMS_SURFACE_OF[kind], clientRelease: clientRelease ?? null };
 }
 
 /** The shared refusal for a missing or outdated terms version: the setup-link redeem and POST /v1/me/terms-acceptance. */
@@ -35,7 +36,13 @@ export async function termsAcceptedAudit(store: LedgerStore, person: UserRecord,
       action: 'user.terms_accepted',
       entityType: 'user',
       entityId: person.id,
-      metadata: { version: acceptance.version, locale: acceptance.locale, surface: acceptance.surface, textSha256: acceptance.textSha256 },
+      metadata: {
+        version: acceptance.version,
+        locale: acceptance.locale,
+        surface: acceptance.surface,
+        textSha256: acceptance.textSha256,
+        clientRelease: acceptance.clientRelease,
+      },
       requestId,
     }));
 }

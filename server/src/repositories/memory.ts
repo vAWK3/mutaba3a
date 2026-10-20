@@ -128,6 +128,10 @@ import type {
   UpdateExpenseGroupPatch,
   EntriesRepository,
   EntryRow,
+  ExportPage,
+  ProfileExportField,
+  ProfileExportRecords,
+  RecordsExportRepository,
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON } from './ports.js';
@@ -446,9 +450,9 @@ export class MemoryLedgerStore implements LedgerStore {
       [...this.people.values()]
         .sort((a, b) => (a.email < b.email ? -1 : a.email > b.email ? 1 : 0))
         .map((u) => {
-          let latestVersion: string | null = null;
-          for (const a of this.termsAcceptances.values()) if (a.userId === u.id && (latestVersion === null || a.version > latestVersion)) latestVersion = a.version;
-          return { userId: u.id, email: u.email, status: u.status, latestVersion };
+          let latest: TermsAcceptanceRecord | undefined;
+          for (const a of this.termsAcceptances.values()) if (a.userId === u.id && (!latest || a.version > latest.version)) latest = a;
+          return { userId: u.id, email: u.email, status: u.status, latestVersion: latest?.version ?? null, latestClientRelease: latest?.clientRelease ?? null };
         }),
     acceptTerms: async (input) => {
       if (!this.people.has(input.userId)) throw new ForeignKeyViolation('terms_acceptances.userId');
@@ -1699,6 +1703,32 @@ export class MemoryLedgerStore implements LedgerStore {
 
   // ---- MUT-270: the entries feed -------------------------------------------
 
+  readonly recordsExport: RecordsExportRepository = {
+    profilePage: async (organizationId, field, afterKey, limit) => {
+      const map = this.exportMaps()[field] as Map<string, unknown>;
+      const owned = field === 'counters'
+        ? (key: string) => key.startsWith(`${organizationId}:`)
+        : (_key: string, row: unknown) => (row as { organizationId: string }).organizationId === organizationId;
+      return pageOfMap(map, (key, row) => owned(key, row), afterKey, limit) as never;
+    },
+    inboxPage: async (userId, afterKey, limit) => pageOfMap(this.inbox, (_key, row) => row.userId === userId, afterKey, limit),
+    findExportableReceipt: async (organizationId, id) => {
+      const row = this.expReceipts.get(id);
+      if (!row || row.organizationId !== organizationId || row.status !== 'READY' || row.deletedAt || !row.storageKey) return null;
+      return { storageKey: row.storageKey, mimeType: row.mimeType, sizeBytes: row.sizeBytes };
+    },
+  };
+
+  /** The profile-owned maps by snapshot field name (MUT-325), so an export page names its map the way the file does. */
+  private exportMaps(): { [F in ProfileExportField]: Map<string, ProfileExportRecords[F]> } {
+    const m = this.snapshot().maps;
+    return {
+      custs: m.custs, projs: m.projs, refs: m.refs, rates: m.rates, agrs: m.agrs, insts: m.insts, charges: m.charges, recs: m.recs, supps: m.supps, versions: m.versions,
+      pays: m.pays, allocs: m.allocs, credits: m.credits, counters: m.counters, props: m.props, exps: m.exps, expCats: m.expCats, expReceipts: m.expReceipts,
+      convs: m.convs, expGroups: m.expGroups, groupMarks: m.groupMarks,
+    };
+  }
+
   readonly entries: EntriesRepository = {
     list: async (organizationIds, page) => {
       const inScope = (row: { organizationId: string; createdAt: Date; id: string }) => organizationIds.includes(row.organizationId) && (!page.cursor || isBeforeCursor(row, page.cursor));
@@ -1826,8 +1856,8 @@ export class MemoryLedgerStore implements LedgerStore {
     const key = `${userId}:${terms.version}`;
     const existing = this.termsAcceptances.get(key);
     if (existing) return { acceptance: { ...existing }, created: false };
-    const { version, locale, textSha256, surface } = terms;
-    const acceptance: TermsAcceptanceRecord = { userId, version, locale, textSha256, surface, acceptedAt: at };
+    const { version, locale, textSha256, surface, clientRelease } = terms;
+    const acceptance: TermsAcceptanceRecord = { userId, version, locale, textSha256, surface, clientRelease, acceptedAt: at };
     this.termsAcceptances.set(key, acceptance);
     return { acceptance: { ...acceptance }, created: true };
   }
@@ -1913,6 +1943,17 @@ export class MemoryLedgerStore implements LedgerStore {
     replaceMap(this.groupMarks, maps.groupMarks);
     replaceMap(this.inbox, maps.inbox);
   }
+}
+
+/** One page of `map`'s matching rows in ascending key order, strictly after `afterKey` (MUT-325 export). Copies, like every other read. */
+function pageOfMap<T>(map: Map<string, T>, matches: (key: string, row: T) => boolean, afterKey: string | null, limit: number): ExportPage<T> {
+  const keys = [...map.keys()].filter((key) => (afterKey === null || key > afterKey) && matches(key, map.get(key) as T)).sort();
+  const page = keys.slice(0, limit);
+  const entries = page.map((key): [string, T] => {
+    const row = map.get(key) as T;
+    return [key, typeof row === 'object' && row !== null ? (structuredClone(row) as T) : row];
+  });
+  return { entries, nextKey: keys.length > limit ? (page[page.length - 1] ?? null) : null };
 }
 
 /** `target.clear()` then repopulate from `source` — `target` is a `private readonly` field, so it is mutated in place, never reassigned. */

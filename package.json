@@ -1,7 +1,7 @@
 {
   "name": "mutaba3a",
   "private": true,
-  "version": "0.1.13",
+  "version": "0.1.15",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -26,6 +26,8 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:tz": "TZ=America/New_York vitest run",
+    "hosts": "tsx scripts/hosts.ts",
+    "domain:plan": "tsx scripts/hosts.ts plan",
     "test:bundles": "vite build --mode web && vite build --mode desktop && vite build --mode hosted && tsx scripts/check-bundles.ts",
     "hosted:types": "openapi-typescript server/openapi/openapi.yaml -o src/hosted/api/schema.d.ts",
     "hosted:types:check": "tsx scripts/check-hosted-types.ts",

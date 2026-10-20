@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useEffect, useState, useCallback, type ReactNode } from 'react';
+import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
 import type { Language } from './types';
-import { I18nProvider, detectSystemLanguage, type Dictionary } from './core';
+import { I18nProvider, createTranslator, detectSystemLanguage, useT, type Dictionary, type TranslationVars } from './core';
 import enTranslations from './translations/en';
 import arTranslations from './translations/ar';
 
@@ -95,4 +95,15 @@ export function LanguageProvider({ children, defaultLanguage }: LanguageProvider
       {children}
     </I18nProvider>
   );
+}
+
+/**
+ * `t` for a text that names its own language (a /terms or /privacy `?lang` link, MUT-356):
+ * that language's strings, or the page's `t` when it names none. Reads the dictionaries
+ * only, so the page's language and the stored choice stay as they are.
+ */
+export function useTIn(language: Language | null): (key: string, vars?: TranslationVars) => string {
+  const pageT = useT();
+  const linkedT = useMemo(() => (language ? createTranslator(translations[language], language) : null), [language]);
+  return linkedT ?? pageT;
 }

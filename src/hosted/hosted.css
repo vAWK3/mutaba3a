@@ -697,3 +697,12 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-your-data { display: flex; flex-direction: column; gap: var(--space-4); }
 .hp-your-data p { margin: 0; }
 .hp-your-data-confirm { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); }
+/* MUT-325: signed in, the profile checklist, the export note and its progress */
+.hp-your-data-note { color: var(--text-secondary); font-size: var(--text-label); }
+.hp-your-data-profiles { border: 0; margin: 0; padding: 0; min-inline-size: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.hp-your-data-profiles legend { padding: 0; margin: 0 0 var(--space-2); font-size: var(--text-body); font-weight: var(--weight-medium); color: var(--text-secondary); }
+.hp-your-data-progress { display: flex; flex-direction: column; gap: var(--space-2); }
+.hp-your-data-progress p { font-size: var(--text-label); color: var(--text-secondary); }
+.hp-progress { block-size: 6px; border-radius: var(--radius-sm); background: var(--border); overflow: hidden; }
+.hp-progress > span { display: block; block-size: 100%; background: var(--btn-primary-bg, var(--accent)); transition: inline-size 200ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .hp-progress > span { transition: none; } }

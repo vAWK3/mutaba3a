@@ -49,6 +49,8 @@ const app = createApp({
     secureCookie: config.NODE_ENV !== 'development',
     ...(config.PORTAL_ORIGIN ? { portalOrigin: config.PORTAL_ORIGIN } : {}),
     trustedProxyHops: config.TRUSTED_PROXY_HOPS,
+    ...(config.FRONT_DOOR_TOKEN ? { frontDoorToken: config.FRONT_DOOR_TOKEN } : {}),
+    legacyRedirect: config.PORTAL_LEGACY_REDIRECT,
   },
   signInThrottle,
   signInIpLimiter,

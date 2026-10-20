@@ -10,7 +10,7 @@ import { isValidTimezone, PAYMENT_TERMS } from './dates.js';
 import { USD_PEGS } from './fx-rates.js';
 import { IMPORT_MAX_ROWS } from './import/plan.js';
 import { SUPPORTED_CURRENCIES } from './money.js';
-import { TERMS_VERSION_PATTERN } from './legal.js';
+import { CLIENT_RELEASE_MAX, CLIENT_RELEASE_PATTERN, TERMS_VERSION_PATTERN } from './legal.js';
 import { ITEM_STATUSES } from './agreements/status.js';
 import { MAX_BILLING_DAY } from './retainers/schedule.js';
 import { PRICING_BASES, VAT_TREATMENTS } from './vat.js';
@@ -218,6 +218,17 @@ export const UserLocaleSchema = z.enum(['en', 'ar']).openapi('UserLocale');
 /** MUT-324: a terms version, named by its ISO date (server/src/legal.ts). */
 export const TermsVersionSchema = z.string().regex(TERMS_VERSION_PATTERN, 'must be a terms version (YYYY-MM-DD)').openapi('TermsVersion', { example: '2026-10-19' });
 
+/**
+ * MUT-354: the client release that showed the terms (`web-v<x>` from the portal), stored as sent with the acceptance.
+ * Optional: a client from before the field still accepts.
+ */
+const ClientReleaseSchema = z
+  .string()
+  .min(1)
+  .max(CLIENT_RELEASE_MAX)
+  .regex(CLIENT_RELEASE_PATTERN, 'must be printable ASCII with no spaces')
+  .openapi({ description: 'The client release that showed the terms, e.g. the portal’s `web-v<x>` tag (MUT-354). Stored as sent.', example: 'web-v0.1.16' });
+
 /** Never includes the password hash. */
 export const UserSummarySchema = z
   .object({
@@ -398,6 +409,8 @@ export const TermsReportSchema = z
         email: z.string(),
         status: z.enum(['ACTIVE', 'DISABLED']),
         latestVersion: TermsVersionSchema.nullable(),
+        /** MUT-354: the client release that showed the latest accepted version; null when none was recorded. */
+        clientRelease: z.string().nullable(),
         /** The latest accepted version is the current one or newer. */
         accepted: z.boolean(),
       }),
@@ -409,8 +422,11 @@ export const TermsReportSchema = z
 const TERMS_STATUS_SHAPE = { version: TermsVersionSchema, accepted: z.boolean() };
 export const TermsStatusSchema = z.object(TERMS_STATUS_SHAPE).openapi('TermsStatus');
 
-/** MUT-324: POST /v1/me/terms-acceptance — the version the person agreed to, and the language they read it in. */
-export const TermsAcceptanceRequestSchema = z.object({ version: TermsVersionSchema, locale: UserLocaleSchema }).strict().openapi('TermsAcceptanceRequest');
+/** MUT-324: POST /v1/me/terms-acceptance — the version the person agreed to, the language they read it in, and (MUT-354) the client release. */
+export const TermsAcceptanceRequestSchema = z
+  .object({ version: TermsVersionSchema, locale: UserLocaleSchema, clientRelease: ClientReleaseSchema.optional() })
+  .strict()
+  .openapi('TermsAcceptanceRequest');
 
 export const MeSchema = z
   .object({
@@ -554,6 +570,8 @@ export const SetupLinkRedeemRequestSchema = z
     acceptedTermsVersion: TermsVersionSchema.optional(),
     /** The language of the terms text the person read; the account's language when omitted. */
     termsLocale: UserLocaleSchema.optional(),
+    /** MUT-354: the client release that showed the setup page. */
+    clientRelease: ClientReleaseSchema.optional(),
   })
   .openapi('SetupLinkRedeemRequest');
 

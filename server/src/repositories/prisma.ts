@@ -4,6 +4,7 @@ import { parseScopes } from '../auth/scopes.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
+import { prismaRecordsExport } from './prisma-records-export.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import type { TermsLocale } from '../legal.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
@@ -267,9 +268,15 @@ export class PrismaLedgerStore implements LedgerStore {
       (
         await this.prisma.user.findMany({
           orderBy: { email: 'asc' },
-          select: { id: true, email: true, status: true, termsAcceptances: { orderBy: { version: 'desc' }, take: 1, select: { version: true } } },
+          select: { id: true, email: true, status: true, termsAcceptances: { orderBy: { version: 'desc' }, take: 1, select: { version: true, clientRelease: true } } },
         })
-      ).map((u) => ({ userId: u.id, email: u.email, status: u.status, latestVersion: u.termsAcceptances[0]?.version ?? null })),
+      ).map((u) => ({
+        userId: u.id,
+        email: u.email,
+        status: u.status,
+        latestVersion: u.termsAcceptances[0]?.version ?? null,
+        latestClientRelease: u.termsAcceptances[0]?.clientRelease ?? null,
+      })),
     acceptTerms: (input) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
@@ -1462,6 +1469,8 @@ export class PrismaLedgerStore implements LedgerStore {
 
   // ---- MUT-270: the entries feed -------------------------------------------
 
+  readonly recordsExport = prismaRecordsExport(() => this.prisma);
+
   readonly entries: EntriesRepository = {
     // D3: one typed, index-bounded query per organization and kind (limit + 1 rows each), merged in memory. Review D1:
     // one organization at a time, its 4 kinds in parallel, so a request holds at most 4 pooled connections.
@@ -1942,8 +1951,8 @@ function toApiKey(row: PrismaApiKey): ApiKeyRecord {
 
 /** MUT-324: the (userId, version) unique key; true when this call wrote the row, false when it already existed. */
 async function insertTermsAcceptance(tx: Prisma.TransactionClient, userId: string, terms: TermsAcceptanceInput, at: Date): Promise<boolean> {
-  const { version, locale, textSha256, surface } = terms;
-  const { count } = await tx.termsAcceptance.createMany({ data: [{ userId, version, locale, textSha256, surface, acceptedAt: at }], skipDuplicates: true });
+  const { version, locale, textSha256, surface, clientRelease } = terms;
+  const { count } = await tx.termsAcceptance.createMany({ data: [{ userId, version, locale, textSha256, surface, clientRelease, acceptedAt: at }], skipDuplicates: true });
   return count === 1;
 }
 
@@ -1954,6 +1963,7 @@ function toTermsAcceptance(row: Prisma.TermsAcceptanceGetPayload<object>): Terms
     locale: row.locale as TermsLocale,
     textSha256: row.textSha256,
     surface: row.surface,
+    clientRelease: row.clientRelease,
     acceptedAt: row.acceptedAt,
   };
 }

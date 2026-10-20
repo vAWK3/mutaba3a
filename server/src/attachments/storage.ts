@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { Storage } from '@google-cloud/storage';
 import { contentDisposition } from './rules.js';
 
@@ -23,6 +24,12 @@ export interface AttachmentStorage {
   signDownload(key: string, input: { filename: string; mimeType: string; ttlSeconds: number; now: Date }): Promise<SignedUrl>;
   head(key: string): Promise<StoredObject | null>;
   remove(key: string): Promise<void>;
+  /**
+   * MUT-325: the object's bytes as a stream, null when it isn't there. The one place the API passes bytes on:
+   * "Download my records" pipes each file into the person's records file (brief §3: the bucket has no CORS, so the
+   * portal can't fetch a signed URL itself). Streamed, never buffered.
+   */
+  read(key: string): Promise<ReadableStream<Uint8Array> | null>;
 }
 
 export class GcsAttachmentStorage implements AttachmentStorage {
@@ -64,15 +71,25 @@ export class GcsAttachmentStorage implements AttachmentStorage {
   async remove(key: string): Promise<void> {
     await this.storage.bucket(this.bucket).file(key).delete({ ignoreNotFound: true });
   }
+
+  async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
+    const file = this.storage.bucket(this.bucket).file(key);
+    const [exists] = await file.exists();
+    if (!exists) return null;
+    return Readable.toWeb(file.createReadStream()) as ReadableStream<Uint8Array>;
+  }
 }
 
 /** Test double: objects appear when a test calls `put`; URLs are deterministic strings. */
 export class MemoryAttachmentStorage implements AttachmentStorage {
   readonly objects = new Map<string, StoredObject>();
   readonly removed: string[] = [];
+  /** MUT-325: the bytes behind an object, for the tests that read them back. An object put without bytes reads as empty. */
+  readonly contents = new Map<string, Uint8Array>();
 
-  put(key: string, object: StoredObject): void {
+  put(key: string, object: StoredObject, bytes?: Uint8Array): void {
     this.objects.set(key, object);
+    if (bytes) this.contents.set(key, bytes);
   }
 
   async signUpload(key: string, input: { mimeType: string; sizeBytes: number; ttlSeconds: number; now: Date }) {
@@ -91,6 +108,18 @@ export class MemoryAttachmentStorage implements AttachmentStorage {
 
   async remove(key: string): Promise<void> {
     this.objects.delete(key);
+    this.contents.delete(key);
     this.removed.push(key);
+  }
+
+  async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
+    if (!this.objects.has(key)) return null;
+    const bytes = this.contents.get(key) ?? new Uint8Array();
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
   }
 }

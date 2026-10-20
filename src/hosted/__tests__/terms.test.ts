@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { termsHref } from '../terms';
+import { TERMS_CLIENT_RELEASE, termsHref } from '../terms';
 
 const TERMS_URL = 'https://mutaba3a.example/terms';
 
@@ -23,5 +23,13 @@ describe('termsHref (MUT-324)', () => {
 
   it('links nowhere when the build has no terms address', () => {
     expect(termsHref('en', '2026-10-19')).toBe('');
+  });
+});
+
+/** MUT-354: the release each acceptance records is the `web-v<x>` tag of the version the build reports. */
+describe('TERMS_CLIENT_RELEASE (MUT-354)', () => {
+  it('names the web release tag of the running build', () => {
+    // Tests define no __APP_VERSION__, so the build reports 0.0.0 (src/lib/appVersion.ts)
+    expect(TERMS_CLIENT_RELEASE).toBe('web-v0.0.0');
   });
 });

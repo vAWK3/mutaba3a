@@ -2,12 +2,13 @@
 # admin token is passed to each command as SENTRY_AUTH_TOKEN="$SENTRY_ADMIN_TOKEN". See server/DEPLOYMENT.md §1.5.
 organization = "mutaba3a"
 
-# Origins each browser DSN accepts events from (R2). When the custom domain ships
-# (MUT-112), add it here and re-apply, or its errors are silently dropped. Cloud Run
-# also serves the service at https://mutaba3a-api-<project-number>.me-west1.run.app;
-# add that origin too if anyone reaches the portal through it.
-portal_origins  = ["https://mutaba3a-api-t5bzsudmja-zf.a.run.app"]
-landing_origins = ["https://mutaba3a.netlify.app"]
+# Origins each browser DSN accepts events from (R2) come from config/hosts.json
+# (MUT-326): its portal and landing origins, new and legacy. Re-apply after the domain
+# is set there, or the new hosts' errors are dropped. Extras only: Cloud Run also
+# serves the service at https://<service>-<project-number>.me-west1.run.app; list it
+# here if anyone reaches the portal through it.
+# portal_origins  = []
+# landing_origins = []
 
 # Optional overrides (defaults in variables.tf).
 # base_url                 = "https://de.sentry.io/api/"

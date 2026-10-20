@@ -363,7 +363,7 @@ describe('Your data (D2)', () => {
 
   it('says before Replace how many receipt files the file is missing (MUT-287 review D4)', async () => {
     const apply = vi.fn(() => Promise.resolve());
-    backend.readRecordsFile.mockResolvedValue({ recordCount: 4, missingReceiptFiles: 2, apply });
+    backend.readRecordsFile.mockResolvedValue({ recordCount: 4, missingReceiptFiles: 2, exportedFromAccountAt: null, apply });
     await openYourData();
 
     chooseFile();
@@ -373,6 +373,16 @@ describe('Your data (D2)', () => {
     expect(apply).not.toHaveBeenCalled();
   });
 
+  it('says a file from an account is an export, and from when (MUT-325)', async () => {
+    backend.readRecordsFile.mockResolvedValue({ recordCount: 4, missingReceiptFiles: 0, exportedFromAccountAt: new Date('2026-10-20T09:00:00.000Z'), apply: vi.fn(() => Promise.resolve()) });
+    await openYourData();
+
+    chooseFile();
+    const confirm = await screen.findByRole('alertdialog');
+
+    expect(confirm).toHaveTextContent(/downloaded from your Mutaba3a account on .*20.*It's an export/);
+  });
+
   it('restores only after a confirm that names the record count, then starts again from / on the restored profile', async () => {
     // The file's person and profile are not this device's: after Replace, /v1/me answers with the file's profile.
     const restoredProfile = { ...personal, id: ORG_B, name: 'Restored' };
@@ -380,7 +390,7 @@ describe('Your data (D2)', () => {
       useLocalRoutes({ 'GET /v1/me': () => ok({ ...localMe, profiles: [restoredProfile] }) });
       return Promise.resolve();
     });
-    backend.readRecordsFile.mockResolvedValue({ recordCount: 12, missingReceiptFiles: 0, apply });
+    backend.readRecordsFile.mockResolvedValue({ recordCount: 12, missingReceiptFiles: 0, exportedFromAccountAt: null, apply });
     const { user, router } = await openYourData();
 
     chooseFile();
@@ -401,13 +411,13 @@ describe('Your data (D2)', () => {
     let finishFirst: (value: PendingRestore) => void = () => {};
     backend.readRecordsFile
       .mockImplementationOnce(() => new Promise<PendingRestore>((resolve) => { finishFirst = resolve; }))
-      .mockResolvedValueOnce({ recordCount: 2, missingReceiptFiles: 0, apply: vi.fn(() => Promise.resolve()) });
+      .mockResolvedValueOnce({ recordCount: 2, missingReceiptFiles: 0, exportedFromAccountAt: null, apply: vi.fn(() => Promise.resolve()) });
     await openYourData();
 
     chooseFile('first.json');
     chooseFile('second.json');
     expect(await screen.findByRole('alertdialog')).toHaveTextContent('the 2 records');
-    await act(async () => finishFirst({ recordCount: 1, missingReceiptFiles: 0, apply: vi.fn(() => Promise.resolve()) }));
+    await act(async () => finishFirst({ recordCount: 1, missingReceiptFiles: 0, exportedFromAccountAt: null, apply: vi.fn(() => Promise.resolve()) }));
 
     expect(screen.getByRole('alertdialog')).toHaveTextContent('the 2 records');
   });
@@ -417,7 +427,7 @@ describe('Your data (D2)', () => {
       useLocalRoutes({ 'GET /v1/me': () => fail(500, 'INTERNAL') });
       return Promise.resolve();
     });
-    backend.readRecordsFile.mockResolvedValue({ recordCount: 3, missingReceiptFiles: 0, apply });
+    backend.readRecordsFile.mockResolvedValue({ recordCount: 3, missingReceiptFiles: 0, exportedFromAccountAt: null, apply });
     const { user } = await openYourData();
 
     chooseFile();
@@ -429,7 +439,7 @@ describe('Your data (D2)', () => {
 
   it('Cancel leaves everything as it was', async () => {
     const apply = vi.fn(() => Promise.resolve());
-    backend.readRecordsFile.mockResolvedValue({ recordCount: 1, missingReceiptFiles: 0, apply });
+    backend.readRecordsFile.mockResolvedValue({ recordCount: 1, missingReceiptFiles: 0, exportedFromAccountAt: null, apply });
     const { user } = await openYourData();
 
     chooseFile();
@@ -452,11 +462,13 @@ describe('Your data (D2)', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
-  it('is not there signed in, even by URL', async () => {
+  it("signed in, is the account's Download (MUT-325): no Restore, never this device's backend", async () => {
     setMode('remote');
     stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
     renderPortal(`/p/${ORG_A}?yourData=true`);
-    await screen.findByRole('navigation', { name: 'Sections' });
-    expect(screen.queryByRole('dialog')).toBeNull();
+    const dialog = await screen.findByRole('dialog', { name: 'Your data' });
+    expect(within(dialog).queryByRole('button', { name: 'Restore from file' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Download my records' })).toBeInTheDocument();
+    expect(backend.exportRecords).not.toHaveBeenCalled();
   });
 });

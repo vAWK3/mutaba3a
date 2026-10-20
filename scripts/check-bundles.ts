@@ -17,6 +17,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { HOSTS } from '../config/hosts';
 import {
   HOSTED_RULES,
   LOCAL_RULES,
@@ -38,7 +39,9 @@ import {
 const TEXT_FILE = /\.(js|mjs|html|css|json|webmanifest)$/;
 const FONT_FILE = /\.(otf|ttf|woff2?)$/;
 const THMANYAH_PINS = 'src/assets/fonts/thmanyah.sha256.json';
-const allowlist = JSON.parse(readFileSync('scripts/bundle-origins.json', 'utf8')) as { local: string[]; hosted: string[] };
+const reviewed = JSON.parse(readFileSync('scripts/bundle-origins.json', 'utf8')) as { local: string[]; hosted: string[] };
+// Our own hosts come from the one hosts config (MUT-326), new and legacy, so moving the domain needs no allowlist edit
+const allowlist = { local: [...reviewed.local, ...HOSTS.allOrigins], hosted: [...reviewed.hosted, ...HOSTS.allOrigins] };
 
 function allFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -72,9 +75,9 @@ function checkBrandFonts(dir: string): string[] {
   return problems;
 }
 
-/** The entry HTML files each dist serves: the web build also emits the /hosted page's copy of index.html. */
+/** The entry HTML files each dist serves. */
 const ENTRY_HTML: Record<string, string[]> = {
-  'dist-web': ['index.html', 'hosted-offer.html'],
+  'dist-web': ['index.html'],
   'dist-desktop': ['index.html'],
   'dist-hosted': ['index.html'],
 };
