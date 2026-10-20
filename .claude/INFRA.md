@@ -99,7 +99,7 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 |---|---|
 | `API_KEY_ENVIRONMENT` | `live` |
 | Cloud SQL | `db-g1-small`, REGIONAL, daily backups + PITR 7d, deletion protection |
-| Attachments bucket | no versioning; deleted objects restorable 14 days (`soft_delete_policy`, TD-190), as long as the 14 daily backups. **Prepared 2026-10-20, not applied**: until Basel runs `server/DEPLOYMENT.md` §6c it has GCS's default 7 days. Record the apply date here |
+| Attachments bucket | no versioning; deleted objects restorable 14 days (`soft_delete_policy`, TD-190), as long as the 14 daily backups. **Prepared 2026-10-20, not applied**: until the next `make release server` (or `server/DEPLOYMENT.md` §6c alone) it has GCS's default 7 days. Listed in `docs/operations/before-release.md`. Record the apply date here |
 | Cloud Run instances | min 1 · max 1 (TD-017) |
 | Prisma pool per instance | `db_pool_size` = 10, as `connection_limit` in the DATABASE_URL secret Terraform writes (MUT-270) |
 | Cloud SQL `max_connections` | `db_max_connections` = 50, an explicit flag (db-g1-small's own default) (MUT-270) |

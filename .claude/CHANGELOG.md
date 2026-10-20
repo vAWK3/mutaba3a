@@ -50,7 +50,8 @@
 
 ### Technical
 - `server/infrastructure/terraform/tests/attachments_bucket.tftest.hcl`: the window is 14 days and equals `retained_backups` × 86400 (mocked providers, offline). Seen failing with a 7-day window first.
-- **Not applied to production.** Basel applies DEPLOYMENT.md §6c.
+- **Not applied to production.** The next `make release server` applies it (deploy.sh's `terraform apply`), or Basel applies it alone per DEPLOYMENT.md §6c.
+- `docs/operations/before-release.md` + `scripts/before-release.sh`: operator steps still owed before a release, one line each under `## web` / `## server`. `make release web|server` prints its target's open items just before the deploy confirmation; a reminder, never a gate. Seeded with TD-190 and MUT-328's §6b apply. Tests: `scripts/__tests__/before-release.test.ts`.
 
 ## [Unreleased] - 2026-10-20 — Restore drill and pilot operator runbook (MUT-327, ADR-157)
 

@@ -18,6 +18,11 @@
 # (ADR-153). Each release target shows the last CI result before it asks to
 # deploy (scripts/ci-reminder.sh) and ends by reminding you to start CI on what
 # it pushed.
+#
+# Operator steps still owed before a release (an infra change to approve, a
+# tfvars value to set) live in docs/operations/before-release.md. Each release
+# target prints its open items before it asks to deploy
+# (scripts/before-release.sh). Delete an item there once it's done.
 
 SHELL      := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -240,6 +245,7 @@ release-web: preflight-web
 	printf '  commits   %s ahead of origin, plus the version bump\n' \
 	  "$$(git rev-list --count origin/$(RELEASE_BRANCH)..HEAD 2>/dev/null || echo '?')"; \
 	scripts/ci-reminder.sh web; \
+	scripts/before-release.sh web; \
 	if ! scripts/confirm.sh 'Push to $(RELEASE_BRANCH) and let Netlify deploy it?'; then \
 	  printf '$(C_YEL)The version bump is still in your working tree — undo it or re-run.$(C_OFF)\n'; \
 	  exit 0; \
@@ -278,6 +284,7 @@ release-server: preflight-server
 	printf '  environment %s\n' '$(ENVIRONMENT)'; \
 	printf '\n$(C_DIM)deploy.sh will: build dist-hosted → push the image → prisma migrate deploy\n  → terraform apply → smoke. Migrations are forward-only.$(C_OFF)\n'; \
 	scripts/ci-reminder.sh server; \
+	scripts/before-release.sh server; \
 	if ! scripts/confirm.sh 'Deploy to Cloud Run now?'; then \
 	  if [ $$bumped = yes ]; then printf '$(C_YEL)The version bump is still in your working tree — undo it or re-run.$(C_OFF)\n'; fi; \
 	  exit 0; \
