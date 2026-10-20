@@ -2104,7 +2104,13 @@ Since MUT-325 its Restore confirm also says when the file came from an account (
 Landing chrome plus a dated, titled-sections legal document. `sections: { title, paragraphs[] }[]`, optional `updated`/`intro`, `after` slot, `loading` (sets `aria-busy`), and `textLanguage` (sets lang/dir on the text when it differs from the page's, as in /terms?lang; MUT-324 review). Used by `PrivacyPolicyPage` and `TermsPage`. Usage: `<LegalPage title={…} updated={…} intro={…} sections={…} />`. Tests: `PrivacyPolicyPage.test.tsx`, `TermsPage.test.tsx`.
 
 ### TermsPage — `src/pages/landing/TermsPage.tsx`
-`/terms` (latest) and `/terms/<version>`: loads the frozen text through `src/content/legal/terms.ts` (`loadTerms`, `TERMS_VERSIONS`, `LATEST_TERMS_VERSION`, `termsVersionOf`, `termsLanguageOf`), in the page language unless a portal link names one (`?lang=en|ar`). That language applies to the text only (LegalPage `textLanguage`) and is never stored. An unknown version says so and links `/terms`, keeping `?lang`.
+`/terms` (latest) and `/terms/<version>`: loads the frozen text through `src/content/legal/terms.ts` (`loadTerms`, `TERMS_VERSIONS`, `LATEST_TERMS_VERSION`, `termsVersionOf`), in the page language unless a portal link names one (`?lang=en|ar`, read by `legalLanguageOf`). That language applies to the text only (LegalPage `textLanguage`) and is never stored. An unknown version says so and links `/terms`, keeping `?lang`.
+
+### legalLanguageOf — `src/content/legal/language.ts` (MUT-356)
+`legalLanguageOf(search)`: the `?lang=en|ar` a link to `/terms` or `/privacy` names, or null (absent or unknown). Shared by `TermsPage` and `PrivacyPolicyPage` (lifted from MUT-324's `termsLanguageOf`). Tests: `src/content/legal/__tests__/language.test.ts`.
+
+### useTIn — `src/lib/i18n/context.tsx` (MUT-356)
+`useTIn(language | null)`: `t` over the app dictionaries for a text that names its own language, else the page's `t`. Reads dictionaries only, so the page language and the stored choice stay as they are. App and landing only (the portal has its own dictionaries). Used by `PrivacyPolicyPage` for `/privacy?lang`. Tests: `PrivacyPolicyPage.test.tsx` (`?lang`).
 
 ### termsManifest — `src/content/legal/termsManifest.ts` (Node only)
 Builds `/legal/terms-versions.json` (version + sha256 per language) for the web build's `legalTermsManifest()` Vite plugin and the pin test. Never import it from page code.
