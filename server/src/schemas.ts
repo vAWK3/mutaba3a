@@ -342,6 +342,41 @@ export const LinkBillingAccountResponseSchema = z
   .openapi('LinkBillingAccountResponse');
 export const BillingAccountListSchema = z.object({ accounts: z.array(BillingAccountSchema) }).openapi('BillingAccountList');
 
+/** MUT-358's per-profile entitlement, as GET /v1/me reports it (the same fields as HostedProfile.billing). */
+const BillingEntitlementSchema = z
+  .object({
+    state: z.enum(['ACTIVE', 'GRACE', 'READ_ONLY', 'LOCKED']),
+    source: z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'NONE']),
+    tier: z.enum(['FREELANCER', 'FIRM']).nullable(),
+    until: z.string().datetime().nullable(),
+  })
+  .openapi('BillingEntitlement');
+
+/** MUT-360 review: GET /admin/v1/billing/status, the operator's check before revoking a pilot grant. */
+export const BillingStatusSchema = z
+  .object({
+    user: z.object({ id: z.string().uuid(), email: z.string() }),
+    /** The Stripe customer linked to this person (at most one). */
+    accounts: z.array(BillingAccountSchema),
+    /** Mirrored subscriptions paid by this person or tied to one of their profiles. */
+    subscriptions: z.array(
+      z.object({
+        stripeSubscriptionId: z.string(),
+        tier: z.enum(['FREELANCER', 'FIRM']),
+        status: z.string(),
+        currentPeriodEnd: z.string().datetime(),
+        cancelAtPeriodEnd: z.boolean(),
+        organizationId: z.string().uuid().nullable(),
+        priceLookupKey: z.string().nullable(),
+        /** Null while the paying customer is unlinked. */
+        payerUserId: z.string().uuid().nullable(),
+      }),
+    ),
+    /** Each profile the person owns: `billing` as /v1/me reports it, `billingWithoutGrants` with operator grants left out. */
+    profiles: z.array(z.object({ id: z.string().uuid(), name: z.string(), billing: BillingEntitlementSchema, billingWithoutGrants: BillingEntitlementSchema })),
+  })
+  .openapi('BillingStatus');
+
 /** MUT-360: what the webhook answers Stripe; `result` shows in Stripe's delivery log. */
 export const StripeWebhookResponseSchema = z
   .object({ received: z.literal(true), result: z.enum(['ignored', 'duplicate', 'noop', 'processed', 'error']) })

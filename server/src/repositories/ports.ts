@@ -1694,6 +1694,8 @@ export interface BillingRepository {
    * StateConflict('billing_account', 'CUSTOMER_LINKED_ELSEWHERE' | 'USER_HAS_ANOTHER_ACCOUNT'); ForeignKeyViolation on an unknown user.
    */
   linkAccount(input: LinkBillingAccountInput): Promise<{ account: BillingAccountRecord; linked: boolean }>;
+  /** MUT-360: the mirrored subscription, if the sync ever stored it. */
+  getSubscription(stripeSubscriptionId: string): Promise<BillingSubscriptionRecord | null>;
   /** MUT-360: the account a Stripe customer has, if the sync ever stored one. */
   getAccount(stripeCustomerId: string): Promise<BillingAccountRecord | null>;
   /** Oldest first; `linked: false` lists the unlinked customers the operator still has to match. */

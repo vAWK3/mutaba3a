@@ -74,6 +74,11 @@ function tierOf(product: string | Stripe.Product | Stripe.DeletedProduct, produc
   return TIERS[(resolved.metadata?.['tier'] ?? '').trim().toLowerCase()] ?? null;
 }
 
+/** What Stripe says about a subscription's state, readable even when its tier isn't (MUT-360 review: never freeze it). */
+export function stateOf(sub: Stripe.Subscription): { status: string; cancelAtPeriodEnd: boolean; currentPeriodEnd: Date | null } {
+  return { status: sub.status, cancelAtPeriodEnd: sub.cancel_at_period_end, currentPeriodEnd: periodEndOf(sub) };
+}
+
 /** Since 2025-03-31.basil the period lives on each item; the latest end is when the subscription runs out. */
 function periodEndOf(sub: Stripe.Subscription): Date | null {
   const ends = sub.items.data.map((item) => item.current_period_end).filter((end): end is number => typeof end === 'number');

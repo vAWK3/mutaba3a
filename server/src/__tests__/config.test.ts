@@ -279,6 +279,13 @@ describe('loadConfig — Stripe and the job token (MUT-360)', () => {
     expect(loadConfig({ ...base, API_KEY_ENVIRONMENT: 'live', ...stripe, STRIPE_SECRET_KEY: 'rk_live_x' }).STRIPE_SECRET_KEY).toBe('rk_live_x');
   });
 
+  it('a live server takes only a restricted live key: no full-access key, no test key (MUT-360 review)', () => {
+    const live = { ...base, API_KEY_ENVIRONMENT: 'live', ...stripe };
+    expect(() => loadConfig({ ...live, STRIPE_SECRET_KEY: 'sk_live_full_access' })).toThrow(/restricted live key/);
+    expect(() => loadConfig({ ...live, STRIPE_SECRET_KEY: 'rk_test_x' })).toThrow(/restricted live key/);
+    expect(loadConfig({ ...base, ...stripe, STRIPE_SECRET_KEY: 'sk_test_local' }).STRIPE_SECRET_KEY).toBe('sk_test_local');
+  });
+
   it('wants a job token of at least 32 characters', () => {
     expect(loadConfig({ ...base, MUTABA3A_JOB_TOKEN: 'j'.repeat(32) }).MUTABA3A_JOB_TOKEN).toBe('j'.repeat(32));
     expect(() => loadConfig({ ...base, MUTABA3A_JOB_TOKEN: 'short' })).toThrow(/MUTABA3A_JOB_TOKEN/);

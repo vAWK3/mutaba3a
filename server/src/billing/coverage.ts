@@ -1,5 +1,5 @@
 import { profileOwnerOf } from '../personal-profile.js';
-import type { LedgerStore, Organization } from '../repositories/ports.js';
+import type { BillingFactsRecord, LedgerStore, Organization } from '../repositories/ports.js';
 import { resolveEntitlement, type Entitlement } from './entitlement.js';
 
 export interface ProfileForBilling {
@@ -13,18 +13,34 @@ export interface ProfileForBilling {
  * The facts are the owners' subscriptions, grants and trial starts, plus anything tied to the profiles themselves.
  */
 export async function entitlementsFor(store: Pick<LedgerStore, 'billing'>, profiles: readonly ProfileForBilling[], now: Date): Promise<Map<string, Entitlement>> {
+  const facts = await factsOf(store, profiles);
+  return new Map(profiles.map((profile) => [profile.organization.id, resolve(profile, facts, now)]));
+}
+
+/**
+ * MUT-360 review (`billing:status`): the same single read, resolved twice per profile: as /v1/me reports it, and with
+ * operator grants left out, so the operator can see Stripe covering before revoking a pilot grant.
+ */
+export async function billingStatusOf(store: Pick<LedgerStore, 'billing'>, profiles: readonly ProfileForBilling[], now: Date) {
+  const facts = await factsOf(store, profiles);
+  const withoutGrants = { ...facts, grants: [] };
+  return {
+    subscriptions: facts.subscriptions,
+    entitlements: new Map(profiles.map((profile) => [profile.organization.id, { current: resolve(profile, facts, now), withoutGrants: resolve(profile, withoutGrants, now) }])),
+  };
+}
+
+async function factsOf(store: Pick<LedgerStore, 'billing'>, profiles: readonly ProfileForBilling[]) {
   const owners = new Set<string>();
   for (const { organization } of profiles) {
     const owner = profileOwnerOf(organization);
     if (owner) owners.add(owner);
   }
-  const facts = await store.billing.factsFor({ ownerUserIds: [...owners], organizationIds: profiles.map((p) => p.organization.id) });
-  return new Map(
-    profiles.map(({ organization, malafatConnected }) => [
-      organization.id,
-      resolveEntitlement({ organizationId: organization.id, ownerUserId: profileOwnerOf(organization), malafatConnected }, facts, now),
-    ]),
-  );
+  return store.billing.factsFor({ ownerUserIds: [...owners], organizationIds: profiles.map((p) => p.organization.id) });
+}
+
+function resolve({ organization, malafatConnected }: ProfileForBilling, facts: BillingFactsRecord, now: Date): Entitlement {
+  return resolveEntitlement({ organizationId: organization.id, ownerUserId: profileOwnerOf(organization), malafatConnected }, facts, now);
 }
 
 /** The wire shape on `/v1/me` (BillingEntitlementSchema): ISO timestamps. */

@@ -141,6 +141,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (config.STRIPE_SECRET_KEY && /^(rk|sk)_live_/.test(config.STRIPE_SECRET_KEY) && config.API_KEY_ENVIRONMENT !== 'live') {
     throw new ConfigError('Invalid configuration:\n  STRIPE_SECRET_KEY: a live Stripe key needs API_KEY_ENVIRONMENT=live');
   }
+  // MUT-360 review: the live server reads billing objects only, so a full-access key (or a test key, whose test-mode
+  // subscriptions would then cover real people) is refused there.
+  if (config.STRIPE_SECRET_KEY && config.API_KEY_ENVIRONMENT === 'live' && !/^rk_live_/.test(config.STRIPE_SECRET_KEY)) {
+    throw new ConfigError('Invalid configuration:\n  STRIPE_SECRET_KEY: a live server needs a restricted live key (rk_live_…), never sk_ or a test key');
+  }
   for (const { min, recommended } of MIN_BUILD_PLATFORMS) {
     const floor = config[min];
     const target = config[recommended];

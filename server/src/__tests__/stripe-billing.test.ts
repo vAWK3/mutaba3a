@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import pino from 'pino';
 import Stripe from 'stripe';
 import { createApp, type AppDependencies } from '../app.js';
-import { createStripeGateway, WEBHOOK_BUDGET, type StripeGateway } from '../billing/stripe/gateway.js';
+import { createStripeGateway, StripeGatewayError, WEBHOOK_BUDGET, type StripeGateway } from '../billing/stripe/gateway.js';
 import { FAKE_WEBHOOK_SECRET, FakeStripeGateway, stripeObjects } from '../billing/stripe/__tests__/fake.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
@@ -141,11 +141,13 @@ describe('POST /v1/billing/stripe/webhook (MUT-360)', () => {
     expect(big.status).toBe(413);
     expect((await read(big)).error.code).toBe('PAYLOAD_TOO_LARGE');
 
+    // MUT-360 review: only failed signatures count (Stripe's IPs are shared), so junk can't 429 real events.
     const limited = harness({ stripeWebhookIpLimiter: new SlidingWindowRateLimiter(1) });
-    expect((await limited.deliver({ id: 'evt_a', type: 'charge.refunded', data: { object: {} } })).status).toBe(200);
-    const second = await limited.deliver({ id: 'evt_b', type: 'charge.refunded', data: { object: {} } });
+    expect((await limited.deliver({ id: 'evt_bad1', type: 'charge.refunded', data: { object: {} } }, { secret: 'whsec_someone_else' })).status).toBe(400);
+    const second = await limited.deliver({ id: 'evt_bad2', type: 'charge.refunded', data: { object: {} } }, { secret: 'whsec_someone_else' });
     expect(second.status).toBe(429);
     expect(second.headers.get('retry-after')).not.toBeNull();
+    for (const id of ['evt_a', 'evt_b', 'evt_c']) expect((await limited.deliver({ id, type: 'charge.refunded', data: { object: {} } })).status).toBe(200);
   });
 
   it('never logs the Stripe key or what Stripe answered, even when the real gateway fails (AC5)', async () => {
@@ -164,6 +166,34 @@ describe('POST /v1/billing/stripe/webhook (MUT-360)', () => {
   });
 });
 
+describe('GET /admin/v1/billing/status (MUT-360 review: the cutover check)', () => {
+  it('shows the mirror and the entitlement with grants left out, so a grant is revoked only once Stripe covers', async () => {
+    const h = harness();
+    const u = await person(h);
+    const email = (await u.me()).user.email as string;
+    const admin = { 'x-admin-token': ADMIN_TOKEN };
+    const status = async () => read(await h.app.request(`/admin/v1/billing/status?email=${encodeURIComponent(email)}`, { headers: admin }));
+    await h.app.request('/admin/v1/billing/grants', { method: 'POST', headers: { ...admin, 'content-type': 'application/json' }, body: JSON.stringify({ userId: u.userId, tier: 'FREELANCER', reason: 'pilot' }) });
+
+    const before = await status();
+    expect(before.user).toMatchObject({ id: u.userId, email });
+    expect(before.accounts).toEqual([]);
+    expect(before.subscriptions).toEqual([]);
+    expect(before.profiles.find((p: { id: string }) => p.id === u.personalId)).toMatchObject({ billing: { state: 'ACTIVE', source: 'OPERATOR' }, billingWithoutGrants: { source: 'NONE' } });
+
+    h.stripe.customers.set('cus_1', stripeObjects.customer('cus_1', { mutaba3a_user_id: u.userId }));
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_F' }));
+    await h.deliver(subscriptionEvent());
+    const after = await status();
+    expect(after.accounts).toMatchObject([{ stripeCustomerId: 'cus_1', userId: u.userId }]);
+    expect(after.subscriptions).toMatchObject([{ stripeSubscriptionId: 'sub_1', tier: 'FREELANCER', status: 'active', payerUserId: u.userId }]);
+    expect(after.profiles.find((p: { id: string }) => p.id === u.personalId)).toMatchObject({ billing: { source: 'OPERATOR' }, billingWithoutGrants: { state: 'ACTIVE', source: 'STRIPE' } });
+
+    expect((await h.app.request(`/admin/v1/billing/status?email=nobody%40example.test`, { headers: admin })).status).toBe(404);
+    expect((await h.app.request(`/admin/v1/billing/status?email=${encodeURIComponent(email)}`)).status).toBe(401);
+  });
+});
+
 describe('Stripe reconcile doors (MUT-360 D2)', () => {
   const run = (h: Harness, path: string, headers: Record<string, string>) => h.app.request(path, { method: 'POST', headers });
 
@@ -177,6 +207,29 @@ describe('Stripe reconcile doors (MUT-360 D2)', () => {
     expect((await read(await run(h, '/jobs/v1/billing/stripe-reconcile', { 'x-admin-token': ADMIN_TOKEN }))).error.code).toBe('JOB_UNAUTHORIZED');
     expect((await read(await run(h, '/admin/v1/billing/stripe/reconcile', { 'x-job-token': JOB_TOKEN }))).error.code).toBe('ADMIN_UNAUTHORIZED');
     expect((await run(h, '/admin/v1/billing/stripe/reconcile', { 'x-admin-token': ADMIN_TOKEN })).status).toBe(200);
+  });
+
+  it('a reconcile that could not list Stripe answers 502 RECONCILE_FAILED, so the Scheduler records a failure', async () => {
+    const broken: StripeGateway = {
+      livemode: false,
+      verifyEvent: () => {
+        throw new Error('unused');
+      },
+      subscription: () => Promise.reject(new Error('unused')),
+      customer: () => Promise.reject(new Error('unused')),
+      listSubscriptions: () => ({
+        [Symbol.asyncIterator]: () => ({
+          next: () => Promise.reject(new StripeGatewayError({ code: null, type: 'StripeAuthenticationError', requestId: null, transient: true })),
+        }),
+      }),
+      listProducts: async () => new Map(),
+    };
+    const h = harness({ gateway: broken });
+    const res = await run(h, '/jobs/v1/billing/stripe-reconcile', { 'x-job-token': JOB_TOKEN });
+    expect(res.status).toBe(502);
+    const body = await read(res);
+    expect(body.error.code).toBe('RECONCILE_FAILED');
+    expect(body.error.details).toMatchObject({ checked: 0, errors: [{ subscriptionId: null, code: 'LIST_FAILED' }] });
   });
 
   it('with no job token configured, /jobs answers 503 and never compares an empty header', async () => {

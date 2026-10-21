@@ -11,7 +11,7 @@ import { ErrorEnvelopeSchema, StripeReconcileSummarySchema, StripeWebhookRespons
 /**
  * MUT-360 (§2.5, ADR-165, D1): every HTTP door to the Stripe sync in one place.
  *
- *   POST /v1/billing/stripe/webhook          public; Stripe-Signature is the credential; own per-address budget
+ *   POST /v1/billing/stripe/webhook          public; Stripe-Signature is the credential; failed signatures rate-limited
  *   POST /jobs/v1/billing/stripe-reconcile   the nightly Cloud Scheduler job, X-Job-Token (jobAuth on /jobs/*)
  *   POST /admin/v1/billing/stripe/reconcile  the operator (`npm run billing:reconcile`), X-Admin-Token
  *
@@ -57,31 +57,33 @@ export function stripeBillingRoutes(options: StripeBillingRouteOptions): OpenAPI
         'Called by Stripe only. The raw body is verified against `Stripe-Signature` (the endpoint secret, 300 s tolerance); a bad, missing ' +
         'or old signature is 400 and nothing is stored. An event already handled answers 200 `duplicate`. The subscription is re-fetched ' +
         'from Stripe rather than trusted from the payload, so events arriving out of order end in Stripe’s current state. A Stripe or ' +
-        `database failure is 500 so Stripe redelivers. Rate-limited to ${STRIPE_WEBHOOK_POLICY.ipPerMinute} requests per minute per address.`,
+        `database failure is 500 so Stripe redelivers. Failed signatures are rate-limited to ${STRIPE_WEBHOOK_POLICY.ipPerMinute} per minute per address; verified events never are.`,
       security: [],
       responses: {
         200: { description: 'Handled, ignored, a duplicate, or recorded for the operator', content: { 'application/json': { schema: StripeWebhookResponseSchema } } },
         400: errorResponse('INVALID_SIGNATURE'),
         413: errorResponse('PAYLOAD_TOO_LARGE'),
-        429: errorResponse('Too many requests from this address; `Retry-After` says when to try again'),
+        429: errorResponse('Too many failed signatures from this address; `Retry-After` says when to try again'),
         500: errorResponse('The event could not be handled now; Stripe redelivers it'),
         503: errorResponse('BILLING_NOT_CONFIGURED'),
       },
     }),
     async (c) => {
-      const ip = await ipLimiter.check(`stripe-webhook:${requestClientIp((name) => c.req.header(name), options)}`, c.get('now')());
-      if (!ip.allowed) {
-        c.header('Retry-After', String(ip.retryAfterSeconds));
-        throw new ApiError('RATE_LIMITED', 'Too many requests; try again in a minute', { retryAfterSeconds: ip.retryAfterSeconds });
-      }
       if (!stripe) throw new ApiError('BILLING_NOT_CONFIGURED', 'Stripe is not configured on this server');
       const raw = await c.req.text();
       let event;
       try {
         event = stripe.webhookGateway.verifyEvent(raw, c.req.header('stripe-signature') ?? '');
       } catch (err) {
-        if (err instanceof InvalidStripeSignature) throw new ApiError('INVALID_SIGNATURE', 'Stripe-Signature does not verify for this endpoint');
-        throw err;
+        if (!(err instanceof InvalidStripeSignature)) throw err;
+        // Only failed signatures spend the address's budget: Stripe sends every account's webhooks from a few shared
+        // IPs, so counting verified events would let anyone's junk deliveries 429 ours (MUT-360 review).
+        const ip = await ipLimiter.check(`stripe-webhook:${requestClientIp((name) => c.req.header(name), options)}`, c.get('now')());
+        if (!ip.allowed) {
+          c.header('Retry-After', String(ip.retryAfterSeconds));
+          throw new ApiError('RATE_LIMITED', 'Too many requests; try again in a minute', { retryAfterSeconds: ip.retryAfterSeconds });
+        }
+        throw new ApiError('INVALID_SIGNATURE', 'Stripe-Signature does not verify for this endpoint');
       }
       const handled = await stripe.sync.handleEvent(event, c.get('requestId'));
       if (handled.status === 500) throw new ApiError('INTERNAL', 'The event could not be handled now; Stripe will redeliver it');
@@ -93,16 +95,21 @@ export function stripeBillingRoutes(options: StripeBillingRouteOptions): OpenAPI
     200: { description: 'The run’s summary; `errors` lists what needs the operator', content: { 'application/json': { schema: StripeReconcileSummarySchema } } },
     401: errorResponse(unauthorized),
     409: errorResponse('RECONCILE_RUNNING'),
+    502: errorResponse('RECONCILE_FAILED: Stripe could not be listed; `details` is the run summary'),
     503: errorResponse(unavailable),
   });
   const reconcile = async (requestId: string) => {
     if (!stripe) throw new ApiError('BILLING_NOT_CONFIGURED', 'Stripe is not configured on this server');
+    let summary;
     try {
-      return await stripe.sync.reconcile(requestId);
+      summary = await stripe.sync.reconcile(requestId);
     } catch (err) {
       if (err instanceof ReconcileRunning) throw new ApiError('RECONCILE_RUNNING', 'A Stripe reconcile is already running');
       throw err;
     }
+    // Nothing was reconciled: answer non-2xx so the Scheduler retries and logs a failure (an alert watches it).
+    if (summary.errors.some((e) => e.code === 'LIST_FAILED')) throw new ApiError('RECONCILE_FAILED', 'Stripe could not be listed; nothing was reconciled', summary);
+    return summary;
   };
 
   app.openapi(

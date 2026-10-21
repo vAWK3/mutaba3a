@@ -197,7 +197,9 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       await expect(store.billing.saveSubscription(base)).rejects.toThrow(/billingAccountId/);
       await store.billing.saveAccount(account(customer, null));
 
+      expect(await store.billing.getSubscription(base.stripeSubscriptionId)).toBeNull();
       const created = await store.billing.saveSubscription(base);
+      expect(await store.billing.getSubscription(base.stripeSubscriptionId)).toMatchObject({ id: created.subscription.id, status: 'active' });
       expect(created).toMatchObject({ outcome: 'created', subscription: { stripeSubscriptionId: base.stripeSubscriptionId, status: 'active' } });
       expect(await store.billing.saveSubscription({ ...base, stripeUpdatedAt: at(2), at: at(2) })).toMatchObject({ outcome: 'unchanged' });
       const canceled = await store.billing.saveSubscription({ ...base, status: 'canceled', stripeUpdatedAt: at(4), at: at(4) });

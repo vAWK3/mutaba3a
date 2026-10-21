@@ -1897,6 +1897,7 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       return { account: { ...account }, linked: true };
     },
+    getSubscription: async (stripeSubscriptionId) => clone([...this.billingSubs.values()].find((s) => s.stripeSubscriptionId === stripeSubscriptionId)),
     getAccount: async (stripeCustomerId) => clone([...this.billingAccounts.values()].find((a) => a.stripeCustomerId === stripeCustomerId)),
     listAccounts: async ({ linked }) =>
       [...this.billingAccounts.values()]

@@ -108,6 +108,12 @@ describe('Stripe gateway (MUT-360)', () => {
     expect(JSON.stringify(err)).not.toContain(KEY);
     expect((err as Error).message).not.toContain(KEY);
 
+    // MUT-360 review: a revoked or under-scoped key is fixable and must not be acknowledged: Stripe has to redeliver.
+    const revoked = fakeStripe(() => ({ status: 401, body: { error: { type: 'invalid_request_error', message: 'Invalid API Key provided' } } }));
+    expect(await gateway(revoked.httpClient).customer('cus_P01').catch((e: unknown) => e)).toMatchObject({ transient: true });
+    const scoped = fakeStripe(() => ({ status: 403, body: { error: { type: 'invalid_request_error', message: 'The provided key does not have the required permissions' } } }));
+    expect(await gateway(scoped.httpClient).customer('cus_P01').catch((e: unknown) => e)).toMatchObject({ transient: true });
+
     const missing = fakeStripe(() => ({ status: 404, body: { error: { type: 'invalid_request_error', code: 'resource_missing', message: 'No such customer' } } }));
     expect(await gateway(missing.httpClient).customer('cus_GONE').catch((e: unknown) => e)).toMatchObject({ code: 'resource_missing', transient: false });
   });

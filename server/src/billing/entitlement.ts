@@ -6,9 +6,10 @@
  *
  *   1 MALAFAT   CONNECTED Malafat integration          → ACTIVE (Malafat's add-on pays, MAL-870)
  *   2 OPERATOR  an unrevoked, unexpired grant           → ACTIVE
- *   3 STRIPE    a covering subscription, active/past_due → ACTIVE / GRACE
+ *   3 STRIPE    a covering subscription, active/past_due → ACTIVE / GRACE (until its period end + 7 days, MUT-360)
  *   4 TRIAL     trialStartedAt + 14 days > now          → ACTIVE
- *   5 STRIPE    a covering subscription that lapsed     → READ_ONLY, for good (a payer is never LOCKED)
+ *   5 STRIPE    a covering subscription that lapsed, or  → READ_ONLY, for good (a payer is never LOCKED)
+ *               one whose period + 7 days has passed
  *   6 TRIAL     ended, nobody ever paid                 → READ_ONLY until day 30, then LOCKED
  *   7 NONE      anything else (operator-issued, no trial) → READ_ONLY
  *
@@ -30,6 +31,11 @@ export interface Entitlement {
 /** D3: the trial runs 14 days from `trialStartedAt`; the account is read-only after that and locked from day 30. */
 export const TRIAL_DAYS = 14;
 export const TRIAL_LOCK_DAYS = 30;
+/**
+ * MUT-360 review: a covering status counts only until its period ends plus this many days. A mirror that stopped
+ * syncing (deleted customer, untagged product, revoked key) then ends in read-only, never in "paid for ever".
+ */
+export const PERIOD_GRACE_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface ProfileFacts {
@@ -83,14 +89,14 @@ export function resolveEntitlement(profile: ProfileFacts, facts: BillingFacts, n
   if (grant) return { state: 'ACTIVE', source: 'OPERATOR', tier: grant.tier, until: grant.expiresAt };
 
   const subscriptions = facts.subscriptions.filter((s) => subscriptionCovers(s, profile));
-  const covering = bestSubscription(subscriptions.filter((s) => coveringState(s) !== undefined));
+  const covering = bestSubscription(subscriptions.filter((s) => coveringState(s) !== undefined && !periodOver(s, now)));
   if (covering) return { state: coveringState(covering)!, source: 'STRIPE', tier: covering.tier, until: covering.currentPeriodEnd };
 
   const trialStartedAt = profile.ownerUserId ? (facts.trialStarts.get(profile.ownerUserId) ?? null) : null;
   const trialEnd = trialStartedAt && addDays(trialStartedAt, TRIAL_DAYS);
   if (trialEnd && now < trialEnd) return { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: trialEnd };
 
-  const lapsed = bestSubscription(subscriptions.filter((s) => LAPSED_STATUSES.has(s.status)));
+  const lapsed = bestSubscription(subscriptions.filter((s) => LAPSED_STATUSES.has(s.status) || (coveringState(s) !== undefined && periodOver(s, now))));
   if (lapsed) return { state: 'READ_ONLY', source: 'STRIPE', tier: lapsed.tier, until: null };
 
   const everPaid = subscriptions.some((s) => !NEVER_PAID_STATUSES.has(s.status));
@@ -135,6 +141,11 @@ function bestSubscription(subscriptions: readonly SubscriptionFact[]): Subscript
   return [...subscriptions].sort(
     (a, b) => stateRank(b) - stateRank(a) || tierRank(b.tier) - tierRank(a.tier) || b.currentPeriodEnd.getTime() - a.currentPeriodEnd.getTime(),
   )[0];
+}
+
+/** Past the period end plus PERIOD_GRACE_DAYS: Stripe would have renewed or ended it by now, so the row is stale. */
+function periodOver(subscription: SubscriptionFact, now: Date): boolean {
+  return addDays(subscription.currentPeriodEnd, PERIOD_GRACE_DAYS) <= now;
 }
 
 function coveringState(subscription: SubscriptionFact): 'ACTIVE' | 'GRACE' | undefined {

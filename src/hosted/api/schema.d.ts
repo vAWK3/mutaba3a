@@ -11657,6 +11657,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/billing/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One person’s Stripe mirror and entitlement, with and without operator grants (MUT-360)
+         * @description The pilot cutover check: revoke a person’s grant only once `billingWithoutGrants` shows ACTIVE / STRIPE. Exactly one of userId and email.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    userId?: string;
+                    email?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Billing status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BillingStatus"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such person */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/stripe/webhook": {
         parameters: {
             query?: never;
@@ -11668,7 +11737,7 @@ export interface paths {
         put?: never;
         /**
          * Stripe webhook: mirrors subscriptions after re-reading them from Stripe
-         * @description Called by Stripe only. The raw body is verified against `Stripe-Signature` (the endpoint secret, 300 s tolerance); a bad, missing or old signature is 400 and nothing is stored. An event already handled answers 200 `duplicate`. The subscription is re-fetched from Stripe rather than trusted from the payload, so events arriving out of order end in Stripe’s current state. A Stripe or database failure is 500 so Stripe redelivers. Rate-limited to 300 requests per minute per address.
+         * @description Called by Stripe only. The raw body is verified against `Stripe-Signature` (the endpoint secret, 300 s tolerance); a bad, missing or old signature is 400 and nothing is stored. An event already handled answers 200 `duplicate`. The subscription is re-fetched from Stripe rather than trusted from the payload, so events arriving out of order end in Stripe’s current state. A Stripe or database failure is 500 so Stripe redelivers. Failed signatures are rate-limited to 300 per minute per address; verified events never are.
          */
         post: {
             parameters: {
@@ -11706,7 +11775,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Too many requests from this address; `Retry-After` says when to try again */
+                /** @description Too many failed signatures from this address; `Retry-After` says when to try again */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -11790,6 +11859,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description RECONCILE_FAILED: Stripe could not be listed; `details` is the run summary */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
                 /** @description BILLING_NOT_CONFIGURED or JOBS_NOT_CONFIGURED */
                 503: {
                     headers: {
@@ -11849,6 +11927,15 @@ export interface paths {
                 };
                 /** @description RECONCILE_RUNNING */
                 409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RECONCILE_FAILED: Stripe could not be listed; `details` is the run summary */
+                502: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -12003,7 +12090,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
+                code: "INVALID_SIGNATURE" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -14239,6 +14326,45 @@ export interface components {
         };
         BillingAccountList: {
             accounts: components["schemas"]["BillingAccount"][];
+        };
+        BillingStatus: {
+            user: {
+                /** Format: uuid */
+                id: string;
+                email: string;
+            };
+            accounts: components["schemas"]["BillingAccount"][];
+            subscriptions: {
+                stripeSubscriptionId: string;
+                /** @enum {string} */
+                tier: "FREELANCER" | "FIRM";
+                status: string;
+                /** Format: date-time */
+                currentPeriodEnd: string;
+                cancelAtPeriodEnd: boolean;
+                /** Format: uuid */
+                organizationId: string | null;
+                priceLookupKey: string | null;
+                /** Format: uuid */
+                payerUserId: string | null;
+            }[];
+            profiles: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                billing: components["schemas"]["BillingEntitlement"];
+                billingWithoutGrants: components["schemas"]["BillingEntitlement"];
+            }[];
+        };
+        BillingEntitlement: {
+            /** @enum {string} */
+            state: "ACTIVE" | "GRACE" | "READ_ONLY" | "LOCKED";
+            /** @enum {string} */
+            source: "MALAFAT" | "OPERATOR" | "STRIPE" | "TRIAL" | "NONE";
+            /** @enum {string|null} */
+            tier: "FREELANCER" | "FIRM" | null;
+            /** Format: date-time */
+            until: string | null;
         };
         StripeWebhookResponse: {
             /** @enum {boolean} */

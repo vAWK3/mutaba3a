@@ -45,7 +45,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -75,6 +75,7 @@ const USAGE = [
   '  billing-link   --customer cus_… --email <email> [--currency ILS|USD]   (currency only for a customer the server has not seen yet)',
   '  billing-unlinked   (Stripe customers not yet matched to a person)',
   '  billing-reconcile  (MUT-360: re-read every Stripe subscription now, as the nightly job does)',
+  '  billing-status   --email <email> | --user-id <uuid>   (their Stripe mirror, and each profile with and without grants)',
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
 ].join('\n');
 
@@ -332,6 +333,26 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
     );
     out(`checked ${s.checked}, changed ${s.changed}, unlinked ${s.unlinked}, pruned ${s.pruned}`);
     for (const e of s.errors) out(`  ${e.subscriptionId ?? '(listing)'}: ${e.code}`);
+  },
+  'billing-status': async ({ client, need, optional, out }) => {
+    const email = optional('email');
+    const query = email ? `email=${encodeURIComponent(email)}` : `userId=${encodeURIComponent(need('user-id'))}`;
+    type Entitlement = { state: string; source: string };
+    const s = await client.call<{
+      user: { id: string; email: string };
+      accounts: { stripeCustomerId: string; currency: string; country: string | null }[];
+      subscriptions: { stripeSubscriptionId: string; tier: string; status: string; currentPeriodEnd: string; cancelAtPeriodEnd: boolean; priceLookupKey: string | null; payerUserId: string | null }[];
+      profiles: { name: string; billing: Entitlement; billingWithoutGrants: Entitlement }[];
+    }>('GET', `/admin/v1/billing/status?${query}`);
+    out(`${s.user.email} (${s.user.id})`);
+    if (s.accounts.length === 0) out('  no Stripe customer linked');
+    for (const a of s.accounts) out(`  customer ${a.stripeCustomerId} ${a.currency}${a.country ? ` ${a.country}` : ''}`);
+    if (s.subscriptions.length === 0) out('  no subscription');
+    for (const sub of s.subscriptions) {
+      const extras = [sub.cancelAtPeriodEnd ? 'cancels at period end' : null, sub.priceLookupKey, sub.payerUserId !== s.user.id ? 'paid by someone else' : null].filter(Boolean);
+      out(`  subscription ${sub.stripeSubscriptionId} ${sub.tier} ${sub.status} until ${sub.currentPeriodEnd.slice(0, 10)}${extras.length > 0 ? ` (${extras.join(', ')})` : ''}`);
+    }
+    for (const p of s.profiles) out(`  profile ${p.name}: now ${p.billing.state} ${p.billing.source} · without grants ${p.billingWithoutGrants.state} ${p.billingWithoutGrants.source}`);
   },
 };
 

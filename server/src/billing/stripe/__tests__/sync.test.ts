@@ -14,7 +14,7 @@ const NOW = new Date('2026-11-01T09:00:00.000Z');
 let n = 0;
 const unique = () => `${Date.now().toString(36)}${(n++).toString(36)}`;
 
-function harness(options: { reconcileGateway?: StripeGateway } = {}) {
+function harness(options: { reconcileGateway?: StripeGateway; reconcileTimeBudgetMs?: number } = {}) {
   const store = new MemoryLedgerStore();
   const clock = { now: NOW };
   const stripe = new FakeStripeGateway(() => clock.now);
@@ -25,6 +25,7 @@ function harness(options: { reconcileGateway?: StripeGateway } = {}) {
     store,
     webhookGateway: stripe,
     reconcileGateway: options.reconcileGateway ?? stripe,
+    ...(options.reconcileTimeBudgetMs !== undefined ? { reconcileTimeBudgetMs: options.reconcileTimeBudgetMs } : {}),
     logger: pino({ level: 'silent' }),
     now: () => clock.now,
   });
@@ -162,11 +163,8 @@ describe('Stripe sync (MUT-360)', () => {
     expect(await h.sync.handleEvent(h.event('customer.subscription.updated', { id: 'sub_1' }, 'evt_live', true), null)).toMatchObject({ status: 200, result: 'ignored' });
     expect(await h.sync.handleEvent(h.event('invoice.paid', { id: 'in_1', parent: null }), null)).toMatchObject({ status: 200, result: 'noop' });
     expect(await h.sync.handleEvent(h.event('checkout.session.completed', { id: 'cs_1', mode: 'payment', subscription: null, customer: 'cus_1' }), null)).toMatchObject({ status: 200, result: 'noop' });
-    h.stripe.customers.set('cus_gone', { id: 'cus_gone', object: 'customer', deleted: true } as Stripe.DeletedCustomer);
-    h.stripe.subscriptions.set('sub_gone', stripeObjects.subscription({ id: 'sub_gone', customer: 'cus_gone', product: 'prod_F' }));
-    expect(await h.sync.handleEvent(h.event('customer.subscription.deleted', { id: 'sub_gone' }), null)).toMatchObject({ status: 200, result: 'noop', codes: ['CUSTOMER_DELETED'] });
     expect(await h.store.billing.listAccounts({})).toEqual([]);
-    expect(h.stripe.calls).toEqual(['subscription:sub_gone']);
+    expect(h.stripe.calls).toEqual([]);
   });
 
   it('a slow or failing Stripe call answers 500 and the redelivery is handled once (D7)', async () => {
@@ -264,4 +262,137 @@ describe('Stripe sync (MUT-360)', () => {
     const listed = [...step.matchAll(/`((?:checkout|customer|invoice)\.[a-z_.]+)`/g)].map((m) => m[1]);
     expect(listed.sort()).toEqual([...HANDLED_EVENT_TYPES].sort());
   });
+
+  // ---- MUT-360 review ----------------------------------------------------------------------------------------
+
+  it('a deleted customer still mirrors its cancelled subscription, so the payer stops being covered', async () => {
+    const h = harness();
+    const u = await h.person();
+    h.stripe.customers.set('cus_1', stripeObjects.customer('cus_1', { mutaba3a_user_id: u.userId }));
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_F' }));
+    await h.sync.handleEvent(h.event('customer.subscription.created', { id: 'sub_1' }), null);
+    expect(await h.billingOf(u.personalId)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE' });
+    h.stripe.customers.set('cus_1', { id: 'cus_1', object: 'customer', deleted: true } as Stripe.DeletedCustomer);
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_F', status: 'canceled' }));
+    h.tick();
+    expect(await h.sync.handleEvent(h.event('customer.subscription.deleted', { id: 'sub_1' }), null)).toMatchObject({ status: 200, result: 'processed', codes: ['CUSTOMER_DELETED'] });
+    expect(await h.store.billing.getSubscription('sub_1')).toMatchObject({ status: 'canceled' });
+    expect(await h.store.billing.getAccount('cus_1')).toMatchObject({ userId: u.userId });
+    expect(await h.billingOf(u.personalId)).toMatchObject({ state: 'READ_ONLY', source: 'STRIPE' });
+  });
+
+  it('a mirror error on a subscription already mirrored still records its status, keeps the stored tier, and stays replayable', async () => {
+    const h = harness();
+    const u = await h.person();
+    h.stripe.customers.set('cus_1', stripeObjects.customer('cus_1', { mutaba3a_user_id: u.userId }));
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_F' }));
+    await h.sync.handleEvent(h.event('customer.subscription.created', { id: 'sub_1' }), null);
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_NOTIER', status: 'canceled', cancelAtPeriodEnd: true }));
+    h.tick();
+    const e = h.event('customer.subscription.updated', { id: 'sub_1' });
+    expect(await h.sync.handleEvent(e, null)).toMatchObject({ status: 200, result: 'error', codes: ['UNKNOWN_TIER'] });
+    expect(await h.store.billing.getSubscription('sub_1')).toMatchObject({ status: 'canceled', tier: 'FREELANCER', cancelAtPeriodEnd: true });
+    expect(await h.billingOf(u.personalId)).toMatchObject({ state: 'READ_ONLY', source: 'STRIPE' });
+    expect(await h.sync.handleEvent(e, null)).not.toMatchObject({ result: 'duplicate' });
+  });
+
+  it('a subscription Stripe refuses is answered 200, recorded, and handled again on redelivery', async () => {
+    const h = harness();
+    h.stripe.customers.set('cus_1', stripeObjects.customer('cus_1'));
+    const e = h.event('customer.subscription.updated', { id: 'sub_missing' });
+    expect(await h.sync.handleEvent(e, null)).toMatchObject({ status: 200, result: 'error', codes: ['STRIPE_resource_missing'] });
+    h.stripe.subscriptions.set('sub_missing', stripeObjects.subscription({ id: 'sub_missing', customer: 'cus_1', product: 'prod_F' }));
+    expect(await h.sync.handleEvent(e, null)).toMatchObject({ status: 200, result: 'processed' });
+  });
+
+  it('never audits onto a stranger’s profile named in metadata; an operator firm is audited and covered (D8/D9)', async () => {
+    const h = harness();
+    const payer = await h.person();
+    const stranger = await h.person();
+    const owned = await h.store.organizations.createOwned(stranger.userId, { name: 'B', slug: `b-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', profileType: 'BUSINESS', at: NOW }, 6, { actorId: stranger.userId, requestId: null });
+    if (owned.kind !== 'created') throw new Error('setup');
+    h.stripe.customers.set('cus_1', stripeObjects.customer('cus_1', { mutaba3a_user_id: payer.userId }));
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_FIRM', metadata: { mutaba3a_organization_id: owned.organization.id } }));
+    expect(await h.sync.handleEvent(h.event('customer.subscription.created', { id: 'sub_1' }), null)).toMatchObject({ codes: ['ORG_NOT_OWNED_BY_PAYER'] });
+    expect(await h.changes(owned.organization.id)).toEqual([]);
+    expect((await h.billingOf(owned.organization.id))?.source).not.toBe('STRIPE');
+    expect(await h.changes(payer.personalId)).toHaveLength(1);
+
+    const firm = await h.store.organizations.create({ name: 'Firm', slug: `firm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    h.stripe.subscriptions.set('sub_2', stripeObjects.subscription({ id: 'sub_2', customer: 'cus_1', product: 'prod_FIRM', metadata: { mutaba3a_organization_id: firm.id } }));
+    expect(await h.sync.handleEvent(h.event('customer.subscription.created', { id: 'sub_2' }), null)).toMatchObject({ result: 'processed', codes: [] });
+    expect(await h.changes(firm.id)).toHaveLength(1);
+    expect(await h.billingOf(firm.id)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE', tier: 'FIRM' });
+  });
+
+  it('one subscription that throws in reconcile is reported, and the run goes on', async () => {
+    const h = harness();
+    h.stripe.customers.set('cus_1', stripeObjects.customer('cus_1'));
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_F' }));
+    h.stripe.subscriptions.set('sub_2', stripeObjects.subscription({ id: 'sub_2', customer: 'cus_absent', product: 'prod_F' }));
+    h.stripe.subscriptions.set('sub_3', stripeObjects.subscription({ id: 'sub_3', customer: 'cus_1', product: 'prod_F' }));
+    const summary = await h.sync.reconcile(null);
+    expect(summary).toMatchObject({ checked: 3, changed: 2 });
+    expect(summary.errors).toEqual([{ subscriptionId: 'sub_2', code: 'STRIPE_resource_missing' }]);
+  });
+
+  it('reconcile reads through its own gateway, never the webhook’s (D7)', async () => {
+    const reconcileStripe = new FakeStripeGateway(() => NOW);
+    reconcileStripe.products.set('prod_F', stripeObjects.product('prod_F', 'freelancer'));
+    reconcileStripe.customers.set('cus_1', stripeObjects.customer('cus_1'));
+    reconcileStripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_F' }));
+    // Listed without its customer expanded, so the sync has to fetch it.
+    const unexpanded: StripeGateway = { ...reconcileStripe, livemode: false, verifyEvent: (r, s) => reconcileStripe.verifyEvent(r, s), subscription: (id) => reconcileStripe.subscription(id), customer: (id) => reconcileStripe.customer(id), listProducts: () => reconcileStripe.listProducts(),
+      async *listSubscriptions() {
+        for await (const f of reconcileStripe.listSubscriptions()) yield { ...f, value: { ...f.value, customer: 'cus_1' } as Stripe.Subscription };
+      } };
+    const h = harness({ reconcileGateway: unexpanded });
+    expect(await h.sync.reconcile(null)).toMatchObject({ checked: 1, changed: 1, errors: [] });
+    expect(h.stripe.calls).toEqual([]);
+    expect(reconcileStripe.calls).toContain('customer:cus_1');
+  });
+
+  it('a failure that isn’t Stripe’s answers 500 and the redelivery is handled', async () => {
+    const h = harness();
+    h.stripe.customers.set('cus_1', stripeObjects.customer('cus_1'));
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_F' }));
+    const save = h.store.billing.saveSubscription.bind(h.store.billing);
+    let fail = true;
+    h.store.billing.saveSubscription = async (input) => {
+      if (fail) {
+        fail = false;
+        throw new Error('database went away');
+      }
+      return save(input);
+    };
+    const e = h.event('customer.subscription.created', { id: 'sub_1' });
+    expect(await h.sync.handleEvent(e, null)).toMatchObject({ status: 500, result: 'error' });
+    expect(await h.sync.handleEvent(e, null)).toMatchObject({ status: 200, result: 'processed' });
+  });
+
+  it('a checkout from a Payment Link doesn’t link by its client_reference_id', async () => {
+    const h = harness();
+    const u = await h.person();
+    h.stripe.customers.set('cus_pl', stripeObjects.customer('cus_pl'));
+    h.stripe.subscriptions.set('sub_pl', stripeObjects.subscription({ id: 'sub_pl', customer: 'cus_pl', product: 'prod_F' }));
+    const viaLink = h.event('checkout.session.completed', { id: 'cs_pl', mode: 'subscription', subscription: 'sub_pl', customer: 'cus_pl', client_reference_id: u.userId, payment_link: 'plink_1' });
+    expect(await h.sync.handleEvent(viaLink, null)).toMatchObject({ result: 'processed' });
+    expect(await h.store.billing.getAccount('cus_pl')).toMatchObject({ userId: null });
+  });
+
+  it('reconcile stops cleanly at its time budget and says so', async () => {
+    const h = harness({ reconcileTimeBudgetMs: 1500 });
+    h.stripe.customers.set('cus_1', stripeObjects.customer('cus_1'));
+    for (const id of ['sub_1', 'sub_2', 'sub_3', 'sub_4']) h.stripe.subscriptions.set(id, stripeObjects.subscription({ id, customer: 'cus_1', product: 'prod_F' }));
+    const save = h.store.billing.saveSubscription.bind(h.store.billing);
+    h.store.billing.saveSubscription = async (input) => {
+      h.tick(1000);
+      return save(input);
+    };
+    const summary = await h.sync.reconcile(null);
+    expect(summary.checked).toBe(2);
+    expect(summary.errors).toEqual([{ subscriptionId: null, code: 'TIME_BUDGET' }]);
+    await expect(h.sync.reconcile(null)).resolves.toBeDefined();
+  });
 });
+

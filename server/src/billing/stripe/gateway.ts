@@ -112,14 +112,10 @@ export function createStripeGateway(options: StripeGatewayOptions): StripeGatewa
     },
     async listProducts() {
       const products = new Map<string, Stripe.Product>();
-      let startingAfter: string | undefined;
-      for (;;) {
-        const page = await wrapped(() => stripe.products.list({ limit: PAGE, ...(startingAfter ? { starting_after: startingAfter } : {}) }));
-        for (const product of page.data) products.set(product.id, product);
-        const last = page.data.at(-1);
-        if (!page.has_more || !last) return products;
-        startingAfter = last.id;
-      }
+      await wrapped(async () => {
+        for await (const product of stripe.products.list({ limit: PAGE })) products.set(product.id, product);
+      });
+      return products;
     },
   };
 }
@@ -132,7 +128,9 @@ async function wrapped<T>(call: () => Promise<T>): Promise<T> {
   }
 }
 
-const TRANSIENT_TYPES = new Set(['StripeConnectionError', 'StripeAPIError', 'StripeRateLimitError', 'RateLimitError']);
+// Auth and permission failures count as transient: a revoked or under-scoped key is fixable, and answering Stripe
+// 200 would drop the event for good (MUT-360 review). A 500 makes Stripe redeliver after the key is fixed.
+const TRANSIENT_TYPES = new Set(['StripeConnectionError', 'StripeAPIError', 'StripeRateLimitError', 'RateLimitError', 'StripeAuthenticationError', 'StripePermissionError']);
 
 export function toGatewayError(err: unknown): StripeGatewayError {
   if (err instanceof Stripe.errors.StripeError) {
@@ -141,7 +139,7 @@ export function toGatewayError(err: unknown): StripeGatewayError {
       code: err.code ?? null,
       type: err.type,
       requestId: err.requestId ?? null,
-      transient: TRANSIENT_TYPES.has(err.type) || status === 429 || status >= 500,
+      transient: TRANSIENT_TYPES.has(err.type) || status === 401 || status === 403 || status === 429 || status >= 500,
     });
   }
   // Not an SDK error (an abort, a bug in a fake): treat as transient, keep nothing from it.

@@ -356,4 +356,15 @@ describe('billing verbs (MUT-358)', () => {
     expect(await h.run(['billing-reconcile'])).toBe(0);
     expect(h.out).toEqual(['checked 2, changed 1, unlinked 1, pruned 0', '  sub_2: UNKNOWN_TIER']);
   });
+
+  it('billing-status prints the person’s Stripe mirror and each profile with and without grants (MUT-360 review)', async () => {
+    const h = harness();
+    await person(h, 'nour@studio.ps');
+    expect(await h.run(['billing-status', '--email', 'nour@studio.ps'])).toBe(0);
+    expect(h.out[0]).toMatch(/^nour@studio\.ps \(/);
+    expect(h.out).toContain('  no Stripe customer linked');
+    expect(h.out).toContain('  no subscription');
+    expect(h.out.some((l) => /^ {2}profile .+: now READ_ONLY NONE · without grants READ_ONLY NONE$/.test(l))).toBe(true);
+  });
 });
+
