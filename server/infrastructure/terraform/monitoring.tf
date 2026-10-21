@@ -256,3 +256,62 @@ resource "google_monitoring_alert_policy" "kms_key_change" {
 
   notification_channels = local.alert_channels
 }
+
+# MUT-360: the Stripe sync and the nightly reconcile log what needs the operator (server/src/billing/stripe/sync.ts,
+# pino's `msg`), and Cloud Scheduler logs every attempt that got a non-2xx answer or no answer (502
+# RECONCILE_FAILED when Stripe couldn't be listed, 409 RECONCILE_RUNNING, a 401 from a rotated token, a timeout)
+# at ERROR. Created with the job (stripe_enabled), on the MUT-328 channels. One email per policy per hour at most:
+# a bad night of per-subscription errors is one notice, not hundreds. Like kms_key_change, the filters are
+# unproven against live entries until each first fires: note it in DEPLOYMENT.md §7 when it does.
+locals {
+  stripe_api_logs = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${local.service_name}\""
+  stripe_alerts = {
+    sync = {
+      display_name = "Stripe sync needs the operator"
+      severity     = "WARNING"
+      filter       = "${local.stripe_api_logs} AND jsonPayload.msg=(\"stripe sync needs the operator\" OR \"stripe event failed; Stripe will redeliver\" OR \"stripe refused a re-fetch\")"
+      doc          = "A Stripe webhook event couldn't be mirrored. `stripe sync needs the operator` names the codes (pilot runbook §1.7 step 5); `stripe refused a re-fetch` is a lasting Stripe error (the key can't read the object?): the event got a 200 and won't come back, the nightly reconcile retries it. `stripe event failed; Stripe will redeliver` is transient: act only if the same event id keeps failing. Logs: Cloud Run → mutaba3a-api → Logs, search `stripe`."
+    }
+    reconcile = {
+      display_name = "Stripe reconcile needs the operator"
+      severity     = "WARNING"
+      filter       = "${local.stripe_api_logs} AND jsonPayload.msg=(\"stripe reconcile needs the operator\" OR \"stripe reconcile could not list\")"
+      doc          = "The nightly Stripe reconcile left subscriptions it couldn't mirror (`needs the operator`, one line per subscription with its code), or couldn't list Stripe at all (`could not list`: a bad or under-scoped key). Run `npm run billing:reconcile -- --url \"$URL\"` and read its errors: pilot runbook §1.7 step 5, DEPLOYMENT.md §6e."
+    }
+    scheduler = {
+      display_name = "Stripe reconcile job failed"
+      severity     = "ERROR"
+      filter       = "resource.type=\"cloud_scheduler_job\" AND resource.labels.job_id=\"${local.stripe_reconcile_job}\" AND severity>=ERROR"
+      doc          = "Cloud Scheduler's `${local.stripe_reconcile_job}` got no 2xx: 502 RECONCILE_FAILED (Stripe couldn't be listed), 409 RECONCILE_RUNNING (a run was already going), 401 (job token rotated, the revision not rolled), 503 (Stripe not configured) or a timeout. Missed webhooks stop healing until it runs. Read the attempt in Scheduler's logs, fix, then `gcloud scheduler jobs run ${local.stripe_reconcile_job} --location=${var.region}`: DEPLOYMENT.md §6e."
+    }
+  }
+}
+
+resource "google_monitoring_alert_policy" "stripe" {
+  for_each     = var.stripe_enabled && local.alerting_enabled ? local.stripe_alerts : {}
+  project      = var.project_id
+  display_name = each.value.display_name
+  combiner     = "OR"
+  severity     = each.value.severity
+
+  conditions {
+    display_name = each.value.display_name
+    condition_matched_log {
+      filter = each.value.filter
+    }
+  }
+
+  alert_strategy {
+    notification_rate_limit {
+      period = "3600s"
+    }
+    auto_close = "1800s"
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = each.value.doc
+  }
+
+  notification_channels = local.alert_channels
+}

@@ -322,12 +322,13 @@ npm run tauri build      # macOS/Windows bundles
 ### Terms of service (MUT-324, ADR-102)
 Hosted accounts are covered by terms of service at `/terms/<version>`. The texts are frozen and versioned, governed by the law of England & Wales, with English prevailing. A person accepts at their setup link, and again in the portal's Updated-terms step after a version bump. Each acceptance records the version, the language, the text's sha256 and the surface. Signed out, no terms apply.
 
-**Billing (MUT-358, ADR-160/162; nothing enforced until MUT-361).**
+**Billing (MUT-358, MUT-360, ADR-160/162/165; nothing enforced until MUT-361).**
 - The person pays; each hosted profile is entitled. `GET /v1/me` reports `billing: { state, source, tier, until }` on every profile. `server/src/billing/entitlement.ts` resolves it from:
   - a CONNECTED Malafat integration;
   - an operator grant;
-  - the owner's (or the profile's own) Stripe subscription mirror;
+  - the owner's (or the profile's own) Stripe subscription mirror; a subscription tied to an organization covers it only when nobody owns it or the payer does (ADR-165);
   - the 14-day trial (read-only until day 30, then locked if never paid).
+- Stripe fills the mirror (MUT-360): a signed webhook (`POST /v1/billing/stripe/webhook`) re-reads each subscription an event names, and a nightly Cloud Scheduler job (`/jobs/v1/billing/stripe-reconcile`, 03:30 Israel time) re-reads them all, so a missed or out-of-order event heals by morning. A customer is linked through `mutaba3a_user_id` metadata; an operator's link always wins. Off until `stripe_enabled` is applied (DEPLOYMENT.md §6e).
 - Operators grant coverage and link pilot Stripe customers with `npm run billing:*` (admin `/admin/v1/billing/*`), audited.
 - Billing never travels with a profile's data: it isn't in the local snapshot, in a profile export, or rolled back by a restore.
 

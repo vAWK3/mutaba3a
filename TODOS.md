@@ -170,3 +170,7 @@
 **Context:** Decided 2026-10-19 in the MUT-299 eng review (R2/D2, `.claude/designs/mut-299-firm-books-plan.md`). Trigger: an accountant or auditor asks for frozen months. Start at `server/src/expenses/compose.ts:20`, which refuses amounts ≤ 0.
 
 **Depends on / blocked by:** MUT-312 (month close) shipped.
+
+## 17. A failed nightly Stripe reconcile run is only visible in Cloud Scheduler's logs
+
+**Done (MUT-360 review, 2026-10-21).** `server/infrastructure/terraform/monitoring.tf` adds three log-match alert policies, created with the job (`stripe_enabled`) on MUT-328's channels: a failed attempt of the Scheduler job (any non-2xx, 502 `RECONCILE_FAILED` and 409 `RECONCILE_RUNNING` included, or the 280 s deadline), and the API's own `stripe sync …` and `stripe reconcile …` lines that need the operator. The old text was wrong on one point: per-subscription failures never went to Sentry (the server has no Sentry client); they are warn-level log lines, which the reconcile policy now pages on. Operator steps: `server/DEPLOYMENT.md` §6e, "Alerts".

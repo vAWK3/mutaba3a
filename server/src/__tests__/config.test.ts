@@ -248,3 +248,46 @@ describe('loadConfig — reference exchange rates (MUT-228)', () => {
     expect(() => loadConfig({ ...base, [name]: value })).toThrow(name);
   });
 });
+
+describe('loadConfig — Stripe and the job token (MUT-360)', () => {
+  const stripe = { STRIPE_SECRET_KEY: 'rk_test_mut360', STRIPE_WEBHOOK_SECRET: 'whsec_mut360' };
+
+  it('has no Stripe and no job token by default', () => {
+    const config = loadConfig(base);
+    expect(config.STRIPE_SECRET_KEY).toBeUndefined();
+    expect(config.STRIPE_WEBHOOK_SECRET).toBeUndefined();
+    expect(config.MUTABA3A_JOB_TOKEN).toBeUndefined();
+  });
+
+  it('accepts a restricted or secret test key with its webhook secret', () => {
+    expect(loadConfig({ ...base, ...stripe }).STRIPE_SECRET_KEY).toBe('rk_test_mut360');
+    expect(loadConfig({ ...base, ...stripe, STRIPE_SECRET_KEY: 'sk_test_x' }).STRIPE_SECRET_KEY).toBe('sk_test_x');
+  });
+
+  it('wants both Stripe values or neither', () => {
+    expect(() => loadConfig({ ...base, STRIPE_SECRET_KEY: stripe.STRIPE_SECRET_KEY })).toThrow(/STRIPE_WEBHOOK_SECRET/);
+    expect(() => loadConfig({ ...base, STRIPE_WEBHOOK_SECRET: stripe.STRIPE_WEBHOOK_SECRET })).toThrow(/STRIPE_SECRET_KEY/);
+  });
+
+  it('refuses values that are not a Stripe key or a webhook secret', () => {
+    expect(() => loadConfig({ ...base, ...stripe, STRIPE_SECRET_KEY: 'pk_test_publishable' })).toThrow(/STRIPE_SECRET_KEY/);
+    expect(() => loadConfig({ ...base, ...stripe, STRIPE_WEBHOOK_SECRET: 'secret' })).toThrow(/STRIPE_WEBHOOK_SECRET/);
+  });
+
+  it('refuses a live key outside the live environment, and accepts it in it', () => {
+    expect(() => loadConfig({ ...base, ...stripe, STRIPE_SECRET_KEY: 'rk_live_x' })).toThrow(/live Stripe key/);
+    expect(loadConfig({ ...base, API_KEY_ENVIRONMENT: 'live', ...stripe, STRIPE_SECRET_KEY: 'rk_live_x' }).STRIPE_SECRET_KEY).toBe('rk_live_x');
+  });
+
+  it('a live server takes only a restricted live key: no full-access key, no test key (MUT-360 review)', () => {
+    const live = { ...base, API_KEY_ENVIRONMENT: 'live', ...stripe };
+    expect(() => loadConfig({ ...live, STRIPE_SECRET_KEY: 'sk_live_full_access' })).toThrow(/restricted live key/);
+    expect(() => loadConfig({ ...live, STRIPE_SECRET_KEY: 'rk_test_x' })).toThrow(/restricted live key/);
+    expect(loadConfig({ ...base, ...stripe, STRIPE_SECRET_KEY: 'sk_test_local' }).STRIPE_SECRET_KEY).toBe('sk_test_local');
+  });
+
+  it('wants a job token of at least 32 characters', () => {
+    expect(loadConfig({ ...base, MUTABA3A_JOB_TOKEN: 'j'.repeat(32) }).MUTABA3A_JOB_TOKEN).toBe('j'.repeat(32));
+    expect(() => loadConfig({ ...base, MUTABA3A_JOB_TOKEN: 'short' })).toThrow(/MUTABA3A_JOB_TOKEN/);
+  });
+});

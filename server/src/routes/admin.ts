@@ -40,6 +40,21 @@ export interface AdminOptions {
   keyEnvironment: ApiKeyEnvironment;
 }
 
+/**
+ * MUT-360 D2: the token the nightly Cloud Scheduler job presents on /jobs/*. It opens nothing else, and the admin
+ * token doesn't open /jobs. Optional, unlike the admin token: unset, every /jobs request is refused before any
+ * compare (two empty buffers would pass timingSafeEqual).
+ */
+export function jobAuth(jobToken: string | null): MiddlewareHandler<AppEnv> {
+  const expected = jobToken ? Buffer.from(jobToken, 'utf8') : null;
+  return async (c, next) => {
+    if (!expected) throw new ApiError('JOBS_NOT_CONFIGURED', 'No job token is configured on this server');
+    const given = Buffer.from(c.req.header('x-job-token') ?? '', 'utf8');
+    if (!(given.length === expected.length && timingSafeEqual(given, expected))) throw new ApiError('JOB_UNAUTHORIZED', 'Missing or invalid X-Job-Token');
+    await next();
+  };
+}
+
 export function adminAuth(adminToken: string): MiddlewareHandler<AppEnv> {
   const expected = Buffer.from(adminToken, 'utf8');
   return async (c, next) => {

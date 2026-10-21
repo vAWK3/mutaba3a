@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.43.0-mut373
+  version: 1.44.0-mut360
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CURRENT_PASSWORD_WRONG, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, RATE_LIMITED, INTERNAL, ATTACHMENTS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CURRENT_PASSWORD_WRONG, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -95,6 +95,11 @@ components:
       type: http
       scheme: bearer
       description: "Native-app device session (MUT-64): `Authorization: Bearer mds_<secret>`. Set by POST /v1/device-sessions. Same session principal and writability as the portal cookie session — organization-scoped calls add X-Mutaba3a-Profile: <organizationId> naming one of the user's memberships."
+    jobToken:
+      type: apiKey
+      in: header
+      name: X-Job-Token
+      description: The nightly Cloud Scheduler job (MUTABA3A_JOB_TOKEN, MUT-360). Opens /jobs/* only.
     adminToken:
       type: apiKey
       in: header
@@ -445,12 +450,14 @@ components:
             code:
               type: string
               enum:
+                - INVALID_SIGNATURE
                 - UNAUTHENTICATED
                 - INVALID_API_KEY
                 - API_KEY_REVOKED
                 - API_KEY_EXPIRED
                 - API_KEY_ENVIRONMENT_MISMATCH
                 - ADMIN_UNAUTHORIZED
+                - JOB_UNAUTHORIZED
                 - INVALID_CREDENTIALS
                 - SESSION_EXPIRED
                 - INSUFFICIENT_SCOPE
@@ -462,14 +469,19 @@ components:
                 - ORGANIZATION_MISMATCH
                 - CONFLICT
                 - OPERATION_IN_PROGRESS
+                - RECONCILE_RUNNING
                 - TERMS_VERSION_STALE
                 - SETUP_LINK_UNUSABLE
                 - VALIDATION_FAILED
                 - IDEMPOTENCY_KEY_REUSED
                 - IDEMPOTENCY_KEY_REQUIRED
+                - PAYLOAD_TOO_LARGE
                 - RATE_LIMITED
                 - INTERNAL
+                - RECONCILE_FAILED
                 - ATTACHMENTS_NOT_CONFIGURED
+                - BILLING_NOT_CONFIGURED
+                - JOBS_NOT_CONFIGURED
                 - FX_RATES_UNAVAILABLE
                 - APP_UPDATE_REQUIRED
             message:
@@ -6337,6 +6349,169 @@ components:
             $ref: "#/components/schemas/BillingAccount"
       required:
         - accounts
+    BillingStatus:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            email:
+              type: string
+          required:
+            - id
+            - email
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/BillingAccount"
+        subscriptions:
+          type: array
+          items:
+            type: object
+            properties:
+              stripeSubscriptionId:
+                type: string
+              tier:
+                type: string
+                enum:
+                  - FREELANCER
+                  - FIRM
+              status:
+                type: string
+              currentPeriodEnd:
+                type: string
+                format: date-time
+              cancelAtPeriodEnd:
+                type: boolean
+              organizationId:
+                type: string
+                nullable: true
+                format: uuid
+              priceLookupKey:
+                type: string
+                nullable: true
+              payerUserId:
+                type: string
+                nullable: true
+                format: uuid
+            required:
+              - stripeSubscriptionId
+              - tier
+              - status
+              - currentPeriodEnd
+              - cancelAtPeriodEnd
+              - organizationId
+              - priceLookupKey
+              - payerUserId
+        profiles:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              billing:
+                $ref: "#/components/schemas/BillingEntitlement"
+              billingWithoutGrants:
+                $ref: "#/components/schemas/BillingEntitlement"
+            required:
+              - id
+              - name
+              - billing
+              - billingWithoutGrants
+      required:
+        - user
+        - accounts
+        - subscriptions
+        - profiles
+    BillingEntitlement:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+            - ACTIVE
+            - GRACE
+            - READ_ONLY
+            - LOCKED
+        source:
+          type: string
+          enum:
+            - MALAFAT
+            - OPERATOR
+            - STRIPE
+            - TRIAL
+            - NONE
+        tier:
+          type: string
+          nullable: true
+          enum:
+            - FREELANCER
+            - FIRM
+            - null
+        until:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - state
+        - source
+        - tier
+        - until
+    StripeWebhookResponse:
+      type: object
+      properties:
+        received:
+          type: boolean
+          enum:
+            - true
+        result:
+          type: string
+          enum:
+            - ignored
+            - duplicate
+            - noop
+            - processed
+            - error
+      required:
+        - received
+        - result
+    StripeReconcileSummary:
+      type: object
+      properties:
+        checked:
+          type: integer
+        changed:
+          type: integer
+        unlinked:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              subscriptionId:
+                type: string
+                nullable: true
+              code:
+                type: string
+            required:
+              - subscriptionId
+              - code
+        pruned:
+          type: integer
+      required:
+        - checked
+        - changed
+        - unlinked
+        - errors
+        - pruned
   parameters: {}
 paths:
   /health:
@@ -14460,6 +14635,175 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/status:
+    get:
+      tags:
+        - Admin
+      summary: One person’s Stripe mirror and entitlement, with and without operator grants (MUT-360)
+      description: "The pilot cutover check: revoke a person’s grant only once `billingWithoutGrants` shows ACTIVE / STRIPE. Exactly one of userId and email."
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: userId
+          in: query
+        - schema:
+            type: string
+            minLength: 3
+            maxLength: 320
+          required: false
+          name: email
+          in: query
+      responses:
+        "200":
+          description: Billing status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingStatus"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/stripe/webhook:
+    post:
+      tags:
+        - Billing
+      summary: "Stripe webhook: mirrors subscriptions after re-reading them from Stripe"
+      description: Called by Stripe only. The raw body is verified against `Stripe-Signature` (the endpoint secret, 300 s tolerance); a bad, missing or old signature is 400 and nothing is stored. An event already handled answers 200 `duplicate`. The subscription is re-fetched from Stripe rather than trusted from the payload, so events arriving out of order end in Stripe’s current state. A Stripe or database failure is 500 so Stripe redelivers. Failed signatures are rate-limited to 300 per minute per address; verified events never are.
+      security: []
+      responses:
+        "200":
+          description: Handled, ignored, a duplicate, or recorded for the operator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StripeWebhookResponse"
+        "400":
+          description: INVALID_SIGNATURE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "413":
+          description: PAYLOAD_TOO_LARGE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many failed signatures from this address; `Retry-After` says when to try again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: The event could not be handled now; Stripe redelivers it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: BILLING_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/billing/stripe-reconcile:
+    post:
+      tags:
+        - Billing
+      summary: Nightly Stripe reconcile (Cloud Scheduler)
+      description: Lists every Stripe subscription and repairs the mirror, so a missed webhook heals within a day. Always 200 once it ran; the job token opens nothing else.
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: The run’s summary; `errors` lists what needs the operator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StripeReconcileSummary"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: RECONCILE_RUNNING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "RECONCILE_FAILED: Stripe could not be listed; `details` is the run summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: BILLING_NOT_CONFIGURED or JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/stripe/reconcile:
+    post:
+      tags:
+        - Admin
+      summary: Run the Stripe reconcile now
+      description: The same run as the nightly job, for the operator (pilot cutover, after fixing metadata).
+      security:
+        - adminToken: []
+      responses:
+        "200":
+          description: The run’s summary; `errors` lists what needs the operator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StripeReconcileSummary"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: RECONCILE_RUNNING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "RECONCILE_FAILED: Stripe could not be listed; `details` is the run summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: BILLING_NOT_CONFIGURED
           content:
             application/json:
               schema:

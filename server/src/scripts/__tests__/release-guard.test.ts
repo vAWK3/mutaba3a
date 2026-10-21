@@ -198,3 +198,109 @@ describe('deploy.sh calls the guard before every step that can move or reopen an
     expect(guardAt.some((g) => g > migrate && g < apply)).toBe(true);
   });
 });
+
+
+/** MUT-360 review: guard_stripe_release keeps a checkout without stripe_enabled from switching Stripe off. */
+type StripeOpts = {
+  enabled?: string; // what `terraform console` gives for var.stripe_enabled ('true' | 'false' | garbage)
+  consoleFails?: boolean;
+  consoleNotice?: boolean; // a notice line after the value
+  job?: 'missing' | 'error' | 'ENABLED' | 'PAUSED';
+  env?: 'missing' | 'error' | string; // ;-separated env names on the service template
+  skip?: string; // SKIP_STRIPE_GUARD
+};
+
+function stripeGuard(o: StripeOpts) {
+  const bin = join(dir, 'bin');
+  const log = join(dir, 'calls.log');
+  spawnSync('mkdir', ['-p', bin]);
+  writeFileSync(join(bin, 'terraform'), [
+    '#!/bin/bash',
+    `echo "terraform $*" >> "${log}"`,
+    `case "$1" in console) cat >/dev/null; ${o.consoleFails ? 'echo "Error: boom" >&2; exit 1' : `printf '%s\\n' '${o.enabled ?? 'false'}'${o.consoleNotice ? "; echo 'Note: provider upgrade available'" : ''}`} ;; esac`,
+    'exit 0',
+  ].join('\n') + '\n');
+  const job = o.job ?? 'missing';
+  const env = o.env ?? 'PORT;DATABASE_URL';
+  writeFileSync(join(bin, 'gcloud'), [
+    '#!/bin/bash',
+    `echo "gcloud $*" >> "${log}"`,
+    'case "$*" in',
+    `  *"scheduler jobs describe"*) ${job === 'missing' ? 'echo "ERROR: (gcloud.scheduler.jobs.describe) NOT_FOUND: Job not found." >&2; exit 1' : job === 'error' ? 'echo "ERROR: auth tokens" >&2; exit 1' : `echo ${job}`} ;;`,
+    `  *"run services describe"*"env[].name"*) ${env === 'missing' ? 'echo "ERROR: Cannot find service [mutaba3a-api]" >&2; exit 1' : env === 'error' ? 'echo "ERROR: PERMISSION_DENIED" >&2; exit 1' : `echo '${env}'`} ;;`,
+    '  *) echo "unexpected gcloud call: $*" >&2; exit 98 ;;',
+    'esac',
+  ].join('\n') + '\n');
+  chmodSync(join(bin, 'terraform'), 0o755);
+  chmodSync(join(bin, 'gcloud'), 0o755);
+  const cmd = `die() { echo "$*" >&2; exit 1; }; warn() { echo "$*" >&2; }; source "${LIB}" && guard_stripe_release "" mutaba3a-api me-west1 demo-project -input=false -var-file=production.tfvars -var image_tag=abc`;
+  const e: NodeJS.ProcessEnv = { ...process.env, SKIP_STRIPE_GUARD: o.skip, PATH: `${bin}:${process.env.PATH}` };
+  for (const [k, v] of Object.entries(e)) if (v === undefined) delete e[k];
+  const r = spawnSync('bash', ['-euo', 'pipefail', '-c', cmd], { cwd: dir, encoding: 'utf-8', env: e });
+  return { status: r.status, err: r.stderr, calls: existsSync(log) ? readFileSync(log, 'utf-8') : '' };
+}
+
+describe('guard_stripe_release (deploy.sh steps 0, 3 and 4)', { timeout: 30_000 }, () => {
+  it('lets a release through when the checkout keeps Stripe on, and warns while the job is paused', () => {
+    expect(stripeGuard({ enabled: 'true', job: 'ENABLED' }).status).toBe(0);
+    const paused = stripeGuard({ enabled: 'true', job: 'PAUSED' });
+    expect(paused.status).toBe(0);
+    expect(paused.err).toMatch(/is paused: the nightly Stripe reconcile/);
+    expect(stripeGuard({ enabled: 'true', job: 'error' }).status).toBe(0); // only the warning needs the job
+  });
+
+  it('lets stripe_enabled false through while production runs no Stripe, and on a first deploy', () => {
+    expect(stripeGuard({ enabled: 'false' }).status).toBe(0);
+    expect(stripeGuard({ enabled: 'false', env: 'missing' }).status).toBe(0);
+    expect(stripeGuard({ enabled: 'false', env: 'PORT;STRIPE_SECRET_KEY_OLD' }).status).toBe(0);
+  });
+
+  it('refuses stripe_enabled false (or unset) while the reconcile job exists, paused or not', () => {
+    for (const job of ['ENABLED', 'PAUSED'] as const) {
+      const r = stripeGuard({ enabled: 'false', job });
+      expect(r.status, job).not.toBe(0);
+      expect(r.err).toMatch(/stripe_enabled is false \(or unset\), but production runs Stripe: the Scheduler job mutaba3a-stripe-reconcile exists/);
+    }
+  });
+
+  it('refuses stripe_enabled false while the service mounts STRIPE_SECRET_KEY, even with no job', () => {
+    const r = stripeGuard({ enabled: 'false', env: 'PORT;STRIPE_SECRET_KEY;STRIPE_WEBHOOK_SECRET' });
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/mutaba3a-api mounts STRIPE_SECRET_KEY/);
+  });
+
+  it('refuses rather than guess when it cannot read the job, the service, or the variable', () => {
+    expect(stripeGuard({ enabled: 'false', job: 'error' }).err).toMatch(/could not read the Scheduler job/);
+    expect(stripeGuard({ enabled: 'false', env: 'error' }).err).toMatch(/could not read mutaba3a-api's env/);
+    expect(stripeGuard({ consoleFails: true }).err).toMatch(/could not evaluate stripe_enabled/);
+    expect(stripeGuard({ enabled: 'maybe' }).err).toMatch(/gave 'maybe' for stripe_enabled/);
+  });
+
+  it('reads only the first line of terraform console, so a notice after it can\'t refuse a release', () => {
+    expect(stripeGuard({ enabled: 'true', job: 'ENABLED', consoleNotice: true }).status).toBe(0);
+    expect(stripeGuard({ enabled: 'false', job: 'ENABLED', consoleNotice: true }).err).toMatch(/stripe_enabled is false/);
+  });
+
+  it('evaluates stripe_enabled with the release\'s own var files', () => {
+    expect(stripeGuard({ enabled: 'true' }).calls).toMatch(/terraform console -var-file=production.tfvars -var image_tag=abc/);
+  });
+
+  it('SKIP_STRIPE_GUARD=1 skips it: says so, and touches neither terraform nor gcloud', () => {
+    const r = stripeGuard({ enabled: 'false', job: 'ENABLED', skip: '1' });
+    expect(r.status).toBe(0);
+    expect(r.err).toMatch(/Stripe release guard skipped \(SKIP_STRIPE_GUARD=1\)/);
+    expect(r.calls).toBe('');
+  });
+});
+
+describe('deploy.sh wires the Stripe guard (MUT-360 review)', () => {
+  it('runs guard_stripe_release before bootstrap, and guard_release() runs both guards', () => {
+    const deploy = readFileSync(DEPLOY, 'utf-8');
+    expect(deploy.indexOf('guard_stripe_release "')).toBeGreaterThan(-1);
+    expect(deploy.indexOf('guard_stripe_release "')).toBeLessThan(deploy.indexOf('ensure_bootstrap "'));
+    const wrapper = /guard_release\(\)\s*\{[\s\S]*?\n\}/.exec(deploy)?.[0] ?? '';
+    expect(wrapper).toMatch(/guard_cmek_release/);
+    expect(wrapper).toMatch(/guard_stripe_release/);
+  });
+});
+

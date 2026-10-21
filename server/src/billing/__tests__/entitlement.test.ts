@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PERIOD_GRACE_DAYS,
   resolveEntitlement,
   TRIAL_DAYS,
   TRIAL_LOCK_DAYS,
@@ -85,6 +86,51 @@ describe('resolveEntitlement', () => {
       expect(resolveEntitlement(FIRM_BY_OPERATOR, facts({ subscriptions: [firm] }), NOW)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE', tier: 'FIRM' });
       expect(resolveEntitlement(payerOwn, facts({ subscriptions: [firm] }), NOW)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE', tier: 'FIRM' });
       expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [firm] }), NOW).source).toBe('NONE');
+    });
+
+    // MUT-360 D8/D9: Stripe metadata names the organization by hand, so a tie only counts on a firm the payer owns
+    // (or an owner-less operator firm), checked here at read time so a later `billing link` needs no re-sync.
+    it('a subscription tied to someone else’s owned profile does not cover it', () => {
+      const tiedByStranger = sub({ userId: OTHER, organizationId: BUSINESS.organizationId, tier: 'FIRM' });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [tiedByStranger] }), NOW).source).toBe('NONE');
+    });
+
+    it('an unlinked customer’s tie covers an operator firm but not an owned profile, until the payer is linked', () => {
+      const unlinkedFirm = sub({ userId: null, organizationId: FIRM_BY_OPERATOR.organizationId, tier: 'FIRM' });
+      expect(resolveEntitlement(FIRM_BY_OPERATOR, facts({ subscriptions: [unlinkedFirm] }), NOW)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE', tier: 'FIRM' });
+      const unlinkedOwned = sub({ userId: null, organizationId: BUSINESS.organizationId, tier: 'FIRM' });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [unlinkedOwned] }), NOW).source).toBe('NONE');
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [{ ...unlinkedOwned, userId: OWNER }] }), NOW)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE', tier: 'FIRM' });
+    });
+
+    it('a lapsed tie to someone else’s owned profile does not count as having paid for it', () => {
+      const lapsedStranger = sub({ userId: OTHER, organizationId: BUSINESS.organizationId, status: 'canceled' });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [lapsedStranger] }), NOW).source).toBe('NONE');
+    });
+
+    // MUT-360 review: a mirror that stopped syncing (a deleted customer, an untagged product, a dead key) must not
+    // cover for ever. A covering status counts only until its period ends plus PERIOD_GRACE_DAYS.
+    it('an active subscription past its period plus the grace no longer covers: read-only, as a lapse', () => {
+      const stale = sub({ currentPeriodEnd: daysFromNow(-(PERIOD_GRACE_DAYS + 1)) });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [stale] }), NOW)).toEqual({ state: 'READ_ONLY', source: 'STRIPE', tier: 'FREELANCER', until: null });
+      const inGrace = sub({ currentPeriodEnd: daysFromNow(-(PERIOD_GRACE_DAYS - 1)) });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [inGrace] }), NOW)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE' });
+      const pastDue = sub({ status: 'past_due', currentPeriodEnd: daysFromNow(-(PERIOD_GRACE_DAYS + 1)) });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [pastDue] }), NOW)).toMatchObject({ state: 'READ_ONLY', source: 'STRIPE' });
+    });
+
+    it('a stale active row never makes someone LOCKED: having paid still counts', () => {
+      const stale = sub({ currentPeriodEnd: daysFromNow(-90) });
+      const f = facts({ subscriptions: [stale], trialStarts: new Map([[OWNER, daysFromNow(-60)]]) });
+      expect(resolveEntitlement(BUSINESS, f, NOW).state).toBe('READ_ONLY');
+    });
+
+    // TD-193 (Basel's open decision): coverage follows the creator, so a co-owner's tie to the shared firm covers
+    // nothing yet. Pinned so a change to that rule is a decision, not an accident.
+    it('a co-owner paying for a firm they don’t create is not counted (TD-193)', () => {
+      const coOwned: ProfileFacts = { organizationId: 'org-shared', ownerUserId: OWNER, malafatConnected: false };
+      const byCoOwner = sub({ userId: OTHER, organizationId: 'org-shared', tier: 'FIRM' });
+      expect(resolveEntitlement(coOwned, facts({ subscriptions: [byCoOwner] }), NOW).source).toBe('NONE');
     });
 
     it('treats trialing as active', () => {

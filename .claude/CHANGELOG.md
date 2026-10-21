@@ -28,6 +28,60 @@
 
 ---
 
+## [Unreleased] - 2026-10-21 — Stripe sync review fixes: billing can't fail open (MUT-360 qa-reconcile, ADR-165 amendments)
+
+**Why:** The pre-landing review found that a deleted customer, an untagged product or a revoked key could leave a payer
+covered for ever with nothing alerting, and that a webhook sync racing an operator link could undo the link.
+
+### Fixed
+- Cancellations always mirror: a deleted customer's subscription is still written, and an unmappable one keeps Stripe's
+  status, period and cancel-at-period-end on the stored tier (`billing/stripe/sync.ts`, `mirror.ts` `stateOf`,
+  `billing.getSubscription`).
+- `saveAccount` / `linkAccount` lock the customer row then the person row, re-read, never write back a stale link, and
+  retry a first-insert race (`repositories/prisma.ts`; Prisma concurrency contract tests).
+- Stripe 401/403 are transient (`gateway.ts`); a reconcile that couldn't list answers 502 `RECONCILE_FAILED`; reconcile
+  stops at 200 s with `TIME_BUDGET`.
+- Only failed signatures spend the per-IP webhook budget; a Payment Link's `client_reference_id` never links.
+
+### Added
+- `GET /admin/v1/billing/status` and `npm run billing:status` (the cutover check: with and without grants).
+- `PERIOD_GRACE_DAYS` (7) in `billing/entitlement.ts`: a covering status past its period + 7 days reads as a lapse.
+- Codes `ORG_NOT_OWNED_BY_PAYER`, `TIME_BUDGET`; error code `RECONCILE_FAILED` (502).
+- Terraform alerts on the sync's operator messages and Scheduler failures; a `stripe_enabled` release guard; the
+  Scheduler job paused during the CMEK cutover; `attempt_deadline` 280 s.
+
+### Changed
+- A live server (`API_KEY_ENVIRONMENT=live`) accepts only an `rk_live_` key.
+- Pilot runbook §1.5/§1.7 use `billing:status`; §4.3 and §7 gained Stripe steps; §1.7's secret step moved after the
+  endpoint is created.
+
+## [Unreleased] - 2026-10-21 — Stripe webhook and nightly reconcile (MUT-360, ADR-165)
+
+**Why:** Pilot subscriptions are made by hand in Stripe, and MUT-358's billing tables had no writer, so `/v1/me` couldn't tell who paid. A missed or out-of-order webhook must never leave a payer uncovered. Nothing is enforced yet (MUT-361).
+
+### Added
+- **`POST /v1/billing/stripe/webhook`** (public; Stripe-Signature on the raw body, 256 KB cap, 300 requests a minute per address). It re-fetches the subscription each event names instead of trusting the payload, and answers `{ received: true, result }`. 9 event types (`HANDLED_EVENT_TYPES`).
+- **`POST /jobs/v1/billing/stripe-reconcile`** (Cloud Scheduler, `X-Job-Token`) and **`POST /admin/v1/billing/stripe/reconcile`** (operator, `npm run billing:reconcile`): list every subscription, repair the mirror, prune `stripe_events` past 90 days, answer `{ checked, changed, unlinked, errors, pruned }`.
+- **`server/src/billing/stripe/`**: `gateway.ts` (the Stripe port and SDK adapter; API version pinned to `2026-09-30.endive`; webhook budget 4 s / 0 retries, reconcile 10 s / 2; errors wrapped as `StripeGatewayError`), `mirror.ts` (pure: tier from `product.metadata.tier`, item-level period end, currency, org id), `sync.ts` (`handleEvent`, `syncSubscription`, `reconcile`).
+- **`server/src/routes/stripe-billing.ts`**: all three doors. **`jobAuth`** in `routes/admin.ts`: `/jobs/*` only, 503 when no token is set.
+- **Repository**: `billing.getAccount`, `beginStripeEvent`, `finishStripeEvent`, `pruneStripeEvents` (all `operator` in `STORE_ACCESS`); `repositories/billing-audit.ts` builds `billing.subscription_changed` for both stores.
+- **Error codes**: `INVALID_SIGNATURE` 400, `JOB_UNAUTHORIZED` 401, `RECONCILE_RUNNING` 409, `PAYLOAD_TOO_LARGE` 413, `BILLING_NOT_CONFIGURED` 503, `JOBS_NOT_CONFIGURED` 503. API 1.44.0-mut360, additive; OpenAPI security scheme `jobToken`.
+- **Config**: `STRIPE_SECRET_KEY` (`sk_`/`rk_`) and `STRIPE_WEBHOOK_SECRET` (`whsec_`), both or neither, a live key only where `API_KEY_ENVIRONMENT=live`; `MUTABA3A_JOB_TOKEN` (at least 32 characters). Unset, the server warns at boot and the routes answer 503.
+- **Terraform**: `stripe_enabled` (default false); secrets `mutaba3a-api-stripe-secret-key${suffix}` and `mutaba3a-api-stripe-webhook-secret${suffix}`, created empty with accessor IAM and mounted only when the flag is on; `mutaba3a-api-job-token${suffix}` (generated, always mounted); `cloudscheduler.googleapis.com`; `google_cloud_scheduler_job.stripe_reconcile` at 03:30 Asia/Jerusalem (`attempt_deadline` 280s, 3 retries), only when the flag is on. `tests/stripe.tftest.hcl`. Not applied.
+
+### Changed
+- **`billing.saveAccount`** fills an empty link and never unlinks or relinks (D5). It returns `{ account, linked, conflict }` (`CUSTOMER_LINKED_ELSEWHERE` | `USER_HAS_ANOTHER_ACCOUNT` | `UNKNOWN_USER`) and writes `billing.account_linked` in its transaction on a new link.
+- **`billing.saveSubscription`** keeps the newer read: `FOR UPDATE`, `stripeUpdatedAt` is when the request to Stripe was sent, and it returns `{ subscription, outcome: created | changed | unchanged | stale }`. It audits only a change to a mirrored field.
+- **`subscriptionCovers`** (`billing/entitlement.ts`, D8/D9): a subscription tied to an organization covers it only when nobody owns it or the payer does. Partial override of ADR-162 decision 2.
+- `/jobs/` joins `PORTAL_EXCLUDED_PREFIXES`. The logger redacts `stripe-signature` and `x-job-token`. The webhook joins `PUBLIC_OPERATIONS` and the no-self-registration list.
+- Docs: `server/DEPLOYMENT.md` §6e (apply, turn on, rotate), `docs/operations/pilot-runbook.md` §1.7 (cutover checklist), `docs/operations/before-release.md` (non-blocking line), `docs/commercial/pilot-offer.md`.
+
+### Technical
+- Dependency `stripe@23.0.0`.
+- Tests: `mirror.test.ts`; `stripe-gateway.test.ts` (recorded fixtures through `Stripe.createFetchHttpClient`: paths, `expand[]`, `status=all`, `limit=100`, the `Stripe-Version` header, pagination, budgets, error wrapping, the version pinned to the SDK's); `sync.test.ts` (out of order, AC3, AC4 with no account yet, checkout, conflicts, no-ops, timeout and redelivery, overlap); `stripe-billing.test.ts` (signatures, replay, 413/429/503, tokens, no secrets in logs); `store-contract-billing.ts` on memory and Postgres; `entitlement.test.ts` coverage rows; `config.test.ts`; `logger.test.ts`.
+- `src/hosted/api/schema.d.ts` regenerated.
+- TD-196 (the full list at scale), TD-197 (a static job token, not OIDC).
+
 ## [Unreleased] - 2026-10-21 — Co-owners: two or three people own one Business profile (MUT-373, ADR-163)
 
 **Why:** Partners running one small business couldn't keep its books together while each kept a private personal profile. An owned profile could never be granted, and an operator firm reads as nobody's own.

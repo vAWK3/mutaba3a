@@ -1,0 +1,31 @@
+{
+  "id": "sub_P01",
+  "object": "subscription",
+  "status": "active",
+  "cancel_at_period_end": false,
+  "currency": "ils",
+  "livemode": false,
+  "metadata": {},
+  "schedule": null,
+  "customer": { "id": "cus_P01", "object": "customer", "address": { "country": "IL" }, "currency": "ils", "livemode": false, "metadata": { "mutaba3a_user_id": "11111111-1111-4111-8111-111111111111" } },
+  "items": {
+    "object": "list",
+    "has_more": false,
+    "data": [
+      {
+        "id": "si_P01",
+        "object": "subscription_item",
+        "current_period_start": 1793491200,
+        "current_period_end": 1796083200,
+        "price": {
+          "id": "price_FOUNDER_ILS",
+          "object": "price",
+          "currency": "ils",
+          "lookup_key": "freelancer_founder_monthly_ils",
+          "unit_amount": 3900,
+          "product": { "id": "prod_FREELANCER", "object": "product", "active": true, "name": "Freelancer", "metadata": { "tier": "freelancer" } }
+        }
+      }
+    ]
+  }
+}

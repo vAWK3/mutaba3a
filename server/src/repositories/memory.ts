@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { applyMalafatChange } from '../malafat-suggestions.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
+import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import type {
   BillingAccountRecord,
   BillingRepository,
   BillingSubscriptionRecord,
+  SaveBillingAccountConflict,
   EntitlementGrantRecord,
   AccountSetupRepository,
   AccountSetupTokenRecord,
@@ -138,7 +140,7 @@ import type {
   RecordsExportRepository,
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
-import { CAPTURE_UNDO_REASON } from './ports.js';
+import { CAPTURE_UNDO_REASON, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { isBeforeCursor, mergeNewestFirst } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, ownsProfile, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
@@ -252,6 +254,8 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly billingSubs = new Map<string, BillingSubscriptionRecord>();
   private readonly grants = new Map<string, EntitlementGrantRecord>();
   private readonly trialStarts = new Map<string, Date>();
+  /** MUT-360: Stripe webhook events by id (processedAt null until handled), also outside the snapshot. */
+  private readonly stripeEvents = new Map<string, { type: string; receivedAt: Date; processedAt: Date | null; error: string | null }>();
 
   readonly organizations: OrganizationRepository = {
     create: async (input: CreateOrganizationInput) => {
@@ -1893,35 +1897,77 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       return { account: { ...account }, linked: true };
     },
+    getSubscription: async (stripeSubscriptionId) => clone([...this.billingSubs.values()].find((s) => s.stripeSubscriptionId === stripeSubscriptionId)),
+    getAccount: async (stripeCustomerId) => clone([...this.billingAccounts.values()].find((a) => a.stripeCustomerId === stripeCustomerId)),
     listAccounts: async ({ linked }) =>
       [...this.billingAccounts.values()]
         .filter((a) => linked === undefined || (a.userId !== null) === linked)
         .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
         .map((a) => ({ ...a })),
     saveAccount: async (input) => {
-      if (input.userId !== null && !this.people.has(input.userId)) throw new ForeignKeyViolation('billing_accounts.userId');
-      const now = new Date();
-      const existing = [...this.billingAccounts.values()].find((a) => a.stripeCustomerId === input.stripeCustomerId);
-      if (input.userId !== null && [...this.billingAccounts.values()].some((a) => a.userId === input.userId && a !== existing)) {
-        throw new UniqueViolation('billing_accounts.userId');
+      const accounts = [...this.billingAccounts.values()];
+      const existing = accounts.find((a) => a.stripeCustomerId === input.stripeCustomerId);
+      let userId = existing?.userId ?? null;
+      let conflict: SaveBillingAccountConflict | null = null;
+      if (input.userId !== null && input.userId !== userId) {
+        if (userId !== null) conflict = 'CUSTOMER_LINKED_ELSEWHERE';
+        else if (!this.people.has(input.userId)) conflict = 'UNKNOWN_USER';
+        else if (accounts.some((a) => a.userId === input.userId)) conflict = 'USER_HAS_ANOTHER_ACCOUNT';
+        else userId = input.userId;
       }
-      const account: BillingAccountRecord = existing ?? { id: randomUUID(), ...input, createdAt: now, updatedAt: now };
-      Object.assign(account, input, { updatedAt: now });
+      const linked = userId !== null && userId !== (existing?.userId ?? null);
+      const currency = input.currency ?? existing?.currency ?? null;
+      if (currency === null) throw new StateConflict('billing_account', 'CURRENCY_REQUIRED');
+      const account: BillingAccountRecord = existing ?? {
+        id: randomUUID(),
+        userId: null,
+        stripeCustomerId: input.stripeCustomerId,
+        country: null,
+        currency,
+        createdAt: input.at,
+        updatedAt: input.at,
+      };
+      Object.assign(account, { userId, country: input.country ?? account.country, currency, updatedAt: input.at });
       this.billingAccounts.set(account.id, account);
-      return { ...account };
+      if (linked) for (const event of input.linkAudit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return { account: { ...account }, linked, conflict };
     },
     saveSubscription: async (input) => {
       const account = [...this.billingAccounts.values()].find((a) => a.stripeCustomerId === input.stripeCustomerId);
       if (!account) throw new ForeignKeyViolation('billing_subscriptions.billingAccountId');
       if (input.organizationId !== null && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('billing_subscriptions.organizationId');
-      const now = new Date();
-      const { stripeCustomerId, ...fields } = input;
+      const { stripeCustomerId, at, audit, ...fields } = input;
       void stripeCustomerId; // matched above; the subscription row stores the account id instead
       const existing = [...this.billingSubs.values()].find((s) => s.stripeSubscriptionId === input.stripeSubscriptionId);
-      const sub: BillingSubscriptionRecord = existing ?? { id: randomUUID(), billingAccountId: account.id, ...fields, createdAt: now, updatedAt: now };
-      Object.assign(sub, fields, { billingAccountId: account.id, updatedAt: now });
+      if (existing && existing.stripeUpdatedAt > input.stripeUpdatedAt) return { subscription: { ...existing }, outcome: 'stale' as const };
+      const before = existing ? { ...existing } : null;
+      const sub: BillingSubscriptionRecord = existing ?? { id: randomUUID(), billingAccountId: account.id, ...fields, createdAt: at, updatedAt: at };
+      Object.assign(sub, fields, { billingAccountId: account.id, updatedAt: at });
       this.billingSubs.set(sub.id, sub);
-      return { ...sub };
+      const changed = before === null || subscriptionChanged(before, sub);
+      if (changed) for (const event of subscriptionChangeAudit(before, sub, audit)) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return { subscription: { ...sub }, outcome: before === null ? ('created' as const) : changed ? ('changed' as const) : ('unchanged' as const) };
+    },
+    beginStripeEvent: async ({ id, type, at }) => {
+      const row = this.stripeEvents.get(id);
+      if (!row) this.stripeEvents.set(id, { type, receivedAt: at, processedAt: null, error: null });
+      return { alreadyProcessed: row?.processedAt != null };
+    },
+    finishStripeEvent: async (id, outcome) => {
+      const row = this.stripeEvents.get(id);
+      if (!row) return;
+      if ('processedAt' in outcome) Object.assign(row, { processedAt: outcome.processedAt, error: null });
+      else row.error = outcome.error.slice(0, STRIPE_EVENT_ERROR_MAX);
+    },
+    pruneStripeEvents: async (before) => {
+      let count = 0;
+      for (const [id, row] of this.stripeEvents) {
+        if (row.receivedAt < before) {
+          this.stripeEvents.delete(id);
+          count += 1;
+        }
+      }
+      return count;
     },
   };
 

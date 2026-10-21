@@ -21,6 +21,7 @@
 #   SKIP_REMOTE        do not contact origin (offline)
 #   SKIP_TERMS_CHECK   server: do not check the terms are live (an emergency fix that keeps the version)
 #   SKIP_CMEK_GUARD    server: 0 runs deploy.sh's MUT-381 release guard; off by default until MUT-385
+#   SKIP_STRIPE_GUARD  server: 1 skips deploy.sh's MUT-360 guard (a release that would switch Stripe off)
 #
 # Other knobs:
 #   RELEASE_BRANCH     branch a release must come from (default: main)
@@ -391,6 +392,15 @@ if [[ "$MODE" == "server" ]]; then
     ok "on (SKIP_CMEK_GUARD=0)"
   else
     ok "off, the default until MUT-385 ${DIM}(SKIP_CMEK_GUARD=0 turns it on; it must be on before any CMEK cutover)${NC}"
+  fi
+
+  # MUT-360: deploy.sh refuses a release that would switch Stripe off (this checkout's production.tfvars
+  # without stripe_enabled = true while production runs it). On by default (lib/release-guard.sh).
+  head_ "Stripe release guard"
+  if [[ "${SKIP_STRIPE_GUARD:-0}" == "1" ]]; then
+    warn "skipped (SKIP_STRIPE_GUARD=1): this release may switch Stripe off"
+  else
+    ok "on ${DIM}(SKIP_STRIPE_GUARD=1 skips it, only to switch Stripe off on purpose)${NC}"
   fi
 fi
 

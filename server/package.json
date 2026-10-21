@@ -46,6 +46,8 @@
     "billing:grants": "tsx src/scripts/users.ts billing-grants",
     "billing:link": "tsx src/scripts/users.ts billing-link",
     "billing:unlinked": "tsx src/scripts/users.ts billing-unlinked",
+    "billing:reconcile": "tsx src/scripts/users.ts billing-reconcile",
+    "billing:status": "tsx src/scripts/users.ts billing-status",
     "smoke": "tsx src/scripts/smoke.ts",
     "seed:demo-account": "tsx src/scripts/seed-demo-account.ts",
     "reconcile": "tsx src/scripts/reconcile.ts",
@@ -63,6 +65,7 @@
     "@prisma/client": "6.19.3",
     "hono": "4.13.13",
     "pino": "10.4.0",
+    "stripe": "23.0.0",
     "yaml": "2.9.1",
     "zod": "4.6.5"
   },

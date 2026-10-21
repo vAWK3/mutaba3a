@@ -3,11 +3,13 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError } from '../errors.js';
+import { billingStatusOf, serializeEntitlement } from '../billing/coverage.js';
 import { ownedProfilesOf } from '../personal-profile.js';
 import { ForeignKeyViolation, StateConflict } from '../repositories/memory.js';
 import type { AuditEventInput, JsonObject, LedgerStore } from '../repositories/ports.js';
 import {
   BillingAccountListSchema,
+  BillingStatusSchema,
   CreateEntitlementGrantRequestSchema,
   EntitlementGrantListSchema,
   EntitlementGrantSchema,
@@ -187,6 +189,60 @@ export function adminBillingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { linked } = c.req.valid('query');
       const accounts = await store.billing.listAccounts({ linked: linked === undefined ? undefined : linked === 'true' });
       return c.json({ accounts: accounts.map(serializeBillingAccount) }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/admin/v1/billing/status',
+      tags: ['Admin'],
+      summary: 'One person’s Stripe mirror and entitlement, with and without operator grants (MUT-360)',
+      description: 'The pilot cutover check: revoke a person’s grant only once `billingWithoutGrants` shows ACTIVE / STRIPE. Exactly one of userId and email.',
+      security: [{ adminToken: [] }],
+      request: { query: z.object({ userId: z.string().uuid().optional(), email: z.string().min(3).max(320).optional() }) },
+      responses: {
+        200: { description: 'Billing status', content: { 'application/json': { schema: BillingStatusSchema } } },
+        404: errorResponse('No such person'),
+        422: errorResponse('Validation failed'),
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const query = c.req.valid('query');
+      if ((query.userId === undefined) === (query.email === undefined)) throw new ApiError('VALIDATION_FAILED', 'Give exactly one of userId and email');
+      const userId = await personId({ userId: query.userId, userEmail: query.email });
+      const user = (await store.users.getById(userId))!;
+      const owned = await ownedProfilesOf(store, userId);
+      const profiles = await Promise.all(
+        owned.map(async (organization) => ({
+          organization,
+          malafatConnected: (await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT'))?.status === 'CONNECTED',
+        })),
+      );
+      const { subscriptions, entitlements } = await billingStatusOf(store, profiles, c.get('now')());
+      const accounts = (await store.billing.listAccounts({ linked: true })).filter((a) => a.userId === userId);
+      return c.json(
+        {
+          user: { id: user.id, email: user.email },
+          accounts: accounts.map(serializeBillingAccount),
+          subscriptions: subscriptions.map((s) => ({
+            stripeSubscriptionId: s.stripeSubscriptionId,
+            tier: s.tier,
+            status: s.status,
+            currentPeriodEnd: s.currentPeriodEnd.toISOString(),
+            cancelAtPeriodEnd: s.cancelAtPeriodEnd,
+            organizationId: s.organizationId,
+            priceLookupKey: s.priceLookupKey,
+            payerUserId: s.userId,
+          })),
+          profiles: owned.map((o) => {
+            const e = entitlements.get(o.id)!;
+            return { id: o.id, name: o.name, billing: serializeEntitlement(e.current), billingWithoutGrants: serializeEntitlement(e.withoutGrants) };
+          }),
+        },
+        200,
+      );
     },
   );
 

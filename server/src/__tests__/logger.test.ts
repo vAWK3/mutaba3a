@@ -6,7 +6,7 @@ import { createLogger } from '../logger.js';
  * for logs. pino's `*.x` wildcard matches one level, so the paths are spelled
  * out to the depths our objects reach; this pins every one of them.
  */
-const SECRET_KEYS = ['authorization', 'cookie', 'set-cookie', 'password', 'token', 'secret', 'apiKey', 'key', 'x-admin-token', 'sessionToken'];
+const SECRET_KEYS = ['authorization', 'cookie', 'set-cookie', 'password', 'token', 'secret', 'apiKey', 'key', 'x-admin-token', 'sessionToken', 'stripe-signature', 'x-job-token'];
 
 function capture() {
   const lines: string[] = [];

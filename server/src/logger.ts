@@ -9,7 +9,7 @@ import pino, { type DestinationStream, type Logger } from 'pino';
  * cookie and response Set-Cookie headers are named explicitly. TD-039: pinned
  * by `__tests__/logger.test.ts`.
  */
-const SENSITIVE_KEYS = ['authorization', 'cookie', 'set-cookie', 'password', 'token', 'secret', 'apiKey', 'key', 'x-admin-token', 'sessionToken'];
+const SENSITIVE_KEYS = ['authorization', 'cookie', 'set-cookie', 'password', 'token', 'secret', 'apiKey', 'key', 'x-admin-token', 'sessionToken', 'stripe-signature', 'x-job-token'];
 const MAX_DEPTH = 3;
 
 function segment(key: string): string {
