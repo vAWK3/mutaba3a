@@ -342,6 +342,22 @@ export const LinkBillingAccountResponseSchema = z
   .openapi('LinkBillingAccountResponse');
 export const BillingAccountListSchema = z.object({ accounts: z.array(BillingAccountSchema) }).openapi('BillingAccountList');
 
+/** MUT-360: what the webhook answers Stripe; `result` shows in Stripe's delivery log. */
+export const StripeWebhookResponseSchema = z
+  .object({ received: z.literal(true), result: z.enum(['ignored', 'duplicate', 'noop', 'processed', 'error']) })
+  .openapi('StripeWebhookResponse');
+
+/** MUT-360: one reconcile run. Always 200; `errors` lists what needs the operator (subscriptionId null: listing failed). */
+export const StripeReconcileSummarySchema = z
+  .object({
+    checked: z.number().int(),
+    changed: z.number().int(),
+    unlinked: z.number().int(),
+    errors: z.array(z.object({ subscriptionId: z.string().nullable(), code: z.string() })),
+    pruned: z.number().int(),
+  })
+  .openapi('StripeReconcileSummary');
+
 // ---- Admin: operator-provisioned users (MUT-37, ADR-037) --------------------
 
 export const UserLocaleSchema = z.enum(['en', 'ar']).openapi('UserLocale');

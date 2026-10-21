@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import pino from 'pino';
-import { createApp } from '../../app.js';
+import { createApp, type AppDependencies } from '../../app.js';
+import { FakeStripeGateway, stripeObjects } from '../../billing/stripe/__tests__/fake.js';
 import { sessionDigest } from '../../auth/sessions.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher } from '../../auth/users.js';
 import { SlidingWindowRateLimiter } from '../../rate-limit.js';
@@ -15,7 +16,7 @@ const PEPPER = 'cli-session-pepper-with-at-least-32-chars';
 /** MUT-235: the printed setup links — https even though the CLI called the API over http (only loopback keeps http). */
 const links = (out: string[]) => out.filter((l) => /^https:\/\/mutaba3a\.test\/setup#[A-Za-z0-9_-]{43}$/.test(l));
 
-function harness() {
+function harness(extra: Partial<AppDependencies> = {}) {
   const store = new MemoryLedgerStore();
   const app = createApp({
     store,
@@ -26,6 +27,7 @@ function harness() {
     version: 'test',
     passwordHasher: createArgon2Hasher(ARGON2_MINIMUMS),
     sessions: { pepper: PEPPER, idleMinutes: 120, absoluteHours: 12, secureCookie: false, trustedProxyHops: 1 },
+    ...extra,
   });
   const fetchFn = ((input: string | URL | Request, init?: RequestInit) => app.request(input as string, init)) as typeof fetch;
   const out: string[] = [];
@@ -338,5 +340,21 @@ describe('billing verbs (MUT-358)', () => {
     expect(await h.run(['billing-unlinked'])).toBe(0);
     expect(h.out).toEqual([expect.stringMatching(/^cus_LEFT USD: seen /)]);
   });
-});
 
+  it('billing-reconcile runs the Stripe reconcile now and prints what needs the operator (MUT-360)', async () => {
+    expect(await harness().run(['billing-reconcile'])).toBe(1);
+    const off = harness();
+    await off.run(['billing-reconcile']);
+    expect(off.err.join('\n')).toContain('BILLING_NOT_CONFIGURED');
+
+    const stripe = new FakeStripeGateway(() => new Date());
+    stripe.products.set('prod_F', stripeObjects.product('prod_F', 'freelancer'));
+    stripe.products.set('prod_X', stripeObjects.product('prod_X', null));
+    stripe.customers.set('cus_1', stripeObjects.customer('cus_1'));
+    stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_F' }));
+    stripe.subscriptions.set('sub_2', stripeObjects.subscription({ id: 'sub_2', customer: 'cus_1', product: 'prod_X' }));
+    const h = harness({ stripe: { webhookGateway: stripe, reconcileGateway: stripe } });
+    expect(await h.run(['billing-reconcile'])).toBe(0);
+    expect(h.out).toEqual(['checked 2, changed 1, unlinked 1, pruned 0', '  sub_2: UNKNOWN_TIER']);
+  });
+});

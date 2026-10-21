@@ -45,7 +45,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -74,6 +74,7 @@ const USAGE = [
   '  billing-grants [--email <email> | --organization-id <uuid>] [--active]',
   '  billing-link   --customer cus_… --email <email> [--currency ILS|USD]   (currency only for a customer the server has not seen yet)',
   '  billing-unlinked   (Stripe customers not yet matched to a person)',
+  '  billing-reconcile  (MUT-360: re-read every Stripe subscription now, as the nightly job does)',
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
 ].join('\n');
 
@@ -323,6 +324,14 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
     const { accounts } = await client.call<{ accounts: BillingAccountRow[] }>('GET', '/admin/v1/billing/accounts?linked=false');
     for (const a of accounts) out(`${a.stripeCustomerId} ${a.currency}${a.country ? ` ${a.country}` : ''}: seen ${a.createdAt}`);
     if (accounts.length === 0) out('every Stripe customer is linked');
+  },
+  'billing-reconcile': async ({ client, out }) => {
+    const s = await client.call<{ checked: number; changed: number; unlinked: number; pruned: number; errors: { subscriptionId: string | null; code: string }[] }>(
+      'POST',
+      '/admin/v1/billing/stripe/reconcile',
+    );
+    out(`checked ${s.checked}, changed ${s.changed}, unlinked ${s.unlinked}, pruned ${s.pruned}`);
+    for (const e of s.errors) out(`  ${e.subscriptionId ?? '(listing)'}: ${e.code}`);
   },
 };
 

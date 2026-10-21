@@ -9,6 +9,8 @@ import { SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
 import { createArgon2Hasher } from './auth/users.js';
 import { CachedFxRates, FrankfurterSource } from './fx-rates.js';
 import { PUBLIC_FX_POLICY } from './routes/fx-rates.js';
+import { createStripeGateway, RECONCILE_BUDGET, WEBHOOK_BUDGET } from './billing/stripe/gateway.js';
+import { STRIPE_WEBHOOK_POLICY } from './routes/stripe-billing.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -18,6 +20,11 @@ const signInThrottle = new SignInThrottle();
 const signInIpLimiter = new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute);
 // MUT-287: the anonymous GET /v1/public/fx-rates keys one window per address; built here so the timer below prunes it.
 const publicFxIpLimiter = new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute);
+const stripeWebhookIpLimiter = new SlidingWindowRateLimiter(STRIPE_WEBHOOK_POLICY.ipPerMinute);
+// MUT-360 D7: one gateway per budget; config refuses a key without its webhook secret, so both or neither exist.
+const stripeGateway = (budget: { timeoutMs: number; maxNetworkRetries: number }) =>
+  createStripeGateway({ secretKey: config.STRIPE_SECRET_KEY!, webhookSecret: config.STRIPE_WEBHOOK_SECRET!, ...budget, now: () => new Date() });
+const stripe = config.STRIPE_SECRET_KEY ? { webhookGateway: stripeGateway(WEBHOOK_BUDGET), reconcileGateway: stripeGateway(RECONCILE_BUDGET) } : null;
 
 const fxRates = new CachedFxRates({
   source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
@@ -55,6 +62,9 @@ const app = createApp({
   signInThrottle,
   signInIpLimiter,
   publicFxIpLimiter,
+  stripe,
+  jobToken: config.MUTABA3A_JOB_TOKEN ?? null,
+  stripeWebhookIpLimiter,
   portal: config.PORTAL_DIST_DIR ? { distDir: config.PORTAL_DIST_DIR } : null,
   appAssociation:
     config.APPLE_TEAM_ID && config.APPLE_BUNDLE_ID && config.ANDROID_PACKAGE_NAME && config.ANDROID_SHA256_FINGERPRINTS
@@ -73,6 +83,8 @@ const app = createApp({
   },
 });
 if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; attachments routes answer 503');
+if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; the Stripe webhook and reconcile answer 503');
+if (!config.MUTABA3A_JOB_TOKEN) logger.warn('MUTABA3A_JOB_TOKEN is not set; /jobs/* answers 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
 if (!config.APPLE_TEAM_ID) logger.warn('APPLE_TEAM_ID/APPLE_BUNDLE_ID/ANDROID_PACKAGE_NAME/ANDROID_SHA256_FINGERPRINTS are not set; no app-association files served');
 
@@ -89,6 +101,7 @@ const pruneTimer = setInterval(() => {
   signInThrottle.prune(now);
   signInIpLimiter.prune(now);
   publicFxIpLimiter.prune(now);
+  stripeWebhookIpLimiter.prune(now);
 }, 60_000);
 pruneTimer.unref();
 

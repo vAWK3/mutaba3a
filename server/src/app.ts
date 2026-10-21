@@ -17,8 +17,11 @@ import type { Logger } from './logger.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
 import type { LedgerStore } from './repositories/ports.js';
 import type { AttachmentStorage } from './attachments/storage.js';
-import { adminAuth, adminRoutes } from './routes/admin.js';
+import { adminAuth, adminRoutes, jobAuth } from './routes/admin.js';
 import { adminBillingRoutes } from './routes/admin-billing.js';
+import { STRIPE_WEBHOOK_POLICY, stripeBillingRoutes } from './routes/stripe-billing.js';
+import type { StripeGateway } from './billing/stripe/gateway.js';
+import { createStripeSync } from './billing/stripe/sync.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
@@ -78,6 +81,15 @@ export interface AppDependencies {
   publicFxIpLimiter?: RateLimiter;
   /** MUT-293 minimum app version gate. Null or absent = no platform gated (every floor/recommended undefined, check not disabled). */
   minimumBuild?: MinimumBuildConfig | null;
+  /**
+   * MUT-360: Stripe, one gateway per budget (D7: the webhook answers fast, reconcile is patient). Null or absent = the
+   * webhook and both reconcile routes answer 503 BILLING_NOT_CONFIGURED.
+   */
+  stripe?: { webhookGateway: StripeGateway; reconcileGateway: StripeGateway } | null;
+  /** MUT-360 D2: the nightly Scheduler job's token. Null or absent = /jobs/* answers 503 JOBS_NOT_CONFIGURED. */
+  jobToken?: string | null;
+  /** Per-IP budget for the Stripe webhook. Defaults to STRIPE_WEBHOOK_POLICY. */
+  stripeWebhookIpLimiter?: RateLimiter;
 }
 
 const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disabled: false };
@@ -92,7 +104,7 @@ const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disa
  * still 404 as JSON, never silently serve the SPA shell to an Apple/Google
  * crawler.
  */
-const PORTAL_EXCLUDED_PREFIXES = ['/v1/', '/admin/'];
+const PORTAL_EXCLUDED_PREFIXES = ['/v1/', '/admin/', '/jobs/'];
 const PORTAL_EXCLUDED_EXACT = new Set([
   '/health',
   '/ready',
@@ -139,7 +151,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.43.0-mut373';
+export const API_VERSION = '1.44.0-mut360';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -196,6 +208,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
+  app.use('/jobs/*', jobAuth(deps.jobToken ?? null));
 
   // MUT-61: register CaptureSource as itself before any route references it. The generator otherwise takes the first
   // use it meets as the component; Payment's nullable response field made the shared component nullable, and every
@@ -255,6 +268,22 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms }));
   app.route('/', adminBillingRoutes(store));
+  // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
+  const stripe = deps.stripe
+    ? {
+        webhookGateway: deps.stripe.webhookGateway,
+        sync: createStripeSync({ store: deps.store, webhookGateway: deps.stripe.webhookGateway, reconcileGateway: deps.stripe.reconcileGateway, logger: deps.logger, now }),
+      }
+    : null;
+  app.route(
+    '/',
+    stripeBillingRoutes({
+      stripe,
+      ipLimiter: deps.stripeWebhookIpLimiter ?? new SlidingWindowRateLimiter(STRIPE_WEBHOOK_POLICY.ipPerMinute),
+      trustedProxyHops: sessions.trustedProxyHops,
+      ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}),
+    }),
+  );
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
@@ -275,6 +304,12 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       'Native-app device session (MUT-64): `Authorization: Bearer mds_<secret>`. ' +
       'Set by POST /v1/device-sessions. Same session principal and writability as the portal cookie session — ' +
       'organization-scoped calls add X-Mutaba3a-Profile: <organizationId> naming one of the user\'s memberships.',
+  });
+  app.openAPIRegistry.registerComponent('securitySchemes', 'jobToken', {
+    type: 'apiKey',
+    in: 'header',
+    name: 'X-Job-Token',
+    description: 'The nightly Cloud Scheduler job (MUTABA3A_JOB_TOKEN, MUT-360). Opens /jobs/* only.',
   });
   app.openAPIRegistry.registerComponent('securitySchemes', 'adminToken', {
     type: 'apiKey',

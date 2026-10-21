@@ -47,13 +47,14 @@ export interface SyncResult {
   reachesNobody: boolean;
 }
 
-export interface ReconcileSummary {
+/** A type, not an interface: Hono's typed JSON responses need the implicit index signature only type aliases have. */
+export type ReconcileSummary = {
   checked: number;
   changed: number;
   unlinked: number;
   errors: { subscriptionId: string | null; code: string }[];
   pruned: number;
-}
+};
 
 export type HandleResult = { status: 200 | 500; result: 'ignored' | 'duplicate' | 'noop' | 'processed' | 'error'; codes: SyncCode[] };
 

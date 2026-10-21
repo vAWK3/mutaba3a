@@ -82,6 +82,15 @@ const envSchema = z.object({
    * it on (never z.coerce.boolean, which reads "false" as true). Needs FRONT_DOOR_TOKEN.
    */
   PORTAL_LEGACY_REDIRECT: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-360: Stripe (Secret Manager, mounted only once stripe_enabled is applied). A restricted key, read-only on
+   * billing objects; both or neither — unset, the webhook and reconcile answer 503. A live key only where
+   * API_KEY_ENVIRONMENT is live, so a test server can never read the real account.
+   */
+  STRIPE_SECRET_KEY: z.string().regex(/^(rk|sk)_(test|live)_[A-Za-z0-9_]+$/, 'must be a Stripe secret or restricted key (sk_/rk_)').optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9_]+$/, 'must be a Stripe webhook signing secret (whsec_)').optional(),
+  /** MUT-360 D2: the nightly Scheduler job's X-Job-Token (Terraform-generated). Unset = /jobs/* answers 503. */
+  MUTABA3A_JOB_TOKEN: z.string().min(32, 'MUTABA3A_JOB_TOKEN must be at least 32 characters').optional(),
 });
 
 const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
@@ -124,6 +133,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   if (config.PORTAL_LEGACY_REDIRECT && !config.FRONT_DOOR_TOKEN) {
     throw new ConfigError('Invalid configuration:\n  PORTAL_LEGACY_REDIRECT: needs FRONT_DOOR_TOKEN, or every visit would be redirected, the new host\'s included');
+  }
+  if ((config.STRIPE_SECRET_KEY === undefined) !== (config.STRIPE_WEBHOOK_SECRET === undefined)) {
+    const missing = config.STRIPE_SECRET_KEY === undefined ? 'STRIPE_SECRET_KEY' : 'STRIPE_WEBHOOK_SECRET';
+    throw new ConfigError(`Invalid configuration:\n  ${missing}: STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are set together or not at all`);
+  }
+  if (config.STRIPE_SECRET_KEY && /^(rk|sk)_live_/.test(config.STRIPE_SECRET_KEY) && config.API_KEY_ENVIRONMENT !== 'live') {
+    throw new ConfigError('Invalid configuration:\n  STRIPE_SECRET_KEY: a live Stripe key needs API_KEY_ENVIRONMENT=live');
   }
   for (const { min, recommended } of MIN_BUILD_PLATFORMS) {
     const floor = config[min];

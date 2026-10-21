@@ -12,12 +12,16 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
  * a code here is a contract change and must appear in openapi.yaml.
  */
 export const ERROR_CODES = {
+  /** MUT-360: a Stripe webhook whose Stripe-Signature doesn't verify against this endpoint's secret (or is too old). */
+  INVALID_SIGNATURE: 400,
   UNAUTHENTICATED: 401,
   INVALID_API_KEY: 401,
   API_KEY_REVOKED: 401,
   API_KEY_EXPIRED: 401,
   API_KEY_ENVIRONMENT_MISMATCH: 401,
   ADMIN_UNAUTHORIZED: 401,
+  /** MUT-360 D2: /jobs/* without the Scheduler's X-Job-Token. */
+  JOB_UNAUTHORIZED: 401,
   INVALID_CREDENTIALS: 401,
   SESSION_EXPIRED: 401,
   INSUFFICIENT_SCOPE: 403,
@@ -31,6 +35,8 @@ export const ERROR_CODES = {
   ORGANIZATION_MISMATCH: 409,
   CONFLICT: 409,
   OPERATION_IN_PROGRESS: 409,
+  /** MUT-360: a Stripe reconcile is already running on this instance; the next one runs when it ends. */
+  RECONCILE_RUNNING: 409,
   /** MUT-324: the terms version the client accepted (or none) is not the current one; `details.current` names it. */
   TERMS_VERSION_STALE: 409,
   /** MUT-235: a setup link that can no longer set a password; `details.state` is expired | used | superseded | invalid. */
@@ -38,9 +44,15 @@ export const ERROR_CODES = {
   VALIDATION_FAILED: 422,
   IDEMPOTENCY_KEY_REUSED: 422,
   IDEMPOTENCY_KEY_REQUIRED: 422,
+  /** MUT-360: a Stripe webhook body over 256 KB. */
+  PAYLOAD_TOO_LARGE: 413,
   RATE_LIMITED: 429,
   INTERNAL: 500,
   ATTACHMENTS_NOT_CONFIGURED: 503,
+  /** MUT-360: no Stripe keys on this server, so neither the webhook nor reconcile can run. */
+  BILLING_NOT_CONFIGURED: 503,
+  /** MUT-360 D2: no job token on this server; /jobs/* refuses everything rather than compare an empty one. */
+  JOBS_NOT_CONFIGURED: 503,
   /** MUT-228: no reference rates to serve (provider down or unusable, and nothing servable cached on this instance; or not configured). */
   FX_RATES_UNAVAILABLE: 503,
   /** MUT-293: the calling phone build is below the configured floor for its platform; details carry { platform, minimumBuild }. */
