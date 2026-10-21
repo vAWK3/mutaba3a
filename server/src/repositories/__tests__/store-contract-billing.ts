@@ -153,6 +153,7 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       const customer = `cus_${unique()}`;
       const linkAudit = [audit(personalOrganization.id, 'billing.account_linked')];
 
+      expect(await store.billing.getAccount(customer)).toBeNull();
       expect(await store.billing.saveAccount(account(customer, null, { country: 'IL', currency: 'ILS' }))).toMatchObject({
         linked: false,
         conflict: null,
@@ -184,6 +185,7 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       });
       expect(await store.billing.saveAccount(account(`cus_${unique()}`, randomUUID(), { linkAudit }))).toMatchObject({ conflict: 'UNKNOWN_USER', account: { userId: null } });
       expect(await store.billing.saveAccount(account(`cus_${unique()}`, 'not-a-uuid', { linkAudit }))).toMatchObject({ conflict: 'UNKNOWN_USER', account: { userId: null } });
+      expect(await store.billing.getAccount(customer)).toMatchObject({ stripeCustomerId: customer, userId: user.id, country: 'IL', currency: 'ILS' });
       expect(await billingAudit(store, personalOrganization.id)).toEqual(['billing.account_linked']);
     });
 

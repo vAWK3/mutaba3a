@@ -257,6 +257,7 @@ export const STORE_ACCESS: StoreAccess = {
     getGrant: 'operator',
     listGrants: 'operator',
     linkAccount: 'operator',
+    getAccount: 'operator',
     listAccounts: 'operator',
     saveAccount: 'operator',
     saveSubscription: 'operator',

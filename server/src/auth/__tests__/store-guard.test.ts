@@ -87,6 +87,7 @@ describe('STORE_ACCESS', () => {
       'billing.beginStripeEvent',
       'billing.createGrant',
       'billing.finishStripeEvent',
+      'billing.getAccount',
       'billing.getGrant',
       'billing.linkAccount',
       'billing.listAccounts',

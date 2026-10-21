@@ -1672,6 +1672,7 @@ export class PrismaLedgerStore implements LedgerStore {
           return { account, linked: true };
         }),
       ),
+    getAccount: (stripeCustomerId) => this.prisma.billingAccount.findUnique({ where: { stripeCustomerId } }),
     listAccounts: ({ linked }) =>
       this.prisma.billingAccount.findMany({
         where: linked === undefined ? {} : { userId: linked ? { not: null } : null },
