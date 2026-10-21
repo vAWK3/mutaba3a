@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — A Malafat firm's expense categories start from the general business list
+
+**Why:** A Malafat-connected firm's first category list was legal-only (court filing fees, bar fees, expert witnesses)
+and had no utilities, software, bank fees or taxes. Basel: categories are general business expenses; legal and
+accounting ones only on a Malafat-connected firm. Every other profile already got the general (or personal) list.
+
+### Changed
+- `server/src/expenses/presets.ts` `LAW_FIRM_PRESET` and the offline `src/db/defaultExpenseCategories.ts`
+  `LAW_FIRM_CATEGORIES`: the general list, then Court & Filing Fees, Notary & Service Fees, Experts & Translation,
+  Professional Association Fees, Professional Liability Insurance, Continuing Professional Education, then Other
+  (en/ar). Selection is unchanged: only `writerOfRecord === 'MALAFAT'` gets it. ADR-066 amendment.
+- Firms seeded earlier keep their list (the seed runs once); no backfill.
+
+### Technical
+- `presets.test.ts` pins the shape (general prefix, the six firm costs, Other last).
+- Flutter `ios.capture.malafat-expense-category` picks "Court & Filing Fees", or "Legal Research Tools" on a QA firm
+  seeded before this change.
+
+---
+
 ## [Unreleased] - 2026-10-21 — Uptime checks move hosts without a failed release (MUT-112 step 4)
 
 **Why:** The first release at stage `live` (api v0.4.1) stopped in `terraform apply`: moving the uptime checks to

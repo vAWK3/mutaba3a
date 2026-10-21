@@ -26,6 +26,13 @@ describe('expense category presets', () => {
     expect(LAW_FIRM_PRESET.length).toBeGreaterThan(10);
   });
 
+  it('gives a Malafat firm the general business list, then legal and accounting costs, Other last', () => {
+    const general = GENERAL_PRESET.slice(0, -1);
+    expect(LAW_FIRM_PRESET.slice(0, general.length)).toEqual(general);
+    expect(LAW_FIRM_PRESET.slice(general.length, -1).map((c) => c.name)).toEqual(['Court & Filing Fees', 'Notary & Service Fees', 'Experts & Translation', 'Professional Association Fees', 'Professional Liability Insurance', 'Continuing Professional Education']);
+    expect(LAW_FIRM_PRESET.at(-1)).toEqual(GENERAL_PRESET.at(-1));
+  });
+
   it('picks law-firm for a Malafat-fed profile, personal for a PERSONAL profile and general for a BUSINESS one or any firm, in the user’s language', () => {
     expect(presetFor({ writerOfRecord: 'MALAFAT', profileType: null }, 'ar')).toEqual({ preset: 'lawFirm', categories: LAW_FIRM_PRESET.map((c) => ({ name: c.nameAr, color: c.color })) });
     expect(presetFor({ writerOfRecord: null, profileType: 'PERSONAL' }, 'en')).toEqual({ preset: 'personal', categories: PERSONAL_PRESET.map((c) => ({ name: c.name, color: c.color })) });
