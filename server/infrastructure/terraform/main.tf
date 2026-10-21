@@ -46,6 +46,12 @@ locals {
   secret_admin_token    = "mutaba3a-api-admin-token${local.suffix}"
   secret_session_pepper = "mutaba3a-api-session-pepper${local.suffix}"
 
+  # MUT-360: the Stripe secrets get their values from Basel (`gcloud secrets versions add`, DEPLOYMENT.md §6e),
+  # never from Terraform. The job token is generated here.
+  secret_stripe_secret_key     = "mutaba3a-api-stripe-secret-key${local.suffix}"
+  secret_stripe_webhook_secret = "mutaba3a-api-stripe-webhook-secret${local.suffix}"
+  secret_job_token             = "mutaba3a-api-job-token${local.suffix}"
+
   # MUT-111: empty (default) = no env vars below, feature off — matches
   # config.ts treating all four as absent. Set together in production.tfvars.
   app_association_env = var.apple_team_id == "" ? {} : {
@@ -75,6 +81,7 @@ resource "google_project_service" "apis" {
     "monitoring.googleapis.com",
     "storage.googleapis.com",
     "iamcredentials.googleapis.com",
+    "cloudscheduler.googleapis.com",
   ], local.cmek_enabled ? ["cloudkms.googleapis.com"] : []))
   project            = var.project_id
   service            = each.key
@@ -333,6 +340,69 @@ resource "google_secret_manager_secret_version" "session_pepper" {
   secret_data = random_password.session_pepper.result
 }
 
+# MUT-360: Stripe's restricted key and webhook signing secret. Created without a version, whatever
+# stripe_enabled says, so Basel can add the values before the flag mounts them (DEPLOYMENT.md §6e).
+resource "google_secret_manager_secret" "stripe_secret_key" {
+  project   = var.project_id
+  secret_id = local.secret_stripe_secret_key
+  labels    = local.labels
+
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret" "stripe_webhook_secret" {
+  project   = var.project_id
+  secret_id = local.secret_stripe_webhook_secret
+  labels    = local.labels
+
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-360 (D2): the Cloud Scheduler job's credential for /jobs/*. It opens nothing else, and the admin
+# token doesn't open /jobs/*. Generated here, never a tfvars value. Rotate with
+# -replace=random_password.job_token, then redeploy: the job's header changes at once, the service on its next revision.
+resource "random_password" "job_token" {
+  length  = 64
+  special = false
+}
+
+resource "google_secret_manager_secret" "job_token" {
+  project   = var.project_id
+  secret_id = local.secret_job_token
+  labels    = local.labels
+
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret_version" "job_token" {
+  secret      = google_secret_manager_secret.job_token.id
+  secret_data = random_password.job_token.result
+}
+
 # ============================================================================
 # Service account and least-privilege IAM
 # ============================================================================
@@ -366,6 +436,27 @@ resource "google_secret_manager_secret_iam_member" "api_reads_admin_token" {
 resource "google_secret_manager_secret_iam_member" "api_reads_session_pepper" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.session_pepper.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "api_reads_stripe_secret_key" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.stripe_secret_key.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "api_reads_stripe_webhook_secret" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.stripe_webhook_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "api_reads_job_token" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.job_token.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.api.email}"
 }
@@ -462,6 +553,34 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
       }
+      # MUT-360: always set, so /jobs/* answers the Scheduler job once stripe_enabled creates it.
+      env {
+        name = "MUTABA3A_JOB_TOKEN"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.job_token.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      # MUT-360: Stripe stays off (routes answer 503) until stripe_enabled. The secrets must hold a version
+      # by then, or the new revision fails to start.
+      dynamic "env" {
+        for_each = var.stripe_enabled ? {
+          STRIPE_SECRET_KEY     = google_secret_manager_secret.stripe_secret_key.secret_id
+          STRIPE_WEBHOOK_SECRET = google_secret_manager_secret.stripe_webhook_secret.secret_id
+        } : {}
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
+      }
 
       dynamic "env" {
         for_each = local.app_association_env
@@ -548,10 +667,14 @@ resource "google_cloud_run_v2_service" "api" {
     google_secret_manager_secret_version.database_url,
     google_secret_manager_secret_version.admin_token,
     google_secret_manager_secret_version.session_pepper,
+    google_secret_manager_secret_version.job_token,
     google_secret_manager_secret_iam_member.api_reads_database_url,
     google_secret_manager_secret_iam_member.api_reads_admin_token,
     google_secret_manager_secret_iam_member.api_reads_session_pepper,
     google_secret_manager_secret_iam_member.api_reads_front_door_token,
+    google_secret_manager_secret_iam_member.api_reads_job_token,
+    google_secret_manager_secret_iam_member.api_reads_stripe_secret_key,
+    google_secret_manager_secret_iam_member.api_reads_stripe_webhook_secret,
   ]
 }
 
@@ -566,6 +689,39 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
 }
 
 # Uptime checks and alerts: monitoring.tf (MUT-328).
+
+# ============================================================================
+# Nightly Stripe reconcile (MUT-360)
+# ============================================================================
+
+# The job token opens only this route (MUT-360 D2). Reconcile always answers 200 with its error list, so
+# the retries only follow a run that never completed (a timeout, a 5xx, a cold start that failed).
+resource "google_cloud_scheduler_job" "stripe_reconcile" {
+  count = var.stripe_enabled ? 1 : 0
+
+  project          = var.project_id
+  name             = "mutaba3a-stripe-reconcile${local.suffix}"
+  region           = var.region
+  description      = "Nightly Stripe reconcile: mirrors every subscription (MUT-360)."
+  schedule         = "30 3 * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "320s"
+
+  retry_config {
+    retry_count = 3
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/stripe-reconcile"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
 
 # ============================================================================
 # Attachments bucket (M6): private, uniform access, reached only through

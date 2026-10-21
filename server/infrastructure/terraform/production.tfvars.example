@@ -13,6 +13,8 @@ min_instances       = 1
 log_level           = "info"
 # MUT-381: our own KMS key. Walk off → prepared → active only as server/DEPLOYMENT.md §6d says.
 # cmek_stage          = "off"
+# MUT-360: Stripe webhook and nightly reconcile. Set true only after both Stripe secrets hold a version (server/DEPLOYMENT.md §6e).
+# stripe_enabled      = false
 # Uptime alerts (MUT-328, server/DEPLOYMENT.md §6b). Real values only in the git-ignored production.tfvars.
 # alert_email      = "you@example.com"
 # alert_sms_number = "+9725XXXXXXXX"   # E.164; verify the SMS channel once after the apply

@@ -62,6 +62,12 @@ variable "cmek_stage" {
   }
 }
 
+variable "stripe_enabled" {
+  description = "MUT-360: mounts the Stripe secrets (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET) into Cloud Run and creates the nightly reconcile Cloud Scheduler job. false (default) = the secrets exist empty and the Stripe routes answer 503. Turn it on only after both secrets hold a version (DEPLOYMENT.md §6e), or the new revision fails to start."
+  type        = bool
+  default     = false
+}
+
 variable "api_ingress" {
   description = "Cloud Run ingress. INGRESS_TRAFFIC_ALL (default) serves everyone; INGRESS_TRAFFIC_INTERNAL_ONLY closes the service to outside traffic, for the CMEK switch apply (DEPLOYMENT.md §6d) and a whole-database restore (pilot runbook §4.3)."
   type        = string
