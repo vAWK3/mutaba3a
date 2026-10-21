@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-21 — Hotfix: portal sign-in and writes failed once the front door was on (MUT-112 step 3)
+
+**Why:** The first release with `FRONT_DOOR_TOKEN` set (api 2aab0d08) answered 500 INTERNAL to every portal sign-in,
+cookie-authenticated write and account setup, on both run.app and app.mtb3a.com. `isSamePortalOrigin` handed Hono's
+`req.header` to `isViaFrontDoor` detached, so it lost its `this` ("Cannot read properties of undefined (reading 'raw')").
+The phone's paths wrap the reader in a closure and were unaffected. Tests used plain `{ url, header }` objects, which
+can't catch it.
+
+### Fixed
+- `server/src/auth/sessions.ts` `isSamePortalOrigin` wraps the reader: `(name) => req.header(name)`.
+
+### Technical
+- Regression test in `server/src/auth/__tests__/front-door.test.ts` drives a real Hono app with a token configured
+  (through the front door, directly on run.app, and from a foreign origin).
+
+---
+
 ## [Unreleased] - 2026-10-21 — Custom domain named: mtb3a.com at stage proxy (MUT-112 step 0)
 
 **Why:** Basel bought `mtb3a.com` (Namecheap, 2026-10-21). Naming it is §5a step 0 of `server/DEPLOYMENT.md`.

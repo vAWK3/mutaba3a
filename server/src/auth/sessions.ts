@@ -143,7 +143,8 @@ export function isSamePortalOrigin(
   settings: { portalOrigin?: string; frontDoorToken?: string },
 ): boolean {
   if (!settings.frontDoorToken) return isSameOriginRequest(req, settings.portalOrigin);
-  return isSameOriginRequest(req, isViaFrontDoor(req.header, settings.frontDoorToken) ? settings.portalOrigin : undefined);
+  // Hono's req.header needs its `this`: never pass it detached.
+  return isSameOriginRequest(req, isViaFrontDoor((name) => req.header(name), settings.frontDoorToken) ? settings.portalOrigin : undefined);
 }
 
 /**

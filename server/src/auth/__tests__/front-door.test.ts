@@ -1,3 +1,4 @@
+import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 import {
   FRONT_DOOR_CLIENT_IP_HEADER,
@@ -88,5 +89,19 @@ describe('isSamePortalOrigin', () => {
     expect(isSamePortalOrigin(req(`${RUN_APP}/v1/sessions`, { origin: PORTAL }), { portalOrigin: PORTAL })).toBe(true);
     expect(isSamePortalOrigin(req(`${RUN_APP}/v1/sessions`, { origin: RUN_APP }), {})).toBe(true);
     expect(isSamePortalOrigin(req(`${RUN_APP}/v1/sessions`, {}), {})).toBe(false);
+  });
+
+  // Production passes Hono's own c.req, whose header() needs its `this`. A plain
+  // { url, header } object can't catch a detached method (MUT-112 step 3 outage).
+  it('reads a real Hono request when a token is configured, through the front door and directly', async () => {
+    const app = new Hono().post('/v1/sessions', (c) => c.json({ same: isSamePortalOrigin(c.req, withDoor) }));
+    const ask = async (map: Record<string, string>) => {
+      const res = await app.request(`${RUN_APP}/v1/sessions`, { method: 'POST', headers: map });
+      expect(res.status).toBe(200);
+      return ((await res.json()) as { same: boolean }).same;
+    };
+    expect(await ask({ [FRONT_DOOR_HEADER]: TOKEN, origin: PORTAL })).toBe(true);
+    expect(await ask({ origin: RUN_APP })).toBe(true);
+    expect(await ask({ origin: 'https://elsewhere.example' })).toBe(false);
   });
 });
