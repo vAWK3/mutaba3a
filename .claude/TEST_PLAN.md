@@ -1200,7 +1200,7 @@ Tests written red first (ADR-066).
 
 | Area | File | What is pinned |
 |---|---|---|
-| Pure unit | `expenses/__tests__/presets.test.ts` | `presetFor` for Malafat-fed (law-firm), personal (personal, en and ar) and other firms (general); Malafat beats the personal mark; `PERSONAL_PRESET` order, Other last, every Arabic name present, hex colours; every preset's names distinct under `categoryNameKey` in both languages (a clash would be dropped silently by the Postgres seed's `skipDuplicates`). Parity with the offline source still covers general and law-firm only |
+| Pure unit | `expenses/__tests__/presets.test.ts` | `presetFor` for Malafat-fed (law-firm), personal (personal, en and ar) and other firms (general); Malafat beats the personal mark; `PERSONAL_PRESET` order, Other last, every Arabic name present, hex colours; every preset's names distinct under `categoryNameKey` in both languages (a clash would be dropped silently by the Postgres seed's `skipDuplicates`). Parity with the offline source still covers general and law-firm only; the law-firm list is the general list, then the six firm costs, Other last (ADR-066 amendment, 2026-10-22) |
 | Routes | `routes-expenses.test.ts` | a real personal profile (`/admin/v1/users` → `personalProfile.id`) seeds the personal preset in English and in Arabic, once, as SYSTEM, audit `{ preset: 'personal', count: 10, locale }`; a firm with no Malafat link keeps general (renamed from the mislabeled "personal profile" test) |
 
 ### MUT-59 — repair of a database that applied the original M7 (`server/`)
