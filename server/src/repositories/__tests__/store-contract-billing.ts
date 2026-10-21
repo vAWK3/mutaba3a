@@ -258,6 +258,9 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       expect(await store.billing.saveAccount(account(a, v.id, { linkAudit }))).toMatchObject({ conflict: 'CUSTOMER_LINKED_ELSEWHERE', account: { userId: u.id } });
       expect(await store.billing.saveAccount(account(a, 'not-a-uuid', { linkAudit }))).toMatchObject({ conflict: 'CUSTOMER_LINKED_ELSEWHERE', account: { userId: u.id } });
       expect(await billingAudit(store, personalOrganization.id)).toEqual(['billing.account_linked']);
+      // A null currency keeps the stored one (customer.updated); a brand-new customer needs one.
+      expect(await store.billing.saveAccount({ ...account(unlinked, null, { minute: 5 }), currency: null })).toMatchObject({ account: { currency: 'ILS' } });
+      await expect(store.billing.saveAccount({ ...account(`cus_${unique()}`, null), currency: null })).rejects.toMatchObject({ reason: 'CURRENCY_REQUIRED' });
     });
 
     it('concurrent saves never undo or duplicate a link, and two first sightings both succeed (MUT-360 review)', async () => {
@@ -286,6 +289,11 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
           store.billing.saveAccount(account(d, w.id, { linkAudit: [audit(wp.id, 'billing.account_linked')], minute: 2 })),
         ]);
         expect(both.map((r) => r.conflict)).toEqual([null, null]);
+        // An operator link creating a new customer while a sync creates it too: both succeed, the link stays.
+        const e = `cus_${unique()}`;
+        const { user: z } = await store.users.create(userInput());
+        await Promise.all([store.billing.linkAccount({ stripeCustomerId: e, userId: z.id, currency: 'ILS', at: at(1), audit: [] }), store.billing.saveAccount(account(e, null, { currency: 'ILS' }))]);
+        expect((await store.billing.getAccount(e))?.userId).toBe(z.id);
         expect((await store.billing.getAccount(d))?.userId).toBe(w.id);
         expect(await billingAudit(store, wp.id)).toEqual(['billing.account_linked']);
         void linkAudit;

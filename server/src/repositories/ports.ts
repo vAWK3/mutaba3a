@@ -1624,7 +1624,8 @@ export interface SaveBillingAccountInput {
   userId: string | null;
   /** Null keeps the country already stored. */
   country: string | null;
-  currency: string;
+  /** Null keeps the stored currency; a new account needs one (StateConflict CURRENCY_REQUIRED). */
+  currency: string | null;
   at: Date;
   /** Written in the same transaction, and only when this call links the customer (one row per profile the person owns). */
   linkAudit: AuditEventInput[];

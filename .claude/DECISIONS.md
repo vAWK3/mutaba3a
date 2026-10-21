@@ -4491,7 +4491,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 2. **Links can't be lost to a race.** `saveAccount` and `linkAccount` lock the customer's row, then the person's (one
    order, no deadlock), re-read, write `userId` only when linking, and `saveAccount` retries a first-insert race.
 3. **Silent failures are loud.** Stripe 401/403 are transient (the webhook answers 500 and Stripe redelivers once the
-   key is fixed); a reconcile that couldn't list answers 502 `RECONCILE_FAILED`; reconcile stops at 240 s
+   key is fixed); a reconcile that couldn't list answers 502 `RECONCILE_FAILED`; reconcile stops at 200 s
    (`TIME_BUDGET`) under the Scheduler's 280 s deadline; log-based alerts watch the operator messages and Scheduler
    failures (the server has no Sentry client, so logs were all there was).
 4. **The cutover can be checked.** `GET /admin/v1/billing/status` / `npm run billing:status` show a person's mirror and

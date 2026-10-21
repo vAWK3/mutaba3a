@@ -40,7 +40,7 @@ covered for ever with nothing alerting, and that a webhook sync racing an operat
 - `saveAccount` / `linkAccount` lock the customer row then the person row, re-read, never write back a stale link, and
   retry a first-insert race (`repositories/prisma.ts`; Prisma concurrency contract tests).
 - Stripe 401/403 are transient (`gateway.ts`); a reconcile that couldn't list answers 502 `RECONCILE_FAILED`; reconcile
-  stops at 240 s with `TIME_BUDGET`.
+  stops at 200 s with `TIME_BUDGET`.
 - Only failed signatures spend the per-IP webhook budget; a Payment Link's `client_reference_id` never links.
 
 ### Added

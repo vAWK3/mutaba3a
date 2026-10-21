@@ -204,6 +204,7 @@ describe('deploy.sh calls the guard before every step that can move or reopen an
 type StripeOpts = {
   enabled?: string; // what `terraform console` gives for var.stripe_enabled ('true' | 'false' | garbage)
   consoleFails?: boolean;
+  consoleNotice?: boolean; // a notice line after the value
   job?: 'missing' | 'error' | 'ENABLED' | 'PAUSED';
   env?: 'missing' | 'error' | string; // ;-separated env names on the service template
   skip?: string; // SKIP_STRIPE_GUARD
@@ -216,7 +217,7 @@ function stripeGuard(o: StripeOpts) {
   writeFileSync(join(bin, 'terraform'), [
     '#!/bin/bash',
     `echo "terraform $*" >> "${log}"`,
-    `case "$1" in console) cat >/dev/null; ${o.consoleFails ? 'echo "Error: boom" >&2; exit 1' : `printf '%s\\n' '${o.enabled ?? 'false'}'`} ;; esac`,
+    `case "$1" in console) cat >/dev/null; ${o.consoleFails ? 'echo "Error: boom" >&2; exit 1' : `printf '%s\\n' '${o.enabled ?? 'false'}'${o.consoleNotice ? "; echo 'Note: provider upgrade available'" : ''}`} ;; esac`,
     'exit 0',
   ].join('\n') + '\n');
   const job = o.job ?? 'missing';
@@ -273,6 +274,11 @@ describe('guard_stripe_release (deploy.sh steps 0, 3 and 4)', { timeout: 30_000 
     expect(stripeGuard({ enabled: 'false', env: 'error' }).err).toMatch(/could not read mutaba3a-api's env/);
     expect(stripeGuard({ consoleFails: true }).err).toMatch(/could not evaluate stripe_enabled/);
     expect(stripeGuard({ enabled: 'maybe' }).err).toMatch(/gave 'maybe' for stripe_enabled/);
+  });
+
+  it('reads only the first line of terraform console, so a notice after it can\'t refuse a release', () => {
+    expect(stripeGuard({ enabled: 'true', job: 'ENABLED', consoleNotice: true }).status).toBe(0);
+    expect(stripeGuard({ enabled: 'false', job: 'ENABLED', consoleNotice: true }).err).toMatch(/stripe_enabled is false/);
   });
 
   it('evaluates stripe_enabled with the release\'s own var files', () => {

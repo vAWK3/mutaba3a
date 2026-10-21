@@ -163,8 +163,12 @@ describe('Stripe sync (MUT-360)', () => {
     expect(await h.sync.handleEvent(h.event('customer.subscription.updated', { id: 'sub_1' }, 'evt_live', true), null)).toMatchObject({ status: 200, result: 'ignored' });
     expect(await h.sync.handleEvent(h.event('invoice.paid', { id: 'in_1', parent: null }), null)).toMatchObject({ status: 200, result: 'noop' });
     expect(await h.sync.handleEvent(h.event('checkout.session.completed', { id: 'cs_1', mode: 'payment', subscription: null, customer: 'cus_1' }), null)).toMatchObject({ status: 200, result: 'noop' });
+    h.stripe.customers.set('cus_gone', { id: 'cus_gone', object: 'customer', deleted: true } as Stripe.DeletedCustomer);
+    h.stripe.subscriptions.set('sub_gone', stripeObjects.subscription({ id: 'sub_gone', customer: 'cus_gone', product: 'prod_F', status: 'canceled' }));
+    // A deleted customer we never mirrored: nothing to end, and no unlinked account left behind.
+    expect(await h.sync.handleEvent(h.event('customer.subscription.deleted', { id: 'sub_gone' }), null)).toMatchObject({ status: 200, result: 'noop', codes: ['CUSTOMER_DELETED'] });
     expect(await h.store.billing.listAccounts({})).toEqual([]);
-    expect(h.stripe.calls).toEqual([]);
+    expect(h.stripe.calls).toEqual(['subscription:sub_gone']);
   });
 
   it('a slow or failing Stripe call answers 500 and the redelivery is handled once (D7)', async () => {
@@ -287,11 +291,13 @@ describe('Stripe sync (MUT-360)', () => {
     h.stripe.customers.set('cus_1', stripeObjects.customer('cus_1', { mutaba3a_user_id: u.userId }));
     h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_F' }));
     await h.sync.handleEvent(h.event('customer.subscription.created', { id: 'sub_1' }), null);
-    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_NOTIER', status: 'canceled', cancelAtPeriodEnd: true }));
+    const stored = (await h.store.billing.getSubscription('sub_1'))!.currentPeriodEnd;
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_NOTIER', status: 'canceled', cancelAtPeriodEnd: true, periodEnd: new Date('2027-06-01T00:00:00Z') }));
     h.tick();
     const e = h.event('customer.subscription.updated', { id: 'sub_1' });
     expect(await h.sync.handleEvent(e, null)).toMatchObject({ status: 200, result: 'error', codes: ['UNKNOWN_TIER'] });
-    expect(await h.store.billing.getSubscription('sub_1')).toMatchObject({ status: 'canceled', tier: 'FREELANCER', cancelAtPeriodEnd: true });
+    // Status goes through; the period stays the stored one, so the 7-day backstop still ends an unmappable active one.
+    expect(await h.store.billing.getSubscription('sub_1')).toMatchObject({ status: 'canceled', tier: 'FREELANCER', cancelAtPeriodEnd: true, currentPeriodEnd: stored });
     expect(await h.billingOf(u.personalId)).toMatchObject({ state: 'READ_ONLY', source: 'STRIPE' });
     expect(await h.sync.handleEvent(e, null)).not.toMatchObject({ result: 'duplicate' });
   });
@@ -323,6 +329,17 @@ describe('Stripe sync (MUT-360)', () => {
     expect(await h.sync.handleEvent(h.event('customer.subscription.created', { id: 'sub_2' }), null)).toMatchObject({ result: 'processed', codes: [] });
     expect(await h.changes(firm.id)).toHaveLength(1);
     expect(await h.billingOf(firm.id)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE', tier: 'FIRM' });
+  });
+
+  it('an unlinked payer naming an owned profile is reported as unlinked, not as wrong metadata', async () => {
+    const h = harness();
+    const owner = await h.person();
+    const owned = await h.store.organizations.createOwned(owner.userId, { name: 'B', slug: `b-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', profileType: 'BUSINESS', at: NOW }, 6, { actorId: owner.userId, requestId: null });
+    if (owned.kind !== 'created') throw new Error('setup');
+    h.stripe.customers.set('cus_1', stripeObjects.customer('cus_1'));
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_FIRM', metadata: { mutaba3a_organization_id: owned.organization.id } }));
+    expect(await h.sync.handleEvent(h.event('customer.subscription.created', { id: 'sub_1' }), null)).toMatchObject({ result: 'processed', codes: [] });
+    expect(await h.sync.reconcile(null)).toMatchObject({ unlinked: 1, errors: [] });
   });
 
   it('one subscription that throws in reconcile is reported, and the run goes on', async () => {

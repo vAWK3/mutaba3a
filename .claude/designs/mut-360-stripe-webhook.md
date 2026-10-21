@@ -264,7 +264,7 @@ For logging, `stripe-signature` is added to `SENSITIVE_KEYS`, with a case in `lo
   - `google_cloud_scheduler_job.stripe_reconcile`:
     - runs at `"30 3 * * *"` in `Asia/Jerusalem`;
     - POSTs to `${service_uri}/jobs/v1/billing/stripe-reconcile` with the `X-Job-Token` header;
-    - `attempt_deadline = "280s"` (review: under Cloud Run's 300 s; the run stops itself at 240 s), retries ×3;
+    - `attempt_deadline = "280s"` (review: under Cloud Run's 300 s; the run stops itself at 200 s), retries ×3;
     - is counted on `var.stripe_enabled`.
   - Cloud Run runs with `cpu_idle = true` (main.tf:326), so the work happens inside the request. That is why there is no acknowledge-then-work path.
 - **Tests:** `tests/stripe.tftest.hcl`.

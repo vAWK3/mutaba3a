@@ -1916,16 +1916,18 @@ export class MemoryLedgerStore implements LedgerStore {
         else userId = input.userId;
       }
       const linked = userId !== null && userId !== (existing?.userId ?? null);
+      const currency = input.currency ?? existing?.currency ?? null;
+      if (currency === null) throw new StateConflict('billing_account', 'CURRENCY_REQUIRED');
       const account: BillingAccountRecord = existing ?? {
         id: randomUUID(),
         userId: null,
         stripeCustomerId: input.stripeCustomerId,
         country: null,
-        currency: input.currency,
+        currency,
         createdAt: input.at,
         updatedAt: input.at,
       };
-      Object.assign(account, { userId, country: input.country ?? account.country, currency: input.currency, updatedAt: input.at });
+      Object.assign(account, { userId, country: input.country ?? account.country, currency, updatedAt: input.at });
       this.billingAccounts.set(account.id, account);
       if (linked) for (const event of input.linkAudit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       return { account: { ...account }, linked, conflict };

@@ -349,7 +349,7 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
     for (const a of s.accounts) out(`  customer ${a.stripeCustomerId} ${a.currency}${a.country ? ` ${a.country}` : ''}`);
     if (s.subscriptions.length === 0) out('  no subscription');
     for (const sub of s.subscriptions) {
-      const extras = [sub.cancelAtPeriodEnd ? 'cancels at period end' : null, sub.priceLookupKey, sub.payerUserId !== s.user.id ? 'paid by someone else' : null].filter(Boolean);
+      const extras = [sub.cancelAtPeriodEnd ? 'cancels at period end' : null, sub.priceLookupKey, sub.payerUserId === null ? 'payer not linked' : sub.payerUserId !== s.user.id ? 'paid by someone else' : null].filter(Boolean);
       out(`  subscription ${sub.stripeSubscriptionId} ${sub.tier} ${sub.status} until ${sub.currentPeriodEnd.slice(0, 10)}${extras.length > 0 ? ` (${extras.join(', ')})` : ''}`);
     }
     for (const p of s.profiles) out(`  profile ${p.name}: now ${p.billing.state} ${p.billing.source} · without grants ${p.billingWithoutGrants.state} ${p.billingWithoutGrants.source}`);

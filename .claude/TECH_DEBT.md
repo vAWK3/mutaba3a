@@ -225,7 +225,7 @@
 **Added**: 2026-10-21
 **Priority**: Low (about 10 subscriptions in the pilot)
 **Impact**: `reconcile()` (`billing/stripe/sync.ts`) lists all subscriptions (`status: 'all'`, canceled ones included) every night: ⌈n/100⌉ list calls plus the product list, then one short transaction per subscription (`FOR UPDATE` on its unique id) and the owned-profile reads for linked ones. Stripe can't filter subscriptions by update time, so there is no cheaper full repair. The run must finish inside the Scheduler's 280 s `attempt_deadline`.
-**Also (MUT-360 review)**: each listed subscription with a linked payer reads that person's owned profiles (`ownedProfilesOf`) even when nothing changed, and `stripe_events` has no index on `receivedAt` for the nightly prune. Both are noise at pilot scale; memoize per run and add `@@index([receivedAt])` at the revisit. A run past the 240 s budget stops with `TIME_BUDGET`, so the scale limit shows up as that code first.
+**Also (MUT-360 review)**: each listed subscription with a linked payer reads that person's owned profiles (`ownedProfilesOf`) even when nothing changed, and `stripe_events` has no index on `receivedAt` for the nightly prune. Both are noise at pilot scale; memoize per run and add `@@index([receivedAt])` at the revisit. A run past the 200 s budget stops with `TIME_BUDGET`, so the scale limit shows up as that code first.
 **Fix**: revisit around 10k subscriptions. Options: walk `events.list` from a stored cursor and re-sync only the subscriptions it names (needs a cursor and a migration, and misses drift that has no event; events are kept 30 days), or skip canceled subscriptions older than N days.
 
 ### TD-195: Malafat's runtime service account has project-wide roles over Mutaba3a's data in the shared project

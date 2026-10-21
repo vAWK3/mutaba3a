@@ -128,6 +128,8 @@ guard_stripe_release() {
   local enabled
   enabled="$(printf 'var.stripe_enabled\n' | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
     || die "could not evaluate stripe_enabled with terraform console (above); refusing to release on a guess"
+  # The first line only, as guard_cmek_release reads its values: a console notice after it must not refuse a release.
+  enabled="$(sed -n '1{s/"//g;p;}' <<<"${enabled}")"
   [[ "${enabled}" == "true" || "${enabled}" == "false" ]] \
     || die "terraform console gave '${enabled}' for stripe_enabled; refusing to release on a guess"
 

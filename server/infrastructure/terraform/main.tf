@@ -699,7 +699,7 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
 # The job token opens only this route (MUT-360 D2). Reconcile answers 200 with its error list, so the
 # retries only follow a run that never completed: 502 RECONCILE_FAILED (Stripe couldn't be listed), 409
 # RECONCILE_RUNNING (overlap), a timeout or a cold start that failed. 280 s stays under Cloud Run's 300 s
-# request timeout; the server stops its own run at about 240 s and reports TIME_BUDGET. Failed attempts
+# request timeout; the server stops its own run at about 200 s and reports TIME_BUDGET. Failed attempts
 # page: monitoring.tf (stripe alerts).
 resource "google_cloud_scheduler_job" "stripe_reconcile" {
   count = var.stripe_enabled ? 1 : 0

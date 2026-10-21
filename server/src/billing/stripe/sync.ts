@@ -42,7 +42,8 @@ export type SyncInput = { id: string } | { subscription: Fetched<Stripe.Subscrip
 
 export interface SyncResult {
   subscriptionId: string;
-  outcome: SaveBillingSubscriptionOutcome | 'error';
+  /** `skipped`: nothing to write (a deleted customer we never mirrored). */
+  outcome: SaveBillingSubscriptionOutcome | 'error' | 'skipped';
   codes: SyncCode[];
   /** A mapping error: the event stays unprocessed (a resend after the fix is handled again), even if status was kept. */
   blocked: boolean;
@@ -90,8 +91,11 @@ export interface StripeSync {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 const NO_PRODUCTS: ReadonlyMap<string, Stripe.Product> = new Map();
-/** Under the Scheduler's 280 s attempt deadline and Cloud Run's 300 s request timeout (MUT-360 review). */
-export const RECONCILE_TIME_BUDGET_MS = 240_000;
+/**
+ * From the start of the run, products included, with room under the Scheduler's 280 s attempt deadline and Cloud Run's
+ * 300 s request timeout for one more page fetch (10 s, two retries) after the last check (MUT-360 review).
+ */
+export const RECONCILE_TIME_BUDGET_MS = 200_000;
 /** An expected state, not something for the operator: a deleted customer's subscriptions end on their own. */
 const needsOperator = (code: string) => code !== 'CUSTOMER_DELETED';
 
@@ -132,14 +136,16 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
       return { profileIds, organizationId: null };
     }
     if (profileOwnerOf(organization) === null || payerProfiles.includes(organizationId)) profileIds.push(organizationId);
-    else codes.push('ORG_NOT_OWNED_BY_PAYER');
+    // With no linked payer yet, linking is the fix (it shows as unlinked), not the metadata.
+    else if (payer !== null) codes.push('ORG_NOT_OWNED_BY_PAYER');
     return { profileIds, organizationId };
   }
 
   /**
    * A subscription we can't map any more (its product lost the tier tag, say) still reports what Stripe says about
-   * it: status, cancel-at-period-end and the period, on the tier and organization already stored. A cancellation is
-   * never frozen out. Nothing to keep when we never mirrored it.
+   * it: status and cancel-at-period-end, on the tier, organization and period already stored. A cancellation is never
+   * frozen out, and a still-active one stops covering 7 days after the stored period. Nothing to keep when we never
+   * mirrored it.
    */
   async function keepStatus(sub: Stripe.Subscription, stripeCustomerId: string, fetchedAt: Date, context: SyncContext): Promise<Omit<SyncResult, 'codes' | 'blocked'>> {
     const stored = await store.billing.getSubscription(sub.id);
@@ -153,7 +159,9 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
       tier: stored.tier,
       organizationId: stored.organizationId,
       status: state.status,
-      currentPeriodEnd: state.currentPeriodEnd ?? stored.currentPeriodEnd,
+      // The stored period, not Stripe's renewed one: a subscription we can't map then reads as a lapse 7 days after it,
+      // unless someone fixes the product (entitlement.ts PERIOD_GRACE_DAYS). Status and cancel still go through.
+      currentPeriodEnd: stored.currentPeriodEnd,
       cancelAtPeriodEnd: state.cancelAtPeriodEnd,
       priceLookupKey: stored.priceLookupKey,
       founderUntil: stored.founderUntil,
@@ -175,6 +183,9 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
     const customer = 'deleted' in fetched && fetched.deleted ? null : (fetched as Stripe.Customer);
     const stripeCustomerId = fetched.id;
     if (!customer) codes.push('CUSTOMER_DELETED');
+
+    // A deleted customer we never mirrored has nothing to end: don't create an account that would only sit unlinked.
+    if (!customer && !(await store.billing.getAccount(stripeCustomerId))) return { subscriptionId: sub.id, outcome: 'skipped', codes, reachesNobody: true, blocked: false };
 
     const mirror = mirrorOf(sub, products);
     if ('error' in mirror) return { ...(await keepStatus(sub, stripeCustomerId, fetchedAt, context)), codes: [...codes, mirror.error], blocked: true };
@@ -220,7 +231,7 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
       stripeCustomerId: customerId,
       userId: candidate,
       country: customer.address?.country ?? null,
-      currency: existing.currency,
+      currency: null,
       at: now(),
       linkAudit: linking.rows,
     });
@@ -231,7 +242,7 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
     const context = (linkHint: string | null): SyncContext => ({ linkHint, source: 'webhook', eventId: event.id, requestId });
     const sync = async (id: string, linkHint: string | null = null) => {
       const r = await syncSubscription({ id }, context(linkHint));
-      return { result: r.blocked || r.outcome === 'error' ? ('error' as const) : ('processed' as const), codes: r.codes };
+      return { result: r.blocked || r.outcome === 'error' ? ('error' as const) : r.outcome === 'skipped' ? ('noop' as const) : ('processed' as const), codes: r.codes };
     };
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -294,8 +305,8 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
     const summary: ReconcileSummary = { checked: 0, changed: 0, unlinked: 0, errors: [], pruned: 0 };
     try {
       try {
-        const products = await deps.reconcileGateway.listProducts();
         const started = now().getTime();
+        const products = await deps.reconcileGateway.listProducts();
         for await (const listed of deps.reconcileGateway.listSubscriptions()) {
           // Stop inside the Scheduler's deadline, never outlive the request (Cloud Run's 300 s) and block later runs.
           if (now().getTime() - started >= budgetMs) {
@@ -306,7 +317,7 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
           try {
             const r = await syncSubscription({ subscription: listed, products }, { linkHint: null, source: 'reconcile', eventId: null, requestId });
             if (r.outcome === 'created' || r.outcome === 'changed') summary.changed += 1;
-            if (!r.blocked && r.outcome !== 'error' && r.reachesNobody) summary.unlinked += 1;
+            if (!r.blocked && r.outcome !== 'error' && r.outcome !== 'skipped' && r.reachesNobody) summary.unlinked += 1;
             for (const code of r.codes.filter(needsOperator)) summary.errors.push({ subscriptionId: r.subscriptionId, code });
           } catch (err) {
             summary.errors.push({ subscriptionId: listed.value.id, code: err instanceof StripeGatewayError ? `STRIPE_${err.code ?? err.type}` : 'FAILED' });
