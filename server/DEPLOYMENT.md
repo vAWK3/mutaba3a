@@ -985,7 +985,7 @@ terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET" -backend-c
 TAG=$(curl -fsS "$(terraform output -raw service_url)/health" | jq -r .version)
 ```
 
-**Releases during this procedure.** `deploy.sh` refuses a release whose `production.tfvars` stage would move the database, and refuses while the service is closed (`lib/release-guard.sh`). So a release is fine before step 4 and after step 4.5 (the reopen), and is refused in between. It checks again before the migration and before the apply, minutes apart. The tfvars in *every* checkout you release from must say the same stage: git doesn't carry it. If the guard itself is what fails (it stops on anything it can't read from GCP or terraform) and you know no cutover or restore is in progress, `SKIP_CMEK_GUARD=1` skips it, as `SKIP_TERMS_CHECK=1` skips the terms check.
+**Releases during this procedure.** The guard below is **off by default** until MUT-385 lands: while `cmek_stage` is `off` a release changes nothing, so releases run as they did before MUT-381. Turn it on with `SKIP_CMEK_GUARD=0` (every release, from every checkout) before step 1, and keep it on from then on (after the switch it is what stops a stale tfvars moving production back to mutaba3a-pg). With it on, `deploy.sh` refuses a release whose `production.tfvars` stage would move the database, and refuses while the service is closed (`lib/release-guard.sh`). So a release is fine before step 4 and after step 4.5 (the reopen), and is refused in between. It checks again before the migration and before the apply, minutes apart. The tfvars in *every* checkout you release from must say the same stage: git doesn't carry it.
 
 #### Step 1: prepare (no downtime)
 

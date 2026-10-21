@@ -14,16 +14,16 @@
 # The caller defines die and warn and runs this inside the terraform dir, after `terraform init`. It fails
 # closed: anything it cannot read stops the release.
 #
-# SKIP_CMEK_GUARD=1 skips it, like SKIP_TERMS_CHECK: only when the guard itself is what's wrong (a GCP or
-# terraform hiccup it can't read past) and you know no CMEK cutover or restore is in progress. The release
-# then runs exactly as it did before MUT-381.
+# Off by default while the CMEK epic is unfinished (Basel, 2026-10-21): cmek_stage stays "off", so a release
+# changes nothing and runs exactly as it did before MUT-381. SKIP_CMEK_GUARD=0 turns it on; it must be on
+# before any CMEK cutover (DEPLOYMENT.md §6d), and MUT-385 makes on the default.
 
 # guard_cmek_release <suffix> <service> <region> <project> <terraform args…>
 #   <terraform args…>: the apply's own arguments; only -var and -var-file are kept, so `terraform console`
 #   sees the same variables (tfvars, *.auto.tfvars, TF_VAR_*) the apply will.
 guard_cmek_release() {
-  if [[ "${SKIP_CMEK_GUARD:-}" == "1" ]]; then
-    warn "WARNING: skipping the CMEK release guard (SKIP_CMEK_GUARD=1)"
+  if [[ "${SKIP_CMEK_GUARD:-1}" != "0" ]]; then
+    warn "CMEK release guard off (the default until MUT-385; SKIP_CMEK_GUARD=0 turns it on)"
     return 0
   fi
   local suffix="$1" service="$2" region="$3" project="$4"; shift 4
