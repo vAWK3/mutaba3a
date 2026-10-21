@@ -34,7 +34,7 @@ type Opts = {
   serviceMissing?: boolean;
   gcloudError?: boolean;
   mounts?: string; // what every serving revision mounts
-  env?: Record<string, string>;
+  env?: Record<string, string | undefined>; // undefined = unset; SKIP_CMEK_GUARD defaults to 0 (guard on)
 };
 
 function guard(o: Opts) {
@@ -81,11 +81,9 @@ function guard(o: Opts) {
   chmodSync(join(bin, 'terraform'), 0o755);
   chmodSync(join(bin, 'gcloud'), 0o755);
   const cmd = `die() { echo "$*" >&2; exit 1; }; warn() { echo "$*" >&2; }; source "${LIB}" && guard_cmek_release "" mutaba3a-api me-west1 demo-project -input=false -var-file=production.tfvars -var image_tag=abc`;
-  const r = spawnSync('bash', ['-euo', 'pipefail', '-c', cmd], {
-    cwd: dir,
-    encoding: 'utf-8',
-    env: { ...process.env, SKIP_CMEK_GUARD: '', ...o.env, PATH: `${bin}:${process.env.PATH}` },
-  });
+  const env: NodeJS.ProcessEnv = { ...process.env, SKIP_CMEK_GUARD: '0', ...o.env, PATH: `${bin}:${process.env.PATH}` };
+  for (const [k, v] of Object.entries(env)) if (v === undefined) delete env[k];
+  const r = spawnSync('bash', ['-euo', 'pipefail', '-c', cmd], { cwd: dir, encoding: 'utf-8', env });
   return { status: r.status, err: r.stderr, calls: existsSync(log) ? readFileSync(log, 'utf-8') : '' };
 }
 
@@ -169,20 +167,20 @@ describe('guard_cmek_release (deploy.sh steps 0, 3 and 4)', { timeout: 30_000 },
     expect(guard({ serving: null, serviceMissing: true }).status).toBe(0);
   });
 
-  it('SKIP_CMEK_GUARD=1 skips every check, says so, and touches neither terraform nor gcloud', () => {
-    // The worst case: state unreadable and gcloud failing, which the guard would refuse.
-    const r = guard({ stage: 'active', outputError: true, gcloudError: true, env: { SKIP_CMEK_GUARD: '1' } });
-    expect(r.status).toBe(0);
-    expect(r.err).toMatch(/WARNING: skipping the CMEK release guard \(SKIP_CMEK_GUARD=1\)/);
-    expect(r.calls).toBe('');
+  it('is off by default (until MUT-385): says so, and touches neither terraform nor gcloud', () => {
+    // The worst case: a release the guard would refuse, with state unreadable and gcloud failing.
+    for (const value of [undefined, '', '1']) {
+      const r = guard({ stage: 'active', outputError: true, gcloudError: true, env: { SKIP_CMEK_GUARD: value } });
+      expect(r.status, String(value)).toBe(0);
+      expect(r.err).toMatch(/CMEK release guard off \(the default until MUT-385; SKIP_CMEK_GUARD=0 turns it on\)/);
+      expect(r.calls).toBe('');
+    }
   });
 
-  it('only SKIP_CMEK_GUARD=1 skips it: any other value still guards', () => {
-    for (const value of ['0', 'true', 'yes']) {
-      const r = guard({ stage: 'active', serving: 'mutaba3a-pg', env: { SKIP_CMEK_GUARD: value } });
-      expect(r.status, value).not.toBe(0);
-      expect(r.err).toMatch(/production serves mutaba3a-pg/);
-    }
+  it('SKIP_CMEK_GUARD=0 turns it on', () => {
+    const r = guard({ stage: 'active', serving: 'mutaba3a-pg', env: { SKIP_CMEK_GUARD: '0' } });
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/production serves mutaba3a-pg/);
   });
 });
 

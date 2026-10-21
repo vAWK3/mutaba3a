@@ -106,7 +106,7 @@ TF_ARGS=(-input=false -var-file="${ENVIRONMENT}.tfvars" -var "image_tag=${SHORT_
 APPROVE=(); [[ "${AUTO_APPROVE}" == "1" ]] && APPROVE=(-auto-approve)
 # MUT-381: never move the database or reopen a closed service as a side effect of a release. Checked here,
 # before the bootstrap apply (it writes the DATABASE_URL secret), and again before steps 3 and 4.
-# SKIP_CMEK_GUARD=1 skips all three, only when the guard itself is broken (lib/release-guard.sh).
+# Off by default until MUT-385; SKIP_CMEK_GUARD=0 turns all three on (lib/release-guard.sh).
 guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
 # First run only: the registry must exist before `docker push`, the database
 # before the migration. Skipped once they are in state (lib/tf-bootstrap.sh).
