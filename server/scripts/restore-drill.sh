@@ -9,7 +9,8 @@
 #   4. prints how long each step took, as rows for the runbook's "Drill results";
 #   5. deletes both scratch instances, on every exit path (unless --keep).
 #
-#   scripts/restore-drill.sh --project <id> [--dry-run]
+#   scripts/restore-drill.sh --project <id> [--dry-run]            (TF_STATE_BUCKET set: the source is the
+#                                                                   instance the API serves from, MUT-381)
 #   scripts/restore-drill.sh --project <id> --receipt-id <uuid> [--pitr-minutes 60] [--only backup|pitr] [--keep]
 #   scripts/restore-drill.sh teardown --project <id> [--name <scratch instance>] [--dry-run]
 #
@@ -36,7 +37,7 @@ DB_USER="mutaba3a_api"
 
 SUBCOMMAND="drill"
 PROJECT="${GCP_PROJECT_ID:-}"
-SOURCE="mutaba3a-pg"
+SOURCE=""
 RECEIPT_ID=""
 PITR_MINUTES=60
 ONLY=""
@@ -49,13 +50,18 @@ info() { printf '\033[0;36m[drill]\033[0m %s\n' "$*"; }
 warn() { printf '\033[0;33m[drill] %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[0;31m[drill] %s\033[0m\n' "$*" >&2; exit 1; }
 
+# shellcheck source=lib/db-checks.sh
+. "${SERVER_DIR}/scripts/lib/db-checks.sh"
+
 usage() {
   cat >&2 <<EOF
 usage: scripts/restore-drill.sh --project <id> [options]
        scripts/restore-drill.sh teardown --project <id> [--name <scratch instance>] [--dry-run]
 
   --project <id>        GCP project holding the source instance (or GCP_PROJECT_ID)
-  --instance <name>     source Cloud SQL instance (default: mutaba3a-pg); only ever read
+  --instance <name>     source Cloud SQL instance, only ever read (default: the instance the API serves
+                        from, read from terraform state in TF_STATE_BUCKET: mutaba3a-pg, or mutaba3a-pg2
+                        once cmek_stage is active)
   --receipt-id <uuid>   the receipt to open (default: the newest READY receipt in the copy)
   --bucket <name>       attachments bucket (default: <project>-mutaba3a-attachments)
   --pitr-minutes <n>    restore point, minutes ago (default 60; at most 7 days of logs)
@@ -90,7 +96,7 @@ done
 [[ "${PITR_MINUTES}" =~ ^[0-9]+$ ]] || die "--pitr-minutes must be a whole number"
 (( PITR_MINUTES >= 1 && PITR_MINUTES < PITR_LOG_MINUTES - 10 )) || die "--pitr-minutes must be between 1 and $((PITR_LOG_MINUTES - 11)) (7 days of logs)"
 [[ -n "${RECEIPT_ID}" && ! "${RECEIPT_ID}" =~ ^[0-9a-fA-F-]{36}$ ]] && die "--receipt-id must be a uuid"
-[[ "${SOURCE}" =~ ^mutaba3a-pg-drill- ]] && die "refusing: --instance ${SOURCE} is a drill scratch instance; the source is the instance you back up (mutaba3a-pg)"
+[[ "${SOURCE}" =~ ^mutaba3a-pg-drill- ]] && die "refusing: --instance ${SOURCE} is a drill scratch instance; the source is the instance you back up (the one the API serves from)"
 BUCKET="${BUCKET:-${PROJECT}-mutaba3a-attachments}"
 
 # ---------------------------------------------------------------------------
@@ -183,6 +189,18 @@ need cloud-sql-proxy "brew install cloud-sql-proxy"
 need psql "brew install libpq && brew link --force libpq"
 need openssl "preinstalled on macOS"
 
+# MUT-381: without --instance, drill the instance the API serves from, so a drill after the CMEK cutover
+# tests mutaba3a-pg2's backups, not the frozen mutaba3a-pg.
+if [[ -z "${SOURCE}" ]]; then
+  if [[ "${DRY_RUN}" == 1 ]]; then
+    printf '+ terraform output -raw cloud_sql_instance_name\n'
+    SOURCE="<active-instance>"
+  else
+    need terraform "brew install terraform"
+    SOURCE="$(tf_active_instance "${SERVER_DIR}/infrastructure/terraform" "${ENVIRONMENT:-production}")"
+  fi
+fi
+
 STAMP="$(date -u +%Y%m%dt%H%M%S)"
 SCRATCH_B="mutaba3a-pg-drill-${STAMP}-b"
 SCRATCH_P="mutaba3a-pg-drill-${STAMP}-p"
@@ -214,14 +232,17 @@ info "project ${PROJECT}, source ${SOURCE} (read-only), scratch ${SCRATCH_B} / $
 run_capture ACCOUNT "<you@example.com>" gcloud config get-value account
 info "gcloud account: ${ACCOUNT}"
 
-run_capture DESCRIBED $'<region>\t<tier>\t<edition>\t<disk-gb>\tPOSTGRES_16\tTrue' \
+run_capture DESCRIBED $'<region>\t<tier>\t<edition>\t<disk-gb>\tPOSTGRES_16\tTrue\t<source-kms-key>' \
   gcloud sql instances describe "${SOURCE}" --project="${PROJECT}" \
-  --format='value(region,settings.tier,settings.edition,settings.dataDiskSizeGb,databaseVersion,settings.backupConfiguration.pointInTimeRecoveryEnabled)'
-IFS=$'\t' read -r REGION TIER EDITION DISK_GB DB_VERSION PITR_ON <<<"${DESCRIBED}"
+  --format='value(region,settings.tier,settings.edition,settings.dataDiskSizeGb,databaseVersion,settings.backupConfiguration.pointInTimeRecoveryEnabled,diskEncryptionConfiguration.kmsKeyName)'
+IFS=$'\t' read -r REGION TIER EDITION DISK_GB DB_VERSION PITR_ON KMS_KEY <<<"${DESCRIBED}"
+# MUT-381: a copy of a CMEK instance stays under the same key (the point-in-time clone inherits it).
+SCRATCH_KEY=()
+[[ -n "${KMS_KEY}" ]] && SCRATCH_KEY=(--disk-encryption-key="${KMS_KEY}")
 # describe says ENTERPRISE / ENTERPRISE_PLUS; create takes enterprise / enterprise-plus.
 EDITION="$(printf '%s' "${EDITION:-ENTERPRISE}" | tr '[:upper:]_' '[:lower:]-')"
 [[ "${PITR_ON}" == "True" || "${ONLY}" == "backup" ]] || die "point-in-time recovery is off on ${SOURCE}; nothing to drill (or use --only backup)"
-info "source: ${DB_VERSION}, ${TIER} (${EDITION}), ${DISK_GB} GB, ${REGION}"
+info "source: ${DB_VERSION}, ${TIER} (${EDITION}), ${DISK_GB} GB, ${REGION}${KMS_KEY:+, encrypted with ${KMS_KEY}}"
 
 COST_NOTE="a ${TIER} instance costs roughly \$0.05–0.10 an hour (twice that for the clone, which is REGIONAL like the source); teardown deletes it when the drill ends"
 
@@ -238,7 +259,8 @@ restore_backup() {
   timed "Create scratch instance (backup)" mutate "${SCRATCH_B}" gcloud sql instances create "${SCRATCH_B}" --project="${PROJECT}" \
     --region="${REGION}" --database-version="${DB_VERSION}" --tier="${TIER}" --edition="${EDITION}" \
     --availability-type=zonal --storage-size="${DISK_GB}GB" --ssl-mode=ENCRYPTED_ONLY \
-    --no-backup --no-deletion-protection --labels=purpose=restore-drill,source="${SOURCE}" --quiet
+    --no-backup --no-deletion-protection --labels=purpose=restore-drill,source="${SOURCE}" \
+    ${SCRATCH_KEY[@]+"${SCRATCH_KEY[@]}"} --quiet
   timed "Restore last night's backup" mutate "${SCRATCH_B}" gcloud sql backups restore "${BACKUP_ID}" \
     --restore-instance="${SCRATCH_B}" --backup-instance="${SOURCE}" --project="${PROJECT}" --quiet
 }
@@ -266,32 +288,24 @@ open_copy() {
   run_capture connection "${PROJECT}:<region>:${scratch}" gcloud sql instances describe "${scratch}" --project="${PROJECT}" --format='value(connectionName)'
   printf '+ cloud-sql-proxy %s --port %s --quiet &\n' "${connection}" "${port}"
   if [[ "${DRY_RUN}" != 1 ]]; then
-    cloud-sql-proxy "${connection}" --port "${port}" --quiet &
-    PROXY_PIDS+=($!)
-    local _
-    for _ in $(seq 1 30); do (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null && break; sleep 1; done
-    (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null || die "cloud-sql-proxy did not open 127.0.0.1:${port} within 30 s"
+    db_start_proxy "${connection}" "${port}"
+    PROXY_PIDS+=("${DB_PROXY_PID}")
   fi
   PGHOST=127.0.0.1 PGPORT="${port}" PGUSER="${DB_USER}" PGDATABASE="${DB_NAME}" PGPASSWORD="${password}" \
     PGOPTIONS='-c default_transaction_read_only=on' timed "Checks on the ${label} copy" check_copy "${label}"
 }
 
-sql() { psql -X -A -t -q -v ON_ERROR_STOP=1 "$@"; }
-
 check_copy() {
-  local label="$1" tables query migrations repo_migrations newest
+  local label="$1" migrations repo_migrations newest
   printf '+ psql (read-only, %s copy): exact row count of every table, migrations, newest audit event\n' "${label}"
   if [[ "${DRY_RUN}" == 1 ]]; then
     check_receipt "${label}"
     return 0
   fi
-  tables="$(sql -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY 1")"
-  query=""
-  for t in ${tables}; do query+="${query:+ UNION ALL }SELECT '${t}', count(*) FROM \"${t}\""; done
-  sql -F '|' -c "${query} ORDER BY 1" >"${WORK}/${label}.counts"
-  migrations="$(sql -c 'SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL')"
+  db_table_counts "${WORK}/${label}.counts"
+  migrations="$(db_sql -c 'SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL')"
   repo_migrations="$(find "${SERVER_DIR}/prisma/migrations" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
-  newest="$(sql -c 'SELECT max("createdAt") FROM audit_events')"
+  newest="$(db_sql -c 'SELECT max("createdAt") FROM audit_events')"
   info "${label}: $(wc -l <"${WORK}/${label}.counts" | tr -d ' ') tables, ${migrations} migrations applied (this checkout has ${repo_migrations}), newest audit event ${newest:-none}"
   check_receipt "${label}"
 }
@@ -308,7 +322,7 @@ check_receipt() {
     RECEIPT_RESULT+=("${label}: —")
     return 0
   fi
-  row="$(sql -F $'\t' -c "SELECT id, \"storageKey\", \"sizeBytes\", \"mimeType\" FROM expense_receipts WHERE ${filter} ORDER BY \"completedAt\" DESC NULLS LAST LIMIT 1")"
+  row="$(db_sql -F $'\t' -c "SELECT id, \"storageKey\", \"sizeBytes\", \"mimeType\" FROM expense_receipts WHERE ${filter} ORDER BY \"completedAt\" DESC NULLS LAST LIMIT 1")"
   if [[ -z "${row}" ]]; then
     warn "${label}: no READY receipt${RECEIPT_ID:+ with id ${RECEIPT_ID}} in this copy"
     RECEIPT_RESULT+=("${label}: FAIL (no receipt row)")
