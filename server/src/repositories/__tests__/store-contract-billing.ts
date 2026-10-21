@@ -30,7 +30,7 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
   });
   const billingAudit = async (store: LedgerStore, organizationId: string) =>
     (await store.audit.list(organizationId, {}, { limit: 50, cursor: null })).items.filter((e) => e.action.startsWith('billing.')).map((e) => e.action);
-  const subscription = (stripeCustomerId: string, organizationId: string | null = null) => ({
+  const subscription = (stripeCustomerId: string, organizationId: string | null = null, profileIds: string[] = []) => ({
     stripeCustomerId,
     stripeSubscriptionId: `sub_${unique()}`,
     tier: 'FREELANCER' as const,
@@ -41,6 +41,16 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
     priceLookupKey: 'freelancer_founder_monthly_ils',
     founderUntil: null,
     stripeUpdatedAt: at(1),
+    at: at(1),
+    audit: { profileIds, source: 'webhook' as const, eventId: 'evt_mut360', requestId: 'req-mut360' },
+  });
+  const account = (stripeCustomerId: string, userId: string | null, rest: { country?: string | null; currency?: string; linkAudit?: AuditEventInput[]; minute?: number } = {}) => ({
+    stripeCustomerId,
+    userId,
+    country: rest.country ?? null,
+    currency: rest.currency ?? 'USD',
+    at: at(rest.minute ?? 1),
+    linkAudit: rest.linkAudit ?? [],
   });
 
   describe(`${name} LedgerStore billing (MUT-358)`, () => {
@@ -50,11 +60,11 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       const { user, personalOrganization } = await store.users.create(userInput(firm.id));
       const { user: stranger } = await store.users.create(userInput());
       const customer = `cus_${unique()}`;
-      await store.billing.saveAccount({ stripeCustomerId: customer, userId: user.id, country: 'IL', currency: 'ILS' });
+      await store.billing.saveAccount(account(customer, user.id, { country: 'IL', currency: 'ILS' }));
       await store.billing.saveSubscription(subscription(customer));
       const strangerCustomer = `cus_${unique()}`;
-      await store.billing.saveAccount({ stripeCustomerId: strangerCustomer, userId: stranger.id, country: null, currency: 'USD' });
-      const firmSub = await store.billing.saveSubscription({ ...subscription(strangerCustomer, firm.id), tier: 'FIRM' });
+      await store.billing.saveAccount(account(strangerCustomer, stranger.id));
+      const { subscription: firmSub } = await store.billing.saveSubscription({ ...subscription(strangerCustomer, firm.id), tier: 'FIRM' });
       await store.billing.createGrant({ id: randomUUID(), userId: null, organizationId: firm.id, tier: 'FIRM', reason: 'pilot', expiresAt: null, grantedBy: 'admin', at: at(2), audit: [] });
       await store.billing.setTrialStart(user.id, at(3));
 
@@ -129,21 +139,99 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       const store = await makeStore();
       const { user } = await store.users.create(userInput());
       const customer = `cus_${unique()}`;
-      await store.billing.saveAccount({ stripeCustomerId: customer, userId: null, country: 'JO', currency: 'USD' });
+      await store.billing.saveAccount(account(customer, null, { country: 'JO' }));
       expect((await store.billing.listAccounts({ linked: false })).map((a) => a.stripeCustomerId)).toContain(customer);
       await store.billing.linkAccount({ stripeCustomerId: customer, userId: user.id, currency: null, at: at(2), audit: [] });
       expect((await store.billing.listAccounts({ linked: false })).map((a) => a.stripeCustomerId)).not.toContain(customer);
       expect((await store.billing.listAccounts({ linked: true })).find((a) => a.stripeCustomerId === customer)).toMatchObject({ userId: user.id, country: 'JO', currency: 'USD' });
     });
 
-    it('saveSubscription upserts by Stripe id and needs a known customer', async () => {
+    it('saveAccount fills an empty link once and never unlinks or relinks (MUT-360 D5)', async () => {
       const store = await makeStore();
+      const { user, personalOrganization } = await store.users.create(userInput());
+      const { user: other } = await store.users.create(userInput());
       const customer = `cus_${unique()}`;
-      await expect(store.billing.saveSubscription(subscription(customer))).rejects.toThrow(/billingAccountId/);
-      await store.billing.saveAccount({ stripeCustomerId: customer, userId: null, country: null, currency: 'USD' });
-      const first = await store.billing.saveSubscription(subscription(customer));
-      const updated = await store.billing.saveSubscription({ ...subscription(customer), stripeSubscriptionId: first.stripeSubscriptionId, status: 'canceled' });
-      expect(updated).toMatchObject({ id: first.id, status: 'canceled' });
+      const linkAudit = [audit(personalOrganization.id, 'billing.account_linked')];
+
+      expect(await store.billing.saveAccount(account(customer, null, { country: 'IL', currency: 'ILS' }))).toMatchObject({
+        linked: false,
+        conflict: null,
+        account: { stripeCustomerId: customer, userId: null, country: 'IL', currency: 'ILS' },
+      });
+      expect(await store.billing.saveAccount(account(customer, user.id, { currency: 'ILS', linkAudit, minute: 2 }))).toMatchObject({
+        linked: true,
+        conflict: null,
+        account: { userId: user.id, country: 'IL' },
+      });
+      // A read without a link (null) keeps the person, and a null country keeps the stored one.
+      expect(await store.billing.saveAccount(account(customer, null, { currency: 'ILS', linkAudit, minute: 3 }))).toMatchObject({
+        linked: false,
+        conflict: null,
+        account: { userId: user.id, country: 'IL' },
+      });
+      expect(await store.billing.saveAccount(account(customer, user.id, { currency: 'ILS', linkAudit, minute: 4 }))).toMatchObject({ linked: false, conflict: null });
+      expect(await store.billing.saveAccount(account(customer, other.id, { currency: 'ILS', linkAudit, minute: 5 }))).toMatchObject({
+        linked: false,
+        conflict: 'CUSTOMER_LINKED_ELSEWHERE',
+        account: { userId: user.id },
+      });
+
+      const second = `cus_${unique()}`;
+      expect(await store.billing.saveAccount(account(second, user.id, { linkAudit }))).toMatchObject({
+        linked: false,
+        conflict: 'USER_HAS_ANOTHER_ACCOUNT',
+        account: { stripeCustomerId: second, userId: null },
+      });
+      expect(await store.billing.saveAccount(account(`cus_${unique()}`, randomUUID(), { linkAudit }))).toMatchObject({ conflict: 'UNKNOWN_USER', account: { userId: null } });
+      expect(await store.billing.saveAccount(account(`cus_${unique()}`, 'not-a-uuid', { linkAudit }))).toMatchObject({ conflict: 'UNKNOWN_USER', account: { userId: null } });
+      expect(await billingAudit(store, personalOrganization.id)).toEqual(['billing.account_linked']);
+    });
+
+    it('saveSubscription needs a known customer, keeps the newer read, and audits only real changes', async () => {
+      const store = await makeStore();
+      const { personalOrganization } = await store.users.create(userInput());
+      const customer = `cus_${unique()}`;
+      const base = subscription(customer, null, [personalOrganization.id, personalOrganization.id]);
+      await expect(store.billing.saveSubscription(base)).rejects.toThrow(/billingAccountId/);
+      await store.billing.saveAccount(account(customer, null));
+
+      const created = await store.billing.saveSubscription(base);
+      expect(created).toMatchObject({ outcome: 'created', subscription: { stripeSubscriptionId: base.stripeSubscriptionId, status: 'active' } });
+      expect(await store.billing.saveSubscription({ ...base, stripeUpdatedAt: at(2), at: at(2) })).toMatchObject({ outcome: 'unchanged' });
+      const canceled = await store.billing.saveSubscription({ ...base, status: 'canceled', stripeUpdatedAt: at(4), at: at(4) });
+      expect(canceled).toMatchObject({ outcome: 'changed', subscription: { id: created.subscription.id, status: 'canceled', stripeUpdatedAt: at(4) } });
+      // An older read arriving late changes nothing.
+      expect(await store.billing.saveSubscription({ ...base, status: 'active', stripeUpdatedAt: at(3), at: at(5) })).toMatchObject({
+        outcome: 'stale',
+        subscription: { status: 'canceled', stripeUpdatedAt: at(4) },
+      });
+      // A change that reaches no profile yet is saved without audit.
+      expect(await store.billing.saveSubscription({ ...base, status: 'past_due', stripeUpdatedAt: at(6), at: at(6), audit: { ...base.audit, profileIds: [] } })).toMatchObject({
+        outcome: 'changed',
+      });
+
+      const rows = (await store.audit.list(personalOrganization.id, {}, { limit: 50, cursor: null })).items.filter((e) => e.action === 'billing.subscription_changed');
+      expect(rows).toHaveLength(2);
+      expect(rows.map((r) => [(r.metadata?.from as { status: string } | null)?.status ?? null, (r.metadata?.to as { status: string }).status]).sort()).toEqual(
+        [
+          [null, 'active'],
+          ['active', 'canceled'],
+        ].sort(),
+      );
+      expect(rows[0]).toMatchObject({ actorType: 'SYSTEM', actorId: null, entityType: 'billing_subscription', entityId: created.subscription.id, requestId: 'req-mut360' });
+      expect(rows[0]!.metadata).toMatchObject({ stripeSubscriptionId: base.stripeSubscriptionId, source: 'webhook', eventId: 'evt_mut360' });
+    });
+
+    it('Stripe events: processed once, an error is handled again on redelivery, and old ones are pruned', async () => {
+      const store = await makeStore();
+      const id = `evt_${unique()}`;
+      expect(await store.billing.beginStripeEvent({ id, type: 'customer.subscription.updated', at: at(1) })).toEqual({ alreadyProcessed: false });
+      await store.billing.finishStripeEvent(id, { error: 'TRANSIENT' });
+      expect(await store.billing.beginStripeEvent({ id, type: 'customer.subscription.updated', at: at(2) })).toEqual({ alreadyProcessed: false });
+      await store.billing.finishStripeEvent(id, { processedAt: at(3) });
+      expect(await store.billing.beginStripeEvent({ id, type: 'customer.subscription.updated', at: at(4) })).toEqual({ alreadyProcessed: true });
+      expect(await store.billing.pruneStripeEvents(at(30))).toBeGreaterThanOrEqual(1);
+      expect(await store.billing.beginStripeEvent({ id, type: 'customer.subscription.updated', at: at(31) })).toEqual({ alreadyProcessed: false });
     });
   });
 }

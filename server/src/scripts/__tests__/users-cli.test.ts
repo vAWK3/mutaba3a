@@ -331,7 +331,7 @@ describe('billing verbs (MUT-358)', () => {
   it('billing-link ties a customer to a person; billing-unlinked lists those still unmatched', async () => {
     const h = harness();
     await person(h, 'rana@studio.ps');
-    await h.store.billing.saveAccount({ stripeCustomerId: 'cus_LEFT', userId: null, country: null, currency: 'USD' });
+    await h.store.billing.saveAccount({ stripeCustomerId: 'cus_LEFT', userId: null, country: null, currency: 'USD', at: new Date(), linkAudit: [] });
     expect(await h.run(['billing-link', '--customer', 'cus_P01', '--email', 'rana@studio.ps', '--currency', 'ILS'])).toBe(0);
     expect(h.out).toEqual(['cus_P01 linked to rana@studio.ps (ILS)']);
     h.out.length = 0;

@@ -260,6 +260,9 @@ export const STORE_ACCESS: StoreAccess = {
     listAccounts: 'operator',
     saveAccount: 'operator',
     saveSubscription: 'operator',
+    beginStripeEvent: 'operator',
+    finishStripeEvent: 'operator',
+    pruneStripeEvents: 'operator',
   },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },

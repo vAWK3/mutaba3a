@@ -80,7 +80,7 @@ describe('GET /v1/me billing (AC3)', () => {
     expect(billingOf(await u.me(), u.personalId)).toEqual({ state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: new Date(NOW.getTime() + 12 * DAY).toISOString() });
 
     const periodEnd = new Date(NOW.getTime() + 20 * DAY);
-    await h.store.billing.saveAccount({ stripeCustomerId: 'cus_A1', userId: u.userId, country: 'IL', currency: 'ILS' });
+    await h.store.billing.saveAccount({ stripeCustomerId: 'cus_A1', userId: u.userId, country: 'IL', currency: 'ILS', at: NOW, linkAudit: [] });
     await h.store.billing.saveSubscription({
       stripeCustomerId: 'cus_A1',
       stripeSubscriptionId: 'sub_A1',
@@ -92,6 +92,8 @@ describe('GET /v1/me billing (AC3)', () => {
       priceLookupKey: 'freelancer_founder_monthly_ils',
       founderUntil: null,
       stripeUpdatedAt: NOW,
+      at: NOW,
+      audit: { profileIds: [], source: 'webhook', eventId: null, requestId: null },
     });
     expect(billingOf(await u.me(), u.personalId)).toEqual({ state: 'GRACE', source: 'STRIPE', tier: 'FREELANCER', until: periodEnd.toISOString() });
 
@@ -203,7 +205,7 @@ describe('POST /admin/v1/billing/accounts/link and the unlinked listing (AC4)', 
   it('lists customers still to be matched, then links one the webhook stored', async () => {
     const h = harness();
     const u = await person(h);
-    await h.store.billing.saveAccount({ stripeCustomerId: 'cus_UNMATCHED', userId: null, country: 'JO', currency: 'USD' });
+    await h.store.billing.saveAccount({ stripeCustomerId: 'cus_UNMATCHED', userId: null, country: 'JO', currency: 'USD', at: NOW, linkAudit: [] });
     const unlinked = async () => (await read(await h.app.request('/admin/v1/billing/accounts?linked=false', { headers: admin }))).accounts;
     expect((await unlinked()).map((a: { stripeCustomerId: string }) => a.stripeCustomerId)).toEqual(['cus_UNMATCHED']);
     const res = await h.app.request('/admin/v1/billing/accounts/link', json({ stripeCustomerId: 'cus_UNMATCHED', userId: u.userId }, admin));

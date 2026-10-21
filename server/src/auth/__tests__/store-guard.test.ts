@@ -83,11 +83,15 @@ describe('STORE_ACCESS', () => {
       'accountSetup.redeem',
       'apiKeys.create',
       // MUT-358: grants, links, trial starts and Stripe's mirror are the operator's (and, from MUT-360, the webhook's).
+      // MUT-360: the Stripe webhook's event bookkeeping, also on the unguarded store.
+      'billing.beginStripeEvent',
       'billing.createGrant',
+      'billing.finishStripeEvent',
       'billing.getGrant',
       'billing.linkAccount',
       'billing.listAccounts',
       'billing.listGrants',
+      'billing.pruneStripeEvents',
       'billing.revokeGrant',
       'billing.saveAccount',
       'billing.saveSubscription',

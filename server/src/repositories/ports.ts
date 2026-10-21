@@ -1620,9 +1620,34 @@ export interface LinkBillingAccountInput {
 
 export interface SaveBillingAccountInput {
   stripeCustomerId: string;
+  /** Fills an empty link only (MUT-360 D5): null keeps the existing link, and a different person is a conflict, never a relink. */
   userId: string | null;
+  /** Null keeps the country already stored. */
   country: string | null;
   currency: string;
+  at: Date;
+  /** Written in the same transaction, and only when this call links the customer (one row per profile the person owns). */
+  linkAudit: AuditEventInput[];
+}
+
+/** Why a requested link was not made; the account is still saved, unlinked or with its existing link. */
+export type SaveBillingAccountConflict = 'CUSTOMER_LINKED_ELSEWHERE' | 'USER_HAS_ANOTHER_ACCOUNT' | 'UNKNOWN_USER';
+
+export interface SaveBillingAccountResult {
+  account: BillingAccountRecord;
+  linked: boolean;
+  conflict: SaveBillingAccountConflict | null;
+}
+
+export type BillingSyncSource = 'webhook' | 'reconcile';
+
+/** What `billing.subscription_changed` needs; the repository builds the rows after its compare, inside the transaction. */
+export interface SubscriptionAuditContext {
+  /** The profiles the subscription reaches (the payer's owned profiles and its organization). Empty: no audit. */
+  profileIds: string[];
+  source: BillingSyncSource;
+  eventId: string | null;
+  requestId: string | null;
 }
 
 export interface SaveBillingSubscriptionInput {
@@ -1635,8 +1660,14 @@ export interface SaveBillingSubscriptionInput {
   cancelAtPeriodEnd: boolean;
   priceLookupKey: string | null;
   founderUntil: Date | null;
+  /** When we asked Stripe (MUT-360): a stored row with a later value is newer and is kept. */
   stripeUpdatedAt: Date;
+  at: Date;
+  audit: SubscriptionAuditContext;
 }
+
+/** `stale`: the stored mirror was read from Stripe later than this one, so nothing was written. */
+export type SaveBillingSubscriptionOutcome = 'created' | 'changed' | 'unchanged' | 'stale';
 
 /**
  * MUT-358: billing state. Reads are a signed-in person's (`/v1/me`, store guard `sessionOnly`); writes are the
@@ -1662,10 +1693,19 @@ export interface BillingRepository {
   linkAccount(input: LinkBillingAccountInput): Promise<{ account: BillingAccountRecord; linked: boolean }>;
   /** Oldest first; `linked: false` lists the unlinked customers the operator still has to match. */
   listAccounts(filter: { linked?: boolean | undefined }): Promise<BillingAccountRecord[]>;
-  /** MUT-360's webhook (and tests): upsert by stripeCustomerId. */
-  saveAccount(input: SaveBillingAccountInput): Promise<BillingAccountRecord>;
-  /** MUT-360's webhook (and tests): upsert by stripeSubscriptionId; the account must exist (ForeignKeyViolation). */
-  saveSubscription(input: SaveBillingSubscriptionInput): Promise<BillingSubscriptionRecord>;
+  /** MUT-360's Stripe sync: upsert by stripeCustomerId; a link conflict is reported, never thrown and never overwritten. */
+  saveAccount(input: SaveBillingAccountInput): Promise<SaveBillingAccountResult>;
+  /**
+   * MUT-360's Stripe sync: upsert by stripeSubscriptionId when this read is not older than the stored one, auditing
+   * `billing.subscription_changed` only when a mirrored field changed. The account must exist (ForeignKeyViolation).
+   */
+  saveSubscription(input: SaveBillingSubscriptionInput): Promise<{ subscription: BillingSubscriptionRecord; outcome: SaveBillingSubscriptionOutcome }>;
+  /** MUT-360: records a webhook event; `alreadyProcessed` only once `finishStripeEvent` stored a processedAt. */
+  beginStripeEvent(input: { id: string; type: string; at: Date }): Promise<{ alreadyProcessed: boolean }>;
+  /** An error leaves processedAt null, so a redelivery is handled again. */
+  finishStripeEvent(id: string, outcome: { processedAt: Date } | { error: string }): Promise<void>;
+  /** Deletes events received before `before`; returns how many. */
+  pruneStripeEvents(before: Date): Promise<number>;
 }
 
 export interface LedgerStore {
