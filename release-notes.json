@@ -1,4 +1,14 @@
 {
+  "0.1.17": {
+    "en": [
+      "Saving an expense or a recurring expense now confirms it on screen.",
+      "Saving income and expenses now shows a small check animation. It stays still if your device is set to reduce motion."
+    ],
+    "ar": [
+      "يؤكّد التطبيق الآن حفظ المصروف أو المصروف المتكرر برسالة على الشاشة.",
+      "تظهر الآن علامة صغيرة متحركة عند حفظ الدخل والمصروفات، وتبقى ثابتة إذا كان جهازك مضبوطًا على تقليل الحركة."
+    ]
+  },
   "0.1.16": {
     "en": [
       "Minor bug fixes"
