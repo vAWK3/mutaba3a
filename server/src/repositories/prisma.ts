@@ -10,6 +10,7 @@ import type { TermsLocale } from '../legal.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
+import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import type {
   BillingRepository,
   TermsAcceptanceInput,
@@ -162,11 +163,17 @@ export class PrismaLedgerStore implements LedgerStore {
           // seed), set the fields, bump the version once, audit (qa-reconcile D3). organizations_personal_owned_check
           // refuses a BUSINESS MUT-120 profile.
           await lockOrganization(tx, id);
-          const current = await tx.organization.findFirst({ where: { id, ...ownedBy(ownerUserId) } });
+          // MUT-373: its creator, or a co-owner — whose branch demands an owned BUSINESS profile (outside voice OV2), so an
+          // OWNER-role member of an operator firm never matches, and the D1 stamp below only ever runs for the creator.
+          const current = await tx.organization.findFirst({ where: { id, OR: [ownedBy(ownerUserId), coOwnedBy(ownerUserId)] } });
           if (!current) return { kind: 'not_found' as const };
           if (current.version !== expectedVersion) return { kind: 'stale' as const, record: current };
           const from = profileTypeOf(current);
           const retype = patch.profileType !== undefined && patch.profileType !== from;
+          // MUT-373 (OV3): under the same lock a co-owner grant takes, so a profile can't be retyped PERSONAL while shared.
+          if (retype && patch.profileType === 'PERSONAL' && (await tx.membership.count({ where: { organizationId: id, role: 'OWNER' } })) > 1) {
+            return { kind: 'co_owned' as const };
+          }
           const typeChange = retype ? await replaceCategories(tx, id, preset ?? [], at) : null;
           const data: Prisma.OrganizationUncheckedUpdateInput = { version: { increment: 1 } };
           // qa-reconcile D1: a MUT-120 profile the old revision wrote without an owner gets stamped on its first update.
@@ -208,10 +215,11 @@ export class PrismaLedgerStore implements LedgerStore {
             await tx.auditEvent.createMany({ data: auditRows([firmAuditRow(id, 'firm.disabled', audit)], at) });
             return { kind: 'updated' as const, organization, changed: true };
           }
-          const members = await tx.membership.findMany({ where: { organizationId: id }, select: { userId: true } });
+          const members = await tx.membership.findMany({ where: { organizationId: id }, select: { userId: true, role: true } });
           const refusal = firmEnableRefusal(current, input.ownerUserIds, new Set(members.map((m) => m.userId)));
           if (refusal) return refusal;
-          const owners = firmOwnersOf(current, input.ownerUserIds);
+          // MUT-373: an owned profile's co-owners stay OWNER.
+          const owners = firmOwnersOf(current, input.ownerUserIds, members.filter((m) => m.role === 'OWNER').map((m) => m.userId));
           await tx.membership.updateMany({ where: { organizationId: id, userId: { in: owners } }, data: { role: 'OWNER' } });
           await tx.membership.updateMany({ where: { organizationId: id, userId: { notIn: owners } }, data: { role: 'BOOKKEEPER' } });
           const organization = await tx.organization.update({
@@ -495,6 +503,49 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     revoke: async (userId, organizationId) =>
       (await this.prisma.membership.deleteMany({ where: { userId, organizationId } })).count > 0,
+    grantOwner: (userId, organizationId, at, maxOwners) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // MUT-373: the row lock queues two grants (and a retype, OV3), so the owner count below can't be raced past.
+          await lockOrganization(tx, organizationId);
+          const organization = await tx.organization.findUnique({ where: { id: organizationId } });
+          if (!organization) return { kind: 'not_found' as const };
+          const members = await tx.membership.findMany({ where: { organizationId }, select: { userId: true, role: true } });
+          const existing = members.find((m) => m.userId === userId) ?? null;
+          const refusal = grantOwnerRefusal(organization, existing?.role ?? null, ownerIdsOf(organization, members).length, maxOwners);
+          if (refusal) return refusal;
+          if (existing) {
+            const row = await tx.membership.findUniqueOrThrow({ where: { userId_organizationId: { userId, organizationId } } });
+            return { kind: 'granted' as const, membership: toMembership(row), created: false };
+          }
+          const membership = await tx.membership.create({ data: { userId, organizationId, role: 'OWNER', createdAt: at } });
+          return { kind: 'granted' as const, membership: toMembership(membership), created: true };
+        }),
+      ),
+    removeOwner: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          await lockOrganization(tx, input.organizationId);
+          const organization = await tx.organization.findUnique({ where: { id: input.organizationId } });
+          if (!organization) return { kind: 'not_found' as const };
+          const roleOf = async (userId: string) =>
+            (await tx.membership.findUnique({ where: { userId_organizationId: { userId, organizationId: input.organizationId } }, select: { role: true } }))?.role ?? null;
+          const decision = removeOwnerDecision(organization, input, await roleOf(input.actorId), await roleOf(input.userId));
+          if (decision.kind !== 'removed') return decision;
+          await tx.membership.delete({ where: { userId_organizationId: { userId: input.userId, organizationId: input.organizationId } } });
+          await tx.auditEvent.createMany({ data: auditRows([ownerRemovedAudit(input, decision.reason)], input.at) });
+          return decision;
+        }),
+      ),
+    listOwnersOf: async (organizationIds) => {
+      if (organizationIds.length === 0) return [];
+      const rows = await this.prisma.membership.findMany({
+        where: { organizationId: { in: [...organizationIds] }, role: 'OWNER' },
+        select: { organizationId: true, userId: true, createdAt: true, user: { select: { displayName: true, email: true } } },
+        orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
+      });
+      return rows.map((r) => ({ organizationId: r.organizationId, userId: r.userId, displayName: r.user.displayName, email: r.user.email, createdAt: r.createdAt }));
+    },
     find: async (userId, organizationId) =>
       mapNullable(await this.prisma.membership.findUnique({ where: { userId_organizationId: { userId, organizationId } } }), toMembership),
     listByUser: async (userId) =>
@@ -1734,6 +1785,11 @@ async function lockOrganization(tx: Tx, organizationId: string): Promise<void> {
 /** A profile `userId` owns, an unstamped MUT-120 one included (qa-reconcile D1; `profileOwnerOf` in SQL). */
 function ownedBy(userId: string): Prisma.OrganizationWhereInput {
   return { OR: [{ ownerUserId: userId }, { ownerUserId: null, personalOwnerUserId: userId }] };
+}
+
+/** MUT-373: a profile `userId` co-owns — `canCoOwn` and an OWNER membership (`ownsProfile`'s second branch in SQL). */
+function coOwnedBy(userId: string): Prisma.OrganizationWhereInput {
+  return { ownerUserId: { not: null }, personalOwnerUserId: null, profileType: 'BUSINESS', memberships: { some: { userId, role: 'OWNER' } } };
 }
 
 /**

@@ -3,16 +3,18 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { presetFor } from '../expenses/presets.js';
-import { profileOwnerOf, profileTypeOf } from '../personal-profile.js';
+import { canCoOwn, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
 import { identityIdempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
-import type { LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
+import type { LedgerStore, MembershipRecord, Organization, UserRecord } from '../repositories/ports.js';
 import {
   CreateProfileRequestSchema,
   FirmRequestResponseSchema,
   HostedProfileSchema,
   IfMatchHeaderSchema,
   ProfileIdParamSchema,
+  ProfileOwnerParamSchema,
+  RemoveProfileOwnerResponseSchema,
   ProfileTypeChangeQuerySchema,
   ProfileTypeChangeSchema,
   UpdateProfileRequestSchema,
@@ -33,6 +35,7 @@ export const PROFILE_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new 
   'PATCH /v1/profiles/:profileId',
   'GET /v1/profiles/:profileId/type-change',
   'POST /v1/profiles/:profileId/firm-request',
+  'DELETE /v1/profiles/:profileId/owners/:userId',
 ]);
 
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
@@ -49,14 +52,26 @@ const forbiddenResponse = { 403: { description: 'READ_ONLY_PROFILE with details.
 export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
-  /** The profile at `profileId`, if the caller owns it: 404 when they cannot see it at all, 403 when it is a firm they only belong to. */
+  /**
+   * The profile at `profileId`, if the caller owns it — created it or co-owns it (MUT-373, ownsProfile): 404 when
+   * they cannot see it at all, 403 when it is a firm they only belong to.
+   */
   async function ownedBy(user: UserRecord, profileId: string): Promise<Organization> {
     const organization = await store.organizations.getById(profileId);
-    if (!organization || !(await store.memberships.find(user.id, profileId))) throw new ApiError('NOT_FOUND', 'Profile not found');
-    if (profileOwnerOf(organization) !== user.id) {
-      throw new ApiError('READ_ONLY_PROFILE', 'Only the person who owns a profile can change it; this one was set up for you by your account administrator', { reason: 'NOT_OWNER' });
-    }
+    const membership = organization ? await store.memberships.find(user.id, profileId) : null;
+    if (!organization || !membership) throw new ApiError('NOT_FOUND', 'Profile not found');
+    if (!ownsProfile(organization, user.id, membership.role)) throw notOwner();
     return organization;
+  }
+
+  /** One profile as the profile routes return it (MUT-182 D1: the /v1/me builder), its owners included (outside voice OV4). */
+  async function profileView(organization: Organization, user: UserRecord, membership: MembershipRecord | null) {
+    return hostedProfileFor(organization, null, user.id, membership, await store.memberships.listOwnersOf([organization.id]));
+  }
+
+  /** How many people own the profile (the preview's early answer; PATCH decides under the row lock). */
+  async function ownerCount(organization: Organization): Promise<number> {
+    return (await store.memberships.listOwnersOf([organization.id])).filter((e) => canCoOwn(organization) || e.userId === profileOwnerOf(organization)).length;
   }
 
   /** The built-in personal profile is always PERSONAL (eng review D2): PATCH refuses to retype it, and the preview of that change says the same. */
@@ -91,7 +106,7 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (result.kind === 'limit') {
         throw new ApiError('CONFLICT', `You already have ${result.count} profiles, the most one person can own`, { reason: 'PROFILE_LIMIT', limit: MAX_OWNED_PROFILES });
       }
-      return c.json(hostedProfileFor(result.organization, null, user.id, result.membership), 201);
+      return c.json(await profileView(result.organization, user, result.membership), 201);
     },
   );
 
@@ -135,10 +150,11 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       );
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'Profile not found');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
+      if (result.kind === 'co_owned') throw coOwned();
       const typeChange = result.typeChange && target ? { ...result.typeChange, preset: target.preset } : null;
       // MUT-300: an owned profile can have firm features on (eng review D4); its owner's role comes with it.
       const membership = await store.memberships.find(user.id, result.record.id);
-      return c.json({ profile: hostedProfileFor(result.record, null, user.id, membership), typeChange }, 200);
+      return c.json({ profile: await profileView(result.record, user, membership), typeChange }, 200);
     },
   );
 
@@ -158,6 +174,7 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const current = await ownedBy(user, c.req.valid('param').profileId);
       const to = c.req.valid('query').to;
       assertRetypable(current, to);
+      if (to === 'PERSONAL' && profileTypeOf(current) !== 'PERSONAL' && (await ownerCount(current)) > 1) throw coOwned();
       const { preset } = presetFor({ writerOfRecord: null, profileType: to }, user.locale);
       const impact = to === profileTypeOf(current) ? { uncategorizedExpenses: 0, deletedCategories: 0 } : await store.organizations.typeChangeImpact(current.id);
       return c.json({ ...impact, preset }, 200);
@@ -199,5 +216,53 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     },
   );
 
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/v1/profiles/{profileId}/owners/{userId}',
+      tags: ['Profiles'],
+      summary: 'Leave a profile you co-own, or remove a co-owner from one you created',
+      description:
+        'MUT-373 (ADR-163). Naming yourself leaves the profile; naming someone else removes them, and only the profile’s creator may (403 READ_ONLY_PROFILE, details.reason NOT_CREATOR). Their membership ends; everything they recorded stays, attributed to them. The creator can’t leave (409 CONFLICT, details.reason CREATOR_CANNOT_LEAVE): there is no ownership transfer yet. 404 when the caller can’t see the profile or the person isn’t one of its co-owners. A retry with the same Idempotency-Key replays the first answer; a new key after success answers 404.',
+      security: SESSION_ONLY,
+      middleware: [identityIdempotent(store, 'profiles.removeOwner')] as const,
+      request: { params: ProfileOwnerParamSchema, headers: IdempotencyHeaderSchema },
+      responses: {
+        200: { description: 'Left, or removed', content: { 'application/json': { schema: RemoveProfileOwnerResponseSchema } } },
+        ...notFoundResponse,
+        ...conflictResponse,
+        ...errorResponses,
+        403: { description: 'READ_ONLY_PROFILE: details.reason NOT_OWNER (a firm you only belong to) or NOT_CREATOR (only the creator removes someone else)', content: errorResponses[403].content },
+      },
+    }),
+    async (c) => {
+      const { user } = c.get('identity');
+      const { profileId, userId } = c.req.valid('param');
+      const result = await store.memberships.removeOwner({ organizationId: profileId, userId, actorId: user.id, at: c.get('now')(), requestId: c.get('requestId') });
+      switch (result.kind) {
+        case 'removed':
+          return c.json({ result: result.reason }, 200);
+        case 'not_found':
+          throw new ApiError('NOT_FOUND', 'Profile not found');
+        case 'not_owner':
+          throw notOwner();
+        case 'not_creator':
+          throw new ApiError('READ_ONLY_PROFILE', 'Only the person who created this profile can remove someone from it', { reason: 'NOT_CREATOR' });
+        case 'creator_cannot_leave':
+          // gstack-shortcut(dec-cd1b5570): creator can't leave, upgrade when MUT-306 lands or a pilot creator asks.
+          throw new ApiError('CONFLICT', 'You created this profile, so you can’t leave it; ask us to hand it over first', { reason: 'CREATOR_CANNOT_LEAVE' });
+      }
+    },
+  );
+
   return app;
+}
+
+function notOwner(): ApiError {
+  return new ApiError('READ_ONLY_PROFILE', 'Only the person who owns a profile can change it; this one was set up for you by your account administrator', { reason: 'NOT_OWNER' });
+}
+
+/** MUT-373 (outside voice OV3): a profile with more than one owner stays BUSINESS; PATCH checks this under its row lock too. */
+function coOwned(): ApiError {
+  return new ApiError('CONFLICT', 'A profile you share with other owners stays Business', { reason: 'CO_OWNED' });
 }

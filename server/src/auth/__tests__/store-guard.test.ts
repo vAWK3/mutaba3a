@@ -93,6 +93,8 @@ describe('STORE_ACCESS', () => {
       'billing.saveSubscription',
       'billing.setTrialStart',
       'memberships.grant',
+      // MUT-373: co-owners are added by the operator only (the pilot path; invites are MUT-306).
+      'memberships.grantOwner',
       'memberships.revoke',
       'organizations.create',
       // MUT-300: an operator turns firm features on and off, declines a request and lists the pending ones.

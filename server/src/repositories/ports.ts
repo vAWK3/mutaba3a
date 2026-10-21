@@ -240,6 +240,8 @@ export type DeclineFirmRequestResult = { kind: 'declined'; organization: Organiz
 export type UpdateOwnedOrganizationResult =
   | { kind: 'updated'; record: Organization; typeChange: ProfileTypeChange | null }
   | { kind: 'stale'; record: Organization }
+  /** MUT-373: a profile with more than one owner stays BUSINESS (checked under the row lock, outside voice OV3). */
+  | { kind: 'co_owned' }
   /** No such profile, or not owned by this user (an operator firm included). */
   | { kind: 'not_found' };
 
@@ -274,6 +276,7 @@ export interface OrganizationRepository {
    */
   updateOwned(
     id: string,
+    /** MUT-373: the profile's creator or one of its co-owners (ownsProfile, in the query). */
     ownerUserId: string,
     expectedVersion: number,
     patch: UpdateOwnedOrganizationPatch,
@@ -1343,6 +1346,51 @@ export interface ChangePasswordInput {
   audit: AuditEventInput[];
 }
 
+/** MUT-373: one owner of a profile, for /v1/me and the profile responses. */
+export interface ProfileOwnerEntry {
+  organizationId: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  /** When their membership began, so owners list in the order they joined. */
+  createdAt: Date;
+}
+
+export type GrantOwnerResult =
+  | { kind: 'granted'; membership: MembershipRecord; created: boolean }
+  | { kind: 'not_found' }
+  /** The built-in personal profile: never anyone else's. */
+  | { kind: 'personal_profile' }
+  /** An owned profile typed PERSONAL. */
+  | { kind: 'not_business' }
+  /** Not an owned profile (an operator firm or a Malafat-fed one): roles on firms are MUT-305's. */
+  | { kind: 'not_co_ownable' }
+  /** The profile already has `max` owners, the creator included. */
+  | { kind: 'limit'; count: number }
+  /** Already a member with another role (eng review D7: role changes are MUT-305's). */
+  | { kind: 'role_conflict'; role: MembershipRole };
+
+export interface RemoveOwnerInput {
+  organizationId: string;
+  /** The owner leaving or being removed. */
+  userId: string;
+  /** Who asks: the same person (leave) or the profile's creator (remove). */
+  actorId: string;
+  at: Date;
+  requestId: string | null;
+}
+
+export type RemoveOwnerResult =
+  | { kind: 'removed'; reason: 'left' | 'removed' }
+  /** The caller can't see the profile, or the person named isn't a co-owner of it. */
+  | { kind: 'not_found' }
+  /** The caller is a member but not an owner. */
+  | { kind: 'not_owner' }
+  /** The creator stays: there is no ownership transfer in v1 (eng review D3). */
+  | { kind: 'creator_cannot_leave' }
+  /** Only the creator removes someone else. */
+  | { kind: 'not_creator' };
+
 export interface MembershipRepository {
   /**
    * Idempotent: an existing membership is returned unchanged with `created: false`. ForeignKeyViolation on an unknown user or organization.
@@ -1351,6 +1399,20 @@ export interface MembershipRepository {
   grant(userId: string, organizationId: string, at: Date): Promise<{ membership: MembershipRecord; created: boolean }>;
   /** True when a membership was removed. */
   revoke(userId: string, organizationId: string): Promise<boolean>;
+  /**
+   * MUT-373 (operator): makes `userId` a co-owner — an OWNER member — of an owned BUSINESS profile, in one
+   * transaction holding the organization's row, so two grants can never pass `maxOwners` and a retype can't slip
+   * in between (outside voice OV3). Idempotent for an existing OWNER. Audit is the caller's (the admin route).
+   */
+  grantOwner(userId: string, organizationId: string, at: Date, maxOwners: number): Promise<GrantOwnerResult>;
+  /**
+   * MUT-373: a co-owner leaves, or the creator removes one, under the organization's row lock. Deletes the
+   * membership only (their records stay, attributed to them) and writes `membership.revoked` (actor USER,
+   * metadata.reason left|removed) in the same transaction (eng review A6).
+   */
+  removeOwner(input: RemoveOwnerInput): Promise<RemoveOwnerResult>;
+  /** MUT-373: the OWNER members of these organizations, with their names, in one read; oldest membership first. */
+  listOwnersOf(organizationIds: readonly string[]): Promise<ProfileOwnerEntry[]>;
   find(userId: string, organizationId: string): Promise<MembershipRecord | null>;
   /** Oldest first. */
   listByUser(userId: string): Promise<MembershipRecord[]>;
