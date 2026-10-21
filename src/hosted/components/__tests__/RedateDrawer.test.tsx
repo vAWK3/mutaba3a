@@ -27,7 +27,7 @@ const PERSONAL = profile({
   timezone: 'Asia/Jerusalem',
 });
 
-const owed = (o: Partial<Receivable> = {}): Receivable => ({ ...receivable(R, C1, PJ, '500.00', 'DUE', '2026-11-15'), origin: 'ADJUSTMENT', gross: '500.00', postingDate: '2026-10-08', version: 3, ...o });
+const owed = (o: Partial<Receivable> = {}): Receivable => ({ ...receivable(R, C1, PJ, '500.00', 'DUE', '2026-11-15'), origin: 'ADJUSTMENT', gross: '500.00', postingDate: '2026-10-08', capturedByUserId: ME, version: 3, ...o });
 const mine = (o: Partial<Payment> = {}): Payment => ({ ...payment(P, 'PAY-2026-0007'), id: P, origin: 'capture', status: 'POSTED', capturedBy: { userId: ME, displayName: 'Me' }, receivedOn: '2026-10-08', version: 2, allocations: [], allocated: '0.00', unallocated: '585.00', ...o });
 
 function json(body: unknown, status = 200) {
@@ -286,6 +286,15 @@ describe('RedateDrawer — a payment (?payment=)', () => {
     expect(sent!.url.pathname).toBe(`/v1/payments/${P}`);
     expect(sent!.headers.get('If-Match')).toBe('2');
     expect(sent!.body).toEqual({ receivedOn: '2026-10-02' });
+  });
+});
+
+describe('RedateDrawer — an Owed entry a partner captured (MUT-373)', () => {
+  it('shows "no longer available" with no Save: only who captured it may re-date it', async () => {
+    stub({ getOwed: () => json(owed({ capturedByUserId: 'u-partner' })) });
+    renderDrawer('owed');
+    expect(await screen.findByText('This entry is no longer available.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
   });
 });
 

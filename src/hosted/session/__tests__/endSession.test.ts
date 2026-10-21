@@ -4,6 +4,7 @@ import type { AnyRouter } from '@tanstack/react-router';
 import { endSession } from '../endSession';
 import { useSavedFlashStore } from '../../../lib/savedFlashStore';
 import { useMalafatPortalMoments } from '../malafatMoments';
+import { useLostAccess } from '../lostAccess';
 
 const { endPortalUsage } = vi.hoisted(() => ({ endPortalUsage: vi.fn() }));
 vi.mock('../../analytics/portalAnalytics', () => ({ endPortalUsage }));
@@ -26,6 +27,13 @@ describe('endSession', () => {
     useMalafatPortalMoments.getState().markClientsRetired();
     endSession(new QueryClient(), { navigate: vi.fn() } as unknown as AnyRouter, { reason: 'expired' });
     expect(useMalafatPortalMoments.getState()).toMatchObject({ businessCreatedId: null, clientsRetiredThisVisit: false });
+  });
+
+  it('MUT-373: the next person in this tab sees no banner naming a profile someone else lost', () => {
+    useLostAccess.getState().remember('p-1', 'Sader & Haddad');
+    useLostAccess.getState().lose('Sader & Haddad');
+    endSession(new QueryClient(), { navigate: vi.fn() } as unknown as AnyRouter, { reason: 'signed_out' });
+    expect(useLostAccess.getState()).toMatchObject({ open: null, lost: null });
   });
 
   it('MUT-155: sign-out forgets the usage choice and its ID; an expired session keeps them (same person)', () => {

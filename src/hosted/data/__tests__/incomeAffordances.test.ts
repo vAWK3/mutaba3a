@@ -62,19 +62,25 @@ describe('isSettleable', () => {
 });
 
 describe('canRedateOwed (MUT-224)', () => {
-  const owed = (status = 'DUE'): Receivable => ({ ...receivable('r1', 'c1', 'p1', '100.00', status), origin: 'ADJUSTMENT' });
+  const VIEWER = 'u-me';
+  const owed = (status = 'DUE'): Receivable => ({ ...receivable('r1', 'c1', 'p1', '100.00', status), origin: 'ADJUSTMENT', capturedByUserId: VIEWER });
+
+  it('refuses an entry someone else captured, as on a profile shared with a partner (MUT-373)', () => {
+    expect(canRedateOwed(personal(), { ...owed(), capturedByUserId: 'u-partner' }, VIEWER)).toBe(false);
+    expect(canRedateOwed(personal(), { ...owed(), capturedByUserId: null }, VIEWER)).toBe(false);
+  });
 
   it('offers it for an Owed entry on a profile the user owns, open or settled', () => {
-    expect(canRedateOwed(personal(), owed())).toBe(true);
-    expect(canRedateOwed(personal(), owed('PAID'))).toBe(true);
+    expect(canRedateOwed(personal(), owed(), VIEWER)).toBe(true);
+    expect(canRedateOwed(personal(), owed('PAID'), VIEWER)).toBe(true);
   });
 
   it('refuses a void entry, anything Malafat posted, a profile without capture write, and any profile the user does not own', () => {
-    expect(canRedateOwed(personal(), owed('VOID'))).toBe(false);
-    expect(canRedateOwed(personal(), { ...owed(), origin: 'INSTALLMENT' })).toBe(false);
-    expect(canRedateOwed(personal({ access: { ...PERSONAL_ACCESS, capture: 'read' } }), owed())).toBe(false);
-    expect(canRedateOwed(personal({ owned: false }), owed())).toBe(false);
-    expect(canRedateOwed(personal({ owned: false, writerOfRecord: 'MALAFAT', income: { ...MALAFAT_RULES } }), owed())).toBe(false);
+    expect(canRedateOwed(personal(), owed('VOID'), VIEWER)).toBe(false);
+    expect(canRedateOwed(personal(), { ...owed(), origin: 'INSTALLMENT' }, VIEWER)).toBe(false);
+    expect(canRedateOwed(personal({ access: { ...PERSONAL_ACCESS, capture: 'read' } }), owed(), VIEWER)).toBe(false);
+    expect(canRedateOwed(personal({ owned: false }), owed(), VIEWER)).toBe(false);
+    expect(canRedateOwed(personal({ owned: false, writerOfRecord: 'MALAFAT', income: { ...MALAFAT_RULES } }), owed(), VIEWER)).toBe(false);
   });
 });
 

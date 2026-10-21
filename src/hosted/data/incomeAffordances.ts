@@ -59,11 +59,12 @@ export function isSettleable(receivable: Receivable): boolean {
 
 /**
  * MUT-224: whether an Owed entry's date can be changed (PATCH /v1/income/{id}). Only on a profile the user owns
- * (the server answers 404 anywhere else), only an entry captured through POST /v1/income, and not a voided one.
- * A settled entry can still be re-dated: the server keeps its due date and its payments.
+ * (the server answers 404 anywhere else), only an entry they captured through POST /v1/income — on a shared profile
+ * (MUT-373) a partner's entry is theirs to re-date, as with payments — and not a voided one. A settled entry can
+ * still be re-dated: the server keeps its due date and its payments.
  */
-export function canRedateOwed(profile: HostedProfile, receivable: Receivable): boolean {
-  return redateAffordancesFor(profile).owed && receivable.origin === 'ADJUSTMENT' && receivable.status !== 'VOID';
+export function canRedateOwed(profile: HostedProfile, receivable: Receivable, userId: string): boolean {
+  return redateAffordancesFor(profile).owed && receivable.origin === 'ADJUSTMENT' && receivable.status !== 'VOID' && receivable.capturedByUserId === userId;
 }
 
 /**

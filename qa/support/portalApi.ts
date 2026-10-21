@@ -57,7 +57,7 @@ export function project(n: number, customerId: string, name: string, currency: C
 
 export function receivable(
   n: number,
-  r: { customerId: string; projectId?: string | null; gross: string; paid?: string; currency?: Currency; status?: string; origin?: string; dueDate?: string; postingDate?: string; title?: string | null },
+  r: { customerId: string; projectId?: string | null; gross: string; paid?: string; currency?: Currency; status?: string; origin?: string; dueDate?: string; postingDate?: string; title?: string | null; capturedBy?: string },
 ) {
   const paid = r.paid ?? '0.00';
   return {
@@ -81,6 +81,8 @@ export function receivable(
     postedAt: STAMP,
     status: r.status ?? 'DUE',
     title: r.title ?? null,
+    // MUT-373: only who captured an Owed entry may re-date it; the signed-in QA user, unless a spec says a partner did.
+    capturedByUserId: (r.origin ?? 'ADJUSTMENT') === 'ADJUSTMENT' ? (r.capturedBy ?? QA_USER_ID) : null,
     version: 1,
   };
 }

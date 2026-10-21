@@ -1,9 +1,10 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
-import { ORG_B, emptyProfileRoutes, fail, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
+import { ORG_B, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import type { HostedProfile } from '../../api/client';
 import { SUPPORT_EMAIL } from '../../terms';
+import { useLostAccess } from '../../session/lostAccess';
 
 /**
  * MUT-373 (ADR-163, design review DR1–DR14): the Owners section of a Business profile's edit pane. The creator
@@ -37,8 +38,16 @@ function portal(profiles: HostedProfile[], routes: Record<string, Handler> = {},
 
 const deletes = (calls: { method: string; url: URL }[]) => calls.filter((c) => c.method === 'DELETE' && c.url.pathname.includes('/owners/'));
 
+/** A response the test releases when it chooses, to hold a request in flight. */
+function deferred() {
+  let release: (response: Response) => void = () => {};
+  const promise = new Promise<Response>((resolve) => (release = resolve));
+  return { handler: () => promise, release };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  useLostAccess.getState().reset();
   localStorage.removeItem(PORTAL_LANGUAGE_KEY);
 });
 
@@ -94,6 +103,69 @@ describe('Owners section (MUT-373)', () => {
     expect(second.headers.get('Idempotency-Key')).toBe(first.headers.get('Idempotency-Key'));
   });
 
+  it('moves focus to the Owners heading once the last removable row has gone (DR6)', async () => {
+    const { user, setProfiles } = portal([created, builtIn], {
+      [`DELETE /v1/profiles/${STUDIO}/owners/${LINA}`]: () => {
+        setProfiles([{ ...created, owners: [owner(ME, 'Nour Haddad', true)] }, builtIn]);
+        return ok({ result: 'removed' });
+      },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
+    await user.click(within(dialog).getByRole('button', { name: 'Remove Lina Saleh' }));
+    await user.click(within(within(dialog).getByRole('group', { name: 'Remove Lina Saleh?' })).getByRole('button', { name: 'Remove Lina Saleh' }));
+    await waitFor(() => expect(within(dialog).getByRole('heading', { name: 'Owners' })).toHaveFocus());
+  });
+
+  it('moves focus to the next owner’s Remove after a removal, not the heading (DR6)', async () => {
+    const OMAR = 'e1111111-1111-4111-8111-111111111111';
+    const three = profile({ ...base, owners: [owner(ME, 'Nour Haddad', true), owner(LINA, 'Lina Saleh', false), owner(OMAR, 'Omar Khalil', false)] });
+    const { user, setProfiles } = portal([three, builtIn], {
+      [`DELETE /v1/profiles/${STUDIO}/owners/${LINA}`]: () => {
+        setProfiles([{ ...three, owners: [owner(ME, 'Nour Haddad', true), owner(OMAR, 'Omar Khalil', false)] }, builtIn]);
+        return ok({ result: 'removed' });
+      },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
+    await user.click(within(dialog).getByRole('button', { name: 'Remove Lina Saleh' }));
+    await user.click(within(within(dialog).getByRole('group', { name: 'Remove Lina Saleh?' })).getByRole('button', { name: 'Remove Lina Saleh' }));
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Remove Omar Khalil' })).toHaveFocus());
+  });
+
+  it('cancels without sending anything, and returns focus to that row’s Remove', async () => {
+    const { user, api } = portal([created, builtIn]);
+    const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
+    await user.click(within(dialog).getByRole('button', { name: 'Remove Lina Saleh' }));
+    await user.click(within(within(dialog).getByRole('group', { name: 'Remove Lina Saleh?' })).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Remove Lina Saleh' })).toHaveFocus());
+    expect(deletes(api.calls)).toHaveLength(0);
+  });
+
+  it('keeps the confirm and the row when the server refuses (NOT_CREATOR), and says why', async () => {
+    const { user } = portal([created, builtIn], {
+      [`DELETE /v1/profiles/${STUDIO}/owners/${LINA}`]: () => fail(403, 'READ_ONLY_PROFILE', { reason: 'NOT_CREATOR' }),
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
+    await user.click(within(dialog).getByRole('button', { name: 'Remove Lina Saleh' }));
+    await user.click(within(within(dialog).getByRole('group', { name: 'Remove Lina Saleh?' })).getByRole('button', { name: 'Remove Lina Saleh' }));
+    expect(await within(dialog).findByText('Only the person who created this profile can remove someone.')).toBeInTheDocument();
+    expect(within(dialog).getByRole('group', { name: 'Remove Lina Saleh?' })).toBeInTheDocument();
+    expect(within(dialog).getByText('Lina Saleh')).toBeInTheDocument();
+  });
+
+  it('stays open while a removal is in flight: Escape waits for the answer (DR5)', async () => {
+    const held = deferred();
+    const { user } = portal([created, builtIn], { [`DELETE /v1/profiles/${STUDIO}/owners/${LINA}`]: held.handler });
+    const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
+    await user.click(within(dialog).getByRole('button', { name: 'Remove Lina Saleh' }));
+    await user.click(within(within(dialog).getByRole('group', { name: 'Remove Lina Saleh?' })).getByRole('button', { name: 'Remove Lina Saleh' }));
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog', { name: 'Sader & Haddad' })).toBeInTheDocument();
+    held.release(ok({ result: 'removed' }));
+    expect(await screen.findByText('Lina Saleh removed from Sader & Haddad')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
   it('treats someone already removed elsewhere as done (DR5)', async () => {
     const { user } = portal([created, builtIn], { [`DELETE /v1/profiles/${STUDIO}/owners/${LINA}`]: () => fail(404, 'NOT_FOUND') });
     const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
@@ -132,6 +204,53 @@ describe('Owners section (MUT-373)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.queryByText("This profile isn't available")).toBeNull();
     expect(screen.queryByText(/You no longer have access/)).toBeNull();
+  });
+
+  it.each([
+    ['the network fails', () => Promise.reject(new TypeError('network down')), /Can't reach Mutaba3a/],
+    ['the creator tries to leave', () => fail(409, 'CONFLICT', { reason: 'CREATOR_CANNOT_LEAVE' }), /you can't leave it/],
+  ] as const)('keeps the leave confirm open with a banner, Save still hidden, when %s', async (_label, answer, banner) => {
+    const { user, router } = portal([coOwned, builtIn], { [`DELETE /v1/profiles/${STUDIO}/owners/${ME}`]: answer as Handler }, `/p/${STUDIO}?editProfile=${STUDIO}`);
+    const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
+    await user.click(within(dialog).getByRole('button', { name: 'Leave Sader & Haddad' }));
+    await user.click(within(within(dialog).getByRole('group', { name: 'Leave Sader & Haddad?' })).getByRole('button', { name: 'Leave Sader & Haddad' }));
+    expect(await within(dialog).findByText(banner)).toBeInTheDocument();
+    expect(within(dialog).getByRole('group', { name: 'Leave Sader & Haddad?' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(locationOf(router)).toContain(`/p/${STUDIO}`);
+  });
+
+  it('treats a leave the server no longer knows (404) as left: personal profile, toast, no lost-access banner', async () => {
+    const { user, setProfiles } = portal(
+      [coOwned, builtIn],
+      {
+        [`DELETE /v1/profiles/${STUDIO}/owners/${ME}`]: () => {
+          setProfiles([builtIn]);
+          return fail(404, 'NOT_FOUND');
+        },
+      },
+      `/p/${STUDIO}?editProfile=${STUDIO}`,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
+    await user.click(within(dialog).getByRole('button', { name: 'Leave Sader & Haddad' }));
+    await user.click(within(within(dialog).getByRole('group', { name: 'Leave Sader & Haddad?' })).getByRole('button', { name: 'Leave Sader & Haddad' }));
+    expect(await screen.findByText('You left Sader & Haddad')).toBeInTheDocument();
+    expect(screen.queryByText(/You no longer have access/)).toBeNull();
+  });
+
+  it('leaving a profile that isn’t open closes the drawer and stays on the open profile', async () => {
+    const { user, router, setProfiles } = portal([coOwned, builtIn], {
+      [`DELETE /v1/profiles/${STUDIO}/owners/${ME}`]: () => {
+        setProfiles([builtIn]);
+        return ok({ result: 'left' });
+      },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
+    await user.click(within(dialog).getByRole('button', { name: 'Leave Sader & Haddad' }));
+    await user.click(within(within(dialog).getByRole('group', { name: 'Leave Sader & Haddad?' })).getByRole('button', { name: 'Leave Sader & Haddad' }));
+    expect(await screen.findByText('You left Sader & Haddad')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(locationOf(router)).toMatch(new RegExp(`^/p/${ORG_B}`));
   });
 
   it('locks the Personal type card on a shared profile, and explains it at the card', async () => {
@@ -179,5 +298,22 @@ describe('Lost access (MUT-373 DR3)', () => {
     // Any 404 on the open profile re-reads /v1/me (QueryView); here the re-read is triggered directly.
     await queryClient.invalidateQueries({ queryKey: ['me'] });
     expect(await screen.findByText('You no longer have access to Sader & Haddad. What you recorded stays.')).toBeInTheDocument();
+  });
+
+  it('closes the banner for good once dismissed', async () => {
+    const { user, setProfiles, queryClient } = portal([coOwned, builtIn], {}, `/p/${STUDIO}`);
+    await screen.findAllByText('Sader & Haddad');
+    setProfiles([builtIn]);
+    await queryClient.invalidateQueries({ queryKey: ['me'] });
+    const banner = await screen.findByText(/You no longer have access to Sader & Haddad/);
+    await user.click(within(banner.closest('.hp-lost-access') as HTMLElement).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByText(/You no longer have access/)).toBeNull();
+    expect(useLostAccess.getState().lost).toBeNull();
+  });
+
+  it('shows the plain unavailable screen for a deep link to a profile never open in this tab', async () => {
+    portal([builtIn], {}, `/p/${STUDIO}`);
+    expect(await screen.findByText("This profile isn't available")).toBeInTheDocument();
+    expect(screen.queryByText(/You no longer have access/)).toBeNull();
   });
 });

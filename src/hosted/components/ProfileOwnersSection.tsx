@@ -23,8 +23,11 @@ import { useToast } from './Toast';
 
 type Confirm = { kind: 'remove'; owner: ProfileOwner } | { kind: 'leave' } | null;
 
-/** A removed row collapses, then the cache forgets it (DR6). The transition's end, or this, whichever is first. */
-const EXIT_FALLBACK_MS = 400;
+/**
+ * A removed row collapses, then the cache forgets it (DR6): at the transition's end, or after this, whichever is
+ * first. Past the collapse (--duration-toggle, 350ms) so the fallback never cuts it short.
+ */
+const EXIT_FALLBACK_MS = 450;
 
 export interface ProfileOwnersSectionProps {
   profileId: string;
@@ -54,6 +57,8 @@ export function ProfileOwnersSection({ profileId, onLeft, onBusyChange, onLeaveC
 
   useEffect(() => {
     onBusyChange(remove.isPending);
+    // Unmounted mid-request (a /v1/me read dropped the profile): the drawer must not stay locked open.
+    return () => onBusyChange(false);
   }, [remove.isPending, onBusyChange]);
 
   if (!profile || local || !ownersSectionVisible(profile)) return null;
@@ -81,7 +86,7 @@ export function ProfileOwnersSection({ profileId, onLeft, onBusyChange, onLeaveC
     setExiting(null);
     showToast(t('hosted.profiles.owners.removed', { name: ownerLabel(owner), profile: profile.name }), { tone: 'info' });
     const next = rest[index] ?? rest[index - 1];
-    queueMicrotask(() => (next ? triggers.current.get(next.userId) : null)?.focus() ?? headingRef.current?.focus());
+    queueMicrotask(() => ((next && triggers.current.get(next.userId)) || headingRef.current)?.focus());
   };
 
   const runRemove = async (owner: ProfileOwner) => {
@@ -163,7 +168,7 @@ export function ProfileOwnersSection({ profileId, onLeft, onBusyChange, onLeaveC
                     {owner.creator && t('hosted.profiles.owners.creator')}
                   </span>
                 </span>
-                {removable && !confirming && (
+                {removable && !confirming && exiting !== owner.userId && (
                   <button
                     type="button"
                     ref={(node) => void triggers.current.set(owner.userId, node)}
