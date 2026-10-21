@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import pino from 'pino';
 import Stripe from 'stripe';
@@ -193,8 +196,13 @@ describe('Stripe reconcile doors (MUT-360 D2)', () => {
     expect((await run(off, '/jobs/v1/billing/stripe-reconcile', { 'x-job-token': JOB_TOKEN })).status).toBe(503);
   });
 
-  it('/jobs is never the portal’s page', async () => {
-    const h = harness();
-    expect((await h.app.request('/jobs/anything')).headers.get('content-type')).toContain('application/json');
+  it('/jobs is never the portal’s page, even with the portal served', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'mut360-portal-'));
+    await writeFile(join(distDir, 'index.html'), '<!doctype html><html><body>portal shell</body></html>');
+    const h = harness({ portal: { distDir } });
+    expect(await (await h.app.request('/some/client/route')).text()).toContain('portal shell');
+    const jobs = await h.app.request('/jobs/anything', { headers: { 'x-job-token': JOB_TOKEN } });
+    expect(jobs.status).toBe(404);
+    expect(jobs.headers.get('content-type')).toContain('application/json');
   });
 });
