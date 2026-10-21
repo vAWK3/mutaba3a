@@ -1,4 +1,4 @@
-# MUT-381 (ADR-163): our own KMS key (CMEK) for Cloud SQL and the attachments bucket, checked offline.
+# MUT-381 (ADR-164): our own KMS key (CMEK) for Cloud SQL and the attachments bucket, checked offline.
 # cmek_stage walks off → prepared → active in that order: state carries across runs, and the key has
 # prevent_destroy, so a later run never goes back to a stage without it.
 # The Google, Google beta and random providers are mocked, so this needs no credentials, project or network:
@@ -163,7 +163,7 @@ run "a_change_to_a_key_version_pages" {
       && strcontains(google_monitoring_alert_policy.kms_key_change[0].conditions[0].condition_matched_log[0].filter, "/keyRings/mutaba3a(/cryptoKeys/mutaba3a-data(/|$)|$)")
       && length(google_monitoring_alert_policy.kms_key_change[0].notification_channels) == 1
     )
-    error_message = "Disabling, destroying or re-pointing a version of mutaba3a-data pages the alert channels (ADR-163)."
+    error_message = "Disabling, destroying or re-pointing a version of mutaba3a-data pages the alert channels (ADR-164)."
   }
 
   assert {

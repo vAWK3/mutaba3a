@@ -99,7 +99,7 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 |---|---|
 | `API_KEY_ENVIRONMENT` | `live` |
 | Cloud SQL | `db-g1-small`, REGIONAL, daily backups + PITR 7d, deletion protection |
-| Encryption at rest (MUT-381, ADR-163) | `cmek_stage` = **off** (merged, not applied). From `prepared`: KMS key `mutaba3a-data` (ring `mutaba3a`, me-west1, 90-day rotation, `prevent_destroy`) on `mutaba3a-pg2` and as the attachments bucket's default. From `active` the API serves from `mutaba3a-pg2`. Procedure: DEPLOYMENT.md §6d. Secret Manager and Terraform state keep Google's default encryption |
+| Encryption at rest (MUT-381, ADR-164) | `cmek_stage` = **off** (merged, not applied). From `prepared`: KMS key `mutaba3a-data` (ring `mutaba3a`, me-west1, 90-day rotation, `prevent_destroy`) on `mutaba3a-pg2` and as the attachments bucket's default. From `active` the API serves from `mutaba3a-pg2`. Procedure: DEPLOYMENT.md §6d. Secret Manager and Terraform state keep Google's default encryption |
 | Cloud Run ingress | `api_ingress` = `INGRESS_TRAFFIC_ALL`; `INGRESS_TRAFFIC_INTERNAL_ONLY` only for the CMEK switch apply or a whole-database restore |
 | Attachments bucket | no versioning; deleted objects restorable 14 days (`soft_delete_policy`, TD-190), as long as the 14 daily backups. **Applied 2026-10-20** (rode along with the §6b apply as a dependency; `retention_duration_seconds` 604800 → 1209600) |
 | Cloud Run instances | min 1 · max 1 (TD-017) |

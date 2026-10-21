@@ -218,7 +218,7 @@ resource "google_monitoring_alert_policy" "cloud_sql" {
   notification_channels = local.alert_channels
 }
 
-# MUT-381 (ADR-163): disabling or scheduling the destruction of a version of our key, or taking a service
+# MUT-381 (ADR-164): disabling or scheduling the destruction of a version of our key, or taking a service
 # agent's grant off the key or its ring, takes the database, its backups and every receipt down (Cloud SQL
 # never re-encrypts onto a newer version). Admin Activity logs record every such change (always on, free), so
 # a log-match alert pages on it within minutes. The filter is unproven against a live audit entry until one
@@ -251,7 +251,7 @@ resource "google_monitoring_alert_policy" "kms_key_change" {
 
   documentation {
     mime_type = "text/markdown"
-    content   = "Someone disabled, scheduled for destruction or re-pointed a version of the KMS key `mutaba3a-data`, or changed who may use the key or its ring. If a version that protects data is disabled or destroyed, or the Cloud SQL or Cloud Storage service agent loses its grant, the database and the receipts go down. Re-enable the version, cancel the destroy (possible for 30 days) or restore the grant (terraform apply): pilot runbook §5.4, ADR-163."
+    content   = "Someone disabled, scheduled for destruction or re-pointed a version of the KMS key `mutaba3a-data`, or changed who may use the key or its ring. If a version that protects data is disabled or destroyed, or the Cloud SQL or Cloud Storage service agent loses its grant, the database and the receipts go down. Re-enable the version, cancel the destroy (possible for 30 days) or restore the grant (terraform apply): pilot runbook §5.4, ADR-164."
   }
 
   notification_channels = local.alert_channels

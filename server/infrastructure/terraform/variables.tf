@@ -53,7 +53,7 @@ variable "db_backup_enabled" {
 }
 
 variable "cmek_stage" {
-  description = "MUT-381 (ADR-163): our own KMS key for Cloud SQL and the attachments bucket. off (default) = nothing new exists, so a release changes nothing; prepared = the key, its grants, mutaba3a-pg2 and the bucket's default key exist while the API still serves from mutaba3a-pg; active = the API, its secret, the outputs and the alerts follow mutaba3a-pg2. Walk it forward only (DEPLOYMENT.md §6d): the key can't be destroyed."
+  description = "MUT-381 (ADR-164): our own KMS key for Cloud SQL and the attachments bucket. off (default) = nothing new exists, so a release changes nothing; prepared = the key, its grants, mutaba3a-pg2 and the bucket's default key exist while the API still serves from mutaba3a-pg; active = the API, its secret, the outputs and the alerts follow mutaba3a-pg2. Walk it forward only (DEPLOYMENT.md §6d): the key can't be destroyed."
   type        = string
   default     = "off"
   validation {

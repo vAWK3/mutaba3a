@@ -1,10 +1,10 @@
-# MUT-381 (ADR-163): our own Cloud KMS key (CMEK) for the Cloud SQL instance mutaba3a-pg2 and the
+# MUT-381 (ADR-164): our own Cloud KMS key (CMEK) for the Cloud SQL instance mutaba3a-pg2 and the
 # attachments bucket. Nothing here exists until cmek_stage leaves "off" (variables.tf), so merging this
 # changes nothing until the operator opts in (DEPLOYMENT.md §6d).
 #
 # What it protects: the disks and backups Google holds, and the right to make all of it unreadable by
 # revoking the key. What it doesn't: anyone with roles in this project. Malafat's runtime service account
-# holds project-wide KMS, storage and SQL roles here (TD-194), so CMEK adds no isolation from it.
+# holds project-wide KMS, storage and SQL roles here (TD-195), so CMEK adds no isolation from it.
 #
 # Cloud SQL never re-encrypts on rotation: an old key version still protects data written under it, so
 # never disable or destroy a version (pilot runbook §5). A destroy can be cancelled for 30 days.

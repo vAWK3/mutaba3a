@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mutaba3a API — move the database onto our own KMS key (MUT-381, ADR-163). The operator runs this;
+# Mutaba3a API — move the database onto our own KMS key (MUT-381, ADR-164). The operator runs this;
 # nothing in CI does. Cloud SQL can't add a key to an existing instance, so Terraform (cmek_stage =
 # "prepared") creates mutaba3a-pg2 with the key, and this script fills it from a fresh backup of
 # mutaba3a-pg. DEPLOYMENT.md §6d is the whole procedure; this is its tested core.

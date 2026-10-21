@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# deploy.sh (MUT-381, ADR-163): refuse a release that would move the database or reopen a closed service.
+# deploy.sh (MUT-381, ADR-164): refuse a release that would move the database or reopen a closed service.
 # Sourced by scripts/deploy.sh, which calls it before the bootstrap apply, before the migration and before the
 # full apply (each a few minutes apart). Tested by src/scripts/__tests__/release-guard.test.ts through a fake
 # `terraform` and `gcloud`.

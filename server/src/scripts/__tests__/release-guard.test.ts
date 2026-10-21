@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
- * MUT-381 (ADR-163): deploy.sh refuses a release that would move the database or reopen a closed service.
+ * MUT-381 (ADR-164): deploy.sh refuses a release that would move the database or reopen a closed service.
  * deploy.sh runs a full terraform apply, so a release whose effective cmek_stage disagrees with what serves
  * would switch to an empty or unmigrated mutaba3a-pg2, or silently back to a frozen mutaba3a-pg (a stale
  * git-ignored tfvars in another checkout), and a release during a cutover would reopen ingress mid-copy.

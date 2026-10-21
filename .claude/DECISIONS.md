@@ -788,7 +788,7 @@ than an architecture rule:
 - **Firm data on the hosted service** is privileged client financial data and
   must be encrypted at rest, regionally resident beside the firm's CRM (GCP
   me-west1, matching Malafat), backed up, and deletable on request.
-  *(Note 2026-10-21: "encrypted at rest" with our own key is ADR-163, MUT-381;
+  *(Note 2026-10-21: "encrypted at rest" with our own key is ADR-164, MUT-381;
   before it, only Google's default encryption.)*
 
 **What replaces it**: ADR-025 below.
@@ -4370,7 +4370,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 ---
 
-## ADR-163: Our Own KMS Key for the Database and the Receipts Bucket, via a New Instance Behind an Opt-In Stage (MUT-381)
+## ADR-164: Our Own KMS Key for the Database and the Receipts Bucket, via a New Instance Behind an Opt-In Stage (MUT-381)
 
 **Status**: Active
 **Date**: 2026-10-21
@@ -4403,7 +4403,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
   - the disks and backups Google holds;
   - the ability to make the database, its backups and every receipt unreadable by revoking the key.
 - **What it doesn't protect against:**
-  - anyone with roles in the project. Malafat's runtime service account holds project-wide KMS, storage, SQL and Secret Manager roles there, so it can read the database credentials, the operator token and the session pepper as well as every receipt (TD-194).
+  - anyone with roles in the project. Malafat's runtime service account holds project-wide KMS, storage, SQL and Secret Manager roles there, so it can read the database credentials, the operator token and the session pepper as well as every receipt (TD-195).
   - Secret Manager and the Terraform state, which keep Google's default encryption.
 - **Cloud SQL never re-encrypts on rotation**, so a disabled or destroyed key version takes the API down. Never disable an old version (pilot runbook §5.4). A destroy can be cancelled for 30 days.
 - **The cutover costs a short downtime**, measured by `rehearse` before the real run.

@@ -973,7 +973,7 @@ gcloud storage buckets describe "gs://$GCP_PROJECT_ID-mutaba3a-attachments" --fo
 
 The restore drill prints the same line (runbook §8).
 
-### 6d. Our own KMS key for the database and receipts (MUT-381, ADR-163)
+### 6d. Our own KMS key for the database and receipts (MUT-381, ADR-164)
 
 The database and the attachments bucket move from Google's default encryption to our own Cloud KMS key, `mutaba3a-data`, in me-west1, rotated every 90 days. Cloud SQL can't add a key to an existing instance, so the API moves to a new instance, `mutaba3a-pg2`, filled from a fresh backup while the API is closed for a short window. `cmek_stage` in `production.tfvars` walks it: `off` (default) → `prepared` → `active`. **Only forward**: the key has `prevent_destroy`, and going back to `off` would plan its destroy.
 

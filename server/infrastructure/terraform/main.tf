@@ -16,7 +16,7 @@ locals {
   instance_id  = "mutaba3a-pg${local.suffix}"
   db_name      = "mutaba3a"
 
-  # MUT-381 (ADR-163): mutaba3a-pg2 is encrypted with our key (kms.tf). Cloud SQL can't add a key to an
+  # MUT-381 (ADR-164): mutaba3a-pg2 is encrypted with our key (kms.tf). Cloud SQL can't add a key to an
   # existing instance, so pg2 is filled from a backup of mutaba3a-pg (scripts/cmek-cutover.sh) and
   # cmek_stage = active moves every consumer below to it at once.
   cmek_enabled        = var.cmek_stage != "off"
@@ -169,7 +169,7 @@ resource "google_sql_user" "api" {
   password = random_password.db.result
 }
 
-# MUT-381 (ADR-163): the same instance, encrypted with our key, from cmek_stage = prepared on. Its settings
+# MUT-381 (ADR-164): the same instance, encrypted with our key, from cmek_stage = prepared on. Its settings
 # are written out in full rather than shared: a for_each over both would rename google_sql_user.api and
 # google_sql_database.mutaba3a, which deploy.sh's bootstrap names (ADR-161). tests/cmek.tftest.hcl pins
 # the two to the same settings. MUT-383 removes mutaba3a-pg 14 days after the cutover.
