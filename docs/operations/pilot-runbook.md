@@ -162,7 +162,11 @@ npm run grant:user -- --url "$URL" --email <partner email> --organization-id <pr
 
 - It prints a note in English and Arabic: send it to both partners. Each keeps their own personal profile, private.
 - At most 3 owners per profile, the creator included (409 `OWNER_LIMIT`). Only an owned **Business** profile can
-  be shared (`PERSONAL_PROFILE`, `NOT_BUSINESS`, `NOT_CO_OWNABLE` otherwise).
+  be shared (`PERSONAL_PROFILE`, `NOT_BUSINESS`, `NOT_CO_OWNABLE` otherwise), and only with an active account
+  (`USER_DISABLED`: enable it first).
+- Each partner re-dates only the entries they recorded themselves; everything else (record, settle, clients,
+  expenses, rename) is shared.
+- If `pre-roll` stops a deploy over a stray membership you meant as a partner, the same command confirms it.
 - The creator removes a partner, or a partner leaves, from the portal's Owners section. `revoke:user` works too.
 - The creator can't leave (TD-194). To hand a profile over, ask Basel: there is no transfer command yet.
 - Billing still follows the creator (TD-193): the partner's own subscription doesn't cover the shared profile.

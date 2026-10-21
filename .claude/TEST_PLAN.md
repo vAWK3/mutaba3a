@@ -3360,4 +3360,8 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Scripts | `pre-roll.test.ts`, `profile-rows.test.ts`, `users-cli.test.ts` | stray membership found, operator co-owner not; purge refuses a creator with co-owners; `--role owner` + partner note |
 | Portal unit | `profileRules.test.ts`, `profileApiErrors.test.ts`, `useProfileKind.test.ts`, `malafatSuggestions.test.ts` | shared cue, actions, cap hint, created-by, error maps, ListFormat en/ar, requested-by line, OV9 |
 | Portal component | `ProfileOwnersSection.test.tsx` | order, remove/leave confirms, network retry same key, 404 done, footer steps aside, type card lock, mailto, cue + cap hint, lost-access banner |
-| Release-QA | `portal.profiles.co-owner-write|remove|leave|removed` | recorded flows |
+| Route (server, review) | `routes-profile-owners.test.ts` | USER_DISABLED (D2), operator revoke audits the role, Owed re-date own vs partner's + `capturedByUserId` (D1), NOT_OWNER for firm staff, refusals keep memberships and write no audit, `firmRequestedBy` name null after the requester leaves |
+| Store contract (review) | `store-contract-co-owners.ts` | grant audit in the transaction and once on confirm, none on refusal; staff never removed or promoted; firm off keeps roles; retype vs grant race (Prisma) |
+| Scripts (review) | `pre-roll.test.ts` | BOOKKEEPER rows pass; built-in personal profile strays; confirm clears a flagged row |
+| Portal (review) | `ProfileOwnersSection.test.tsx`, `endSession.test.ts`, `RedateDrawer.test.tsx`, `incomeAffordances.test.ts` | focus to next Remove (fails on the old code), cancel, NOT_CREATOR, close while pending, leave errors/404/not-open, lost-access dismiss/deep link/sign-out reset, partner's Owed entry not re-datable |
+| Release-QA | `portal.profiles.co-owner-write|remove|leave|removed|full-rights` | recorded flows |
