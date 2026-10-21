@@ -97,6 +97,7 @@ features:
       - Add a received income on the shared profile
     expect:
       - The switcher and the list read "Business · Shared with Basel Sader", and the list explains the count ("Profiles shared with you don't count.")
+      - The switcher lists only the shared profile and your own personal profile, never your partner's
       - The Owners section lists Basel Sader (Created this profile) and you (You); there is no Remove, and Leave sits at its foot
       - The Personal card is disabled with "A shared profile stays Business."
       - The income drawer offers Received and the save is sent for the shared profile
@@ -110,6 +111,7 @@ features:
       - Open your shared profile in Manage profiles
       - Choose Remove on Lina's row, then Remove Lina Saleh in the confirm
     expect:
+      - The creator's Owners section offers Remove and never Leave
       - The confirm reads "Lina Saleh loses access to Sader & Haddad. What they recorded stays."
       - DELETE /v1/profiles/{id}/owners/{lina} goes once with an Idempotency-Key
       - The toast reads "Lina Saleh removed from Sader & Haddad", her row is gone, and the section reads Only you own this profile
@@ -137,3 +139,17 @@ features:
     expect:
       - The portal moves to the personal profile and shows "You no longer have access to Sader & Haddad. What you recorded stays."
       - Close dismisses the banner
+  - id: co-owner-full-rights
+    title: A co-owner adds a client, records a payment and an expense, and renames the shared profile — the rights its creator has (MUT-373)
+    tier: secondary
+    paths:
+      - src/hosted/data/incomeAffordances.ts
+      - src/hosted/data/profileRules.ts
+    steps:
+      - On the shared profile, add Owed income for a new client with Add client
+      - Record a payment on an open entry
+      - Record an expense
+      - Rename the shared profile in Manage profiles
+    expect:
+      - The client, the income, the payment and the expense are each sent for the shared profile
+      - The rename sends PATCH {name} only, says Profile saved, and the switcher shows the new name

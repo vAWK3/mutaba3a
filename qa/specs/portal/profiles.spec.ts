@@ -1,6 +1,6 @@
 import { test, expect } from '../../support/qa';
-import { FIRM, OFFICE_A, OFFICE_B, QA_USER_ID, malafatFirm, office, type StubOwner, type StubProfile } from '../../support/portal';
-import { FakeApi, apiError, uid } from '../../support/portalApi';
+import { FIRM, OFFICE_A, OFFICE_B, QA_USER_ID, customer, malafatFirm, office, type StubOwner, type StubProfile } from '../../support/portal';
+import { FakeApi, apiError, category, receivable, todayInJerusalem, uid } from '../../support/portalApi';
 
 /**
  * Hosted profiles (MUT-183): New profile and Manage profiles, both drawers on
@@ -270,10 +270,13 @@ test('A co-owner sees the shared profile named for their partner, owns it fully,
   const pane = page.getByRole('dialog', { name: 'Sader & Haddad' });
   const owners = pane.getByRole('region', { name: 'Owners' });
 
-  await step('Open the switcher: the shared profile names Basel', async () => {
+  await step('Open the switcher: the shared profile names Basel, beside your own personal profile and nothing of his', async () => {
     await api.open(page, `/p/${OFFICE_A}/payments`);
     await page.getByRole('button', { name: /^Switch profile/ }).click();
     await expect(page.getByRole('menuitemradio', { name: /Sader & Haddad/ })).toContainText('Business · Shared with Basel Sader');
+    // Each keeps a private personal profile: yours is listed, Basel's never is.
+    await expect(page.getByRole('menuitemradio')).toHaveCount(2);
+    await expect(page.getByRole('menuitemradio', { name: /Personal/ })).toContainText('Personal');
     await page.keyboard.press('Escape');
   });
 
@@ -314,9 +317,10 @@ test('The creator removes a co-owner after an in-place confirm; the row goes and
   const pane = page.getByRole('dialog', { name: 'Sader & Haddad' });
   const owners = pane.getByRole('region', { name: 'Owners' });
 
-  await step('Open the shared profile in Manage profiles', async () => {
+  await step('Open the shared profile in Manage profiles: the creator gets Remove, never Leave', async () => {
     await api.open(page, `/p/${OFFICE_B}/clients?editProfile=${OFFICE_A}`);
     await expect(owners.getByRole('listitem')).toHaveCount(2);
+    await expect(owners.getByRole('button', { name: /^Leave/ })).toHaveCount(0);
   });
 
   await step('Remove on Lina’s row opens the confirm under it, naming her', async () => {
@@ -383,5 +387,61 @@ test('Someone removed while working on the shared profile lands on their persona
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}`));
     await page.getByRole('button', { name: 'Close' }).click();
     await expect(banner).toHaveCount(0);
+  });
+});
+
+test('A co-owner adds a client, records a payment and an expense, and renames the shared profile', { tag: '@portal.profiles.co-owner-full-rights' }, async ({ page, step }) => {
+  const C1 = customer(0).id;
+  const api = new FakeApi({
+    profiles: [sharedByBasel, personal],
+    clients: 1,
+    categories: [category(1, 'Office supplies')],
+    receivables: [receivable(1, { customerId: C1, gross: '500.00', dueDate: '2026-10-30' })],
+  });
+  const asShared = (method: string, path: RegExp) => api.last(method, path)?.headers['x-mutaba3a-profile'];
+
+  await step('On Basel’s shared profile, add income for a client nobody has, with Add client', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.getByRole('button', { name: '+ Add income' }).first().click();
+    const drawer = page.getByRole('dialog', { name: 'New income' });
+    await drawer.getByRole('radio', { name: 'Owed' }).click();
+    await drawer.getByLabel('Client').fill('Ramallah Bakery');
+    await drawer.getByRole('option', { name: /Add client.*Ramallah Bakery/ }).click();
+    await drawer.getByLabel('Amount').fill('900');
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer).toHaveCount(0);
+    expect(asShared('POST', /^\/v1\/customers$/)).toBe(OFFICE_A);
+    expect(asShared('POST', /^\/v1\/income$/)).toBe(OFFICE_A);
+  });
+
+  await step('Record a payment on Client 1’s open entry', async () => {
+    await page.getByRole('table', { name: 'Receivables' }).getByRole('button', { name: /^Record payment for Client 1/ }).click();
+    const drawer = page.getByRole('dialog', { name: /Record payment/ });
+    await expect(drawer.getByLabel('Paid on')).toHaveValue(todayInJerusalem());
+    await drawer.getByRole('button', { name: 'Record payment' }).click();
+    await expect(drawer).toHaveCount(0);
+    expect(asShared('POST', /\/settle$/)).toBe(OFFICE_A);
+  });
+
+  await step('Record an expense', async () => {
+    await page.goto(`/p/${OFFICE_A}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    const drawer = page.getByRole('dialog', { name: 'Record expense' });
+    await drawer.getByLabel('Amount').fill('12.50');
+    await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+    expect(asShared('POST', /^\/v1\/expenses$/)).toBe(OFFICE_A);
+  });
+
+  await step('Rename the shared profile in Manage profiles; the switcher shows the new name', async () => {
+    await page.goto(`/p/${OFFICE_A}/expenses?editProfile=${OFFICE_A}`);
+    const pane = page.getByRole('dialog', { name: 'Sader & Haddad' });
+    await pane.getByLabel('Name').fill('S&H Studio');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByTestId('toast-live')).toHaveText('Profile saved');
+    const patch = api.last('PATCH', new RegExp(`^/v1/profiles/${OFFICE_A}$`));
+    expect(patch?.body).toEqual({ name: 'S&H Studio' });
+    await expect(page.getByRole('button', { name: /^Switch profile/ })).toContainText('S&H Studio');
   });
 });
