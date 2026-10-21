@@ -97,6 +97,8 @@ export function receivable(id: string, customerId: string, projectId: string, ou
     postingDate: '2026-09-01',
     postedAt: STAMP,
     status,
+    // The harness's signed-in user (harness.tsx), so an ADJUSTMENT built from this is theirs to re-date (MUT-373).
+    capturedByUserId: '99999999-9999-4999-8999-999999999999',
     version: 1,
   } as Receivable;
 }

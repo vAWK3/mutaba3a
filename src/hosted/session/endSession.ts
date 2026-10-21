@@ -1,3 +1,4 @@
+import { useLostAccess } from './lostAccess';
 import type { QueryClient } from '@tanstack/react-query';
 import type { AnyRouter } from '@tanstack/react-router';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
@@ -14,6 +15,7 @@ export function endSession(queryClient: QueryClient, router: AnyRouter, search: 
   useSavedFlashStore.getState().clear();
   // MUT-191: the next person in this tab starts with no Malafat moment pending
   useMalafatPortalMoments.getState().reset();
+  useLostAccess.getState().reset();
   // MUT-155: sign-out (this tab or another) forgets the usage choice and its random ID, sending
   // nothing; an expired session is the same person, so the choice stays (rule 6, B4)
   if (search.reason === 'signed_out') endPortalUsage();

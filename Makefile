@@ -128,6 +128,7 @@ help:
 	@printf '  ALLOW_DIRTY=1 ALLOW_UNMERGED=1 ALLOW_WORKTREES=1 ALLOW_NODE_MAJOR=1\n'
 	@printf '  SKIP_REMOTE=1          offline: do not contact origin or GCP\n'
 	@printf '  SKIP_TERMS_CHECK=1     server: skip the terms-are-live check (an emergency fix that keeps the terms version)\n'
+	@printf '  SKIP_CMEK_GUARD=0      server: run the CMEK release guard (off by default until MUT-385)\n'
 	@printf '  BUMP=patch|minor|major|keep    skip the version prompt\n'
 	@printf '  AUTO=1                 skip the final "deploy now?" confirmation\n'
 	@printf '  RELEASE_BRANCH=  ENVIRONMENT=  GCP_PROJECT_ID=  TF_STATE_BUCKET=\n'

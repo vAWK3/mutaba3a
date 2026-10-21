@@ -1,8 +1,8 @@
 import { assertIsoDate, assertNotTooOld, todayFor, validationError, type DateBound } from '../agreements/compose.js';
 import type { ProfileWriter } from '../auth/writability.js';
 import { compareIsoDates, dueDateFor, type IsoDate } from '../dates.js';
-import { profileOwnerOf } from '../personal-profile.js';
-import type { LedgerStore, Organization, PaymentRecord } from '../repositories/ports.js';
+import { ownsProfile } from '../personal-profile.js';
+import type { LedgerStore, MembershipRole, Organization, PaymentRecord } from '../repositories/ports.js';
 import type { VatTreatment } from '../vat.js';
 
 /**
@@ -133,11 +133,12 @@ export function pastMoneyDate(raw: string, today: IsoDate, field: string): IsoDa
 }
 
 /**
- * MUT-223: a date may be changed only on a profile the person owns (personal or self-service, MUT-182). A
- * Malafat-fed or firm profile is never theirs: Malafat owns allocations there, and a moved date would change its books.
+ * MUT-223: a date may be changed only on a profile the person owns (personal or self-service, MUT-182, or co-owned,
+ * MUT-373). A Malafat-fed or firm profile is never theirs: Malafat owns allocations there, and a moved date would
+ * change its books.
  */
-export function isOwnProfile(organization: Pick<Organization, 'ownerUserId' | 'personalOwnerUserId'>, userId: string): boolean {
-  return profileOwnerOf(organization) === userId;
+export function isOwnProfile(organization: Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType'>, userId: string, role: MembershipRole | null): boolean {
+  return ownsProfile(organization, userId, role);
 }
 
 /** MUT-223: a payment a person may re-date — their own capture (settle's included), still POSTED. */

@@ -6,6 +6,7 @@ import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { SUPPORTED_CURRENCIES } from '../money.js';
 import type { LedgerStore, UserRecord } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema, MeSchema } from '../schemas.js';
+import { ownsProfile } from '../personal-profile.js';
 import { hostedProfileFor } from '../serializers.js';
 import { MAX_OWNED_PROFILES } from './profiles.js';
 
@@ -55,12 +56,14 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
     const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
     loaded.push({ organization, membership, malafatConnected: malafat?.status === 'CONNECTED' });
   }
-  // MUT-358: one billing read for all the profiles (billing/coverage.ts), never one per profile.
-  const entitlements = billingAt ? await entitlementsFor(store, loaded, billingAt) : null;
+  // MUT-358: one billing read for all the profiles (billing/coverage.ts), never one per profile. MUT-373 (eng review
+  // D1): likewise one owners read for every profile the caller owns; the two are independent, so they run together.
+  const ownedIds = loaded.filter(({ organization, membership }) => ownsProfile(organization, user.id, membership.role)).map(({ organization }) => organization.id);
+  const [entitlements, ownerEntries] = await Promise.all([billingAt ? entitlementsFor(store, loaded, billingAt) : null, store.memberships.listOwnersOf(ownedIds)]);
   const profiles = loaded.map(({ organization, membership, malafatConnected }) => {
     const entitlement = entitlements?.get(organization.id);
     return {
-      ...hostedProfileFor(organization, malafatConnected ? 'MALAFAT' : null, user.id, membership),
+      ...hostedProfileFor(organization, malafatConnected ? 'MALAFAT' : null, user.id, membership, ownerEntries),
       billing: entitlement ? serializeEntitlement(entitlement) : null,
     };
   });

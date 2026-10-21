@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/ui/Button';
 import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
-import type { HostedProfile, UpdateProfileResponse } from '../api/client';
-import { canCreateProfile, profileEditability, profileKindKey } from '../data/profileRules';
-import { useMe } from '../session/me';
+import type { HostedProfile, Me, UpdateProfileResponse } from '../api/client';
+import { canCreateProfile, coOwnsOthersProfiles, profileEditability } from '../data/profileRules';
+import { useProfileKind } from '../data/useProfileKind';
+import { profileKey, ME_KEY, useMe } from '../session/me';
+import { withProfileLeft } from '../data/profileQueries';
+import { useLostAccess } from '../session/lostAccess';
 import { Drawer } from './Drawer';
 import { LockIcon } from './Icons';
 import { ProfileBanner } from './ProfileBanner';
@@ -44,6 +48,10 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
   const [footerSlot, setFooterSlot] = useState<HTMLDivElement | null>(null);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [typeChanged, setTypeChanged] = useState<TypeChangedNote | null>(null);
+  const [ownersBusy, setOwnersBusy] = useState(false);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const forgetOpen = useLostAccess((s) => s.forget);
 
   const editing = me.profiles.find((profile) => profile.id === editId && profile.owned) ?? null;
   const canCreate = canCreateProfile(me);
@@ -51,6 +59,21 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
   const leaveEdit = (next: Banner | null) => {
     setBanner(next);
     onBack();
+  };
+
+  /**
+   * MUT-373 (DR4): leaving closes the whole drawer. If the profile was open, the portal moves to the personal profile
+   * first, and only then forgets it, so nothing renders "This profile isn't available" in between.
+   */
+  const onLeftProfile = async (left: HostedProfile) => {
+    forgetOpen(left.id);
+    const personal = me.profiles.find((profile) => profile.isPersonalDefault);
+    if (active?.id === left.id && personal) await navigate({ to: `/p/${personal.id}` });
+    else onClose();
+    queryClient.setQueryData<Me>(ME_KEY, (current) => withProfileLeft(current, left.id));
+    queryClient.removeQueries({ queryKey: profileKey(left.id) });
+    void queryClient.invalidateQueries({ queryKey: ME_KEY });
+    showToast(t('hosted.profiles.owners.left', { profile: left.name }), { tone: 'info' });
   };
 
   const onSaved = (profile: HostedProfile, result: UpdateProfileResponse) => {
@@ -64,12 +87,21 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
   return (
     <Drawer
       title={editing ? editing.name : t('hosted.profiles.manageTitle')}
-      onClose={onClose}
+      // DR5: never close under a leave or removal still in flight.
+      onClose={() => !ownersBusy && onClose()}
       closeLabel={t('common.close')}
       footer={editing ? <div ref={setFooterSlot} className="drawer-footer-right" /> : undefined}
     >
       {editing ? (
-        <ProfileEditForm key={editing.id} profile={editing} footerSlot={footerSlot} onSaved={(result) => onSaved(editing, result)} onLeave={leaveEdit} />
+        <ProfileEditForm
+          key={editing.id}
+          profile={editing}
+          footerSlot={footerSlot}
+          onSaved={(result) => onSaved(editing, result)}
+          onLeave={leaveEdit}
+          onLeftProfile={(left) => void onLeftProfile(left)}
+          onOwnersBusy={setOwnersBusy}
+        />
       ) : (
         <div className="hp-profiles">
           {typeChanged && (
@@ -89,7 +121,11 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
           )}
           {banner && <ProfileBanner banner={banner} />}
           <div className="hp-profiles-head">
-            <span className="hp-muted">{tp('hosted.profiles.used', me.limits.maxOwnedProfiles, { owned: String(me.limits.ownedProfiles) })}</span>
+            <span className="hp-muted">
+              {tp('hosted.profiles.used', me.limits.maxOwnedProfiles, { owned: String(me.limits.ownedProfiles) })}
+              {/* MUT-373 (DR2): only for someone the count would otherwise puzzle. */}
+              {coOwnsOthersProfiles(me) && <span className="hp-profiles-cap-hint">{t('hosted.profiles.owners.capHint')}</span>}
+            </span>
             <Button variant="secondary" size="sm" aria-disabled={!canCreate || undefined} onClick={() => canCreate && onNew()}>
               {t('hosted.shell.switcher.newProfile')}
             </Button>
@@ -97,7 +133,7 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
           <ul className="hp-profile-list">
             {me.profiles.map((profile) => (
               <li key={profile.id}>
-                <ProfileRow profile={profile} open={profile.id === active?.id} onEdit={onEdit} />
+                <ProfileRow profile={profile} viewerId={me.user.id} open={profile.id === active?.id} onEdit={onEdit} />
               </li>
             ))}
           </ul>
@@ -107,8 +143,9 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
   );
 }
 
-function ProfileRow({ profile, open, onEdit }: { profile: HostedProfile; open: boolean; onEdit: (id: string) => void }) {
+function ProfileRow({ profile, viewerId, open, onEdit }: { profile: HostedProfile; viewerId: string; open: boolean; onEdit: (id: string) => void }) {
   const t = useT();
+  const kind = useProfileKind(profile, viewerId);
   const editability = profileEditability(profile);
   const body = (
     <>
@@ -120,7 +157,9 @@ function ProfileRow({ profile, open, onEdit }: { profile: HostedProfile; open: b
           {open && <span className="hp-pill-open">{t('hosted.profiles.openNow')}</span>}
         </span>
         {editability.editable ? (
-          <span className="hp-option-sub">{t(profileKindKey(profile))}</span>
+          <span className="hp-option-sub hp-profile-kind" title={kind}>
+            {kind}
+          </span>
         ) : (
           <span className="hp-option-sub hp-profile-row-reason">
             <LockIcon />

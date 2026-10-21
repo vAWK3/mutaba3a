@@ -1,4 +1,4 @@
-import { profileOwnerOf, profileTypeOf } from './personal-profile.js';
+import { canCoOwn, profileOwnerOf, profileTypeOf } from './personal-profile.js';
 import type { AuditEventInput, FirmAudit, MembershipRole, Organization, SetFirmInput, SetFirmResult } from './repositories/ports.js';
 
 /**
@@ -27,10 +27,14 @@ export function firmEnableRefusal(organization: FirmOrganization, ownerUserIds: 
   return outsiders.length > 0 ? { kind: 'not_a_member', userIds: outsiders } : null;
 }
 
-/** The users who become OWNER on enable: an owned profile's owner, or an operator firm's named owners (deduplicated, in the given order). */
-export function firmOwnersOf(organization: FirmOrganization, ownerUserIds: string[]): string[] {
+/**
+ * The users who become OWNER on enable: an owned profile's owner and its co-owners (MUT-373: `coOwnerIds`, its
+ * current OWNER members, so enabling never demotes one), or an operator firm's named owners — deduplicated, in order.
+ */
+export function firmOwnersOf(organization: FirmOrganization, ownerUserIds: string[], coOwnerIds: readonly string[] = []): string[] {
   const owner = profileOwnerOf(organization);
-  return owner ? [owner] : [...new Set(ownerUserIds)];
+  if (!owner) return [...new Set(ownerUserIds)];
+  return [...new Set([owner, ...(canCoOwn(organization) ? coOwnerIds : [])])];
 }
 
 /** True when the organization is already in the state the input asks for (a no-op: nothing written, no audit). */

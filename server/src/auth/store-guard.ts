@@ -79,7 +79,9 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-324 T1: the operator's "who is behind on the terms" list.
     listLatestTermsVersions: 'operator',
   },
-  memberships: { grant: 'operator', revoke: 'operator', find: 'read', listByUser: 'read', listByOrganization: 'read' },
+  // MUT-373: co-owners are added by the operator; a co-owner leaves, or the creator removes one, from their session (the
+  // checks run inside removeOwner's transaction). The owners list is read on /v1/me.
+  memberships: { grant: 'operator', revoke: 'operator', grantOwner: 'operator', removeOwner: 'sessionOnly', find: 'read', listByUser: 'read', listByOrganization: 'read', listOwnersOf: 'read' },
   sessions: { create: { write: 'identity' }, findByDigest: 'read', touch: 'control', revoke: { write: 'identity' }, revokeAllForUser: 'operator' },
   // MUT-235: issued by /admin, redeemed by the two public setup routes; both run with no guard, so every principal is refused here.
   accountSetup: { issue: 'operator', findByDigest: 'operator', redeem: 'operator' },

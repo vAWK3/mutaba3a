@@ -19,6 +19,8 @@ export type MeTermsMayBeNull = AssertTrue<null extends Me['terms'] ? true : fals
 type AssertTrue<T extends true> = T;
 export type HostedProfile = Schemas['HostedProfile'];
 export type FirmRequestResponse = Schemas['FirmRequestResponse'];
+export type RemoveProfileOwnerResponse = Schemas['RemoveProfileOwnerResponse'];
+export type ProfileOwner = Schemas['ProfileOwner'];
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];
 export type Currency = Schemas['Currency'];
@@ -467,6 +469,9 @@ export const api = {
   // MUT-300: the owner asks for firm features; idempotent on the server, attempt-scoped key like create.
   requestFirm: (profileId: string, idempotencyKey: string) =>
     request<FirmRequestResponse>('POST', `/v1/profiles/${encodeURIComponent(profileId)}/firm-request`, { idempotencyKey }),
+  // MUT-373: yourself to leave a profile you co-own, a co-owner to remove them (the creator only); attempt-scoped key.
+  removeProfileOwner: (profileId: string, userId: string, idempotencyKey: string) =>
+    request<RemoveProfileOwnerResponse>('DELETE', `/v1/profiles/${encodeURIComponent(profileId)}/owners/${encodeURIComponent(userId)}`, { idempotencyKey }),
 
   // Conversions (MUT-161); edit and delete since MUT-194 (ADR-075), the same shape as expenses.
   conversions: (profileId: string, query: Query<'/v1/conversions'> = {}) =>

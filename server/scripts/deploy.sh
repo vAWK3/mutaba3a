@@ -10,7 +10,7 @@
 #   2. docker build (linux/amd64) with your local daemon, docker push to
 #      Artifact Registry as mutaba3a-api:<short git sha>. The image serves
 #      dist-hosted/ from the same origin as the API (hosted-portal.md §9).
-#   3. Cloud SQL Auth Proxy on 127.0.0.1:5440, then `prisma migrate deploy`
+#   3. Cloud SQL Auth Proxy on 127.0.0.1:5440, then `prisma migrate deploy` and the read-only pre-roll checks (src/scripts/pre-roll.ts)
 #      from this directory against the production database. The proxy is
 #      stopped afterwards. A failed migration stops here; the service is not
 #      touched.
@@ -47,21 +47,26 @@ PROXY_PID=""
 
 info() { printf '\033[0;36m[deploy]\033[0m %s\n' "$*"; }
 die()  { printf '\033[0;31m[deploy] %s\033[0m\n' "$*" >&2; exit 1; }
+warn() { printf '\033[0;33m[deploy] %s\033[0m\n' "$*" >&2; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing tool: $1 ($2)"; }
 cleanup() { if [[ -n "${PROXY_PID}" ]]; then kill "${PROXY_PID}" 2>/dev/null || true; fi; }
 trap cleanup EXIT
 # shellcheck source=lib/tf-bootstrap.sh
 source "${SERVER_DIR}/scripts/lib/tf-bootstrap.sh"
-# The Cloud SQL Auth Proxy on 127.0.0.1:PROXY_PORT, for steps 3 and 6; needs SQL_CONNECTION (step 0).
+# shellcheck source=lib/release-guard.sh
+source "${SERVER_DIR}/scripts/lib/release-guard.sh"
+# shellcheck source=lib/db-checks.sh
+source "${SERVER_DIR}/scripts/lib/db-checks.sh"
+# MUT-381: guard_cmek_release with this release's own terraform arguments; run inside TF_DIR.
+guard_release() {
+  (cd "${TF_DIR}" && guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}")
+}
+# The Cloud SQL Auth Proxy on 127.0.0.1:PROXY_PORT, for steps 3 and 6; needs SQL_CONNECTION (step 0). It
+# refuses a port something already listens on: an old proxy there would take the migration to its instance.
 start_proxy() {
   info "starting cloud-sql-proxy for ${SQL_CONNECTION} on 127.0.0.1:${PROXY_PORT}"
-  cloud-sql-proxy "${SQL_CONNECTION}" --port "${PROXY_PORT}" --quiet &
-  PROXY_PID=$!
-  for _ in $(seq 1 30); do
-    (exec 3<>"/dev/tcp/127.0.0.1/${PROXY_PORT}") 2>/dev/null && return 0
-    sleep 1
-  done
-  die "cloud-sql-proxy did not open 127.0.0.1:${PROXY_PORT} within 30 s"
+  db_start_proxy "${SQL_CONNECTION}" "${PROXY_PORT}"
+  PROXY_PID="${DB_PROXY_PID}"
 }
 stop_proxy() { kill "${PROXY_PID}" 2>/dev/null || true; PROXY_PID=""; }
 
@@ -99,6 +104,10 @@ terraform init -reconfigure -input=false \
   -backend-config="prefix=mutaba3a-api/${ENVIRONMENT}" >/dev/null
 TF_ARGS=(-input=false -var-file="${ENVIRONMENT}.tfvars" -var "image_tag=${SHORT_SHA}")
 APPROVE=(); [[ "${AUTO_APPROVE}" == "1" ]] && APPROVE=(-auto-approve)
+# MUT-381: never move the database or reopen a closed service as a side effect of a release. Checked here,
+# before the bootstrap apply (it writes the DATABASE_URL secret), and again before steps 3 and 4.
+# Off by default until MUT-385; SKIP_CMEK_GUARD=0 turns all three on (lib/release-guard.sh).
+guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
 # First run only: the registry must exist before `docker push`, the database
 # before the migration. Skipped once they are in state (lib/tf-bootstrap.sh).
 ensure_bootstrap "${TF_ARGS[@]}" "${APPROVE[@]}"
@@ -130,16 +139,22 @@ docker push "${IMAGE}"
 # ---------------------------------------------------------------------------
 # 3. Migrate from this machine through the Cloud SQL Auth Proxy
 # ---------------------------------------------------------------------------
+guard_release # the build took minutes: a cutover may have started since step 0
 start_proxy
 info "running prisma migrate deploy"
 DATABASE_URL="${LOCAL_DATABASE_URL}" npx prisma migrate deploy \
   || die "migration failed; the service was NOT rolled. Fix the migration and re-run."
+# MUT-373 (OV1b): a stray membership on an owned profile would make its holder an owner once this revision serves.
+info "running pre-roll checks"
+DATABASE_URL="${LOCAL_DATABASE_URL}" npm run --silent pre-roll \
+  || die "pre-roll checks failed; the service was NOT rolled. Fix what they name and re-run."
 stop_proxy
 popd >/dev/null
 
 # ---------------------------------------------------------------------------
 # 4. Roll the service and reconcile everything else
 # ---------------------------------------------------------------------------
+guard_release
 pushd "${TF_DIR}" >/dev/null
 info "applying the full stack at ${SHORT_SHA}"
 terraform apply "${TF_ARGS[@]}" "${APPROVE[@]}"

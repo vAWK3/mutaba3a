@@ -11,6 +11,8 @@ min_instances       = 1
 # db_pool_size        = 10
 # db_max_connections  = 50
 log_level           = "info"
+# MUT-381: our own KMS key. Walk off → prepared → active only as server/DEPLOYMENT.md §6d says.
+# cmek_stage          = "off"
 # Uptime alerts (MUT-328, server/DEPLOYMENT.md §6b). Real values only in the git-ignored production.tfvars.
 # alert_email      = "you@example.com"
 # alert_sms_number = "+9725XXXXXXXX"   # E.164; verify the SMS channel once after the apply

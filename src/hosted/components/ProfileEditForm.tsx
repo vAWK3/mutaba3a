@@ -8,11 +8,12 @@ import { Select } from '../../components/ui/Input';
 import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { HostedProfile, ProfileType, ProfileTypeChange, UpdateProfileRequest, UpdateProfileResponse } from '../api/client';
-import { changedFields, profileEditability } from '../data/profileRules';
+import { changedFields, isShared, profileEditability } from '../data/profileRules';
 import { fetchTypeChangePreview, useUpdateProfile } from '../data/profileQueries';
 import { HOSTED_CURRENCIES } from '../format/currencies';
-import { ME_KEY, meQuery } from '../session/me';
+import { ME_KEY, meQuery, useMe } from '../session/me';
 import { FirmRequestSection } from './FirmRequestSection';
+import { ProfileOwnersSection } from './ProfileOwnersSection';
 import { ProfileBanner } from './ProfileBanner';
 import { ProfileTypeCards } from './ProfileTypeCards';
 import { mapProfileError, type ProfileBanner as Banner } from './profileApiErrors';
@@ -42,6 +43,10 @@ export interface ProfileEditFormProps {
   onSaved: (result: UpdateProfileResponse) => void;
   /** Leave for the list, optionally with a banner to show there (403, 404). */
   onLeave: (banner: Banner | null) => void;
+  /** MUT-373: the person left this profile (its Owners section); the drawer takes it from here (DR4). */
+  onLeftProfile: (profile: HostedProfile) => void;
+  /** MUT-373: a leave or removal is in flight, so the drawer must not close (DR5). */
+  onOwnersBusy: (busy: boolean) => void;
 }
 
 const valuesOf = (profile: HostedProfile): EditProfileValues => ({
@@ -52,7 +57,7 @@ const valuesOf = (profile: HostedProfile): EditProfileValues => ({
 
 const typeLabel = (type: ProfileType) => (type === 'BUSINESS' ? 'hosted.profiles.kind.business' : 'hosted.profiles.kind.personal');
 
-export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave }: ProfileEditFormProps) {
+export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave, onLeftProfile, onOwnersBusy }: ProfileEditFormProps) {
   const t = useT();
   const tp = useTp();
   const queryClient = useQueryClient();
@@ -62,6 +67,9 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave }: Profi
   const [step, setStep] = useState<Step>({ kind: 'form' });
   const [banner, setBanner] = useState<Banner | null>(null);
   const [conflict, setConflict] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const live = useMe().profiles.find((p) => p.id === profile.id) ?? opened;
+  const shared = isShared(live);
   const confirmHeading = useRef<HTMLHeadingElement>(null);
   const saveButton = useRef<HTMLButtonElement>(null);
   const typeLocked = profileEditability(opened).editable && opened.isPersonalDefault;
@@ -77,7 +85,7 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave }: Profi
   }, [step.kind]);
 
   const fail = (error: unknown) => {
-    const mapped = mapProfileError(error);
+    const mapped = mapProfileError(error, shared);
     if (mapped.refetchMe) void queryClient.invalidateQueries({ queryKey: ME_KEY });
     if (mapped.backToList) {
       onLeave(mapped.banner ?? null);
@@ -139,8 +147,7 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave }: Profi
     return message ? <p className="form-error">{t(message)}</p> : null;
   };
 
-  const footer =
-    step.kind === 'confirm' ? (
+  const footer = leaveConfirmOpen ? null : step.kind === 'confirm' ? (
       <>
         <Button type="button" variant="secondary" onClick={backFromConfirm}>
           {t('hosted.profiles.confirm.back')}
@@ -238,6 +245,8 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave }: Profi
                       onChange={field.onChange}
                       labelledBy={`${FORM_ID}-type-label`}
                       describedBy={`${FORM_ID}-type-hint`}
+                      // MUT-373: read live, not from the opened copy, so a co-owner added meanwhile locks it at once.
+                      disabled={shared ? { value: 'PERSONAL', reason: t('hosted.profiles.owners.sharedLock') } : undefined}
                     />
                   )}
                 />
@@ -249,8 +258,12 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave }: Profi
           </div>
         </form>
       )}
+      {/* MUT-373 (DR1): form, then Owners, then firm features; both outside the form and gone while a type change confirms. */}
+      {step.kind !== 'confirm' && (
+        <ProfileOwnersSection profileId={profile.id} onLeft={onLeftProfile} onBusyChange={onOwnersBusy} onLeaveConfirmChange={setLeaveConfirmOpen} />
+      )}
       {/* MUT-300: outside the form, so asking for firm features never submits or dirties it */}
-      {step.kind !== 'confirm' && <FirmRequestSection profileId={profile.id} />}
+      {step.kind !== 'confirm' && !leaveConfirmOpen && <FirmRequestSection profileId={profile.id} />}
     </>
   );
 }

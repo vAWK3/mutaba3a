@@ -10,7 +10,9 @@ import { TermsUpdatePage } from '../pages/auth/TermsUpdatePage';
 import { HostedShell } from '../shell/HostedShell';
 import { useProfileDrawers } from '../shell/ProfileDrawers';
 import { MeProvider, ProfileProvider, meQuery, useMe } from './me';
+import { useLostAccess } from './lostAccess';
 import { useIsLocalMode } from './mode';
+import { ProfileBanner } from '../components/ProfileBanner';
 import { useSignOut } from './useSignOut';
 
 /**
@@ -111,11 +113,22 @@ function NoProfiles() {
   );
 }
 
-/** `/p/$profileId`: the active profile, or S12 when it isn't (or is no longer) one of the person's. */
+/**
+ * `/p/$profileId`: the active profile, or S12 when it isn't (or is no longer) one of the person's. MUT-373 (DR3): when
+ * the profile that was open here drops out of `/v1/me` — a co-owner removed — the person lands on their personal
+ * profile with a banner that names it, instead of S12.
+ */
 export function ProfileLayout({ profileId }: { profileId: string }) {
   const { profiles } = useMe();
   const profile = profiles.find((candidate) => candidate.id === profileId);
+  const open = useLostAccess((s) => s.open);
+  const remember = useLostAccess((s) => s.remember);
+  useEffect(() => {
+    if (profile) remember(profile.id, profile.name);
+  }, [profile, remember]);
   if (!profile) {
+    const personal = profiles.find((candidate) => candidate.isPersonalDefault);
+    if (open?.id === profileId && personal) return <LostAccessRedirect name={open.name} to={personal.id} />;
     return (
       <HostedShell profile={null}>
         <ProfileUnavailable />
@@ -125,12 +138,37 @@ export function ProfileLayout({ profileId }: { profileId: string }) {
   return (
     <ProfileProvider profile={profile}>
       <HostedShell profile={profile}>
+        <LostAccessBanner />
         {/* Keyed so a switch remounts the views: no state or figure carries across profiles. */}
         <Fragment key={profile.id}>
           <Outlet />
         </Fragment>
       </HostedShell>
     </ProfileProvider>
+  );
+}
+
+function LostAccessRedirect({ name, to }: { name: string; to: string }) {
+  const lose = useLostAccess((s) => s.lose);
+  useEffect(() => lose(name), [lose, name]);
+  return <Navigate to={`/p/${to}` as never} replace />;
+}
+
+/** DR3: persistent until dismissed — losing access to your business's books is not a passing toast. */
+function LostAccessBanner() {
+  const t = useT();
+  const lost = useLostAccess((s) => s.lost);
+  const dismiss = useLostAccess((s) => s.dismiss);
+  if (!lost) return null;
+  return (
+    <div className="hp-lost-access">
+      <ProfileBanner banner={{ tone: 'info', key: 'hosted.auth.lostAccess', vars: { profile: lost.name } }}>
+        {' '}
+        <button type="button" className="hp-link-button" onClick={dismiss}>
+          {t('common.close')}
+        </button>
+      </ProfileBanner>
+    </div>
   );
 }
 

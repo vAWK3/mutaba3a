@@ -19,7 +19,13 @@ output "local_database_url" {
 }
 
 output "cloud_sql_connection_name" {
-  value = google_sql_database_instance.postgres.connection_name
+  description = "The instance the API serves from: mutaba3a-pg, or mutaba3a-pg2 once cmek_stage is active (MUT-381). deploy.sh and db.sh proxy to it."
+  value       = local.active_sql_instance
+}
+
+output "cloud_sql_instance_name" {
+  description = "Name of the instance the API serves from (MUT-381). The restore drill reads it when --instance is absent."
+  value       = local.active_instance_id
 }
 
 output "artifact_registry" {

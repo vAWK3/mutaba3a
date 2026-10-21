@@ -223,6 +223,18 @@ if (!url || !hasPsql) {
       }
     });
 
+    it('refuses while a profile they created has a co-owner (MUT-373)', async () => {
+      await live.db.membership.create({ data: { userId: ids.other, organizationId: ids.business, role: 'OWNER', createdAt: at } });
+      try {
+        const r = profileRows(env(), 'purge-user', '--user-id', ids.owner, '--yes');
+        expect(r.status).not.toBe(0);
+        expect(r.err).toContain('co-owners');
+        expect(r.err).toContain(ids.business);
+      } finally {
+        await live.db.membership.delete({ where: { userId_organizationId: { userId: ids.other, organizationId: ids.business } } });
+      }
+    });
+
     it('refuses while rows in someone else\'s profile still point at the person', async () => {
       const expense = await live.db.expense.create({
         data: { organizationId: ids.firm, occurredOn: '2026-09-30', amountMinor: 100n, currency: 'ILS', createdByUserId: ids.owner, createdAt: at, updatedAt: at },

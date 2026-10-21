@@ -9603,7 +9603,7 @@ export interface paths {
         head?: never;
         /**
          * Rename a profile you own, change its default currency or its type
-         * @description One atomic write under If-Match. The default currency only seeds new records; existing ones keep theirs. A changed type replaces the profile’s expense categories with the new type’s preset, in your language, and leaves every expense that had one uncategorized — preview it with GET /v1/profiles/{profileId}/type-change. The built-in personal profile can be renamed but is always PERSONAL (409 CONFLICT, details.reason DEFAULT_PERSONAL_PROFILE).
+         * @description One atomic write under If-Match. The default currency only seeds new records; existing ones keep theirs. A changed type replaces the profile’s expense categories with the new type’s preset, in your language, and leaves every expense that had one uncategorized — preview it with GET /v1/profiles/{profileId}/type-change. The built-in personal profile can be renamed but is always PERSONAL (409 CONFLICT, details.reason DEFAULT_PERSONAL_PROFILE). A profile with more than one owner stays BUSINESS (409 CONFLICT, details.reason CO_OWNED; MUT-373).
          */
         patch: {
             parameters: {
@@ -9699,7 +9699,7 @@ export interface paths {
         };
         /**
          * Preview what changing a profile’s type would do
-         * @description The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type. Refused exactly where PATCH is (409 DEFAULT_PERSONAL_PROFILE on the built-in personal profile).
+         * @description The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type. Refused exactly where PATCH is (409 DEFAULT_PERSONAL_PROFILE on the built-in personal profile, 409 CO_OWNED on a shared one).
          */
         get: {
             parameters: {
@@ -9871,6 +9871,96 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/profiles/{profileId}/owners/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Leave a profile you co-own, or remove a co-owner from one you created
+         * @description MUT-373 (ADR-163). Naming yourself leaves the profile; naming someone else removes them, and only the profile’s creator may (403 READ_ONLY_PROFILE, details.reason NOT_CREATOR). Their membership ends; everything they recorded stays, attributed to them. The creator can’t leave (409 CONFLICT, details.reason CREATOR_CANNOT_LEAVE): there is no ownership transfer yet. 404 when the caller can’t see the profile or the person isn’t one of its co-owners. A retry with the same Idempotency-Key replays the first answer; a new key after success answers 404.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    profileId: string;
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Left, or removed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RemoveProfileOwnerResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description READ_ONLY_PROFILE: details.reason NOT_OWNER (a firm you only belong to) or NOT_CREATOR (only the creator removes someone else) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -10938,7 +11028,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description The organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE) */
+                /** @description Without `role`: the organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE). With `role: OWNER` (MUT-373): PERSONAL_PROFILE, NOT_BUSINESS (an owned Personal profile), NOT_CO_OWNABLE (not an owned profile), OWNER_LIMIT, ROLE_CHANGE_NOT_SUPPORTED (already a member with another role), or USER_DISABLED (the account is disabled). */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -11649,6 +11739,7 @@ export interface components {
             income: components["schemas"]["IncomeCaptureRules"];
             isPersonalDefault: boolean;
             owned: boolean;
+            owners: components["schemas"]["ProfileOwner"][] | null;
             /** @enum {string|null} */
             type: "PERSONAL" | "BUSINESS" | null;
             version: number;
@@ -11656,6 +11747,11 @@ export interface components {
             role: components["schemas"]["MembershipRole"];
             /** Format: date-time */
             firmRequestedAt: string | null;
+            firmRequestedBy: {
+                /** Format: uuid */
+                userId: string;
+                name: string | null;
+            } | null;
             billing?: {
                 /** @enum {string} */
                 state: "ACTIVE" | "GRACE" | "READ_ONLY" | "LOCKED";
@@ -11674,6 +11770,13 @@ export interface components {
             owed: boolean;
             /** @enum {string} */
             customer: "optional" | "linked-required";
+        };
+        ProfileOwner: {
+            /** Format: uuid */
+            userId: string;
+            name: string | null;
+            email: string;
+            creator: boolean;
         };
         /** @enum {string|null} */
         MembershipRole: "OWNER" | "BOOKKEEPER" | "SUBMITTER" | null;
@@ -12353,6 +12456,11 @@ export interface components {
             postedAt: string;
             status: components["schemas"]["ItemStatus"];
             title: string | null;
+            /**
+             * Format: uuid
+             * @description Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person's account is gone.
+             */
+            capturedByUserId: string | null;
             version: number;
         };
         TriggerInstallmentRequest: {
@@ -13642,6 +13750,10 @@ export interface components {
                 requestedAt: string;
             };
         };
+        RemoveProfileOwnerResponse: {
+            /** @enum {string} */
+            result: "left" | "removed";
+        };
         RecordsFile: {
             /** @enum {string} */
             kind: "mutaba3a-local-records";
@@ -13825,6 +13937,8 @@ export interface components {
         GrantMembershipRequest: {
             /** Format: uuid */
             organizationId: string;
+            /** @enum {string} */
+            role?: "OWNER";
         };
         RemoveMembershipResponse: {
             removed: boolean;

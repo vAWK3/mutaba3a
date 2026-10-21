@@ -3349,3 +3349,19 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `server/src/scripts/__tests__/profile-rows.test.ts` (extended) | Export leaves out `entitlement_grants` / `billing_subscriptions`; a grant made after the backup survives a restore |
 | Release-QA | None: no user-visible flow. MUT-361/362 carry the portal billing scenarios |
 
+
+## MUT-373 — Co-owners (2026-10-21, ADR-163)
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit (server) | `server/src/__tests__/owns-profile.test.ts` | R1 truth table: creator, co-owner, firm/Malafat/personal OWNER-role members never own, no membership |
+| Route (server) | `server/src/__tests__/routes-profile-owners.test.ts` | grant role OWNER (refusals, limit, D7), co-owner rights (PATCH, CO_OWNED, income, re-date own vs other's, firm request, firm enable keeps OWNER), firm member never owned (OV2), leave/remove/creator/NOT_CREATOR/404/idempotent replay, terms audit |
+| Store contract | `store-contract-co-owners.ts` (memory + Prisma) | grantOwner incl. concurrent limit (Prisma), listOwnersOf, updateOwned co-owner vs firm member, CO_OWNED, removeOwner + audit, setFirm keeps OWNER, role conflict |
+| Scripts | `pre-roll.test.ts`, `profile-rows.test.ts`, `users-cli.test.ts` | stray membership found, operator co-owner not; purge refuses a creator with co-owners; `--role owner` + partner note |
+| Portal unit | `profileRules.test.ts`, `profileApiErrors.test.ts`, `useProfileKind.test.ts`, `malafatSuggestions.test.ts` | shared cue, actions, cap hint, created-by, error maps, ListFormat en/ar, requested-by line, OV9 |
+| Portal component | `ProfileOwnersSection.test.tsx` | order, remove/leave confirms, network retry same key, 404 done, footer steps aside, type card lock, mailto, cue + cap hint, lost-access banner |
+| Route (server, review) | `routes-profile-owners.test.ts` | USER_DISABLED (D2), operator revoke audits the role, Owed re-date own vs partner's + `capturedByUserId` (D1), NOT_OWNER for firm staff, refusals keep memberships and write no audit, `firmRequestedBy` name null after the requester leaves |
+| Store contract (review) | `store-contract-co-owners.ts` | grant audit in the transaction and once on confirm, none on refusal; staff never removed or promoted; firm off keeps roles; retype vs grant race (Prisma) |
+| Scripts (review) | `pre-roll.test.ts` | BOOKKEEPER rows pass; built-in personal profile strays; confirm clears a flagged row |
+| Portal (review) | `ProfileOwnersSection.test.tsx`, `endSession.test.ts`, `RedateDrawer.test.tsx`, `incomeAffordances.test.ts` | focus to next Remove (fails on the old code), cancel, NOT_CREATOR, close while pending, leave errors/404/not-open, lost-access dismiss/deep link/sign-out reset, partner's Owed entry not re-datable |
+| Release-QA | `portal.profiles.co-owner-write|remove|leave|removed|full-rights` | recorded flows |

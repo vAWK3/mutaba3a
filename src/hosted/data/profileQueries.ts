@@ -85,6 +85,31 @@ export function useRequestFirm(profileId: string) {
   });
 }
 
+/** `me` with one owner gone from a profile (MUT-373: the creator removed them), its other fields as they were. */
+export function withOwnerRemoved(me: Me | undefined, profileId: string, userId: string): Me | undefined {
+  if (!me) return me;
+  return { ...me, profiles: me.profiles.map((p) => (p.id === profileId && p.owners ? { ...p, owners: p.owners.filter((o) => o.userId !== userId) } : p)) };
+}
+
+/** `me` without a profile the person left (MUT-373). A co-owned profile never counted toward their cap, so the count stays. */
+export function withProfileLeft(me: Me | undefined, profileId: string): Me | undefined {
+  if (!me) return me;
+  return { ...me, profiles: me.profiles.filter((p) => p.id !== profileId) };
+}
+
+/**
+ * MUT-373: leave a profile, or remove a co-owner from one you created. One attempt key per person named, reused
+ * while the same request is retried (design review DR5): a retry after a dropped answer replays the first one.
+ * The cache is the caller's to update, after its exit animation (DR6) or its navigation away (DR4).
+ */
+export function useRemoveProfileOwner(profileId: string) {
+  const [attempt] = useState(createAttemptKey);
+  return useMutation({
+    mutationFn: (userId: string) => api.removeProfileOwner(profileId, userId, attempt.keyFor({ profileId, userId })),
+    onSuccess: () => attempt.succeeded(),
+  });
+}
+
 /** The server's count for a type change, read fresh at the moment of asking (plan §2.5). */
 export function fetchTypeChangePreview(queryClient: QueryClient, profileId: string, to: ProfileType) {
   return queryClient.fetchQuery({

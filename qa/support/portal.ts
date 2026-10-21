@@ -17,6 +17,17 @@ export const OFFICE_B = '22222222-2222-4222-8222-222222222222';
 export const FIRM = '33333333-3333-4333-8333-333333333333';
 export const NEW_PROFILE = '44444444-4444-4444-8444-444444444444';
 
+/** The signed-in person's id in meBody (MUT-373: owners name them). */
+export const QA_USER_ID = '99999999-9999-4999-8999-999999999999';
+
+/** MUT-373: one owner of an owned profile, as /v1/me lists it. */
+export interface StubOwner {
+  userId: string;
+  name: string | null;
+  email: string;
+  creator: boolean;
+}
+
 export interface StubProfile {
   id: string;
   name: string;
@@ -28,6 +39,10 @@ export interface StubProfile {
   role?: 'OWNER' | 'BOOKKEEPER' | 'SUBMITTER';
   /** MUT-300: the owner's pending request for firm features. */
   firmRequestedAt?: string | null;
+  /** MUT-373: who owns it, creator first; an owned profile defaults to the signed-in person alone. */
+  owners?: StubOwner[];
+  /** MUT-373: the person's built-in personal profile. */
+  personalDefault?: boolean;
 }
 
 export const office = (id: string, name: string): StubProfile => ({ id, name, type: 'BUSINESS', owned: true, writerOfRecord: null });
@@ -46,8 +61,10 @@ export function hostedProfile(p: StubProfile) {
       ? { payments: 'read', expenses: 'read-write', capture: 'read-write' }
       : { payments: 'read-write', expenses: 'read-write', capture: 'read-write' },
     income: fed ? { received: true, owed: false, customer: 'linked-required' } : { received: true, owed: true, customer: 'optional' },
-    isPersonalDefault: false,
+    isPersonalDefault: p.personalDefault ?? false,
     owned: p.owned,
+    owners: p.owned ? (p.owners ?? [{ userId: QA_USER_ID, name: 'Nour Haddad', email: 'nour@office.ps', creator: true }]) : null,
+    firmRequestedBy: null,
     type: p.type,
     version: 1,
     firm: p.firm ?? false,
@@ -94,7 +111,7 @@ export function meBody(
   terms: { version: string; accepted: boolean } | null = { version: QA_TERMS_VERSION, accepted: true },
 ) {
   return {
-    user: { id: '99999999-9999-4999-8999-999999999999', email: 'nour@office.ps', displayName: 'Nour Haddad', locale: language, malafatSuggestions: suggestions },
+    user: { id: QA_USER_ID, email: 'nour@office.ps', displayName: 'Nour Haddad', locale: language, malafatSuggestions: suggestions },
     profiles: profiles.map(hostedProfile),
     limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },
     terms,

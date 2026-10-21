@@ -82,7 +82,7 @@ export function RedateDrawer({ kind, profile, id, userId, onClose, onOpenPayment
       </Drawer>
     );
   }
-  const editable = kind === 'owed' ? canRedateOwed(profile, loaded.data as Receivable) : canRedatePayment(profile, loaded.data as Payment, userId);
+  const editable = kind === 'owed' ? canRedateOwed(profile, loaded.data as Receivable, userId) : canRedatePayment(profile, loaded.data as Payment, userId);
   if (!editable) return goneDrawer;
   return (
     <RedateForm

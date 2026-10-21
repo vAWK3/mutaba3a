@@ -788,6 +788,8 @@ than an architecture rule:
 - **Firm data on the hosted service** is privileged client financial data and
   must be encrypted at rest, regionally resident beside the firm's CRM (GCP
   me-west1, matching Malafat), backed up, and deletable on request.
+  *(Note 2026-10-21: "encrypted at rest" with our own key is ADR-164, MUT-381;
+  before it, only Google's default encryption.)*
 
 **What replaces it**: ADR-025 below.
 
@@ -1955,6 +1957,7 @@ holds).
   - **`/v1/me`** publishes `owned`, `type`, `version` per profile and `limits`; order is firms, then created profiles (oldest first), then the personal profile last.
 - *Why*: a freelancer with a second business had nowhere to record it without an operator.
 - *Override log*: replaces "organizations are created only by `/admin` and the scripts" with "…except a person's own standalone profile, created by its owner's session". Date 2026-10-14; reason above; the operator path is unchanged for firms and Malafat tenants.
+- *Superseded in part by ADR-163 (MUT-373, 2026-10-21)*: an owned **Business** profile may now be granted to a co-owner, by the operator, with `role: OWNER`; every other grant still refuses.
 - *qa-reconcile (2026-10-14, owner answers D1–D7)*: (1) **ownership is `profileOwnerOf(org)` = `ownerUserId ?? personalOwnerUserId`** at every door — the old revision still writes unstamped personal profiles after the migration (the CHECKs pass on NULL by design), post-roll stamps them; (2) the owned-profile writes **audit inside their own transactions**, and a type change records the removed categories and every lost expense→category pair; (3) row locks are `FOR NO KEY UPDATE`, and a type change locks expense rows before category rows.
 
 **Amendment (MUT-183, 2026-10-14) — the portal itself creates and edits owned profiles.** Approved by the owner with `.claude/designs/mut-183-portal-profile-management.md` (eng review D2–D10, design review Issues 1–12 and R1–R8). Builds on MUT-182's API; no server change.
@@ -4365,3 +4368,75 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - MUT-361 can enforce from `/v1/me`'s `billing` and a store-guard rule alone.
 - MUT-373 co-owners: coverage follows the one owner `profileOwnerOf` names; a co-owner's own subscription doesn't cover a shared profile yet (TD-193).
 - The API is 1.42.0-mut358.
+
+---
+
+## ADR-163: Co-Owners — an Owned Business Profile May Have Up to Three OWNER Members; One Ownership Rule; the Creator Stays (MUT-373) (Partial Overrides of ADR-037's MUT-182 Amendment, MUT-181 Decision 4, ADR-099's Rejected Alternative and Its "Role Is Inert" Rule)
+
+**Status**: Active
+**Date**: 2026-10-21
+**Context**: Two partners running one small business had no way to keep its books together while each kept a private personal profile. An owned profile could not be granted (409 `OWNED_PROFILE`), and an operator-made firm reads as "nobody's own" in the portal, with income, clients and payments read-only (ADR-066). Basel's intake (2026-10-21): equal partners, Freelancer tier, operator-added in the pilot, the creator removes, a co-owner leaves, records stay. Plan, Apple design pass, design review (DR1–DR14) and eng review ledger (A1, D3, D7, A6, R1, OV1b–OV9): `.claude/designs/mut-373-co-owners-plan.md`.
+**Decision**:
+1. **A co-owner is an OWNER member of an owned BUSINESS profile.** The creator stays `Organization.ownerUserId` (`profileOwnerOf`), so there is no migration and no local snapshot bump. `canCoOwn(org)` = owned, BUSINESS, not the built-in personal profile.
+2. **One rule, `ownsProfile(org, userId, role)`** = `profileOwnerOf(org) === userId || (canCoOwn(org) && role === 'OWNER')` (`server/src/personal-profile.ts`). Every owner gate reads it: PATCH/type-change/firm-request, income and payment re-date, `/v1/me` `owned`, terms acceptance, `updateOwned`'s SQL (`coOwnedBy`). The `canCoOwn` guard is load-bearing: every membership defaults to OWNER (MUT-300), so without it staff of operator and Malafat firms would become owners (outside voice OV1). The role comes from `SessionAuth.membershipRole`, which `selectProfile` already loads (A1).
+3. **Adding is operator-only in v1**: `POST /admin/v1/users/{id}/memberships` with `role: OWNER` (`grant:user --role owner`) → `memberships.grantOwner`, under the organization's row lock. At most `MAX_PROFILE_OWNERS = 3`, creator included (DR11). Refused: `PERSONAL_PROFILE`, `NOT_BUSINESS`, `NOT_CO_OWNABLE` (not an owned profile), `OWNER_LIMIT`, `ROLE_CHANGE_NOT_SUPPORTED` (already a member with another role; role changes are MUT-305's, D7), `USER_DISABLED` (a disabled account never takes an owner place; Basel, qa-reconcile D2). A grant without a role still refuses every owned profile. The `membership.granted` audit (role OWNER) commits in `grantOwner`'s transaction, and a confirm of an existing OWNER membership writes it when none exists yet, so pre-roll's "confirm it with `grant:user --role owner`" remedy clears a flagged row (adversarial review 1). An operator revoke of a co-owner records the role (`metadata.role`, `reason: operator`).
+4. **Leaving and removing**: `DELETE /v1/profiles/{profileId}/owners/{userId}` (session, Idempotency-Key). Naming yourself leaves; naming a co-owner removes them, and only the creator may (`NOT_CREATOR`). **The creator can't leave** (`CREATOR_CANNOT_LEAVE`, D3; ownership transfer is a follow-up, TD-194). The membership goes; records stay attributed. Audited `membership.revoked`, actor USER, `metadata.reason left|removed` (A6), in `removeOwner`'s transaction.
+5. **A shared profile stays BUSINESS**: `updateOwned` returns `co_owned` (409 `CO_OWNED`) under its row lock (OV3).
+6. **The cap counts the creator only** (`countOwnedBy` unchanged); co-owned profiles don't use a co-owner's slots (the portal explains it, DR2).
+7. **Firm enable keeps every OWNER** (`firmOwnersOf` takes the co-owners), so turning firm features on never demotes a partner.
+8. **`/v1/me` and POST/PATCH `/v1/profiles`** carry `owners` (creator first; null on a profile you don't own) and `firmRequestedBy`, from one `memberships.listOwnersOf` read (D1, OV4). API 1.43.0-mut373, additive.
+9. **Release safety**: `npm run pre-roll` (deploy.sh step 3, before the roll) stops the deploy when a non-creator OWNER-role membership on an owned profile was never made a co-owner (no `membership.granted` with `role: OWNER`), OV1b. Other roles own nothing and pass. `profile-rows.sh purge-user` refuses a creator whose profile still has co-owners.
+10. **Re-dating stays per person** (Basel, qa-reconcile D1): a co-owner re-dates only entries they captured, as before. Owed entries carry `capturedByUserId` so the portal offers re-dating only on your own, as it already did for payments. Undo stays per person too.
+11. **Billing** keeps following the creator (`ownedProfilesOf` stays creator-only; TD-193 on MUT-358). Malafat suggestions count only profiles the viewer created (OV9).
+**Override log**:
+- ADR-037's MUT-182 amendment said an owned profile is "never granted to or provisioned into another user". Replaced by: never, except an operator grant with `role: OWNER` on an owned Business profile. Date 2026-10-21; reason above.
+- MUT-181 decision 4 ("no sharing") is replaced for co-owners of Business profiles; invites and staff stay out.
+- ADR-099 rejected "lifting MUT-182's 'owned is never shared' rule" because it would create two kinds of shared organization. This keeps one kind: an owned organization whose members carry `Membership.role`. Co-owners are its OWNER members, and MUT-305/306 add BOOKKEEPER/SUBMITTER members to that same organization.
+- ADR-099 decision 2 said the role is inert while firm features are off. On an owned Business profile, OWNER now means co-owner, read only through `ownsProfile`.
+**Consequences**:
+- MUT-374 (phone) reads `owned` and `owners` from `/v1/me`; a removed co-owner's outbox writes now answer 404. `owned` now means "you own it" (creator or co-owner), not "you created it": a client that needs the creator reads `owners[].creator`. The phone should gate Owed re-dating on `capturedByUserId`.
+- MUT-333 must decide what happens to a co-owner's records on a shared profile when their account closes (Restrict FKs block the purge today; Jira comment 12287).
+- Local mode has one person: a co-owned profile exported to a device keeps only the exporter as owner.
+**Alternatives considered**: a separate co-owners table (rejected: a second source of truth beside `Membership.role`); letting any OWNER membership count (rejected: firm staff); transfer now (deferred, D3); per-profile `owners` queries (rejected for one batched read, D1).
+
+---
+
+## ADR-164: Our Own KMS Key for the Database and the Receipts Bucket, via a New Instance Behind an Opt-In Stage (MUT-381)
+
+**Status**: Active
+**Date**: 2026-10-21
+**Context**: ADR-024 requires firm data to be encrypted at rest. Until now Cloud SQL, the attachments bucket and Secret Manager used only Google's default encryption. The 2026-10-21 privacy review chose "harden + CMEK" and ruled out field-level and end-to-end encryption, which would break server totals, FX, Malafat and the accountant export. Cloud SQL can't add a customer-managed key to an existing instance. Plan and eng review: `.claude/designs/mut-381-cmek.md` (Basel's answers D1–D5).
+**Decision**:
+1. **One key**, `mutaba3a-data` in key ring `mutaba3a` (me-west1).
+   - It is SOFTWARE-protected, rotates every 90 days, and has `prevent_destroy`.
+   - Only the Cloud SQL and Cloud Storage service agents are granted on it, on the key itself, never project-wide (`infrastructure/terraform/kms.tf`).
+2. **A new instance, `mutaba3a-pg2`, encrypted with the key.** It has the same settings as `mutaba3a-pg`, written out in full and pinned by `tests/cmek.tftest.hcl`. It is filled by restoring a fresh backup of `mutaba3a-pg`; `scripts/cmek-cutover.sh` is the only tool that writes to it.
+   - Not a `for_each` over both instances: that would rename the bootstrap targets ADR-161 relies on.
+3. **`cmek_stage = off | prepared | active`, default `off` (D3).**
+   - `deploy.sh` runs a full apply, so without the stage the first release after the merge would create the key and the instance and re-key the bucket.
+   - `prepared` creates everything. `active` moves the DATABASE_URL secret, the Cloud Run volume, the outputs and the Cloud SQL alerts to `mutaba3a-pg2` together.
+4. **The bucket gets the key as its default from `prepared` on.** Signed URLs are unchanged, because the storage agent does the encryption. Existing objects are rewritten under the key by hand (DEPLOYMENT.md §6d).
+5. **The cutover is a tested script (D1).**
+   - The API is closed during the copy, which goes on-demand backup → restore → key check → every table's count compared.
+   - Any failure reopens the API on `mutaba3a-pg`.
+   - The switch apply runs with `api_ingress = INGRESS_TRAFFIC_INTERNAL_ONLY`, and a second apply reopens it once `verify` sees the new revision serve 100% from pg2 (D2). This closes the gap in which outside requests could reach an old revision still writing to `mutaba3a-pg`.
+6. **The restore drill follows the active instance (D4).** CMEK copies stay under the key.
+7. **`mutaba3a-pg` stays for 14 days after the cutover**, so its backups cover the window the privacy policy promises. MUT-383 then removes it (D5).
+8. **Hardened after the pre-landing review (2026-10-21).**
+   - The cutover copies only when terraform state is readable and the serving Cloud Run revision doesn't mount `mutaba3a-pg2`; a state it can't read stops it, never a guess.
+   - The freeze is checked, not assumed: a drain wait, the live ingress re-read, and `mutaba3a-pg`'s write counters (`pg_stat_database` rows inserted/updated/deleted) compared before and after the copy, so an UPDATE the row counts can't see still stops it.
+   - `deploy.sh` refuses a release whose tfvars stage would move the database, and one that would reopen a closed service (`scripts/lib/release-guard.sh`). The switch happens only through the printed applies, which both pin `cmek_stage=active`; the tfvars edit comes after `verify`.
+   - `verify` also checks the DATABASE_URL secret names `mutaba3a-pg2`, because the probes only hit `/health`.
+   - A log-match alert pages on any change to a version of `mutaba3a-data` (Admin Activity log).
+9. **No KMS Data Access audit logs.** In the shared `malafat-production` project they're a project-wide setting, so they would also log every decrypt of Malafat's tenant keys. Admin Activity logs (every change to the key) are always on.
+**Consequences**:
+- **What CMEK protects:**
+  - the disks and backups Google holds;
+  - the ability to make the database, its backups and every receipt unreadable by revoking the key.
+- **What it doesn't protect against:**
+  - anyone with roles in the project. Malafat's runtime service account holds project-wide KMS, storage, SQL and Secret Manager roles there, so it can read the database credentials, the operator token and the session pepper as well as every receipt (TD-195).
+  - Secret Manager and the Terraform state, which keep Google's default encryption.
+- **Cloud SQL never re-encrypts on rotation**, so a disabled or destroyed key version takes the API down. Never disable an old version (pilot runbook §5.4). A destroy can be cancelled for 30 days.
+- **The cutover costs a short downtime**, measured by `rehearse` before the real run.
+- **About $28 once** for the second instance's 14 days, plus cents a month for the key.
+- **Ingress is now a variable** (`api_ingress`), which runbook §4.3's emergency close can use too.
