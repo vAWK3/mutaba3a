@@ -4352,6 +4352,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 2. **Coverage follows the owner (`profileOwnerOf`).**
    - The owner's subscriptions cover all of the owner's profiles; Firm includes Freelancer.
    - A subscription or grant tied to an organization covers that profile.
+     - *Superseded in part by ADR-165 (MUT-360, 2026-10-21)*: a **subscription** tied to an organization covers it only when nobody owns it (an operator firm) or its owner is the payer. Grants are unchanged.
    - `firmEnabledAt` is not read (P3).
 3. **`User.trialStartedAt`, not a verification time (P2).** It is null for every operator-issued account; MUT-331's signup sets it through `billing.setTrialStart`.
 4. **Pre-billing backfill (P1).** The migration grants every existing user (FREELANCER) and every owner-less operator firm (FIRM), with `reason = 'pre-billing'`. People provisioned later get a grant by hand (`pilot-runbook.md` §1.5).
@@ -4440,3 +4441,43 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **The cutover costs a short downtime**, measured by `rehearse` before the real run.
 - **About $28 once** for the second instance's 14 days, plus cents a month for the key.
 - **Ingress is now a variable** (`api_ingress`), which runbook §4.3's emergency close can use too.
+
+---
+
+## ADR-165: Stripe Webhook and Nightly Reconcile: Re-Fetch, Newer Read Wins, Never Unlink, Firm Coverage at Read Time, a Job Token for the Scheduler (MUT-360) (Partial Override of ADR-162 Decision 2)
+
+**Status**: Active
+**Date**: 2026-10-21
+**Context**: Pilot subscriptions are made by hand in the Stripe dashboard (`pilot-offer.md` §5). MUT-358 created `billing_accounts`, `billing_subscriptions` and `stripe_events`, but nothing wrote them from Stripe, so `/v1/me` couldn't tell who paid. ADR-160 decision 5 said webhooks re-fetch and a nightly reconcile repairs what they miss. A missed or out-of-order webhook must never leave a payer uncovered. Plan, eng review and outside voice: `.claude/designs/mut-360-stripe-webhook.md`. Basel answered D1–D9 on 2026-10-21 (§7 there).
+**Decision**:
+1. **One routes file (D1).** `server/src/routes/stripe-billing.ts` holds all three doors:
+   - `POST /v1/billing/stripe/webhook`: public, Stripe-Signature is the credential;
+   - `POST /jobs/v1/billing/stripe-reconcile`: the nightly Cloud Scheduler job, `X-Job-Token`;
+   - `POST /admin/v1/billing/stripe/reconcile`: the operator (`npm run billing:reconcile`), `X-Admin-Token`.
+   None is in `PORTAL_ROUTES`. `/jobs/` joins `PORTAL_EXCLUDED_PREFIXES`.
+2. **A dedicated job token (D2).** Not Google OIDC, and not the admin token. `jobAuth` in `routes/admin.ts` guards `/jobs/*` with a timing-safe compare of `X-Job-Token` against `MUTABA3A_JOB_TOKEN` (Terraform-generated). The job token opens only `/jobs/*`; the admin token doesn't open it. When the token is unset, `/jobs/*` answers 503 `JOBS_NOT_CONFIGURED` before any compare, because two empty buffers pass `timingSafeEqual` (outside voice OV-4). TD-197.
+3. **Reconcile lists every subscription (D3).** Stripe can't filter subscriptions by update time, so the ticket's "updated since its last run" is replaced. One `listProducts`, then `listSubscriptions` (`status: 'all'`, 100 a page, `expand: ['data.customer']`), each through the same `syncSubscription` the webhook uses. It prunes `stripe_events` older than 90 days. It always answers 200 with `{ checked, changed, unlinked, errors, pruned }` once it ran, so a Scheduler retry never repeats a finished scan. An in-process guard refuses an overlapping run with 409 `RECONCILE_RUNNING`. TD-196.
+4. **`founderUntil` stays null (D4).** MUT-363 reads the subscription schedule and fills it.
+5. **The operator's link always wins (D5).** `billing.saveAccount` fills an empty link and never unlinks or relinks. It returns `{ account, linked, conflict }` with `conflict` one of `CUSTOMER_LINKED_ELSEWHERE`, `USER_HAS_ANOTHER_ACCOUNT` or `UNKNOWN_USER`. The account is still written (country, currency), so a conflict is reported, never thrown. The sync logs it at warn; an unlinked account shows in `billing:unlinked`. `linkAccount` still throws `StateConflict` for the operator's own link; the two conventions differ on purpose. A new link writes `billing.account_linked` (SYSTEM, `source: stripe`) on each owned profile in the same transaction.
+6. **Only the subscription sync creates billing accounts (D6).** `syncSubscription` is the one creator, with the currency taken from the subscription (ILS or USD). `checkout.session.completed` passes `client_reference_id` into it as the link hint. `customer.updated` refreshes country and link on an existing account (`billing.getAccount`) and is a no-op otherwise.
+7. **Two Stripe budgets (D7).** The webhook gateway uses a 4 s timeout and 0 SDK retries; Stripe's own redelivery is the retry. The reconcile gateway uses 10 s and 2 retries.
+8. **Firm coverage is checked at read time (D8, D9).** A subscription tied to a profile's organization covers it only when `profile.ownerUserId` is null (an owner-less operator firm) or equals the payer (`subscription.userId`). This lives in `subscriptionCovers` (`billing/entitlement.ts`), so a later `billing link` or ownership change takes effect on the next `/v1/me` with no re-sync. The mirror stores the metadata organization id as-is when it is UUID-shaped and the organization exists; otherwise it stores null and notes `UNKNOWN_ORG`. The payer's own profiles stay covered as before. `billing.subscription_changed` is audited only on profiles the subscription can cover.
+9. **Newer read wins.** A Subscription has no updated time of its own, so `stripeUpdatedAt` is the time our request to Stripe was **sent** (a retrieve, or the list page that carried it). `billing.saveSubscription` locks the row (`FOR UPDATE`), returns `stale` and writes nothing when the stored value is later, and otherwise returns `created`, `changed` or `unchanged` with the row. It builds `billing.subscription_changed` inside the transaction, only when a mirrored field changed (`repositories/billing-audit.ts`; `stripeUpdatedAt` alone is not a change). Two racing first inserts retry once on the unique violation.
+10. **The Stripe API version is pinned** to `2026-09-30.endive` (`STRIPE_API_VERSION` in `billing/stripe/gateway.ts`, SDK `stripe@23.0.0`). A test ties it to `Stripe.API_VERSION`, so an SDK upgrade that moves it fails until someone decides. The runbook sets the webhook endpoint to the same version. The period end is read from the items (where it lives since `2025-03-31.basil`), falling back to the top-level field; an invoice's subscription is read from either shape.
+11. **Gateway errors never reach a logger whole.** Every SDK failure becomes `StripeGatewayError { code, type, requestId, transient }` (transient: a network error, timeout, 429 or 5xx). Logs carry those fields only. `stripe-signature` and `x-job-token` join the logger's `SENSITIVE_KEYS`.
+12. **What the webhook answers.**
+    - A bad, missing or old signature: 400 `INVALID_SIGNATURE`, nothing stored.
+    - An unhandled type or a livemode mismatch: 200, nothing stored.
+    - An event already processed: 200 `duplicate`.
+    - A mapping error (`UNKNOWN_TIER`, `UNSUPPORTED_CURRENCY`, `NO_PERIOD`) or a non-transient Stripe refusal: 200, the code recorded on the `stripe_events` row and `processedAt` left null, so a redelivery after a metadata fix is handled again.
+    - A transient Stripe or database failure: 500, so Stripe redelivers.
+13. **Config.** `STRIPE_SECRET_KEY` (`sk_`/`rk_`) and `STRIPE_WEBHOOK_SECRET` (`whsec_`) are set together or not at all; unset, the three routes answer 503 `BILLING_NOT_CONFIGURED`. A live key is refused unless `API_KEY_ENVIRONMENT` is `live`. Terraform mounts both only when `stripe_enabled` (default false); the job token is always mounted.
+**Override log**:
+- ADR-162 decision 2 said "a subscription or grant tied to an organization covers that profile". Replaced by: a tied **subscription** covers an owner-less operator firm, or a profile its payer owns; grants are unchanged. Why: the organization id is typed by hand in Stripe metadata, so a wrong but real id must not make a stranger's firm paid (D8). Date 2026-10-21. No production subscription existed, so no live coverage changed.
+**Consequences**:
+- TD-196 (the full list at scale) and TD-197 (a static job token instead of OIDC).
+- The pilot cutover follows the ordered checklist in `docs/operations/pilot-runbook.md` §1.7: tag Products, set customer metadata, add the restricted key and the webhook secret, turn on `stripe_enabled`, run `billing:reconcile` once, verify `/v1/me`, then revoke `pre-billing` grants one person at a time. Apply steps: `server/DEPLOYMENT.md` §6e.
+- MUT-362's checkout must pass the existing `stripeCustomerId`, or a returning payer gets a second customer that stays unlinked (`USER_HAS_ANOTHER_ACCOUNT`).
+- MUT-363 fills `founderUntil`.
+- A failed nightly run is visible only in Scheduler logs until TODOS.md #17 adds an alert.
+- The API is 1.44.0-mut360, additive.

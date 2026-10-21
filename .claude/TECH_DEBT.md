@@ -211,6 +211,22 @@
 **Impact**: the 200-group cap counts live groups only, so create-and-delete churn grows `expense_groups` without bound. The list index `(organizationId, startOn DESC, id DESC)` includes the dead rows.
 **Fix**: a partial index `WHERE "deletedAt" IS NULL` in place of the full one.
 
+### TD-197: The nightly reconcile job authenticates with a static shared token, not a Google OIDC token
+**Status**: Accepted (MUT-360 D2, Basel 2026-10-21)
+**Ticket**: none (MUT-360, ADR-165)
+**Added**: 2026-10-21
+**Priority**: Low (the token opens only the reconcile, which is idempotent; a leak lets someone run extra re-syncs)
+**Impact**: Cloud Scheduler sends `X-Job-Token` to `POST /jobs/v1/billing/stripe-reconcile`. The value is a Terraform `random_password` (`random_password.job_token`), so it sits in plain text in the Scheduler job's config and in Terraform state, besides Secret Manager. The server compares it in `jobAuth` (`routes/admin.ts`). Rotation is manual (`-replace=random_password.job_token`, then a deploy; DEPLOYMENT.md §6e).
+**Fix**: have the job send a Google OIDC token as a dedicated service account (`http_target.oidc_token`), and verify issuer, audience and email in `jobAuth` with `google-auth-library` (a new dependency). Then drop the secret and the header. Do it when `/jobs/*` gets a job that isn't idempotent, or when Terraform state access widens.
+
+### TD-196: The nightly Stripe reconcile lists every subscription
+**Status**: Accepted (MUT-360 D3, Basel 2026-10-21)
+**Ticket**: none (MUT-360, ADR-165)
+**Added**: 2026-10-21
+**Priority**: Low (about 10 subscriptions in the pilot)
+**Impact**: `reconcile()` (`billing/stripe/sync.ts`) lists all subscriptions (`status: 'all'`, canceled ones included) every night: ⌈n/100⌉ list calls plus the product list, then one short transaction per subscription (`FOR UPDATE` on its unique id) and the owned-profile reads for linked ones. Stripe can't filter subscriptions by update time, so there is no cheaper full repair. The run must finish inside the Scheduler's 320 s `attempt_deadline`.
+**Fix**: revisit around 10k subscriptions. Options: walk `events.list` from a stored cursor and re-sync only the subscriptions it names (needs a cursor and a migration, and misses drift that has no event; events are kept 30 days), or skip canceled subscriptions older than N days.
+
 ### TD-195: Malafat's runtime service account has project-wide roles over Mutaba3a's data in the shared project
 
 **Introduced**: 2026-10-21 (MUT-381, ADR-164)

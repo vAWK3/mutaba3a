@@ -2599,3 +2599,20 @@ When a server answer would unmount the row that should animate out, keep the id 
 
 ### Pattern: Navigate away before forgetting the open profile
 Leaving the open profile navigates to the personal profile first and only then drops it from `ME_KEY` and `removeQueries(['p', id])`, so nothing renders "This profile isn't available" in between. A profile lost involuntarily is noticed by ProfileLayout (the `lostAccess` store remembers the open one) and gets a named banner instead.
+
+## Patterns added by MUT-360 (2026-10-21, ADR-165)
+
+### Pattern: A public webhook that verifies a raw body
+The sender's signature covers the exact bytes it sent, so the route declares no zod body (which would parse it first) and reads `await c.req.text()` before verifying. It sets `security: []` and lives outside `PORTAL_ROUTES`. It gets its own `bodyLimit` (`hono/body-limit`, 413 `PAYLOAD_TOO_LARGE`) on that path only, and its own per-IP `SlidingWindowRateLimiter`, built in `index.ts` so the prune timer covers it. A bad signature is 400 and stores nothing. Add the operation to `PUBLIC_OPERATIONS` (`route-security.test.ts`) and to `no-self-registration.test.ts`'s list, with a comment saying it creates no account. Example: `routes/stripe-billing.ts`.
+
+### Pattern: An optional shared-secret token
+A token the server may run without (`MUTABA3A_JOB_TOKEN`) refuses every request with 503 when it is unset, before any compare. Never let it fall back to an empty string: `timingSafeEqual` on two empty buffers is true, so an empty header would pass. Compare lengths first, then `timingSafeEqual`. One token opens one prefix; another token doesn't open it (`jobAuth` on `/jobs/*`, `adminAuth` on `/admin/*`, both in `routes/admin.ts`).
+
+### Pattern: Third-party SDK errors never reach a logger
+An SDK error object can carry the request, its headers and the body. Wrap every call in the adapter and rethrow a typed error with only safe fields (`StripeGatewayError { code, type, requestId, transient }`, `billing/stripe/gateway.ts`). Anything that isn't the SDK's own error becomes the same type with nothing copied. Callers log those fields, never `err`, and a route test throws a raw SDK error and checks the log line holds no key or body.
+
+### Pattern: Hono typed JSON needs type aliases, not interfaces
+A value passed to `c.json(...)` on an OpenAPI route must be a `type` alias, not an `interface`: Hono's typed JSON responses need the implicit index signature that only type aliases get. Declare response shapes as `export type X = { ... }` (`ReconcileSummary` in `billing/stripe/sync.ts`).
+
+### Pattern: Newer read wins for mirrored third-party state
+When the source object has no updated time of its own, stamp each read with the time the request was **sent** (a list's page time, never the moment each item is processed). The write locks the row (`SELECT … FOR UPDATE`), and when the stored stamp is later it returns `stale` and writes nothing. Re-fetching on every event plus this guard makes out-of-order and duplicate deliveries harmless. The change audit is built inside the same transaction after the compare, so `from` is the row actually replaced (`billing.saveSubscription`, `repositories/billing-audit.ts`).
