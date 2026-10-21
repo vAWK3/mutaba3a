@@ -6,7 +6,7 @@ record the date where the item says.
 
 ## server
 
-- **BLOCKING — MUT-112 step 0 is committed (`config/hosts.json`: `mtb3a.com`, stage `proxy`, 2026-10-21) but the front-door stack is not applied.** Until `server/infrastructure/frontdoor` is applied (`server/DEPLOYMENT.md` §5a step 1), this release's Terraform plan fails reading the `mutaba3a-api-front-door-token` secret. Apply step 1 first, or release from a branch with `domain: null`. Delete this line once step 1 is applied.
+- MUT-112: the front-door stack was applied 2026-10-21 (zone `mtb3a.com`, name servers `destiny`/`duke.ns.cloudflare.com`), so this release gives Cloud Run `PORTAL_ORIGIN` and `FRONT_DOOR_TOKEN`. Not blocking, but run it as `server/DEPLOYMENT.md` §5a step 3 only after step 2 (the zone is Active and `https://app.mtb3a.com/health` answers). Delete this line after that release.
 - MUT-360's Terraform (Stripe secrets, job token, Scheduler) is merged: the release creates the empty Stripe secrets and mounts `MUTABA3A_JOB_TOKEN`. Not blocking: Stripe stays off until `stripe_enabled = true`. Apply and turn it on per `server/DEPLOYMENT.md` §6e.
 
 ## web
