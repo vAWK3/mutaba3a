@@ -2585,3 +2585,17 @@ Our own hosts (landing, portal/API, legacy and new) live only in `config/hosts.j
 
 ### Pattern: A second path to the service proves itself with a token, not a hop count
 When the same service is reached both directly and through a proxy, don't raise `TRUSTED_PROXY_HOPS`: that trusts a forged `X-Forwarded-For` entry on the direct path. The proxy sends a shared secret (Secret Manager, a `secret_text` binding) plus the client IP it read. The server uses those only when the secret matches (digest + `timingSafeEqual`) and otherwise keeps its old rules (`auth/sessions.ts` `requestClientIp`, `isSamePortalOrigin`).
+
+## Patterns added by MUT-373 (2026-10-21, ADR-163)
+
+### Pattern: Ownership is one function, and the role only counts where it can
+`ownsProfile(org, userId, role)` is the only "does this person own this profile" check, on the server and in SQL (`coOwnedBy` mirrors its second branch). Never compare `ownerUserId`, `personalOwnerUserId` or `Membership.role` at a call site. A role that has a default (OWNER) must be gated by a structural condition (`canCoOwn`) before it grants anything, or every defaulted row gains the right.
+
+### Pattern: Decide under the lock in a shared rules module, write in each store
+Co-owner grants and removals take the organization row lock, read the rows, and ask a pure function in `co-owners.ts` (`grantOwnerRefusal`, `removeOwnerDecision`) what to do — the `firm.ts` pattern — so the memory store and Postgres refuse identically and the contract test pins both.
+
+### Pattern: A removal animates first, then the cache forgets
+When a server answer would unmount the row that should animate out, keep the id in local "exiting" state, collapse it, and write the cache on `transitionend` or a fallback timer (motion tokens are 0ms under reduced motion, so there is no transition to wait for). Focus goes to the next row, else the previous, else the section heading.
+
+### Pattern: Navigate away before forgetting the open profile
+Leaving the open profile navigates to the personal profile first and only then drops it from `ME_KEY` and `removeQueries(['p', id])`, so nothing renders "This profile isn't available" in between. A profile lost involuntarily is noticed by ProfileLayout (the `lostAccess` store remembers the open one) and gets a named banner instead.

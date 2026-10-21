@@ -95,6 +95,32 @@ describe('users CLI (npm run provision:user and friends)', () => {
     expect(await h.store.memberships.find(user.id, b.id)).toBeNull();
   });
 
+  it('grant --role owner makes a co-owner and prints the note for both partners (MUT-373, DR8)', async () => {
+    const h = harness();
+    const { user: creator } = await h.store.users.create({ email: 'basel@studio.ps', displayName: 'Basel', passwordHash: null, locale: 'en', personal: { name: 'Personal', slug: 'personal-basel', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: new Date('2026-10-21T09:00:00Z') });
+    const created = await h.store.organizations.createOwned(creator.id, { name: 'Sader & Haddad', slug: 'p-sh', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', profileType: 'BUSINESS', at: new Date('2026-10-21T09:00:00Z') }, 6, { actorId: creator.id, requestId: null });
+    if (created.kind !== 'created') throw new Error('cap');
+    await h.run(['create', '--email', 'lina@studio.ps', '--name', 'Lina', '--currency', 'ILS', '--timezone', 'Asia/Jerusalem']);
+    const lina = (await h.store.users.findByEmail('lina@studio.ps'))!;
+    h.out.length = 0;
+
+    expect(await h.run(['grant', '--email', 'lina@studio.ps', '--organization-id', created.organization.id, '--role', 'owner'])).toBe(0);
+    expect(await h.store.memberships.find(lina.id, created.organization.id)).toMatchObject({ role: 'OWNER' });
+    expect(h.out[0]).toBe(`lina@studio.ps → ${created.organization.id}: co-owner added`);
+    expect(h.out.join('\n')).toContain('Sader & Haddad is now shared');
+    expect(h.out.join('\n')).toContain('Sader & Haddad أصبح مشتركًا');
+
+    h.out.length = 0;
+    expect(await h.run(['grant', '--email', 'lina@studio.ps', '--organization-id', created.organization.id, '--role', 'owner'])).toBe(0);
+    expect(h.out).toEqual([`lina@studio.ps → ${created.organization.id}: already a co-owner`]);
+  });
+
+  it('grant refuses a --role other than owner', async () => {
+    const h = harness();
+    const o = await org(h.store, 'Firm');
+    expect(await h.run(['grant', '--email', 'x@firm.ps', '--organization-id', o.id, '--role', 'bookkeeper'])).not.toBe(0);
+  });
+
   it('rotate prints a new setup link once and says the current password keeps working (MUT-235)', async () => {
     const h = harness();
     const o = await org(h.store, 'Firm');

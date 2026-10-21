@@ -165,11 +165,11 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Changed', content: { 'application/json': { schema: IncomeResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, user } = sessionAuth(c);
+      const { organization, user, membershipRole } = sessionAuth(c);
       const occurredOn = redateTo(c.req.valid('json').occurredOn, organization, c.get('now')(), 'occurredOn');
       const { incomeId } = c.req.valid('param');
       const notFound = () => new ApiError('NOT_FOUND', 'No such income entry');
-      if (!isOwnProfile(organization, user.id)) throw notFound();
+      if (!isOwnProfile(organization, user.id, membershipRole)) throw notFound();
 
       const receivable = await store.receivables.getById(organization.id, incomeId);
       if (receivable) {

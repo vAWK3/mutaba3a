@@ -1955,6 +1955,7 @@ holds).
   - **`/v1/me`** publishes `owned`, `type`, `version` per profile and `limits`; order is firms, then created profiles (oldest first), then the personal profile last.
 - *Why*: a freelancer with a second business had nowhere to record it without an operator.
 - *Override log*: replaces "organizations are created only by `/admin` and the scripts" with "…except a person's own standalone profile, created by its owner's session". Date 2026-10-14; reason above; the operator path is unchanged for firms and Malafat tenants.
+- *Superseded in part by ADR-163 (MUT-373, 2026-10-21)*: an owned **Business** profile may now be granted to a co-owner, by the operator, with `role: OWNER`; every other grant still refuses.
 - *qa-reconcile (2026-10-14, owner answers D1–D7)*: (1) **ownership is `profileOwnerOf(org)` = `ownerUserId ?? personalOwnerUserId`** at every door — the old revision still writes unstamped personal profiles after the migration (the CHECKs pass on NULL by design), post-roll stamps them; (2) the owned-profile writes **audit inside their own transactions**, and a type change records the removed categories and every lost expense→category pair; (3) row locks are `FOR NO KEY UPDATE`, and a type change locks expense rows before category rows.
 
 **Amendment (MUT-183, 2026-10-14) — the portal itself creates and edits owned profiles.** Approved by the owner with `.claude/designs/mut-183-portal-profile-management.md` (eng review D2–D10, design review Issues 1–12 and R1–R8). Builds on MUT-182's API; no server change.
@@ -4365,3 +4366,33 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - MUT-361 can enforce from `/v1/me`'s `billing` and a store-guard rule alone.
 - MUT-373 co-owners: coverage follows the one owner `profileOwnerOf` names; a co-owner's own subscription doesn't cover a shared profile yet (TD-193).
 - The API is 1.42.0-mut358.
+
+---
+
+## ADR-163: Co-Owners — an Owned Business Profile May Have Up to Three OWNER Members; One Ownership Rule; the Creator Stays (MUT-373) (Partial Overrides of ADR-037's MUT-182 Amendment, MUT-181 Decision 4, ADR-099's Rejected Alternative and Its "Role Is Inert" Rule)
+
+**Status**: Active
+**Date**: 2026-10-21
+**Context**: Two partners running one small business had no way to keep its books together while each kept a private personal profile. An owned profile could not be granted (409 `OWNED_PROFILE`), and an operator-made firm reads as "nobody's own" in the portal, with income, clients and payments read-only (ADR-066). Basel's intake (2026-10-21): equal partners, Freelancer tier, operator-added in the pilot, the creator removes, a co-owner leaves, records stay. Plan, Apple design pass, design review (DR1–DR14) and eng review ledger (A1, D3, D7, A6, R1, OV1b–OV9): `.claude/designs/mut-373-co-owners-plan.md`.
+**Decision**:
+1. **A co-owner is an OWNER member of an owned BUSINESS profile.** The creator stays `Organization.ownerUserId` (`profileOwnerOf`), so there is no migration and no local snapshot bump. `canCoOwn(org)` = owned, BUSINESS, not the built-in personal profile.
+2. **One rule, `ownsProfile(org, userId, role)`** = `profileOwnerOf(org) === userId || (canCoOwn(org) && role === 'OWNER')` (`server/src/personal-profile.ts`). Every owner gate reads it: PATCH/type-change/firm-request, income and payment re-date, `/v1/me` `owned`, terms acceptance, `updateOwned`'s SQL (`coOwnedBy`). The `canCoOwn` guard is load-bearing: every membership defaults to OWNER (MUT-300), so without it staff of operator and Malafat firms would become owners (outside voice OV1). The role comes from `SessionAuth.membershipRole`, which `selectProfile` already loads (A1).
+3. **Adding is operator-only in v1**: `POST /admin/v1/users/{id}/memberships` with `role: OWNER` (`grant:user --role owner`) → `memberships.grantOwner`, under the organization's row lock. At most `MAX_PROFILE_OWNERS = 3`, creator included (DR11). Refused: `PERSONAL_PROFILE`, `NOT_BUSINESS`, `NOT_CO_OWNABLE` (not an owned profile), `OWNER_LIMIT`, `ROLE_CHANGE_NOT_SUPPORTED` (already a member with another role; role changes are MUT-305's, D7), `USER_DISABLED` (a disabled account never takes an owner place; Basel, qa-reconcile D2). A grant without a role still refuses every owned profile. The `membership.granted` audit (role OWNER) commits in `grantOwner`'s transaction, and a confirm of an existing OWNER membership writes it when none exists yet, so pre-roll's "confirm it with `grant:user --role owner`" remedy clears a flagged row (adversarial review 1). An operator revoke of a co-owner records the role (`metadata.role`, `reason: operator`).
+4. **Leaving and removing**: `DELETE /v1/profiles/{profileId}/owners/{userId}` (session, Idempotency-Key). Naming yourself leaves; naming a co-owner removes them, and only the creator may (`NOT_CREATOR`). **The creator can't leave** (`CREATOR_CANNOT_LEAVE`, D3; ownership transfer is a follow-up, TD-194). The membership goes; records stay attributed. Audited `membership.revoked`, actor USER, `metadata.reason left|removed` (A6), in `removeOwner`'s transaction.
+5. **A shared profile stays BUSINESS**: `updateOwned` returns `co_owned` (409 `CO_OWNED`) under its row lock (OV3).
+6. **The cap counts the creator only** (`countOwnedBy` unchanged); co-owned profiles don't use a co-owner's slots (the portal explains it, DR2).
+7. **Firm enable keeps every OWNER** (`firmOwnersOf` takes the co-owners), so turning firm features on never demotes a partner.
+8. **`/v1/me` and POST/PATCH `/v1/profiles`** carry `owners` (creator first; null on a profile you don't own) and `firmRequestedBy`, from one `memberships.listOwnersOf` read (D1, OV4). API 1.43.0-mut373, additive.
+9. **Release safety**: `npm run pre-roll` (deploy.sh step 3, before the roll) stops the deploy when a non-creator OWNER-role membership on an owned profile was never made a co-owner (no `membership.granted` with `role: OWNER`), OV1b. Other roles own nothing and pass. `profile-rows.sh purge-user` refuses a creator whose profile still has co-owners.
+10. **Re-dating stays per person** (Basel, qa-reconcile D1): a co-owner re-dates only entries they captured, as before. Owed entries carry `capturedByUserId` so the portal offers re-dating only on your own, as it already did for payments. Undo stays per person too.
+11. **Billing** keeps following the creator (`ownedProfilesOf` stays creator-only; TD-193 on MUT-358). Malafat suggestions count only profiles the viewer created (OV9).
+**Override log**:
+- ADR-037's MUT-182 amendment said an owned profile is "never granted to or provisioned into another user". Replaced by: never, except an operator grant with `role: OWNER` on an owned Business profile. Date 2026-10-21; reason above.
+- MUT-181 decision 4 ("no sharing") is replaced for co-owners of Business profiles; invites and staff stay out.
+- ADR-099 rejected "lifting MUT-182's 'owned is never shared' rule" because it would create two kinds of shared organization. This keeps one kind: an owned organization whose members carry `Membership.role`. Co-owners are its OWNER members, and MUT-305/306 add BOOKKEEPER/SUBMITTER members to that same organization.
+- ADR-099 decision 2 said the role is inert while firm features are off. On an owned Business profile, OWNER now means co-owner, read only through `ownsProfile`.
+**Consequences**:
+- MUT-374 (phone) reads `owned` and `owners` from `/v1/me`; a removed co-owner's outbox writes now answer 404. `owned` now means "you own it" (creator or co-owner), not "you created it": a client that needs the creator reads `owners[].creator`. The phone should gate Owed re-dating on `capturedByUserId`.
+- MUT-333 must decide what happens to a co-owner's records on a shared profile when their account closes (Restrict FKs block the purge today; Jira comment 12287).
+- Local mode has one person: a co-owned profile exported to a device keeps only the exporter as owner.
+**Alternatives considered**: a separate co-owners table (rejected: a second source of truth beside `Membership.role`); letting any OWNER membership count (rejected: firm staff); transfer now (deferred, D3); per-profile `owners` queries (rejected for one batched read, D1).

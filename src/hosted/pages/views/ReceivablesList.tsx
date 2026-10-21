@@ -13,7 +13,7 @@ import { ADD_BUTTON_ATTR, IncomeDrawerHost, SETTLE_BUTTON_ATTR } from '../../com
 import { useCustomerDirectory, useProjectDirectory, useReceivables } from '../../data/queries';
 import { DecimalAmount, formatDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
-import { useProfile } from '../../session/me';
+import { useMe, useProfile } from '../../session/me';
 import { NoMatch, PageHeader, ShowMore, StatusBadge } from './shared';
 
 /**
@@ -40,7 +40,7 @@ interface ReceivableRow {
   redatable: boolean;
 }
 
-function shape(items: Receivable[], customers: Map<string, Customer>, projects: Map<string, Project>, language: 'en' | 'ar', profile: HostedProfile): ReceivableRow[] {
+function shape(items: Receivable[], customers: Map<string, Customer>, projects: Map<string, Project>, language: 'en' | 'ar', profile: HostedProfile, userId: string): ReceivableRow[] {
   return items.map((r) => ({
     id: r.id,
     client: customers.get(r.customerId)?.name ?? '—',
@@ -53,7 +53,7 @@ function shape(items: Receivable[], customers: Map<string, Customer>, projects: 
     outstanding: r.outstanding,
     status: r.status,
     settleable: isSettleable(r),
-    redatable: canRedateOwed(profile, r),
+    redatable: canRedateOwed(profile, r, userId),
   }));
 }
 
@@ -71,6 +71,7 @@ interface ReceivablesListProps {
 
 export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecordPayment, addAction, onRedate }: ReceivablesListProps) {
   const profile = useProfile();
+  const userId = useMe().user.id;
   const { t, language } = useLanguage();
   const effective = fixedCustomerId ? { ...filters, customerId: fixedCustomerId } : filters;
   const list = useReceivables(profile.id, effective);
@@ -78,8 +79,8 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
   const projects = useProjectDirectory(profile.id);
 
   const rows = useMemo(
-    () => (list.data && customers.data && projects.data ? shape(list.data, customers.data, projects.data, language, profile) : undefined),
-    [list.data, customers.data, projects.data, language, profile],
+    () => (list.data && customers.data && projects.data ? shape(list.data, customers.data, projects.data, language, profile, userId) : undefined),
+    [list.data, customers.data, projects.data, language, profile, userId],
   );
 
   const columns = useMemo<Column<ReceivableRow>[]>(

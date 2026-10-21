@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.42.0-mut358
+  version: 1.43.0-mut373
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -281,6 +281,11 @@ components:
           type: boolean
         owned:
           type: boolean
+        owners:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/ProfileOwner"
         type:
           type: string
           nullable: true
@@ -299,6 +304,19 @@ components:
           type: string
           nullable: true
           format: date-time
+        firmRequestedBy:
+          type: object
+          nullable: true
+          properties:
+            userId:
+              type: string
+              format: uuid
+            name:
+              type: string
+              nullable: true
+          required:
+            - userId
+            - name
         billing:
           type: object
           nullable: true
@@ -345,11 +363,13 @@ components:
         - income
         - isPersonalDefault
         - owned
+        - owners
         - type
         - version
         - firm
         - role
         - firmRequestedAt
+        - firmRequestedBy
     Currency:
       type: string
       enum:
@@ -378,6 +398,24 @@ components:
         - received
         - owed
         - customer
+    ProfileOwner:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        email:
+          type: string
+        creator:
+          type: boolean
+      required:
+        - userId
+        - name
+        - email
+        - creator
     MembershipRole:
       type: string
       nullable: true
@@ -2244,6 +2282,11 @@ components:
         title:
           type: string
           nullable: true
+        capturedByUserId:
+          type: string
+          nullable: true
+          format: uuid
+          description: Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person's account is gone.
         version:
           type: integer
       required:
@@ -2267,6 +2310,7 @@ components:
         - postedAt
         - status
         - title
+        - capturedByUserId
         - version
     TriggerInstallmentRequest:
       type: object
@@ -5602,6 +5646,16 @@ components:
             - requestedAt
       required:
         - firmRequest
+    RemoveProfileOwnerResponse:
+      type: object
+      properties:
+        result:
+          type: string
+          enum:
+            - left
+            - removed
+      required:
+        - result
     RecordsFile:
       type: object
       properties:
@@ -6070,6 +6124,10 @@ components:
         organizationId:
           type: string
           format: uuid
+        role:
+          type: string
+          enum:
+            - OWNER
       required:
         - organizationId
     RemoveMembershipResponse:
@@ -13093,7 +13151,7 @@ paths:
       tags:
         - Profiles
       summary: Rename a profile you own, change its default currency or its type
-      description: One atomic write under If-Match. The default currency only seeds new records; existing ones keep theirs. A changed type replaces the profile’s expense categories with the new type’s preset, in your language, and leaves every expense that had one uncategorized — preview it with GET /v1/profiles/{profileId}/type-change. The built-in personal profile can be renamed but is always PERSONAL (409 CONFLICT, details.reason DEFAULT_PERSONAL_PROFILE).
+      description: One atomic write under If-Match. The default currency only seeds new records; existing ones keep theirs. A changed type replaces the profile’s expense categories with the new type’s preset, in your language, and leaves every expense that had one uncategorized — preview it with GET /v1/profiles/{profileId}/type-change. The built-in personal profile can be renamed but is always PERSONAL (409 CONFLICT, details.reason DEFAULT_PERSONAL_PROFILE). A profile with more than one owner stays BUSINESS (409 CONFLICT, details.reason CO_OWNED; MUT-373).
       security:
         - session: []
         - deviceSession: []
@@ -13165,7 +13223,7 @@ paths:
       tags:
         - Profiles
       summary: Preview what changing a profile’s type would do
-      description: "The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type. Refused exactly where PATCH is (409 DEFAULT_PERSONAL_PROFILE on the built-in personal profile)."
+      description: "The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type. Refused exactly where PATCH is (409 DEFAULT_PERSONAL_PROFILE on the built-in personal profile, 409 CO_OWNED on a shared one)."
       security:
         - session: []
         - deviceSession: []
@@ -13264,6 +13322,74 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: "READ_ONLY_PROFILE with details.reason NOT_OWNER: a profile the caller belongs to but does not own"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profiles/{profileId}/owners/{userId}:
+    delete:
+      tags:
+        - Profiles
+      summary: Leave a profile you co-own, or remove a co-owner from one you created
+      description: "MUT-373 (ADR-163). Naming yourself leaves the profile; naming someone else removes them, and only the profile’s creator may (403 READ_ONLY_PROFILE, details.reason NOT_CREATOR). Their membership ends; everything they recorded stays, attributed to them. The creator can’t leave (409 CONFLICT, details.reason CREATOR_CANNOT_LEAVE): there is no ownership transfer yet. 404 when the caller can’t see the profile or the person isn’t one of its co-owners. A retry with the same Idempotency-Key replays the first answer; a new key after success answers 404."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      responses:
+        "200":
+          description: Left, or removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoveProfileOwnerResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: "READ_ONLY_PROFILE: details.reason NOT_OWNER (a firm you only belong to) or NOT_CREATOR (only the creator removes someone else)"
           content:
             application/json:
               schema:
@@ -13941,7 +14067,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: The organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE)
+          description: "Without `role`: the organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE). With `role: OWNER` (MUT-373): PERSONAL_PROFILE, NOT_BUSINESS (an owned Personal profile), NOT_CO_OWNABLE (not an owned profile), OWNER_LIMIT, ROLE_CHANGE_NOT_SUPPORTED (already a member with another role), or USER_DISABLED (the account is disabled)."
           content:
             application/json:
               schema:

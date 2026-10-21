@@ -1,7 +1,7 @@
 import type { SessionKind } from './auth/sessions.js';
 import { ApiError } from './errors.js';
 import { TERMS_SURFACE_OF, type CurrentTerms } from './legal.js';
-import { ownedProfilesOf } from './personal-profile.js';
+import { ownedOrCoOwnedProfilesOf } from './personal-profile.js';
 import type { AuditEventInput, LedgerStore, TermsAcceptanceInput, UserLocale, UserRecord } from './repositories/ports.js';
 
 /**
@@ -20,11 +20,12 @@ export function staleTerms(terms: CurrentTerms): ApiError {
 
 /**
  * `user.terms_accepted`, as the person, on each profile they own (D2): a person
- * accepts for themselves and, as owner, for their own profiles. A firm they are
- * only a member of never sees it (ownedProfilesOf).
+ * accepts for themselves and, as owner, for their own profiles — the ones they
+ * co-own included (MUT-373). A firm they are only a member of never sees it
+ * (ownedOrCoOwnedProfilesOf).
  */
 export async function termsAcceptedAudit(store: LedgerStore, person: UserRecord, acceptance: TermsAcceptanceInput, requestId: string): Promise<AuditEventInput[]> {
-  return (await ownedProfilesOf(store, person.id)).map((organization) => ({
+  return (await ownedOrCoOwnedProfilesOf(store, person.id)).map((organization) => ({
       organizationId: organization.id,
       actorType: 'USER' as const,
       actorId: person.id,

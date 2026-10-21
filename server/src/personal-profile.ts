@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { AuditEventInput, CreateUserInput, LedgerStore, Organization, OwnedProfileAudit, ProfileType, ProfileTypeChange, UpdateOwnedProfileAudit, UserLocale } from './repositories/ports.js';
+import type { AuditEventInput, CreateUserInput, LedgerStore, MembershipRole, Organization, OwnedProfileAudit, ProfileType, ProfileTypeChange, UpdateOwnedProfileAudit, UserLocale } from './repositories/ports.js';
 
 /** MUT-120: the personal profile is named in the user's language; a server-generated name, so no i18n layer (precedent: expenses/presets.ts). */
 export const PERSONAL_PROFILE_NAME: Record<UserLocale, string> = { en: 'Personal', ar: 'شخصي' };
@@ -25,14 +25,42 @@ export function profileOwnerOf(organization: Pick<Organization, 'ownerUserId' | 
 }
 
 /**
- * The profiles a person owns (profileOwnerOf), out of the ones they are a member of: where a person's own act is
- * audited (MUT-324 terms, MUT-358 billing). A firm they only belong to is left out. The profiles are read in one tick:
- * Prisma batches same-tick `findUnique` calls into a single query, so this is one round trip, not a fan-out on the pool.
+ * MUT-373 (ADR-163): a profile more than one person may own — an owned BUSINESS profile, never the built-in personal
+ * profile, an owned PERSONAL one or an operator firm. Its creator stays `ownerUserId`; co-owners are OWNER members.
+ */
+export function canCoOwn(organization: Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType'>): boolean {
+  return organization.ownerUserId !== null && organization.personalOwnerUserId === null && organization.profileType === 'BUSINESS';
+}
+
+/**
+ * MUT-373 (ADR-163, outside voice OV1): whether `userId` owns the profile — its creator (`profileOwnerOf`), or an
+ * OWNER member of a profile that can be co-owned. Every membership defaults to OWNER (MUT-300), so the role counts
+ * only where `canCoOwn` holds: a member of a firm, a Malafat-fed profile or someone's personal profile never owns it.
+ * Every owner gate reads this; none compares columns or roles itself.
+ */
+export function ownsProfile(organization: Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType'>, userId: string, role: MembershipRole | null): boolean {
+  return profileOwnerOf(organization) === userId || (role === 'OWNER' && canCoOwn(organization));
+}
+
+/**
+ * The profiles a person created (profileOwnerOf), out of the ones they are a member of: billing coverage (MUT-358)
+ * follows the creator only, so a profile they co-own is left out (TD-193), as is a firm they only belong to. The
+ * profiles are read in one tick: Prisma batches same-tick `findUnique` calls into a single query, so this is one
+ * round trip, not a fan-out on the pool.
  */
 export async function ownedProfilesOf(store: Pick<LedgerStore, 'memberships' | 'organizations'>, userId: string): Promise<Organization[]> {
+  return (await memberProfilesOf(store, userId)).filter(({ organization }) => profileOwnerOf(organization) === userId).map(({ organization }) => organization);
+}
+
+/** MUT-373: every profile a person owns, the ones they co-own included (ownsProfile) — where their own act is audited (MUT-324 terms). */
+export async function ownedOrCoOwnedProfilesOf(store: Pick<LedgerStore, 'memberships' | 'organizations'>, userId: string): Promise<Organization[]> {
+  return (await memberProfilesOf(store, userId)).filter(({ organization, role }) => ownsProfile(organization, userId, role)).map(({ organization }) => organization);
+}
+
+async function memberProfilesOf(store: Pick<LedgerStore, 'memberships' | 'organizations'>, userId: string): Promise<{ organization: Organization; role: MembershipRole }[]> {
   const memberships = await store.memberships.listByUser(userId);
   const organizations = await Promise.all(memberships.map((membership) => store.organizations.getById(membership.organizationId)));
-  return organizations.filter((organization): organization is Organization => organization !== null && profileOwnerOf(organization) === userId);
+  return organizations.flatMap((organization, i) => (organization ? [{ organization, role: memberships[i]!.role }] : []));
 }
 
 /** A profile's type, counting an unstamped MUT-120 profile as the PERSONAL it always is. */

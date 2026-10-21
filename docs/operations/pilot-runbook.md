@@ -151,6 +151,26 @@ section once MUT-300 lands (§9).
   `billing:unlinked` lists Stripe customers the server has seen but can't match to anyone.
 - Add the person to the weekly pilot review (`docs/commercial/pilot-reviews.md`).
 
+### 1.6 Add a partner to a Business profile (MUT-373, ADR-163)
+
+When a pilot user asks to share a Business profile they created with a partner (the portal's "write to us"
+link sends the profile's name), both need their own account first (§1). Then:
+
+```bash
+npm run grant:user -- --url "$URL" --email <partner email> --organization-id <profile id> --role owner
+```
+
+- It prints a note in English and Arabic: send it to both partners. Each keeps their own personal profile, private.
+- At most 3 owners per profile, the creator included (409 `OWNER_LIMIT`). Only an owned **Business** profile can
+  be shared (`PERSONAL_PROFILE`, `NOT_BUSINESS`, `NOT_CO_OWNABLE` otherwise), and only with an active account
+  (`USER_DISABLED`: enable it first).
+- Each partner re-dates only the entries they recorded themselves; everything else (record, settle, clients,
+  expenses, rename) is shared.
+- If `pre-roll` stops a deploy over a stray membership you meant as a partner, the same command confirms it.
+- The creator removes a partner, or a partner leaves, from the portal's Owners section. `revoke:user` works too.
+- The creator can't leave (TD-194). To hand a profile over, ask Basel: there is no transfer command yet.
+- Billing still follows the creator (TD-193): the partner's own subscription doesn't cover the shared profile.
+
 ## 2. Reset a password
 
 There's no "forgot password" form (ADR-037). The person emails support (§6), and you reply with a
@@ -520,6 +540,13 @@ nothing was deleted.
    ```
 
    That's audited on the firm's own trail.
+
+   **Co-owners (MUT-373).** `purge-user` also refuses:
+   - a person who **created** a profile that still has co-owners — remove each co-owner first (`revoke:user`
+     on that profile), or hand the profile over (no command yet, TD-194);
+   - a co-owner who **recorded anything** on someone else's shared profile, even after leaving it
+     (`expenses.createdByUserId` and friends are Restrict). Stop and ask: MUT-333 decides whether those records
+     move to the creator or the person is anonymized.
 2. **Rehearse the purge.** This runs it all and rolls back:
 
    ```bash

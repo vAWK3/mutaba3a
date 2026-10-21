@@ -51,6 +51,7 @@
     "reconcile": "tsx src/scripts/reconcile.ts",
     "backfill:personal-categories": "tsx src/scripts/backfill-personal-expense-categories.ts",
     "post-roll": "tsx src/scripts/post-roll.ts",
+    "pre-roll": "tsx src/scripts/pre-roll.ts",
     "docker:build": "docker build -t mutaba3a-api:local .",
     "openapi:json": "tsx src/scripts/export-openapi.ts --json"
   },

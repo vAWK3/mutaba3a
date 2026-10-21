@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ApiError } from '../../api/client';
-import { mapProfileError } from '../profileApiErrors';
+import { mapOwnerError, mapProfileError } from '../profileApiErrors';
 
 const err = (status: number, code: ConstructorParameters<typeof ApiError>[1], details?: unknown) => new ApiError(status, code, 'm', details ?? null);
 
@@ -58,5 +58,25 @@ describe('mapProfileError (ER1–ER8, design review Issue 5)', () => {
   it('ER8: anything else, including a validation error with no field, is a generic banner', () => {
     expect(mapProfileError(err(422, 'VALIDATION_FAILED', {}))).toEqual({ banner: { tone: 'error', key: 'hosted.profiles.errors.generic' } });
     expect(mapProfileError(err(500, 'INTERNAL'))).toEqual({ banner: { tone: 'error', key: 'hosted.profiles.errors.generic' } });
+  });
+});
+
+describe('co-owners (MUT-373)', () => {
+  it('names another owner in a version conflict on a shared profile (DR7)', () => {
+    expect(mapProfileError(err(409, 'CONFLICT', { reason: 'VERSION_MISMATCH' }), true).banner?.key).toBe('hosted.profiles.errors.changedByOwner');
+  });
+
+  it('explains CO_OWNED and re-reads me', () => {
+    expect(mapProfileError(err(409, 'CONFLICT', { reason: 'CO_OWNED' }))).toEqual({ banner: { tone: 'error', key: 'hosted.profiles.errors.coOwned' }, refetchMe: true });
+  });
+
+  it('maps a leave or removal refusal to a banner in the section, never a toast (DR5)', () => {
+    expect(mapOwnerError(err(409, 'CONFLICT', { reason: 'CREATOR_CANNOT_LEAVE' })).banner?.key).toBe('hosted.profiles.owners.creatorCannotLeave');
+    expect(mapOwnerError(err(403, 'READ_ONLY_PROFILE', { reason: 'NOT_CREATOR' })).banner?.key).toBe('hosted.profiles.owners.notCreator');
+    expect(mapOwnerError(new ApiError(0, 'NETWORK', 'm', null))).toEqual({ banner: { tone: 'error', key: 'hosted.profiles.errors.network' } });
+  });
+
+  it('treats someone already gone as done: refetch, then the toast (DR5)', () => {
+    expect(mapOwnerError(err(404, 'NOT_FOUND'))).toEqual({ done: true, refetchMe: true });
   });
 });

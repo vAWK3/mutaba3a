@@ -141,7 +141,8 @@ import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON } from './ports.js';
 import { isBeforeCursor, mergeNewestFirst } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
-import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
+import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, ownsProfile, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
+import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
@@ -286,7 +287,8 @@ export class MemoryLedgerStore implements LedgerStore {
     countOwnedBy: async (userId) => this.ownedCount(userId),
     updateOwned: async (id, ownerUserId, expectedVersion, patch: UpdateOwnedOrganizationPatch, preset, at, audit) => {
       const org = this.orgs.get(id);
-      if (!org || profileOwnerOf(org) !== ownerUserId) return { kind: 'not_found' };
+      // MUT-373 (OV2): the creator, or a co-owner — ownsProfile, the same rule the Postgres query spells out.
+      if (!org || !ownsProfile(org, ownerUserId, this.members.get(membershipKey(ownerUserId, id))?.role ?? null)) return { kind: 'not_found' };
       if (org.version !== expectedVersion) return { kind: 'stale', record: { ...org } };
       // Postgres' organizations_personal_owned_check (eng review D2), checked before any write.
       if (org.personalOwnerUserId && patch.profileType && patch.profileType !== 'PERSONAL') {
@@ -294,6 +296,10 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       const from = profileTypeOf(org);
       const retype = patch.profileType !== undefined && patch.profileType !== from;
+      // MUT-373 (OV3): a shared profile stays BUSINESS.
+      if (retype && patch.profileType === 'PERSONAL' && [...this.members.values()].filter((m) => m.organizationId === id && m.role === 'OWNER').length > 1) {
+        return { kind: 'co_owned' };
+      }
       const typeChange = retype ? this.replaceCategories(id, preset ?? [], at) : null;
       // qa-reconcile D1: a MUT-120 profile the old revision wrote without an owner gets stamped on its first update.
       if (org.ownerUserId === null) Object.assign(org, { ownerUserId, profileType: from });
@@ -328,7 +334,8 @@ export class MemoryLedgerStore implements LedgerStore {
       const members = [...this.members.values()].filter((m) => m.organizationId === id);
       const refusal = firmEnableRefusal(org, input.ownerUserIds, new Set(members.map((m) => m.userId)));
       if (refusal) return refusal;
-      const owners = firmOwnersOf(org, input.ownerUserIds);
+      // MUT-373: an owned profile's co-owners stay OWNER.
+      const owners = firmOwnersOf(org, input.ownerUserIds, members.filter((m) => m.role === 'OWNER').map((m) => m.userId));
       for (const m of members) m.role = owners.includes(m.userId) ? 'OWNER' : 'BOOKKEEPER';
       Object.assign(org, { firmEnabledAt: at, firmRequestedAt: null, firmRequestedByUserId: null, version: org.version + 1 });
       await this.audit.append(firmAuditRow(id, 'firm.enabled', audit, { ownerUserIds: owners }));
@@ -653,6 +660,47 @@ export class MemoryLedgerStore implements LedgerStore {
       return { membership: { ...membership }, created: true };
     },
     revoke: async (userId, organizationId) => this.members.delete(membershipKey(userId, organizationId)),
+    grantOwner: async (userId, organizationId, at, maxOwners, audit) => {
+      const organization = this.orgs.get(organizationId);
+      if (!organization) return { kind: 'not_found' };
+      if (!this.people.has(userId)) throw new ForeignKeyViolation('memberships.userId');
+      const members = [...this.members.values()].filter((m) => m.organizationId === organizationId);
+      const existing = this.members.get(membershipKey(userId, organizationId)) ?? null;
+      const refusal = grantOwnerRefusal(organization, existing?.role ?? null, ownerIdsOf(organization, members).length, maxOwners);
+      if (refusal) return refusal;
+      const record = () => this.events.push({ id: randomUUID(), createdAt: at, ...audit });
+      if (existing) {
+        const granted = this.events.some(
+          (e) => e.organizationId === organizationId && e.entityType === 'user' && e.entityId === userId && e.action === 'membership.granted' && e.metadata?.role === 'OWNER',
+        );
+        if (!granted) record();
+        return { kind: 'granted', membership: { ...existing }, created: false };
+      }
+      const membership: MembershipRecord = { userId, organizationId, role: 'OWNER', createdAt: at };
+      this.members.set(membershipKey(userId, organizationId), membership);
+      record();
+      return { kind: 'granted', membership: { ...membership }, created: true };
+    },
+    removeOwner: async (input) => {
+      const organization = this.orgs.get(input.organizationId);
+      if (!organization) return { kind: 'not_found' };
+      const roleOf = (userId: string) => this.members.get(membershipKey(userId, input.organizationId))?.role ?? null;
+      const decision = removeOwnerDecision(organization, input, roleOf(input.actorId), roleOf(input.userId));
+      if (decision.kind !== 'removed') return decision;
+      this.members.delete(membershipKey(input.userId, input.organizationId));
+      await this.audit.append(ownerRemovedAudit(input, decision.reason));
+      return decision;
+    },
+    listOwnersOf: async (organizationIds) => {
+      const wanted = new Set(organizationIds);
+      return [...this.members.values()]
+        .filter((m) => wanted.has(m.organizationId) && m.role === 'OWNER')
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.userId.localeCompare(b.userId))
+        .flatMap((m) => {
+          const person = this.people.get(m.userId);
+          return person ? [{ organizationId: m.organizationId, userId: m.userId, displayName: person.displayName, email: person.email, createdAt: m.createdAt }] : [];
+        });
+    },
     find: async (userId, organizationId) => clone(this.members.get(membershipKey(userId, organizationId))),
     listByUser: async (userId) => [...this.members.values()].filter((m) => m.userId === userId).map((m) => ({ ...m })),
     listByOrganization: async (organizationId) =>
