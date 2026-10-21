@@ -34,6 +34,7 @@ type Opts = {
   serviceMissing?: boolean;
   gcloudError?: boolean;
   mounts?: string; // what every serving revision mounts
+  env?: Record<string, string>;
 };
 
 function guard(o: Opts) {
@@ -79,11 +80,11 @@ function guard(o: Opts) {
   );
   chmodSync(join(bin, 'terraform'), 0o755);
   chmodSync(join(bin, 'gcloud'), 0o755);
-  const cmd = `die() { echo "$*" >&2; exit 1; }; source "${LIB}" && guard_cmek_release "" mutaba3a-api me-west1 demo-project -input=false -var-file=production.tfvars -var image_tag=abc`;
+  const cmd = `die() { echo "$*" >&2; exit 1; }; warn() { echo "$*" >&2; }; source "${LIB}" && guard_cmek_release "" mutaba3a-api me-west1 demo-project -input=false -var-file=production.tfvars -var image_tag=abc`;
   const r = spawnSync('bash', ['-euo', 'pipefail', '-c', cmd], {
     cwd: dir,
     encoding: 'utf-8',
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+    env: { ...process.env, SKIP_CMEK_GUARD: '', ...o.env, PATH: `${bin}:${process.env.PATH}` },
   });
   return { status: r.status, err: r.stderr, calls: existsSync(log) ? readFileSync(log, 'utf-8') : '' };
 }
@@ -166,6 +167,22 @@ describe('guard_cmek_release (deploy.sh steps 0, 3 and 4)', { timeout: 30_000 },
 
   it('lets a first deploy through when the service does not exist yet', () => {
     expect(guard({ serving: null, serviceMissing: true }).status).toBe(0);
+  });
+
+  it('SKIP_CMEK_GUARD=1 skips every check, says so, and touches neither terraform nor gcloud', () => {
+    // The worst case: state unreadable and gcloud failing, which the guard would refuse.
+    const r = guard({ stage: 'active', outputError: true, gcloudError: true, env: { SKIP_CMEK_GUARD: '1' } });
+    expect(r.status).toBe(0);
+    expect(r.err).toMatch(/WARNING: skipping the CMEK release guard \(SKIP_CMEK_GUARD=1\)/);
+    expect(r.calls).toBe('');
+  });
+
+  it('only SKIP_CMEK_GUARD=1 skips it: any other value still guards', () => {
+    for (const value of ['0', 'true', 'yes']) {
+      const r = guard({ stage: 'active', serving: 'mutaba3a-pg', env: { SKIP_CMEK_GUARD: value } });
+      expect(r.status, value).not.toBe(0);
+      expect(r.err).toMatch(/production serves mutaba3a-pg/);
+    }
   });
 });
 

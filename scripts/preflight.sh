@@ -20,6 +20,7 @@
 #   ALLOW_NODE_MAJOR   a node major other than the supported one
 #   SKIP_REMOTE        do not contact origin (offline)
 #   SKIP_TERMS_CHECK   server: do not check the terms are live (an emergency fix that keeps the version)
+#   SKIP_CMEK_GUARD    server: deploy.sh skips the MUT-381 release guard (only when the guard itself is broken)
 #
 # Other knobs:
 #   RELEASE_BRANCH     branch a release must come from (default: main)
@@ -381,6 +382,13 @@ if [[ "$MODE" == "server" ]]; then
   else
     bad "${TERMS_OUT#\[terms\] }"
     hint "if the version isn't listed yet: make release web, wait for Netlify, then release the server"
+  fi
+
+  # MUT-381: deploy.sh checks a release can't move the database or reopen a closed service. Skipping it is
+  # deploy.sh's call; this only makes sure nobody does it without seeing it.
+  if [[ "${SKIP_CMEK_GUARD:-0}" == "1" ]]; then
+    head_ "CMEK release guard"
+    warn "deploy.sh will skip it ${DIM}(SKIP_CMEK_GUARD=1): only if no CMEK cutover or restore is in progress${NC}"
   fi
 fi
 

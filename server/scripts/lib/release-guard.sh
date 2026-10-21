@@ -11,13 +11,21 @@
 #     the API back to the frozen mutaba3a-pg and lose everything written since; "off" once the key exists
 #     would plan the key's destroy after the migration ran;
 #   * a release while a cutover or a restore holds ingress closed would reopen it mid-copy.
-# The caller defines die and runs this inside the terraform dir, after `terraform init`. It fails closed:
-# anything it cannot read stops the release.
+# The caller defines die and warn and runs this inside the terraform dir, after `terraform init`. It fails
+# closed: anything it cannot read stops the release.
+#
+# SKIP_CMEK_GUARD=1 skips it, like SKIP_TERMS_CHECK: only when the guard itself is what's wrong (a GCP or
+# terraform hiccup it can't read past) and you know no CMEK cutover or restore is in progress. The release
+# then runs exactly as it did before MUT-381.
 
 # guard_cmek_release <suffix> <service> <region> <project> <terraform args…>
 #   <terraform args…>: the apply's own arguments; only -var and -var-file are kept, so `terraform console`
 #   sees the same variables (tfvars, *.auto.tfvars, TF_VAR_*) the apply will.
 guard_cmek_release() {
+  if [[ "${SKIP_CMEK_GUARD:-}" == "1" ]]; then
+    warn "WARNING: skipping the CMEK release guard (SKIP_CMEK_GUARD=1)"
+    return 0
+  fi
   local suffix="$1" service="$2" region="$3" project="$4"; shift 4
   local -a var_args=()
   while [[ $# -gt 0 ]]; do
