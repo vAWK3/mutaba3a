@@ -28,8 +28,10 @@
 #     rows missing from the live database are added back, none are removed, and a
 #     SYSTEM event organization.restored records the restore.
 #   * purge-user refuses while the person is a member of a profile they don't own
-#     (revoke:user first, which audits it), or while rows in someone else's profile
-#     still point at them. Those are MUT-333's decisions, not the operator's.
+#     (revoke:user first, which audits it), while a profile they created has
+#     co-owners (MUT-373), or while rows in someone else's profile still point at
+#     them — a co-owner's records on a shared profile included. Those are MUT-333's
+#     decisions, not the operator's.
 #   * Neither touches the attachments bucket: they print the gcloud lines to run.
 # Bash 3.2 compatible (macOS /bin/bash).
 set -euo pipefail
@@ -279,6 +281,11 @@ all_profile_tables="$(profile_tables "${TARGET_URL}" | tr '\n' ' ')"
 
 shared="$(q "${TARGET_URL}" -c "SELECT \"organizationId\" FROM memberships WHERE \"userId\" = '${USER_ID}' AND \"organizationId\" <> ALL(${OWNED_SQL}) ORDER BY 1" | tr '\n' ' ')"
 [[ -z "${shared}" ]] || die "refusing: still a member of profile(s) they don't own (memberships): ${shared}. Remove each with: npm run revoke:user -- --url \"\$URL\" --email <email> --organization-id <id>"
+
+# MUT-373: a profile they created that someone else co-owns is the partners' books too; it never goes with one account.
+co_owned="$(q "${TARGET_URL}" -c "SELECT DISTINCT \"organizationId\" FROM memberships WHERE \"organizationId\" = ANY(${OWNED_SQL}) AND \"userId\" <> '${USER_ID}' ORDER BY 1" | tr '\n' ' ')"
+[[ -z "${co_owned}" ]] || die "refusing: profile(s) they created still have co-owners: ${co_owned}. Remove each co-owner first (npm run revoke:user), or wait for MUT-333's transfer rules"
+
 
 # Columns that point at users, and what deleting the user would do to rows outside the owned profiles.
 user_fks="$(q "${TARGET_URL}" -F '|' -c "

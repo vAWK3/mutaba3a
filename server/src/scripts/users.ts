@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
  *
  *   npm run provision:user  -- --url https://<portal origin> --email nour@firm.ps --name "Nour Haddad" --organization-id <uuid> [--locale en] [--valid-hours 72]  (Arabic by default, MUT-209)
  *   npm run provision:user  -- --email solo@me.ps --name "Solo" --currency ILS --timezone Asia/Jerusalem   (no firm; MUT-120)
- *   npm run grant:user      -- --email nour@firm.ps --organization-id <uuid>
+ *   npm run grant:user      -- --email nour@firm.ps --organization-id <uuid> [--role owner]   (MUT-373: a co-owner)
  *   npm run revoke:user     -- --email nour@firm.ps --organization-id <uuid>
  *   npm run rotate:password -- --email nour@firm.ps [--valid-hours 72] [--lock]
  *   npm run disable:user    -- --email nour@firm.ps
@@ -52,7 +52,8 @@ const USAGE = [
   '  create  --email <email> --name <display name> [--organization-id <uuid>] [--currency ILS|USD|EUR] [--timezone <IANA>] [--locale en|ar] [--valid-hours <1-720>]',
   '          (every user gets a personal profile; with no --organization-id, --currency and --timezone are required)',
   '          prints a one-time setup link (72 hours unless --valid-hours) through which the person sets their own password',
-  '  grant   --email <email> --organization-id <uuid>',
+  '  grant   --email <email> --organization-id <uuid> [--role owner]',
+  '          --role owner: a co-owner of a Business profile someone created (MUT-373; at most 3 owners); prints the note for both partners',
   '  revoke  --email <email> --organization-id <uuid>',
   '  rotate  --email <email> [--valid-hours <1-720>] [--lock]',
   '          prints a new setup link; their current password keeps working until they use it.',
@@ -107,6 +108,7 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
         'valid-hours': { type: 'string' },
         lock: { type: 'boolean' },
         owner: { type: 'string' },
+        role: { type: 'string' },
         tier: { type: 'string' },
         reason: { type: 'string' },
         expires: { type: 'string' },
@@ -270,6 +272,16 @@ function describeGrant(g: GrantRow): string {
   return `${g.id} ${g.tier} for ${target} (${state}): ${g.reason}`;
 }
 
+/** MUT-373 (DR8): what the operator sends both partners when a profile becomes shared, in both languages. */
+export function partnerNote(profileName: string): string[] {
+  return [
+    '',
+    'Send this to both partners:',
+    `EN: ${profileName} is now shared. You both own it fully: income, clients, payments, expenses and its settings. Each of your personal profiles stays private.`,
+    `AR: ${profileName} أصبح مشتركًا. يملكه كلٌّ منكما بالكامل: الدخل والعملاء والدفعات والمصاريف والإعدادات. ويبقى ملفّ كلٍّ منكما الشخصي خاصًّا به.`,
+  ];
+}
+
 const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: HandlerContext) => Promise<void>> = {
   'billing-grant': async ({ client, need, optional, out }) => {
     const email = optional('email');
@@ -339,11 +351,22 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
     for (const m of created.memberships) out(`membership ${m.organizationId}`);
     printSetupLink(out, created.setupLink);
   },
-  grant: async ({ client, need, out }) => {
+  grant: async ({ client, need, optional, out }) => {
+    const role = optional('role');
+    if (role !== undefined && role !== 'owner') throw new CliError('--role takes only "owner" (a co-owner of a Business profile; MUT-373)');
     const user = await client.userByEmail(need('email'));
     const organizationId = need('organization-id');
-    const { created } = await client.call<{ created: boolean }>('POST', `/admin/v1/users/${user.id}/memberships`, { organizationId });
-    out(`${user.email} → ${organizationId}: ${created ? 'access granted' : 'already had access'}`);
+    const { created } = await client.call<{ created: boolean }>('POST', `/admin/v1/users/${user.id}/memberships`, { organizationId, ...(role ? { role: 'OWNER' } : {}) });
+    if (!role) {
+      out(`${user.email} → ${organizationId}: ${created ? 'access granted' : 'already had access'}`);
+      return;
+    }
+    out(`${user.email} → ${organizationId}: ${created ? 'co-owner added' : 'already a co-owner'}`);
+    if (created) {
+      // MUT-373 (design review DR8): the app says nothing when a profile appears, so the operator tells both partners.
+      const { organization } = await client.call<{ organization: { name: string } }>('GET', `/admin/v1/organizations/${organizationId}`);
+      for (const line of partnerNote(organization.name)) out(line);
+    }
   },
   revoke: async ({ client, need, out }) => {
     const user = await client.userByEmail(need('email'));
