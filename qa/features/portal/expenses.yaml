@@ -86,6 +86,19 @@ features:
     expect:
       - PATCH /v1/expenses/<id> carries the new occurredOn with If-Match 1
       - The row shows the new day
+  - id: expense-category-client-matter
+    title: An expense saved with a category, a client and a matter (as the phone sends it) shows all three in the portal's drawer (MUT-384)
+    tier: secondary
+    tickets: [MUT-384]
+    paths:
+      - src/hosted/components/ExpenseDrawer.tsx
+      - src/hosted/components/ClientPicker.tsx
+      - src/hosted/components/ProjectPicker.tsx
+      - src/hosted/components/useMatterCascade.ts
+    steps:
+      - On a firm's business profile, open Expenses and choose an expense that has a category, a client and a matter
+    expect:
+      - The expense's drawer shows its category, its client and its matter
   - id: save-feedback-animation
     title: A successful expense save shows the animated save-feedback icon in SavedNotice (MUT-338)
     tier: tertiary
