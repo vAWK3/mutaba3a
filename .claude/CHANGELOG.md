@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-21 — Uptime checks move hosts without a failed release (MUT-112 step 4)
+
+**Why:** The first release at stage `live` (api v0.4.1) stopped in `terraform apply`: moving the uptime checks to
+`app.mtb3a.com` replaces them, Terraform deleted first, and Google refuses to delete a check an alert policy still
+names ("please ensure all associated Alert Policies are deleted"). Nothing was deployed; production stayed on 2aab0d08.
+
+### Fixed
+- `server/infrastructure/terraform/monitoring.tf`: `google_monitoring_uptime_check_config.endpoint` is
+  `create_before_destroy`, so the new check exists and the policy points at it before the old one goes. A read-only
+  production plan shows `+/- create replacement and then destroy`; `terraform test` (monitoring) passes.
+
+---
+
 ## [Unreleased] - 2026-10-21 — Hotfix: portal sign-in and writes failed once the front door was on (MUT-112 step 3)
 
 **Why:** The first release with `FRONT_DOOR_TOKEN` set (api 2aab0d08) answered 500 INTERNAL to every portal sign-in,

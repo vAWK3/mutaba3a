@@ -93,6 +93,13 @@ resource "google_monitoring_uptime_check_config" "endpoint" {
   }
 
   depends_on = [google_project_service.apis]
+
+  # A new host replaces the check (the domain move, MUT-112). Google refuses to delete a
+  # check an alert policy still names, so create the new one, repoint the policy, then
+  # delete the old one.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # The single /health check and its optional policy existed before MUT-328.
