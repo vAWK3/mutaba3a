@@ -5,7 +5,7 @@ import type { PostingActor } from '../agreements/posting.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
 import { profileOwnerOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { ApiKeyRecord, LedgerStore, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
+import type { ApiKeyRecord, LedgerStore, MembershipRecord, MembershipRole, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
 import { hasScope, isScope, type Scope } from './scopes.js';
 import { DEFAULT_DEVICE_IDLE_DAYS, isDeviceSessionToken, isSamePortalOrigin, sessionCookieName, sessionDigest } from './sessions.js';
@@ -35,6 +35,8 @@ export interface SessionAuth {
   scopes: readonly Scope[];
   /** The selected profile's writer of record, for READ_ONLY_PROFILE. */
   writerOfRecord: ProfileWriter;
+  /** MUT-373 (eng review A1): the caller's role on the selected profile, from the membership that admitted them — `ownsProfile` reads it. */
+  membershipRole: MembershipRole;
 }
 
 /** What every organization-scoped route can read from the context. */
@@ -320,16 +322,18 @@ async function selectProfile(c: Context<AppEnv>, identity: SessionIdentity, stor
   if (!c.req.header('x-mutaba3a-profile')) {
     throw new ApiError('VALIDATION_FAILED', 'Name the profile to act on in the X-Mutaba3a-Profile header', { reason: 'PROFILE_REQUIRED' });
   }
-  const organization = await namedMemberOrganization(c, identity, store);
-  if (!organization) throw new ApiError('NOT_FOUND', 'Profile not found');
+  const named = await namedMembership(c, identity, store);
+  if (!named) throw new ApiError('NOT_FOUND', 'Profile not found');
+  const { organization, membership } = named;
   const writerOfRecord = await profileWriterOf(store, organization.id);
-  return { kind: 'session', organization, user: identity.user, session: identity.session, scopes: sessionScopesFor(writerOfRecord), writerOfRecord };
+  return { kind: 'session', organization, user: identity.user, session: identity.session, scopes: sessionScopesFor(writerOfRecord), writerOfRecord, membershipRole: membership.role };
 }
 
-async function namedMemberOrganization(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<Organization | null> {
+async function namedMembership(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<{ organization: Organization; membership: MembershipRecord } | null> {
   const requested = c.req.header('x-mutaba3a-profile');
   const membership = requested && UUID_RE.test(requested) ? await store.memberships.find(identity.user.id, requested) : null;
-  return membership ? store.organizations.getById(membership.organizationId) : null;
+  const organization = membership ? await store.organizations.getById(membership.organizationId) : null;
+  return organization && membership ? { organization, membership } : null;
 }
 
 /**
@@ -344,8 +348,8 @@ async function keyOnlyRefusal(c: Context<AppEnv>, identity: SessionIdentity, acc
     .map(domainOfScope)
     .find((d) => d !== undefined && matrixRow(d).writerOfRecord === 'MALAFAT');
   if (!domain) return principalNotAccepted();
-  const organization = await namedMemberOrganization(c, identity, store);
-  return writeRefusal(domain, organization ? await profileWriterOf(store, organization.id) : null);
+  const named = await namedMembership(c, identity, store);
+  return writeRefusal(domain, named ? await profileWriterOf(store, named.organization.id) : null);
 }
 
 async function enforceRateLimit(c: Context<AppEnv>, limiter: RateLimiter, key: string, now: Date, message: string): Promise<void> {

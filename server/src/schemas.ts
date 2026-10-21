@@ -43,7 +43,7 @@ export const OrganizationSchema = z
     timezone: z.string(),
     /** MUT-120: the owning user on their built-in personal profile; null on every other organization. */
     personalOwnerUserId: z.string().uuid().nullable(),
-    /** MUT-182: the user who owns this profile (their personal one or one they created); null on an operator firm. An owned profile is never keyed, bound or shared. */
+    /** MUT-182: the user who owns this profile (their personal one or one they created); null on an operator firm. An owned profile is never keyed or bound; MUT-373: an owned Business profile may have co-owners besides this creator (OWNER members). */
     ownerUserId: z.string().uuid().nullable(),
     /** MUT-182: PERSONAL or BUSINESS on an owned profile; null on an operator-provisioned organization. */
     profileType: z.enum(['PERSONAL', 'BUSINESS']).nullable(),
@@ -437,7 +437,15 @@ export const UserDetailSchema = z
 export const UserListSchema = z.object({ users: z.array(UserSummarySchema) }).openapi('UserList');
 
 export const GrantMembershipRequestSchema = z
-  .object({ organizationId: z.string().uuid() })
+  .object({
+    organizationId: z.string().uuid(),
+    /**
+     * MUT-373 (ADR-163): OWNER makes the user a co-owner of an owned Business profile — the only way anyone is
+     * granted a profile someone else owns. Omitted: a plain grant, refused on any owned profile as before.
+     * Additive since 1.43.0-mut373.
+     */
+    role: z.enum(['OWNER']).optional(),
+  })
   .openapi('GrantMembershipRequest');
 
 export const GrantMembershipResponseSchema = z
@@ -498,8 +506,16 @@ export const HostedProfileSchema = z
       .openapi('IncomeCaptureRules'),
     /** MUT-120: true on the signed-in user's own personal profile (exactly one), false everywhere else. Clients read this, not writerOfRecord. */
     isPersonalDefault: z.boolean(),
-    /** MUT-182: true on a profile the caller owns (their personal one and any they created) — theirs to rename and retype with PATCH /v1/profiles/{id}. */
+    /** MUT-182: true on a profile the caller owns (their personal one and any they created) — theirs to rename and retype with PATCH /v1/profiles/{id}. MUT-373: a Business profile they co-own too. */
     owned: z.boolean(),
+    /**
+     * MUT-373 (ADR-163): who owns this profile, the creator first, then co-owners in the order they joined; `[you]` on a
+     * profile only you own. Null on a profile you don't own. `name` is null when the person has no display name: show
+     * their email. Additive since 1.43.0-mut373.
+     */
+    owners: z
+      .array(z.object({ userId: z.string().uuid(), name: z.string().nullable(), email: z.string(), creator: z.boolean() }).openapi('ProfileOwner'))
+      .nullable(),
     /** MUT-182: PERSONAL or BUSINESS on an owned profile (it picks the expense categories); null on a profile you don't own. Unnamed, so the request-side ProfileType component stays non-null. */
     type: z.enum(['PERSONAL', 'BUSINESS']).nullable(),
     /** MUT-182: send as If-Match on PATCH /v1/profiles/{id}. */
@@ -510,6 +526,8 @@ export const HostedProfileSchema = z
     role: MembershipRoleSchema.nullable(),
     /** MUT-300: the owner's pending request for firm features; null when none is pending, and always null for anyone but the owner. Additive since 1.41.0-mut300. */
     firmRequestedAt: z.string().datetime().nullable(),
+    /** MUT-373 (design review DR13): who asked for firm features, with `firmRequestedAt`; `name` null when unknown (no display name, or they left). Additive since 1.43.0-mut373. */
+    firmRequestedBy: z.object({ userId: z.string().uuid(), name: z.string().nullable() }).nullable(),
     /**
      * MUT-358 (ADR-160): whether this profile is entitled, and why. On GET /v1/me (and the sign-in responses) it is
      * always present: null only where billing doesn't apply (the portal's signed-out mode). POST/PATCH /v1/profiles
@@ -644,6 +662,12 @@ export const UpdateProfileRequestSchema = z
   .openapi('UpdateProfileRequest');
 
 export const ProfileIdParamSchema = z.object({ profileId: z.string().uuid().openapi({ param: { name: 'profileId', in: 'path' } }) });
+
+/** MUT-373: DELETE /v1/profiles/{profileId}/owners/{userId} — yourself to leave, a co-owner to remove them. */
+export const ProfileOwnerParamSchema = ProfileIdParamSchema.extend({ userId: z.string().uuid().openapi({ param: { name: 'userId', in: 'path' } }) });
+
+/** MUT-373: `left` when you named yourself, `removed` when you named a co-owner. */
+export const RemoveProfileOwnerResponseSchema = z.object({ result: z.enum(['left', 'removed']) }).openapi('RemoveProfileOwnerResponse');
 
 export const ProfileTypeChangeQuerySchema = z.object({ to: ProfileTypeSchema });
 
@@ -1412,6 +1436,8 @@ export const ReceivableSchema = z
     status: ItemStatusSchema,
     /** "What you did" (MUT-65, ADJUSTMENT origin only); null otherwise. */
     title: z.string().nullable(),
+    /** MUT-373: who captured an Owed entry; only they may re-date it (PATCH /v1/income/{id}). Null for other origins. */
+    capturedByUserId: uuid.nullable().openapi({ description: 'Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person\'s account is gone.' }),
     version: z.number().int(),
   })
   .openapi('Receivable');

@@ -2,7 +2,8 @@ import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { HostedProfile } from '../api/client';
-import { canCreateProfile, profileKindKey } from '../data/profileRules';
+import { canCreateProfile } from '../data/profileRules';
+import { useProfileKind } from '../data/useProfileKind';
 import { useMe } from '../session/me';
 import { useIsLocalMode } from '../session/mode';
 import { useProfileDrawers } from './ProfileDrawers';
@@ -86,7 +87,7 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
                     <span>{profile.name}</span>
                     {!local && <span className="hp-chip">{t('hosted.shell.switcher.hosted')}</span>}
                   </span>
-                  <span className="hp-option-sub">{t(profileKindKey(profile))}</span>
+                  <ProfileKindLine profile={profile} viewerId={me.user.id} />
                 </span>
               </button>
             );
@@ -115,5 +116,15 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** MUT-373 (DR12): the same line the Manage list shows, the shared cue included. */
+function ProfileKindLine({ profile, viewerId }: { profile: HostedProfile; viewerId: string }) {
+  const kind = useProfileKind(profile, viewerId);
+  return (
+    <span className="hp-option-sub hp-profile-kind" title={kind}>
+      {kind}
+    </span>
   );
 }

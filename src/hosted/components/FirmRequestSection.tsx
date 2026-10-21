@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { Button } from '../../components/ui/Button';
 import { useLanguage } from '../../lib/i18n/core';
+import { requestedLine } from '../data/firmRequestLine';
 import { firmRequestState } from '../data/profileRules';
 import { useRequestFirm } from '../data/profileQueries';
 import { formatInstant } from '../format/dates';
@@ -20,7 +21,8 @@ import { ProfileBanner } from './ProfileBanner';
 export function FirmRequestSection({ profileId }: { profileId: string }) {
   const { t, language } = useLanguage();
   const headingId = useId();
-  const profile = useMe().profiles.find((p) => p.id === profileId);
+  const me = useMe();
+  const profile = me.profiles.find((p) => p.id === profileId);
   const request = useRequestFirm(profileId);
   const local = useIsLocalMode();
   if (!profile || local) return null;
@@ -33,7 +35,7 @@ export function FirmRequestSection({ profileId }: { profileId: string }) {
         {t('hosted.profiles.firm.title')}
       </h3>
       {state === 'requested' ? (
-        <p className="form-hint">{t('hosted.profiles.firm.requested', { date: formatInstant(profile.firmRequestedAt, language, profile.timezone) })}</p>
+        <p className="form-hint">{requestedLine(profile, me.user.id, (key, vars) => t(key, vars), formatInstant(profile.firmRequestedAt, language, profile.timezone))}</p>
       ) : (
         <>
           <p className="form-hint">{t('hosted.profiles.firm.body')}</p>

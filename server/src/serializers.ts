@@ -1,7 +1,8 @@
 import { maskApiKey } from './auth/api-key.js';
 import { sessionAccessFor, WRITABILITY_MATRIX, type ProfileWriter } from './auth/writability.js';
 import { incomeCaptureRulesFor } from './income/compose.js';
-import { profileOwnerOf, profileTypeOf } from './personal-profile.js';
+import { profileOwnersOf } from './co-owners.js';
+import { ownsProfile, profileTypeOf } from './personal-profile.js';
 import type { IsoDate } from './dates.js';
 import { formatMoney, type Currency } from './money.js';
 import { windowEnd } from './expenses/groups.js';
@@ -37,6 +38,7 @@ import type {
   IntegrationRecord,
   MembershipRecord,
   Organization,
+  ProfileOwnerEntry,
   ProjectRecord,
   ReceivableRecord,
   RetainerChargeRecord,
@@ -75,8 +77,17 @@ export function serializeAdminOrganization(o: Organization) {
  * can never drift). `writerOfRecord` is MALAFAT when a CONNECTED Malafat
  * integration feeds the organization; an owned profile never has one.
  */
-export function hostedProfileFor(organization: Organization, writerOfRecord: ProfileWriter, userId: string, membership: Pick<MembershipRecord, 'role'> | null) {
-  const owned = profileOwnerOf(organization) === userId;
+export function hostedProfileFor(
+  organization: Organization,
+  writerOfRecord: ProfileWriter,
+  userId: string,
+  membership: Pick<MembershipRecord, 'role'> | null,
+  /** MUT-373: `memberships.listOwnersOf` for this profile (or more); read for owned profiles only. */
+  ownerEntries: readonly ProfileOwnerEntry[],
+) {
+  const owned = ownsProfile(organization, userId, membership?.role ?? null);
+  const owners = owned ? profileOwnersOf(organization, ownerEntries.filter((e) => e.organizationId === organization.id)) : null;
+  const requester = owned && organization.firmRequestedByUserId ? organization.firmRequestedByUserId : null;
   const firm = organization.firmEnabledAt !== null;
   return {
     id: organization.id,
@@ -92,8 +103,9 @@ export function hostedProfileFor(organization: Organization, writerOfRecord: Pro
     // MUT-120: explicit, from the row already loaded; another user's personal profile is never this user's default.
     isPersonalDefault: organization.personalOwnerUserId === userId,
     // MUT-182: the caller's own (theirs to rename and retype), its type, and the If-Match for doing so.
-    // profileOwnerOf / profileTypeOf: an unstamped MUT-120 profile the old revision wrote is still the caller's, PERSONAL (qa-reconcile D1).
+    // ownsProfile / profileTypeOf: an unstamped MUT-120 profile the old revision wrote is still the caller's, PERSONAL (qa-reconcile D1).
     owned,
+    owners,
     type: profileTypeOf(organization),
     version: organization.version,
     // MUT-300: firm features are on in place (eng review D4), so an owned profile can be a firm too. The role only
@@ -101,6 +113,7 @@ export function hostedProfileFor(organization: Organization, writerOfRecord: Pro
     firm,
     role: firm ? (membership?.role ?? null) : null,
     firmRequestedAt: owned ? iso(organization.firmRequestedAt) : null,
+    firmRequestedBy: requester ? { userId: requester, name: owners?.find((o) => o.userId === requester)?.name ?? null } : null,
   };
 }
 
@@ -318,6 +331,7 @@ export function serializeReceivable(r: ReceivableRecord, today: IsoDate) {
     postedAt: r.postedAt.toISOString(),
     status: receivableStatus(r, today),
     title: r.title,
+    capturedByUserId: r.origin === 'ADJUSTMENT' ? r.createdByUserId : null,
     version: r.version,
   };
 }

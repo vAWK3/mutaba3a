@@ -219,6 +219,14 @@
 **Fix when**: before a pilot firm that isn't a Malafat tenant asks who can read its data, or at GA. Either move Mutaba3a to its own project (INFRA.md §2: a re-apply with a new `project_id` plus a data move), or have Malafat scope those roles to its own key ring, buckets and instances.
 **Severity**: High (another product's runtime can read and write every customer's data; the privacy policy must not claim isolation, MUT-382).
 
+### TD-194: The creator of a co-owned profile can't leave it; there is no ownership transfer
+**Status**: Open
+**Ticket**: follow-up to MUT-373 (operator transfer, eng review D3; decision log dec-cd1b5570)
+**Added**: 2026-10-21
+**Priority**: Low (operator-run pilot: the operator can remove the co-owners or hand the profile over by hand)
+**Impact**: `DELETE /v1/profiles/{id}/owners/{creator}` answers 409 `CREATOR_CANNOT_LEAVE`, and `purge-user` refuses a creator whose profile has co-owners. A creator who wants out has to ask the operator. The refusal carries `gstack-shortcut(dec-cd1b5570)` in `routes/profiles.ts`.
+**Fix**: an operator transfer (`users transfer-owner`) that moves `ownerUserId` to a co-owner in one transaction, re-checking the new creator's cap of 6; then let the old creator leave. Upgrade when MUT-306 lands or a pilot creator asks.
+
 ### TD-193: Billing coverage follows the single owner `profileOwnerOf` names; co-owners (MUT-373) aren't counted
 
 **Introduced**: 2026-10-21 (MUT-358, ADR-162)

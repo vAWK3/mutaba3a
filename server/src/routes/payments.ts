@@ -326,12 +326,12 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Changed', content: { 'application/json': { schema: PaymentSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, user } = sessionAuth(c);
+      const { organization, user, membershipRole } = sessionAuth(c);
       const now = c.get('now')();
       const receivedOn = redateTo(c.req.valid('json').receivedOn, organization, now, 'receivedOn');
       const notFound = () => new ApiError('NOT_FOUND', 'No such payment');
       const payment = await store.payments.getById(organization.id, c.req.valid('param').paymentId);
-      if (!payment || !isOwnProfile(organization, user.id) || !isOwnCapture(payment, user.id)) throw notFound();
+      if (!payment || !isOwnProfile(organization, user.id, membershipRole) || !isOwnCapture(payment, user.id)) throw notFound();
       const updated = await redateOwnCapture(store, c, payment, receivedOn, notFound);
       return c.json(await viewOf(organization.id, updated, todayFor(organization, now)), 200);
     },

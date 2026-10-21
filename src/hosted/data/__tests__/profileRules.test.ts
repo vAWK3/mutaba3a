@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canCreateProfile, changedFields, firmRequestState, profileEditability, profileKindKey } from '../profileRules';
+import { canCreateProfile, changedFields, coOwnsOthersProfiles, createdBy, firmRequestState, isShared, ownerActions, ownersSectionVisible, profileEditability, profileKindKey, sharedWith } from '../profileRules';
 import { me, profile } from '../../__tests__/harness';
 
 const firm = profile();
@@ -84,5 +84,53 @@ describe('firmRequestState (MUT-300)', () => {
     delete older.firm;
     delete older.firmRequestedAt;
     expect(firmRequestState(older as typeof ownedBusiness)).toBe('hidden');
+  });
+});
+
+describe('co-owners (MUT-373)', () => {
+  const ME = '99999999-9999-4999-8999-999999999999';
+  const BASEL = '11111111-1111-4111-8111-111111111111';
+  const OMAR = '22222222-2222-4222-8222-222222222222';
+  const owner = (userId: string, name: string | null, creator: boolean) => ({ userId, name, email: `${userId.slice(0, 4)}@studio.ps`, creator });
+  const solo = profile({ ...ownedBusiness, owners: [owner(ME, 'Nour Haddad', true)] });
+  const iCreated = profile({ ...ownedBusiness, owners: [owner(ME, 'Nour Haddad', true), owner(BASEL, 'Basel Sader', false)] });
+  const iCoOwn = profile({ ...ownedBusiness, owners: [owner(BASEL, 'Basel Sader', true), owner(ME, 'Nour Haddad', false), owner(OMAR, null, false)] });
+
+  it('names the other owners, never you, and falls back to their email (DR12)', () => {
+    expect(sharedWith(solo, ME)).toBeNull();
+    expect(sharedWith(iCreated, ME)).toEqual(['Basel Sader']);
+    expect(sharedWith(iCoOwn, ME)).toEqual(['Basel Sader', '2222@studio.ps']);
+    expect(sharedWith(firm, ME)).toBeNull();
+  });
+
+  it('lets the creator remove and a co-owner leave, nobody else (AD1, D3)', () => {
+    expect(ownerActions(iCreated, ME)).toEqual({ canRemove: true, canLeave: false });
+    expect(ownerActions(iCoOwn, ME)).toEqual({ canRemove: false, canLeave: true });
+    expect(ownerActions(solo, ME)).toEqual({ canRemove: true, canLeave: false });
+    expect(ownerActions(firm, ME)).toEqual({ canRemove: false, canLeave: false });
+  });
+
+  it('shows the Owners section on owned Business profiles only (AD5)', () => {
+    expect(ownersSectionVisible(solo)).toBe(true);
+    expect(ownersSectionVisible(builtIn)).toBe(false);
+    expect(ownersSectionVisible(ownedPersonal)).toBe(false);
+    expect(ownersSectionVisible(firm)).toBe(false);
+  });
+
+  it('keeps a shared profile Business (CO_OWNED) and says so at the type cards', () => {
+    expect(isShared(iCreated)).toBe(true);
+    expect(isShared(solo)).toBe(false);
+  });
+
+  it('shows the cap hint only to someone who co-owns a profile they didn’t create (DR2)', () => {
+    expect(coOwnsOthersProfiles({ ...me([solo, iCreated]), user: { ...me().user, id: ME } })).toBe(false);
+    expect(coOwnsOthersProfiles({ ...me([solo, iCoOwn]), user: { ...me().user, id: ME } })).toBe(true);
+  });
+
+  it('knows who created a profile, and treats an older server’s owned profile as yours', () => {
+    expect(createdBy(iCreated, ME)).toBe(true);
+    expect(createdBy(iCoOwn, ME)).toBe(false);
+    expect(createdBy({ ...ownedBusiness, owners: null }, ME)).toBe(true);
+    expect(createdBy(firm, ME)).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import { sessionDigest } from '../auth/sessions.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
 import { termsAccepted, type CurrentTerms } from '../legal.js';
+import { MAX_PROFILE_OWNERS } from '../co-owners.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
 import { ForeignKeyViolation, StateConflict, UniqueViolation } from '../repositories/memory.js';
@@ -89,6 +90,31 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       ...(metadata ? { metadata } : {}),
       requestId: c.get('requestId'),
     }));
+  }
+
+  /** MUT-373 (ADR-163): the pilot's one way to add a co-owner (design review DR11: at most MAX_PROFILE_OWNERS). */
+  async function grantCoOwner(c: Context<AppEnv>, user: UserRecord, organizationId: string) {
+    // Basel (qa-reconcile D2): a disabled account can't sign in, so it never takes one of the profile's owner places.
+    if (user.status !== 'ACTIVE') throw new ApiError('CONFLICT', 'A disabled account can’t be made a co-owner; enable it first', { reason: 'USER_DISABLED' });
+    // The audit commits with the membership (adversarial review 1): pre-roll recognizes a co-owner by this row.
+    const [grantAudit] = auditEvents(c, [organizationId], user.id, 'membership.granted', { role: 'OWNER' }) as [AuditEventInput];
+    const result = await store.memberships.grantOwner(user.id, organizationId, c.get('now')(), MAX_PROFILE_OWNERS, grantAudit);
+    switch (result.kind) {
+      case 'granted':
+        return c.json({ membership: serializeMembership(result.membership), created: result.created }, result.created ? 201 : 200);
+      case 'not_found':
+        throw new ApiError('NOT_FOUND', 'Organization not found');
+      case 'personal_profile':
+        throw new ApiError('CONFLICT', 'A built-in personal profile is never shared', { reason: 'PERSONAL_PROFILE' });
+      case 'not_business':
+        throw new ApiError('CONFLICT', 'Only a Business profile can have co-owners', { reason: 'NOT_BUSINESS' });
+      case 'not_co_ownable':
+        throw new ApiError('CONFLICT', 'Co-owners are for profiles a person created; roles on firms arrive with MUT-305', { reason: 'NOT_CO_OWNABLE' });
+      case 'limit':
+        throw new ApiError('CONFLICT', `This profile already has ${result.count} owners, the most it can have`, { reason: 'OWNER_LIMIT', limit: MAX_PROFILE_OWNERS });
+      case 'role_conflict':
+        throw new ApiError('CONFLICT', `Already a member as ${result.role}; changing a role isn't supported yet`, { reason: 'ROLE_CHANGE_NOT_SUPPORTED', role: result.role });
+    }
   }
 
   /**
@@ -304,13 +330,18 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
         201: { description: 'Granted', content: { 'application/json': { schema: GrantMembershipResponseSchema } } },
         200: { description: 'Already granted', content: { 'application/json': { schema: GrantMembershipResponseSchema } } },
         404: notFound,
-        409: { description: 'The organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        409: {
+          description:
+            'Without `role`: the organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE). With `role: OWNER` (MUT-373): PERSONAL_PROFILE, NOT_BUSINESS (an owned Personal profile), NOT_CO_OWNABLE (not an owned profile), OWNER_LIMIT, ROLE_CHANGE_NOT_SUPPORTED (already a member with another role), or USER_DISABLED (the account is disabled).',
+          content: { 'application/json': { schema: ErrorEnvelopeSchema } },
+        },
         ...adminErrors,
       },
     }),
     async (c) => {
       const user = await mustGetUser(c.req.valid('param').userId);
-      const { organizationId } = c.req.valid('json');
+      const { organizationId, role } = c.req.valid('json');
+      if (role === 'OWNER') return grantCoOwner(c, user, organizationId);
       const org = await store.organizations.getById(organizationId);
       if (!org) throw new ApiError('NOT_FOUND', 'Organization not found');
       const owner = profileOwnerOf(org);
@@ -341,13 +372,15 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     async (c) => {
       const { userId, organizationId } = c.req.valid('param');
       const user = await mustGetUser(userId);
-      // MUT-120/182: a user always keeps a profile they own; it cannot be revoked away from them.
+      // MUT-120/182: a user always keeps a profile they created; it cannot be revoked away from them. A co-owner
+      // (MUT-373) can be: the audit records the role they held, so the trail shows an owner was removed.
       const owned = await store.organizations.getById(organizationId);
       if (owned && profileOwnerOf(owned) === user.id) {
         throw ownedProfileConflict(owned, 'A user keeps the profiles they own; they cannot be revoked');
       }
+      const membership = await store.memberships.find(user.id, organizationId);
       const removed = await store.memberships.revoke(user.id, organizationId);
-      if (removed) await audit(c, [organizationId], user.id, 'membership.revoked');
+      if (removed) await audit(c, [organizationId], user.id, 'membership.revoked', membership ? { role: membership.role, reason: 'operator' } : undefined);
       return c.json({ removed }, 200);
     },
   );

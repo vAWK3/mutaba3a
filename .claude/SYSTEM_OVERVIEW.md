@@ -574,3 +574,10 @@ mini-crm/
 | 2026-10-15 | 1.24.0-mut209 (API) | MUT-209: a user created without `locale` is Arabic (`CreateUserRequest.locale` defaults to `ar`), so its personal profile is شخصي and the portal adopts Arabic after sign-in; existing accounts unchanged |
 | 2026-10-13 | 1.20.0-mut161 (API) | MUT-161: hosted `/v1/conversions` (create + read only), the server-side counterpart to MUT-141 that unblocks MUT-159 (mobile); new `Conversion` Prisma model (own table, not a kind column), new hosted-only `/conversions` page/drawer, session+device-session only (ADR-070) |
 | 2026-10-14 | (portal, no API change) | MUT-183: the portal creates and manages its own owned profiles — ProfileSwitcher gains "+ New profile"/"Manage profiles", a URL-driven drawer tree (create / manage list / edit pane), attempt-scoped Idempotency-Key, and an inline type-change confirm against the server's uncategorized-expense preview; the no-profile empty state no longer says "ask your operator" (ADR-037 amendment, qa-reconcile fixed a page-filter-rewrite bug that could silently close a shell drawer) |
+
+## MUT-373 — Co-owners (2026-10-21, ADR-163)
+
+- **Model**: a co-owner is an OWNER `Membership` on an owned BUSINESS profile; the creator stays `ownerUserId`. Up to 3 owners. One rule, `ownsProfile` (`server/src/personal-profile.ts`), gates every owner write; `SessionAuth.membershipRole` carries the role from `selectProfile`.
+- **Paths**: the operator adds (`grant:user --role owner`, `memberships.grantOwner`); a co-owner leaves or the creator removes (`DELETE /v1/profiles/{id}/owners/{userId}`, `memberships.removeOwner`); the creator can't leave (TD-194). `/v1/me` and the profile responses carry `owners` and `firmRequestedBy` (API 1.43.0-mut373).
+- **Guards**: a shared profile stays BUSINESS (`CO_OWNED`); firm enable keeps every OWNER; `npm run pre-roll` stops a deploy on a stray membership; `purge-user` refuses a creator with co-owners. Billing still follows the creator (TD-193).
+- **Portal**: Owners section in the edit pane, shared cue in the switcher and list, cap hint, lost-access banner, leave → personal profile. Hidden in local mode (one person).

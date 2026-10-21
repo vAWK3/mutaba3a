@@ -82,7 +82,9 @@ export class ApiError extends Error {
  * MUT-120 / MUT-182: a profile a person owns — their built-in personal one or
  * one they created — belongs to that person and to no external system, so it
  * is never bound, issued an API key, granted to or provisioned into anyone
- * else, or revoked from its owner. Every one of those doors refuses through
+ * else, or revoked from its owner. MUT-373 (ADR-163): the one exception is an
+ * operator grant with role OWNER, which adds a co-owner to an owned Business
+ * profile (memberships.grantOwner); every other grant still refuses here. Every one of those doors refuses through
  * this one helper. An existing CONFLICT with a reason, not a new code (a new
  * code is a contract change Malafat maps): PERSONAL_PROFILE on the built-in
  * profile, as MUT-120 published it, and OWNED_PROFILE on any other.

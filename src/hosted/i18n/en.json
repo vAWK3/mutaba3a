@@ -55,7 +55,8 @@
       },
       "signOut": "Sign out",
       "signOutFailed": "Couldn't sign out. Check your connection and try again.",
-      "changePassword": "Change password"
+      "changePassword": "Change password",
+      "lostAccess": "You no longer have access to {profile}. What you recorded stays."
     },
     "account": {
       "changePassword": {
@@ -624,7 +625,9 @@
         "currencyInvalid": "Choose a currency",
         "timezoneInvalid": "Choose a valid time zone",
         "network": "Can't reach Mutaba3a. Nothing was saved. Try again.",
-        "generic": "Something went wrong. Nothing was saved."
+        "generic": "Something went wrong. Nothing was saved.",
+        "changedByOwner": "Another owner or device changed this profile. Reload to see the latest, then save again.",
+        "coOwned": "A profile you share with other owners stays Business."
       },
       "firm": {
         "title": "Use this profile for a firm",
@@ -632,8 +635,40 @@
         "request": "Request firm features",
         "requesting": "Sending request…",
         "requested": "Requested on {date}. Firm features show up here once they're turned on.",
-        "error": "Your request didn't go through. Try again."
-      }
+        "error": "Your request didn't go through. Try again.",
+        "requestedBy": "Requested by {name} on {date}. Firm features show up here once they're turned on.",
+        "requestedByYou": "You requested this on {date}. Firm features show up here once they're turned on."
+      },
+      "owners": {
+        "title": "Owners",
+        "caption": "Everyone here can record, edit and settle.",
+        "you": "You",
+        "creator": "Created this profile",
+        "solo": "Only you own this profile.",
+        "addPartnerLead": "To add a partner,",
+        "addPartnerLink": "write to us",
+        "mailSubject": "Add a partner to {profile}",
+        "mailBody": "Please add my partner to {profile}.\n\nTheir name:\nTheir email:",
+        "remove": "Remove",
+        "removeAria": "Remove {name}",
+        "leave": "Leave",
+        "leaveAria": "Leave {profile}",
+        "removeTitle": "Remove {name}?",
+        "removeBody": "{name} loses access to {profile}. What they recorded stays.",
+        "removeConfirm": "Remove {name}",
+        "leaveTitle": "Leave {profile}?",
+        "leaveBody": "You'll lose access to {profile}. What you recorded stays.",
+        "leaveConfirm": "Leave {profile}",
+        "removing": "Removing…",
+        "leaving": "Leaving…",
+        "removed": "{name} removed from {profile}",
+        "left": "You left {profile}",
+        "creatorCannotLeave": "You created this profile, so you can't leave it. Write to us to hand it over.",
+        "notCreator": "Only the person who created this profile can remove someone.",
+        "capHint": "Profiles shared with you don't count.",
+        "sharedLock": "A shared profile stays Business."
+      },
+      "shared": "Shared with {names}"
     },
     "usage": {
       "title": "Share anonymous usage?",

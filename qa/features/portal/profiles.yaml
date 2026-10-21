@@ -16,6 +16,7 @@ paths:
   - src/hosted/data/profileQueries.ts
   - src/hosted/data/profileRules.ts
   - src/hosted/format/currencies.ts
+  - src/hosted/data/useProfileKind.ts
 features:
   - id: edit
     title: Edit a profile's name and currency in Manage profiles; a change made elsewhere first is refused with Reload, which loads the latest
@@ -82,3 +83,73 @@ features:
       - The Business profile's pane offers "Use this profile for a firm" with Request firm features
       - POST /v1/profiles/{id}/firm-request goes once with an Idempotency-Key, and the pane reads "Requested on … Firm features show up here once they're turned on." with no button
       - After the reload it still reads Requested
+  - id: co-owner-write
+    title: A co-owner sees the shared profile named for their partner, owns it fully, and its Owners section lists both; the Personal type stays locked (MUT-373)
+    tier: secondary
+    paths:
+      - src/hosted/components/ProfileOwnersSection.tsx
+      - src/hosted/data/profileRules.ts
+      - src/hosted/data/partnerMail.ts
+      - src/hosted/data/firmRequestLine.ts
+    steps:
+      - Open the switcher on a profile Basel created and shared with you
+      - Open Manage profiles and the shared profile
+      - Add a received income on the shared profile
+    expect:
+      - The switcher and the list read "Business · Shared with Basel Sader", and the list explains the count ("Profiles shared with you don't count.")
+      - The switcher lists only the shared profile and your own personal profile, never your partner's
+      - The Owners section lists Basel Sader (Created this profile) and you (You); there is no Remove, and Leave sits at its foot
+      - The Personal card is disabled with "A shared profile stays Business."
+      - The income drawer offers Received and the save is sent for the shared profile
+  - id: co-owner-remove
+    title: The creator removes a co-owner after an in-place confirm; the row goes and a toast says so (MUT-373)
+    tier: secondary
+    paths:
+      - src/hosted/components/ProfileOwnersSection.tsx
+      - src/hosted/components/profileApiErrors.ts
+    steps:
+      - Open your shared profile in Manage profiles
+      - Choose Remove on Lina's row, then Remove Lina Saleh in the confirm
+    expect:
+      - The creator's Owners section offers Remove and never Leave
+      - The confirm reads "Lina Saleh loses access to Sader & Haddad. What they recorded stays."
+      - DELETE /v1/profiles/{id}/owners/{lina} goes once with an Idempotency-Key
+      - The toast reads "Lina Saleh removed from Sader & Haddad", her row is gone, and the section reads Only you own this profile
+  - id: co-owner-leave
+    title: A co-owner leaves the open shared profile, lands on their personal profile with a toast, and the drawer closes (MUT-373)
+    tier: secondary
+    paths:
+      - src/hosted/components/ProfileOwnersSection.tsx
+      - src/hosted/components/ProfilesManageDrawer.tsx
+    steps:
+      - On the shared profile, open it in Manage profiles
+      - Choose Leave, then Leave Sader & Haddad in the confirm
+    expect:
+      - The confirm reads "You'll lose access to Sader & Haddad. What you recorded stays." and Save is gone while it is open
+      - The personal profile opens with the toast "You left Sader & Haddad", the drawer is closed, and the switcher no longer lists the shared profile
+  - id: co-owner-removed
+    title: Someone removed while working on the shared profile lands on their personal profile with a banner naming it (MUT-373)
+    tier: secondary
+    paths:
+      - src/hosted/session/AuthGate.tsx
+      - src/hosted/session/lostAccess.ts
+    steps:
+      - Work on the shared profile's Clients
+      - Meanwhile the creator removes you; open Expenses
+    expect:
+      - The portal moves to the personal profile and shows "You no longer have access to Sader & Haddad. What you recorded stays."
+      - Close dismisses the banner
+  - id: co-owner-full-rights
+    title: A co-owner adds a client, records a payment and an expense, and renames the shared profile — the rights its creator has (MUT-373)
+    tier: secondary
+    paths:
+      - src/hosted/data/incomeAffordances.ts
+      - src/hosted/data/profileRules.ts
+    steps:
+      - On the shared profile, add Owed income for a new client with Add client
+      - Record a payment on an open entry
+      - Record an expense
+      - Rename the shared profile in Manage profiles
+    expect:
+      - The client, the income, the payment and the expense are each sent for the shared profile
+      - The rename sends PATCH {name} only, says Profile saved, and the switcher shows the new name

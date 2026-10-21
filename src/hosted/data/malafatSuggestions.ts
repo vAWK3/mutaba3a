@@ -3,14 +3,17 @@ import { api, type HostedProfile, type MalafatSuggestions, type MalafatSuggestio
 import { ME_KEY, useMe } from '../session/me';
 import { useIsLocalMode } from '../session/mode';
 import type { MalafatMoment } from '../../types';
+import { createdBy } from './profileRules';
 
 /**
  * Who the portal may suggest Malafat to (MUT-191, ADR-078): a profile the
- * person owns as a business, fed by nobody. Firms are Malafat's own tenants
- * (connected, or not yet), and personal profiles are never a firm.
+ * person created as a business, fed by nobody. Firms are Malafat's own tenants
+ * (connected, or not yet), and personal profiles are never a firm. MUT-373
+ * (OV9): a Business profile they only co-own is its creator's to take to
+ * Malafat, so its partners aren't pitched about the same firm twice.
  */
-export function portalMalafatEligible(profile: HostedProfile | null): boolean {
-  return !!profile && profile.owned && profile.type === 'BUSINESS' && !profile.isPersonalDefault && profile.writerOfRecord === null;
+export function portalMalafatEligible(profile: HostedProfile | null, viewerId: string): boolean {
+  return !!profile && createdBy(profile, viewerId) && profile.type === 'BUSINESS' && !profile.isPersonalDefault && profile.writerOfRecord === null;
 }
 
 /** Someone who belongs to a Malafat-fed firm already uses Malafat: no suggestion anywhere. */
@@ -18,9 +21,9 @@ export function isMalafatCustomer(me: Me): boolean {
   return me.profiles.some((profile) => profile.writerOfRecord === 'MALAFAT');
 }
 
-/** The person's own business profiles (C3 asks for a second one). */
+/** The business profiles the person created (C3 asks for a second one); one they co-own isn't theirs to count (MUT-373). */
 export function businessProfileCount(me: Me): number {
-  return me.profiles.filter((profile) => profile.owned && profile.type === 'BUSINESS' && !profile.isPersonalDefault).length;
+  return me.profiles.filter((profile) => createdBy(profile, me.user.id) && profile.type === 'BUSINESS' && !profile.isPersonalDefault).length;
 }
 
 /** What retiring a moment sends: the business-created note and the second-business card are one event. */

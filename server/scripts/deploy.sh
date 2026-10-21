@@ -10,7 +10,7 @@
 #   2. docker build (linux/amd64) with your local daemon, docker push to
 #      Artifact Registry as mutaba3a-api:<short git sha>. The image serves
 #      dist-hosted/ from the same origin as the API (hosted-portal.md §9).
-#   3. Cloud SQL Auth Proxy on 127.0.0.1:5440, then `prisma migrate deploy`
+#   3. Cloud SQL Auth Proxy on 127.0.0.1:5440, then `prisma migrate deploy` and the read-only pre-roll checks (src/scripts/pre-roll.ts)
 #      from this directory against the production database. The proxy is
 #      stopped afterwards. A failed migration stops here; the service is not
 #      touched.
@@ -143,6 +143,10 @@ start_proxy
 info "running prisma migrate deploy"
 DATABASE_URL="${LOCAL_DATABASE_URL}" npx prisma migrate deploy \
   || die "migration failed; the service was NOT rolled. Fix the migration and re-run."
+# MUT-373 (OV1b): a stray membership on an owned profile would make its holder an owner once this revision serves.
+info "running pre-roll checks"
+DATABASE_URL="${LOCAL_DATABASE_URL}" npm run --silent pre-roll \
+  || die "pre-roll checks failed; the service was NOT rolled. Fix what they name and re-run."
 stop_proxy
 popd >/dev/null
 
