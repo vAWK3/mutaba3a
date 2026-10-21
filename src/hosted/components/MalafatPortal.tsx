@@ -34,11 +34,12 @@ function useMalafatLink() {
  */
 export function MalafatMenuItems({ profile }: { profile: HostedProfile | null }) {
   const { t } = useLanguage();
+  const viewerId = useMe().user.id;
   const state = usePortalMalafat();
   const change = useChangeMalafatSuggestions();
   const link = useMalafatLink();
 
-  if (!state.allowed || !portalMalafatEligible(profile)) return null;
+  if (!state.allowed || !portalMalafatEligible(profile, viewerId)) return null;
 
   return (
     <>
@@ -86,7 +87,7 @@ export function MalafatClientsCard({ customers, query, onGone }: ClientsCardProp
   const businessCreatedThisVisit = useMalafatPortalMoments((s) => s.businessCreatedThisVisit);
   const markClientsRetired = useMalafatPortalMoments((s) => s.markClientsRetired);
 
-  if (!state.allowed || !portalMalafatEligible(profile) || query?.trim() || retiredThisVisit) return null;
+  if (!state.allowed || !portalMalafatEligible(profile, me.user.id) || query?.trim() || retiredThisVisit) return null;
 
   const activeClients = [...customers.values()].filter((customer) => customer.status === 'ACTIVE').length;
   const moment = pickClientsMoment({ suggestions: state, clientCount: activeClients, businessCount: businessProfileCount(me) });
@@ -119,6 +120,7 @@ export function MalafatCreatedNote({ onGone = () => {} }: { onGone?: () => void 
 
 function CreatedNote({ profile, onGone }: { profile: HostedProfile; onGone: () => void }) {
   const { t } = useLanguage();
+  const viewerId = useMe().user.id;
   const state = usePortalMalafat();
   const change = useChangeMalafatSuggestions();
   const link = useMalafatLink();
@@ -129,7 +131,7 @@ function CreatedNote({ profile, onGone }: { profile: HostedProfile; onGone: () =
     if (arrived) clearBusinessCreated();
   }, [arrived, clearBusinessCreated]);
 
-  const shown = arrived && state.allowed && state.on && portalMalafatEligible(profile) && !state.dismissed.includes('business-profile');
+  const shown = arrived && state.allowed && state.on && portalMalafatEligible(profile, viewerId) && !state.dismissed.includes('business-profile');
   if (!shown) return null;
   return (
     <MalafatSuggestionCard

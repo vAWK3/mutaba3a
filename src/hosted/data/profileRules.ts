@@ -62,3 +62,51 @@ export function changedFields(profile: HostedProfile, values: ProfileEditValues)
   if (!profile.isPersonalDefault && values.type !== profile.type) patch.type = values.type;
   return patch;
 }
+
+/**
+ * MUT-373 (ADR-163): co-owners. `owners` comes from the server (creator first); every rule below reads it, never
+ * the column it came from. A profile you don't own has none, and an older server sends none at all.
+ */
+type ProfileOwner = NonNullable<HostedProfile['owners']>[number];
+
+/** The other owners' names — never yours — or their email when they have none (DR12); null when nobody shares it. */
+export function sharedWith(profile: HostedProfile, viewerId: string): string[] | null {
+  const others = (profile.owners ?? []).filter((owner) => owner.userId !== viewerId);
+  return others.length > 0 ? others.map(ownerLabel) : null;
+}
+
+/** How a person reads in the Owners list and the shared cue: their name, else their email (DR10). */
+export function ownerLabel(owner: ProfileOwner): string {
+  return owner.name ?? owner.email;
+}
+
+/** More than one owner: such a profile stays Business (server 409 CO_OWNED). */
+export function isShared(profile: HostedProfile): boolean {
+  return (profile.owners?.length ?? 0) > 1;
+}
+
+/**
+ * Whether the viewer created the profile. An older server sends no `owners`: an owned profile was then always the
+ * viewer's own creation, as before MUT-373.
+ */
+export function createdBy(profile: HostedProfile, viewerId: string): boolean {
+  if (!profile.owned) return false;
+  return profile.owners ? profile.owners.some((owner) => owner.creator && owner.userId === viewerId) : true;
+}
+
+/** The creator removes co-owners; a co-owner leaves; the creator never leaves (eng review D3). */
+export function ownerActions(profile: HostedProfile, viewerId: string): { canRemove: boolean; canLeave: boolean } {
+  if (!profile.owned) return { canRemove: false, canLeave: false };
+  const creator = createdBy(profile, viewerId);
+  return { canRemove: creator, canLeave: !creator };
+}
+
+/** The Owners section belongs to owned Business profiles (AD5): never the built-in one, an owned Personal one or a firm. */
+export function ownersSectionVisible(profile: HostedProfile): boolean {
+  return profile.owned && profile.type === 'BUSINESS' && !profile.isPersonalDefault;
+}
+
+/** The cap hint (DR2): only for someone who co-owns a profile they didn't create, which their count leaves out. */
+export function coOwnsOthersProfiles(me: Me): boolean {
+  return me.profiles.some((profile) => profile.owned && !createdBy(profile, me.user.id));
+}

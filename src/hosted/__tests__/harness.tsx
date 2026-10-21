@@ -54,6 +54,9 @@ export function profile(overrides: Partial<HostedProfile> = {}): HostedProfile {
     firm: false,
     role: null,
     firmRequestedAt: null,
+    // MUT-373: a profile you don't own lists no owners.
+    owners: null,
+    firmRequestedBy: null,
     ...overrides,
   };
 }

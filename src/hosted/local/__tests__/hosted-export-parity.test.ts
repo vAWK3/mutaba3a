@@ -182,7 +182,12 @@ describe('hosted export → local restore parity (MUT-325 AC1)', () => {
     expect(firmThere).toMatchObject({ writerOfRecord: 'MALAFAT', owned: false });
     expect(firmHere).toMatchObject({ writerOfRecord: null, owned: true, type: 'BUSINESS', name: 'Haddad Law' });
     // MUT-358: billing is a hosted account's alone; on this device every profile reports `billing: null`.
-    const withoutBilling = (p: Record<string, unknown> | undefined) => ({ ...p, billing: undefined });
+    // MUT-373: `owners` names the person by email, and the device has none (the re-homing above), so emails differ too.
+    const withoutBilling = (p: Record<string, unknown> | undefined) => ({
+      ...p,
+      billing: undefined,
+      owners: (p?.owners as Array<Record<string, unknown>> | null | undefined)?.map((o) => ({ ...o, email: undefined })),
+    });
     expect(here.profiles.every((p) => p.billing === null)).toBe(true);
     expect(withoutBilling(here.profiles.find((p) => p.id === hosted.personal))).toEqual(withoutBilling(there.profiles.find((p) => p.id === hosted.personal)));
     expect(JSON.stringify(device.store.snapshot().maps.people)).not.toContain('rana@studio.ps');

@@ -710,3 +710,25 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-progress { block-size: 6px; border-radius: var(--radius-sm); background: var(--border); overflow: hidden; }
 .hp-progress > span { display: block; block-size: 100%; background: var(--btn-primary-bg, var(--accent)); transition: inline-size 200ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .hp-progress > span { transition: none; } }
+
+/* MUT-373 (ADR-163): the Owners section, between the profile form and firm features (design review DR1, DR9). */
+.hp-owners { border-top: 1px solid var(--divider); padding-top: var(--space-4); margin-top: var(--space-4); display: grid; gap: var(--space-2); justify-items: stretch; }
+.hp-owners > h3, .hp-owners > p { margin: 0; }
+.hp-owners > h3:focus { outline: none; }
+.hp-owner-list { margin: 0; }
+/* The row collapses after the server answers (DR6); --duration-nav is 0ms under reduced motion, so it just goes. */
+.hp-owner-item { display: grid; grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows var(--duration-nav) var(--ease-spring), opacity var(--duration-nav) var(--ease-spring); }
+.hp-owner-item > * { min-height: 0; overflow: hidden; }
+.hp-owner-item[data-exiting] { grid-template-rows: 0fr; opacity: 0; }
+.hp-owner-row { cursor: default; }
+/* Always visible, 44px tall: no hover-only actions (AD10); trailing, so it mirrors in RTL. */
+.hp-owner-action { flex: none; min-height: 44px; padding-inline: var(--space-2); justify-self: start; }
+.hp-owner-confirm { margin-block: var(--space-2); }
+.hp-owner-add { margin: 0; }
+.hp-owner-address { color: var(--muted); user-select: all; }
+
+.hp-type-card-off { cursor: default; color: var(--muted); }
+/* MUT-373: the shared cue truncates with its full text in title (DR12); the cap hint sits under the count (DR2); the lost-access banner (DR3). */
+.hp-profile-kind { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-profiles-cap-hint { display: block; font-size: var(--text-label); }
+.hp-lost-access { margin-block-end: var(--space-4); }
