@@ -30,11 +30,14 @@ SERVER_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TF_DIR="${SERVER_DIR}/infrastructure/terraform"
 ENVIRONMENT="${ENVIRONMENT:-production}"
 REGION="${GCP_REGION:-me-west1}"
+# Production only: the names below carry no environment suffix (main.tf's local.suffix).
 SOURCE="mutaba3a-pg"
 TARGET="mutaba3a-pg2"
 SERVICE="mutaba3a-api"
 PORT_SOURCE="${PROXY_PORT_SOURCE:-5461}"
 PORT_TARGET="${PROXY_PORT_TARGET:-5462}"
+# Seconds between closing ingress and the backup, for requests already in flight to finish.
+DRAIN_SECONDS="${DRAIN_SECONDS:-15}"
 
 SUBCOMMAND=""
 PROJECT="${GCP_PROJECT_ID:-}"
@@ -45,6 +48,8 @@ info() { printf '\033[0;36m[cmek]\033[0m %s\n' "$*"; }
 warn() { printf '\033[0;33m[cmek] %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[0;31m[cmek] %s\033[0m\n' "$*" >&2; exit 1; }
 
+# shellcheck source-path=SCRIPTDIR source=lib/script-helpers.sh
+. "${SERVER_DIR}/scripts/lib/script-helpers.sh"
 # shellcheck source-path=SCRIPTDIR source=lib/db-checks.sh
 . "${SERVER_DIR}/scripts/lib/db-checks.sh"
 
@@ -76,52 +81,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ -n "${SUBCOMMAND}" && -n "${PROJECT}" ]] || { usage; exit 2; }
+[[ "${ENVIRONMENT}" == "production" ]] || die "ENVIRONMENT=${ENVIRONMENT}: this script only knows production's instance and service names"
 
 # ---------------------------------------------------------------------------
 # Command helpers (the drill's shape: scripts/restore-drill.sh)
 # ---------------------------------------------------------------------------
-run() {
-  printf '+ %s\n' "$*"
-  [[ "${DRY_RUN}" == 1 ]] && return 0
-  "$@"
-}
-
-# run_capture <var> <placeholder> <command...>: run a read-only command and keep its stdout.
-run_capture() {
-  local var="$1" placeholder="$2"; shift 2
-  printf '+ %s\n' "$*"
-  if [[ "${DRY_RUN}" == 1 ]]; then printf -v "${var}" '%s' "${placeholder}"; return 0; fi
-  local value
-  value="$("$@")"
-  printf -v "${var}" '%s' "${value}"
-}
+# run, run_capture, confirm, need, timed: lib/script-helpers.sh
 
 # mutate <target instance> <command...>: the only way this script creates, changes or deletes an instance.
 mutate() {
   local target="$1"; shift
   [[ "${target}" == "${TARGET}" ]] || die "refusing: ${target} is not ${TARGET}; this script changes no other instance"
   run "$@"
-}
-
-confirm() {
-  if [[ "${DRY_RUN}" == 1 ]]; then printf '[dry-run] would ask: %s [y/N]\n' "$1"; return 0; fi
-  [[ "${YES}" == 1 ]] && return 0
-  [[ -r /dev/tty ]] || die "this step needs a terminal to confirm (or --yes): $1"
-  local answer
-  read -r -p "$1 [y/N] " answer </dev/tty
-  [[ "${answer}" == "y" || "${answer}" == "Y" ]]
-}
-
-need() { [[ "${DRY_RUN}" == 1 ]] || command -v "$1" >/dev/null 2>&1 || die "missing tool: $1 ($2)"; }
-
-STEP_NAMES=()
-STEP_SECONDS=()
-timed() {
-  local label="$1"; shift
-  local started=${SECONDS}
-  "$@"
-  STEP_NAMES+=("${label}")
-  if [[ "${DRY_RUN}" == 1 ]]; then STEP_SECONDS+=("—"); else STEP_SECONDS+=("$((SECONDS - started))"); fi
 }
 
 set_ingress() {
@@ -141,10 +112,29 @@ read_state() {
     DB_URL="postgresql://<user>:<password>@127.0.0.1:5440/mutaba3a"
     return 0
   fi
+  local rc=0
   tf_init "${TF_DIR}" "${ENVIRONMENT}"
-  ACTIVE="$(tf_output "${TF_DIR}" cloud_sql_instance_name || true)"
-  ACTIVE="${ACTIVE:-${SOURCE}}"
+  ACTIVE="$(tf_output "${TF_DIR}" cloud_sql_instance_name)" || rc=$?
+  case "${rc}" in
+    0) ;;
+    3) warn "terraform state has no cloud_sql_instance_name output yet (no apply since MUT-381): ${SOURCE} serves"
+       ACTIVE="${SOURCE}" ;;
+    *) exit 1 ;; # tf_output said why
+  esac
   DB_URL="$(tf_output "${TF_DIR}" local_database_url)" || die "no local_database_url output in terraform state"
+}
+
+# read_serving <placeholder mounts>: what Cloud Run actually serves. Sets REVISION PERCENT LATEST INGRESS URL
+# and MOUNTS (the Cloud SQL instances the serving revision mounts). Terraform state says what should serve;
+# this is the ground truth a copy must never contradict.
+read_serving() {
+  run_capture SERVING $'<revision>\t100\t<revision>\t<ingress>\t<service-url>' \
+    gcloud run services describe "${SERVICE}" --region="${REGION}" --project="${PROJECT}" \
+    --format='value(status.traffic[0].revisionName,status.traffic[0].percent,status.latestReadyRevisionName,metadata.annotations."run.googleapis.com/ingress",status.url)'
+  IFS=$'\t' read -r REVISION PERCENT LATEST INGRESS URL <<<"${SERVING}"
+  run_capture MOUNTS "$1" gcloud run revisions describe "${REVISION}" --region="${REGION}" --project="${PROJECT}" \
+    --format='value(metadata.annotations."run.googleapis.com/cloudsql-instances")'
+  [[ -n "${MOUNTS}" ]] || die "could not read which Cloud SQL instance revision ${REVISION} mounts; stopping rather than guess"
 }
 
 # with_db <port> <command...>: run a read-only command as the API user against the proxy on <port>.
@@ -155,15 +145,41 @@ with_db() {
     PGDATABASE="${BASH_REMATCH[3]}" PGOPTIONS='-c default_transaction_read_only=on' "$@"
 }
 
-# count_rows <connection> <port> <label>: proxy to one instance, write WORK/<label>.counts.
-count_rows() {
-  local connection="$1" port="$2" label="$3"
+# open_proxy <connection> <port>: a cloud-sql-proxy on <port>, once per port.
+OPEN_PORTS=" "
+open_proxy() {
+  local connection="$1" port="$2"
+  [[ "${OPEN_PORTS}" == *" ${port} "* ]] && return 0
   printf '+ cloud-sql-proxy %s --port %s --quiet &\n' "${connection}" "${port}"
-  printf '+ psql (read-only, %s): exact row count of every table\n' "${label}"
+  OPEN_PORTS+="${port} "
   [[ "${DRY_RUN}" == 1 ]] && return 0
   db_start_proxy "${connection}" "${port}"
   PROXY_PIDS+=("${DB_PROXY_PID}")
+}
+
+# count_rows <connection> <port> <label>: proxy to one instance, write WORK/<label>.counts.
+count_rows() {
+  local connection="$1" port="$2" label="$3"
+  open_proxy "${connection}" "${port}"
+  printf '+ psql (read-only, %s): exact row count of every table\n' "${label}"
+  [[ "${DRY_RUN}" == 1 ]] && return 0
   with_db "${port}" db_table_counts "${WORK}/${label}.counts"
+}
+
+# source_writes <var>: mutaba3a-pg's write counters (lib/db-checks.sh db_write_counters).
+source_writes() {
+  open_proxy "${SOURCE_CONN}" "${PORT_SOURCE}"
+  printf '+ psql (read-only, %s): rows inserted, updated, deleted (pg_stat_database)\n' "${SOURCE}"
+  if [[ "${DRY_RUN}" == 1 ]]; then printf -v "$1" '%s' "<writes>"; return 0; fi
+  printf -v "$1" '%s' "$(with_db "${PORT_SOURCE}" db_write_counters)"
+}
+
+# expect_closed <when>: the live service must report internal ingress.
+expect_closed() {
+  local live
+  run_capture live "internal" gcloud run services describe "${SERVICE}" --region="${REGION}" --project="${PROJECT}" \
+    --format='value(metadata.annotations."run.googleapis.com/ingress")'
+  [[ "${live}" == "internal" ]] || die "${1}: ingress still reports ${live:-nothing}, so ${SOURCE} may be taking writes; ${SERVICE} goes back to ${SOURCE}"
 }
 
 describe_target() {
@@ -186,6 +202,7 @@ INGRESS_CLOSED=0
 SWITCH_READY=0
 cleanup() {
   local status=$? pid
+  trap '' INT TERM # a second Ctrl-C must not abort the reopen below
   for pid in ${PROXY_PIDS[@]+"${PROXY_PIDS[@]}"}; do kill "${pid}" 2>/dev/null || true; done
   if [[ "${INGRESS_CLOSED}" == 1 && "${SWITCH_READY}" != 1 ]]; then
     warn "stopped before the switch: reopening ${SERVICE} on ${SOURCE}"
@@ -208,14 +225,17 @@ if [[ "${SUBCOMMAND}" == "verify" ]]; then
   read_state
   [[ "${ACTIVE}" == "${TARGET}" ]] || die "terraform still serves from ${ACTIVE}: set cmek_stage = \"active\" and run the switch apply first (DEPLOYMENT.md §6d)"
   describe_target
-  run_capture SERVING $'<revision>\t100\t<revision>\t<ingress>\t<service-url>' \
-    gcloud run services describe "${SERVICE}" --region="${REGION}" --project="${PROJECT}" \
-    --format='value(status.traffic[0].revisionName,status.traffic[0].percent,status.latestReadyRevisionName,metadata.annotations."run.googleapis.com/ingress",status.url)'
-  IFS=$'\t' read -r REVISION PERCENT LATEST INGRESS URL <<<"${SERVING}"
+  read_serving "${TARGET_CONN}"
   [[ "${PERCENT}" == "100" && "${REVISION}" == "${LATEST}" ]] || die "traffic is not 100% on the latest ready revision (${REVISION} ${PERCENT}%, latest ${LATEST}); wait for the rollout, then verify again"
-  run_capture MOUNTS "${TARGET_CONN}" gcloud run revisions describe "${REVISION}" --region="${REGION}" --project="${PROJECT}" \
-    --format='value(metadata.annotations."run.googleapis.com/cloudsql-instances")'
   [[ ",${MOUNTS}," == *",${TARGET_CONN},"* ]] || die "the serving revision ${REVISION} mounts ${MOUNTS}, not ${TARGET_CONN}"
+  # The probes only hit /health, so a revision with the wrong DATABASE_URL still turns Ready. Check the
+  # secret's host without ever printing the URL (it carries the password).
+  run_capture SECRET_URL "host=/cloudsql/${TARGET_CONN}&" gcloud secrets versions access latest \
+    --secret="mutaba3a-api-database-url" --project="${PROJECT}"
+  SECRET_CONN="${SECRET_URL#*host=/cloudsql/}"
+  SECRET_CONN="${SECRET_CONN%%&*}"
+  unset SECRET_URL
+  [[ "${SECRET_CONN}" == "${TARGET_CONN}" ]] || die "the DATABASE_URL secret points at ${SECRET_CONN}, not ${TARGET_CONN}: re-run the switch apply before reopening"
   info "${REVISION} serves 100% from ${TARGET_CONN}, encrypted with ${TARGET_KEY}"
   if [[ "${INGRESS}" == "all" ]]; then
     run curl -fsS "${URL}/ready" -o /dev/null || die "${URL}/ready did not answer 200"
@@ -241,6 +261,11 @@ run_capture SOURCE_DESCRIBED $'<source-gb>\t<project>:<region>:'"${SOURCE}" \
 IFS=$'\t' read -r SOURCE_GB SOURCE_CONN <<<"${SOURCE_DESCRIBED}"
 info "${SOURCE} (${SOURCE_GB} GB) → ${TARGET} (${TARGET_GB} GB, key ${TARGET_KEY})"
 
+# Fix 1 (review): terraform state is not enough. If the serving revision mounts mutaba3a-pg2, it is live.
+read_serving "<project>:<region>:${SOURCE}"
+[[ ",${MOUNTS}," != *",${TARGET_CONN},"* ]] \
+  || die "${SERVICE} serves from ${TARGET_CONN} (revision ${REVISION}): copying again would overwrite live data. Nothing to do."
+
 # C2: a backup restores only into an instance with at least the source's storage.
 if [[ "${DRY_RUN}" != 1 ]] && (( TARGET_GB < SOURCE_GB )); then
   die "${TARGET} has ${TARGET_GB} GB but ${SOURCE} has ${SOURCE_GB} GB; grow it first: gcloud sql instances patch ${TARGET} --project=${PROJECT} --storage-size=${SOURCE_GB}GB"
@@ -249,10 +274,19 @@ fi
 STAMP="$(date -u +%Y%m%dt%H%M%S)"
 STARTED=${SECONDS}
 
+if [[ "${SUBCOMMAND}" == "rehearse" ]]; then
+  confirm "Overwrite ${TARGET} with a fresh copy of ${SOURCE}? (the API stays open)" || die "stopped before copying anything"
+fi
+
 if [[ "${SUBCOMMAND}" == "cutover" ]]; then
   confirm "Close ${SERVICE} to outside traffic (portal, phones, Malafat) and copy ${SOURCE} into ${TARGET}?" || die "stopped before closing anything"
   INGRESS_CLOSED=1
   timed "Close ingress" set_ingress internal
+  # Fix 2 (review): requests already in flight finish, the close must have taken, and from here on
+  # mutaba3a-pg's write counters must not move. Row counts alone can't see an UPDATE.
+  [[ "${DRY_RUN}" == 1 ]] || sleep "${DRAIN_SECONDS}"
+  expect_closed "after closing"
+  source_writes WRITES_BEFORE
 fi
 
 timed "On-demand backup of ${SOURCE}" run gcloud sql backups create --instance="${SOURCE}" --project="${PROJECT}" \
@@ -272,9 +306,10 @@ describe_target
 info "${TARGET} is encrypted with ${TARGET_KEY_VERSION}"
 
 timed "Row counts on ${TARGET}" count_rows "${TARGET_CONN}" "${PORT_TARGET}" target
+# rehearse counts the source too, so its timings match the cutover's window; only cutover compares.
+timed "Row counts on ${SOURCE}" count_rows "${SOURCE_CONN}" "${PORT_SOURCE}" source
 if [[ "${SUBCOMMAND}" == "cutover" ]]; then
   # Ingress is closed, so mutaba3a-pg has not changed since the backup: every count must match.
-  timed "Row counts on ${SOURCE}" count_rows "${SOURCE_CONN}" "${PORT_SOURCE}" source
   if [[ "${DRY_RUN}" != 1 ]]; then
     if ! diff "${WORK}/source.counts" "${WORK}/target.counts" >"${WORK}/counts.diff"; then
       warn "row counts differ (< ${SOURCE}, > ${TARGET}):"
@@ -283,6 +318,10 @@ if [[ "${SUBCOMMAND}" == "cutover" ]]; then
     fi
     info "every table matches ($(wc -l <"${WORK}/target.counts" | tr -d ' ') tables)"
   fi
+  source_writes WRITES_AFTER
+  [[ "${WRITES_AFTER}" == "${WRITES_BEFORE}" ]] \
+    || die "${SOURCE} recorded writes during the copy (inserted,updated,deleted ${WRITES_BEFORE} → ${WRITES_AFTER}); the copy may miss them, so ${SERVICE} goes back to ${SOURCE}"
+  info "${SOURCE} recorded no writes during the copy (${WRITES_BEFORE})"
 fi
 
 echo
@@ -303,19 +342,22 @@ fi
 
 run_capture IMAGE "<registry>/mutaba3a-api:<live-tag>" gcloud run services describe "${SERVICE}" --region="${REGION}" \
   --project="${PROJECT}" --format='value(spec.template.spec.containers[0].image)'
+expect_closed "before the switch"
+[[ "${IMAGE}" != *@* ]] || die "${SERVICE} runs a digest-pinned image (${IMAGE}); the switch apply needs the image tag deploy.sh pushed"
 IMAGE_TAG="${IMAGE##*:}"
 SWITCH_READY=1
 cat <<EOF
 
 ${TARGET} holds a verified copy. ${SERVICE} stays closed until you finish (DEPLOYMENT.md §6d):
 
-  1. In infrastructure/terraform/${ENVIRONMENT}.tfvars set: cmek_stage = "active"
-  2. The switch, ingress still closed:
+  1. The switch, ingress still closed:
        terraform apply -var-file=${ENVIRONMENT}.tfvars -var image_tag=${IMAGE_TAG} -var cmek_stage=active -var api_ingress=INGRESS_TRAFFIC_INTERNAL_ONLY
-  3. scripts/cmek-cutover.sh verify --project ${PROJECT}
+  2. scripts/cmek-cutover.sh verify --project ${PROJECT}
+  3. Only now, in infrastructure/terraform/${ENVIRONMENT}.tfvars set: cmek_stage = "active"
+     (until then a release is refused, so nothing switches or reopens behind your back)
   4. Reopen:
-       terraform apply -var-file=${ENVIRONMENT}.tfvars -var image_tag=${IMAGE_TAG}
-  5. scripts/cmek-cutover.sh verify --project ${PROJECT}   (checks /ready), then the smoke checks.
+       terraform apply -var-file=${ENVIRONMENT}.tfvars -var image_tag=${IMAGE_TAG} -var cmek_stage=active
+  5. scripts/cmek-cutover.sh verify --project ${PROJECT}   (checks /ready), then DEPLOYMENT.md §6d step 5.
 
 Roll back before step 2 (nothing moved yet):
   gcloud run services update ${SERVICE} --region=${REGION} --project=${PROJECT} --ingress=all

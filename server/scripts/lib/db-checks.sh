@@ -18,6 +18,12 @@ db_table_counts() {
   db_sql -F '|' -c "${query} ORDER BY 1" >"${out}"
 }
 
+# db_write_counters: "inserted,updated,deleted" rows since the stats were last reset, for the whole database.
+# Reads (row counts included) never move them; any INSERT, UPDATE or DELETE does.
+db_write_counters() {
+  db_sql -c "SELECT tup_inserted || ',' || tup_updated || ',' || tup_deleted FROM pg_stat_database WHERE datname = current_database()"
+}
+
 # db_start_proxy <connection name> <port>: start cloud-sql-proxy in the background and wait up to 30 s for
 # it to listen. Sets DB_PROXY_PID; the caller kills it.
 db_start_proxy() {
@@ -26,7 +32,11 @@ db_start_proxy() {
   # shellcheck disable=SC2034 # read by the caller
   DB_PROXY_PID=$!
   for _ in $(seq 1 30); do (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null && break; sleep 1; done
-  (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null || die "cloud-sql-proxy did not open 127.0.0.1:${port} within 30 s (is the port free? is gcloud authenticated?)"
+  if ! (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null; then
+    # The caller hasn't recorded the PID yet: stop the proxy here so the exit trap has nothing to miss.
+    kill "${DB_PROXY_PID}" 2>/dev/null || true
+    die "cloud-sql-proxy did not open 127.0.0.1:${port} within 30 s (is the port free? is gcloud authenticated?)"
+  fi
 }
 
 # tf_init <terraform dir> <environment>: point the terraform dir at the remote state (TF_STATE_BUCKET), the
@@ -39,19 +49,31 @@ tf_init() {
     || die "terraform init failed in $1 (is TF_STATE_BUCKET right? is gcloud authenticated?)"
 }
 
-# tf_output <terraform dir> <name>: one output from the state tf_init loaded; fails when there is none.
-tf_output() { (cd "$1" && terraform output -raw "$2" 2>/dev/null); }
+# tf_output <terraform dir> <name>: print one output from the state tf_init loaded. Returns 3 when the state
+# has no such output; any other failure (state unreadable, network, auth) dies. Callers that can fall back
+# must only do it on 3: guessing on an unreadable state is how a copy lands on the live database.
+tf_output() {
+  local err rc=0 out
+  err="$(mktemp "${TMPDIR:-/tmp}/tf-output-XXXX")"
+  out="$(cd "$1" && terraform output -raw "$2" 2>"${err}")" || rc=$?
+  if (( rc == 0 )); then rm -f "${err}"; printf '%s' "${out}"; return 0; fi
+  if grep -q "Output \"$2\" not found" "${err}"; then rm -f "${err}"; return 3; fi
+  warn "$(cat "${err}")"
+  rm -f "${err}"
+  die "could not read $2 from terraform state (above); stopping rather than guess"
+}
 
 # tf_active_instance <terraform dir> <environment>: the Cloud SQL instance the API serves from (MUT-381:
 # mutaba3a-pg, or mutaba3a-pg2 once cmek_stage is active). A state last applied before MUT-381 has no such
-# output; pg2 can't be active then, so that means mutaba3a-pg.
+# output; pg2 can't be active then, so that alone means mutaba3a-pg.
 tf_active_instance() {
-  local name
+  local name rc=0
   tf_init "$1" "$2"
-  if name="$(tf_output "$1" cloud_sql_instance_name)" && [[ -n "${name}" ]]; then
-    printf '%s\n' "${name}"
-  else
-    warn "terraform state has no cloud_sql_instance_name output yet (no apply since MUT-381); using mutaba3a-pg"
-    printf 'mutaba3a-pg\n'
-  fi
+  name="$(tf_output "$1" cloud_sql_instance_name)" || rc=$?
+  case "${rc}" in
+    0) printf '%s\n' "${name}" ;;
+    3) warn "terraform state has no cloud_sql_instance_name output yet (no apply since MUT-381); using mutaba3a-pg"
+       printf 'mutaba3a-pg\n' ;;
+    *) exit 1 ;;
+  esac
 }

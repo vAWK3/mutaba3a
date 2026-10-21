@@ -220,7 +220,9 @@ What you have:
   (DEPLOYMENT.md §6d). Set it once before the commands below:
 
   ```bash
+  (cd server/infrastructure/terraform && terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-api/production" >/dev/null)
   INSTANCE=$(cd server/infrastructure/terraform && terraform output -raw cloud_sql_instance_name)
+  : "${INSTANCE:?terraform output failed: fix the init above before running anything below}"
   ```
 
 **Find the moment.** The profile's audit trail shows when the mistake happened:
@@ -440,7 +442,9 @@ Plain email from the support inbox, in the person's language. EN draft (the AR v
 
 1. **Acknowledge.** Note the time you knew.
 2. **Contain:**
-   - a release caused it: roll back with `IMAGE_TAG=<old sha> ./scripts/deploy.sh`;
+   - a release caused it: roll back with `IMAGE_TAG=<old sha> ./scripts/deploy.sh`. After the MUT-381
+     cutover never shift Cloud Run traffic to a revision from before it: those mount only `mutaba3a-pg`
+     and fail every request (DEPLOYMENT.md §6d);
    - access is at risk: lock or rotate (above);
    - writes are corrupting data: close ingress (§4.3);
    - after the MUT-381 cutover, the database or receipts fail with a KMS or "key" error: a version of

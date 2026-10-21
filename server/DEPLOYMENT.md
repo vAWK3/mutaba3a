@@ -985,7 +985,7 @@ terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET" -backend-c
 TAG=$(curl -fsS "$(terraform output -raw service_url)/health" | jq -r .version)
 ```
 
-**No `make release server` between step 3 and the end of step 5.** Between steps 1 and 3 a release is safe: it still serves from `mutaba3a-pg`.
+**Releases during this procedure.** `deploy.sh` refuses a release whose `production.tfvars` stage would move the database, and refuses while the service is closed (`lib/release-guard.sh`). So a release is fine before step 4 and after step 4.3, and is refused in between. The tfvars in *every* checkout you release from must say the same stage: git doesn't carry it.
 
 #### Step 1: prepare (no downtime)
 
@@ -994,6 +994,8 @@ Set `cmek_stage = "prepared"` in `production.tfvars`, then:
 ```bash
 terraform plan -var-file=production.tfvars -var image_tag="$TAG"
 ```
+
+If the apply fails with a permission error on the key, the grants haven't propagated yet (IAM is eventually consistent): wait a minute and apply again.
 
 Expect only additions: the KMS key ring and key, the Cloud SQL service identity, two key grants, `mutaba3a-pg2` with its database and user, and the KMS API. The bucket changes in place (its `encryption` block). The Cloud Run service and the DATABASE_URL secret must **not** change. Apply the same command with `apply`. The new instance takes about 10 minutes.
 
@@ -1014,6 +1016,12 @@ Expect only additions: the KMS key ring and key, the Cloud SQL service identity,
    gcloud storage objects update "gs://$GCP_PROJECT_ID-mutaba3a-attachments/**" --encryption-key="$KEY"
    ```
 
+4. Check nothing was missed (objects deleted or replaced while it ran make it error partway). This must print nothing; re-run the update for anything it lists:
+
+   ```bash
+   gcloud storage objects list "gs://$GCP_PROJECT_ID-mutaba3a-attachments/**" --format='value(name,kms_key)' | awk -F'\t' '$2 == ""'
+   ```
+
 The replaced copies sit in soft delete for 14 days, billed at STANDARD, then purge (§6c).
 
 #### Step 3: rehearse (no downtime)
@@ -1023,36 +1031,42 @@ scripts/cmek-cutover.sh rehearse --project $GCP_PROJECT_ID --dry-run   # read it
 scripts/cmek-cutover.sh rehearse --project $GCP_PROJECT_ID
 ```
 
-It copies a fresh backup into `mutaba3a-pg2`, checks the key survived the restore, and prints the timings and row counts. The sum of the backup and restore times is the downtime to announce. Paste the table into pilot runbook §10. Tell Malafat's operator the window: its money calls fail while the API is closed.
+It asks first, refuses if Cloud Run already serves from `mutaba3a-pg2`, copies a fresh backup into `mutaba3a-pg2`, checks the key survived the restore, and prints the timings and row counts. The total, plus about 15 s of drain and the two applies (a minute or two each), is the downtime to announce. Paste the table into pilot runbook §10. Tell Malafat's operator the window: its money calls fail while the API is closed.
 
 #### Step 4: cut over (downtime: the API is closed)
 
-In a quiet window:
+In a quiet window. The `/health` and `/ready` uptime checks will page while the API is closed (§6b): expect it, or snooze those policies in Cloud Monitoring for the window. Run it from the checkout of the release that is live (`git checkout api-v<live>`), so the switch apply below changes nothing but the database (see "Expect" under 4.1).
 
 ```bash
 scripts/cmek-cutover.sh cutover --project $GCP_PROJECT_ID
 ```
 
-It closes the API to outside traffic, copies again, and compares every table's row count with `mutaba3a-pg`, which has been frozen since ingress closed. On any failure or mismatch it reopens the API on `mutaba3a-pg` and stops; nothing has moved. On success it leaves the API **closed** and prints the next steps:
+It closes the API to outside traffic, waits 15 s for requests in flight, checks the close took, and records `mutaba3a-pg`'s write counters (rows inserted, updated, deleted). Then it copies again, compares every table's row count, re-reads the counters (any write since, an UPDATE included, stops it) and checks ingress is still closed. On any failure or mismatch it reopens the API on `mutaba3a-pg` and stops; nothing has moved. On success it leaves the API **closed** and prints the next steps:
 
-1. Set `cmek_stage = "active"` in `production.tfvars`.
-2. Run the switch apply. Ingress stays closed:
+1. The switch apply. Ingress stays closed:
 
    ```bash
    terraform apply -var-file=production.tfvars -var image_tag="$TAG" -var cmek_stage=active -var api_ingress=INGRESS_TRAFFIC_INTERNAL_ONLY
    ```
 
-   The DATABASE_URL secret and the Cloud Run revision move to `mutaba3a-pg2`.
-3. Check the serving revision mounts `mutaba3a-pg2` and the key is set:
+   **Expect** only: the DATABASE_URL secret version replaced, the Cloud Run service updated (its Cloud SQL volume), and the two Cloud SQL alert policies updated. Anything else (a new env var, a flag, a `moved` block) means this checkout isn't the live release: answer `no` and switch checkouts.
+2. Check the serving revision mounts `mutaba3a-pg2`, the DATABASE_URL secret points at it, and the key is set:
 
    ```bash
    scripts/cmek-cutover.sh verify --project $GCP_PROJECT_ID
    ```
 
-4. Reopen:
+3. Take `mutaba3a-pg2`'s first backup of its own. Until it exists, its only backups are the nightly ones taken while it held rehearsal data, and point-in-time recovery has no base:
 
    ```bash
-   terraform apply -var-file=production.tfvars -var image_tag="$TAG"
+   gcloud sql backups create --instance=mutaba3a-pg2 --project=$GCP_PROJECT_ID --description="after the MUT-381 cutover"
+   ```
+
+4. Only now set `cmek_stage = "active"` in `production.tfvars` (and in every other checkout you release from).
+5. Reopen:
+
+   ```bash
+   terraform apply -var-file=production.tfvars -var image_tag="$TAG" -var cmek_stage=active
    scripts/cmek-cutover.sh verify --project $GCP_PROJECT_ID   # now also /ready
    ```
 
@@ -1062,14 +1076,18 @@ It closes the API to outside traffic, copies again, and compares every table's r
 2. Save an expense on the phone.
 3. Make one Malafat money call.
 4. `gcloud sql instances describe mutaba3a-pg2 --format='value(diskEncryptionConfiguration.kmsKeyName)'` names the key.
-5. Record in pilot runbook §10: the cutover's timings and the date. Record in INFRA.md §2: `cmek_stage = active` and the date.
+5. Record in pilot runbook §10: the cutover's timings, the date and time of 4.3's backup (restores and drills of `mutaba3a-pg2` must use backups from then on, never the nightly ones before it). Record in INFRA.md §2: `cmek_stage = active` and the date.
 
 #### Rollback
 
 | When | What to do |
 |---|---|
-| Before step 4's switch apply | `gcloud run services update mutaba3a-api --region=me-west1 --project=$GCP_PROJECT_ID --ingress=all`. Nothing moved. |
-| After the switch apply | Set `cmek_stage = "prepared"` and apply. The API goes back to `mutaba3a-pg`, and **everything written on `mutaba3a-pg2` since then is lost**. Only do this inside the window. |
+| Before step 4.1's switch apply | `gcloud run services update mutaba3a-api --region=me-west1 --project=$GCP_PROJECT_ID --ingress=all`. Nothing moved. |
+| The switch apply failed partway | Keep ingress closed. The secret may already name `mutaba3a-pg2` while the revision mounts `mutaba3a-pg`: re-run the same switch apply until `verify` passes, or go back with `terraform apply -var-file=production.tfvars -var image_tag="$TAG" -var cmek_stage=prepared -var api_ingress=INGRESS_TRAFFIC_INTERNAL_ONLY`, check `/ready` through `gcloud run services proxy`, then reopen. Never reopen while the secret and the revision disagree. |
+| After the switch, before the reopen | `terraform apply -var-file=production.tfvars -var image_tag="$TAG" -var cmek_stage=prepared`. Nothing was written to `mutaba3a-pg2` (it was closed), so nothing is lost. |
+| After the reopen | Close ingress first. Writes on `mutaba3a-pg2` since the reopen must go back: take an on-demand backup of `mutaba3a-pg2` and restore it into `mutaba3a-pg` (the reverse of the cutover, with the same count check), then apply `cmek_stage = "prepared"` with ingress internal, verify, reopen. Applying `prepared` without that copy **loses everything written since the reopen**. |
+
+**Never roll Cloud Run traffic back to a revision from before the switch** (console "Manage traffic", `gcloud run services update-traffic`). Every revision reads the DATABASE_URL secret's latest version, which names `mutaba3a-pg2`, but an old revision mounts only `mutaba3a-pg`: it starts, passes `/health`, and fails every request. Roll back with `IMAGE_TAG=<sha> ./scripts/deploy.sh`.
 
 #### Day 14
 

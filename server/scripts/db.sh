@@ -46,7 +46,10 @@ PROXY_PID=""
 info() { printf '\033[0;36m[db]\033[0m %s\n' "$*"; }
 die()  { printf '\033[0;31m[db] %s\033[0m\n' "$*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing tool: $1 ($2)"; }
+warn() { printf '\033[0;33m[db] %s\033[0m\n' "$*" >&2; }
 cleanup() { if [[ -n "${PROXY_PID}" ]]; then kill "${PROXY_PID}" 2>/dev/null || true; fi; }
+# shellcheck source-path=SCRIPTDIR source=lib/db-checks.sh
+. "${SERVER_DIR}/scripts/lib/db-checks.sh"
 trap cleanup EXIT
 
 usage() {
@@ -106,13 +109,8 @@ else
   URL="${URL/127.0.0.1:${TF_PORT}/127.0.0.1:${PROXY_PORT}}"
 
   info "starting cloud-sql-proxy for ${SQL_CONNECTION} on 127.0.0.1:${PROXY_PORT} (${ENVIRONMENT})"
-  cloud-sql-proxy "${SQL_CONNECTION}" --port "${PROXY_PORT}" --quiet &
-  PROXY_PID=$!
-  for _ in $(seq 1 30); do
-    (exec 3<>"/dev/tcp/127.0.0.1/${PROXY_PORT}") 2>/dev/null && break
-    sleep 1
-  done
-  (exec 3<>"/dev/tcp/127.0.0.1/${PROXY_PORT}") 2>/dev/null || die "cloud-sql-proxy did not open 127.0.0.1:${PROXY_PORT} within 30 s (is the port free? is gcloud authenticated?)"
+  db_start_proxy "${SQL_CONNECTION}" "${PROXY_PORT}"
+  PROXY_PID="${DB_PROXY_PID}"
 fi
 
 # ---------------------------------------------------------------------------

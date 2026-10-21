@@ -4391,13 +4391,19 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
    - The switch apply runs with `api_ingress = INGRESS_TRAFFIC_INTERNAL_ONLY`, and a second apply reopens it once `verify` sees the new revision serve 100% from pg2 (D2). This closes the gap in which outside requests could reach an old revision still writing to `mutaba3a-pg`.
 6. **The restore drill follows the active instance (D4).** CMEK copies stay under the key.
 7. **`mutaba3a-pg` stays for 14 days after the cutover**, so its backups cover the window the privacy policy promises. MUT-383 then removes it (D5).
-8. **No KMS Data Access audit logs.** In the shared `malafat-production` project they're a project-wide setting, so they would also log every decrypt of Malafat's tenant keys. Admin Activity logs (every change to the key) are always on.
+8. **Hardened after the pre-landing review (2026-10-21).**
+   - The cutover copies only when terraform state is readable and the serving Cloud Run revision doesn't mount `mutaba3a-pg2`; a state it can't read stops it, never a guess.
+   - The freeze is checked, not assumed: a drain wait, the live ingress re-read, and `mutaba3a-pg`'s write counters (`pg_stat_database` rows inserted/updated/deleted) compared before and after the copy, so an UPDATE the row counts can't see still stops it.
+   - `deploy.sh` refuses a release whose tfvars stage would move the database, and one that would reopen a closed service (`scripts/lib/release-guard.sh`). The switch happens only through the printed applies, which both pin `cmek_stage=active`; the tfvars edit comes after `verify`.
+   - `verify` also checks the DATABASE_URL secret names `mutaba3a-pg2`, because the probes only hit `/health`.
+   - A log-match alert pages on any change to a version of `mutaba3a-data` (Admin Activity log).
+9. **No KMS Data Access audit logs.** In the shared `malafat-production` project they're a project-wide setting, so they would also log every decrypt of Malafat's tenant keys. Admin Activity logs (every change to the key) are always on.
 **Consequences**:
 - **What CMEK protects:**
   - the disks and backups Google holds;
   - the ability to make the database, its backups and every receipt unreadable by revoking the key.
 - **What it doesn't protect against:**
-  - anyone with roles in the project. Malafat's runtime service account holds project-wide KMS, storage and SQL roles there (TD-194).
+  - anyone with roles in the project. Malafat's runtime service account holds project-wide KMS, storage, SQL and Secret Manager roles there, so it can read the database credentials, the operator token and the session pepper as well as every receipt (TD-194).
   - Secret Manager and the Terraform state, which keep Google's default encryption.
 - **Cloud SQL never re-encrypts on rotation**, so a disabled or destroyed key version takes the API down. Never disable an old version (pilot runbook §5.4). A destroy can be cancelled for 30 days.
 - **The cutover costs a short downtime**, measured by `rehearse` before the real run.

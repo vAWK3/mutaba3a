@@ -94,6 +94,11 @@ run "prepared_creates_the_key_and_mutaba3a_pg2_but_keeps_serving_from_mutaba3a_p
   }
 
   assert {
+    condition     = length(google_monitoring_alert_policy.kms_key_change) == 0
+    error_message = "Without an alert channel there is no key alert (and no channel means no alerting at all)."
+  }
+
+  assert {
     condition     = contains(keys(google_project_service.apis), "cloudkms.googleapis.com")
     error_message = "From stage prepared on, the KMS API is enabled."
   }
@@ -141,6 +146,31 @@ run "prepared_creates_the_key_and_mutaba3a_pg2_but_keeps_serving_from_mutaba3a_p
   }
 }
 
+run "a_change_to_a_key_version_pages" {
+  command = apply
+
+  variables {
+    cmek_stage  = "prepared"
+    alert_email = "ops@example.com"
+  }
+
+  assert {
+    condition = (
+      google_monitoring_alert_policy.kms_key_change[0].severity == "CRITICAL"
+      && strcontains(google_monitoring_alert_policy.kms_key_change[0].conditions[0].condition_matched_log[0].filter, "DestroyCryptoKeyVersion")
+      && strcontains(google_monitoring_alert_policy.kms_key_change[0].conditions[0].condition_matched_log[0].filter, "UpdateCryptoKeyVersion")
+      && strcontains(google_monitoring_alert_policy.kms_key_change[0].conditions[0].condition_matched_log[0].filter, "/keyRings/mutaba3a/cryptoKeys/mutaba3a-data")
+      && length(google_monitoring_alert_policy.kms_key_change[0].notification_channels) == 1
+    )
+    error_message = "Disabling, destroying or re-pointing a version of mutaba3a-data pages the alert channels (ADR-163)."
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.cloud_sql) == 2 && alltrue([for p in google_monitoring_alert_policy.cloud_sql : strcontains(p.conditions[0].condition_threshold[0].filter, "resource.label.database_id=\"test-project:mutaba3a-pg\"")])
+    error_message = "Until stage active, the Cloud SQL alerts watch mutaba3a-pg."
+  }
+}
+
 run "mutaba3a_pg2_matches_mutaba3a_pg_settings" {
   command = apply
 
@@ -174,11 +204,26 @@ run "mutaba3a_pg2_matches_mutaba3a_pg_settings" {
     condition = (
       google_sql_database_instance.postgres_cmek[0].settings[0].ip_configuration[0].ssl_mode == "ENCRYPTED_ONLY"
       && google_sql_database_instance.postgres_cmek[0].settings[0].ip_configuration[0].ipv4_enabled == google_sql_database_instance.postgres.settings[0].ip_configuration[0].ipv4_enabled
-      && one([for flag in google_sql_database_instance.postgres_cmek[0].settings[0].database_flags : flag.value if flag.name == "max_connections"]) == "50"
+      && one([for flag in google_sql_database_instance.postgres_cmek[0].settings[0].database_flags : flag.value if flag.name == "max_connections"]) == one([for flag in google_sql_database_instance.postgres.settings[0].database_flags : flag.value if flag.name == "max_connections"])
       && google_sql_database_instance.postgres_cmek[0].settings[0].maintenance_window[0].day == google_sql_database_instance.postgres.settings[0].maintenance_window[0].day
       && google_sql_database_instance.postgres_cmek[0].settings[0].maintenance_window[0].hour == google_sql_database_instance.postgres.settings[0].maintenance_window[0].hour
     )
     error_message = "mutaba3a-pg2 keeps encrypted-only connections, the explicit max_connections and the maintenance window."
+  }
+
+  # Every other field written out twice in main.tf, compared with mutaba3a-pg rather than a literal.
+  assert {
+    condition = (
+      google_sql_database_instance.postgres_cmek[0].settings[0].backup_configuration[0].start_time == google_sql_database_instance.postgres.settings[0].backup_configuration[0].start_time
+      && google_sql_database_instance.postgres_cmek[0].settings[0].backup_configuration[0].enabled == google_sql_database_instance.postgres.settings[0].backup_configuration[0].enabled
+      && google_sql_database_instance.postgres_cmek[0].settings[0].backup_configuration[0].point_in_time_recovery_enabled == google_sql_database_instance.postgres.settings[0].backup_configuration[0].point_in_time_recovery_enabled
+      && google_sql_database_instance.postgres_cmek[0].settings[0].backup_configuration[0].transaction_log_retention_days == google_sql_database_instance.postgres.settings[0].backup_configuration[0].transaction_log_retention_days
+      && google_sql_database_instance.postgres_cmek[0].settings[0].backup_configuration[0].backup_retention_settings[0].retained_backups == google_sql_database_instance.postgres.settings[0].backup_configuration[0].backup_retention_settings[0].retained_backups
+      && google_sql_database_instance.postgres_cmek[0].settings[0].maintenance_window[0].update_track == google_sql_database_instance.postgres.settings[0].maintenance_window[0].update_track
+      && google_sql_database_instance.postgres_cmek[0].settings[0].disk_size == google_sql_database_instance.postgres.settings[0].disk_size
+      && google_sql_database_instance.postgres_cmek[0].settings[0].user_labels == google_sql_database_instance.postgres.settings[0].user_labels
+    )
+    error_message = "Every setting duplicated on mutaba3a-pg2 matches mutaba3a-pg."
   }
 }
 
@@ -221,7 +266,7 @@ run "active_moves_the_secret_the_volume_the_outputs_and_the_alerts_to_mutaba3a_p
   }
 
   assert {
-    condition     = alltrue([for p in google_monitoring_alert_policy.cloud_sql : strcontains(p.conditions[0].condition_threshold[0].filter, "resource.label.database_id=\"test-project:mutaba3a-pg2\"")])
+    condition     = length(google_monitoring_alert_policy.cloud_sql) == 2 && alltrue([for p in google_monitoring_alert_policy.cloud_sql : strcontains(p.conditions[0].condition_threshold[0].filter, "resource.label.database_id=\"test-project:mutaba3a-pg2\"")])
     error_message = "The Cloud SQL alerts follow the active instance."
   }
 

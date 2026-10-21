@@ -52,6 +52,8 @@ cleanup() { if [[ -n "${PROXY_PID}" ]]; then kill "${PROXY_PID}" 2>/dev/null || 
 trap cleanup EXIT
 # shellcheck source=lib/tf-bootstrap.sh
 source "${SERVER_DIR}/scripts/lib/tf-bootstrap.sh"
+# shellcheck source=lib/release-guard.sh
+source "${SERVER_DIR}/scripts/lib/release-guard.sh"
 # The Cloud SQL Auth Proxy on 127.0.0.1:PROXY_PORT, for steps 3 and 6; needs SQL_CONNECTION (step 0).
 start_proxy() {
   info "starting cloud-sql-proxy for ${SQL_CONNECTION} on 127.0.0.1:${PROXY_PORT}"
@@ -102,6 +104,8 @@ APPROVE=(); [[ "${AUTO_APPROVE}" == "1" ]] && APPROVE=(-auto-approve)
 # First run only: the registry must exist before `docker push`, the database
 # before the migration. Skipped once they are in state (lib/tf-bootstrap.sh).
 ensure_bootstrap "${TF_ARGS[@]}" "${APPROVE[@]}"
+# MUT-381: never move the database or reopen a closed service as a side effect of a release.
+guard_cmek_release "${ENVIRONMENT}.tfvars" "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}"
 LOCAL_DATABASE_URL="$(terraform output -raw local_database_url)"
 SQL_CONNECTION="$(terraform output -raw cloud_sql_connection_name)"
 popd >/dev/null

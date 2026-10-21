@@ -217,3 +217,39 @@ resource "google_monitoring_alert_policy" "cloud_sql" {
 
   notification_channels = local.alert_channels
 }
+
+# MUT-381 (ADR-163): disabling or scheduling the destruction of a version of our key takes the database, its
+# backups and every receipt down, and Cloud SQL never re-encrypts onto a newer version. Admin Activity logs
+# record every such change (always on, free), so a log-match alert pages on it within minutes.
+resource "google_monitoring_alert_policy" "kms_key_change" {
+  count        = local.cmek_enabled && local.alerting_enabled ? 1 : 0
+  project      = var.project_id
+  display_name = "mutaba3a-data key version changed"
+  combiner     = "OR"
+  severity     = "CRITICAL"
+
+  conditions {
+    display_name = "A version of mutaba3a-data was disabled, destroyed or re-pointed"
+    condition_matched_log {
+      filter = join(" AND ", [
+        "protoPayload.serviceName=\"cloudkms.googleapis.com\"",
+        "protoPayload.methodName=(\"DestroyCryptoKeyVersion\" OR \"UpdateCryptoKeyVersion\" OR \"UpdateCryptoKeyPrimaryVersion\")",
+        "protoPayload.resourceName:\"/keyRings/mutaba3a${local.suffix}/cryptoKeys/mutaba3a-data\"",
+      ])
+    }
+  }
+
+  alert_strategy {
+    notification_rate_limit {
+      period = "300s"
+    }
+    auto_close = "1800s"
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = "Someone disabled, scheduled for destruction or re-pointed a version of the KMS key `mutaba3a-data`. If a version that protects data is disabled or destroyed, the database and the receipts go down. Re-enable it, or cancel the destroy (possible for 30 days): pilot runbook §5.4, ADR-163."
+  }
+
+  notification_channels = local.alert_channels
+}

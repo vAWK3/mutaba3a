@@ -27,16 +27,24 @@ args="$*"
 case "$args" in
   "config get-value account"*) echo "ops@example.com" ;;
   "sql instances describe mutaba3a-pg2 "*"connectionName"*)
-    if [[ -n "$FAKE_NO_KEY" ]]; then printf ',%s,demo-project:me-west1:mutaba3a-pg2,\\n' "\${FAKE_TARGET_GB:-10}";
+    if [[ -n "$FAKE_LOSE_KEY" ]] && grep -q 'backups restore' "${calls}"; then printf '%s,10,demo-project:me-west1:mutaba3a-pg2,\\n' "${KEY}";
+    elif [[ -n "$FAKE_NO_KEY" ]]; then printf ',%s,demo-project:me-west1:mutaba3a-pg2,\\n' "\${FAKE_TARGET_GB:-10}";
     else printf '%s,%s,demo-project:me-west1:mutaba3a-pg2,%s/cryptoKeyVersions/1\\n' "${KEY}" "\${FAKE_TARGET_GB:-10}" "${KEY}"; fi ;;
   "sql instances describe mutaba3a-pg "*) printf '%s\\tdemo-project:me-west1:mutaba3a-pg\\n' "\${FAKE_SOURCE_GB:-10}" ;;
   "sql backups create"*) ;;
   "sql backups list"*) echo "1700000000000" ;;
   "sql backups restore"*) exit "\${FAKE_RESTORE_EXIT:-0}" ;;
   "run services update"*) ;;
-  "run services describe"*"image"*) echo "me-west1-docker.pkg.dev/demo-project/mutaba3a/mutaba3a-api:abc1234" ;;
-  "run services describe"*) printf '%s\\t100\\t%s\\t%s\\t%s\\n' mutaba3a-api-00042-xyz mutaba3a-api-00042-xyz "\${FAKE_INGRESS:-internal}" https://mutaba3a-api.example.run.app ;;
-  "run revisions describe"*) echo "\${FAKE_REVISION_SQL:-demo-project:me-west1:mutaba3a-pg2}" ;;
+  "run services describe"*"value(metadata.annotations"*)
+    live=all
+    grep -q -- '--ingress=internal' "${calls}" && live=internal
+    [[ -n "$FAKE_INGRESS_STUCK" ]] && live=all
+    [[ -n "$FAKE_REOPENED_MIDCOPY" ]] && grep -q 'backups restore' "${calls}" && live=all
+    echo "$live" ;;
+  "secrets versions access"*) printf 'postgresql://u:p@localhost/mutaba3a?host=/cloudsql/%s&connection_limit=10' "\${FAKE_SECRET_CONN:-demo-project:me-west1:mutaba3a-pg2}" ;;
+  "run services describe"*"image"*) echo "\${FAKE_IMAGE:-me-west1-docker.pkg.dev/demo-project/mutaba3a/mutaba3a-api:abc1234}" ;;
+  "run services describe"*) printf '%s\\t%s\\t%s\\t%s\\t%s\\n' mutaba3a-api-00042-xyz "\${FAKE_PERCENT:-100}" mutaba3a-api-00042-xyz "\${FAKE_INGRESS:-internal}" https://mutaba3a-api.example.run.app ;;
+  "run revisions describe"*) echo "\${FAKE_REVISION_SQL:-demo-project:me-west1:\${FAKE_ACTIVE:-mutaba3a-pg}}" ;;
   *) echo "unexpected gcloud call: $args" >&2; exit 98 ;;
 esac
 `,
@@ -44,7 +52,10 @@ esac
 echo "terraform $*" >> "${calls}"
 case "$1 $3" in
   "init "*) exit 0 ;;
-  "output cloud_sql_instance_name") printf '%s' "\${FAKE_ACTIVE:-mutaba3a-pg}" ;;
+  "output cloud_sql_instance_name")
+    [[ -n "$FAKE_TF_OUTPUT_ERR" ]] && { echo 'Error: Failed to load state: storage: 503' >&2; exit 1; }
+    [[ -n "$FAKE_TF_NO_OUTPUT" ]] && { echo 'Error: Output "cloud_sql_instance_name" not found' >&2; exit 1; }
+    printf '%s' "\${FAKE_ACTIVE:-mutaba3a-pg}" ;;
   "output local_database_url") printf '%s' "postgresql://mutaba3a_api:s3cret@127.0.0.1:5440/mutaba3a" ;;
   *) exit 1 ;;
 esac
@@ -55,6 +66,12 @@ exec sleep 60
 `,
   psql: `#!/bin/bash
 args="$*"
+if [[ "$args" == *pg_stat_database* ]]; then
+  w=5
+  [[ -n "$FAKE_WRITE_DURING" && -f "${bin}/writes.mark" ]] && w=6
+  touch "${bin}/writes.mark"
+  printf '10,%s,0\\n' "$w"; exit 0
+fi
 if [[ "$args" == *pg_tables* ]]; then printf 'audit_events\\nusers\\n'; exit 0; fi
 if [[ "$args" == *"count(*)"* ]]; then
   users=1
@@ -90,8 +107,13 @@ afterAll(async () => {
 });
 
 function cutover(env: Record<string, string>, ...args: string[]) {
+  return run(env, args, !args.includes('--dry-run'));
+}
+
+function run(env: Record<string, string>, args: string[], yes: boolean) {
   rmSync(calls, { force: true });
-  const run = spawnSync('bash', [SCRIPT, ...args, ...(args.includes('--dry-run') ? [] : ['--yes'])], {
+  rmSync(join(bin, 'writes.mark'), { force: true });
+  const run = spawnSync('bash', [SCRIPT, ...args, ...(yes ? ['--yes'] : [])], {
     encoding: 'utf8',
     env: {
       PATH: `${bin}:/usr/bin:/bin`,
@@ -99,6 +121,7 @@ function cutover(env: Record<string, string>, ...args: string[]) {
       TF_STATE_BUCKET: 'demo-state',
       PROXY_PORT_SOURCE: String(ports[0]),
       PROXY_PORT_TARGET: String(ports[1]),
+      DRAIN_SECONDS: '0',
       ...env,
     },
     input: '',
@@ -113,7 +136,9 @@ const dry = (...args: string[]) => cutover({}, ...args, '--project', 'demo-proje
 const mutatingLines = (out: string) =>
   out.split('\n').filter((l) => /^\+ gcloud sql (instances (create|clone|patch|delete)|backups restore|users set-password)/.test(l));
 
-describe('cmek-cutover.sh', () => {
+// Each case spawns the script and a few dozen fake-CLI processes; under the full suite's load one can take
+// several seconds (spawnSync itself is capped at 60 s above).
+describe('cmek-cutover.sh', { timeout: 30_000 }, () => {
   it('prints usage and exits 2 without a subcommand or --project', () => {
     expect(cutover({}, '--dry-run').status).toBe(2);
     expect(cutover({}, 'cutover', '--dry-run').status).toBe(2);
@@ -218,6 +243,126 @@ describe('cmek-cutover.sh', () => {
     const r = cutover({ FAKE_ACTIVE: 'mutaba3a-pg2', FAKE_REVISION_SQL: 'demo-project:me-west1:mutaba3a-pg' }, 'verify', '--project', 'demo-project');
     expect(r.status).not.toBe(0);
     expect(r.err).toMatch(/mounts demo-project:me-west1:mutaba3a-pg\b/);
+  });
+
+  it('reopens ingress when the restored target no longer reports a key version', () => {
+    const r = cutover({ FAKE_LOSE_KEY: '1' }, 'cutover', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/after the restore mutaba3a-pg2 reports key/);
+    expect(r.calls.at(-1)).toContain('--ingress=all');
+    expect(r.out).not.toContain('terraform apply');
+  });
+
+  it('a failed rehearse never touches ingress', () => {
+    const r = cutover({ FAKE_RESTORE_EXIT: '1' }, 'rehearse', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.calls.some((c) => c.includes('--ingress'))).toBe(false);
+  });
+
+  it('refuses a digest-pinned image and reopens, rather than print an apply with a tag that does not exist', () => {
+    const r = cutover({ FAKE_IMAGE: 'me-west1-docker.pkg.dev/demo-project/mutaba3a/mutaba3a-api@sha256:abc' }, 'cutover', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toContain('digest-pinned');
+    expect(r.calls.at(-1)).toContain('--ingress=all');
+    expect(r.out).not.toContain('terraform apply');
+  });
+
+  it('refuses any ENVIRONMENT but production before touching anything', () => {
+    const r = cutover({ ENVIRONMENT: 'staging' }, 'rehearse', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toContain('ENVIRONMENT=staging');
+    expect(r.calls).toEqual([]);
+  });
+
+  it('verify fails while the rollout has not moved all traffic to the latest revision', () => {
+    const r = cutover({ FAKE_ACTIVE: 'mutaba3a-pg2', FAKE_PERCENT: '50' }, 'verify', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/traffic is not 100% on the latest ready revision/);
+  });
+
+  it('verify fails when /ready does not answer once ingress is open', () => {
+    const r = cutover({ FAKE_ACTIVE: 'mutaba3a-pg2', FAKE_INGRESS: 'all', FAKE_READY_EXIT: '22' }, 'verify', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toContain('/ready did not answer 200');
+  });
+
+  // Fix 1 (review, 2026-10-21): never copy over a mutaba3a-pg2 that serves.
+  it('stops when terraform state cannot be read, rather than assume mutaba3a-pg serves', () => {
+    for (const sub of ['rehearse', 'cutover']) {
+      const r = cutover({ FAKE_TF_OUTPUT_ERR: '1' }, sub, '--project', 'demo-project');
+      expect(r.status, sub).not.toBe(0);
+      expect(r.err).toMatch(/could not read cloud_sql_instance_name/);
+      expect(r.calls.some((c) => c.startsWith('gcloud sql') || c.includes('--ingress')), sub).toBe(false);
+    }
+  });
+
+  it('falls back to mutaba3a-pg only when the state predates the output', () => {
+    const r = cutover({ FAKE_TF_NO_OUTPUT: '1' }, 'rehearse', '--project', 'demo-project');
+    expect(r.status, r.err).toBe(0);
+    expect(r.err).toContain('no cloud_sql_instance_name output yet');
+  });
+
+  it('refuses when the serving Cloud Run revision already mounts mutaba3a-pg2, whatever terraform says', () => {
+    for (const sub of ['rehearse', 'cutover']) {
+      const r = cutover({ FAKE_REVISION_SQL: 'demo-project:me-west1:mutaba3a-pg2' }, sub, '--project', 'demo-project');
+      expect(r.status, sub).not.toBe(0);
+      expect(r.err).toMatch(/serves from demo-project:me-west1:mutaba3a-pg2/);
+      expect(r.calls.some((c) => c.includes('backups') || c.includes('--ingress')), sub).toBe(false);
+    }
+  });
+
+  it('rehearse asks before overwriting mutaba3a-pg2, and stops without a terminal or --yes', () => {
+    const r = run({}, ['rehearse', '--project', 'demo-project'], false);
+    expect(r.status).not.toBe(0);
+    // No controlling terminal: /dev/tty is missing (needs a terminal) or unreadable (the read fails).
+    expect(r.err).toMatch(/needs a terminal|stopped before copying anything/);
+    expect(r.calls.some((c) => c.includes('backups'))).toBe(false);
+  });
+
+  // Fix 2 (review, 2026-10-21): the copy is only good if mutaba3a-pg really was frozen.
+  it('stops and reopens when mutaba3a-pg recorded a write during the copy (an UPDATE the counts cannot see)', () => {
+    const r = cutover({ FAKE_WRITE_DURING: '1' }, 'cutover', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/recorded writes during the copy/);
+    expect(r.calls.at(-1)).toContain('--ingress=all');
+    expect(r.out).not.toContain('terraform apply');
+  });
+
+  it('stops when the ingress close has not taken effect, before any backup', () => {
+    const r = cutover({ FAKE_INGRESS_STUCK: '1' }, 'cutover', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/ingress still reports all/);
+    expect(r.calls.some((c) => c.includes('backups create'))).toBe(false);
+    expect(r.calls.at(-1)).toContain('--ingress=all');
+  });
+
+  it('declares nothing ready when ingress was reopened during the copy', () => {
+    const r = cutover({ FAKE_REOPENED_MIDCOPY: '1' }, 'cutover', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/ingress still reports all/);
+    expect(r.out).not.toContain('terraform apply');
+  });
+
+  // Fix 3 (review, 2026-10-21): the stage moves only through the printed applies, in a safe order.
+  it('prints the tfvars edit after verify, and both applies pin cmek_stage=active', () => {
+    const r = dry('cutover');
+    const lines = r.out.split('\n');
+    const applies = lines.filter((l) => l.includes('terraform apply'));
+    expect(applies).toHaveLength(2);
+    for (const a of applies) expect(a).toContain('-var cmek_stage=active');
+    expect(applies[0]).toContain('-var api_ingress=INGRESS_TRAFFIC_INTERNAL_ONLY');
+    expect(applies[1]).not.toContain('api_ingress');
+    const verify = r.out.indexOf('cmek-cutover.sh verify');
+    const tfvars = r.out.indexOf('cmek_stage = "active"');
+    expect(verify).toBeGreaterThan(-1);
+    expect(tfvars).toBeGreaterThan(verify);
+  });
+
+  it('verify fails when the DATABASE_URL secret does not point at mutaba3a-pg2', () => {
+    const r = cutover({ FAKE_ACTIVE: 'mutaba3a-pg2', FAKE_SECRET_CONN: 'demo-project:me-west1:mutaba3a-pg' }, 'verify', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/DATABASE_URL secret points at demo-project:me-west1:mutaba3a-pg\b/);
+    expect(r.out + r.err).not.toContain('postgresql://');
   });
 
   it('verify fails while terraform still serves from mutaba3a-pg', () => {

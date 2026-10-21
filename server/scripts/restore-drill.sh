@@ -50,6 +50,8 @@ info() { printf '\033[0;36m[drill]\033[0m %s\n' "$*"; }
 warn() { printf '\033[0;33m[drill] %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[0;31m[drill] %s\033[0m\n' "$*" >&2; exit 1; }
 
+# shellcheck source-path=SCRIPTDIR source=lib/script-helpers.sh
+. "${SERVER_DIR}/scripts/lib/script-helpers.sh"
 # shellcheck source-path=SCRIPTDIR source=lib/db-checks.sh
 . "${SERVER_DIR}/scripts/lib/db-checks.sh"
 
@@ -102,21 +104,7 @@ BUCKET="${BUCKET:-${PROJECT}-mutaba3a-attachments}"
 # ---------------------------------------------------------------------------
 # Command helpers
 # ---------------------------------------------------------------------------
-run() {
-  printf '+ %s\n' "$*"
-  [[ "${DRY_RUN}" == 1 ]] && return 0
-  "$@"
-}
-
-# run_capture <var> <placeholder> <command...>: run a read-only command and keep its stdout.
-run_capture() {
-  local var="$1" placeholder="$2"; shift 2
-  printf '+ %s\n' "$*"
-  if [[ "${DRY_RUN}" == 1 ]]; then printf -v "${var}" '%s' "${placeholder}"; return 0; fi
-  local value
-  value="$("$@")"
-  printf -v "${var}" '%s' "${value}"
-}
+# run, run_capture, confirm, need, timed: lib/script-helpers.sh
 
 assert_scratch() {
   local name="$1"
@@ -129,27 +117,6 @@ mutate() {
   local target="$1"; shift
   assert_scratch "${target}"
   run "$@"
-}
-
-confirm() {
-  if [[ "${DRY_RUN}" == 1 ]]; then printf '[dry-run] would ask: %s [y/N]\n' "$1"; return 0; fi
-  [[ -r /dev/tty ]] || die "this step needs a terminal to confirm: $1"
-  local answer
-  read -r -p "$1 [y/N] " answer </dev/tty
-  [[ "${answer}" == "y" || "${answer}" == "Y" ]]
-}
-
-need() { [[ "${DRY_RUN}" == 1 ]] || command -v "$1" >/dev/null 2>&1 || die "missing tool: $1 ($2)"; }
-
-# Timings, as two parallel arrays (bash 3.2 has no associative arrays).
-STEP_NAMES=()
-STEP_SECONDS=()
-timed() {
-  local label="$1"; shift
-  local started=${SECONDS}
-  "$@"
-  STEP_NAMES+=("${label}")
-  if [[ "${DRY_RUN}" == 1 ]]; then STEP_SECONDS+=("—"); else STEP_SECONDS+=("$((SECONDS - started))"); fi
 }
 
 utc_minutes_ago() {
@@ -232,10 +199,11 @@ info "project ${PROJECT}, source ${SOURCE} (read-only), scratch ${SCRATCH_B} / $
 run_capture ACCOUNT "<you@example.com>" gcloud config get-value account
 info "gcloud account: ${ACCOUNT}"
 
-run_capture DESCRIBED $'<region>\t<tier>\t<edition>\t<disk-gb>\tPOSTGRES_16\tTrue\t<source-kms-key>' \
+# CSV, not value(): read with a tab IFS collapses empty fields (an empty edition shifts every later one).
+run_capture DESCRIBED '<region>,<tier>,<edition>,<disk-gb>,POSTGRES_16,True,<source-kms-key>' \
   gcloud sql instances describe "${SOURCE}" --project="${PROJECT}" \
-  --format='value(region,settings.tier,settings.edition,settings.dataDiskSizeGb,databaseVersion,settings.backupConfiguration.pointInTimeRecoveryEnabled,diskEncryptionConfiguration.kmsKeyName)'
-IFS=$'\t' read -r REGION TIER EDITION DISK_GB DB_VERSION PITR_ON KMS_KEY <<<"${DESCRIBED}"
+  --format='csv[no-heading](region,settings.tier,settings.edition,settings.dataDiskSizeGb,databaseVersion,settings.backupConfiguration.pointInTimeRecoveryEnabled,diskEncryptionConfiguration.kmsKeyName)'
+IFS=, read -r REGION TIER EDITION DISK_GB DB_VERSION PITR_ON KMS_KEY <<<"${DESCRIBED}"
 # MUT-381: a copy of a CMEK instance stays under the same key (the point-in-time clone inherits it).
 SCRATCH_KEY=()
 [[ -n "${KMS_KEY}" ]] && SCRATCH_KEY=(--disk-encryption-key="${KMS_KEY}")

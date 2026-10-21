@@ -48,7 +48,9 @@ writeFileSync(
     '#!/bin/sh',
     'case "$1" in',
     '  init) exit "${FAKE_TF_INIT:-0}" ;;',
-    '  output) [ -n "$FAKE_TF_INSTANCE" ] || exit 1; printf "%s" "$FAKE_TF_INSTANCE"; exit 0 ;;',
+    '  output) [ -z "$FAKE_TF_OUTPUT_ERR" ] || { echo "Error: Failed to load state: 503" >&2; exit 1; }',
+    '          [ -n "$FAKE_TF_INSTANCE" ] || { echo "Error: Output \\"cloud_sql_instance_name\\" not found" >&2; exit 1; }',
+    '          printf "%s" "$FAKE_TF_INSTANCE"; exit 0 ;;',
     'esac',
     'exit 0',
   ].join('\n') + '\n',
@@ -119,6 +121,13 @@ describe('restore-drill.sh', () => {
     const r = drillFromState({ FAKE_TF_INSTANCE: '' }, '--project', 'demo-project');
     expect(r.err).toContain('no cloud_sql_instance_name output yet');
     expect(r.out).toContain('source mutaba3a-pg (read-only)');
+  });
+
+  it('stops when the output cannot be read, rather than drilling the frozen instance', () => {
+    const r = drillFromState({ FAKE_TF_OUTPUT_ERR: '1', FAKE_TF_INSTANCE: 'mutaba3a-pg2' }, '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/could not read cloud_sql_instance_name/);
+    expect(r.out).not.toContain('(read-only)');
   });
 
   it('stops when terraform state cannot be read, rather than guessing the source', () => {

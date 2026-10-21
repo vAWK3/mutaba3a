@@ -214,10 +214,10 @@
 ### TD-194: Malafat's runtime service account has project-wide roles over Mutaba3a's data in the shared project
 
 **Introduced**: 2026-10-21 (MUT-381, ADR-163)
-**Where**: `malafat-production` IAM. Malafat's `infrastructure/terraform/modules/regional-stack/main.tf` grants its Cloud Run service account `run-<region>` project-level `roles/cloudkms.cryptoKeyEncrypterDecrypter`, `roles/storage.objectAdmin` and `roles/cloudsql.client`.
-**Problem**: Mutaba3a's attachments bucket, its KMS key (ADR-163) and its Cloud SQL instances live in the same project. Malafat's runtime can therefore read and write every receipt object and use Mutaba3a's key, so CMEK adds no isolation from it. The database still needs `mutaba3a_api`'s password.
+**Where**: `malafat-production` IAM. Malafat's `infrastructure/terraform/modules/regional-stack/main.tf` grants its Cloud Run service account `run-<region>` project-level `roles/cloudkms.cryptoKeyEncrypterDecrypter`, `roles/storage.objectAdmin`, `roles/cloudsql.client` and `roles/secretmanager.secretAccessor`.
+**Problem**: Mutaba3a's attachments bucket, its KMS key (ADR-163) and its Cloud SQL instances live in the same project. Malafat's runtime can therefore read and write every receipt object and use Mutaba3a's key, so CMEK adds no isolation from it. It can also read every Mutaba3a secret: `mutaba3a-api-database-url` (the database user and password, which with `cloudsql.client` reaches `mutaba3a-pg` and `mutaba3a-pg2`), `mutaba3a-api-admin-token` (operator access) and `mutaba3a-api-session-pepper` (forging portal sessions).
 **Fix when**: before a pilot firm that isn't a Malafat tenant asks who can read its data, or at GA. Either move Mutaba3a to its own project (INFRA.md §2: a re-apply with a new `project_id` plus a data move), or have Malafat scope those roles to its own key ring, buckets and instances.
-**Severity**: Medium (it's a promise the privacy policy must not make, MUT-382).
+**Severity**: High (another product's runtime can read and write every customer's data; the privacy policy must not claim isolation, MUT-382).
 
 ### TD-193: Billing coverage follows the single owner `profileOwnerOf` names; co-owners (MUT-373) aren't counted
 
