@@ -52,6 +52,26 @@ variable "db_backup_enabled" {
   default     = true
 }
 
+variable "cmek_stage" {
+  description = "MUT-381 (ADR-164): our own KMS key for Cloud SQL and the attachments bucket. off (default) = nothing new exists, so a release changes nothing; prepared = the key, its grants, mutaba3a-pg2 and the bucket's default key exist while the API still serves from mutaba3a-pg; active = the API, its secret, the outputs and the alerts follow mutaba3a-pg2. Walk it forward only (DEPLOYMENT.md §6d): the key can't be destroyed."
+  type        = string
+  default     = "off"
+  validation {
+    condition     = contains(["off", "prepared", "active"], var.cmek_stage)
+    error_message = "cmek_stage must be off, prepared or active."
+  }
+}
+
+variable "api_ingress" {
+  description = "Cloud Run ingress. INGRESS_TRAFFIC_ALL (default) serves everyone; INGRESS_TRAFFIC_INTERNAL_ONLY closes the service to outside traffic, for the CMEK switch apply (DEPLOYMENT.md §6d) and a whole-database restore (pilot runbook §4.3)."
+  type        = string
+  default     = "INGRESS_TRAFFIC_ALL"
+  validation {
+    condition     = contains(["INGRESS_TRAFFIC_ALL", "INGRESS_TRAFFIC_INTERNAL_ONLY"], var.api_ingress)
+    error_message = "api_ingress must be INGRESS_TRAFFIC_ALL or INGRESS_TRAFFIC_INTERNAL_ONLY."
+  }
+}
+
 variable "deletion_protection" {
   description = "Refuse `terraform destroy` on the Cloud SQL instance. Keep true in production."
   type        = bool

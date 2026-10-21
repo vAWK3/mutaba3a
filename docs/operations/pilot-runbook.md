@@ -236,6 +236,14 @@ What you have:
 - 7 days of point-in-time recovery (PITR), down to the second.
 - The backups hold rows, not receipt files. A deleted receipt's file stays restorable for 14 days,
   as long as the oldest backup (§4.4).
+- **Which instance:** `mutaba3a-pg` until the MUT-381 cutover, `mutaba3a-pg2` after it
+  (DEPLOYMENT.md §6d). Set it once before the commands below:
+
+  ```bash
+  (cd server/infrastructure/terraform && terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-api/production" >/dev/null)
+  INSTANCE=$(cd server/infrastructure/terraform && terraform output -raw cloud_sql_instance_name)
+  : "${INSTANCE:?terraform output failed: fix the init above before running anything below}"
+  ```
 
 **Find the moment.** The profile's audit trail shows when the mistake happened:
 
@@ -254,7 +262,7 @@ deletes it. It costs roughly $0.10–0.20 an hour; delete it the same day.
 ```bash
 COPY=mutaba3a-pg-drill-$(date -u +%Y%m%dt%H%M%S)-p
 AT=2026-11-03T09:14:00.000Z                                  # just before the mistake, within the last 7 days
-gcloud sql instances clone mutaba3a-pg "$COPY" --point-in-time="$AT" --project=$GCP_PROJECT_ID
+gcloud sql instances clone "$INSTANCE" "$COPY" --point-in-time="$AT" --project=$GCP_PROJECT_ID
 gcloud sql instances patch "$COPY" --no-deletion-protection --no-backup --no-enable-point-in-time-recovery \
   --update-labels=purpose=restore-drill --project=$GCP_PROJECT_ID --quiet
 PW=$(openssl rand -hex 24)
@@ -265,9 +273,12 @@ export SOURCE_DATABASE_URL="postgresql://mutaba3a_api:$PW@127.0.0.1:5452/mutaba3
 
 **Older than 7 days?** Restore a daily backup into a fresh instance instead, as the drill does:
 
-- `gcloud sql backups list --instance=mutaba3a-pg --project=$GCP_PROJECT_ID` to pick the backup;
+- `gcloud sql backups list --instance="$INSTANCE" --project=$GCP_PROJECT_ID` to pick the backup;
 - `gcloud sql instances create "$COPY" …` with the flags in `scripts/restore-drill.sh`, `restore_backup`;
-- `gcloud sql backups restore <id> --restore-instance="$COPY" --backup-instance=mutaba3a-pg --project=$GCP_PROJECT_ID`.
+- `gcloud sql backups restore <id> --restore-instance="$COPY" --backup-instance="$INSTANCE" --project=$GCP_PROJECT_ID`. Once the
+  source is `mutaba3a-pg2`, create `$COPY` with
+  `--disk-encryption-key=projects/$GCP_PROJECT_ID/locations/me-west1/keyRings/mutaba3a/cryptoKeys/mutaba3a-data`
+  so the copy stays under the key.
 
 Check the copy before using it:
 
@@ -327,18 +338,19 @@ you start (§5.3 template).
 First:
 
 ```bash
-gcloud sql backups create --instance=mutaba3a-pg --project=$GCP_PROJECT_ID --description="before restore $(date -u +%FT%RZ)"   # the undo point
+gcloud sql backups create --instance="$INSTANCE" --project=$GCP_PROJECT_ID --description="before restore $(date -u +%FT%RZ)"   # the undo point
 gcloud run services update mutaba3a-api --region=me-west1 --project=$GCP_PROJECT_ID --ingress=internal                       # stop portal, phone and Malafat traffic
 ```
 
-The next `./scripts/deploy.sh` sets ingress back to Terraform's `INGRESS_TRAFFIC_ALL` anyway.
+The next `./scripts/deploy.sh` sets ingress back to Terraform's `INGRESS_TRAFFIC_ALL` anyway, unless
+`production.tfvars` sets `api_ingress = "INGRESS_TRAFFIC_INTERNAL_ONLY"` for as long as the restore takes.
 
 **A. Last night's backup, in place.** Fastest. The instance restarts, and everything after the
 backup is lost.
 
 ```bash
-gcloud sql backups list --instance=mutaba3a-pg --project=$GCP_PROJECT_ID --filter="type=AUTOMATED AND status=SUCCESSFUL" --limit=3
-gcloud sql backups restore <backup id> --restore-instance=mutaba3a-pg --backup-instance=mutaba3a-pg --project=$GCP_PROJECT_ID
+gcloud sql backups list --instance="$INSTANCE" --project=$GCP_PROJECT_ID --filter="type=AUTOMATED AND status=SUCCESSFUL" --limit=3
+gcloud sql backups restore <backup id> --restore-instance="$INSTANCE" --backup-instance="$INSTANCE" --project=$GCP_PROJECT_ID
 ```
 
 **B. A point in time.** Copy it back with Postgres 16 tools:
@@ -450,9 +462,19 @@ Plain email from the support inbox, in the person's language. EN draft (the AR v
 
 1. **Acknowledge.** Note the time you knew.
 2. **Contain:**
-   - a release caused it: roll back with `IMAGE_TAG=<old sha> ./scripts/deploy.sh`;
+   - a release caused it: roll back with `IMAGE_TAG=<old sha> ./scripts/deploy.sh`. After the MUT-381
+     cutover never shift Cloud Run traffic to a revision from before it: those mount only `mutaba3a-pg`
+     and fail every request (DEPLOYMENT.md §6d);
    - access is at risk: lock or rotate (above);
-   - writes are corrupting data: close ingress (§4.3).
+   - writes are corrupting data: close ingress (§4.3);
+   - after the MUT-381 cutover, the database or receipts fail with a KMS or "key" error: a version of
+     `mutaba3a-data` was disabled or scheduled for destruction. Re-enable it, or cancel the destroy,
+     which is possible for 30 days (`gcloud kms keys versions list --key=mutaba3a-data --keyring=mutaba3a --location=me-west1`).
+     Never disable a version yourself: Cloud SQL doesn't re-encrypt on rotation (ADR-164). The same goes
+     for the Cloud SQL and Cloud Storage agents' grants on the key (`terraform apply` restores them). The
+     `mutaba3a-data key version changed` alert pages on any of these; its log filter has not been tried
+     against a live audit entry yet, so test it once in a scratch project (disable and re-enable a
+     non-primary version) before relying on it.
 3. **Restore** if data was lost (§4).
 4. **Tell** people (§5.2, §5.3).
 5. **Record** it (§5.5) within 2 days, with the cause and the fix (a ticket).
@@ -602,6 +624,9 @@ run it:
     `mutaba3a-pg-drill-<stamp>-b|p`.
   - The scratch copies get their own throwaway password, so the drill never reads production's.
   - `--dry-run` prints the whole sequence and calls nothing.
+- **Which instance (MUT-381):** without `--instance` it drills the one the API serves from, read from
+  terraform state (`TF_STATE_BUCKET`): `mutaba3a-pg2` after the CMEK cutover. A copy of a CMEK
+  instance is created under the same key.
 
 **Run it (Basel):**
 

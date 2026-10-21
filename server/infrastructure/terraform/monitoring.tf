@@ -38,19 +38,20 @@ locals {
   alerting_enabled = var.alert_email != "" || local.sms_enabled || length(var.alert_notification_channels) > 0
 
   # By name, not by reference: a targeted monitoring apply (DEPLOYMENT.md §6b) then never plans the instance itself.
-  cloud_sql_database_id = "${var.project_id}:${local.instance_id}"
+  # MUT-381: the instance the API serves from (main.tf), which cmek_stage = active moves to mutaba3a-pg2.
+  cloud_sql_database_id = "${var.project_id}:${local.active_instance_id}"
   cloud_sql_alerts = {
     disk = {
-      display_name = "${local.instance_id} disk above 80%"
+      display_name = "${local.active_instance_id} disk above 80%"
       metric       = "cloudsql.googleapis.com/database/disk/utilization"
       threshold    = 0.8
-      doc          = "Cloud SQL `${local.instance_id}` has used more than 80% of its disk for 15 minutes. `disk_autoresize` grows it (and the bill) on its own; check what is growing before it does."
+      doc          = "Cloud SQL `${local.active_instance_id}` has used more than 80% of its disk for 15 minutes. `disk_autoresize` grows it (and the bill) on its own; check what is growing before it does."
     }
     cpu = {
-      display_name = "${local.instance_id} CPU above 90%"
+      display_name = "${local.active_instance_id} CPU above 90%"
       metric       = "cloudsql.googleapis.com/database/cpu/utilization"
       threshold    = 0.9
-      doc          = "Cloud SQL `${local.instance_id}` has run above 90% CPU for 15 minutes. Look for a slow query in Query Insights before raising `db_tier`."
+      doc          = "Cloud SQL `${local.active_instance_id}` has run above 90% CPU for 15 minutes. Look for a slow query in Query Insights before raising `db_tier`."
     }
   }
 }
@@ -212,6 +213,45 @@ resource "google_monitoring_alert_policy" "cloud_sql" {
   documentation {
     mime_type = "text/markdown"
     content   = each.value.doc
+  }
+
+  notification_channels = local.alert_channels
+}
+
+# MUT-381 (ADR-164): disabling or scheduling the destruction of a version of our key, or taking a service
+# agent's grant off the key or its ring, takes the database, its backups and every receipt down (Cloud SQL
+# never re-encrypts onto a newer version). Admin Activity logs record every such change (always on, free), so
+# a log-match alert pages on it within minutes. The filter is unproven against a live audit entry until one
+# happens: test it once in a scratch project (pilot runbook §5.4).
+resource "google_monitoring_alert_policy" "kms_key_change" {
+  count        = local.cmek_enabled && local.alerting_enabled ? 1 : 0
+  project      = var.project_id
+  display_name = "mutaba3a-data key version changed"
+  combiner     = "OR"
+  severity     = "CRITICAL"
+
+  conditions {
+    display_name = "mutaba3a-data or its key ring changed"
+    condition_matched_log {
+      filter = join(" AND ", [
+        "protoPayload.serviceName=\"cloudkms.googleapis.com\"",
+        "protoPayload.methodName=(\"DestroyCryptoKeyVersion\" OR \"UpdateCryptoKeyVersion\" OR \"UpdateCryptoKeyPrimaryVersion\" OR \"SetIamPolicy\")",
+        # The key and its versions, or the ring itself (a grant on the ring reaches the key too).
+        "protoPayload.resourceName=~\"/keyRings/mutaba3a${local.suffix}(/cryptoKeys/mutaba3a-data(/|$)|$)\"",
+      ])
+    }
+  }
+
+  alert_strategy {
+    notification_rate_limit {
+      period = "300s"
+    }
+    auto_close = "1800s"
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = "Someone disabled, scheduled for destruction or re-pointed a version of the KMS key `mutaba3a-data`, or changed who may use the key or its ring. If a version that protects data is disabled or destroyed, or the Cloud SQL or Cloud Storage service agent loses its grant, the database and the receipts go down. Re-enable the version, cancel the destroy (possible for 30 days) or restore the grant (terraform apply): pilot runbook §5.4, ADR-164."
   }
 
   notification_channels = local.alert_channels

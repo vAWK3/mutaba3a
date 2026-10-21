@@ -788,6 +788,8 @@ than an architecture rule:
 - **Firm data on the hosted service** is privileged client financial data and
   must be encrypted at rest, regionally resident beside the firm's CRM (GCP
   me-west1, matching Malafat), backed up, and deletable on request.
+  *(Note 2026-10-21: "encrypted at rest" with our own key is ADR-164, MUT-381;
+  before it, only Google's default encryption.)*
 
 **What replaces it**: ADR-025 below.
 
@@ -4396,3 +4398,45 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - MUT-333 must decide what happens to a co-owner's records on a shared profile when their account closes (Restrict FKs block the purge today; Jira comment 12287).
 - Local mode has one person: a co-owned profile exported to a device keeps only the exporter as owner.
 **Alternatives considered**: a separate co-owners table (rejected: a second source of truth beside `Membership.role`); letting any OWNER membership count (rejected: firm staff); transfer now (deferred, D3); per-profile `owners` queries (rejected for one batched read, D1).
+
+---
+
+## ADR-164: Our Own KMS Key for the Database and the Receipts Bucket, via a New Instance Behind an Opt-In Stage (MUT-381)
+
+**Status**: Active
+**Date**: 2026-10-21
+**Context**: ADR-024 requires firm data to be encrypted at rest. Until now Cloud SQL, the attachments bucket and Secret Manager used only Google's default encryption. The 2026-10-21 privacy review chose "harden + CMEK" and ruled out field-level and end-to-end encryption, which would break server totals, FX, Malafat and the accountant export. Cloud SQL can't add a customer-managed key to an existing instance. Plan and eng review: `.claude/designs/mut-381-cmek.md` (Basel's answers D1–D5).
+**Decision**:
+1. **One key**, `mutaba3a-data` in key ring `mutaba3a` (me-west1).
+   - It is SOFTWARE-protected, rotates every 90 days, and has `prevent_destroy`.
+   - Only the Cloud SQL and Cloud Storage service agents are granted on it, on the key itself, never project-wide (`infrastructure/terraform/kms.tf`).
+2. **A new instance, `mutaba3a-pg2`, encrypted with the key.** It has the same settings as `mutaba3a-pg`, written out in full and pinned by `tests/cmek.tftest.hcl`. It is filled by restoring a fresh backup of `mutaba3a-pg`; `scripts/cmek-cutover.sh` is the only tool that writes to it.
+   - Not a `for_each` over both instances: that would rename the bootstrap targets ADR-161 relies on.
+3. **`cmek_stage = off | prepared | active`, default `off` (D3).**
+   - `deploy.sh` runs a full apply, so without the stage the first release after the merge would create the key and the instance and re-key the bucket.
+   - `prepared` creates everything. `active` moves the DATABASE_URL secret, the Cloud Run volume, the outputs and the Cloud SQL alerts to `mutaba3a-pg2` together.
+4. **The bucket gets the key as its default from `prepared` on.** Signed URLs are unchanged, because the storage agent does the encryption. Existing objects are rewritten under the key by hand (DEPLOYMENT.md §6d).
+5. **The cutover is a tested script (D1).**
+   - The API is closed during the copy, which goes on-demand backup → restore → key check → every table's count compared.
+   - Any failure reopens the API on `mutaba3a-pg`.
+   - The switch apply runs with `api_ingress = INGRESS_TRAFFIC_INTERNAL_ONLY`, and a second apply reopens it once `verify` sees the new revision serve 100% from pg2 (D2). This closes the gap in which outside requests could reach an old revision still writing to `mutaba3a-pg`.
+6. **The restore drill follows the active instance (D4).** CMEK copies stay under the key.
+7. **`mutaba3a-pg` stays for 14 days after the cutover**, so its backups cover the window the privacy policy promises. MUT-383 then removes it (D5).
+8. **Hardened after the pre-landing review (2026-10-21).**
+   - The cutover copies only when terraform state is readable and the serving Cloud Run revision doesn't mount `mutaba3a-pg2`; a state it can't read stops it, never a guess.
+   - The freeze is checked, not assumed: a drain wait, the live ingress re-read, and `mutaba3a-pg`'s write counters (`pg_stat_database` rows inserted/updated/deleted) compared before and after the copy, so an UPDATE the row counts can't see still stops it.
+   - `deploy.sh` refuses a release whose tfvars stage would move the database, and one that would reopen a closed service (`scripts/lib/release-guard.sh`). The switch happens only through the printed applies, which both pin `cmek_stage=active`; the tfvars edit comes after `verify`.
+   - `verify` also checks the DATABASE_URL secret names `mutaba3a-pg2`, because the probes only hit `/health`.
+   - A log-match alert pages on any change to a version of `mutaba3a-data` (Admin Activity log).
+9. **No KMS Data Access audit logs.** In the shared `malafat-production` project they're a project-wide setting, so they would also log every decrypt of Malafat's tenant keys. Admin Activity logs (every change to the key) are always on.
+**Consequences**:
+- **What CMEK protects:**
+  - the disks and backups Google holds;
+  - the ability to make the database, its backups and every receipt unreadable by revoking the key.
+- **What it doesn't protect against:**
+  - anyone with roles in the project. Malafat's runtime service account holds project-wide KMS, storage, SQL and Secret Manager roles there, so it can read the database credentials, the operator token and the session pepper as well as every receipt (TD-195).
+  - Secret Manager and the Terraform state, which keep Google's default encryption.
+- **Cloud SQL never re-encrypts on rotation**, so a disabled or destroyed key version takes the API down. Never disable an old version (pilot runbook §5.4). A destroy can be cancelled for 30 days.
+- **The cutover costs a short downtime**, measured by `rehearse` before the real run.
+- **About $28 once** for the second instance's 14 days, plus cents a month for the key.
+- **Ingress is now a variable** (`api_ingress`), which runbook §4.3's emergency close can use too.
