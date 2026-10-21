@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-21 — Custom domain named: mtb3a.com at stage proxy (MUT-112 step 0)
+
+**Why:** Basel bought `mtb3a.com` (Namecheap, 2026-10-21). Naming it is §5a step 0 of `server/DEPLOYMENT.md`.
+
+### Technical
+- `config/hosts.json` production: `domain` `mtb3a.com`, `stage` `proxy`. No build changes yet: vite defaults, the
+  terms guard and the phone keep the legacy hosts until stage `live`. The bundle allowlist adds `mtb3a.com` and
+  `app.mtb3a.com`.
+- **The next `make release server` needs the front-door stack applied first** (§5a step 1); the API stack reads its
+  token secret once a domain is set. Recorded as a blocking item in `docs/operations/before-release.md`.
+- `npm run domain:plan -- --stage proxy` checked; `no-hardcoded-hosts`, `config/` and `vite-config` tests pass.
+
+---
+
 ## [Unreleased] - 2026-10-21 — Portal QA: an expense's category, client and matter together (MUT-384 AC2b)
 
 **Why:** MUT-384 AC2b promises the portal shows all three fields the phone saves on one expense; nothing proved it.
