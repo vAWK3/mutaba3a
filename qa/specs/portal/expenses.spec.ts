@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect, type Step } from '../../support/qa';
 import { OFFICE_A, customer, office, type StubProfile } from '../../support/portal';
 import { traceIconScale, readIconScale } from '../../support/motion';
-import { FakeApi, STORAGE, apiError, category, expense, todayInJerusalem } from '../../support/portalApi';
+import { FakeApi, STORAGE, apiError, category, expense, project, todayInJerusalem } from '../../support/portalApi';
 
 /**
  * Expenses in the portal (MUT-44): the list, the Record/Edit expense drawer and
@@ -328,3 +328,24 @@ test('An expense’s date is changed in the edit drawer and the list shows the n
   });
 });
 
+
+test('An expense saved with a category, a client and a matter shows all three in its drawer (MUT-384)', { tag: '@portal.expenses.expense-category-client-matter' }, async ({ page, step }) => {
+  // As the phone saves it (MUT-384 AC2b): categoryId, customerId and projectId together, on a firm's business profile
+  const matter = project(1, C1, 'Haddad v. Levi');
+  const filing = expense(1, { amount: '120.00', title: 'Court filing fee', categoryId: travel.id, customerId: C1, projectId: matter.id });
+  const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'Nour Studio'), firm: true, role: 'OWNER' }], clients: 2, projects: [matter], categories: [office_, travel], expenses: [filing] });
+  const drawer = page.getByRole('dialog', { name: 'Edit expense' });
+
+  await step('Open the expense', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`);
+    await page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /Court filing fee/ }).click();
+    await expect(drawer).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`expense=${filing.id}`));
+  });
+
+  await step('The drawer shows category, client and matter', async () => {
+    await expect(drawer.getByLabel('Category').locator('option:checked')).toHaveText('Travel');
+    await expect(drawer.getByLabel('Client')).toHaveValue('Client 1');
+    await expect(drawer.getByLabel('Matter')).toHaveValue('Haddad v. Levi');
+  });
+});

@@ -183,7 +183,7 @@ interface StubReceipt {
   completedAt: string | null;
 }
 
-export function expense(n: number, e: { amount: string; currency?: Currency; title?: string | null; vendor?: string | null; categoryId?: string | null; customerId?: string | null; occurredOn?: string; notes?: string | null }) {
+export function expense(n: number, e: { amount: string; currency?: Currency; title?: string | null; vendor?: string | null; categoryId?: string | null; customerId?: string | null; projectId?: string | null; occurredOn?: string; notes?: string | null }) {
   return {
     id: uid(0x9, n),
     occurredOn: e.occurredOn ?? '2026-10-03',
@@ -193,7 +193,7 @@ export function expense(n: number, e: { amount: string; currency?: Currency; tit
     vendor: e.vendor ?? null,
     categoryId: e.categoryId ?? null,
     customerId: e.customerId ?? null,
-    projectId: null,
+    projectId: e.projectId ?? null,
     notes: e.notes ?? null,
     createdByUserId: '99999999-9999-4999-8999-999999999999',
     version: 1,

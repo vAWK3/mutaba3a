@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-21 — Portal QA: an expense's category, client and matter together (MUT-384 AC2b)
+
+**Why:** MUT-384 AC2b promises the portal shows all three fields the phone saves on one expense; nothing proved it.
+
+### Technical
+- Release-QA feature `portal.expenses.expense-category-client-matter` (`qa/features/portal/expenses.yaml`,
+  `tickets: [MUT-384]`) and its spec in `qa/specs/portal/expenses.spec.ts`: a firm's business profile, an expense
+  with category + client + matter, its Edit drawer shows all three. The `expense()` fixture in
+  `qa/support/portalApi.ts` now takes an optional `projectId`.
+
+---
+
 ## [Unreleased] - 2026-10-21 — Stripe sync review fixes: billing can't fail open (MUT-360 qa-reconcile, ADR-165 amendments)
 
 **Why:** The pre-landing review found that a deleted customer, an untagged product or a revoked key could leave a payer
