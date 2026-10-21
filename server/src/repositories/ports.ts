@@ -1666,6 +1666,9 @@ export interface SaveBillingSubscriptionInput {
   audit: SubscriptionAuditContext;
 }
 
+/** `stripe_events.error` keeps at most this much (codes are short; a joined list is capped, never a write failure). */
+export const STRIPE_EVENT_ERROR_MAX = 500;
+
 /** `stale`: the stored mirror was read from Stripe later than this one, so nothing was written. */
 export type SaveBillingSubscriptionOutcome = 'created' | 'changed' | 'unchanged' | 'stale';
 

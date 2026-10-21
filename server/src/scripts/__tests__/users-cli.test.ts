@@ -342,9 +342,8 @@ describe('billing verbs (MUT-358)', () => {
   });
 
   it('billing-reconcile runs the Stripe reconcile now and prints what needs the operator (MUT-360)', async () => {
-    expect(await harness().run(['billing-reconcile'])).toBe(1);
     const off = harness();
-    await off.run(['billing-reconcile']);
+    expect(await off.run(['billing-reconcile'])).toBe(1);
     expect(off.err.join('\n')).toContain('BILLING_NOT_CONFIGURED');
 
     const stripe = new FakeStripeGateway(() => new Date());

@@ -8,10 +8,11 @@ import { customerIdOf, mirrorOf, subscriptionIdOfInvoice, type MirrorError, type
 /**
  * MUT-360 (§2.3, ADR-165): Stripe → billing_accounts / billing_subscriptions. One path, `syncSubscription`, serves
  * the webhook (which re-fetches the subscription its event names) and the nightly reconcile (which lists them all),
- * and it is the only place a billing account is created (D6). The store is the unguarded one (ADR-162 decision 6).
+ * and it is the only Stripe-event path that creates a billing account (D6; the operator's `billing link` can create one
+ * too). The store is the unguarded one (ADR-162 decision 6).
  */
 
-/** The events the webhook endpoint subscribes to; the runbook lists these, so it can't drift from the handler. */
+/** The events the webhook endpoint subscribes to. Pilot runbook §1.7 step 4 copies this list (a test pins it): change both. */
 export const HANDLED_EVENT_TYPES = [
   'checkout.session.completed',
   'customer.subscription.created',
@@ -26,7 +27,7 @@ export const HANDLED_EVENT_TYPES = [
 const HANDLED = new Set<string>(HANDLED_EVENT_TYPES);
 
 /** Why a subscription, customer or event needs the operator: recorded on the event, logged, returned by reconcile. */
-export type SyncCode = MirrorError | MirrorNote | SaveBillingAccountConflict | 'CUSTOMER_DELETED' | `STRIPE_${string}`;
+export type SyncCode = MirrorError | MirrorNote | SaveBillingAccountConflict | 'CUSTOMER_DELETED' | 'ORG_NOT_OWNED_BY_PAYER' | `STRIPE_${string}`;
 
 export interface SyncContext {
   /** The person a checkout names (`client_reference_id`); otherwise the customer's `mutaba3a_user_id` metadata. */
@@ -43,7 +44,7 @@ export interface SyncResult {
   subscriptionId: string;
   outcome: SaveBillingSubscriptionOutcome | 'error' | 'skipped';
   codes: SyncCode[];
-  /** Neither a linked payer nor an organization: the mirror covers nobody until the operator links the customer. */
+  /** No profile reached yet (no linked payer, no organization the rule lets it cover): the operator still has to act. */
   reachesNobody: boolean;
 }
 
@@ -108,10 +109,12 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
   }
 
   async function syncSubscription(input: SyncInput, context: SyncContext): Promise<SyncResult> {
-    const { value: sub, fetchedAt } = 'id' in input ? await deps.webhookGateway.subscription(input.id) : input.subscription;
+    // D7: the webhook path keeps the webhook's budget; reconcile's own fallback reads stay on reconcile's.
+    const gateway = 'id' in input ? deps.webhookGateway : deps.reconcileGateway;
+    const { value: sub, fetchedAt } = 'id' in input ? await gateway.subscription(input.id) : input.subscription;
     const products = 'id' in input ? NO_PRODUCTS : input.products;
     const codes: SyncCode[] = [];
-    const customer = typeof sub.customer === 'string' ? (await deps.webhookGateway.customer(sub.customer)).value : sub.customer;
+    const customer = typeof sub.customer === 'string' ? (await gateway.customer(sub.customer)).value : sub.customer;
     if ('deleted' in customer && customer.deleted) return { subscriptionId: sub.id, outcome: 'skipped', codes: ['CUSTOMER_DELETED'], reachesNobody: true };
 
     const mirror = mirrorOf(sub, products);
@@ -142,6 +145,9 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
       } else if (profileOwnerOf(organization) === null || payerProfiles.includes(organizationId)) {
         // Audit only where the read-time rule (D8/D9) lets the subscription cover: never on a stranger's profile.
         profileIds.push(organizationId);
+      } else {
+        // Stored as typed (D9 decides at read time), but it covers nothing until the payer owns it: tell the operator.
+        codes.push('ORG_NOT_OWNED_BY_PAYER');
       }
     }
 
@@ -156,7 +162,7 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
       at: now(),
       audit: { profileIds, source: context.source, eventId: context.eventId, requestId: context.requestId },
     });
-    return { subscriptionId: sub.id, outcome, codes, reachesNobody: payer === null && organizationId === null };
+    return { subscriptionId: sub.id, outcome, codes, reachesNobody: profileIds.length === 0 };
   }
 
   /** customer.updated: country and metadata link on an account the sync already made; never creates one (D6). */
@@ -216,7 +222,8 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
     try {
       const { result, codes } = await dispatch(event, requestId);
       if (codes.length > 0) logger.warn({ eventId: event.id, type: event.type, codes, requestId }, 'stripe sync needs the operator');
-      // A code that blocked the mirror leaves the event unprocessed, so a redelivery after the fix is handled again.
+      // Stripe won't redeliver a 200. A code that blocked the mirror leaves the event unprocessed, so a dashboard resend
+      // after the fix is handled again; the nightly reconcile retries the subscription either way.
       await store.billing.finishStripeEvent(event.id, result === 'error' ? { error: codes.join(',') } : { processedAt: now() });
       return { status: 200, result, codes };
     } catch (err) {

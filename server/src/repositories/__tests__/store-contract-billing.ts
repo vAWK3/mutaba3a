@@ -235,5 +235,72 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       expect(await store.billing.pruneStripeEvents(at(30))).toBeGreaterThanOrEqual(1);
       expect(await store.billing.beginStripeEvent({ id, type: 'customer.subscription.updated', at: at(31) })).toEqual({ alreadyProcessed: false });
     });
+
+    it('saveAccount state cells: unlinked or linked, against a missing, other or unknown person (MUT-360 review)', async () => {
+      const store = await makeStore();
+      const { user: u, personalOrganization } = await store.users.create(userInput());
+      const { user: v } = await store.users.create(userInput());
+      const linkAudit = [audit(personalOrganization.id, 'billing.account_linked')];
+      const unlinked = `cus_${unique()}`;
+      await store.billing.saveAccount(account(unlinked, null, { country: 'IL', currency: 'ILS' }));
+      // unlinked × no candidate: stays unlinked, country kept.
+      expect(await store.billing.saveAccount(account(unlinked, null, { currency: 'ILS', minute: 2 }))).toMatchObject({ linked: false, conflict: null, account: { userId: null, country: 'IL' } });
+      // unlinked × unknown person: stays unlinked.
+      expect(await store.billing.saveAccount(account(unlinked, randomUUID(), { currency: 'ILS', linkAudit }))).toMatchObject({ conflict: 'UNKNOWN_USER', account: { userId: null } });
+      // A linked customer for u, then: unlinked × u (who already has a customer) → stays unlinked.
+      const a = `cus_${unique()}`;
+      await store.billing.saveAccount(account(a, u.id, { linkAudit }));
+      expect(await store.billing.saveAccount(account(unlinked, u.id, { currency: 'ILS', linkAudit }))).toMatchObject({ conflict: 'USER_HAS_ANOTHER_ACCOUNT', account: { userId: null } });
+      // linked × someone with their own customer, and linked × garbage: the link wins and says so.
+      await store.billing.saveAccount(account(`cus_${unique()}`, v.id));
+      expect(await store.billing.saveAccount(account(a, v.id, { linkAudit }))).toMatchObject({ conflict: 'CUSTOMER_LINKED_ELSEWHERE', account: { userId: u.id } });
+      expect(await store.billing.saveAccount(account(a, 'not-a-uuid', { linkAudit }))).toMatchObject({ conflict: 'CUSTOMER_LINKED_ELSEWHERE', account: { userId: u.id } });
+      expect(await billingAudit(store, personalOrganization.id)).toEqual(['billing.account_linked']);
+    });
+
+    it('concurrent saves never undo or duplicate a link, and two first sightings both succeed (MUT-360 review)', async () => {
+      const store = await makeStore();
+      for (let i = 0; i < 15; i++) {
+        const { user, personalOrganization } = await store.users.create(userInput());
+        const linkAudit = [audit(personalOrganization.id, 'billing.account_linked')];
+        // Two first sightings of a new customer (checkout + subscription.created arrive together).
+        const fresh = `cus_${unique()}`;
+        const [x, y] = await Promise.all([store.billing.saveAccount(account(fresh, null)), store.billing.saveAccount(account(fresh, null))]);
+        expect(x.account.id).toBe(y.account.id);
+        // An operator link racing a sync that names nobody: the link stays.
+        const c = `cus_${unique()}`;
+        await store.billing.saveAccount(account(c, null));
+        await Promise.all([
+          store.billing.linkAccount({ stripeCustomerId: c, userId: user.id, currency: null, at: at(1), audit: [] }),
+          store.billing.saveAccount(account(c, null, { minute: 2 })),
+        ]);
+        expect((await store.billing.getAccount(c))?.userId).toBe(user.id);
+        // Two saves linking the same person: no false conflict, one audit row.
+        const d = `cus_${unique()}`;
+        const { user: w, personalOrganization: wp } = await store.users.create(userInput());
+        await store.billing.saveAccount(account(d, null));
+        const both = await Promise.all([
+          store.billing.saveAccount(account(d, w.id, { linkAudit: [audit(wp.id, 'billing.account_linked')] })),
+          store.billing.saveAccount(account(d, w.id, { linkAudit: [audit(wp.id, 'billing.account_linked')], minute: 2 })),
+        ]);
+        expect(both.map((r) => r.conflict)).toEqual([null, null]);
+        expect((await store.billing.getAccount(d))?.userId).toBe(w.id);
+        expect(await billingAudit(store, wp.id)).toEqual(['billing.account_linked']);
+        void linkAudit;
+      }
+    });
+
+    it('two first reads of a new subscription leave one row and one created audit (MUT-360 review)', async () => {
+      const store = await makeStore();
+      const { personalOrganization } = await store.users.create(userInput());
+      const customer = `cus_${unique()}`;
+      await store.billing.saveAccount(account(customer, null));
+      const base = subscription(customer, null, [personalOrganization.id]);
+      const outcomes = (await Promise.all([store.billing.saveSubscription(base), store.billing.saveSubscription({ ...base, stripeUpdatedAt: at(2), at: at(2) })])).map((r) => r.outcome);
+      expect(outcomes).toContain('created');
+      const rows = (await store.audit.list(personalOrganization.id, {}, { limit: 50, cursor: null })).items.filter((e) => e.action === 'billing.subscription_changed');
+      expect(rows).toHaveLength(1);
+    });
   });
 }
+

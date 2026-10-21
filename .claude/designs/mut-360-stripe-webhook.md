@@ -177,7 +177,7 @@ That's 9 types.
 3. Each listed subscription goes through `syncSubscription` with its page's `fetchedAt`.
 4. Prune `stripe_events` older than 90 days.
 5. Return `{ checked, changed, unlinked, errors: [{ subscriptionId, code }] }`, always with **200**, so Scheduler retries never repeat a scan that completed.
-6. Log one summary line. Each error goes to warn with ids only, which reaches Sentry.
+6. Log one summary line. Each error goes to warn with ids only. (Review correction: the server has no Sentry client, so these are log lines only; TODOS #17.)
 
 ### 2.4 Repository changes (no migration)
 
@@ -793,7 +793,7 @@ Dispositions: both accepted as corrections (no behaviour change).
 |---|---|---|---|
 | Webhook | Stripe API slow | D7 budget → 500, Stripe retries; test | Nothing; Stripe dashboard shows retries |
 | Webhook | Wrong `whsec_` after rotation | 400 on every event; Stripe emails on endpoint failures; reconcile heals nightly | Stripe's failure email |
-| Webhook | Product missing `metadata.tier` | `UNKNOWN_TIER` recorded + warn log (Sentry); cutover checklist step 1 | Sentry alert, `/v1/me` unchanged |
+| Webhook | Product missing `metadata.tier` | `UNKNOWN_TIER` recorded + warn log; cutover checklist step 1 | A log line only (no Sentry on the server; review correction), `/v1/me` unchanged |
 | Sync | Returning payer gets a second customer | account unlinked, listed by `billing:unlinked`; MUT-362 note | Operator list |
 | Reconcile | Job token rotated or Stripe unset | 401/503 in Scheduler logs only | **Silent** until TODOS #17. Not critical: webhooks still keep payers current |
 | Coverage | Org metadata names a firm the payer doesn't own | read-time rule (D9); test | Firm stays uncovered; mismatch visible via `/v1/me` |

@@ -6,7 +6,7 @@ import pino from 'pino';
 import Stripe from 'stripe';
 import { createApp, type AppDependencies } from '../app.js';
 import { createStripeGateway, WEBHOOK_BUDGET, type StripeGateway } from '../billing/stripe/gateway.js';
-import { FakeStripeGateway, stripeObjects } from '../billing/stripe/__tests__/fake.js';
+import { FAKE_WEBHOOK_SECRET, FakeStripeGateway, stripeObjects } from '../billing/stripe/__tests__/fake.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
@@ -93,7 +93,7 @@ describe('POST /v1/billing/stripe/webhook (MUT-360)', () => {
     const signed = h.stripe.sign(event);
     const tampered = await h.app.request(WEBHOOK, { method: 'POST', headers: { 'stripe-signature': signed.signature }, body: signed.raw.replace('sub_1', 'sub_2') });
     expect(tampered.status).toBe(400);
-    const old = new Stripe('sk_test_x').webhooks.generateTestHeaderString({ payload: signed.raw, secret: 'whsec_mut360_fake_endpoint', timestamp: Math.floor(Date.now() / 1000) - 3600 });
+    const old = new Stripe('sk_test_x').webhooks.generateTestHeaderString({ payload: signed.raw, secret: FAKE_WEBHOOK_SECRET, timestamp: Math.floor(Date.now() / 1000) - 3600 });
     expect((await h.app.request(WEBHOOK, { method: 'POST', headers: { 'stripe-signature': old }, body: signed.raw })).status).toBe(400);
     expect(h.stripe.calls).toEqual([]);
     expect(await h.store.billing.getAccount('cus_1')).toBeNull();
@@ -152,7 +152,7 @@ describe('POST /v1/billing/stripe/webhook (MUT-360)', () => {
     const key = 'rk_test_secret_key_never_in_logs';
     const failing = Stripe.createFetchHttpClient((async () =>
       new Response(JSON.stringify({ error: { type: 'api_error', message: 'upstream body that must not be logged' } }), { status: 500, headers: { 'content-type': 'application/json' } })) as typeof fetch);
-    const real = createStripeGateway({ secretKey: key, webhookSecret: 'whsec_mut360_fake_endpoint', ...WEBHOOK_BUDGET, now: () => NOW, httpClient: failing });
+    const real = createStripeGateway({ secretKey: key, webhookSecret: FAKE_WEBHOOK_SECRET, ...WEBHOOK_BUDGET, now: () => NOW, httpClient: failing });
     const h = harness({ gateway: real });
     const res = await h.deliver(subscriptionEvent(), {});
     expect(res.status).toBe(500);

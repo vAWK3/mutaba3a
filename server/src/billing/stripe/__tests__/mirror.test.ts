@@ -71,6 +71,11 @@ describe('mirrorOf (MUT-360)', () => {
     expect(mirrorOf(subscription({ currency: 'eur' }), new Map())).toEqual({ error: 'UNSUPPORTED_CURRENCY' });
   });
 
+  it('cuts a lookup key to the column’s 100 characters', () => {
+    const long = 'k'.repeat(150);
+    expect(mirrorOf(subscription({}, [item(product('prod_A', 'freelancer'), 1, long)]), new Map())).toMatchObject({ ok: { priceLookupKey: 'k'.repeat(100) } });
+  });
+
   it('keeps Stripe’s status and cancel-at-period-end as sent', () => {
     expect(mirrorOf(subscription({ status: 'past_due', cancel_at_period_end: true }), new Map())).toMatchObject({ ok: { status: 'past_due', cancelAtPeriodEnd: true } });
   });

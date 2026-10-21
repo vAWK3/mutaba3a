@@ -26,6 +26,7 @@ export interface MirrorFields {
 }
 
 const TIERS: Record<string, BillingTier> = { freelancer: 'FREELANCER', firm: 'FIRM' };
+const LOOKUP_KEY_MAX = 100;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** `products`: by id, for list results, which can't expand `price.product` (five levels; Stripe allows four). */
@@ -57,7 +58,9 @@ export function mirrorOf(sub: Stripe.Subscription, products: ReadonlyMap<string,
       status: sub.status,
       currentPeriodEnd: periodEnd,
       cancelAtPeriodEnd: sub.cancel_at_period_end,
-      priceLookupKey: tieredItem.price.lookup_key ?? null,
+      // billing_subscriptions.priceLookupKey is VarChar(100); Stripe allows 200. Our keys are short; never let a long one
+      // turn the event into a database error Stripe retries for days.
+      priceLookupKey: tieredItem.price.lookup_key?.slice(0, LOOKUP_KEY_MAX) ?? null,
       founderUntil: null,
       currency,
     },

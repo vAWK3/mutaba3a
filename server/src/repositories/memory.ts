@@ -140,7 +140,7 @@ import type {
   RecordsExportRepository,
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
-import { CAPTURE_UNDO_REASON } from './ports.js';
+import { CAPTURE_UNDO_REASON, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { isBeforeCursor, mergeNewestFirst } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, ownsProfile, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
@@ -1954,7 +1954,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const row = this.stripeEvents.get(id);
       if (!row) return;
       if ('processedAt' in outcome) Object.assign(row, { processedAt: outcome.processedAt, error: null });
-      else row.error = outcome.error;
+      else row.error = outcome.error.slice(0, STRIPE_EVENT_ERROR_MAX);
     },
     pruneStripeEvents: async (before) => {
       let count = 0;

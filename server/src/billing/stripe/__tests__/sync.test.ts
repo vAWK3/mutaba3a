@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import pino from 'pino';
 import type Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
@@ -5,7 +6,7 @@ import { MemoryLedgerStore } from '../../../repositories/memory.js';
 import type { CreateUserInput } from '../../../repositories/ports.js';
 import { entitlementsFor } from '../../coverage.js';
 import { StripeGatewayError, type StripeGateway } from '../gateway.js';
-import { createStripeSync, ReconcileRunning } from '../sync.js';
+import { createStripeSync, HANDLED_EVENT_TYPES, ReconcileRunning } from '../sync.js';
 import { FakeStripeGateway, stripeObjects } from './fake.js';
 
 /** MUT-360 §2.3: events and the nightly reconcile through one sync path, on the memory store and a fake Stripe. */
@@ -255,5 +256,12 @@ describe('Stripe sync (MUT-360)', () => {
     await h.store.billing.beginStripeEvent({ id: 'evt_old', type: 'customer.updated', at: new Date(NOW.getTime() - 91 * 86_400_000) });
     await h.store.billing.beginStripeEvent({ id: 'evt_new', type: 'customer.updated', at: new Date(NOW.getTime() - 89 * 86_400_000) });
     expect(await h.sync.reconcile(null)).toMatchObject({ pruned: 1 });
+  });
+
+  it('pilot runbook §1.7 lists exactly the events the handler handles', () => {
+    const runbook = readFileSync(new URL('../../../../../docs/operations/pilot-runbook.md', import.meta.url), 'utf8');
+    const step = /4\. \*\*Webhook endpoint\.\*\*[\s\S]*?Set \*\*its API version/.exec(runbook)?.[0] ?? '';
+    const listed = [...step.matchAll(/`((?:checkout|customer|invoice)\.[a-z_.]+)`/g)].map((m) => m[1]);
+    expect(listed.sort()).toEqual([...HANDLED_EVENT_TYPES].sort());
   });
 });

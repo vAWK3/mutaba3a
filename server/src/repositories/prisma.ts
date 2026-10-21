@@ -109,7 +109,7 @@ import type {
   EntryRow,
   PageCursor,
 } from './ports.js';
-import { CAPTURE_UNDO_REASON } from './ports.js';
+import { CAPTURE_UNDO_REASON, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { mergeNewestFirst } from '../entries/merge.js';
 
@@ -1656,7 +1656,9 @@ export class PrismaLedgerStore implements LedgerStore {
     linkAccount: (input) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
-          // Lock the customer's row (if any) and the person's, so two links can't both pass the checks below.
+          // Lock the customer's row (if any), then the person's — saveAccount's order, so the two never deadlock — so two
+          // links can't both pass the checks below and a concurrent Stripe sync can't write back a stale userId.
+          await tx.$queryRaw`SELECT id FROM billing_accounts WHERE "stripeCustomerId" = ${input.stripeCustomerId} FOR UPDATE`;
           await tx.$queryRaw`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
           const existing = await tx.billingAccount.findUnique({ where: { stripeCustomerId: input.stripeCustomerId } });
           if (existing?.userId === input.userId) return { account: existing, linked: false };
@@ -1678,29 +1680,41 @@ export class PrismaLedgerStore implements LedgerStore {
         where: linked === undefined ? {} : { userId: linked ? { not: null } : null },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       }),
-    saveAccount: (input) =>
-      translate(() =>
-        this.prisma.$transaction(async (tx) => {
-          const existing = await tx.billingAccount.findUnique({ where: { stripeCustomerId: input.stripeCustomerId } });
-          let userId = existing?.userId ?? null;
-          let conflict: SaveBillingAccountConflict | null = null;
-          if (input.userId !== null && input.userId !== userId) {
-            // Lock the person's row, as linkAccount does, so two customers can't both claim them past the check below.
-            const person = UUID_RE.test(input.userId) ? await tx.$queryRaw<{ id: string }[]>`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE` : [];
-            if (userId !== null) conflict = 'CUSTOMER_LINKED_ELSEWHERE';
-            else if (person.length === 0) conflict = 'UNKNOWN_USER';
-            else if (await tx.billingAccount.findUnique({ where: { userId: input.userId }, select: { id: true } })) conflict = 'USER_HAS_ANOTHER_ACCOUNT';
-            else userId = input.userId;
-          }
-          const linked = userId !== null && userId !== (existing?.userId ?? null);
-          const data = { userId, country: input.country ?? existing?.country ?? null, currency: input.currency, updatedAt: input.at };
-          const account = existing
-            ? await tx.billingAccount.update({ where: { id: existing.id }, data })
-            : await tx.billingAccount.create({ data: { ...data, stripeCustomerId: input.stripeCustomerId, createdAt: input.at } });
-          if (linked && input.linkAudit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.linkAudit, input.at) });
-          return { account, linked, conflict };
-        }),
-      ),
+    saveAccount: async (input) => {
+      const attempt = () =>
+        translate(() =>
+          this.prisma.$transaction(async (tx) => {
+            // Customer row, then person row, the same order as linkAccount: a concurrent link or sync waits here and
+            // then reads what the other one wrote, so nothing is decided (or written back) from a stale read.
+            await tx.$queryRaw`SELECT id FROM billing_accounts WHERE "stripeCustomerId" = ${input.stripeCustomerId} FOR UPDATE`;
+            const existing = await tx.billingAccount.findUnique({ where: { stripeCustomerId: input.stripeCustomerId } });
+            let userId = existing?.userId ?? null;
+            let conflict: SaveBillingAccountConflict | null = null;
+            if (input.userId !== null && input.userId !== userId) {
+              const person = UUID_RE.test(input.userId) ? await tx.$queryRaw<{ id: string }[]>`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE` : [];
+              if (userId !== null) conflict = 'CUSTOMER_LINKED_ELSEWHERE';
+              else if (person.length === 0) conflict = 'UNKNOWN_USER';
+              else if (await tx.billingAccount.findUnique({ where: { userId: input.userId }, select: { id: true } })) conflict = 'USER_HAS_ANOTHER_ACCOUNT';
+              else userId = input.userId;
+            }
+            const linked = userId !== null && userId !== (existing?.userId ?? null);
+            // userId is written only when this call links: never copied back from what it read (D5: never unlink).
+            const data = { country: input.country ?? existing?.country ?? null, currency: input.currency, updatedAt: input.at, ...(linked ? { userId } : {}) };
+            const account = existing
+              ? await tx.billingAccount.update({ where: { id: existing.id }, data })
+              : await tx.billingAccount.create({ data: { ...data, userId, stripeCustomerId: input.stripeCustomerId, createdAt: input.at } });
+            if (linked && input.linkAudit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.linkAudit, input.at) });
+            return { account, linked, conflict };
+          }),
+        );
+      try {
+        return await attempt();
+      } catch (err) {
+        // Two first sightings of a new customer (checkout and subscription events arrive together): the loser reads again.
+        if (err instanceof UniqueViolation) return attempt();
+        throw err;
+      }
+    },
     saveSubscription: async (input) => {
       const { stripeCustomerId, at, audit, ...fields } = input;
       const attempt = () =>
@@ -1738,7 +1752,7 @@ export class PrismaLedgerStore implements LedgerStore {
     finishStripeEvent: async (id, outcome) => {
       await this.prisma.stripeEvent.updateMany({
         where: { id },
-        data: 'processedAt' in outcome ? { processedAt: outcome.processedAt, error: null } : { error: outcome.error.slice(0, 500) },
+        data: 'processedAt' in outcome ? { processedAt: outcome.processedAt, error: null } : { error: outcome.error.slice(0, STRIPE_EVENT_ERROR_MAX) },
       });
     },
     pruneStripeEvents: async (before) => (await this.prisma.stripeEvent.deleteMany({ where: { receivedAt: { lt: before } } })).count,
