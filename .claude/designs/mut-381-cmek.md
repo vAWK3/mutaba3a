@@ -81,12 +81,12 @@ Status at planning: Backlog → Planned. Plan only; Claude prepares code and Ter
 
 ### Docs
 
-11. ADR-162 in `.claude/DECISIONS.md`: CMEK on Cloud SQL and the bucket.
+11. ADR-163 in `.claude/DECISIONS.md`: CMEK on Cloud SQL and the bucket.
     - Record D1–D6.
     - **What it protects:** physical media and Google-internal access outside our project; the ability to revoke the key, making the whole store unreadable along with its backups.
     - **What it doesn't:** anyone with project roles (operators, and Malafat's runtime SA, which has project-wide KMS/storage/SQL roles); application-level reads.
     - Amend ADR-024's "encrypted at rest" with a pointer here.
-12. TD entry (next free number): the project-wide roles of Malafat's runtime SA in the shared project cancel CMEK's isolation. The fix is the project split or Malafat narrowing to its own resources.
+12. TD-194: the project-wide roles of Malafat's runtime SA in the shared project cancel CMEK's isolation. The fix is the project split or Malafat narrowing to its own resources.
 13. `server/DEPLOYMENT.md` §6d (new) — the operator steps: phase 1 apply, signed-URL check, object rewrite, rehearsal, cutover, verify, rollback, day-14 deletion.
 14. `docs/operations/pilot-runbook.md`:
     - The §8 drill notes that CMEK scratch instances use the source's key.
@@ -404,7 +404,7 @@ Critical gaps: none (no row is silent and untested with no handling).
 |---|---|---|
 | Terraform (stage, KMS, pg2, ingress, tests) | server/infrastructure/terraform | — |
 | Scripts (db-checks, drill, cutover + tests) | server/scripts, server/src/scripts/__tests__ | Terraform output name `cloud_sql_instance_name` (agree first) |
-| Docs (ADR-162, TD, DEPLOYMENT §6d, runbook, INFRA) | .claude, server/DEPLOYMENT.md, docs/operations | both above |
+| Docs (ADR-163, TD, DEPLOYMENT §6d, runbook, INFRA) | .claude, server/DEPLOYMENT.md, docs/operations | both above |
 
 Sequential implementation, no parallelization opportunity worth a second worktree. The two code lanes share the output contract, and the whole job is about 1.5 CC-hours.
 
@@ -431,7 +431,7 @@ Synthesized from this review's findings. Each task derives from a specific findi
   - Surfaced by: D1; C2; C4; R1
   - Files: server/scripts/cmek-cutover.sh, server/src/scripts/__tests__/cmek-cutover.test.ts
   - Verify: `npm --prefix server test -- cmek-cutover`
-- [ ] **T6 (P2, human: ~2h / CC: ~15min)** — docs — ADR-162 (amends ADR-024), TD entry (Malafat's project-wide roles), DEPLOYMENT.md §6d, pilot-runbook §5/§8/§10, INFRA.md rows
+- [ ] **T6 (P2, human: ~2h / CC: ~15min)** — docs — ADR-163 (amends ADR-024), TD entry (Malafat's project-wide roles), DEPLOYMENT.md §6d, pilot-runbook §5/§8/§10, INFRA.md rows
   - Surfaced by: Architecture (honest limits); plan items 11–15
   - Files: .claude/DECISIONS.md, .claude/TECH_DEBT.md, server/DEPLOYMENT.md, docs/operations/pilot-runbook.md, .claude/INFRA.md
   - Verify: review; `npm --prefix server test` (legal-terms test still green)

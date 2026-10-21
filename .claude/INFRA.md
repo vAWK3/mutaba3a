@@ -99,6 +99,8 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 |---|---|
 | `API_KEY_ENVIRONMENT` | `live` |
 | Cloud SQL | `db-g1-small`, REGIONAL, daily backups + PITR 7d, deletion protection |
+| Encryption at rest (MUT-381, ADR-163) | `cmek_stage` = **off** (merged, not applied). From `prepared`: KMS key `mutaba3a-data` (ring `mutaba3a`, me-west1, 90-day rotation, `prevent_destroy`) on `mutaba3a-pg2` and as the attachments bucket's default. From `active` the API serves from `mutaba3a-pg2`. Procedure: DEPLOYMENT.md §6d. Secret Manager and Terraform state keep Google's default encryption |
+| Cloud Run ingress | `api_ingress` = `INGRESS_TRAFFIC_ALL`; `INGRESS_TRAFFIC_INTERNAL_ONLY` only for the CMEK switch apply or a whole-database restore |
 | Attachments bucket | no versioning; deleted objects restorable 14 days (`soft_delete_policy`, TD-190), as long as the 14 daily backups. **Applied 2026-10-20** (rode along with the §6b apply as a dependency; `retention_duration_seconds` 604800 → 1209600) |
 | Cloud Run instances | min 1 · max 1 (TD-017) |
 | Prisma pool per instance | `db_pool_size` = 10, as `connection_limit` in the DATABASE_URL secret Terraform writes (MUT-270) |
@@ -119,6 +121,7 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 - `server/infrastructure/terraform/monitoring.tf` — uptime checks, notification channels and alert policies (MUT-328, ADR-154). **Applied 2026-10-20, email only**: `alert_email` set in production.tfvars (channel `notificationChannels/14384563563247649611`), 3 checks + 5 policies live, 8 added / 1 changed (the §6c bucket) / 0 destroyed. No SMS channel yet (`alert_sms_number` unset; add it and re-run §6b steps 2–4 when wanted). The drill (§6b) has not been run. The checks probe `uptime_host`, else the Cloud Run host, so they follow the custom domain (MUT-112).
 - `server/Dockerfile` — the one image.
 - `server/scripts/deploy.sh` — the only rollout path; runs on the operator's machine.
+- `server/scripts/cmek-cutover.sh` — the one-time move to `mutaba3a-pg2` under our key (MUT-381): rehearse, cutover, verify. The only instance it changes is `mutaba3a-pg2`.
 - `docs/operations/pilot-runbook.md` — the pilot operator runbook (MUT-327): onboarding, resets, restores, incidents, support, offboarding. `server/scripts/restore-drill.sh` restores backups into scratch instances (**drill not yet run against production**; results go in the runbook's §10), `server/scripts/profile-rows.sh` exports, restores or purges one profile.
 - `.github/workflows/server-ci.yml` — verification only; never pushes or deploys.
 
@@ -151,6 +154,8 @@ Money M8.
 |---|---|
 | Cloud SQL | ~$50–60/mo (`db-g1-small`, REGIONAL) |
 | Cloud Run | ~$10–15/mo (1 min instance, 512Mi, cpu idle) |
+| Cloud KMS key `mutaba3a-data` (from `cmek_stage = prepared`, MUT-381) | ~$0.06 per key version per month (4–5 versions a year) plus cents of operations |
+| Second Cloud SQL instance during the CMEK cutover (MUT-381) | about $2/day from `prepared` until MUT-383 deletes `mutaba3a-pg`, 14 days after the cutover: about $28 if the cutover follows within a day |
 | Attachments bucket, incl. 14 days of soft-deleted receipts (TD-190) | cents/mo at pilot volume (STANDARD rate; soft-deleted bytes bill the same until purged) |
 | Secret Manager, Artifact Registry, uptime checks + 5 alert conditions (MUT-328) | < $1/mo (checks within the 1M runs/month free; ~$0.10/condition/month if alerting charges apply) |
 
