@@ -38,19 +38,20 @@ locals {
   alerting_enabled = var.alert_email != "" || local.sms_enabled || length(var.alert_notification_channels) > 0
 
   # By name, not by reference: a targeted monitoring apply (DEPLOYMENT.md §6b) then never plans the instance itself.
-  cloud_sql_database_id = "${var.project_id}:${local.instance_id}"
+  # MUT-381: the instance the API serves from (main.tf), which cmek_stage = active moves to mutaba3a-pg2.
+  cloud_sql_database_id = "${var.project_id}:${local.active_instance_id}"
   cloud_sql_alerts = {
     disk = {
-      display_name = "${local.instance_id} disk above 80%"
+      display_name = "${local.active_instance_id} disk above 80%"
       metric       = "cloudsql.googleapis.com/database/disk/utilization"
       threshold    = 0.8
-      doc          = "Cloud SQL `${local.instance_id}` has used more than 80% of its disk for 15 minutes. `disk_autoresize` grows it (and the bill) on its own; check what is growing before it does."
+      doc          = "Cloud SQL `${local.active_instance_id}` has used more than 80% of its disk for 15 minutes. `disk_autoresize` grows it (and the bill) on its own; check what is growing before it does."
     }
     cpu = {
-      display_name = "${local.instance_id} CPU above 90%"
+      display_name = "${local.active_instance_id} CPU above 90%"
       metric       = "cloudsql.googleapis.com/database/cpu/utilization"
       threshold    = 0.9
-      doc          = "Cloud SQL `${local.instance_id}` has run above 90% CPU for 15 minutes. Look for a slow query in Query Insights before raising `db_tier`."
+      doc          = "Cloud SQL `${local.active_instance_id}` has run above 90% CPU for 15 minutes. Look for a slow query in Query Insights before raising `db_tier`."
     }
   }
 }
