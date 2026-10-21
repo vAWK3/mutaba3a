@@ -1436,6 +1436,8 @@ export const ReceivableSchema = z
     status: ItemStatusSchema,
     /** "What you did" (MUT-65, ADJUSTMENT origin only); null otherwise. */
     title: z.string().nullable(),
+    /** MUT-373: who captured an Owed entry; only they may re-date it (PATCH /v1/income/{id}). Null for other origins. */
+    capturedByUserId: uuid.nullable().openapi({ description: 'Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person\'s account is gone.' }),
     version: z.number().int(),
   })
   .openapi('Receivable');

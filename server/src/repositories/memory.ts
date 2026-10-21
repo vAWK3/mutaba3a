@@ -660,7 +660,7 @@ export class MemoryLedgerStore implements LedgerStore {
       return { membership: { ...membership }, created: true };
     },
     revoke: async (userId, organizationId) => this.members.delete(membershipKey(userId, organizationId)),
-    grantOwner: async (userId, organizationId, at, maxOwners) => {
+    grantOwner: async (userId, organizationId, at, maxOwners, audit) => {
       const organization = this.orgs.get(organizationId);
       if (!organization) return { kind: 'not_found' };
       if (!this.people.has(userId)) throw new ForeignKeyViolation('memberships.userId');
@@ -668,9 +668,17 @@ export class MemoryLedgerStore implements LedgerStore {
       const existing = this.members.get(membershipKey(userId, organizationId)) ?? null;
       const refusal = grantOwnerRefusal(organization, existing?.role ?? null, ownerIdsOf(organization, members).length, maxOwners);
       if (refusal) return refusal;
-      if (existing) return { kind: 'granted', membership: { ...existing }, created: false };
+      const record = () => this.events.push({ id: randomUUID(), createdAt: at, ...audit });
+      if (existing) {
+        const granted = this.events.some(
+          (e) => e.organizationId === organizationId && e.entityType === 'user' && e.entityId === userId && e.action === 'membership.granted' && e.metadata?.role === 'OWNER',
+        );
+        if (!granted) record();
+        return { kind: 'granted', membership: { ...existing }, created: false };
+      }
       const membership: MembershipRecord = { userId, organizationId, role: 'OWNER', createdAt: at };
       this.members.set(membershipKey(userId, organizationId), membership);
+      record();
       return { kind: 'granted', membership: { ...membership }, created: true };
     },
     removeOwner: async (input) => {

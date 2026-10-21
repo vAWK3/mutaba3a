@@ -130,11 +130,33 @@ describe('the operator adds a co-owner (role OWNER)', () => {
     expect((await read(res)).error.details).toEqual({ reason: 'OWNER_LIMIT', limit: MAX_PROFILE_OWNERS });
   });
 
+  it('refuses a disabled account (USER_DISABLED, qa-reconcile D2), and writes nothing', async () => {
+    const h = harness();
+    const basel = await person(h);
+    const lina = await person(h);
+    const id = await businessOf(h, basel);
+    expect((await h.app.request(`/admin/v1/users/${lina.userId}/disable`, { method: 'POST', headers: admin })).status).toBe(200);
+    const res = await grant(h, lina.userId, id, 'OWNER');
+    expect(res.status).toBe(409);
+    expect((await read(res)).error.details).toEqual({ reason: 'USER_DISABLED' });
+    expect(await h.store.memberships.find(lina.userId, id)).toBeNull();
+    expect((await h.store.audit.listByOrganization(id, 50)).filter((e) => e.action === 'membership.granted' && e.entityId === lina.userId)).toEqual([]);
+  });
+
+  it('audits an operator revoke of a co-owner with the role they held', async () => {
+    const { h, lina, id } = await shared();
+    expect((await h.app.request(`/admin/v1/users/${lina.userId}/memberships/${id}`, { method: 'DELETE', headers: admin })).status).toBe(200);
+    expect(await h.store.memberships.find(lina.userId, id)).toBeNull();
+    const revoked = (await h.store.audit.listByOrganization(id, 50)).filter((e) => e.action === 'membership.revoked');
+    expect(revoked).toEqual([expect.objectContaining({ actorType: 'ADMIN', entityId: lina.userId, metadata: { role: 'OWNER', reason: 'operator' } })]);
+  });
+
   it('refuses to turn an existing member with another role into an owner (eng review D7)', async () => {
     const { h, id } = await shared();
     const bookkeeper = await person(h);
-    // Unreachable through the API until MUT-306: plant the BOOKKEEPER row directly.
-    (h.store as unknown as { members: Map<string, Loose> }).members.set(`${bookkeeper.userId}:${id}`, { userId: bookkeeper.userId, organizationId: id, role: 'BOOKKEEPER', createdAt: h.clock.now });
+    // Unreachable through the API until MUT-306: with firm features on, a store grant lands as BOOKKEEPER (MUT-300).
+    expect((await h.app.request(`/admin/v1/organizations/${id}`, json({ firmEnabled: true }, admin, 'PATCH'))).status).toBe(200);
+    expect((await h.store.memberships.grant(bookkeeper.userId, id, h.clock.now)).membership.role).toBe('BOOKKEEPER');
     const res = await grant(h, bookkeeper.userId, id, 'OWNER');
     expect(res.status).toBe(409);
     expect((await read(res)).error.details).toEqual({ reason: 'ROLE_CHANGE_NOT_SUPPORTED', role: 'BOOKKEEPER' });
@@ -197,10 +219,31 @@ describe('a co-owner owns the profile as fully as its creator', () => {
     expect((await redate(theirs.id)).status).toBe(404);
   });
 
+  it('re-dates only an Owed entry they captured, and the entry says who did (qa-reconcile D1)', async () => {
+    const { h, basel, lina, id } = await shared();
+    const client = await read(await h.app.request('/v1/customers', json({ name: 'Al-Quds Bakery' }, lina.me({ 'x-mutaba3a-profile': id, ...idem() }))));
+    const owe = async (by: Person) => {
+      const res = await h.app.request('/v1/income', json({ kind: 'owed', amount: '120.00', currency: 'ILS', occurredOn: '2026-10-08', customerId: client.id, dueDate: '2026-11-15' }, by.me({ 'x-mutaba3a-profile': id, ...idem() })));
+      expect(res.status).toBe(201);
+      return (await read(res)).id as string;
+    };
+    const mine = await owe(lina);
+    const theirs = await owe(basel);
+    const entry = async (rid: string) => read(await h.app.request(`/v1/receivables/${rid}`, { headers: lina.me({ 'x-mutaba3a-profile': id }) }));
+    expect((await entry(mine)).capturedByUserId).toBe(lina.userId);
+    expect((await entry(theirs)).capturedByUserId).toBe(basel.userId);
+    const redate = (rid: string) => h.app.request(`/v1/income/${rid}`, json({ occurredOn: '2026-10-01' }, lina.me({ 'x-mutaba3a-profile': id, 'if-match': '1' }), 'PATCH'));
+    expect((await redate(mine)).status).toBe(200);
+    expect((await redate(theirs)).status).toBe(404);
+  });
+
   it('may ask for firm features, and both owners see who asked (DR13)', async () => {
     const { h, basel, lina, id } = await shared();
     expect((await h.app.request(`/v1/profiles/${id}/firm-request`, { method: 'POST', headers: lina.me(idem()) })).status).toBe(202);
     expect((await profileIn(h, basel, id)).firmRequestedBy).toEqual({ userId: lina.userId, name: 'Lina Haddad' });
+    // The request outlives the person: once they leave, the creator still sees it, no longer named.
+    expect((await removeOwner(h, lina, id, lina.userId)).status).toBe(200);
+    expect((await profileIn(h, basel, id)).firmRequestedBy).toEqual({ userId: lina.userId, name: null });
   });
 
   it('keeps every owner OWNER when firm features are turned on (no demotion)', async () => {
@@ -263,15 +306,32 @@ describe('leaving and removing (DELETE /v1/profiles/{id}/owners/{userId})', () =
       const res = await removeOwner(h, lina, id, target);
       expect(res.status).toBe(403);
       expect((await read(res)).error.details).toEqual({ reason: 'NOT_CREATOR' });
+      expect(await h.store.memberships.find(target, id)).toMatchObject({ role: 'OWNER' });
     }
+    expect((await h.store.audit.listByOrganization(id, 50)).filter((e) => e.action === 'membership.revoked')).toEqual([]);
+  });
+
+  it('answers NOT_OWNER to firm staff who belong to the profile but don’t own it', async () => {
+    const h = harness();
+    const firm = (await read(await h.app.request('/admin/v1/organizations', json({ name: `Firm ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)))).id as string;
+    const staff = await person(h, { firmId: firm });
+    const res = await removeOwner(h, staff, firm, staff.userId);
+    expect(res.status).toBe(403);
+    expect((await read(res)).error.details).toEqual({ reason: 'NOT_OWNER' });
+    expect(await h.store.memberships.find(staff.userId, firm)).not.toBeNull();
   });
 
   it('answers 404 to an outsider, and for someone who isn’t a co-owner', async () => {
     const { h, basel, lina, id } = await shared();
     const outsider = await person(h);
-    expect((await removeOwner(h, outsider, id, lina.userId)).status).toBe(404);
+    for (const target of [lina.userId, basel.userId, outsider.userId]) expect((await removeOwner(h, outsider, id, target)).status).toBe(404);
     expect((await removeOwner(h, basel, id, outsider.userId)).status).toBe(404);
+    expect((await removeOwner(h, lina, id, outsider.userId)).status).toBe(404);
     expect((await removeOwner(h, basel, basel.personalId, lina.userId)).status).toBe(404);
+    expect(await h.store.memberships.find(lina.userId, id)).toMatchObject({ role: 'OWNER' });
+    expect(await h.store.memberships.find(basel.userId, id)).toMatchObject({ role: 'OWNER' });
+    expect(await h.store.memberships.find(outsider.userId, id)).toBeNull();
+    expect((await h.store.audit.listByOrganization(id, 50)).filter((e) => e.action === 'membership.revoked')).toEqual([]);
   });
 
   it('replays the first answer for a retry with the same key, and 404s a fresh one after success', async () => {

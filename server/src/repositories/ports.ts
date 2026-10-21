@@ -1405,9 +1405,11 @@ export interface MembershipRepository {
   /**
    * MUT-373 (operator): makes `userId` a co-owner — an OWNER member — of an owned BUSINESS profile, in one
    * transaction holding the organization's row, so two grants can never pass `maxOwners` and a retype can't slip
-   * in between (outside voice OV3). Idempotent for an existing OWNER. Audit is the caller's (the admin route).
+   * in between (outside voice OV3). Idempotent for an existing OWNER. `audit` (`membership.granted`, role OWNER)
+   * commits in the same transaction when the membership is created, and on a confirm when the person holds no such
+   * row yet: pre-roll recognizes a co-owner only by it, so confirming a flagged membership must leave one.
    */
-  grantOwner(userId: string, organizationId: string, at: Date, maxOwners: number): Promise<GrantOwnerResult>;
+  grantOwner(userId: string, organizationId: string, at: Date, maxOwners: number, audit: AuditEventInput): Promise<GrantOwnerResult>;
   /**
    * MUT-373: a co-owner leaves, or the creator removes one, under the organization's row lock. Deletes the
    * membership only (their records stay, attributed to them) and writes `membership.revoked` (actor USER,

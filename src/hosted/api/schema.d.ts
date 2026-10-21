@@ -9603,7 +9603,7 @@ export interface paths {
         head?: never;
         /**
          * Rename a profile you own, change its default currency or its type
-         * @description One atomic write under If-Match. The default currency only seeds new records; existing ones keep theirs. A changed type replaces the profile’s expense categories with the new type’s preset, in your language, and leaves every expense that had one uncategorized — preview it with GET /v1/profiles/{profileId}/type-change. The built-in personal profile can be renamed but is always PERSONAL (409 CONFLICT, details.reason DEFAULT_PERSONAL_PROFILE).
+         * @description One atomic write under If-Match. The default currency only seeds new records; existing ones keep theirs. A changed type replaces the profile’s expense categories with the new type’s preset, in your language, and leaves every expense that had one uncategorized — preview it with GET /v1/profiles/{profileId}/type-change. The built-in personal profile can be renamed but is always PERSONAL (409 CONFLICT, details.reason DEFAULT_PERSONAL_PROFILE). A profile with more than one owner stays BUSINESS (409 CONFLICT, details.reason CO_OWNED; MUT-373).
          */
         patch: {
             parameters: {
@@ -9699,7 +9699,7 @@ export interface paths {
         };
         /**
          * Preview what changing a profile’s type would do
-         * @description The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type. Refused exactly where PATCH is (409 DEFAULT_PERSONAL_PROFILE on the built-in personal profile).
+         * @description The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type. Refused exactly where PATCH is (409 DEFAULT_PERSONAL_PROFILE on the built-in personal profile, 409 CO_OWNED on a shared one).
          */
         get: {
             parameters: {
@@ -11028,7 +11028,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Without `role`: the organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE). With `role: OWNER` (MUT-373): PERSONAL_PROFILE, NOT_BUSINESS (an owned Personal profile), NOT_CO_OWNABLE (not an owned profile), OWNER_LIMIT, or ROLE_CHANGE_NOT_SUPPORTED (already a member with another role). */
+                /** @description Without `role`: the organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE). With `role: OWNER` (MUT-373): PERSONAL_PROFILE, NOT_BUSINESS (an owned Personal profile), NOT_CO_OWNABLE (not an owned profile), OWNER_LIMIT, ROLE_CHANGE_NOT_SUPPORTED (already a member with another role), or USER_DISABLED (the account is disabled). */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -12456,6 +12456,11 @@ export interface components {
             postedAt: string;
             status: components["schemas"]["ItemStatus"];
             title: string | null;
+            /**
+             * Format: uuid
+             * @description Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person's account is gone.
+             */
+            capturedByUserId: string | null;
             version: number;
         };
         TriggerInstallmentRequest: {

@@ -56,11 +56,10 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
     const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
     loaded.push({ organization, membership, malafatConnected: malafat?.status === 'CONNECTED' });
   }
-  // MUT-358: one billing read for all the profiles (billing/coverage.ts), never one per profile.
-  const entitlements = billingAt ? await entitlementsFor(store, loaded, billingAt) : null;
-  // MUT-373 (eng review D1): one owners read for every profile the caller owns, never one per profile.
+  // MUT-358: one billing read for all the profiles (billing/coverage.ts), never one per profile. MUT-373 (eng review
+  // D1): likewise one owners read for every profile the caller owns; the two are independent, so they run together.
   const ownedIds = loaded.filter(({ organization, membership }) => ownsProfile(organization, user.id, membership.role)).map(({ organization }) => organization.id);
-  const ownerEntries = await store.memberships.listOwnersOf(ownedIds);
+  const [entitlements, ownerEntries] = await Promise.all([billingAt ? entitlementsFor(store, loaded, billingAt) : null, store.memberships.listOwnersOf(ownedIds)]);
   const profiles = loaded.map(({ organization, membership, malafatConnected }) => {
     const entitlement = entitlements?.get(organization.id);
     return {

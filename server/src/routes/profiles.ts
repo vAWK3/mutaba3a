@@ -117,7 +117,7 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Profiles'],
       summary: 'Rename a profile you own, change its default currency or its type',
       description:
-        'One atomic write under If-Match. The default currency only seeds new records; existing ones keep theirs. A changed type replaces the profile’s expense categories with the new type’s preset, in your language, and leaves every expense that had one uncategorized — preview it with GET /v1/profiles/{profileId}/type-change. The built-in personal profile can be renamed but is always PERSONAL (409 CONFLICT, details.reason DEFAULT_PERSONAL_PROFILE).',
+        'One atomic write under If-Match. The default currency only seeds new records; existing ones keep theirs. A changed type replaces the profile’s expense categories with the new type’s preset, in your language, and leaves every expense that had one uncategorized — preview it with GET /v1/profiles/{profileId}/type-change. The built-in personal profile can be renamed but is always PERSONAL (409 CONFLICT, details.reason DEFAULT_PERSONAL_PROFILE). A profile with more than one owner stays BUSINESS (409 CONFLICT, details.reason CO_OWNED; MUT-373).',
       security: SESSION_ONLY,
       middleware: [ifMatch()] as const,
       request: { params: ProfileIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateProfileRequestSchema) },
@@ -164,7 +164,7 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/profiles/{profileId}/type-change',
       tags: ['Profiles'],
       summary: 'Preview what changing a profile’s type would do',
-      description: 'The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type. Refused exactly where PATCH is (409 DEFAULT_PERSONAL_PROFILE on the built-in personal profile).',
+      description: 'The counts PATCH /v1/profiles/{profileId} would report for the same `to`, right now: expenses left uncategorized and categories replaced. All zero when `to` is already the profile’s type. Refused exactly where PATCH is (409 DEFAULT_PERSONAL_PROFILE on the built-in personal profile, 409 CO_OWNED on a shared one).',
       security: SESSION_ONLY,
       request: { params: ProfileIdParamSchema, query: ProfileTypeChangeQuerySchema },
       responses: { 200: { description: 'Preview', content: { 'application/json': { schema: ProfileTypeChangeSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...forbiddenResponse },
@@ -238,6 +238,8 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     async (c) => {
       const { user } = c.get('identity');
       const { profileId, userId } = c.req.valid('param');
+      // Adversarial review 3: a stranger is answered before the store takes the profile's row lock.
+      if (!(await store.memberships.find(user.id, profileId))) throw new ApiError('NOT_FOUND', 'Profile not found');
       const result = await store.memberships.removeOwner({ organizationId: profileId, userId, actorId: user.id, at: c.get('now')(), requestId: c.get('requestId') });
       switch (result.kind) {
         case 'removed':

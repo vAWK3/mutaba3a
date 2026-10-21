@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
+import { MAX_PROFILE_OWNERS } from '../co-owners.js';
 
 /**
  * Operator CLI for hosted-portal users (MUT-37, ADR-037). Talks to the admin
@@ -53,7 +54,7 @@ const USAGE = [
   '          (every user gets a personal profile; with no --organization-id, --currency and --timezone are required)',
   '          prints a one-time setup link (72 hours unless --valid-hours) through which the person sets their own password',
   '  grant   --email <email> --organization-id <uuid> [--role owner]',
-  '          --role owner: a co-owner of a Business profile someone created (MUT-373; at most 3 owners); prints the note for both partners',
+  `          --role owner: a co-owner of a Business profile someone created (MUT-373; at most ${MAX_PROFILE_OWNERS} owners); prints the note for both partners`,
   '  revoke  --email <email> --organization-id <uuid>',
   '  rotate  --email <email> [--valid-hours <1-720>] [--lock]',
   '          prints a new setup link; their current password keeps working until they use it.',

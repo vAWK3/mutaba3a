@@ -503,7 +503,7 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     revoke: async (userId, organizationId) =>
       (await this.prisma.membership.deleteMany({ where: { userId, organizationId } })).count > 0,
-    grantOwner: (userId, organizationId, at, maxOwners) =>
+    grantOwner: (userId, organizationId, at, maxOwners, audit) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
           // MUT-373: the row lock queues two grants (and a retype, OV3), so the owner count below can't be raced past.
@@ -515,10 +515,16 @@ export class PrismaLedgerStore implements LedgerStore {
           const refusal = grantOwnerRefusal(organization, existing?.role ?? null, ownerIdsOf(organization, members).length, maxOwners);
           if (refusal) return refusal;
           if (existing) {
+            const granted = await tx.auditEvent.findFirst({
+              where: { organizationId, entityType: 'user', entityId: userId, action: 'membership.granted', metadata: { path: ['role'], equals: 'OWNER' } },
+              select: { id: true },
+            });
+            if (!granted) await tx.auditEvent.createMany({ data: auditRows([audit], at) });
             const row = await tx.membership.findUniqueOrThrow({ where: { userId_organizationId: { userId, organizationId } } });
             return { kind: 'granted' as const, membership: toMembership(row), created: false };
           }
           const membership = await tx.membership.create({ data: { userId, organizationId, role: 'OWNER', createdAt: at } });
+          await tx.auditEvent.createMany({ data: auditRows([audit], at) });
           return { kind: 'granted' as const, membership: toMembership(membership), created: true };
         }),
       ),
@@ -532,7 +538,7 @@ export class PrismaLedgerStore implements LedgerStore {
             (await tx.membership.findUnique({ where: { userId_organizationId: { userId, organizationId: input.organizationId } }, select: { role: true } }))?.role ?? null;
           const decision = removeOwnerDecision(organization, input, await roleOf(input.actorId), await roleOf(input.userId));
           if (decision.kind !== 'removed') return decision;
-          await tx.membership.delete({ where: { userId_organizationId: { userId: input.userId, organizationId: input.organizationId } } });
+          await tx.membership.deleteMany({ where: { userId: input.userId, organizationId: input.organizationId } });
           await tx.auditEvent.createMany({ data: auditRows([ownerRemovedAudit(input, decision.reason)], input.at) });
           return decision;
         }),

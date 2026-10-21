@@ -15,8 +15,8 @@ export interface StrayMembership {
 }
 
 /**
- * MUT-373 (eng review OV1b): someone other than its owner holds a membership on an owned profile, and no operator
- * ever made them a co-owner. Such a row would have been refused since MUT-182 (2026-10-14); under MUT-373's rule an
+ * MUT-373 (eng review OV1b): someone other than its owner holds an OWNER membership on an owned profile, and no
+ * operator ever made them a co-owner. Other roles own nothing, so they pass. Such a row would have been refused since MUT-182 (2026-10-14); under MUT-373's rule an
  * OWNER-role one would silently make its holder an owner of someone's books. A co-owner the operator added is
  * recognized by the `membership.granted` audit row `grant:user --role owner` writes, so this keeps passing once
  * co-owners exist.
@@ -28,9 +28,10 @@ export async function findStrayOwnedMemberships(db: PrismaClient): Promise<Stray
       JOIN organizations o ON o.id = m."organizationId"
      WHERE COALESCE(o."ownerUserId", o."personalOwnerUserId") IS NOT NULL
        AND m."userId" <> COALESCE(o."ownerUserId", o."personalOwnerUserId")
+       AND m.role = 'OWNER'
        AND NOT EXISTS (
          SELECT 1 FROM audit_events a
-          WHERE a."organizationId" = m."organizationId" AND a."entityId" = m."userId"::text
+          WHERE a."organizationId" = m."organizationId" AND a."entityType" = 'user' AND a."entityId" = m."userId"::text
             AND a.action = 'membership.granted' AND a.metadata->>'role' = 'OWNER')
      ORDER BY 1, 2`;
 }
