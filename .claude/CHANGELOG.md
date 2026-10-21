@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-10-21 — Co-owners: two or three people own one Business profile (MUT-373, ADR-163)
+
+**Why:** Partners running one small business couldn't keep its books together while each kept a private personal profile. An owned profile could never be granted, and an operator firm reads as nobody's own.
+
+### Added
+- **The ownership rule** `ownsProfile` / `canCoOwn` (`server/src/personal-profile.ts`) and `server/src/co-owners.ts` (shared by both stores): a co-owner is an OWNER member of an owned BUSINESS profile; the creator stays `ownerUserId`.
+- **Operator**: `POST /admin/v1/users/{id}/memberships` with `role: OWNER`, `grant:user --role owner` (prints the en/ar note for both partners, DR8). At most 3 owners. `memberships.grantOwner` holds the org row lock.
+- **Session**: `DELETE /v1/profiles/{profileId}/owners/{userId}` — leave, or (creator only) remove. Records stay; audited `membership.revoked` (actor USER, reason left|removed).
+- **`/v1/me` and POST/PATCH `/v1/profiles`**: `owners` (creator first) and `firmRequestedBy`. API 1.43.0-mut373, additive.
+- **`npm run pre-roll`** (deploy.sh step 3): stops a deploy when a membership on an owned profile was never made a co-owner (OV1b).
+- **Portal**: the Owners section in a Business profile's edit pane (DR1, DR9, DR10), in-place Remove/Leave confirms (AD1–AD3), pending/retry/404-as-done (DR5), the row's exit (DR6), the add-a-partner email (DR14); "Business · Shared with …" in the switcher and Manage list (DR12); the cap hint (DR2); the lost-access banner (DR3); leave lands on the personal profile (DR4).
+
+### Changed
+- Every owner gate reads `ownsProfile`: profile PATCH/type-change/firm-request, income and payment re-date (`SessionAuth.membershipRole`, A1), `updateOwned` (creator or co-owner, never a firm member, OV2), terms acceptance.
+- A shared profile stays BUSINESS (409 `CO_OWNED`, under the row lock). Firm enable keeps every OWNER.
+- `profile-rows.sh purge-user` refuses a creator whose profile has co-owners.
+- The portal: version conflicts on a shared profile name another owner (DR7); firm requests say who asked (DR13); Malafat suggestions count only profiles you created (OV9).
+
+### Technical
+- Tests: `owns-profile.test.ts` (the R1 truth table), `routes-profile-owners.test.ts`, the co-owners store contract (memory + Prisma, incl. concurrent grants), `pre-roll.test.ts`, CLI and purge cases; portal `ProfileOwnersSection.test.tsx`, rule, error-map, name-list and requested-line tests; release-QA `portal.profiles.co-owner-write|remove|leave|removed`.
+- TD-194 (no ownership transfer). TD-193 (billing follows the creator) stays open on MUT-358.
+
 ## [Unreleased] - 2026-10-21 — Billing core: per-profile entitlement on /v1/me, operator grants and links (MUT-358, ADR-162)
 
 **Why:** Every GA billing story (MUT-360 webhook, MUT-361 lapse gate, MUT-362 self-service, MUT-363 Firm tier, MUT-364 phone, MUT-365 prices) needs one answer: is this profile entitled, and why? ADR-160 decided the rules; this builds them. Nothing is enforced yet.
