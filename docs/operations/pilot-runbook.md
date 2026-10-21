@@ -139,16 +139,24 @@ section once MUT-300 lands (§9).
   npm run billing:grant -- --url "$URL" --email <email> --tier FREELANCER --reason "pilot P01"
   ```
 
-- Create their Stripe subscription by hand (pilot-offer §5). Then link the Stripe customer to them, and
-  revoke the grant once the subscription shows on `GET /v1/me` (MUT-360's webhook):
+- Create their Stripe subscription by hand (pilot-offer §5), in this order, so MUT-360's webhook links it with
+  no step from you:
+
+  1. On the Stripe **Customer**, set metadata `mutaba3a_user_id` = their user id (from `npm run users:…` or the
+     admin listing). For a firm, also set `mutaba3a_organization_id` = the firm's profile id on the
+     **Subscription**. It only counts if they own that profile, or if it's an operator firm.
+  2. Create the subscription with a catalogue price (lookup keys `freelancer_founder_monthly_ils` …).
+  3. Check `GET /v1/me` shows their profiles with `source: STRIPE`. Only then revoke the grant:
 
   ```bash
-  npm run billing:link    -- --url "$URL" --customer cus_… --email <email> --currency ILS
   npm run billing:grants  -- --url "$URL" --email <email> --active      # the grant's id
   npm run billing:revoke  -- --url "$URL" --grant-id <uuid>
   ```
 
-  `billing:unlinked` lists Stripe customers the server has seen but can't match to anyone.
+  If you forgot the metadata, set it and run `npm run billing:reconcile -- --url "$URL"`, or link by hand:
+  `npm run billing:link -- --url "$URL" --customer cus_… --email <email> --currency ILS`. A link you made by hand
+  always wins over metadata (MUT-360 D5). `billing:unlinked` lists Stripe customers the server has seen but can't
+  match to anyone, including a returning payer who ended up with a second Stripe customer.
 - Add the person to the weekly pilot review (`docs/commercial/pilot-reviews.md`).
 
 ### 1.6 Add a partner to a Business profile (MUT-373, ADR-163)
@@ -170,6 +178,44 @@ npm run grant:user -- --url "$URL" --email <partner email> --organization-id <pr
 - The creator removes a partner, or a partner leaves, from the portal's Owners section. `revoke:user` works too.
 - The creator can't leave (TD-194). To hand a profile over, ask Basel: there is no transfer command yet.
 - Billing still follows the creator (TD-193): the partner's own subscription doesn't cover the shared profile.
+
+### 1.7 Turn on the Stripe sync (MUT-360, ADR-165; once, in this order)
+
+Do each step only when the one before it checks out. Nothing changes for anyone until step 5.
+
+1. **Catalogue.** Each Product has metadata `tier` = `freelancer` or `firm`, backfilled on Products that already
+   exist. A subscription whose product has no tier is never mirrored (`UNKNOWN_TIER`). Prices carry the lookup keys
+   `freelancer_founder_{monthly|yearly}_{ils|usd}` and `firm_founder_…`.
+2. **Existing pilot customers.** Set `mutaba3a_user_id` on every pilot Customer and `mutaba3a_organization_id`
+   on every firm's Subscription (§1.5).
+3. **Keys.** Create a **restricted key** with read access to Customers, Subscriptions, Products, Prices, Checkout
+   Sessions, Invoices and Events. Add it and the webhook's signing secret to Secret Manager (`server/DEPLOYMENT.md`
+   §6e).
+4. **Webhook endpoint.** In the Mutaba3a Stripe account, add the endpoint `https://<api host>/v1/billing/stripe/webhook`
+   with exactly these 9 events (`HANDLED_EVENT_TYPES` in `server/src/billing/stripe/sync.ts`):
+   `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`,
+   `customer.subscription.deleted`, `customer.subscription.paused`, `customer.subscription.resumed`,
+   `invoice.paid`, `invoice.payment_failed`, `customer.updated`. Set **its API version to `2026-09-30.endive`**
+   (`STRIPE_API_VERSION` in `gateway.ts`), so its payloads match what the server reads.
+5. **Turn it on.** Set `stripe_enabled = true` and apply (`server/DEPLOYMENT.md` §6e). Then run one reconcile and
+   read the summary:
+
+   ```bash
+   npm run billing:reconcile -- --url "$URL"
+   ```
+
+   `errors` must be empty, or each one explained: `UNKNOWN_TIER` (product metadata), `UNKNOWN_ORG` /
+   `FIRM_WITHOUT_ORG` (subscription metadata), `CUSTOMER_LINKED_ELSEWHERE` (metadata names someone other than the
+   person you linked).
+6. **Verify.** Every pilot user's `GET /v1/me` shows the profiles you expect as `ACTIVE`, and `billing:unlinked`
+   lists nobody you know.
+7. **Grants.** Only now revoke the `pre-billing` grants, one person at a time, rechecking `/v1/me` after each. A grant
+   revoked before the subscription shows drops that person to their trial or read-only.
+8. **Afterwards.** The nightly job (03:30 Asia/Jerusalem) repairs anything a webhook missed. If a run fails as a
+   whole (no job token, Stripe off), only Cloud Scheduler's log shows it until TODOS #17.
+
+**Test-mode checks (Basel).** In test mode, check whether the UK account can charge in ILS and whether ILS can
+settle as ILS. Add a USD bank account for USD settlement.
 
 ## 2. Reset a password
 

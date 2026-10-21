@@ -1128,8 +1128,8 @@ Stripe tells the API about subscriptions through `POST /v1/billing/stripe/webhoo
    ```bash
    read -rs KEY && printf '%s' "$KEY" | gcloud secrets versions add mutaba3a-api-stripe-secret-key --data-file=- --project=$GCP_PROJECT_ID; unset KEY
    ```
-   Use the live-mode key (`rk_live_…`). The server refuses a live key anywhere but production.
-3. Create the webhook endpoint (pilot runbook §1.5 lists its events and API version), then add its signing secret the same way:
+   Use the live-mode key (`rk_live_…`). The server refuses a live key unless `API_KEY_ENVIRONMENT=live` (`server/src/config.ts`).
+3. Create the webhook endpoint (pilot runbook §1.7 lists its events and API version), then add its signing secret the same way:
    ```bash
    read -rs KEY && printf '%s' "$KEY" | gcloud secrets versions add mutaba3a-api-stripe-webhook-secret --data-file=- --project=$GCP_PROJECT_ID; unset KEY
    ```
@@ -1139,7 +1139,7 @@ Stripe tells the API about subscriptions through `POST /v1/billing/stripe/webhoo
    terraform plan -var-file=production.tfvars -var image_tag="$TAG"
    ```
    Expect `google_cloud_run_v2_service.api` updated in place (`STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` added) and `google_cloud_scheduler_job.stripe_reconcile[0]` added: **`Plan: 1 to add, 1 to change, 0 to destroy`**. Anything else means stop and ask. Apply the same command with `apply`. A secret without a version stops the new revision starting; the old one keeps serving, so add the version and apply again.
-5. Check: `gcloud scheduler jobs describe mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID` shows `state: ENABLED`. Then walk the cutover checklist in [`docs/operations/pilot-runbook.md`](../docs/operations/pilot-runbook.md) §1.5 (run the reconcile once, verify, then revoke grants). Delete the MUT-360 line from `docs/operations/before-release.md` and record the date in §7.
+5. Check: `gcloud scheduler jobs describe mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID` shows `state: ENABLED`. Then walk the cutover checklist in [`docs/operations/pilot-runbook.md`](../docs/operations/pilot-runbook.md) §1.7 (run the reconcile once, verify, then revoke grants). Delete the MUT-360 line from `docs/operations/before-release.md` and record the date in §7.
 
 **Turn it off:** set `stripe_enabled = false` and apply. The job goes, the Stripe env vars go, and the routes answer 503. The secrets and their versions stay.
 
