@@ -118,10 +118,15 @@ function bestGrant(grants: readonly GrantFact[]): GrantFact | undefined {
   return [...grants].sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || lasts(b) - lasts(a))[0];
 }
 
-/** The payer's own profiles are covered by all their subscriptions (Firm includes Freelancer); a tied organization by its own. */
+/**
+ * The payer's own profiles are covered by all their subscriptions (Firm includes Freelancer); a tied organization by
+ * its own, but only when nobody owns it (an operator firm) or the payer does (MUT-360 D8/D9: the tie is typed by hand
+ * in Stripe, so a wrong but real id must not cover a stranger's profile). Read time, so a later link needs no re-sync.
+ */
 function subscriptionCovers(subscription: SubscriptionFact, profile: ProfileFacts): boolean {
-  if (subscription.organizationId === profile.organizationId) return true;
-  return subscription.userId !== null && subscription.userId === profile.ownerUserId;
+  const paidByOwner = subscription.userId !== null && subscription.userId === profile.ownerUserId;
+  if (subscription.organizationId === profile.organizationId) return profile.ownerUserId === null || paidByOwner;
+  return paidByOwner;
 }
 
 /** ACTIVE before GRACE, then the Firm tier, then the later period end. */

@@ -87,6 +87,26 @@ describe('resolveEntitlement', () => {
       expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [firm] }), NOW).source).toBe('NONE');
     });
 
+    // MUT-360 D8/D9: Stripe metadata names the organization by hand, so a tie only counts on a firm the payer owns
+    // (or an owner-less operator firm), checked here at read time so a later `billing link` needs no re-sync.
+    it('a subscription tied to someone else’s owned profile does not cover it', () => {
+      const tiedByStranger = sub({ userId: OTHER, organizationId: BUSINESS.organizationId, tier: 'FIRM' });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [tiedByStranger] }), NOW).source).toBe('NONE');
+    });
+
+    it('an unlinked customer’s tie covers an operator firm but not an owned profile, until the payer is linked', () => {
+      const unlinkedFirm = sub({ userId: null, organizationId: FIRM_BY_OPERATOR.organizationId, tier: 'FIRM' });
+      expect(resolveEntitlement(FIRM_BY_OPERATOR, facts({ subscriptions: [unlinkedFirm] }), NOW)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE', tier: 'FIRM' });
+      const unlinkedOwned = sub({ userId: null, organizationId: BUSINESS.organizationId, tier: 'FIRM' });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [unlinkedOwned] }), NOW).source).toBe('NONE');
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [{ ...unlinkedOwned, userId: OWNER }] }), NOW)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE', tier: 'FIRM' });
+    });
+
+    it('a lapsed tie to someone else’s owned profile does not count as having paid for it', () => {
+      const lapsedStranger = sub({ userId: OTHER, organizationId: BUSINESS.organizationId, status: 'canceled' });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [lapsedStranger] }), NOW).source).toBe('NONE');
+    });
+
     it('treats trialing as active', () => {
       expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [sub({ status: 'trialing' })] }), NOW).state).toBe('ACTIVE');
     });
