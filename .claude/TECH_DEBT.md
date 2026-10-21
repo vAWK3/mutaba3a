@@ -519,7 +519,7 @@
 **Fix (if it bites)**: cap the list (first N pairs plus a total), or write one audit row per removed category with its expense ids.
 
 ### TD-132: Flutter still decides "personal" from `writerOfRecord == null`
-**Status**: Open
+**Status**: Resolved (MUT-384, 2026-10-21: personal-only phone UI keys on `HostedProfile.isPersonalBooks` (personal default, or owned and typed Personal), never on `writerOfRecord`; the outbox half, dropping a deleted category and resending, shipped in MUT-184 `outbox_uploader.dart`; lands with mutaba3a-flutter feature/mut-384-business-expense-fields)
 **Added**: 2026-10-14 (MUT-182)
 **Ticket**: MUT-184
 **Priority**: Medium
