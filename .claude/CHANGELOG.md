@@ -55,6 +55,9 @@ can't catch it.
 ### Technical
 - Regression test in `server/src/auth/__tests__/front-door.test.ts` drives a real Hono app with a token configured
   (through the front door, directly on run.app, and from a foreign origin).
+- `server/src/__tests__/front-door-sign-in.test.ts` drives the whole app with a front-door token: setup link, wrong
+  password 401, sign-in 201, a cookie DELETE through the origin check, the legacy host's own origin, and 403 for a
+  foreign origin. On the pre-fix code it fails with the production 500 (at account setup).
 
 ---
 
