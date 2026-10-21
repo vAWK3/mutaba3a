@@ -163,7 +163,7 @@ describe('vite.config', () => {
       expect(pluginNames(resolve('web').plugins)).toContain('mutaba3a:domain-move-redirects');
       expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:domain-move-redirects');
       expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:domain-move-redirects');
-      expect(netlifyRedirects(HOSTS)).toBe(HOSTS.stage === 'legacy' || HOSTS.stage === 'proxy' ? '' : expect.stringContaining('/app'));
+      expect(netlifyRedirects(HOSTS)).toEqual(HOSTS.stage === 'legacy' || HOSTS.stage === 'proxy' ? '' : expect.stringContaining('/app'));
     });
   });
 

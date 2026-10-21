@@ -3,7 +3,7 @@
   "production": {
     "domain": "mtb3a.com",
     "portalSubdomain": "app",
-    "stage": "proxy",
+    "stage": "live",
     "legacy": {
       "landing": "https://mutaba3a.netlify.app",
       "portal": "https://mutaba3a-api-t5bzsudmja-zf.a.run.app"
