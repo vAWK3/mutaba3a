@@ -28,6 +28,36 @@
 
 ---
 
+## [Unreleased] - 2026-10-21 — Billing core: per-profile entitlement on /v1/me, operator grants and links (MUT-358, ADR-162)
+
+**Why:** Every GA billing story (MUT-360 webhook, MUT-361 lapse gate, MUT-362 self-service, MUT-363 Firm tier, MUT-364 phone, MUT-365 prices) needs one answer: is this profile entitled, and why? ADR-160 decided the rules; this builds them. Nothing is enforced yet.
+
+### Added
+- **Billing tables** (migration `20261020200000_mut358_billing_core`): `billing_accounts`, `billing_subscriptions`, `entitlement_grants` (CHECK: exactly one target) and `stripe_events`, plus `users.trialStartedAt`.
+  - The migration backfills a `pre-billing` grant for every existing user and every operator firm (P1), so MUT-361 can't turn anyone who exists today read-only.
+- **`server/src/billing/entitlement.ts`**: the pure resolver. Rules in order: MALAFAT, OPERATOR, STRIPE, TRIAL, lapsed STRIPE, ended TRIAL, NONE. States: ACTIVE, GRACE, READ_ONLY, LOCKED (only for an unpaid trial from day 30).
+- **`billing/coverage.ts`**: `entitlementsFor`, one `billing.factsFor` read for all of a person's profiles.
+- **`GET /v1/me` and the sign-in responses**: each profile gains a nullable `billing: { state, source, tier, until }`. It's null in the portal's signed-out mode. API 1.42.0-mut358; additive.
+- **Admin routes**:
+  - `POST /admin/v1/billing/grants`, `GET /admin/v1/billing/grants`, `DELETE /admin/v1/billing/grants/{id}`;
+  - `POST /admin/v1/billing/accounts/link`, `GET /admin/v1/billing/accounts?linked=false`.
+  - Every change is audited on each profile it reaches.
+- **CLI**: `npm run billing:grant|billing:revoke|billing:grants|billing:link|billing:unlinked` (verbs in `scripts/users.ts`).
+
+### Changed
+- `personal-profile.ts`: `ownedProfilesOf(store, userId)`, now shared by the terms audit and the billing audit.
+- `scripts/profile-rows.sh`: `billing_subscriptions` and `entitlement_grants` stay live on restore and are left out of export.
+- `docs/operations/pilot-runbook.md` §1.5: grant every new pilot user; link their Stripe customer; revoke the grant once the subscription shows.
+
+### Technical
+- Tests:
+  - `billing/__tests__/entitlement.test.ts` covers each rule and every trial boundary, and that a payer is never LOCKED;
+  - `__tests__/billing-core.test.ts` covers /v1/me, the admin routes, audit, the local-mode null, one facts read, and the snapshot exclusion;
+  - `store-contract-billing.ts` runs against memory and Postgres;
+  - `migration-mut358.test.ts` covers the backfill, the CHECK and schema parity;
+  - the CLI verbs and the profile-rows restore/export are covered too.
+- TD-193: coverage follows the single owner, so co-owners (MUT-373) aren't counted yet.
+
 ## [Unreleased] - 2026-10-20 — Restrained save feedback follows the firm switch (MUT-338, Basel's comment 12272)
 
 **Why:** the restrained icon is meant for firms. With MUT-300 merged, "firm" means firm features are on. A freelancer's BUSINESS profile is not a firm, and an operator organization only is once its switch is on.

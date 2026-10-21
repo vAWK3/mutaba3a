@@ -3,6 +3,10 @@ import { applyMalafatChange } from '../malafat-suggestions.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import type {
+  BillingAccountRecord,
+  BillingRepository,
+  BillingSubscriptionRecord,
+  EntitlementGrantRecord,
   AccountSetupRepository,
   AccountSetupTokenRecord,
   TermsAcceptanceInput,
@@ -239,6 +243,14 @@ export class MemoryLedgerStore implements LedgerStore {
   /** Keyed `${groupId}:${expenseId}` — the Postgres primary key. */
   private readonly groupMarks = new Map<string, ExpenseGroupOverrideRecord>();
   private readonly inbox = new Map<string, InboxEntryRecord>();
+  /**
+   * MUT-358 billing state. Deliberately not in snapshot()/restore(), like the terms acceptances: the portal's
+   * signed-out mode has no billing (its /v1/me says `billing: null`), and new maps would change the local format.
+   */
+  private readonly billingAccounts = new Map<string, BillingAccountRecord>();
+  private readonly billingSubs = new Map<string, BillingSubscriptionRecord>();
+  private readonly grants = new Map<string, EntitlementGrantRecord>();
+  private readonly trialStarts = new Map<string, Date>();
 
   readonly organizations: OrganizationRepository = {
     create: async (input: CreateOrganizationInput) => {
@@ -1762,6 +1774,106 @@ export class MemoryLedgerStore implements LedgerStore {
       const row = this.expReceipts.get(id);
       if (!row || row.organizationId !== organizationId || row.status !== 'READY' || row.deletedAt || !row.storageKey) return null;
       return { storageKey: row.storageKey, mimeType: row.mimeType, sizeBytes: row.sizeBytes };
+    },
+  };
+
+  readonly billing: BillingRepository = {
+    factsFor: async ({ ownerUserIds, organizationIds }) => {
+      const owners = new Set(ownerUserIds);
+      const orgs = new Set(organizationIds);
+      const accounts = [...this.billingAccounts.values()];
+      const payerOf = (accountId: string) => accounts.find((a) => a.id === accountId)?.userId ?? null;
+      const subscriptions = [...this.billingSubs.values()]
+        .map((sub) => ({ ...sub, userId: payerOf(sub.billingAccountId) }))
+        .filter((sub) => (sub.userId !== null && owners.has(sub.userId)) || (sub.organizationId !== null && orgs.has(sub.organizationId)));
+      const grants = [...this.grants.values()]
+        .filter((g) => (g.userId !== null && owners.has(g.userId)) || (g.organizationId !== null && orgs.has(g.organizationId)))
+        .map((g) => ({ ...g }));
+      const trialStarts = new Map([...owners].filter((id) => this.people.has(id)).map((id) => [id, this.trialStarts.get(id) ?? null] as const));
+      return { subscriptions, grants, trialStarts };
+    },
+    setTrialStart: async (userId, at) => {
+      if (!this.people.has(userId)) return null;
+      this.trialStarts.set(userId, at);
+      return { trialStartedAt: at };
+    },
+    createGrant: async (input) => {
+      if ((input.userId === null) === (input.organizationId === null)) throw new StateConflict('entitlement_grant', 'ONE_TARGET');
+      if (input.userId !== null && !this.people.has(input.userId)) throw new ForeignKeyViolation('entitlement_grants.userId');
+      if (input.organizationId !== null && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('entitlement_grants.organizationId');
+      const { id, userId, organizationId, tier, reason, expiresAt, grantedBy, at } = input;
+      if (this.grants.has(id)) throw new UniqueViolation('entitlement_grants.id');
+      const grant: EntitlementGrantRecord = { id, userId, organizationId, tier, reason, expiresAt, grantedBy, createdAt: at, revokedAt: null };
+      this.grants.set(grant.id, grant);
+      for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return { ...grant };
+    },
+    revokeGrant: async (id, at, audit) => {
+      const grant = this.grants.get(id);
+      if (!grant) return null;
+      if (grant.revokedAt) return { grant: { ...grant }, revoked: false };
+      grant.revokedAt = at;
+      for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return { grant: { ...grant }, revoked: true };
+    },
+    getGrant: async (id) => clone(this.grants.get(id)),
+    listGrants: async ({ userId, organizationId, activeAt }) =>
+      [...this.grants.values()]
+        .filter((g) => (userId === undefined || g.userId === userId) && (organizationId === undefined || g.organizationId === organizationId))
+        .filter((g) => !activeAt || (!g.revokedAt && (!g.expiresAt || g.expiresAt > activeAt)))
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1))
+        .map((g) => ({ ...g })),
+    linkAccount: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('billing_accounts.userId');
+      const existing = [...this.billingAccounts.values()].find((a) => a.stripeCustomerId === input.stripeCustomerId);
+      const usersAccount = [...this.billingAccounts.values()].find((a) => a.userId === input.userId);
+      if (existing?.userId === input.userId) return { account: { ...existing }, linked: false };
+      if (existing?.userId) throw new StateConflict('billing_account', 'CUSTOMER_LINKED_ELSEWHERE');
+      if (usersAccount) throw new StateConflict('billing_account', 'USER_HAS_ANOTHER_ACCOUNT');
+      if (!existing && !input.currency) throw new StateConflict('billing_account', 'CURRENCY_REQUIRED');
+      const account: BillingAccountRecord = existing ?? {
+        id: randomUUID(),
+        userId: null,
+        stripeCustomerId: input.stripeCustomerId,
+        country: null,
+        currency: input.currency!,
+        createdAt: input.at,
+        updatedAt: input.at,
+      };
+      Object.assign(account, { userId: input.userId, updatedAt: input.at });
+      this.billingAccounts.set(account.id, account);
+      for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return { account: { ...account }, linked: true };
+    },
+    listAccounts: async ({ linked }) =>
+      [...this.billingAccounts.values()]
+        .filter((a) => linked === undefined || (a.userId !== null) === linked)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .map((a) => ({ ...a })),
+    saveAccount: async (input) => {
+      if (input.userId !== null && !this.people.has(input.userId)) throw new ForeignKeyViolation('billing_accounts.userId');
+      const now = new Date();
+      const existing = [...this.billingAccounts.values()].find((a) => a.stripeCustomerId === input.stripeCustomerId);
+      if (input.userId !== null && [...this.billingAccounts.values()].some((a) => a.userId === input.userId && a !== existing)) {
+        throw new UniqueViolation('billing_accounts.userId');
+      }
+      const account: BillingAccountRecord = existing ?? { id: randomUUID(), ...input, createdAt: now, updatedAt: now };
+      Object.assign(account, input, { updatedAt: now });
+      this.billingAccounts.set(account.id, account);
+      return { ...account };
+    },
+    saveSubscription: async (input) => {
+      const account = [...this.billingAccounts.values()].find((a) => a.stripeCustomerId === input.stripeCustomerId);
+      if (!account) throw new ForeignKeyViolation('billing_subscriptions.billingAccountId');
+      if (input.organizationId !== null && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('billing_subscriptions.organizationId');
+      const now = new Date();
+      const { stripeCustomerId, ...fields } = input;
+      void stripeCustomerId; // matched above; the subscription row stores the account id instead
+      const existing = [...this.billingSubs.values()].find((s) => s.stripeSubscriptionId === input.stripeSubscriptionId);
+      const sub: BillingSubscriptionRecord = existing ?? { id: randomUUID(), billingAccountId: account.id, ...fields, createdAt: now, updatedAt: now };
+      Object.assign(sub, fields, { billingAccountId: account.id, updatedAt: now });
+      this.billingSubs.set(sub.id, sub);
+      return { ...sub };
     },
   };
 

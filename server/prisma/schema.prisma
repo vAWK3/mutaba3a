@@ -220,6 +220,10 @@ model Organization {
   expenseGroups         ExpenseGroup[]
   expenseGroupOverrides ExpenseGroupOverride[]
 
+  /// MUT-358: subscriptions tied to this profile (a Firm subscription), and operator grants on it.
+  billingSubscriptions BillingSubscription[]
+  entitlementGrants    EntitlementGrant[]
+
   @@index([ownerUserId])
   @@map("organizations")
 }
@@ -300,6 +304,14 @@ model User {
   inboxEntries        InboxEntry[]
   /// MUT-131: this person's idempotency claims for organization-independent writes.
   userIdempotencyKeys UserIdempotencyKey[]
+
+  /// MUT-358 (ADR-160): when this person's 14-day trial began. NULL = no trial (every operator-issued account);
+  /// MUT-331's self-service signup sets it at email verification.
+  trialStartedAt    DateTime?
+  /// MUT-358: the Stripe customer this person pays through, once linked.
+  billingAccount    BillingAccount?
+  /// MUT-358: operator grants covering this person's own profiles.
+  entitlementGrants EntitlementGrant[]
 
   @@map("users")
 }
@@ -1173,4 +1185,90 @@ model ExpenseGroupOverride {
   /// "Which groups is this expense in?" (GET /v1/expense-groups?expenseId=).
   @@index([expenseId])
   @@map("expense_group_overrides")
+}
+
+// ---- MUT-358 (ADR-160): billing core ---------------------------------------
+// The person pays; the profile is what's entitled (server/src/billing/entitlement.ts). Stripe is the source of
+// truth for subscriptions: MUT-360's webhook and nightly reconcile write them. Nothing here is enforced until MUT-361.
+
+enum BillingTier {
+  FREELANCER
+  FIRM
+}
+
+/// MUT-358: one Stripe customer. userId is NULL while the customer is unlinked (MUT-360 stores those; the
+/// operator links them with `billing link`). SET NULL on user deletion: the Stripe customer outlives the person.
+model BillingAccount {
+  id               String                @id @default(uuid()) @db.Uuid
+  userId           String?               @unique @db.Uuid
+  user             User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  stripeCustomerId String                @unique
+  /// ISO 3166-1 alpha-2, from Stripe's customer address.
+  country          String?               @db.VarChar(2)
+  /// 'ILS' for Israel, 'USD' elsewhere (billing-spike.md §0).
+  currency         String                @db.VarChar(3)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  subscriptions    BillingSubscription[]
+
+  @@map("billing_accounts")
+}
+
+/// MUT-358: a mirror of one Stripe subscription. `status` is Stripe's own string. A Firm subscription carries the
+/// organization it pays for; SET NULL if that profile is deleted, since Stripe still bills until it is cancelled.
+model BillingSubscription {
+  id                   String         @id @default(uuid()) @db.Uuid
+  billingAccountId     String         @db.Uuid
+  billingAccount       BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Restrict)
+  stripeSubscriptionId String         @unique
+  tier                 BillingTier
+  organizationId       String?        @db.Uuid
+  organization         Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  status               String         @db.VarChar(32)
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean        @default(false)
+  /// The Stripe Price's lookup_key (`freelancer_founder_monthly_ils` …).
+  priceLookupKey       String?        @db.VarChar(100)
+  /// The end of a founder-price lock (12 months, D4).
+  founderUntil         DateTime?
+  /// Stripe's own last-change time, so an older event never overwrites a newer state (MUT-360).
+  stripeUpdatedAt      DateTime
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@index([billingAccountId])
+  @@index([organizationId])
+  @@map("billing_subscriptions")
+}
+
+/// MUT-358: an operator grant. Exactly one of userId (the person's own profiles) and organizationId (that profile)
+/// is set (CHECK in the migration). Never deleted: revoking sets revokedAt, so "who was covered when" stays answerable.
+model EntitlementGrant {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String?       @db.Uuid
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?       @db.Uuid
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tier           BillingTier
+  reason         String        @db.VarChar(200)
+  expiresAt      DateTime?
+  /// `admin` for the admin API and CLI; `migration:mut358` for the pre-billing backfill.
+  grantedBy      String        @db.VarChar(64)
+  createdAt      DateTime      @default(now())
+  revokedAt      DateTime?
+
+  @@index([userId])
+  @@index([organizationId])
+  @@map("entitlement_grants")
+}
+
+/// MUT-358: Stripe webhook events already handled, for idempotency and replay. MUT-360 writes it.
+model StripeEvent {
+  id          String    @id
+  type        String    @db.VarChar(100)
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+
+  @@map("stripe_events")
 }

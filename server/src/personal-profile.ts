@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { AuditEventInput, CreateUserInput, Organization, OwnedProfileAudit, ProfileType, ProfileTypeChange, UpdateOwnedProfileAudit, UserLocale } from './repositories/ports.js';
+import type { AuditEventInput, CreateUserInput, LedgerStore, Organization, OwnedProfileAudit, ProfileType, ProfileTypeChange, UpdateOwnedProfileAudit, UserLocale } from './repositories/ports.js';
 
 /** MUT-120: the personal profile is named in the user's language; a server-generated name, so no i18n layer (precedent: expenses/presets.ts). */
 export const PERSONAL_PROFILE_NAME: Record<UserLocale, string> = { en: 'Personal', ar: 'شخصي' };
@@ -22,6 +22,17 @@ export function personalProfileFor(locale: UserLocale, settings: { defaultCurren
  */
 export function profileOwnerOf(organization: Pick<Organization, 'ownerUserId' | 'personalOwnerUserId'>): string | null {
   return organization.ownerUserId ?? organization.personalOwnerUserId;
+}
+
+/**
+ * The profiles a person owns (profileOwnerOf), out of the ones they are a member of: where a person's own act is
+ * audited (MUT-324 terms, MUT-358 billing). A firm they only belong to is left out. The profiles are read in one tick:
+ * Prisma batches same-tick `findUnique` calls into a single query, so this is one round trip, not a fan-out on the pool.
+ */
+export async function ownedProfilesOf(store: Pick<LedgerStore, 'memberships' | 'organizations'>, userId: string): Promise<Organization[]> {
+  const memberships = await store.memberships.listByUser(userId);
+  const organizations = await Promise.all(memberships.map((membership) => store.organizations.getById(membership.organizationId)));
+  return organizations.filter((organization): organization is Organization => organization !== null && profileOwnerOf(organization) === userId);
 }
 
 /** A profile's type, counting an unstamped MUT-120 profile as the PERSONAL it always is. */

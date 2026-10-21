@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.41.0-mut300
+  version: 1.42.0-mut358
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -299,6 +299,41 @@ components:
           type: string
           nullable: true
           format: date-time
+        billing:
+          type: object
+          nullable: true
+          properties:
+            state:
+              type: string
+              enum:
+                - ACTIVE
+                - GRACE
+                - READ_ONLY
+                - LOCKED
+            source:
+              type: string
+              enum:
+                - MALAFAT
+                - OPERATOR
+                - STRIPE
+                - TRIAL
+                - NONE
+            tier:
+              type: string
+              nullable: true
+              enum:
+                - FREELANCER
+                - FIRM
+                - null
+            until:
+              type: string
+              nullable: true
+              format: date-time
+          required:
+            - state
+            - source
+            - tier
+            - until
       required:
         - id
         - name
@@ -6082,6 +6117,168 @@ components:
           minimum: 0
       required:
         - revoked
+    EntitlementGrant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          nullable: true
+          format: uuid
+        organizationId:
+          type: string
+          nullable: true
+          format: uuid
+        tier:
+          $ref: "#/components/schemas/BillingTier"
+        reason:
+          type: string
+        expiresAt:
+          type: string
+          nullable: true
+          format: date-time
+        grantedBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - id
+        - userId
+        - organizationId
+        - tier
+        - reason
+        - expiresAt
+        - grantedBy
+        - createdAt
+        - revokedAt
+    BillingTier:
+      type: string
+      enum:
+        - FREELANCER
+        - FIRM
+    CreateEntitlementGrantRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        userEmail:
+          type: string
+          minLength: 3
+          maxLength: 320
+        organizationId:
+          type: string
+          format: uuid
+        tier:
+          $ref: "#/components/schemas/BillingTier"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+        expiresAt:
+          type: string
+          format: date-time
+      required:
+        - tier
+        - reason
+      additionalProperties: false
+    RevokeEntitlementGrantResponse:
+      type: object
+      properties:
+        grant:
+          $ref: "#/components/schemas/EntitlementGrant"
+        revoked:
+          type: boolean
+      required:
+        - grant
+        - revoked
+    EntitlementGrantList:
+      type: object
+      properties:
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntitlementGrant"
+      required:
+        - grants
+    LinkBillingAccountResponse:
+      type: object
+      properties:
+        account:
+          $ref: "#/components/schemas/BillingAccount"
+        linked:
+          type: boolean
+      required:
+        - account
+        - linked
+    BillingAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          nullable: true
+          format: uuid
+        stripeCustomerId:
+          type: string
+        country:
+          type: string
+          nullable: true
+        currency:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - stripeCustomerId
+        - country
+        - currency
+        - createdAt
+        - updatedAt
+    LinkBillingAccountRequest:
+      type: object
+      properties:
+        stripeCustomerId:
+          type: string
+          pattern: ^cus_[A-Za-z0-9]+$
+        userId:
+          type: string
+          format: uuid
+        userEmail:
+          type: string
+          minLength: 3
+          maxLength: 320
+        currency:
+          type: string
+          enum:
+            - ILS
+            - USD
+      required:
+        - stripeCustomerId
+      additionalProperties: false
+    BillingAccountList:
+      type: object
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/BillingAccount"
+      required:
+        - accounts
   parameters: {}
 paths:
   /health:
@@ -13940,6 +14137,203 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/grants:
+    post:
+      tags:
+        - Admin
+      summary: Grant billing coverage to a person (their own profiles) or to one profile
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEntitlementGrantRequest"
+      responses:
+        "201":
+          description: Granted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementGrant"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      tags:
+        - Admin
+      summary: List grants, newest first; active=true keeps only those in force now
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: userId
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: organizationId
+          in: query
+        - schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+          required: false
+          name: active
+          in: query
+      responses:
+        "200":
+          description: Grants
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementGrantList"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/grants/{grantId}:
+    delete:
+      tags:
+        - Admin
+      summary: Revoke a grant (it is kept, with revokedAt set); revoking twice changes nothing
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: grantId
+          in: path
+      responses:
+        "200":
+          description: Revoked, or already revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokeEntitlementGrantResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such grant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/accounts/link:
+    post:
+      tags:
+        - Admin
+      summary: Link a Stripe customer to a person (a pilot subscription made by hand in the dashboard)
+      description: Creates the billing account when the customer is new here; `currency` is then required. Linking the same pair again changes nothing.
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkBillingAccountRequest"
+      responses:
+        "200":
+          description: Linked, or already linked to this person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkBillingAccountResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: the customer is linked to someone else, or the person already has another customer"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed, or currency missing for a new customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/accounts:
+    get:
+      tags:
+        - Admin
+      summary: List Stripe customers, oldest first; linked=false lists those still to be matched to a person
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+          required: false
+          name: linked
+          in: query
+      responses:
+        "200":
+          description: Billing accounts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingAccountList"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
           content:
             application/json:
               schema:

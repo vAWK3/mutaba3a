@@ -204,7 +204,7 @@ describe('the terms in /v1/me (MUT-324)', () => {
     const h = harness(store);
     const p = await provision(h);
     const user = await store.users.getById(p.id);
-    expect((await buildMe(store, user!, null)).terms).toBeNull();
+    expect((await buildMe(store, user!, null, null)).terms).toBeNull();
   });
 });
 

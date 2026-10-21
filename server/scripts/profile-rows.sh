@@ -22,7 +22,9 @@
 #   * restore and purge-user run as ONE transaction on the target. --dry-run runs
 #     the whole thing and ends in ROLLBACK, so it is a rehearsal, not a preview.
 #   * restore never rolls back access: api_keys, memberships, integrations and
-#     idempotency_keys keep what the live database has now. audit_events only grow:
+#     idempotency_keys keep what the live database has now. Neither does it roll back
+#     billing (MUT-358): billing_subscriptions follow Stripe and entitlement_grants the
+#     operator, never a backup; export leaves both out, since they aren't the person's records. audit_events only grow:
 #     rows missing from the live database are added back, none are removed, and a
 #     SYSTEM event organization.restored records the restore.
 #   * purge-user refuses while the person is a member of a profile they don't own
@@ -32,8 +34,8 @@
 # Bash 3.2 compatible (macOS /bin/bash).
 set -euo pipefail
 
-RESTORE_KEEP_LIVE="api_keys memberships integrations idempotency_keys audit_events"
-EXPORT_SKIP="api_keys idempotency_keys"
+RESTORE_KEEP_LIVE="api_keys memberships integrations idempotency_keys billing_subscriptions entitlement_grants audit_events"
+EXPORT_SKIP="api_keys idempotency_keys billing_subscriptions entitlement_grants"
 UUID_RE='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
 
 info() { printf '\033[0;36m[profile-rows]\033[0m %s\n' "$*"; }

@@ -131,7 +131,24 @@ section once MUT-300 lands (§9).
 
 ### 1.5 After onboarding
 
-- Create their Stripe subscription by hand (pilot-offer §5).
+- **Cover them while billing isn't wired yet (MUT-358).** The pre-billing backfill only covered people who
+  existed when it ran. Anyone created after it has no billing coverage. Nothing enforces that yet, but
+  MUT-361 will turn such an account read-only. So grant every new pilot user now:
+
+  ```bash
+  npm run billing:grant -- --url "$URL" --email <email> --tier FREELANCER --reason "pilot P01"
+  ```
+
+- Create their Stripe subscription by hand (pilot-offer §5). Then link the Stripe customer to them, and
+  revoke the grant once the subscription shows on `GET /v1/me` (MUT-360's webhook):
+
+  ```bash
+  npm run billing:link    -- --url "$URL" --customer cus_… --email <email> --currency ILS
+  npm run billing:grants  -- --url "$URL" --email <email> --active      # the grant's id
+  npm run billing:revoke  -- --url "$URL" --grant-id <uuid>
+  ```
+
+  `billing:unlinked` lists Stripe customers the server has seen but can't match to anyone.
 - Add the person to the weekly pilot review (`docs/commercial/pilot-reviews.md`).
 
 ## 2. Reset a password
