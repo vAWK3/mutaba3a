@@ -50,7 +50,7 @@ info() { printf '\033[0;36m[drill]\033[0m %s\n' "$*"; }
 warn() { printf '\033[0;33m[drill] %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[0;31m[drill] %s\033[0m\n' "$*" >&2; exit 1; }
 
-# shellcheck source=lib/db-checks.sh
+# shellcheck source-path=SCRIPTDIR source=lib/db-checks.sh
 . "${SERVER_DIR}/scripts/lib/db-checks.sh"
 
 usage() {

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Read-only database helpers shared by scripts/restore-drill.sh (MUT-327) and scripts/cmek-cutover.sh
 # (MUT-381). Sourced, never run. Bash 3.2 compatible (macOS /bin/bash).
 #
@@ -22,6 +23,7 @@ db_table_counts() {
 db_start_proxy() {
   local connection="$1" port="$2" _
   cloud-sql-proxy "${connection}" --port "${port}" --quiet &
+  # shellcheck disable=SC2034 # read by the caller
   DB_PROXY_PID=$!
   for _ in $(seq 1 30); do (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null && break; sleep 1; done
   (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null || die "cloud-sql-proxy did not open 127.0.0.1:${port} within 30 s (is the port free? is gcloud authenticated?)"
