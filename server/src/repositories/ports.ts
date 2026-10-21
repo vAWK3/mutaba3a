@@ -299,8 +299,8 @@ export interface OrganizationRepository {
    * MUT-300 (operator): turns firm features on in place or off, under the
    * row lock, audited `firm.enabled` / `firm.disabled` in the same
    * transaction. Enabling clears a pending request and rewrites every
-   * member's role: the owner of an owned profile, or the named owners of an
-   * operator firm, OWNER; everyone else BOOKKEEPER. Disabling leaves roles as
+   * member's role: the owner of an owned profile and its co-owners (MUT-373),
+   * or the named owners of an operator firm, OWNER; everyone else BOOKKEEPER. Disabling leaves roles as
    * they are (inert). One version bump per change.
    */
   setFirm(id: string, input: SetFirmInput, at: Date, audit: FirmAudit): Promise<SetFirmResult>;
@@ -1254,7 +1254,10 @@ export interface CreateUserInput {
 export interface MembershipRecord {
   userId: string;
   organizationId: string;
-  /** MUT-300: OWNER by default, BOOKKEEPER for a new member of an organization whose firm features are on (eng review D3). */
+  /**
+   * MUT-300: OWNER by default, BOOKKEEPER for a new member of an organization whose firm features are on (eng review D3).
+   * MUT-373: on an owned Business profile an OWNER member is a co-owner — read only through `ownsProfile`.
+   */
   role: MembershipRole;
   createdAt: Date;
 }

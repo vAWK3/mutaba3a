@@ -1,5 +1,5 @@
 import { test, expect } from '../../support/qa';
-import { FIRM, OFFICE_A, OFFICE_B, malafatFirm, office } from '../../support/portal';
+import { FIRM, OFFICE_A, OFFICE_B, QA_USER_ID, malafatFirm, office, type StubOwner, type StubProfile } from '../../support/portal';
 import { FakeApi, apiError, uid } from '../../support/portalApi';
 
 /**
@@ -247,5 +247,141 @@ test('The owner of a Business profile asks for firm features; it reads Requested
     await page.goto(`/p/${OFFICE_A}/clients?editProfile=${OFFICE_A}`);
     await expect(section).toContainText('Requested on');
     await expect(section.getByRole('button', { name: 'Request firm features' })).toHaveCount(0);
+  });
+});
+
+// MUT-373 (ADR-163): co-owners. Basel created Sader & Haddad; the signed-in person (Nour) co-owns it, or created it
+// and shares it with Lina. OFFICE_B is Nour's built-in personal profile, where a leave or a removal lands.
+const BASEL = 'b1111111-1111-4111-8111-111111111111';
+const LINA = 'c1111111-1111-4111-8111-111111111111';
+const NOUR: StubOwner = { userId: QA_USER_ID, name: 'Nour Haddad', email: 'nour@office.ps', creator: true };
+const personal: StubProfile = { ...office(OFFICE_B, 'Personal'), type: 'PERSONAL', personalDefault: true };
+const sharedByBasel: StubProfile = {
+  ...office(OFFICE_A, 'Sader & Haddad'),
+  owners: [{ userId: BASEL, name: 'Basel Sader', email: 'basel@sader.ps', creator: true }, { ...NOUR, creator: false }],
+};
+const sharedWithLina: StubProfile = {
+  ...office(OFFICE_A, 'Sader & Haddad'),
+  owners: [NOUR, { userId: LINA, name: 'Lina Saleh', email: 'lina@sader.ps', creator: false }],
+};
+
+test('A co-owner sees the shared profile named for their partner, owns it fully, and its Owners section lists both', { tag: '@portal.profiles.co-owner-write' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [sharedByBasel, personal], clients: 1 });
+  const pane = page.getByRole('dialog', { name: 'Sader & Haddad' });
+  const owners = pane.getByRole('region', { name: 'Owners' });
+
+  await step('Open the switcher: the shared profile names Basel', async () => {
+    await api.open(page, `/p/${OFFICE_A}/payments`);
+    await page.getByRole('button', { name: /^Switch profile/ }).click();
+    await expect(page.getByRole('menuitemradio', { name: /Sader & Haddad/ })).toContainText('Business · Shared with Basel Sader');
+    await page.keyboard.press('Escape');
+  });
+
+  await step('Open Manage profiles: the list explains the count, and the shared profile reads the same', async () => {
+    await openManage(page);
+    const list = page.getByRole('dialog', { name: 'Profiles' });
+    await expect(list).toContainText("Profiles shared with you don't count.");
+    await expect(list.getByRole('button', { name: /^Sader & Haddad/ })).toContainText('Business · Shared with Basel Sader');
+    await list.getByRole('button', { name: /^Sader & Haddad/ }).click();
+  });
+
+  await step('Its Owners section lists Basel as creator and you; there is no Remove, Leave is at its foot', async () => {
+    const rows = owners.getByRole('listitem');
+    await expect(rows.nth(0)).toContainText('Basel Sader');
+    await expect(rows.nth(0)).toContainText('Created this profile');
+    await expect(rows.nth(1)).toContainText('Nour Haddad');
+    await expect(rows.nth(1)).toContainText('You');
+    await expect(owners.getByRole('button', { name: /^Remove/ })).toHaveCount(0);
+    await expect(owners.getByRole('button', { name: 'Leave Sader & Haddad' })).toBeVisible();
+    await expect(pane.getByRole('radio', { name: /Personal/ })).toBeDisabled();
+    await expect(pane).toContainText('A shared profile stays Business.');
+  });
+
+  await step('Close the drawer and add a received income on the shared profile', async () => {
+    await page.getByRole('button', { name: 'Close' }).click();
+    await page.locator('[data-income-add]').click();
+    const drawer = page.getByRole('dialog', { name: 'New income' });
+    await expect(drawer.getByRole('radio', { name: 'Received' })).toHaveAttribute('aria-checked', 'true');
+    await drawer.getByLabel('Amount').fill('300');
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer).toHaveCount(0);
+    expect(api.last('POST', /^\/v1\/income$/)?.headers['x-mutaba3a-profile']).toBe(OFFICE_A);
+  });
+});
+
+test('The creator removes a co-owner after an in-place confirm; the row goes and a toast says so', { tag: '@portal.profiles.co-owner-remove' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [sharedWithLina, personal] });
+  const pane = page.getByRole('dialog', { name: 'Sader & Haddad' });
+  const owners = pane.getByRole('region', { name: 'Owners' });
+
+  await step('Open the shared profile in Manage profiles', async () => {
+    await api.open(page, `/p/${OFFICE_B}/clients?editProfile=${OFFICE_A}`);
+    await expect(owners.getByRole('listitem')).toHaveCount(2);
+  });
+
+  await step('Remove on Lina’s row opens the confirm under it, naming her', async () => {
+    await owners.getByRole('button', { name: 'Remove Lina Saleh' }).click();
+    const confirm = owners.getByRole('group', { name: 'Remove Lina Saleh?' });
+    await expect(confirm).toContainText('Lina Saleh loses access to Sader & Haddad. What they recorded stays.');
+    await confirm.getByRole('button', { name: 'Remove Lina Saleh' }).click();
+  });
+
+  await step('The removal goes once with an Idempotency-Key; the toast says so and her row is gone', async () => {
+    await expect(page.getByTestId('toast-live')).toHaveText('Lina Saleh removed from Sader & Haddad');
+    await expect(owners.getByRole('listitem')).toHaveCount(1);
+    await expect(owners).toContainText('Only you own this profile.');
+    const deletes = api.calls('DELETE', new RegExp(`^/v1/profiles/${OFFICE_A}/owners/${LINA}$`));
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]?.headers['idempotency-key']).toBeTruthy();
+  });
+});
+
+test('A co-owner leaves the open shared profile and lands on their personal profile with a toast', { tag: '@portal.profiles.co-owner-leave' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [sharedByBasel, personal] });
+  const pane = page.getByRole('dialog', { name: 'Sader & Haddad' });
+  const owners = pane.getByRole('region', { name: 'Owners' });
+
+  await step('On the shared profile, open it in Manage profiles', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients?editProfile=${OFFICE_A}`);
+    await expect(owners).toBeVisible();
+  });
+
+  await step('Leave opens a confirm that says what stays, and Save steps aside', async () => {
+    await owners.getByRole('button', { name: 'Leave Sader & Haddad' }).click();
+    const confirm = owners.getByRole('group', { name: 'Leave Sader & Haddad?' });
+    await expect(confirm).toContainText("You'll lose access to Sader & Haddad. What you recorded stays.");
+    await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0);
+    await confirm.getByRole('button', { name: 'Leave Sader & Haddad' }).click();
+  });
+
+  await step('The portal lands on the personal profile, the drawer is closed, and a toast says so', async () => {
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}`));
+    await expect(page.getByTestId('toast-live')).toHaveText('You left Sader & Haddad');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByText("This profile isn't available")).toHaveCount(0);
+    await page.getByRole('button', { name: /^Switch profile/ }).click();
+    await expect(page.getByRole('menuitemradio', { name: /Sader & Haddad/ })).toHaveCount(0);
+  });
+});
+
+test('Someone removed while working on the shared profile lands on their personal profile with a banner naming it', { tag: '@portal.profiles.co-owner-removed' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [sharedByBasel, personal], clients: 1 });
+
+  await step('Work on the shared profile’s Clients', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients`);
+    await expect(page.getByRole('button', { name: /^Switch profile/ })).toContainText('Sader & Haddad');
+  });
+
+  await step('Meanwhile Basel removes you; open Expenses', async () => {
+    api.removedElsewhere(OFFICE_A);
+    await page.getByRole('link', { name: 'Expenses' }).first().click();
+  });
+
+  await step('The portal moves to the personal profile with a banner naming the shared one; Close dismisses it', async () => {
+    const banner = page.getByText('You no longer have access to Sader & Haddad. What you recorded stays.');
+    await expect(banner).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}`));
+    await page.getByRole('button', { name: 'Close' }).click();
+    await expect(banner).toHaveCount(0);
   });
 });

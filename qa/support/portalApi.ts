@@ -1,5 +1,5 @@
 import type { Page, Request, Route } from '@playwright/test';
-import { QA_TERMS_VERSION, customer, meBody, openSignedInPortal, type StubProfile } from './portal';
+import { QA_TERMS_VERSION, QA_USER_ID, customer, meBody, openSignedInPortal, type StubProfile } from './portal';
 
 /**
  * A small in-memory hosted API for portal specs (shapes from src/hosted/api/schema.d.ts).
@@ -407,6 +407,8 @@ export class FakeApi {
   private termsAccepted: boolean;
   /** MUT-324: the version the server names; bumpTerms moves it, as a release would. */
   private termsVersion = QA_TERMS_VERSION;
+  /** MUT-373: profiles the person lost access to elsewhere; a request naming one answers 404, as the server does. */
+  private readonly gone = new Set<string>();
 
   constructor(seed: FakeApiSeed) {
     this.signedIn = seed.signedIn ?? true;
@@ -535,6 +537,8 @@ export class FakeApi {
     const seg = path.split('/').filter(Boolean); // ['v1', resource, id?, sub?, subId?, action?]
     const [, resource, id, sub, subId, action] = seg;
     const q = (key: string) => query.get(key) ?? undefined;
+    const named = e.headers['x-mutaba3a-profile'];
+    if (named && this.gone.has(named)) return notFound();
 
     if (resource === 'sessions') {
       if (method === 'POST') {
@@ -555,7 +559,7 @@ export class FakeApi {
     }
     if (resource === 'me' && id === 'password' && method === 'POST') return this.changePasswordAnswer(e.body as { currentPassword?: string; newPassword?: string } | null);
 
-    if (resource === 'profiles') return this.profileAnswer(e, id, sub);
+    if (resource === 'profiles') return this.profileAnswer(e, id, sub, subId);
 
     if (resource === 'summaries') {
       if (id === 'organization') return json({ asOf: '2026-10-15', currencies: this.summary });
@@ -633,7 +637,7 @@ export class FakeApi {
     return uid(kind, this.serial);
   }
 
-  private profileAnswer(e: Logged, id?: string, sub?: string) {
+  private profileAnswer(e: Logged, id?: string, sub?: string, subId?: string) {
     const state = this.profiles.find((p) => p.stub.id === id);
     if (e.method === 'POST' && !id) {
       const body = e.body as { name: string; type: 'BUSINESS' | 'PERSONAL'; defaultCurrency?: Currency };
@@ -646,6 +650,17 @@ export class FakeApi {
       // MUT-300: idempotent like the server; the version stays put (eng review O3).
       state.stub = { ...state.stub, firmRequestedAt: state.stub.firmRequestedAt ?? FIRM_REQUESTED_AT };
       return json({ firmRequest: { requestedAt: state.stub.firmRequestedAt } }, 202);
+    }
+    if (e.method === 'DELETE' && sub === 'owners' && subId) {
+      // MUT-373: yourself leaves; anyone else is removed (the spec seeds who may do which).
+      if (subId === QA_USER_ID) {
+        this.profiles = this.profiles.filter((p) => p !== state);
+        return json({ result: 'left' });
+      }
+      const owners = state.stub.owners ?? [];
+      if (!owners.some((o) => o.userId === subId)) return notFound();
+      state.stub = { ...state.stub, owners: owners.filter((o) => o.userId !== subId) };
+      return json({ result: 'removed' });
     }
     if (e.method === 'GET' && sub === 'type-change') {
       const to = e.query.get('to');
@@ -662,6 +677,12 @@ export class FakeApi {
       return json({ profile, typeChange: typeChanged ? { uncategorizedExpenses: this.uncategorized, deletedCategories: 6, preset: body.type === 'BUSINESS' ? 'general' : 'personal' } : null });
     }
     return undefined;
+  }
+
+  /** MUT-373: the creator removed the signed-in person from this profile, elsewhere. */
+  removedElsewhere(profileId: string) {
+    this.profiles = this.profiles.filter((p) => p.stub.id !== profileId);
+    this.gone.add(profileId);
   }
 
   /** Bump a profile's version as if it were edited on another device. */

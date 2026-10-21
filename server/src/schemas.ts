@@ -43,7 +43,7 @@ export const OrganizationSchema = z
     timezone: z.string(),
     /** MUT-120: the owning user on their built-in personal profile; null on every other organization. */
     personalOwnerUserId: z.string().uuid().nullable(),
-    /** MUT-182: the user who owns this profile (their personal one or one they created); null on an operator firm. An owned profile is never keyed, bound or shared. */
+    /** MUT-182: the user who owns this profile (their personal one or one they created); null on an operator firm. An owned profile is never keyed or bound; MUT-373: an owned Business profile may have co-owners besides this creator (OWNER members). */
     ownerUserId: z.string().uuid().nullable(),
     /** MUT-182: PERSONAL or BUSINESS on an owned profile; null on an operator-provisioned organization. */
     profileType: z.enum(['PERSONAL', 'BUSINESS']).nullable(),
