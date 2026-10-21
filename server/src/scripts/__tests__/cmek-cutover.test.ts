@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer, type Server } from 'node:net';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +20,7 @@ const bin = mkdtempSync(join(tmpdir(), 'cmek-cutover-'));
 const calls = join(bin, 'calls.log');
 const KEY = 'projects/demo-project/locations/me-west1/keyRings/mutaba3a/cryptoKeys/mutaba3a-data';
 
+const NODE = process.execPath;
 const fakes: Record<string, string> = {
   gcloud: `#!/bin/bash
 echo "gcloud $*" >> "${calls}"
@@ -34,6 +35,7 @@ case "$args" in
   "sql backups create"*) ;;
   "sql backups list"*) echo "1700000000000" ;;
   "sql backups restore"*) exit "\${FAKE_RESTORE_EXIT:-0}" ;;
+  "run services update"*"--ingress=all"*) exit "\${FAKE_REOPEN_EXIT:-0}" ;;
   "run services update"*) ;;
   "run services describe"*"value(metadata.annotations"*)
     live=all
@@ -41,9 +43,14 @@ case "$args" in
     [[ -n "$FAKE_INGRESS_STUCK" ]] && live=all
     [[ -n "$FAKE_REOPENED_MIDCOPY" ]] && grep -q 'backups restore' "${calls}" && live=all
     echo "$live" ;;
-  "secrets versions access"*) printf 'postgresql://u:p@localhost/mutaba3a?host=/cloudsql/%s&connection_limit=10' "\${FAKE_SECRET_CONN:-demo-project:me-west1:mutaba3a-pg2}" ;;
+  "secrets versions access"*)
+    [[ -n "$FAKE_SECRET_DENIED" ]] && { echo "PERMISSION_DENIED: secretmanager.versions.access" >&2; exit 1; }
+    if [[ -n "$FAKE_SECRET_RAW" ]]; then printf '%s' "$FAKE_SECRET_RAW";
+    else printf 'postgresql://u:p@localhost/mutaba3a?host=/cloudsql/%s&connection_limit=10' "\${FAKE_SECRET_CONN:-demo-project:me-west1:mutaba3a-pg2}"; fi ;;
   "run services describe"*"image"*) echo "\${FAKE_IMAGE:-me-west1-docker.pkg.dev/demo-project/mutaba3a/mutaba3a-api:abc1234}" ;;
+  "run services describe"*"status.traffic[].revisionName"*) echo "\${FAKE_TRAFFIC_REVS:-mutaba3a-api-00042-xyz}" ;;
   "run services describe"*) printf '%s\\t%s\\t%s\\t%s\\t%s\\n' mutaba3a-api-00042-xyz "\${FAKE_PERCENT:-100}" mutaba3a-api-00042-xyz "\${FAKE_INGRESS:-internal}" https://mutaba3a-api.example.run.app ;;
+  "run revisions describe rev-b "*) echo "\${FAKE_SPLIT_REV_SQL:-demo-project:me-west1:mutaba3a-pg}" ;;
   "run revisions describe"*) echo "\${FAKE_REVISION_SQL:-demo-project:me-west1:\${FAKE_ACTIVE:-mutaba3a-pg}}" ;;
   *) echo "unexpected gcloud call: $args" >&2; exit 98 ;;
 esac
@@ -55,22 +62,25 @@ case "$1 $3" in
   "output cloud_sql_instance_name")
     [[ -n "$FAKE_TF_OUTPUT_ERR" ]] && { echo 'Error: Failed to load state: storage: 503' >&2; exit 1; }
     [[ -n "$FAKE_TF_NO_OUTPUT" ]] && { echo 'Error: Output "cloud_sql_instance_name" not found' >&2; exit 1; }
+    [[ -n "$FAKE_TF_EMPTY" ]] && exit 0
     printf '%s' "\${FAKE_ACTIVE:-mutaba3a-pg}" ;;
   "output local_database_url") printf '%s' "postgresql://mutaba3a_api:s3cret@127.0.0.1:5440/mutaba3a" ;;
   *) exit 1 ;;
 esac
 `,
+  // A real listener on the --port it is given, like the proxy: the script refuses a port that already listens.
   'cloud-sql-proxy': `#!/bin/bash
 echo "cloud-sql-proxy $*" >> "${calls}"
-exec sleep 60
+exec "${NODE}" -e "require('net').createServer((s) => s.end()).listen(Number(process.argv[1]), '127.0.0.1')" "$3"
 `,
   psql: `#!/bin/bash
 args="$*"
 if [[ "$args" == *pg_stat_database* ]]; then
-  w=5
-  [[ -n "$FAKE_WRITE_DURING" && -f "${bin}/writes.mark" ]] && w=6
+  [[ -n "$FAKE_STATS_FAIL" ]] && exit 2
+  w="\${FAKE_COUNTERS:-10,5,0}"
+  [[ -n "$FAKE_WRITE_DURING" && -f "${bin}/writes.mark" ]] && w=10,6,0
   touch "${bin}/writes.mark"
-  printf '10,%s,0\\n' "$w"; exit 0
+  printf '%s,%s\\n' "\${FAKE_TRACK_COUNTS:-on}" "$w"; exit 0
 fi
 if [[ "$args" == *pg_tables* ]]; then printf 'audit_events\\nusers\\n'; exit 0; fi
 if [[ "$args" == *"count(*)"* ]]; then
@@ -82,6 +92,7 @@ exit 97
 `,
   curl: `#!/bin/bash
 echo "curl $*" >> "${calls}"
+if [[ "$*" == *http_code* ]]; then printf '%s' "\${FAKE_HEALTH_CODE:-404}"; exit 0; fi
 exit "\${FAKE_READY_EXIT:-0}"
 `,
 };
@@ -91,18 +102,18 @@ for (const [tool, body] of Object.entries(fakes)) {
   chmodSync(path, 0o755);
 }
 
-const servers: Server[] = [];
+// Two free ports for the proxies: the script refuses one that already listens, so the fake proxy opens them.
 const ports: number[] = [];
 beforeAll(async () => {
   for (let i = 0; i < 2; i++) {
-    const server = createServer((socket) => socket.end());
+    const server = createServer();
     await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
-    servers.push(server);
     ports.push((server.address() as { port: number }).port);
+    await new Promise((done) => server.close(done));
   }
 });
-afterAll(async () => {
-  await Promise.all(servers.map((s) => new Promise((done) => s.close(done))));
+afterAll(() => {
+  spawnSync('pkill', ['-f', `listen\\(Number\\(process.argv\\[1\\]\\)`]);
   rmSync(bin, { recursive: true, force: true });
 });
 
@@ -113,7 +124,8 @@ function cutover(env: Record<string, string>, ...args: string[]) {
 function run(env: Record<string, string>, args: string[], yes: boolean) {
   rmSync(calls, { force: true });
   rmSync(join(bin, 'writes.mark'), { force: true });
-  const run = spawnSync('bash', [SCRIPT, ...args, ...(yes ? ['--yes'] : [])], {
+  // setsid: a new session with no controlling terminal, so a prompt can never block on the developer's keyboard.
+  const run = spawnSync('perl', ['-MPOSIX', '-e', 'POSIX::setsid(); exec @ARGV', 'bash', SCRIPT, ...args, ...(yes ? ['--yes'] : [])], {
     encoding: 'utf8',
     env: {
       PATH: `${bin}:/usr/bin:/bin`,
@@ -347,7 +359,7 @@ describe('cmek-cutover.sh', { timeout: 30_000 }, () => {
   it('prints the tfvars edit after verify, and both applies pin cmek_stage=active', () => {
     const r = dry('cutover');
     const lines = r.out.split('\n');
-    const applies = lines.filter((l) => l.includes('terraform apply'));
+    const applies = lines.filter((l) => l.includes('terraform apply') && l.includes('cmek_stage=active'));
     expect(applies).toHaveLength(2);
     for (const a of applies) expect(a).toContain('-var cmek_stage=active');
     expect(applies[0]).toContain('-var api_ingress=INGRESS_TRAFFIC_INTERNAL_ONLY');
@@ -363,6 +375,105 @@ describe('cmek-cutover.sh', { timeout: 30_000 }, () => {
     expect(r.status).not.toBe(0);
     expect(r.err).toMatch(/DATABASE_URL secret points at demo-project:me-west1:mutaba3a-pg\b/);
     expect(r.out + r.err).not.toContain('postgresql://');
+  });
+
+  // Cycle 2 of the review (2026-10-21).
+  it('stops when terraform state is empty (a wrong bucket or prefix), before touching anything', () => {
+    const r = cutover({ FAKE_TF_EMPTY: '1' }, 'cutover', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/cloud_sql_instance_name is empty/);
+    expect(r.calls.some((c) => c.startsWith('gcloud sql') || c.includes('--ingress'))).toBe(false);
+  });
+
+  it('stops and reopens when mutaba3a-pg\'s write counters cannot be read', () => {
+    const r = cutover({ FAKE_STATS_FAIL: '1' }, 'cutover', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/could not read mutaba3a-pg's write counters/);
+    expect(r.calls.at(-1)).toContain('--ingress=all');
+    expect(r.out).not.toContain('terraform apply');
+  });
+
+  it('stops when Postgres is not counting writes (track_counts off), since the freeze check would be blind', () => {
+    const r = cutover({ FAKE_TRACK_COUNTS: 'off' }, 'cutover', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/track_counts/);
+    expect(r.calls.at(-1)).toContain('--ingress=all');
+  });
+
+  it('refuses when any revision taking traffic mounts mutaba3a-pg2, not only the first', () => {
+    const r = cutover({ FAKE_TRAFFIC_REVS: 'mutaba3a-api-00042-xyz;rev-b', FAKE_SPLIT_REV_SQL: 'demo-project:me-west1:mutaba3a-pg2' }, 'rehearse', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/serves from demo-project:me-west1:mutaba3a-pg2 \(revision rev-b\)/);
+    expect(r.calls.some((c) => c.includes('backups'))).toBe(false);
+  });
+
+  it('refuses a proxy port something already listens on, so it never counts the wrong database', async () => {
+    const busy = createServer((sock) => sock.end());
+    await new Promise<void>((done) => busy.listen(0, '127.0.0.1', done));
+    const port = String((busy.address() as { port: number }).port);
+    const r = cutover({ PROXY_PORT_TARGET: port }, 'rehearse', '--project', 'demo-project');
+    await new Promise((done) => busy.close(done));
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(new RegExp(`already listens on 127.0.0.1:${port}`));
+  });
+
+  it('refuses the same port for both proxies', () => {
+    const r = cutover({ PROXY_PORT_TARGET: String(ports[0]) }, 'rehearse', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/PROXY_PORT_SOURCE and PROXY_PORT_TARGET must differ/);
+    expect(r.calls).toEqual([]);
+  });
+
+  it('stops when the service still answers from outside after the close', () => {
+    const r = cutover({ FAKE_HEALTH_CODE: '200' }, 'cutover', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/still answers from outside/);
+    expect(r.calls.some((c) => c.includes('backups create'))).toBe(false);
+    expect(r.calls.at(-1)).toContain('--ingress=all');
+  });
+
+  it('checks the operator can read the DATABASE_URL secret before anything is copied or closed', () => {
+    for (const sub of ['rehearse', 'cutover']) {
+      const r = cutover({ FAKE_SECRET_DENIED: '1' }, sub, '--project', 'demo-project');
+      expect(r.status, sub).not.toBe(0);
+      expect(r.err).toMatch(/cannot read the DATABASE_URL secret/);
+      expect(r.calls.some((c) => c.includes('backups') || c.includes('--ingress')), sub).toBe(false);
+    }
+  });
+
+  it('tries the reopen three times before giving up and printing the command', () => {
+    const r = cutover({ FAKE_RESTORE_EXIT: '1', FAKE_REOPEN_EXIT: '1' }, 'cutover', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.calls.filter((c) => c.includes('--ingress=all'))).toHaveLength(3);
+    expect(r.err).toMatch(/could not reopen: run {2}gcloud run services update mutaba3a-api/);
+  });
+
+  it('prints mutaba3a-pg\'s counters for verify, pg2\'s first backup, and a rollback that names step 4.1', () => {
+    const r = cutover({}, 'cutover', '--project', 'demo-project');
+    expect(r.status, r.err).toBe(0);
+    expect(r.out).toContain('scripts/cmek-cutover.sh verify --project demo-project --source-writes 10,5,0');
+    expect(r.out).toContain('gcloud sql backups create --instance=mutaba3a-pg2');
+    expect(r.out).toMatch(/Roll back before 4\.1/);
+    expect(r.out).toMatch(/After 4\.1 and before the reopen/);
+  });
+
+  it('verify --source-writes passes while mutaba3a-pg is still frozen', () => {
+    const r = cutover({ FAKE_ACTIVE: 'mutaba3a-pg2' }, 'verify', '--project', 'demo-project', '--source-writes', '10,5,0');
+    expect(r.status, r.err).toBe(0);
+    expect(r.out).toContain('mutaba3a-pg recorded no writes since the copy');
+  });
+
+  it('verify --source-writes fails when mutaba3a-pg took writes after the copy', () => {
+    const r = cutover({ FAKE_ACTIVE: 'mutaba3a-pg2', FAKE_COUNTERS: '11,5,0' }, 'verify', '--project', 'demo-project', '--source-writes', '10,5,0');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/recorded writes after the copy/);
+  });
+
+  it('verify never prints a DATABASE_URL secret it cannot parse', () => {
+    const r = cutover({ FAKE_ACTIVE: 'mutaba3a-pg2', FAKE_SECRET_RAW: 'postgresql://u:hunter2@10.0.0.5:5432/mutaba3a' }, 'verify', '--project', 'demo-project');
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/names no \/cloudsql\/ host/);
+    expect(r.out + r.err).not.toContain('hunter2');
   });
 
   it('verify fails while terraform still serves from mutaba3a-pg', () => {

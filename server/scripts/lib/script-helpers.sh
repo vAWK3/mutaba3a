@@ -15,7 +15,8 @@ run_capture() {
   printf '+ %s\n' "$*"
   if [[ "${DRY_RUN}" == 1 ]]; then printf -v "${var}" '%s' "${placeholder}"; return 0; fi
   local value
-  value="$("$@")"
+  # `|| return`: called as `run_capture … || die …`, set -e is off inside, so a failure must be returned.
+  value="$("$@")" || return $?
   printf -v "${var}" '%s' "${value}"
 }
 

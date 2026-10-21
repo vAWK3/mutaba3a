@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +28,8 @@ function drill(...args: string[]) {
 
 function drillWith(env: Record<string, string>, ...args: string[]) {
   rmSync(touched, { force: true });
-  const run = spawnSync('bash', [SCRIPT, ...args], {
+  // setsid: a new session with no controlling terminal, so a prompt can never block on the developer's keyboard.
+  const run = spawnSync('perl', ['-MPOSIX', '-e', 'POSIX::setsid(); exec @ARGV', 'bash', SCRIPT, ...args], {
     encoding: 'utf8',
     env: { PATH: `${bin}:/usr/bin:/bin`, HOME: bin, ...env },
     input: '',
@@ -65,7 +66,8 @@ function drillFromState(env: Record<string, string>, ...args: string[]) {
 const mutatingLines = (out: string) =>
   out.split('\n').filter((l) => /^\+ gcloud sql (instances (create|clone|patch|delete)|backups restore|users set-password)/.test(l));
 
-describe('restore-drill.sh', () => {
+// Each case spawns bash and fake CLIs; under the full suite's parallel load one can pass 5 s.
+describe('restore-drill.sh', { timeout: 30_000 }, () => {
   it('prints usage and exits 2 without --project', () => {
     const r = drill('--dry-run');
     expect(r.status).toBe(2);
@@ -136,6 +138,58 @@ describe('restore-drill.sh', () => {
     expect(r.err).toContain('terraform init failed');
     expect(r.out).not.toContain('(read-only)');
     expect(r.touched).toBe(false);
+  });
+
+  it('reads a describe row with an empty edition and no key without shifting fields (CSV)', () => {
+    const csvBin = mkdtempSync(join(tmpdir(), 'restore-drill-csv-'));
+    writeFileSync(
+      join(csvBin, 'gcloud'),
+      [
+        '#!/bin/bash',
+        'case "$*" in',
+        '  "config get-value account"*) echo ops@example.com ;;',
+        '  "sql instances describe"*) echo "me-west1,db-custom-1-3840,,10,POSTGRES_16,True," ;;',
+        '  *) exit 99 ;;',
+        'esac',
+      ].join('\n') + '\n',
+    );
+    chmodSync(join(csvBin, 'gcloud'), 0o755);
+    for (const tool of ['cloud-sql-proxy', 'psql']) {
+      writeFileSync(join(csvBin, tool), '#!/bin/sh\nexit 99\n');
+      chmodSync(join(csvBin, tool), 0o755);
+    }
+    const r = drillWith({ PATH: `${csvBin}:/usr/bin:/bin` }, '--project', 'demo-project', '--instance', 'mutaba3a-pg');
+    rmSync(csvBin, { recursive: true, force: true });
+    expect(r.out).toContain('source: POSTGRES_16, db-custom-1-3840 (enterprise), 10 GB, me-west1');
+    expect(r.out).not.toContain('encrypted with');
+  });
+
+  it('YES=1 in the environment does not skip the drill\'s paid-step prompts', () => {
+    const yesBin = mkdtempSync(join(tmpdir(), 'restore-drill-yes-'));
+    const log = join(yesBin, 'calls.log');
+    writeFileSync(
+      join(yesBin, 'gcloud'),
+      [
+        '#!/bin/bash',
+        `echo "gcloud $*" >> "${log}"`,
+        'case "$*" in',
+        '  "config get-value account"*) echo ops@example.com ;;',
+        '  "sql instances describe"*) echo "me-west1,db-g1-small,ENTERPRISE,10,POSTGRES_16,True," ;;',
+        '  "sql backups list"*) printf "123\\t2026-10-21T03:00:00Z\\n" ;;',
+        '  *) exit 99 ;;',
+        'esac',
+      ].join('\n') + '\n',
+    );
+    chmodSync(join(yesBin, 'gcloud'), 0o755);
+    for (const tool of ['cloud-sql-proxy', 'psql']) {
+      writeFileSync(join(yesBin, tool), '#!/bin/sh\nexit 99\n');
+      chmodSync(join(yesBin, tool), 0o755);
+    }
+    const r = drillWith({ PATH: `${yesBin}:/usr/bin:/bin`, YES: '1' }, '--project', 'demo-project', '--instance', 'mutaba3a-pg', '--only', 'backup');
+    const created = existsSync(log) && readFileSync(log, 'utf8').includes('instances create');
+    rmSync(yesBin, { recursive: true, force: true });
+    expect(r.status).not.toBe(0);
+    expect(created).toBe(false);
   });
 
   it('--only pitr skips the backup restore', () => {

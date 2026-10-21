@@ -43,6 +43,7 @@ PITR_MINUTES=60
 ONLY=""
 KEEP=0
 DRY_RUN=0
+YES=0 # the drill always asks before a paid step; lib/script-helpers.sh's confirm honours YES
 TEARDOWN_NAME=""
 BUCKET=""
 

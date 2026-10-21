@@ -218,9 +218,11 @@ resource "google_monitoring_alert_policy" "cloud_sql" {
   notification_channels = local.alert_channels
 }
 
-# MUT-381 (ADR-163): disabling or scheduling the destruction of a version of our key takes the database, its
-# backups and every receipt down, and Cloud SQL never re-encrypts onto a newer version. Admin Activity logs
-# record every such change (always on, free), so a log-match alert pages on it within minutes.
+# MUT-381 (ADR-163): disabling or scheduling the destruction of a version of our key, or taking a service
+# agent's grant off the key or its ring, takes the database, its backups and every receipt down (Cloud SQL
+# never re-encrypts onto a newer version). Admin Activity logs record every such change (always on, free), so
+# a log-match alert pages on it within minutes. The filter is unproven against a live audit entry until one
+# happens: test it once in a scratch project (pilot runbook §5.4).
 resource "google_monitoring_alert_policy" "kms_key_change" {
   count        = local.cmek_enabled && local.alerting_enabled ? 1 : 0
   project      = var.project_id
@@ -229,12 +231,13 @@ resource "google_monitoring_alert_policy" "kms_key_change" {
   severity     = "CRITICAL"
 
   conditions {
-    display_name = "A version of mutaba3a-data was disabled, destroyed or re-pointed"
+    display_name = "mutaba3a-data or its key ring changed"
     condition_matched_log {
       filter = join(" AND ", [
         "protoPayload.serviceName=\"cloudkms.googleapis.com\"",
-        "protoPayload.methodName=(\"DestroyCryptoKeyVersion\" OR \"UpdateCryptoKeyVersion\" OR \"UpdateCryptoKeyPrimaryVersion\")",
-        "protoPayload.resourceName:\"/keyRings/mutaba3a${local.suffix}/cryptoKeys/mutaba3a-data\"",
+        "protoPayload.methodName=(\"DestroyCryptoKeyVersion\" OR \"UpdateCryptoKeyVersion\" OR \"UpdateCryptoKeyPrimaryVersion\" OR \"SetIamPolicy\")",
+        # The key and its versions, or the ring itself (a grant on the ring reaches the key too).
+        "protoPayload.resourceName=~\"/keyRings/mutaba3a${local.suffix}(/cryptoKeys/mutaba3a-data(/|$)|$)\"",
       ])
     }
   }
@@ -248,7 +251,7 @@ resource "google_monitoring_alert_policy" "kms_key_change" {
 
   documentation {
     mime_type = "text/markdown"
-    content   = "Someone disabled, scheduled for destruction or re-pointed a version of the KMS key `mutaba3a-data`. If a version that protects data is disabled or destroyed, the database and the receipts go down. Re-enable it, or cancel the destroy (possible for 30 days): pilot runbook §5.4, ADR-163."
+    content   = "Someone disabled, scheduled for destruction or re-pointed a version of the KMS key `mutaba3a-data`, or changed who may use the key or its ring. If a version that protects data is disabled or destroyed, or the Cloud SQL or Cloud Storage service agent loses its grant, the database and the receipts go down. Re-enable the version, cancel the destroy (possible for 30 days) or restore the grant (terraform apply): pilot runbook §5.4, ADR-163."
   }
 
   notification_channels = local.alert_channels

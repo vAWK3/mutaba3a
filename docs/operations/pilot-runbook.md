@@ -450,7 +450,11 @@ Plain email from the support inbox, in the person's language. EN draft (the AR v
    - after the MUT-381 cutover, the database or receipts fail with a KMS or "key" error: a version of
      `mutaba3a-data` was disabled or scheduled for destruction. Re-enable it, or cancel the destroy,
      which is possible for 30 days (`gcloud kms keys versions list --key=mutaba3a-data --keyring=mutaba3a --location=me-west1`).
-     Never disable a version yourself: Cloud SQL doesn't re-encrypt on rotation (ADR-163).
+     Never disable a version yourself: Cloud SQL doesn't re-encrypt on rotation (ADR-163). The same goes
+     for the Cloud SQL and Cloud Storage agents' grants on the key (`terraform apply` restores them). The
+     `mutaba3a-data key version changed` alert pages on any of these; its log filter has not been tried
+     against a live audit entry yet, so test it once in a scratch project (disable and re-enable a
+     non-primary version) before relying on it.
 3. **Restore** if data was lost (§4).
 4. **Tell** people (§5.2, §5.3).
 5. **Record** it (§5.5) within 2 days, with the cause and the fix (a ticket).

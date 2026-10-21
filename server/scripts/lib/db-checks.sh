@@ -19,15 +19,28 @@ db_table_counts() {
 }
 
 # db_write_counters: "inserted,updated,deleted" rows since the stats were last reset, for the whole database.
-# Reads (row counts included) never move them; any INSERT, UPDATE or DELETE does.
+# Reads (row counts included) never move them; any INSERT, UPDATE or DELETE does. Backends flush them on idle
+# (up to ~10 s after a write on Postgres 15+), so callers wait before a read that must see every write. Dies
+# unless track_counts is on (the counters would never move) and the row is well formed.
 db_write_counters() {
-  db_sql -c "SELECT tup_inserted || ',' || tup_updated || ',' || tup_deleted FROM pg_stat_database WHERE datname = current_database()"
+  local row
+  row="$(db_sql -c "SELECT current_setting('track_counts') || ',' || tup_inserted || ',' || tup_updated || ',' || tup_deleted FROM pg_stat_database WHERE datname = current_database()")" \
+    || die "could not read the write counters (pg_stat_database)"
+  [[ "${row}" == on,* ]] || die "track_counts is not on (${row%%,*}): the write counters never move, so they can't prove a freeze"
+  row="${row#on,}"
+  [[ "${row}" =~ ^[0-9]+,[0-9]+,[0-9]+$ ]] || die "unexpected write counters: ${row}"
+  printf '%s\n' "${row}"
 }
 
 # db_start_proxy <connection name> <port>: start cloud-sql-proxy in the background and wait up to 30 s for
 # it to listen. Sets DB_PROXY_PID; the caller kills it.
 db_start_proxy() {
   local connection="$1" port="$2" _
+  # A listener already on the port (an old `npm run db:proxy`?) would answer instead of this proxy and send
+  # every query to whichever instance it points at.
+  if (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null; then
+    die "something already listens on 127.0.0.1:${port} (an old cloud-sql-proxy?); stop it or pick another port"
+  fi
   cloud-sql-proxy "${connection}" --port "${port}" --quiet &
   # shellcheck disable=SC2034 # read by the caller
   DB_PROXY_PID=$!
@@ -37,6 +50,7 @@ db_start_proxy() {
     kill "${DB_PROXY_PID}" 2>/dev/null || true
     die "cloud-sql-proxy did not open 127.0.0.1:${port} within 30 s (is the port free? is gcloud authenticated?)"
   fi
+  kill -0 "${DB_PROXY_PID}" 2>/dev/null || die "cloud-sql-proxy for ${connection} exited, yet 127.0.0.1:${port} answers: something else is listening there"
 }
 
 # tf_init <terraform dir> <environment>: point the terraform dir at the remote state (TF_STATE_BUCKET), the
@@ -56,7 +70,12 @@ tf_output() {
   local err rc=0 out
   err="$(mktemp "${TMPDIR:-/tmp}/tf-output-XXXX")"
   out="$(cd "$1" && terraform output -raw "$2" 2>"${err}")" || rc=$?
-  if (( rc == 0 )); then rm -f "${err}"; printf '%s' "${out}"; return 0; fi
+  if (( rc == 0 )); then
+    rm -f "${err}"
+    # An empty state (a wrong bucket or prefix) answers every output with nothing and exit 0.
+    [[ -n "${out}" ]] || die "terraform output $2 is empty: is TF_STATE_BUCKET (and the prefix) right?"
+    printf '%s' "${out}"; return 0
+  fi
   if grep -q "Output \"$2\" not found" "${err}"; then rm -f "${err}"; return 3; fi
   warn "$(cat "${err}")"
   rm -f "${err}"

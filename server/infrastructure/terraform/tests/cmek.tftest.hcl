@@ -159,7 +159,8 @@ run "a_change_to_a_key_version_pages" {
       google_monitoring_alert_policy.kms_key_change[0].severity == "CRITICAL"
       && strcontains(google_monitoring_alert_policy.kms_key_change[0].conditions[0].condition_matched_log[0].filter, "DestroyCryptoKeyVersion")
       && strcontains(google_monitoring_alert_policy.kms_key_change[0].conditions[0].condition_matched_log[0].filter, "UpdateCryptoKeyVersion")
-      && strcontains(google_monitoring_alert_policy.kms_key_change[0].conditions[0].condition_matched_log[0].filter, "/keyRings/mutaba3a/cryptoKeys/mutaba3a-data")
+      && strcontains(google_monitoring_alert_policy.kms_key_change[0].conditions[0].condition_matched_log[0].filter, "SetIamPolicy")
+      && strcontains(google_monitoring_alert_policy.kms_key_change[0].conditions[0].condition_matched_log[0].filter, "/keyRings/mutaba3a(/cryptoKeys/mutaba3a-data(/|$)|$)")
       && length(google_monitoring_alert_policy.kms_key_change[0].notification_channels) == 1
     )
     error_message = "Disabling, destroying or re-pointing a version of mutaba3a-data pages the alert channels (ADR-163)."
