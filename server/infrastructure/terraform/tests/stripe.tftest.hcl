@@ -1,4 +1,4 @@
-# MUT-360: the Stripe secrets, the job token and the nightly reconcile job, checked offline.
+# MUT-360: the Stripe secrets, the job token, the nightly reconcile job and its alerts, checked offline.
 # stripe_enabled is off by default, so merging changes nothing in production but the job token.
 # The Google, Google beta and random providers are mocked, so this needs no credentials, project or network:
 #   terraform init -backend=false && terraform test
@@ -91,6 +91,19 @@ run "off_by_default_mounts_the_job_token_but_no_stripe_and_no_job" {
   }
 }
 
+run "off_creates_no_stripe_alerts_even_with_a_channel" {
+  command = apply
+
+  variables {
+    alert_email = "ops@example.com"
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.stripe) == 0
+    error_message = "With stripe_enabled off there is nothing to watch, so no Stripe alert policy."
+  }
+}
+
 run "stripe_enabled_mounts_both_secrets_and_schedules_the_reconcile" {
   command = apply
 
@@ -126,10 +139,10 @@ run "stripe_enabled_mounts_both_secrets_and_schedules_the_reconcile" {
       && google_cloud_scheduler_job.stripe_reconcile[0].region == "me-west1"
       && google_cloud_scheduler_job.stripe_reconcile[0].schedule == "30 3 * * *"
       && google_cloud_scheduler_job.stripe_reconcile[0].time_zone == "Asia/Jerusalem"
-      && google_cloud_scheduler_job.stripe_reconcile[0].attempt_deadline == "320s"
+      && google_cloud_scheduler_job.stripe_reconcile[0].attempt_deadline == "280s"
       && google_cloud_scheduler_job.stripe_reconcile[0].retry_config[0].retry_count == 3
     )
-    error_message = "The reconcile runs nightly at 03:30 Israel time, gets 320 s, and retries 3 times."
+    error_message = "The reconcile runs nightly at 03:30 Israel time, gets 280 s (under Cloud Run's 300 s request timeout), and retries 3 times."
   }
 
   assert {
@@ -150,6 +163,76 @@ run "stripe_enabled_mounts_both_secrets_and_schedules_the_reconcile" {
   assert {
     condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if e.name == "MUTABA3A_JOB_TOKEN"]) == 1
     error_message = "MUTABA3A_JOB_TOKEN stays mounted with Stripe on."
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.stripe) == 0
+    error_message = "With no alert channel set, Stripe on creates no alert policy (like MUT-328's)."
+  }
+}
+
+run "stripe_enabled_alerts_on_what_needs_the_operator_and_a_failed_job" {
+  command = apply
+
+  variables {
+    stripe_enabled              = true
+    alert_email                 = "ops@example.com"
+    alert_notification_channels = ["projects/test-project/notificationChannels/111"]
+  }
+
+  assert {
+    condition     = toset(keys(google_monitoring_alert_policy.stripe)) == toset(["sync", "reconcile", "scheduler"])
+    error_message = "One policy each: the webhook sync, the reconcile's own log lines, and the Scheduler job's failed attempts."
+  }
+
+  assert {
+    condition = alltrue([
+      for p in values(google_monitoring_alert_policy.stripe) :
+      toset(p.notification_channels) == toset([google_monitoring_notification_channel.email[0].name, "projects/test-project/notificationChannels/111"])
+    ])
+    error_message = "Every Stripe policy notifies the MUT-328 channels."
+  }
+
+  assert {
+    condition = alltrue([
+      for p in values(google_monitoring_alert_policy.stripe) :
+      p.alert_strategy[0].notification_rate_limit[0].period == "3600s" && length(p.conditions) == 1
+    ])
+    error_message = "Each is one log-match condition, at most one notice an hour."
+  }
+
+  assert {
+    condition = alltrue([
+      for msg in ["stripe sync needs the operator", "stripe event failed; Stripe will redeliver", "stripe refused a re-fetch"] :
+      strcontains(google_monitoring_alert_policy.stripe["sync"].conditions[0].condition_matched_log[0].filter, "\"${msg}\"")
+    ])
+    error_message = "The sync policy matches the three webhook messages exactly."
+  }
+
+  assert {
+    condition = alltrue([
+      for msg in ["stripe reconcile needs the operator", "stripe reconcile could not list"] :
+      strcontains(google_monitoring_alert_policy.stripe["reconcile"].conditions[0].condition_matched_log[0].filter, "\"${msg}\"")
+    ])
+    error_message = "The reconcile policy matches both reconcile messages exactly."
+  }
+
+  assert {
+    condition = alltrue([
+      for k in ["sync", "reconcile"] :
+      startswith(google_monitoring_alert_policy.stripe[k].conditions[0].condition_matched_log[0].filter, "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"mutaba3a-api\" AND jsonPayload.msg=(")
+    ])
+    error_message = "The API's policies read only mutaba3a-api's logs, by pino's msg field."
+  }
+
+  assert {
+    condition     = google_monitoring_alert_policy.stripe["scheduler"].conditions[0].condition_matched_log[0].filter == "resource.type=\"cloud_scheduler_job\" AND resource.labels.job_id=\"mutaba3a-stripe-reconcile\" AND severity>=ERROR"
+    error_message = "The job policy matches the reconcile job's failed attempts (Scheduler logs a non-2xx or a timeout at ERROR)."
+  }
+
+  assert {
+    condition     = google_monitoring_alert_policy.stripe["scheduler"].conditions[0].condition_matched_log[0].filter == "resource.type=\"cloud_scheduler_job\" AND resource.labels.job_id=\"${google_cloud_scheduler_job.stripe_reconcile[0].name}\" AND severity>=ERROR"
+    error_message = "The job policy names the job Terraform creates."
   }
 }
 
@@ -182,5 +265,24 @@ run "a_non_production_environment_suffixes_every_name" {
   assert {
     condition     = google_cloud_scheduler_job.stripe_reconcile[0].name == "mutaba3a-stripe-reconcile-staging"
     error_message = "Staging's reconcile job carries the -staging suffix."
+  }
+}
+
+run "a_non_production_environment_alerts_on_its_own_job_and_service" {
+  command = apply
+
+  variables {
+    environment    = "staging"
+    stripe_enabled = true
+    alert_email    = "ops@example.com"
+  }
+
+  assert {
+    condition = (
+      strcontains(google_monitoring_alert_policy.stripe["scheduler"].conditions[0].condition_matched_log[0].filter, "resource.labels.job_id=\"mutaba3a-stripe-reconcile-staging\"")
+      && strcontains(google_monitoring_alert_policy.stripe["sync"].conditions[0].condition_matched_log[0].filter, "resource.labels.service_name=\"mutaba3a-api-staging\"")
+      && strcontains(google_monitoring_alert_policy.stripe["reconcile"].conditions[0].condition_matched_log[0].filter, "resource.labels.service_name=\"mutaba3a-api-staging\"")
+    )
+    error_message = "Staging's Stripe alerts watch staging's job and service only."
   }
 }

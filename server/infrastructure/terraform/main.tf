@@ -51,6 +51,8 @@ locals {
   secret_stripe_secret_key     = "mutaba3a-api-stripe-secret-key${local.suffix}"
   secret_stripe_webhook_secret = "mutaba3a-api-stripe-webhook-secret${local.suffix}"
   secret_job_token             = "mutaba3a-api-job-token${local.suffix}"
+  # By name, so monitoring.tf's alert on its failed attempts never plans the job itself.
+  stripe_reconcile_job = "mutaba3a-stripe-reconcile${local.suffix}"
 
   # MUT-111: empty (default) = no env vars below, feature off — matches
   # config.ts treating all four as absent. Set together in production.tfvars.
@@ -694,18 +696,21 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
 # Nightly Stripe reconcile (MUT-360)
 # ============================================================================
 
-# The job token opens only this route (MUT-360 D2). Reconcile always answers 200 with its error list, so
-# the retries only follow a run that never completed (a timeout, a 5xx, a cold start that failed).
+# The job token opens only this route (MUT-360 D2). Reconcile answers 200 with its error list, so the
+# retries only follow a run that never completed: 502 RECONCILE_FAILED (Stripe couldn't be listed), 409
+# RECONCILE_RUNNING (overlap), a timeout or a cold start that failed. 280 s stays under Cloud Run's 300 s
+# request timeout; the server stops its own run at about 240 s and reports TIME_BUDGET. Failed attempts
+# page: monitoring.tf (stripe alerts).
 resource "google_cloud_scheduler_job" "stripe_reconcile" {
   count = var.stripe_enabled ? 1 : 0
 
   project          = var.project_id
-  name             = "mutaba3a-stripe-reconcile${local.suffix}"
+  name             = local.stripe_reconcile_job
   region           = var.region
   description      = "Nightly Stripe reconcile: mirrors every subscription (MUT-360)."
   schedule         = "30 3 * * *"
   time_zone        = "Asia/Jerusalem"
-  attempt_deadline = "320s"
+  attempt_deadline = "280s"
 
   retry_config {
     retry_count = 3

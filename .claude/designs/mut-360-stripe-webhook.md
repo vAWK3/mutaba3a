@@ -177,7 +177,7 @@ That's 9 types.
 3. Each listed subscription goes through `syncSubscription` with its page's `fetchedAt`.
 4. Prune `stripe_events` older than 90 days.
 5. Return `{ checked, changed, unlinked, errors: [{ subscriptionId, code }] }`, always with **200**, so Scheduler retries never repeat a scan that completed.
-6. Log one summary line. Each error goes to warn with ids only. (Review correction: the server has no Sentry client, so these are log lines only; TODOS #17.)
+6. Log one summary line. Each error goes to warn with ids only. (Review correction: the server has no Sentry client; log-based alerts in `monitoring.tf` watch these lines.)
 
 ### 2.4 Repository changes (no migration)
 
@@ -264,7 +264,7 @@ For logging, `stripe-signature` is added to `SENSITIVE_KEYS`, with a case in `lo
   - `google_cloud_scheduler_job.stripe_reconcile`:
     - runs at `"30 3 * * *"` in `Asia/Jerusalem`;
     - POSTs to `${service_uri}/jobs/v1/billing/stripe-reconcile` with the `X-Job-Token` header;
-    - `attempt_deadline = "320s"`, retries ×3;
+    - `attempt_deadline = "280s"` (review: under Cloud Run's 300 s; the run stops itself at 240 s), retries ×3;
     - is counted on `var.stripe_enabled`.
   - Cloud Run runs with `cpu_idle = true` (main.tf:326), so the work happens inside the request. That is why there is no acknowledge-then-work path.
 - **Tests:** `tests/stripe.tftest.hcl`.
@@ -777,7 +777,7 @@ Dispositions: both accepted as corrections (no behaviour change).
 - `founderUntil` from subscription schedules: MUT-363 (D4).
 - Per-seat or per-member billing: not the model (ADR-160: the person pays, profiles are entitled; Firm is per firm).
 - OIDC for Scheduler: TD (D2 chose the job token).
-- An alert when a whole reconcile run fails: TODOS.md #17.
+- ~~An alert when a whole reconcile run fails: TODOS.md #17.~~ Done in the review (log-based alerts in `monitoring.tf`).
 
 ## What already exists
 
@@ -795,7 +795,7 @@ Dispositions: both accepted as corrections (no behaviour change).
 | Webhook | Wrong `whsec_` after rotation | 400 on every event; Stripe emails on endpoint failures; reconcile heals nightly | Stripe's failure email |
 | Webhook | Product missing `metadata.tier` | `UNKNOWN_TIER` recorded + warn log; cutover checklist step 1 | A log line only (no Sentry on the server; review correction), `/v1/me` unchanged |
 | Sync | Returning payer gets a second customer | account unlinked, listed by `billing:unlinked`; MUT-362 note | Operator list |
-| Reconcile | Job token rotated or Stripe unset | 401/503 in Scheduler logs only | **Silent** until TODOS #17. Not critical: webhooks still keep payers current |
+| Reconcile | Job token rotated or Stripe unset | 401/503, and 502 RECONCILE_FAILED when Stripe can't be listed | Alerted (review: Scheduler-failure log alert) |
 | Coverage | Org metadata names a firm the payer doesn't own | read-time rule (D9); test | Firm stays uncovered; mismatch visible via `/v1/me` |
 
 Critical gaps (no test, no handling, silent): 0.
@@ -845,7 +845,7 @@ Synthesized from this review's findings. Each task derives from a specific findi
   - Surfaced by: OV-3, OV-5 (endpoint API version), OV-7, R3/D4
   - Files: docs/operations/pilot-runbook.md, docs/commercial/pilot-offer.md, .claude/{DECISIONS,TECH_DEBT,CHANGELOG,INFRA,PATTERNS,COMPONENT_REGISTRY,SYSTEM_OVERVIEW}.md, qa catalog entry (manual AC3)
   - Verify: `release-qa lint`; walk the checklist in Stripe test mode
-- [ ] **T8 (P3, human: ~1h / CC: ~10min)**: alert on a failed reconcile run (TODOS.md #17)
+- [x] **T8 (P3, human: ~1h / CC: ~10min)**: alert on a failed reconcile run (TODOS.md #17), done in the review
   - Surfaced by: Failure modes, reconcile row
   - Files: server/infrastructure/terraform/monitoring.tf
   - Verify: tftest

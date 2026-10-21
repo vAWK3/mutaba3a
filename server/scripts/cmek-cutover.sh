@@ -20,6 +20,9 @@
 #   * Once cutover has closed ingress, every exit path reopens it on mutaba3a-pg (the EXIT trap), until
 #     the counts match and the switch apply is printed. From then on the API stays closed until the
 #     operator applies the switch or reopens it by hand (the printed rollback).
+#   * MUT-360: Cloud Scheduler counts as internal traffic, so the nightly Stripe reconcile would still reach
+#     a closed API and write. cutover pauses the job (if it exists and runs) before closing, the EXIT trap
+#     resumes it with the reopen, and on success the printed steps resume it after the reopen.
 #   * It refuses to run once terraform serves from mutaba3a-pg2: a second copy would overwrite live data.
 #   * Database credentials come from terraform state (TF_STATE_BUCKET), as scripts/db.sh reads them.
 #
@@ -34,6 +37,7 @@ REGION="${GCP_REGION:-me-west1}"
 SOURCE="mutaba3a-pg"
 TARGET="mutaba3a-pg2"
 SERVICE="mutaba3a-api"
+RECONCILE_JOB="mutaba3a-stripe-reconcile" # MUT-360, created only when stripe_enabled
 PORT_SOURCE="${PROXY_PORT_SOURCE:-5461}"
 PORT_TARGET="${PROXY_PORT_TARGET:-5462}"
 # Seconds between closing ingress and the backup, for requests already in flight to finish.
@@ -103,6 +107,37 @@ mutate() {
 
 set_ingress() {
   run gcloud run services update "${SERVICE}" --region="${REGION}" --project="${PROJECT}" --ingress="$1" --quiet
+}
+
+# reconcile_job <pause|resume>
+reconcile_job() {
+  run gcloud scheduler jobs "$1" "${RECONCILE_JOB}" --location="${REGION}" --project="${PROJECT}" --quiet
+}
+
+# pause_reconcile: pause MUT-360's nightly Stripe reconcile for the window, only if it exists and is enabled
+# (sets RECONCILE_PAUSED; one already paused by someone else stays theirs to resume). A job it can't read is
+# left as it is, with a warning: a reconcile that writes during the copy moves mutaba3a-pg's write counters,
+# and that stops the cutover.
+RECONCILE_PAUSED=0
+pause_reconcile() {
+  local state="" rc=0
+  run_capture state "ENABLED" gcloud scheduler jobs describe "${RECONCILE_JOB}" --location="${REGION}" \
+    --project="${PROJECT}" --format='value(state)' 2>"${WORK}/scheduler.err" || rc=$?
+  if (( rc != 0 )); then
+    if grep -qiE 'NOT_FOUND|not found' "${WORK}/scheduler.err"; then
+      info "no ${RECONCILE_JOB} job (stripe_enabled is off): nothing to pause"
+    else
+      cat "${WORK}/scheduler.err" >&2
+      warn "could not read ${RECONCILE_JOB} (above), so it isn't paused: if it runs during the copy, the write check stops the cutover"
+    fi
+    return 0
+  fi
+  if [[ "${state}" != "ENABLED" ]]; then
+    info "${RECONCILE_JOB} is ${state:-in no state}: left as it is"
+    return 0
+  fi
+  reconcile_job pause
+  RECONCILE_PAUSED=1
 }
 
 # ---------------------------------------------------------------------------
@@ -253,6 +288,10 @@ cleanup() {
     done
     [[ "${reopened}" == 1 ]] || warn "could not reopen: run  gcloud run services update ${SERVICE} --region=${REGION} --project=${PROJECT} --ingress=all"
   fi
+  if [[ "${RECONCILE_PAUSED}" == 1 && "${SWITCH_READY}" != 1 ]]; then
+    reconcile_job resume \
+      || warn "could not resume the Stripe reconcile: run  gcloud scheduler jobs resume ${RECONCILE_JOB} --location=${REGION} --project=${PROJECT}"
+  fi
   rm -rf "${WORK}"
   exit "${status}"
 }
@@ -300,6 +339,11 @@ if [[ "${SUBCOMMAND}" == "verify" ]]; then
   if [[ "${INGRESS}" == "all" ]]; then
     run curl -fsS "${URL}/ready" -o /dev/null || die "${URL}/ready did not answer 200"
     info "verify passed: ${URL}/ready answers; finish with the smoke checks (DEPLOYMENT.md §6d)"
+    # MUT-360: cutover paused the nightly Stripe reconcile, and nothing else resumes it.
+    run_capture JOB_STATE "<state>" gcloud scheduler jobs describe "${RECONCILE_JOB}" --location="${REGION}" \
+      --project="${PROJECT}" --format='value(state)' 2>/dev/null || JOB_STATE=""
+    [[ "${JOB_STATE}" != "PAUSED" ]] \
+      || warn "${RECONCILE_JOB} is still paused: gcloud scheduler jobs resume ${RECONCILE_JOB} --location=${REGION} --project=${PROJECT}"
   else
     info "verify passed while ingress is ${INGRESS}: run the second apply (without api_ingress) to reopen, then verify again to check /ready"
   fi
@@ -340,6 +384,7 @@ fi
 
 if [[ "${SUBCOMMAND}" == "cutover" ]]; then
   confirm "Close ${SERVICE} to outside traffic (portal, phones, Malafat) and copy ${SOURCE} into ${TARGET}?" || die "stopped before closing anything"
+  pause_reconcile
   INGRESS_CLOSED=1
   timed "Close ingress" set_ingress internal
   # Fix 2 (review): requests already in flight finish, the close must have taken, and from here on
@@ -407,6 +452,15 @@ run_capture IMAGE "<registry>/mutaba3a-api:<live-tag>" gcloud run services descr
 expect_closed "before the switch"
 [[ "${IMAGE}" != *@* ]] || die "${SERVICE} runs a digest-pinned image (${IMAGE}); the switch apply needs the image tag deploy.sh pushed"
 IMAGE_TAG="${IMAGE##*:}"
+RESUME_STEP=""
+RESUME_ROLLBACK=""
+if [[ "${RECONCILE_PAUSED}" == 1 ]]; then
+  RESUME_STEP="  4.6 Resume the nightly Stripe reconcile, paused for the window (no apply resumes it):
+        gcloud scheduler jobs resume ${RECONCILE_JOB} --location=${REGION} --project=${PROJECT}
+"
+  RESUME_ROLLBACK="  gcloud scheduler jobs resume ${RECONCILE_JOB} --location=${REGION} --project=${PROJECT}
+"
+fi
 SWITCH_READY=1
 cat <<EOF
 
@@ -421,10 +475,10 @@ ${TARGET} holds a verified copy. ${SERVICE} stays closed until you finish (DEPLO
   4.5 Reopen, then check /ready:
         terraform apply -var-file=${ENVIRONMENT}.tfvars -var image_tag=${IMAGE_TAG} -var cmek_stage=active
         scripts/cmek-cutover.sh verify --project ${PROJECT}
-  Then DEPLOYMENT.md §6d step 5 (smoke, record).
+${RESUME_STEP}  Then DEPLOYMENT.md §6d step 5 (smoke, record).
 
 Roll back before 4.1 (nothing moved yet):
   gcloud run services update ${SERVICE} --region=${REGION} --project=${PROJECT} --ingress=all
-After 4.1 and before the reopen: keep ingress closed and follow DEPLOYMENT.md §6d's rollback table (apply
+${RESUME_ROLLBACK}After 4.1 and before the reopen: keep ingress closed and follow DEPLOYMENT.md §6d's rollback table (apply
 cmek_stage=prepared with api_ingress=INGRESS_TRAFFIC_INTERNAL_ONLY, check /ready, then reopen).
 EOF

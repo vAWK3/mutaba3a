@@ -57,9 +57,10 @@ source "${SERVER_DIR}/scripts/lib/tf-bootstrap.sh"
 source "${SERVER_DIR}/scripts/lib/release-guard.sh"
 # shellcheck source=lib/db-checks.sh
 source "${SERVER_DIR}/scripts/lib/db-checks.sh"
-# MUT-381: guard_cmek_release with this release's own terraform arguments; run inside TF_DIR.
+# MUT-381 / MUT-360: both release guards with this release's own terraform arguments; run inside TF_DIR.
 guard_release() {
-  (cd "${TF_DIR}" && guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}")
+  (cd "${TF_DIR}" && guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
+    && guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}")
 }
 # The Cloud SQL Auth Proxy on 127.0.0.1:PROXY_PORT, for steps 3 and 6; needs SQL_CONNECTION (step 0). It
 # refuses a port something already listens on: an old proxy there would take the migration to its instance.
@@ -108,6 +109,9 @@ APPROVE=(); [[ "${AUTO_APPROVE}" == "1" ]] && APPROVE=(-auto-approve)
 # before the bootstrap apply (it writes the DATABASE_URL secret), and again before steps 3 and 4.
 # Off by default until MUT-385; SKIP_CMEK_GUARD=0 turns all three on (lib/release-guard.sh).
 guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
+# MUT-360: never switch Stripe off as a side effect of a release (a checkout whose production.tfvars lacks
+# stripe_enabled = true). On by default; SKIP_STRIPE_GUARD=1 skips it (lib/release-guard.sh).
+guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
 # First run only: the registry must exist before `docker push`, the database
 # before the migration. Skipped once they are in state (lib/tf-bootstrap.sh).
 ensure_bootstrap "${TF_ARGS[@]}" "${APPROVE[@]}"

@@ -1042,7 +1042,7 @@ In a quiet window. The `/health` and `/ready` uptime checks will page while the 
 scripts/cmek-cutover.sh cutover --project $GCP_PROJECT_ID
 ```
 
-It closes the API to outside traffic, waits 15 s for requests in flight, checks the close took, and records `mutaba3a-pg`'s write counters (rows inserted, updated, deleted). Then it copies again, compares every table's row count, re-reads the counters (any write since, an UPDATE included, stops it) and checks ingress is still closed. On any failure or mismatch it reopens the API on `mutaba3a-pg` and stops; nothing has moved. On success it leaves the API **closed** and prints the next steps:
+It pauses the nightly Stripe reconcile first, if the job exists and runs (§6e): Cloud Scheduler counts as internal traffic, so the job would still reach the closed API and write. Then it closes the API to outside traffic, waits 15 s for requests in flight, checks the close took, and records `mutaba3a-pg`'s write counters (rows inserted, updated, deleted). Then it copies again, compares every table's row count, re-reads the counters (any write since, an UPDATE included, stops it) and checks ingress is still closed. On any failure or mismatch it reopens the API on `mutaba3a-pg`, resumes the job it paused, and stops; nothing has moved. On success it leaves the API **closed** and the job paused, and prints the next steps:
 
 1. The switch apply. Ingress stays closed:
 
@@ -1071,6 +1071,12 @@ It closes the API to outside traffic, waits 15 s for requests in flight, checks 
    scripts/cmek-cutover.sh verify --project $GCP_PROJECT_ID   # now also /ready
    ```
 
+6. Resume the Stripe reconcile, if cutover paused it (it prints this step only then). No apply resumes it, and `verify` warns while it's still paused:
+
+   ```bash
+   gcloud scheduler jobs resume mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID
+   ```
+
 #### Step 5: smoke, then record
 
 1. Sign in on the portal and on a phone.
@@ -1083,7 +1089,7 @@ It closes the API to outside traffic, waits 15 s for requests in flight, checks 
 
 | When | What to do |
 |---|---|
-| Before step 4.1's switch apply | `gcloud run services update mutaba3a-api --region=me-west1 --project=$GCP_PROJECT_ID --ingress=all`. Nothing moved. |
+| Before step 4.1's switch apply | `gcloud run services update mutaba3a-api --region=me-west1 --project=$GCP_PROJECT_ID --ingress=all`, then `gcloud scheduler jobs resume mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID` if cutover paused it. Nothing moved. |
 | The switch apply failed partway | Keep ingress closed. The secret may already name `mutaba3a-pg2` while the revision mounts `mutaba3a-pg`: re-run the same switch apply until `verify` passes, or go back with `terraform apply -var-file=production.tfvars -var image_tag="$TAG" -var cmek_stage=prepared -var api_ingress=INGRESS_TRAFFIC_INTERNAL_ONLY`, check `/ready` through `gcloud run services proxy`, then reopen. Never reopen while the secret and the revision disagree. |
 | After the switch, before the reopen | `terraform apply -var-file=production.tfvars -var image_tag="$TAG" -var cmek_stage=prepared -var api_ingress=INGRESS_TRAFFIC_INTERNAL_ONLY`, check `/ready` through `gcloud run services proxy mutaba3a-api --region=me-west1`, then reopen with the same apply without `api_ingress`. Nothing was written to `mutaba3a-pg2` (it was closed), so nothing is lost. If 4.4 was done, set `cmek_stage = "prepared"` again in every checkout, or the next release is refused. |
 | After the reopen | Close ingress first (`api_ingress=INGRESS_TRAFFIC_INTERNAL_ONLY` on every apply until the end). Writes on `mutaba3a-pg2` since the reopen must go back: take an on-demand backup of `mutaba3a-pg2` and restore it into `mutaba3a-pg` (the reverse of the cutover, with the same count check), then apply `cmek_stage = "prepared"` with ingress internal, set `cmek_stage = "prepared"` in every checkout, check `/ready` through the proxy, reopen. Applying `prepared` without that copy **loses everything written since the reopen**. |
@@ -1100,13 +1106,14 @@ Never disable or destroy a version of `mutaba3a-data`. Cloud SQL doesn't re-encr
 
 ### 6e. Stripe webhook and nightly reconcile (MUT-360)
 
-Stripe tells the API about subscriptions through `POST /v1/billing/stripe/webhook`. A Cloud Scheduler job, `mutaba3a-stripe-reconcile`, POSTs to `/jobs/v1/billing/stripe-reconcile` at 03:30 Israel time and mirrors every subscription again, so a missed webhook is caught by morning. Terraform (`infrastructure/terraform/main.tf`, brief `.claude/designs/mut-360-stripe-webhook.md` §2.7) holds:
+Stripe tells the API about subscriptions through `POST /v1/billing/stripe/webhook`. A Cloud Scheduler job, `mutaba3a-stripe-reconcile`, POSTs to `/jobs/v1/billing/stripe-reconcile` at 03:30 Israel time and mirrors every subscription again, so a missed webhook is caught by morning. Each attempt gets 280 s (`attempt_deadline`, under Cloud Run's 300 s request timeout); the server stops its own run at about 240 s and lists `TIME_BUDGET` in its errors, and the next run (or a manual one) carries on. The route answers 200 with the run's summary, **502 `RECONCILE_FAILED`** when Stripe couldn't be listed at all (a bad or under-scoped key), and 409 `RECONCILE_RUNNING` when a run is already going. Anything but a 2xx is retried 3 times and pages (see "Alerts" below). Terraform (`infrastructure/terraform/main.tf`, brief `.claude/designs/mut-360-stripe-webhook.md` §2.7) holds:
 
 | Resource | State until `stripe_enabled = true` |
 |---|---|
 | Secrets `mutaba3a-api-stripe-secret-key` and `mutaba3a-api-stripe-webhook-secret`, readable by the API's service account | Exist, empty. Terraform never writes their values: you add them with `gcloud`. Not mounted, so the Stripe routes answer 503 |
 | Secret `mutaba3a-api-job-token`, generated by Terraform (`random_password.job_token`) | Mounted as `MUTABA3A_JOB_TOKEN` on every release. Opens `/jobs/*` only, never `/admin/*` |
 | The Scheduler job, and `cloudscheduler.googleapis.com` | The API is enabled; the job doesn't exist |
+| 3 log-match alert policies (`monitoring.tf`, `google_monitoring_alert_policy.stripe`), on the §6b channels | Don't exist. Created with the job, only if an alert channel is set |
 
 **Cost:** 3 Scheduler jobs per billing account are free and this is the only one. The 3 secrets cost about $0.18/month.
 
@@ -1128,7 +1135,7 @@ Stripe tells the API about subscriptions through `POST /v1/billing/stripe/webhoo
    ```bash
    read -rs KEY && printf '%s' "$KEY" | gcloud secrets versions add mutaba3a-api-stripe-secret-key --data-file=- --project=$GCP_PROJECT_ID; unset KEY
    ```
-   Use the live-mode key (`rk_live_…`). The server refuses a live key unless `API_KEY_ENVIRONMENT=live` (`server/src/config.ts`).
+   Use the **restricted live key** (`rk_live_…`). Production is a live server (`API_KEY_ENVIRONMENT=live`), and a live server accepts nothing else: an `sk_` key, or any test key (`rk_test_…`, `sk_test_…`), stops the new revision starting (`server/src/config.ts`). Test keys work only on a non-live server, and a live key never does.
 3. Create the webhook endpoint (pilot runbook §1.7 lists its events and API version), then add its signing secret the same way:
    ```bash
    read -rs KEY && printf '%s' "$KEY" | gcloud secrets versions add mutaba3a-api-stripe-webhook-secret --data-file=- --project=$GCP_PROJECT_ID; unset KEY
@@ -1138,10 +1145,22 @@ Stripe tells the API about subscriptions through `POST /v1/billing/stripe/webhoo
    ```bash
    terraform plan -var-file=production.tfvars -var image_tag="$TAG"
    ```
-   Expect `google_cloud_run_v2_service.api` updated in place (`STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` added) and `google_cloud_scheduler_job.stripe_reconcile[0]` added: **`Plan: 1 to add, 1 to change, 0 to destroy`**. Anything else means stop and ask. Apply the same command with `apply`. A secret without a version stops the new revision starting; the old one keeps serving, so add the version and apply again.
-5. Check: `gcloud scheduler jobs describe mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID` shows `state: ENABLED`. Then walk the cutover checklist in [`docs/operations/pilot-runbook.md`](../docs/operations/pilot-runbook.md) §1.7 (run the reconcile once, verify, then revoke grants). Delete the MUT-360 line from `docs/operations/before-release.md` and record the date in §7.
+   Expect `google_cloud_run_v2_service.api` updated in place (`STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` added), `google_cloud_scheduler_job.stripe_reconcile[0]` added, and the 3 alert policies `google_monitoring_alert_policy.stripe["sync"]`, `["reconcile"]` and `["scheduler"]` added (production has `alert_email`, §6b): **`Plan: 4 to add, 1 to change, 0 to destroy`**. Anything else means stop and ask. Apply the same command with `apply`. A secret without a version stops the new revision starting; the old one keeps serving, so add the version and apply again.
+5. Check: `gcloud scheduler jobs describe mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID` shows `state: ENABLED`, and Monitoring → Alerting lists "Stripe sync needs the operator", "Stripe reconcile needs the operator" and "Stripe reconcile job failed". Then walk the cutover checklist in [`docs/operations/pilot-runbook.md`](../docs/operations/pilot-runbook.md) §1.7 (run the reconcile once, verify, then revoke grants). Delete the MUT-360 line from `docs/operations/before-release.md` and record the date in §7.
 
-**Turn it off:** set `stripe_enabled = false` and apply. The job goes, the Stripe env vars go, and the routes answer 503. The secrets and their versions stay.
+**Releases once it's on.** `deploy.sh` refuses a release whose checkout's `production.tfvars` has `stripe_enabled = false`, or no such line, while production runs Stripe (`guard_stripe_release`, `lib/release-guard.sh`). The tfvars is git-ignored, so a checkout that never got the line would release with the default, false: its full apply would delete the job and the alerts and unmount the Stripe secrets. "Runs Stripe" means the Scheduler job exists or the service mounts `STRIPE_SECRET_KEY`. Fix the tfvars and release again. It's on by default, checks at the same three points as the CMEK guard (§6d), and stops the release if it can't read the job or the service. It also warns, without refusing, while the job is paused. `SKIP_STRIPE_GUARD=1` skips it: only for a release meant to switch Stripe off.
+
+**Alerts** (`monitoring.tf`, one email per policy per hour at most, to the §6b channels):
+
+| Policy | Fires on | Do |
+|---|---|---|
+| Stripe sync needs the operator (WARNING) | The API logs `stripe sync needs the operator`, `stripe refused a re-fetch` or `stripe event failed; Stripe will redeliver` | Read the log line's codes (pilot runbook §1.7 step 5). A refused re-fetch got a 200 and won't come back; the nightly run retries it. "Will redeliver" is transient: act only if the same event id keeps failing |
+| Stripe reconcile needs the operator (WARNING) | The API logs `stripe reconcile needs the operator` (one line per subscription it couldn't mirror) or `stripe reconcile could not list` | `npm run billing:reconcile -- --url "$URL"` and read `errors` (pilot runbook §1.7 step 5). `TIME_BUDGET`: the run stopped early; run it again |
+| Stripe reconcile job failed (ERROR) | Cloud Scheduler logs a failed attempt of `mutaba3a-stripe-reconcile` (no 2xx, or the 280 s deadline) | Read the attempt in Scheduler's logs. 502 `RECONCILE_FAILED`: the key is wrong or lacks a read permission (§6e step 2). 409 `RECONCILE_RUNNING`: someone ran `billing:reconcile` at 03:30; nothing to do. 401: the job token was rotated and the revision not rolled. 503: Stripe isn't configured. Fix, then `gcloud scheduler jobs run mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID` |
+
+The filters are unproven against live entries until each first fires: note the date in §7 when one does.
+
+**Turn it off:** set `stripe_enabled = false` and apply (this command, not a release: the release guard refuses it). The job and the alerts go, the Stripe env vars go, and the routes answer 503. The secrets and their versions stay. Then set `stripe_enabled = false` in every checkout you release from.
 
 **Rotate the job token:** `terraform apply -var-file=production.tfvars -var image_tag="$TAG" -replace=random_password.job_token`, then `./scripts/deploy.sh` so the new revision reads the new version. Until it rolls, the service refuses the job, and the next night's run catches up.
 

@@ -173,14 +173,4 @@
 
 ## 17. A failed nightly Stripe reconcile run is only visible in Cloud Scheduler's logs
 
-**What:** Add a log-based alert (Cloud Monitoring, beside MUT-328's uptime alerts in `server/infrastructure/terraform/monitoring.tf`) when the `stripe_reconcile` Scheduler job gets a non-2xx response or misses its deadline.
-
-**Why:** MUT-360's reconcile answers 200 even when single subscriptions fail (those go to Sentry). But a run that never starts is invisible: a 401 from a rotated job token, a 503 because Stripe isn't configured, or a timeout. Missed webhooks would then stop healing, and nobody would hear about it.
-
-**Pros of fixing:** Closes the one silent failure left in the billing sync, using the alert channel that already exists (email + SMS, MUT-328).
-
-**Cons / cost / risk:** One more alert policy to keep tuned. Webhooks still keep paying users current while reconcile is down, so this is drift protection, not an outage.
-
-**Context:** Found 2026-10-21 in the MUT-360 eng review. Deferred because MUT-360 stays off until `stripe_enabled = true`. Start at `monitoring.tf` with a `google_logging_metric` on `resource.type="cloud_scheduler_job"` and `severity>=ERROR`.
-
-**Depends on / blocked by:** MUT-360 merged and its Terraform applied.
+**Done (MUT-360 review, 2026-10-21).** `server/infrastructure/terraform/monitoring.tf` adds three log-match alert policies, created with the job (`stripe_enabled`) on MUT-328's channels: a failed attempt of the Scheduler job (any non-2xx, 502 `RECONCILE_FAILED` and 409 `RECONCILE_RUNNING` included, or the 280 s deadline), and the API's own `stripe sync …` and `stripe reconcile …` lines that need the operator. The old text was wrong on one point: per-subscription failures never went to Sentry (the server has no Sentry client); they are warn-level log lines, which the reconcile policy now pages on. Operator steps: `server/DEPLOYMENT.md` §6e, "Alerts".

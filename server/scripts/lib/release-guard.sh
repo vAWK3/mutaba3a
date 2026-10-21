@@ -1,5 +1,6 @@
 # shellcheck shell=bash
 # deploy.sh (MUT-381, ADR-164): refuse a release that would move the database or reopen a closed service.
+# (MUT-360: guard_stripe_release, below, refuses one that would switch Stripe off.)
 # Sourced by scripts/deploy.sh, which calls it before the bootstrap apply, before the migration and before the
 # full apply (each a few minutes apart). Tested by src/scripts/__tests__/release-guard.test.ts through a fake
 # `terraform` and `gcloud`.
@@ -18,6 +19,20 @@
 # changes nothing and runs exactly as it did before MUT-381. SKIP_CMEK_GUARD=0 turns it on; it must be on
 # before any CMEK cutover (DEPLOYMENT.md §6d), and MUT-385 makes on the default.
 
+# guard_var_args <terraform args…>: keeps only -var and -var-file in GUARD_VAR_ARGS, so `terraform console`
+# sees the same variables (tfvars, *.auto.tfvars, TF_VAR_*) the apply will.
+GUARD_VAR_ARGS=()
+guard_var_args() {
+  GUARD_VAR_ARGS=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -var|-var-file) GUARD_VAR_ARGS+=("$1" "${2:-}"); shift 2 ;;
+      -var=*|-var-file=*) GUARD_VAR_ARGS+=("$1"); shift ;;
+      *) shift ;;
+    esac
+  done
+}
+
 # guard_cmek_release <suffix> <service> <region> <project> <terraform args…>
 #   <terraform args…>: the apply's own arguments; only -var and -var-file are kept, so `terraform console`
 #   sees the same variables (tfvars, *.auto.tfvars, TF_VAR_*) the apply will.
@@ -27,17 +42,10 @@ guard_cmek_release() {
     return 0
   fi
   local suffix="$1" service="$2" region="$3" project="$4"; shift 4
-  local -a var_args=()
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      -var|-var-file) var_args+=("$1" "${2:-}"); shift 2 ;;
-      -var=*|-var-file=*) var_args+=("$1"); shift ;;
-      *) shift ;;
-    esac
-  done
+  guard_var_args "$@"
 
   local values stage ingress
-  values="$(printf 'var.cmek_stage\nvar.api_ingress\n' | terraform console ${var_args[@]+"${var_args[@]}"})" \
+  values="$(printf 'var.cmek_stage\nvar.api_ingress\n' | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
     || die "could not evaluate cmek_stage and api_ingress with terraform console (above); refusing to release on a guess"
   stage="$(sed -n '1s/"//gp' <<<"${values}")"
   ingress="$(sed -n '2s/"//gp' <<<"${values}")"
@@ -95,4 +103,72 @@ guard_cmek_release() {
       [[ "${conn}" == *":${want}" ]] || die "${rev} mounts ${conn}, but this release would serve ${want}: terraform state and Cloud Run disagree. Find out why before releasing."
     done
   done
+}
+
+# MUT-360 (ADR-165): refuse a release whose checkout says stripe_enabled = false (or doesn't set it) while
+# production already runs Stripe. stripe_enabled lives in the git-ignored production.tfvars, so a checkout that
+# never got the line would release with the default, false: its full apply deletes the nightly reconcile job and
+# unmounts the Stripe secrets, and the webhook answers 503 until someone notices. Turning Stripe off is
+# DEPLOYMENT.md §6e's own apply, never a side effect of a release.
+#
+# "Production runs Stripe" is read from Google, not from terraform state: the reconcile job exists, or the
+# service's template mounts STRIPE_SECRET_KEY. Either one is enough. On by default; SKIP_STRIPE_GUARD=1 skips it.
+# It fails closed like the CMEK guard: anything it cannot read stops the release. It also warns (never refuses)
+# when the job is paused, which a CMEK cutover or a whole-database restore leaves to the operator to undo.
+
+# guard_stripe_release <suffix> <service> <region> <project> <terraform args…>
+guard_stripe_release() {
+  if [[ "${SKIP_STRIPE_GUARD:-0}" == "1" ]]; then
+    warn "Stripe release guard skipped (SKIP_STRIPE_GUARD=1)"
+    return 0
+  fi
+  local suffix="$1" service="$2" region="$3" project="$4"; shift 4
+  guard_var_args "$@"
+
+  local enabled
+  enabled="$(printf 'var.stripe_enabled\n' | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
+    || die "could not evaluate stripe_enabled with terraform console (above); refusing to release on a guess"
+  [[ "${enabled}" == "true" || "${enabled}" == "false" ]] \
+    || die "terraform console gave '${enabled}' for stripe_enabled; refusing to release on a guess"
+
+  local job="mutaba3a-stripe-reconcile${suffix}" err rc=0 state
+  err="$(mktemp "${TMPDIR:-/tmp}/release-guard-XXXX")"
+  state="$(gcloud scheduler jobs describe "${job}" --location="${region}" --project="${project}" \
+    --format='value(state)' 2>"${err}")" || rc=$?
+  if (( rc != 0 )); then
+    state=""
+    # Stripe on in this checkout: the job only feeds the paused warning, so an unreadable one never stops it.
+    if [[ "${enabled}" == "false" ]] && ! grep -qiE 'NOT_FOUND|not found' "${err}"; then
+      cat "${err}" >&2; rm -f "${err}"
+      die "could not read the Scheduler job ${job} (above); refusing to release on a guess"
+    fi
+  fi
+  rm -f "${err}"
+  if [[ "${state}" == "PAUSED" ]]; then
+    warn "${job} is paused: the nightly Stripe reconcile doesn't run. If no CMEK cutover or restore holds the database closed, resume it: gcloud scheduler jobs resume ${job} --location=${region} --project=${project}"
+  fi
+  [[ "${enabled}" == "true" ]] && return 0
+
+  local env_names="" live=""
+  if [[ -n "${state}" ]]; then
+    live="the Scheduler job ${job} exists"
+  else
+    err="$(mktemp "${TMPDIR:-/tmp}/release-guard-XXXX")"
+    rc=0
+    env_names="$(gcloud run services describe "${service}" --region="${region}" --project="${project}" \
+      --format='value(spec.template.spec.containers[0].env[].name)' 2>"${err}")" || rc=$?
+    if (( rc != 0 )); then
+      if grep -qiE 'cannot find service|could not be found|NOT_FOUND' "${err}"; then
+        rm -f "${err}"; return 0 # first deploy: nothing runs Stripe yet
+      fi
+      cat "${err}" >&2; rm -f "${err}"
+      die "could not read ${service}'s env (above); refusing to release on a guess"
+    fi
+    rm -f "${err}"
+    if [[ ";${env_names};" == *";STRIPE_SECRET_KEY;"* ]]; then
+      live="${service} mounts STRIPE_SECRET_KEY"
+    fi
+  fi
+  [[ -z "${live}" ]] && return 0
+  die "this checkout's stripe_enabled is false (or unset), but production runs Stripe: ${live}. This release would delete the nightly reconcile job and unmount the Stripe secrets. Set stripe_enabled = true in this checkout's production.tfvars (git doesn't carry it), then release. To turn Stripe off, use DEPLOYMENT.md §6e's own apply; SKIP_STRIPE_GUARD=1 only if you mean this release to do it."
 }
