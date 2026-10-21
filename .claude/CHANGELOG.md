@@ -28,6 +28,33 @@
 
 ---
 
+## [Unreleased] - 2026-10-21 — Stripe sync review fixes: billing can't fail open (MUT-360 qa-reconcile, ADR-165 amendments)
+
+**Why:** The pre-landing review found that a deleted customer, an untagged product or a revoked key could leave a payer
+covered for ever with nothing alerting, and that a webhook sync racing an operator link could undo the link.
+
+### Fixed
+- Cancellations always mirror: a deleted customer's subscription is still written, and an unmappable one keeps Stripe's
+  status, period and cancel-at-period-end on the stored tier (`billing/stripe/sync.ts`, `mirror.ts` `stateOf`,
+  `billing.getSubscription`).
+- `saveAccount` / `linkAccount` lock the customer row then the person row, re-read, never write back a stale link, and
+  retry a first-insert race (`repositories/prisma.ts`; Prisma concurrency contract tests).
+- Stripe 401/403 are transient (`gateway.ts`); a reconcile that couldn't list answers 502 `RECONCILE_FAILED`; reconcile
+  stops at 240 s with `TIME_BUDGET`.
+- Only failed signatures spend the per-IP webhook budget; a Payment Link's `client_reference_id` never links.
+
+### Added
+- `GET /admin/v1/billing/status` and `npm run billing:status` (the cutover check: with and without grants).
+- `PERIOD_GRACE_DAYS` (7) in `billing/entitlement.ts`: a covering status past its period + 7 days reads as a lapse.
+- Codes `ORG_NOT_OWNED_BY_PAYER`, `TIME_BUDGET`; error code `RECONCILE_FAILED` (502).
+- Terraform alerts on the sync's operator messages and Scheduler failures; a `stripe_enabled` release guard; the
+  Scheduler job paused during the CMEK cutover; `attempt_deadline` 280 s.
+
+### Changed
+- A live server (`API_KEY_ENVIRONMENT=live`) accepts only an `rk_live_` key.
+- Pilot runbook §1.5/§1.7 use `billing:status`; §4.3 and §7 gained Stripe steps; §1.7's secret step moved after the
+  endpoint is created.
+
 ## [Unreleased] - 2026-10-21 — Stripe webhook and nightly reconcile (MUT-360, ADR-165)
 
 **Why:** Pilot subscriptions are made by hand in Stripe, and MUT-358's billing tables had no writer, so `/v1/me` couldn't tell who paid. A missed or out-of-order webhook must never leave a payer uncovered. Nothing is enforced yet (MUT-361).

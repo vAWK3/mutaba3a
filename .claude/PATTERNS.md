@@ -2616,3 +2616,13 @@ A value passed to `c.json(...)` on an OpenAPI route must be a `type` alias, not 
 
 ### Pattern: Newer read wins for mirrored third-party state
 When the source object has no updated time of its own, stamp each read with the time the request was **sent** (a list's page time, never the moment each item is processed). The write locks the row (`SELECT … FOR UPDATE`), and when the stored stamp is later it returns `stale` and writes nothing. Re-fetching on every event plus this guard makes out-of-order and duplicate deliveries harmless. The change audit is built inside the same transaction after the compare, so `from` is the row actually replaced (`billing.saveSubscription`, `repositories/billing-audit.ts`).
+
+### Mirrored third-party state never freezes "paid" (MUT-360 review)
+A sync that can't map an object must still write the fields that end access (status, period, cancel-at-period-end) on
+the values already stored, and the reader should stop trusting a covering state past its period plus a grace
+(`PERIOD_GRACE_DAYS` in `billing/entitlement.ts`). Fail closed after the period, not open for ever.
+
+### Lock order for rows two writers share (MUT-360 review)
+When two paths both decide from a row and write it (`saveAccount` and `linkAccount`), lock it `FOR UPDATE` first, then
+any second row, in the same order on both paths; re-read after locking, and write only the fields this call decided.
+Never write back a value read before the lock. Pin it with a `Promise.all` contract test that runs on Postgres.

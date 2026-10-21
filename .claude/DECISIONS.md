@@ -4479,5 +4479,25 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - The pilot cutover follows the ordered checklist in `docs/operations/pilot-runbook.md` §1.7: tag Products, set customer metadata, add the restricted key and the webhook secret, turn on `stripe_enabled`, run `billing:reconcile` once, verify `/v1/me`, then revoke `pre-billing` grants one person at a time. Apply steps: `server/DEPLOYMENT.md` §6e.
 - MUT-362's checkout must pass the existing `stripeCustomerId`, or a returning payer gets a second customer that stays unlinked (`USER_HAS_ANOTHER_ACCOUNT`).
 - MUT-363 fills `founderUntil`.
-- A failed nightly run is visible only in Scheduler logs until TODOS.md #17 adds an alert.
 - The API is 1.44.0-mut360, additive.
+
+**Review amendments (qa-reconcile, Basel 2026-10-21)** — nine reviewers (checklist, seven specialists, an adversarial
+pass and a red team) found that billing could fail open. Accepted fixes:
+1. **Nothing is ever frozen "paid".** A deleted customer's subscription is still mirrored (Stripe cancels it); an
+   unmappable one (`UNKNOWN_TIER`, `UNSUPPORTED_CURRENCY`, `NO_PERIOD`) still records Stripe's status, period and
+   cancel-at-period-end on the stored tier, and its event stays replayable. As a backstop, `resolveEntitlement` counts a
+   covering status only until `currentPeriodEnd` + `PERIOD_GRACE_DAYS` (7); after that it reads as a lapse (READ_ONLY,
+   never LOCKED). This amends ADR-162's rule 3.
+2. **Links can't be lost to a race.** `saveAccount` and `linkAccount` lock the customer's row, then the person's (one
+   order, no deadlock), re-read, write `userId` only when linking, and `saveAccount` retries a first-insert race.
+3. **Silent failures are loud.** Stripe 401/403 are transient (the webhook answers 500 and Stripe redelivers once the
+   key is fixed); a reconcile that couldn't list answers 502 `RECONCILE_FAILED`; reconcile stops at 240 s
+   (`TIME_BUDGET`) under the Scheduler's 280 s deadline; log-based alerts watch the operator messages and Scheduler
+   failures (the server has no Sentry client, so logs were all there was).
+4. **The cutover can be checked.** `GET /admin/v1/billing/status` / `npm run billing:status` show a person's mirror and
+   each owned profile's entitlement with and without grants; a pilot grant is revoked only once the latter is
+   ACTIVE / STRIPE. A release guard refuses a checkout whose `stripe_enabled` is off while production runs Stripe.
+5. **Hardening.** Only failed signatures spend the per-IP webhook budget (Stripe's IPs are shared); a live server
+   takes only `rk_live_` keys; a Payment Link's `client_reference_id` never links; a firm tie the payer doesn't own is
+   reported (`ORG_NOT_OWNED_BY_PAYER`); lookup keys are cut to the column's 100 characters.
+6. **Not changed:** co-owners still don't count for a firm tie (TD-193, pinned by a test); the job token stays (TD-197).
