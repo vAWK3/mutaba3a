@@ -170,3 +170,17 @@
 **Context:** Decided 2026-10-19 in the MUT-299 eng review (R2/D2, `.claude/designs/mut-299-firm-books-plan.md`). Trigger: an accountant or auditor asks for frozen months. Start at `server/src/expenses/compose.ts:20`, which refuses amounts ≤ 0.
 
 **Depends on / blocked by:** MUT-312 (month close) shipped.
+
+## 17. A failed nightly Stripe reconcile run is only visible in Cloud Scheduler's logs
+
+**What:** Add a log-based alert (Cloud Monitoring, beside MUT-328's uptime alerts in `server/infrastructure/terraform/monitoring.tf`) when the `stripe_reconcile` Scheduler job gets a non-2xx response or misses its deadline.
+
+**Why:** MUT-360's reconcile answers 200 even when single subscriptions fail (those go to Sentry). But a run that never starts is invisible: a 401 from a rotated job token, a 503 because Stripe isn't configured, or a timeout. Missed webhooks would then stop healing, and nobody would hear about it.
+
+**Pros of fixing:** Closes the one silent failure left in the billing sync, using the alert channel that already exists (email + SMS, MUT-328).
+
+**Cons / cost / risk:** One more alert policy to keep tuned. Webhooks still keep paying users current while reconcile is down, so this is drift protection, not an outage.
+
+**Context:** Found 2026-10-21 in the MUT-360 eng review. Deferred because MUT-360 stays off until `stripe_enabled = true`. Start at `monitoring.tf` with a `google_logging_metric` on `resource.type="cloud_scheduler_job"` and `severity>=ERROR`.
+
+**Depends on / blocked by:** MUT-360 merged and its Terraform applied.
