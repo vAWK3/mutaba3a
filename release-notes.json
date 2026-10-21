@@ -1,4 +1,12 @@
 {
+  "0.1.18": {
+    "en": [
+      "Minor bug fix"
+    ],
+    "ar": [
+      "Minor bug fix"
+    ]
+  },
   "0.1.17": {
     "en": [
       "Saving an expense or a recurring expense now confirms it on screen.",
