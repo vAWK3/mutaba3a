@@ -291,3 +291,29 @@ describe('loadConfig — Stripe and the job token (MUT-360)', () => {
     expect(() => loadConfig({ ...base, MUTABA3A_JOB_TOKEN: 'short' })).toThrow(/MUTABA3A_JOB_TOKEN/);
   });
 });
+
+describe('loadConfig — Sentry (MUT-148, ADR-091)', () => {
+  const EU_DSN = 'https://publickey@o4501.ingest.de.sentry.io/4502';
+
+  it('leaves Sentry off when SENTRY_DSN is unset', () => {
+    expect(loadConfig(base).SENTRY_DSN).toBeUndefined();
+  });
+
+  it('accepts an EU-region DSN', () => {
+    expect(loadConfig({ ...base, SENTRY_DSN: EU_DSN }).SENTRY_DSN).toBe(EU_DSN);
+  });
+
+  it.each([
+    ['a US-region DSN', 'https://publickey@o4501.ingest.us.sentry.io/4502'],
+    ['a DSN with no region', 'https://publickey@o4501.ingest.sentry.io/4502'],
+    ['plain http', 'http://publickey@o4501.ingest.de.sentry.io/4502'],
+    ['not a DSN', 'sentry'],
+  ])('refuses %s at boot, naming SENTRY_DSN', (_label, dsn) => {
+    expect(() => loadConfig({ ...base, SENTRY_DSN: dsn })).toThrow(/SENTRY_DSN/);
+  });
+
+  it('reports under NODE_ENV unless SENTRY_ENVIRONMENT names another environment', () => {
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).SENTRY_ENVIRONMENT).toBe('production');
+    expect(loadConfig({ ...base, NODE_ENV: 'production', SENTRY_ENVIRONMENT: 'operator' }).SENTRY_ENVIRONMENT).toBe('operator');
+  });
+});

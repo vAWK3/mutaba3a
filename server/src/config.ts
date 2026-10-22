@@ -9,6 +9,9 @@ function isHttpsOrLocalHttp(value: string): boolean {
   return url.protocol === 'https:' || (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1'));
 }
 
+/** ADR-091 D5: the same EU-region rule as the Sentry module's sentry_key postcondition. */
+const SENTRY_EU_DSN = /^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+\.ingest\.de\.sentry\.io\/\d+$/;
+
 /**
  * Validated process configuration. Fails fast at boot with a readable list of
  * what is missing — a half-configured ledger service must not start.
@@ -91,6 +94,13 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9_]+$/, 'must be a Stripe webhook signing secret (whsec_)').optional(),
   /** MUT-360 D2: the nightly Scheduler job's X-Job-Token (Terraform-generated). Unset = /jobs/* answers 503. */
   MUTABA3A_JOB_TOKEN: z.string().min(32, 'MUTABA3A_JOB_TOKEN must be at least 32 characters').optional(),
+  /**
+   * MUT-148 (ADR-091): the api project's DSN (Secret Manager, mounted once sentry_enabled is applied). Unset = no
+   * error reports. Only an EU-region DSN starts: a US one would send events outside the region ADR-091 chose (D5).
+   */
+  SENTRY_DSN: z.string().regex(SENTRY_EU_DSN, 'must be an https DSN on the EU region, https://<key>@<org>.ingest.de.sentry.io/<project>').optional(),
+  /** The environment events are filed under. Unset = NODE_ENV. */
+  SENTRY_ENVIRONMENT: z.string().min(1).max(64).optional(),
 });
 
 const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
@@ -153,5 +163,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       throw new ConfigError(`Invalid configuration:\n  ${recommended}: must be >= ${min} (${target} < ${floor})`);
     }
   }
-  return config;
+  return { ...config, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV };
 }
