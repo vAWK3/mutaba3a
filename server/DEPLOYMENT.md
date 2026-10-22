@@ -187,8 +187,8 @@ state, and `deploy.sh` never touches it. The rules are in
    terraform -chdir=server/infrastructure/sentry output -json dsn
    ```
 
-   Nothing reads the DSNs until MUT-148..151 wire the SDKs. Then
-   `unset SENTRY_ADMIN_TOKEN`.
+   The api DSN needs no copying: step 8 reads it from this stack's state. The
+   other three wait for MUT-149..151. Then `unset SENTRY_ADMIN_TOKEN`.
 7. **Read back.** In Sentry, confirm:
    - four projects, each with one key, capped per day;
    - spike protection on;
@@ -196,6 +196,23 @@ state, and `deploy.sh` never touches it. The rules are in
    - the portal and landing projects' Allowed Domains.
 
    Then update INFRA's "Error reporting" Status row with the date.
+8. **Turn the API's reports on (MUT-148).** In `server/infrastructure/terraform/production.tfvars`
+   set `sentry_enabled = true`, then release (`make release server`). The release:
+   - reads the api DSN from this stack's state (`terraform_remote_state`, no Sentry token), stores it as
+     `mutaba3a-api-sentry-dsn` and mounts `SENTRY_DSN` and `SENTRY_ENVIRONMENT` into Cloud Run;
+   - smoke-checks `/health`: expect `PASS  Error reporting matches the release — on vs on`;
+   - hands pre-roll and post-roll the same DSN, so their crashes are reported too.
+
+   Then send one deliberate event and find it in Sentry under `mutaba3a-api`:
+
+   ```bash
+   cd server
+   SENTRY_DSN="$(gcloud secrets versions access latest --secret=mutaba3a-api-sentry-dsn --project="$GCP_PROJECT_ID")" \
+     SENTRY_ENVIRONMENT=production SERVICE_VERSION="$(git rev-parse --short HEAD)" npm run sentry:smoke
+   ```
+
+   From then on `deploy.sh` refuses a release whose `production.tfvars` lacks `sentry_enabled = true`
+   (it would delete the DSN secret). `SKIP_SENTRY_GUARD=1` only to turn reports off on purpose.
 
 A new portal or landing origin (the custom domain, MUT-112) goes into
 `portal_origins` / `landing_origins` followed by `terraform apply`. Until

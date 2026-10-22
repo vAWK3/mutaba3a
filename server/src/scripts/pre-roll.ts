@@ -1,4 +1,7 @@
 import { PrismaClient } from '@prisma/client';
+import { runScript } from '../observability/reporter.js';
+import { createScriptReporter } from '../observability/sentry-node.js';
+import { SENTRY_RULES } from '../observability/sentry-rules.js';
 
 /**
  * Checks that must pass before the new revision rolls (deploy.sh step 3, after `prisma migrate deploy`). Read-only:
@@ -43,20 +46,20 @@ if (isMain) {
     console.error('pre-roll: DATABASE_URL is not set');
     process.exit(1);
   }
-  const db = new PrismaClient({ datasources: { db: { url } } });
-  try {
-    const stray = await findStrayOwnedMemberships(db);
-    for (const { organizationId, userId } of stray) console.error(`pre-roll: user ${userId} is a member of owned profile ${organizationId} without being made a co-owner`);
-    if (stray.length > 0) {
-      console.error(`pre-roll: ${stray.length} stray membership(s) on owned profiles; revoke each (npm run revoke:user) or confirm it with grant:user --role owner, then deploy again`);
-      process.exitCode = 1;
-    } else {
-      console.log('pre-roll: no stray memberships on owned profiles');
+  const db = new PrismaClient({ datasources: { db: { url } }, errorFormat: SENTRY_RULES.serverPrismaErrorFormat });
+  // MUT-148: a crash is reported (deploy.sh passes SENTRY_DSN); stray memberships are a finding, not a crash.
+  await runScript('pre-roll', createScriptReporter(), async () => {
+    try {
+      const stray = await findStrayOwnedMemberships(db);
+      for (const { organizationId, userId } of stray) console.error(`pre-roll: user ${userId} is a member of owned profile ${organizationId} without being made a co-owner`);
+      if (stray.length > 0) {
+        console.error(`pre-roll: ${stray.length} stray membership(s) on owned profiles; revoke each (npm run revoke:user) or confirm it with grant:user --role owner, then deploy again`);
+        process.exitCode = 1;
+      } else {
+        console.log('pre-roll: no stray memberships on owned profiles');
+      }
+    } finally {
+      await db.$disconnect();
     }
-  } catch (err) {
-    console.error('pre-roll: failed', err);
-    process.exitCode = 1;
-  } finally {
-    await db.$disconnect();
-  }
+  });
 }

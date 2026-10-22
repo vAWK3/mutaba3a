@@ -2178,3 +2178,13 @@ The portal's "We've updated our terms" step, rendered by `AuthGate` (prop `versi
 
 ### termsAcceptanceOf / termsAcceptedAudit — `server/src/terms-acceptance.ts`
 The acceptance row for the current terms (sha256 by locale, surface from `Session.kind`, MUT-354 the request's `clientRelease` or null), and its `user.terms_accepted` audit on owned profiles only. Shared by the setup redeem and `POST /v1/me/terms-acceptance`.
+
+### scrubEvent / SENTRY_RULES — `server/src/observability/sentry-scrub.ts`, `sentry-rules.ts` (MUT-148)
+ADR-091's whole-event scrubber, `scrubEvent(event, surface) → event | null` (null = an ignored error), over the
+contract embedded in `SENTRY_RULES`. Pure, no `node:*`: MUT-149 (portal) and MUT-150 (landing) import it as their
+`beforeSend` instead of writing a second scrubber. Proven against every surface's fixtures.
+
+### ErrorReporter / NOOP_REPORTER / runScript / shutdownAndFlush — `server/src/observability/reporter.ts` (MUT-148)
+The reporting seam (see PATTERNS). `runScript(name, reporter, body)` logs, reports and sets exit code 1 on a crash,
+then flushes; `shutdownAndFlush` closes, disconnects, flushes (2 s), exits. `createSentryReporter` /
+`createScriptReporter` / `apiRelease` in `sentry-node.ts` build the real one.

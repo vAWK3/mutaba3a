@@ -404,7 +404,7 @@ describe('contract', () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
     expect(doc.info.version).toBe(API_VERSION);
-    expect(API_VERSION).toBe('1.47.0-mut388');
+    expect(API_VERSION).toBe('1.48.0-mut148');
     for (const path of ['/v1/customers', '/v1/customers/{customerId}', '/v1/customers/{customerId}/archive', '/v1/projects', '/v1/projects/{projectId}', '/v1/projects/{projectId}/archive', '/v1/import/preview', '/v1/import/commit']) {
       expect(doc.paths[path], path).toBeDefined();
     }

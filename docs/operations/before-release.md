@@ -7,5 +7,6 @@ record the date where the item says.
 ## server
 
 - MUT-360's Terraform (Stripe secrets, job token, Scheduler) is merged: the release creates the empty Stripe secrets and mounts `MUTABA3A_JOB_TOKEN`. Not blocking: Stripe stays off until `stripe_enabled = true`. Apply and turn it on per `server/DEPLOYMENT.md` §6e.
+- MUT-148's error reporting is merged but off: the release changes nothing until `sentry_enabled = true`. First apply the Sentry stack (`server/DEPLOYMENT.md` §1.5, org `barmajiyat-ltd`), then set `sentry_enabled = true` in `production.tfvars` and release. The smoke must print `PASS  Error reporting matches the release — on vs on`; then run the §1.5 step 8 `sentry:smoke` once and record the date in INFRA's "Error reporting" Status row.
 
 ## web

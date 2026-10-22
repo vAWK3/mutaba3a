@@ -14,6 +14,8 @@ export interface SmokeOptions {
   adminToken?: string | undefined;
   /** When set, /health must report exactly this SERVICE_VERSION. */
   expectVersion?: string | undefined;
+  /** MUT-148 D4: when set, /health must report exactly this, which proves the DSN reached (or stayed off) the instance. */
+  expectErrorReporting?: 'on' | 'off' | undefined;
   log?: ((line: string) => void) | undefined;
 }
 
@@ -93,6 +95,10 @@ class SmokeContext {
     this.record(health.status === 200 && health.body.status === 'ok', 'GET /health', `status ${health.status}, version ${String(health.body.version)}`);
     if (this.options.expectVersion) {
       this.record(health.body.version === this.options.expectVersion, 'SERVICE_VERSION matches the deployed tag', `${String(health.body.version)} vs ${this.options.expectVersion}`);
+    }
+    if (this.options.expectErrorReporting) {
+      const actual = String(health.body.errorReporting);
+      this.record(actual === this.options.expectErrorReporting, 'Error reporting matches the release', `${actual} vs ${this.options.expectErrorReporting}`);
     }
 
     const portal = await this.options.fetch(`${this.base}/`, { signal: AbortSignal.timeout(TIMEOUT_MS) });

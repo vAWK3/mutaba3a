@@ -584,6 +584,27 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
+      # MUT-148 (ADR-091): error reports, once sentry_enabled (sentry.tf).
+      dynamic "env" {
+        for_each = var.sentry_enabled ? [google_secret_manager_secret.sentry_dsn[0].secret_id] : []
+        content {
+          name = "SENTRY_DSN"
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
+      }
+      dynamic "env" {
+        for_each = var.sentry_enabled ? { SENTRY_ENVIRONMENT = var.environment } : {}
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
       dynamic "env" {
         for_each = local.app_association_env
         content {
@@ -677,6 +698,8 @@ resource "google_cloud_run_v2_service" "api" {
     google_secret_manager_secret_iam_member.api_reads_job_token,
     google_secret_manager_secret_iam_member.api_reads_stripe_secret_key,
     google_secret_manager_secret_iam_member.api_reads_stripe_webhook_secret,
+    google_secret_manager_secret_version.sentry_dsn,
+    google_secret_manager_secret_iam_member.api_reads_sentry_dsn,
   ]
 }
 

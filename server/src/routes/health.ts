@@ -3,7 +3,9 @@ import type { AppEnv } from '../auth/middleware.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { HealthSchema, ReadySchema } from '../schemas.js';
 
-export function healthRoutes(store: LedgerStore, version: string): OpenAPIHono<AppEnv> {
+/** MUT-148 D4: `errorReporting` lets the post-deploy smoke prove the DSN reached Cloud Run, without naming it. */
+export function healthRoutes(store: LedgerStore, version: string, errorReportingOn = false): OpenAPIHono<AppEnv> {
+  const errorReporting = errorReportingOn ? ('on' as const) : ('off' as const);
   const app = new OpenAPIHono<AppEnv>();
 
   app.openapi(
@@ -14,7 +16,7 @@ export function healthRoutes(store: LedgerStore, version: string): OpenAPIHono<A
       summary: 'Liveness',
       responses: { 200: { description: 'Process is up', content: { 'application/json': { schema: HealthSchema } } } },
     }),
-    (c) => c.json({ status: 'ok' as const, version, time: c.get('now')().toISOString() }, 200),
+    (c) => c.json({ status: 'ok' as const, version, time: c.get('now')().toISOString(), errorReporting }, 200),
   );
 
   app.openapi(

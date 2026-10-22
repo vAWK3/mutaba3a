@@ -12,6 +12,7 @@ const SECTION_KEYS = [
   'security',
   'noTracking',
   'usageAnalytics',
+  'errorReports',
   'mobileDeletion',
   'children',
   'changes',

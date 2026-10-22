@@ -178,7 +178,13 @@ export const DisconnectIntegrationResponseSchema = z
   .openapi('DisconnectIntegrationResponse');
 
 export const HealthSchema = z
-  .object({ status: z.literal('ok'), version: z.string(), time: z.string().datetime() })
+  .object({
+    status: z.literal('ok'),
+    version: z.string(),
+    time: z.string().datetime(),
+    /** MUT-148: whether this instance reports errors to Sentry (ADR-091). */
+    errorReporting: z.enum(['on', 'off']),
+  })
   .openapi('Health');
 
 export const ReadySchema = z

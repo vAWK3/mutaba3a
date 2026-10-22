@@ -12,7 +12,7 @@ contain. MUT-147 set it up. The surface stories wire it in:
 
 | Surface | Sentry project | Sends |
 |---|---|---|
-| Hosted API (`server/`) | `mutaba3a-api` | Unknown errors and `ApiError`s with status 500 or higher |
+| Hosted API (`server/`) | `mutaba3a-api` | Unknown errors and `ApiError`s with status 500 or higher; pre-roll and post-roll crashes (MUT-148: live once `sentry_enabled`) |
 | Hosted portal (`--mode hosted`) | `mutaba3a-portal` | Crashes, uncaught errors, unhandled rejections |
 | Landing pages (`/`, `/download`, `/privacy`, lazy chunks only) | `mutaba3a-landing` | The same as the portal, with no user context |
 | Capture app (Flutter, iOS + Android) | `mutaba3a-capture-app` | Dart, Flutter-framework and native crashes |
@@ -48,6 +48,12 @@ Only production builds may send.
 
 Each surface's scrubber test runs the fixtures for its surface and must produce `expected`
 exactly.
+
+**The JS scrubber already exists (MUT-148).** `server/src/observability/sentry-scrub.ts` is the whole-event
+`beforeSend` over the embedded `sentry-rules.ts`, free of `node:*` imports.
+`scripts/__tests__/sentry-server-scrub.test.ts` runs every surface's fixtures through it, and asserts the
+embedded copy equals `sentry-rules.json` field by field. The portal and landing (MUT-149/150) import it rather
+than write a second one. A contract change updates `sentry-rules.ts` in the same commit, or that test fails.
 
 ## Rules every surface follows
 
@@ -312,6 +318,12 @@ sentence.
   - AR: «عندما يحدث خلل، نريد أن نعرف قبل أن تضطر لإخبارنا. يذكر تقرير العطل مكان المشكلة في الكود، والإصدار الذي كنت تستخدمه، ولغتك، ونظام تشغيل جهازك ومتصفحه وطرازه. ولا يتضمن أبدًا أي مبالغ أو أسماء أو ملاحظات أو بيانات اتصال أو محتوى الطلبات أو عنوان IP الخاص بك أو أي شيء تكتبه. وإن تضمّن التقرير حسابًا أصلًا، فهو معرّف داخلي عشوائي. وتحفظ Sentry التقارير في الاتحاد الأوروبي.»
 
 ### Hosted service and portal (MUT-148, MUT-149)
+
+**Published with MUT-148 (D5, 2026-10-22).** The shared changes above, in a server-only form, because the portal
+didn't send yet: `noTracking.body` says "Our servers send error reports when something breaks on our side…", and
+the `errorReports` sentence is EN "Our servers send a report when a request fails on our side." AR «ترسل خوادمنا
+تقريرًا عندما يفشل طلب بسبب خلل من جهتنا.» MUT-149 replaces both with the full wording below, and each later
+surface adds itself to `noTracking.body`'s list.
 
 **`errorReports` sentence.**
 

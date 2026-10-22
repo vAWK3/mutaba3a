@@ -111,6 +111,37 @@ test('a link from the phone or the portal opens the privacy policy in its langua
   });
 });
 
+test('the privacy policy says our servers send error reports, and what they never hold', { tag: '@web.legal.privacy-error-reports' }, async ({ page, step }) => {
+  const section = (title: string) => page.locator('section', { has: page.getByRole('heading', { level: 2, name: title }) });
+
+  await step('Open the privacy policy in English: an Error reports section right after Anonymous usage counts', async () => {
+    await preferLanguage(page, 'en');
+    await page.goto('/privacy');
+    await expect(page.getByRole('heading', { level: 2, name: privacy.en.errorReports.title })).toBeVisible();
+    const headings = await page.getByRole('heading', { level: 2 }).allTextContents();
+    expect(headings.indexOf(privacy.en.errorReports.title)).toBe(headings.indexOf(privacy.en.usageAnalytics.title) + 1);
+    const reports = section(privacy.en.errorReports.title);
+    await expect(reports).toContainText('It never includes amounts, names, notes, contact details, request contents, your IP address, or anything you type');
+    await expect(reports).toContainText('Our servers send a report when a request fails on our side');
+    await expect(reports).not.toContainText(/hosted portal sends|Our website sends|iPhone and Android apps send/);
+  });
+
+  await step('"No ads, no tracking" drops the no-crash-reporting promise; "Who else handles your data" names Sentry in the EU', async () => {
+    const noTracking = section(privacy.en.noTracking.title);
+    await expect(noTracking).not.toContainText('crash reporting');
+    await expect(noTracking).toContainText('The free apps on Mac, Windows, and in the browser never send them');
+    await expect(section(privacy.en.sharing.title)).toContainText('Sentry, hosted in the EU, receives the error reports');
+  });
+
+  await step('Open it in Arabic: the same section, right to left', async () => {
+    await preferLanguage(page, 'ar');
+    await page.goto('/privacy');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(section(privacy.ar.errorReports.title)).toContainText('ترسل خوادمنا تقريرًا عندما يفشل طلب بسبب خلل من جهتنا');
+    await expect(section(privacy.ar.noTracking.title)).toContainText('فلا ترسلها أبدًا');
+  });
+});
+
 test('the terms are linked from the footer and the /hosted form, and the privacy policy explains hosted accounts', { tag: '@web.legal.links' }, async ({ page, step }) => {
   await step('The privacy policy has a hosted-accounts section and its footer links the terms', async () => {
     await preferLanguage(page, 'en');

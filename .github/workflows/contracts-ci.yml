@@ -35,4 +35,5 @@ jobs:
           npx vitest run
           scripts/__tests__/sentry-rules.test.ts
           scripts/__tests__/sentry-org-settings.test.ts
+          scripts/__tests__/sentry-server-scrub.test.ts
           scripts/__tests__/analytics-taxonomy.test.ts

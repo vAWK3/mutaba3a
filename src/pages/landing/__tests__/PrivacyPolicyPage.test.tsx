@@ -81,8 +81,33 @@ describe('PrivacyPolicyPage', () => {
     expect(body(/Who else handles your data/)).toContain('PostHog');
     expect(body(/What reaches the network/)).toMatch(/visit counts .* to PostHog/);
     expect(body(/The short version/)).not.toMatch(/The one thing our website can send us/);
-    // The crash-reporting promise stays until Sentry ships (MUT-146 owns those words)
-    expect(body(/No ads, no tracking/)).toMatch(/crash reporting/);
+  });
+
+  it('says the servers send error reports, what they hold, and that Sentry in the EU keeps them (MUT-148, ADR-091)', () => {
+    renderPage('en');
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings.indexOf('Error reports')).toBe(headings.indexOf('Anonymous usage counts') + 1);
+    const body = (name: RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
+    const reports = body(/Error reports/);
+    expect(reports).toMatch(/It never includes amounts, names, notes, contact details, request contents, your IP address, or anything you type/);
+    expect(reports).toMatch(/Our servers send a report when a request fails on our side/);
+    // Only what is live (ADR-090 P3): the portal, website and phones get their sentences with MUT-149..151.
+    expect(reports).not.toMatch(/hosted portal sends|Our website sends|iPhone and Android apps send/);
+    const noTracking = body(/No ads, no tracking/);
+    expect(noTracking).not.toMatch(/crash reporting/);
+    expect(noTracking).toMatch(/Our servers send error reports when something breaks on our side/);
+    expect(noTracking).toMatch(/The free apps on Mac, Windows, and in the browser never send them/);
+    expect(body(/Who else handles your data/)).toMatch(/Sentry, hosted in the EU, receives the error reports/);
+  });
+
+  it('says the same about error reports in Arabic', () => {
+    renderPage('ar');
+    const reports = screen.getByRole('heading', { level: 2, name: 'تقارير الأعطال' }).parentElement?.textContent ?? '';
+    expect(reports).toContain('ترسل خوادمنا تقريرًا عندما يفشل طلب بسبب خلل من جهتنا');
+    expect(reports).toContain('Sentry');
+    const noTracking = screen.getByRole('heading', { level: 2, name: 'لا إعلانات، لا تتبّع' }).parentElement?.textContent ?? '';
+    expect(noTracking).not.toContain('أو تقارير الأعطال أو');
+    expect(noTracking).toContain('ترسل خوادمنا تقارير أعطال عند حدوث خلل من جهتنا');
   });
 
   it('says what the portal counts, where it is turned off, and that it reaches PostHog only if turned on (MUT-155)', () => {

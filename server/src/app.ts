@@ -14,6 +14,7 @@ import { ERROR_CODES } from './errors.js';
 import { CURRENT_TERMS, type CurrentTerms } from './legal.js';
 import type { CachedFxRates } from './fx-rates.js';
 import type { Logger } from './logger.js';
+import { NOOP_REPORTER, type ErrorReporter } from './observability/reporter.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
 import type { LedgerStore } from './repositories/ports.js';
 import type { AttachmentStorage } from './attachments/storage.js';
@@ -93,6 +94,8 @@ export interface AppDependencies {
   stripeWebhookIpLimiter?: RateLimiter;
   /** MUT-255: per-person budget for starting receipts-library uploads. Defaults to RECEIPT_UPLOAD_POLICY. */
   receiptUploadLimiter?: RateLimiter;
+  /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
+  reporter?: ErrorReporter;
 }
 
 const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disabled: false };
@@ -154,7 +157,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.47.0-mut388';
+export const API_VERSION = '1.48.0-mut148';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -164,7 +167,8 @@ export const API_VERSION = '1.47.0-mut388';
 export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const now = deps.now ?? (() => new Date());
 
-  const { app } = createApiShell({ now, logger: deps.logger });
+  const reporter = deps.reporter ?? NOOP_REPORTER;
+  const { app } = createApiShell({ now, logger: deps.logger, reporter });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
@@ -219,7 +223,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.openAPIRegistry.register('CaptureSource', CaptureSourceSchema);
   // MUT-324 review: the same for TermsStatus. Me.terms is nullable; the accept route's 200 is not.
   app.openAPIRegistry.register('TermsStatus', TermsStatusSchema);
-  app.route('/', healthRoutes(store, deps.version));
+  app.route('/', healthRoutes(store, deps.version, reporter.enabled));
   app.route(
     '/',
     sessionRoutes({

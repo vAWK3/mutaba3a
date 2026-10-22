@@ -4,11 +4,15 @@ import { HTTPException } from 'hono/http-exception';
 import type { AppEnv } from './auth/middleware.js';
 import { ApiError } from './errors.js';
 import type { Logger } from './logger.js';
+import { NOOP_REPORTER, type ErrorReporter } from './observability/reporter.js';
+import { SENTRY_RULES } from './observability/sentry-rules.js';
 
 export interface ApiShellDependencies {
   /** Injectable clock so tests can control expiry and rate windows. */
   now: () => Date;
   logger: Logger;
+  /** MUT-148: where errors logged as errors are also reported. Absent = none (the portal's local mode, ADR-024). */
+  reporter?: ErrorReporter;
 }
 
 /**
@@ -21,6 +25,7 @@ export interface ApiShellDependencies {
  */
 export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<AppEnv> } {
   const { now, logger } = deps;
+  const reporter = deps.reporter ?? NOOP_REPORTER;
 
   const app = new OpenAPIHono<AppEnv>({
     defaultHook: (result, c) => {
@@ -41,8 +46,13 @@ export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<A
 
   app.onError((err, c) => {
     const requestId = c.get('requestId') ?? 'unknown';
+    // ADR-091: reported exactly where it is logged as an error; `routePath` is the template, never the raw path.
+    const report = () => reporter.captureException(err, { requestId, route: c.req.routePath });
     if (err instanceof ApiError) {
-      if (err.status >= 500) logger.error({ requestId, err }, err.message);
+      if (err.status >= SENTRY_RULES.serverReportsStatusAtLeast) {
+        logger.error({ requestId, err }, err.message);
+        report();
+      }
       return c.json(err.toEnvelope(requestId), err.status);
     }
     // TD-148 (MUT-235 review): Hono's validator throws a 400 HTTPException for an unparseable body (e.g. a JSON
@@ -52,6 +62,7 @@ export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<A
       return c.json(invalid.toEnvelope(requestId), invalid.status);
     }
     logger.error({ requestId, err }, 'unhandled error');
+    report();
     const internal = new ApiError('INTERNAL', 'Unexpected server error');
     return c.json(internal.toEnvelope(requestId), internal.status);
   });

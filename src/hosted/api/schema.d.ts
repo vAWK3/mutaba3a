@@ -12971,6 +12971,8 @@ export interface components {
             version: string;
             /** Format: date-time */
             time: string;
+            /** @enum {string} */
+            errorReporting: "on" | "off";
         };
         Ready: {
             /** @enum {string} */
