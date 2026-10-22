@@ -22,7 +22,7 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/summaries/organization',
       tags: ['Summaries'],
       summary: 'Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer',
-      description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables; unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer\'s row. Due items are posted before the figures are read. ?currency= narrows to one block.',
+      description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables whose posting date is not after today (an Owed dated ahead counts from its own date, MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer\'s row. Due items are posted before the figures are read. ?currency= narrows to one block.',
       security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('summaries:read')] as const,
       request: { query: SummaryCurrencyQuerySchema },

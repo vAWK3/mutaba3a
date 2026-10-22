@@ -33,11 +33,20 @@ export function emptyBuckets(): Buckets {
   return { outstanding: 0n, overdue: 0n, dueToday: 0n, notYetDue: 0n };
 }
 
-/** Day buckets over OPEN receivables (settled ones carry nothing). */
+/**
+ * MUT-392 (ADR-169, eng review D2): a receivable counts from its posting date. Only an Owed can be dated after today
+ * (installments post when due, contingency outcomes are never later than today), and until its day it is work not yet
+ * done: not owed, not overdue, not posted. Computed on read, so it joins every figure on its own date with no job.
+ */
+export function countsOn(r: Pick<ReceivableRecord, 'postingDate'>, today: IsoDate): boolean {
+  return r.postingDate <= today;
+}
+
+/** Day buckets over OPEN receivables (settled ones carry nothing) that count today (`countsOn`). */
 export function bucketize(receivables: readonly ReceivableRecord[], today: IsoDate): Buckets {
   const b = emptyBuckets();
   for (const r of receivables) {
-    if (r.status !== 'OPEN') continue;
+    if (r.status !== 'OPEN' || !countsOn(r, today)) continue;
     const o = outstandingOf(r);
     if (o <= 0n) continue;
     b.outstanding += o;
@@ -109,11 +118,12 @@ export interface ProjectFigures {
 const isFixedLike = (a: Pick<AgreementRecord, 'type'>) => a.type === 'FIXED' || a.type === 'CONTINGENCY';
 
 export function projectFigures(input: { agreements: readonly AgreementRecord[]; installments: readonly InstallmentRecord[]; receivables: readonly ReceivableRecord[]; monthlyMinor?: bigint | null; today: IsoDate }): ProjectFigures {
-  const buckets = bucketize(input.receivables, input.today);
+  const counted = input.receivables.filter((r) => countsOn(r, input.today));
+  const buckets = bucketize(counted, input.today);
   let postedMinor = 0n;
   let paidMinor = 0n;
   let creditedMinor = 0n;
-  for (const r of input.receivables) {
+  for (const r of counted) {
     postedMinor += r.grossMinor;
     paidMinor += r.paidMinor;
     creditedMinor += r.creditedMinor;

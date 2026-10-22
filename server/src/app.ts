@@ -388,7 +388,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Changing a date (MUT-223): on a profile the person owns (their personal profile or one they created), PATCH /v1/income/{id} { occurredOn } moves their own Owed entry (its dueDate stays) or Received entry, and PATCH /v1/payments/{id} { receivedOn } moves their own captured payment, a settle payment included (allocations untouched). Date only, If-Match on `version` (stale → 409 VERSION_MISMATCH), not later than the organization\'s today. Anything else answers 404 — on a Malafat-fed profile PATCH /v1/income too, while PATCH /v1/payments answers 403 READ_ONLY_PROFILE there, before any lookup, as settle does. GET /v1/audit never lists these edits.',
         '',
-        'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
+        'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables whose posting date is not after today (an Owed dated ahead counts from its own date, MUT-392); statuses are Mutaba3a\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
       ].join('\n'),
     },
     tags: [

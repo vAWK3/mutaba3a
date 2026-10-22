@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgreementRecord, InstallmentRecord, PaymentRecord, ReceivableRecord } from '../../repositories/ports.js';
-import { bucketize, customerStatus, fixedStatus, lastPaymentOn, projectFigures, retainerStatus, unallocatedOf } from '../compute.js';
+import { bucketize, countsOn, customerStatus, fixedStatus, lastPaymentOn, projectFigures, retainerStatus, unallocatedOf } from '../compute.js';
 
 const rec = (over: Partial<ReceivableRecord>): ReceivableRecord => ({ id: 'r', organizationId: 'o', customerId: 'c', projectId: 'p', agreementId: 'a', origin: 'INSTALLMENT', originId: null, currency: 'ILS', netMinor: 1000n, vatMinor: 0n, grossMinor: 1000n, paidMinor: 0n, creditedMinor: 0n, vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, dueDate: '2026-10-20', postingDate: '2026-10-01', postedAt: new Date(0), status: 'OPEN', title: null, createdByUserId: null, deletedAt: null, version: 1, createdAt: new Date(0), ...over });
 const pay = (over: Partial<PaymentRecord>): PaymentRecord => ({ id: 'p', organizationId: 'o', customerId: 'c', projectId: null, number: 'PAY-2026-0001', currency: 'ILS', amountMinor: 500n, allocatedMinor: 0n, receivedOn: '2026-10-05', method: 'BANK', reference: null, notes: null, status: 'POSTED', reversedAt: null, reversalReason: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, version: 1, createdAt: new Date(0), updatedAt: new Date(0), ...over });
@@ -13,6 +13,20 @@ describe('buckets', () => {
     const b = bucketize([rec({ dueDate: '2026-10-19' }), rec({ dueDate: '2026-10-20', paidMinor: 400n }), rec({ dueDate: '2026-10-21', creditedMinor: 100n }), rec({ status: 'SETTLED', paidMinor: 1000n }), rec({ paidMinor: 1000n })], today);
     expect(b).toEqual({ outstanding: 2500n, overdue: 1000n, dueToday: 600n, notYetDue: 900n });
     expect(b.overdue + b.dueToday + b.notYetDue).toBe(b.outstanding);
+  });
+
+  it('leaves out an Owed dated after today until its day, then buckets it by its due date (MUT-392 D2)', () => {
+    const future = rec({ origin: 'ADJUSTMENT', postingDate: '2026-11-11', dueDate: '2026-12-15' });
+    const dated = rec({ id: 'd', dueDate: '2026-10-19' });
+    expect(bucketize([future, dated], '2026-10-20')).toEqual({ outstanding: 1000n, overdue: 1000n, dueToday: 0n, notYetDue: 0n });
+    expect(bucketize([future, dated], '2026-11-11')).toEqual({ outstanding: 2000n, overdue: 1000n, dueToday: 0n, notYetDue: 1000n });
+    expect(bucketize([future], '2026-12-16')).toEqual({ outstanding: 1000n, overdue: 1000n, dueToday: 0n, notYetDue: 0n });
+  });
+
+  it('countsOn: a receivable counts from its posting date, that day included', () => {
+    expect(countsOn({ postingDate: '2026-10-20' }, '2026-10-20')).toBe(true);
+    expect(countsOn({ postingDate: '2026-10-21' }, '2026-10-20')).toBe(false);
+    expect(countsOn({ postingDate: '2026-01-01' }, '2026-10-20')).toBe(true);
   });
 
   it('counts unallocated funds on POSTED payments only and the last POSTED received-on date', () => {
@@ -62,6 +76,16 @@ describe('projectFigures', () => {
     });
     expect(f).toMatchObject({ kind: 'FIXED', agreedMinor: 3000n, monthlyMinor: null, postedMinor: 1000n, paidMinor: 400n, creditedMinor: 100n, pending: { count: 1, amountMinor: 1000n }, status: 'OVERDUE' });
     expect(f.buckets.outstanding).toBe(500n);
+  });
+
+  it('leaves a future-dated Owed out of posted, paid, credited and the buckets until its day (MUT-392 D2)', () => {
+    const future = rec({ id: 'f', origin: 'ADJUSTMENT', agreementId: null, postingDate: '2026-11-11', dueDate: '2026-12-15', paidMinor: 200n });
+    const before = projectFigures({ agreements: [], installments: [], receivables: [rec({}), future], today: '2026-10-20' });
+    expect(before).toMatchObject({ postedMinor: 1000n, paidMinor: 0n, creditedMinor: 0n });
+    expect(before.buckets.outstanding).toBe(1000n);
+    const on = projectFigures({ agreements: [], installments: [], receivables: [rec({}), future], today: '2026-11-11' });
+    expect(on).toMatchObject({ postedMinor: 2000n, paidMinor: 200n });
+    expect(on.buckets.outstanding).toBe(1800n);
   });
 
   it('retainer: monthly from the caller (terms in force), no agreed total; no agreements → NONE', () => {
