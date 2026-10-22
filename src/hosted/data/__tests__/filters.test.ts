@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { omitShellOverlay, parseClientDetail, parseGroupDetail, parseGroupsPage, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseReceivablesPage, pickShellOverlay, splitIncomeDrawer } from '../filters';
+import { omitShellOverlay, parseClientDetail, parseGroupDetail, parseGroupsPage, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseProfileDrawer, parseReceivablesPage, pickShellOverlay, splitIncomeDrawer } from '../filters';
 
 const R = 'b1111111-1111-4111-8111-111111111111';
 
@@ -101,6 +101,14 @@ describe('shell overlay keys (MUT-183 R1)', () => {
     const search = { status: 'OPEN', changePassword: 'true' };
     expect(omitShellOverlay(search)).toEqual({ status: 'OPEN' });
     expect(pickShellOverlay(search)).toEqual({ changePassword: 'true' });
+  });
+
+  it('parses and carries the Billing drawer, its Subscribe step and Stripe’s return (MUT-362)', () => {
+    expect(parseProfileDrawer({ billing: 'true', step: 'subscribe', checkout: 'success' })).toEqual({ billing: true, step: 'subscribe', checkout: 'success' });
+    expect(parseProfileDrawer({ billing: 'true', step: 'pay', checkout: 'maybe' })).toEqual({ billing: true });
+    const search = { status: 'OPEN', billing: 'true', checkout: 'cancelled' };
+    expect(omitShellOverlay(search)).toEqual({ status: 'OPEN' });
+    expect(pickShellOverlay(search)).toEqual({ billing: 'true', checkout: 'cancelled' });
   });
 });
 

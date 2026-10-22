@@ -268,8 +268,14 @@ export interface ProfileDrawerSearch {
   changePassword?: true;
   /** MUT-286: the account menu's Your data drawer (signed out only), carried the same way as Change password. */
   yourData?: true;
+  /** MUT-362: the account menu's Billing drawer (signed in only); Stripe's return URLs open it too. */
+  billing?: true;
+  /** MUT-362 DR2: the Subscribe step inside the Billing drawer, deep-linkable (MUT-361's locked screen opens it). */
+  step?: 'subscribe';
+  /** MUT-362: how the person came back from Stripe Checkout (its success_url / cancel_url). */
+  checkout?: 'success' | 'cancelled';
 }
-export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData'] as const;
+export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'step', 'checkout'] as const;
 
 const flag = (value: unknown): true | undefined => (value === true || value === 'true' || value === 1 || value === '1' ? true : undefined);
 
@@ -280,6 +286,9 @@ export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
     editProfile: id(raw.editProfile),
     changePassword: flag(raw.changePassword),
     yourData: flag(raw.yourData),
+    billing: flag(raw.billing),
+    step: raw.step === 'subscribe' ? 'subscribe' : undefined,
+    checkout: raw.checkout === 'success' || raw.checkout === 'cancelled' ? raw.checkout : undefined,
   });
 
 /** A page's search without the shell's keys, so no list ever sees them. */

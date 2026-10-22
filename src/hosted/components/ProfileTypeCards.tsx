@@ -1,11 +1,13 @@
 import { useT } from '../../lib/i18n/core';
 import type { ProfileType } from '../api/client';
+import { RadioCards } from './RadioCards';
 
 /**
  * Personal | Business as two native radio cards (design review Issue 7). Not
  * `SegmentedControl`: that needs a selected value, and a new profile's type
  * starts unchosen (eng review R5). Each card says what it seeds, so the choice
- * that is costly to change later is made knowingly.
+ * that is costly to change later is made knowingly. The cards themselves are
+ * the shared `RadioCards` (MUT-362 DR9).
  */
 
 const TYPES: readonly { value: ProfileType; label: string; seed: string }[] = [
@@ -24,22 +26,8 @@ export interface ProfileTypeCardsProps {
   disabled?: { value: ProfileType; reason: string };
 }
 
-export function ProfileTypeCards({ name, value, onChange, labelledBy, describedBy, invalid, disabled }: ProfileTypeCardsProps) {
+export function ProfileTypeCards(props: ProfileTypeCardsProps) {
   const t = useT();
-  return (
-    <div className="hp-type-cards" role="radiogroup" aria-labelledby={labelledBy} aria-describedby={describedBy} aria-invalid={invalid || undefined}>
-      {TYPES.map((type) => {
-        const off = disabled?.value === type.value;
-        return (
-          <label key={type.value} className={`hp-type-card ${value === type.value ? 'hp-type-card-on' : ''} ${off ? 'hp-type-card-off' : ''}`}>
-            <input type="radio" name={name} value={type.value} checked={value === type.value} disabled={off} onChange={() => onChange(type.value)} />
-            <span className="hp-type-card-text">
-              <span className="hp-type-card-label">{t(type.label)}</span>
-              <span className="hp-type-card-seed">{off ? disabled.reason : t(type.seed)}</span>
-            </span>
-          </label>
-        );
-      })}
-    </div>
-  );
+  const options = TYPES.map((type) => ({ value: type.value, label: t(type.label), note: t(type.seed) }));
+  return <RadioCards {...props} options={options} />;
 }
