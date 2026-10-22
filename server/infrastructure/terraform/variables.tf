@@ -68,6 +68,18 @@ variable "stripe_enabled" {
   default     = false
 }
 
+variable "sentry_enabled" {
+  description = "MUT-148 (ADR-091): reads the api DSN from the Sentry stack's state, stores it in Secret Manager and mounts SENTRY_DSN into Cloud Run. false (default) = no error reports. Turn it on only after DEPLOYMENT.md §1.5 has applied server/infrastructure/sentry, or the plan fails reading its state. Once on, deploy.sh refuses a release whose tfvars turns it off (SKIP_SENTRY_GUARD=1 skips that)."
+  type        = bool
+  default     = false
+}
+
+variable "sentry_state_bucket" {
+  description = "MUT-148: the GCS bucket holding the Sentry stack's state. null (default) = <project_id>-terraform-state, the bucket both stacks use (DEPLOYMENT.md §1.3)."
+  type        = string
+  default     = null
+}
+
 variable "api_ingress" {
   description = "Cloud Run ingress. INGRESS_TRAFFIC_ALL (default) serves everyone; INGRESS_TRAFFIC_INTERNAL_ONLY closes the service to outside traffic, for the CMEK switch apply (DEPLOYMENT.md §6d) and a whole-database restore (pilot runbook §4.3)."
   type        = string

@@ -304,3 +304,97 @@ describe('deploy.sh wires the Stripe guard (MUT-360 review)', () => {
   });
 });
 
+/** MUT-148: guard_sentry_release keeps a checkout without sentry_enabled from switching error reports off. */
+type SentryOpts = {
+  enabled?: string; // what `terraform console` gives for var.sentry_enabled
+  consoleFails?: boolean;
+  env?: 'missing' | 'error' | string; // ;-separated env names on the service template
+  skip?: string; // SKIP_SENTRY_GUARD
+};
+
+function sentryGuard(o: SentryOpts) {
+  const bin = join(dir, 'bin');
+  const log = join(dir, 'calls.log');
+  spawnSync('mkdir', ['-p', bin]);
+  writeFileSync(join(bin, 'terraform'), [
+    '#!/bin/bash',
+    `echo "terraform $*" >> "${log}"`,
+    `case "$1" in console) cat >/dev/null; ${o.consoleFails ? 'echo "Error: boom" >&2; exit 1' : `printf '%s\\n' '${o.enabled ?? 'false'}'`} ;; esac`,
+    'exit 0',
+  ].join('\n') + '\n');
+  const env = o.env ?? 'PORT;DATABASE_URL';
+  writeFileSync(join(bin, 'gcloud'), [
+    '#!/bin/bash',
+    `echo "gcloud $*" >> "${log}"`,
+    'case "$*" in',
+    `  *"run services describe"*"env[].name"*) ${env === 'missing' ? 'echo "ERROR: Cannot find service [mutaba3a-api]" >&2; exit 1' : env === 'error' ? 'echo "ERROR: PERMISSION_DENIED" >&2; exit 1' : `echo '${env}'`} ;;`,
+    '  *) echo "unexpected gcloud call: $*" >&2; exit 98 ;;',
+    'esac',
+  ].join('\n') + '\n');
+  chmodSync(join(bin, 'terraform'), 0o755);
+  chmodSync(join(bin, 'gcloud'), 0o755);
+  const cmd = `die() { echo "$*" >&2; exit 1; }; warn() { echo "$*" >&2; }; source "${LIB}" && guard_sentry_release "" mutaba3a-api me-west1 demo-project -input=false -var-file=production.tfvars -var image_tag=abc && echo "SENTRY_ENABLED=\${SENTRY_ENABLED}"`;
+  const e: NodeJS.ProcessEnv = { ...process.env, SKIP_SENTRY_GUARD: o.skip, PATH: `${bin}:${process.env.PATH}` };
+  for (const [k, v] of Object.entries(e)) if (v === undefined) delete e[k];
+  const r = spawnSync('bash', ['-euo', 'pipefail', '-c', cmd], { cwd: dir, encoding: 'utf-8', env: e });
+  return { status: r.status, out: r.stdout, err: r.stderr, calls: existsSync(log) ? readFileSync(log, 'utf-8') : '' };
+}
+
+describe('guard_sentry_release (MUT-148, deploy.sh steps 0, 3 and 4)', { timeout: 30_000 }, () => {
+  it('lets a release through with sentry_enabled true, and tells deploy.sh so', () => {
+    const r = sentryGuard({ enabled: 'true', env: 'PORT;SENTRY_DSN' });
+    expect(r.status).toBe(0);
+    expect(r.out).toMatch(/SENTRY_ENABLED=true/);
+  });
+
+  it('lets sentry_enabled false through while production reports nothing, and on a first deploy', () => {
+    expect(sentryGuard({ enabled: 'false' }).out).toMatch(/SENTRY_ENABLED=false/);
+    expect(sentryGuard({ enabled: 'false', env: 'missing' }).status).toBe(0);
+    expect(sentryGuard({ enabled: 'false', env: 'PORT;SENTRY_DSN_OLD' }).status).toBe(0);
+  });
+
+  it('refuses sentry_enabled false (or unset) while the service mounts SENTRY_DSN', () => {
+    const r = sentryGuard({ enabled: 'false', env: 'PORT;SENTRY_DSN;SENTRY_ENVIRONMENT' });
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/sentry_enabled is false \(or unset\), but mutaba3a-api mounts SENTRY_DSN/);
+  });
+
+  it('refuses rather than guess when it cannot read the service or the variable', () => {
+    expect(sentryGuard({ enabled: 'false', env: 'error' }).err).toMatch(/could not read mutaba3a-api's env/);
+    expect(sentryGuard({ consoleFails: true }).err).toMatch(/could not evaluate sentry_enabled/);
+    expect(sentryGuard({ enabled: 'maybe' }).err).toMatch(/gave 'maybe' for sentry_enabled/);
+  });
+
+  it('SKIP_SENTRY_GUARD=1 skips the check but still reads sentry_enabled, which the smoke needs', () => {
+    const r = sentryGuard({ enabled: 'false', env: 'PORT;SENTRY_DSN', skip: '1' });
+    expect(r.status).toBe(0);
+    expect(r.err).toMatch(/Sentry release guard skipped \(SKIP_SENTRY_GUARD=1\)/);
+    expect(r.out).toMatch(/SENTRY_ENABLED=false/);
+    expect(r.calls).not.toMatch(/gcloud/);
+  });
+});
+
+describe('deploy.sh wires error reporting (MUT-148)', () => {
+  const deploy = readFileSync(DEPLOY, 'utf-8');
+
+  it('runs guard_sentry_release before bootstrap, and guard_release() runs it too', () => {
+    expect(deploy.indexOf('guard_sentry_release "')).toBeGreaterThan(-1);
+    expect(deploy.indexOf('guard_sentry_release "')).toBeLessThan(deploy.indexOf('ensure_bootstrap "'));
+    const wrapper = /guard_release\(\)\s*\{[\s\S]*?\n\}/.exec(deploy)?.[0] ?? '';
+    expect(wrapper).toMatch(/guard_sentry_release/);
+  });
+
+  it('asks the smoke to check /health errorReporting on every smoke run', () => {
+    const smokes = [...deploy.matchAll(/^\s*npm run --silent smoke -- .*$/gm)].map((m) => m[0]);
+    expect(smokes.length).toBeGreaterThan(0);
+    for (const line of smokes) expect(line).toMatch(/--expect-error-reporting "\$\{EXPECT_ERROR_REPORTING\}"/);
+  });
+
+  it('hands pre-roll and post-roll the DSN and release, so their crashes are reported', () => {
+    for (const step of ['pre-roll', 'post-roll']) {
+      const line = deploy.split('\n').find((l) => l.includes(`npm run --silent ${step}`)) ?? '';
+      expect(line, step).toMatch(/\$\{SCRIPT_SENTRY_ENV\[@\]\}/);
+    }
+  });
+});
+

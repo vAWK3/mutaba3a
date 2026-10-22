@@ -60,7 +60,21 @@ source "${SERVER_DIR}/scripts/lib/db-checks.sh"
 # MUT-381 / MUT-360: both release guards with this release's own terraform arguments; run inside TF_DIR.
 guard_release() {
   (cd "${TF_DIR}" && guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
-    && guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}")
+    && guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
+    && guard_sentry_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}")
+}
+# MUT-148 (ADR-091): pre-roll and post-roll run here, not in Cloud Run, so they get the API's DSN from Secret
+# Manager. Re-read before each step: the release that turns sentry_enabled on creates the secret in step 4.
+SCRIPT_SENTRY_ENV=()
+script_sentry_env() {
+  SCRIPT_SENTRY_ENV=(SERVICE_VERSION="${SHORT_SHA}" SENTRY_ENVIRONMENT="${ENVIRONMENT}")
+  [[ "${SENTRY_ENABLED}" == "true" ]] || return 0
+  local dsn
+  if dsn="$(gcloud secrets versions access latest --secret="mutaba3a-api-sentry-dsn${SUFFIX}" --project="${GCP_PROJECT_ID}" 2>/dev/null)"; then
+    SCRIPT_SENTRY_ENV+=(SENTRY_DSN="${dsn}")
+  else
+    warn "mutaba3a-api-sentry-dsn${SUFFIX} has no version yet (step 4 creates it); this step's crashes are logged, not reported"
+  fi
 }
 # The Cloud SQL Auth Proxy on 127.0.0.1:PROXY_PORT, for steps 3 and 6; needs SQL_CONNECTION (step 0). It
 # refuses a port something already listens on: an old proxy there would take the migration to its instance.
@@ -112,6 +126,10 @@ guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_
 # MUT-360: never switch Stripe off as a side effect of a release (a checkout whose production.tfvars lacks
 # stripe_enabled = true). On by default; SKIP_STRIPE_GUARD=1 skips it (lib/release-guard.sh).
 guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
+# MUT-148: never switch error reports off as a side effect of a release. Also sets SENTRY_ENABLED, which the
+# smoke checks against /health (D4). On by default; SKIP_SENTRY_GUARD=1 skips the check (lib/release-guard.sh).
+guard_sentry_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
+EXPECT_ERROR_REPORTING="off"; [[ "${SENTRY_ENABLED}" == "true" ]] && EXPECT_ERROR_REPORTING="on"
 # First run only: the registry must exist before `docker push`, the database
 # before the migration. Skipped once they are in state (lib/tf-bootstrap.sh).
 ensure_bootstrap "${TF_ARGS[@]}" "${APPROVE[@]}"
@@ -150,7 +168,8 @@ DATABASE_URL="${LOCAL_DATABASE_URL}" npx prisma migrate deploy \
   || die "migration failed; the service was NOT rolled. Fix the migration and re-run."
 # MUT-373 (OV1b): a stray membership on an owned profile would make its holder an owner once this revision serves.
 info "running pre-roll checks"
-DATABASE_URL="${LOCAL_DATABASE_URL}" npm run --silent pre-roll \
+script_sentry_env
+env "${SCRIPT_SENTRY_ENV[@]}" DATABASE_URL="${LOCAL_DATABASE_URL}" npm run --silent pre-roll \
   || die "pre-roll checks failed; the service was NOT rolled. Fix what they name and re-run."
 stop_proxy
 popd >/dev/null
@@ -173,11 +192,11 @@ popd >/dev/null
 # ---------------------------------------------------------------------------
 info "smoke-testing ${SERVICE_URL}"
 pushd "${SERVER_DIR}" >/dev/null
-npm run --silent smoke -- --url "${SERVICE_URL}" --expect-version "${SHORT_SHA}"
+npm run --silent smoke -- --url "${SERVICE_URL}" --expect-version "${SHORT_SHA}" --expect-error-reporting "${EXPECT_ERROR_REPORTING}"
 # Through the front door too, once users are sent there (ADR-155): same checks, the Worker's path.
 if [[ -n "${PUBLIC_PORTAL_ORIGIN}" && "${PUBLIC_PORTAL_ORIGIN}" != "${SERVICE_URL}" ]]; then
   info "smoke-testing ${PUBLIC_PORTAL_ORIGIN} (the front door)"
-  npm run --silent smoke -- --url "${PUBLIC_PORTAL_ORIGIN}" --expect-version "${SHORT_SHA}"
+  npm run --silent smoke -- --url "${PUBLIC_PORTAL_ORIGIN}" --expect-version "${SHORT_SHA}" --expect-error-reporting "${EXPECT_ERROR_REPORTING}"
 fi
 popd >/dev/null
 
@@ -189,7 +208,8 @@ popd >/dev/null
 pushd "${SERVER_DIR}" >/dev/null
 start_proxy
 info "running post-roll data repairs"
-DATABASE_URL="${LOCAL_DATABASE_URL}" npm run --silent post-roll \
+script_sentry_env
+env "${SCRIPT_SENTRY_ENV[@]}" DATABASE_URL="${LOCAL_DATABASE_URL}" npm run --silent post-roll \
   || die "post-roll repairs failed; the service IS rolled and healthy. Re-run ./scripts/deploy.sh (every step is idempotent) or 'DATABASE_URL=… npm run post-roll' through 'npm run db:proxy'."
 stop_proxy
 popd >/dev/null

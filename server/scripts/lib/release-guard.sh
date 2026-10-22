@@ -174,3 +174,50 @@ guard_stripe_release() {
   [[ -z "${live}" ]] && return 0
   die "this checkout's stripe_enabled is false (or unset), but production runs Stripe: ${live}. This release would delete the nightly reconcile job and unmount the Stripe secrets. Set stripe_enabled = true in this checkout's production.tfvars (git doesn't carry it), then release. To turn Stripe off, use DEPLOYMENT.md §6e's own apply; SKIP_STRIPE_GUARD=1 only if you mean this release to do it."
 }
+
+# MUT-148 (ADR-091): refuse a release whose checkout says sentry_enabled = false (or doesn't set it) while the
+# service already mounts SENTRY_DSN. Like stripe_enabled it lives in the git-ignored production.tfvars, so a
+# checkout without the line would release with the default, false: its full apply deletes the DSN secret and
+# the API stops reporting errors without anyone noticing. Turning reports off is a deliberate apply, never a
+# side effect of a release.
+#
+# Sets SENTRY_ENABLED (true|false) for deploy.sh, which tells the smoke what /health must say and hands
+# pre-roll and post-roll the DSN. SKIP_SENTRY_GUARD=1 skips the check, never the read. Fails closed.
+
+# guard_sentry_release <suffix> <service> <region> <project> <terraform args…>
+# shellcheck disable=SC2034 # read by deploy.sh, which sources this file
+SENTRY_ENABLED=""
+# shellcheck disable=SC2034 # the same: SENTRY_ENABLED is set here for deploy.sh
+guard_sentry_release() {
+  local suffix="$1" service="$2" region="$3" project="$4"; shift 4
+  guard_var_args "$@"
+
+  local enabled
+  enabled="$(printf 'var.sentry_enabled\n' | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
+    || die "could not evaluate sentry_enabled with terraform console (above); refusing to release on a guess"
+  enabled="$(sed -n '1{s/"//g;p;}' <<<"${enabled}")"
+  [[ "${enabled}" == "true" || "${enabled}" == "false" ]] \
+    || die "terraform console gave '${enabled}' for sentry_enabled; refusing to release on a guess"
+  SENTRY_ENABLED="${enabled}"
+
+  if [[ "${SKIP_SENTRY_GUARD:-0}" == "1" ]]; then
+    warn "Sentry release guard skipped (SKIP_SENTRY_GUARD=1)"
+    return 0
+  fi
+  [[ "${enabled}" == "true" ]] && return 0
+
+  local env_names err rc=0
+  err="$(mktemp "${TMPDIR:-/tmp}/release-guard-XXXX")"
+  env_names="$(gcloud run services describe "${service}" --region="${region}" --project="${project}" \
+    --format='value(spec.template.spec.containers[0].env[].name)' 2>"${err}")" || rc=$?
+  if (( rc != 0 )); then
+    if grep -qiE 'cannot find service|could not be found|NOT_FOUND' "${err}"; then
+      rm -f "${err}"; return 0 # first deploy: nothing reports yet
+    fi
+    cat "${err}" >&2; rm -f "${err}"
+    die "could not read ${service}'s env (above); refusing to release on a guess"
+  fi
+  rm -f "${err}"
+  [[ ";${env_names};" == *";SENTRY_DSN;"* ]] || return 0
+  die "this checkout's sentry_enabled is false (or unset), but ${service} mounts SENTRY_DSN. This release would delete the DSN secret and stop error reports. Set sentry_enabled = true in this checkout's production.tfvars (git doesn't carry it), then release. SKIP_SENTRY_GUARD=1 only if you mean this release to turn reports off."
+}
