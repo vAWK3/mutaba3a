@@ -812,21 +812,24 @@ with a blank amount. So a server release that drops a currency (MUT-388 dropped 
 gate **before and after** `make release server`. Before, so you know; after, because the old API accepts the codes
 until the new one is live.
 
-1. Count (read-only). Exit 0 means nothing to do; exit 3 prints table, column, code, profile and rows:
+1. Count (read-only). Exit 0 means nothing to do; exit 3 prints table, column, code, owner (a profile, or `user:<id>`
+   for an Unsorted inbox row) and rows. Soft-deleted rows don't count:
 
    ```bash
    npm run db:run -- scripts/currency-rows.sh count
    ```
 
-2. Rows on **your own test or operator profiles** go. Rehearse, then do it:
+2. Rows on **your own test or operator profiles** (and your own inbox) go. Rehearse, then do it:
 
    ```bash
-   npm run db:run -- scripts/currency-rows.sh delete-test-profiles --organization-id <uuid>[,<uuid>…] --dry-run
-   npm run db:run -- scripts/currency-rows.sh delete-test-profiles --organization-id <uuid>[,<uuid>…]
+   npm run db:run -- scripts/currency-rows.sh delete-test-profiles --organization-id <uuid>[,…] --user-id <your user id> --dry-run
+   npm run db:run -- scripts/currency-rows.sh delete-test-profiles --organization-id <uuid>[,…] --user-id <your user id>
    ```
 
-   A test profile whose own currency is a removed one is printed, not deleted: change it in the portal
-   (Settings › Profiles).
+   It names the profiles and users, previews every change, then asks you to type `delete`. Rows on a table with
+   `deletedAt` are soft-deleted, the app's own delete. Others are hard-deleted only when nothing points at them;
+   otherwise it lists those rows and changes nothing (unlink or remove them in the portal, then run it again). A test
+   profile whose own currency is a removed one is printed, not changed: change it in the portal (Settings › Profiles).
 3. A row on **anyone else's profile** stops the release. Basel decides what happens to it; note it in the log.
 4. After the release, count again. It must exit 0 (or list only rows Basel has decided to keep).
 

@@ -168,3 +168,13 @@ Commands:
 
 The gate (`currency-rows.sh`) and the 0.1.7 live check are operator steps, not catalog flows: runbook §10 and the
 MUT-388 acceptance criteria.
+
+## Review amendments (/qa-reconcile + /review, 2026-10-22, Basel)
+
+- **D1:** a stored Gulf row reads back with its real amount. `RETIRED_EXPONENT` in `money.ts` is display only. A blank amount failed the phone's whole Recent page, because the phone keeps the Gulf enum values and `MoneyCodec` throws on `""`.
+- **D2:** filing an inbox entry in a removed currency answers 422 `UNSUPPORTED_CURRENCY`.
+- **D3:** the gate counts only live rows and names the inbox user.
+  - `delete-test-profiles` soft-deletes where a table has `deletedAt` and hard-deletes only unreferenced rows; otherwise it lists the blockers and changes nothing.
+  - It takes `--user-id` for the inbox and always previews first.
+- **D4:** the removed Gulf tests are kept removed (gate RH-1): each has a refusal test or an existing JOD equivalent.
+- **Portal local mode** stays outside the gate. Its rows read correctly and refuse a new amount.

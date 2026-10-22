@@ -4514,8 +4514,15 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Decision**:
 1. **Four currencies.** `SUPPORTED_CURRENCIES` is `ILS, USD, EUR, JOD` again; `USD_PEGS` is `{ JOD: 0.709 }` and `docs/fx/pegs.json` follows. Every reader of the list (`/v1/me.currencies`, sessions, device sessions, import, `/v1/fx-rates`) narrows with it. ADR-098's machinery stays: every pair through USD, `derived` = either side pegged, `currencies` as plain strings. Bringing a currency back is a list and peg edit.
-2. **A stored row can outlive its currency.** Columns are `VarChar(3)`, so nothing refuses a Gulf row written while it was supported. Reads pass it through (`formatMoney` gives `amount: ""`; the portal shows "—"). Writes don't: `parseMoney` throws `MoneyParseError` when the currency has no exponent, which every write already maps to 422 `AMOUNT_INVALID`, so a PATCH that falls back to the stored currency can't rescale the amount (12.345 BHD became 12345). Moving the row to a supported currency with its amount works.
-3. **A release gate, not a migration.** `server/scripts/currency-rows.sh count` lists every row outside the list (columns read from the catalog, the list from `money.ts`, `billing_*` aside) and exits 3. It runs through `npm run db:run` before and after the server release; rows on the operator's own test profiles go with `delete-test-profiles`; rows on anyone else's profile stop the release for Basel's call (`docs/operations/pilot-runbook.md` §10).
+2. **A stored row can outlive its currency.** Columns are `VarChar(3)`, so nothing refuses a Gulf row written while it was supported.
+   - **Reads show its real amount.** `money.ts` keeps `RETIRED_EXPONENT` (AED/SAR/QAR 2, BHD/OMR 3) for `formatMoney` only (review D1). A blank amount would have failed every phone build's whole Recent page: the phone keeps the Gulf enum values, and `MoneyCodec` throws on `""`.
+   - **Writes refuse it.** `parseMoney` throws `MoneyParseError` when the currency has no supported exponent, which every write already maps to 422 `AMOUNT_INVALID`, so a PATCH that falls back to the stored currency can't rescale the amount (12.345 BHD became 12345). Moving the row to a supported currency with its amount works.
+   - **Filing an inbox entry** in a removed code answers 422 `UNSUPPORTED_CURRENCY` (`assertFilableCurrency`, review D2): filing copies the entry's currency outside the request schema.
+3. **A release gate, not a migration.** `server/scripts/currency-rows.sh count` lists every live row outside the list, by profile or (for the inbox) user. Its columns are read from the catalog and its list from `money.ts`; `billing_*` is left out and soft-deleted rows don't count. It exits 3 when there are any.
+   - It runs through `npm run db:run` before and after the server release.
+   - Rows on the operator's own test profiles and users go with `delete-test-profiles` (review D3). It soft-deletes where a table has `deletedAt`, the app's own delete. Elsewhere it hard-deletes only rows nothing points at; otherwise it lists the blockers and changes nothing. It always previews first.
+   - Rows on anyone else's profile stop the release for Basel's call (`docs/operations/pilot-runbook.md` §10).
+   - **Portal local mode (signed-out, IndexedDB) is outside the gate.** Such rows read back with their amounts (point 2) and refuse a new amount until their currency changes.
 4. **The phone keeps its Gulf enum values, unused.** It offers only what `/v1/me.currencies` lists (MUT-279 D4), so the server is the switch; its parity tests become subset checks. Only lists that don't follow the server change there (the iOS FX widget picker, the release notes).
 5. **Analytics contract 2.0.0** (four currencies): a removal is a major version (`docs/analytics/README.md`).
 6. **Release order:** web, the gate, then `make release server` (the portal ships with it). No phone release is needed for correctness.
@@ -4528,6 +4535,6 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Consequences**:
 - API 1.45.0-mut388. Clients built against 1.35.0+ keep working: `currencies` is a plain string list.
-- A Gulf row left on a real profile reads blank and can't take a new amount until its currency changes; the gate keeps that from happening silently.
+- A Gulf row left on a real profile still reads right but can't take a new amount until its currency changes; the gate keeps that from happening silently.
 - ADR-098 §7's "the web (MUT-282/283) reads it" and "server-ci watches docs/fx" were never or are no longer true: MUT-282/283 were not built, and CI is manual (`workflow_dispatch`).
 
