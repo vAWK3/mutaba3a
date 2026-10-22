@@ -1,5 +1,5 @@
 variable "organization" {
-  description = "Slug of the dedicated EU-region Sentry org (ADR-091, R3). Basel creates it by hand; Terraform never creates orgs."
+  description = "Slug of the EU-region Sentry org, `barmajiyat-ltd` (ADR-091 amendment 5). Basel creates it by hand; Terraform never creates orgs."
   type        = string
 }
 

@@ -125,10 +125,10 @@ Separate from the GCP rollout: `server/infrastructure/sentry/` has its own
 state, and `deploy.sh` never touches it. The rules are in
 `docs/observability/README.md`.
 
-1. **Org.** Sign in to Sentry and create a **new organization in the EU
-   (Frankfurt) region**, slug `mutaba3a` (the product, so no other product is
-   added to it by habit). The region can't be changed later. Don't reuse another
-   product's org. Turn on **two-factor authentication on your own account first**:
+1. **Org.** Use the company org **`barmajiyat-ltd`**, which is in the **EU
+   (Frankfurt) region** (ADR-091 amendment 5). If you create it again, pick the
+   EU region: the region can't be changed later. Never use an org outside
+   Barmajiyat. Turn on **two-factor authentication on your own account first**:
    step 5 makes the org require it, and Sentry refuses that setting from an
    account without 2FA.
 2. **Plan and budget.** Stay on the **Developer (free)** plan. Under
@@ -161,7 +161,7 @@ state, and `deploy.sh` never touches it. The rules are in
 
    The personal token reaches every org you belong to, and the step 5 guard runs
    after this apply. So before applying, read the org slug in the plan: every
-   resource should show `organization = "mutaba3a"`.
+   resource should show `organization = "barmajiyat-ltd"`.
 
    If the plan errors on `de.sentry.io`, or the apply stops on the "not in the
    EU region" postcondition, **stop and check the org's data region** in its
@@ -175,7 +175,7 @@ state, and `deploy.sh` never touches it. The rules are in
 
    ```bash
    cd "$(git rev-parse --show-toplevel)"
-   SENTRY_ADMIN_TOKEN="$SENTRY_ADMIN_TOKEN" SENTRY_ORG=mutaba3a npx tsx scripts/sentry-org-settings.ts --apply
+   SENTRY_ADMIN_TOKEN="$SENTRY_ADMIN_TOKEN" SENTRY_ORG=barmajiyat-ltd npx tsx scripts/sentry-org-settings.ts --apply
    ```
 
    It prints the target org and host, then exits 1 and lists any setting that

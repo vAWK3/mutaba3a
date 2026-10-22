@@ -3665,6 +3665,12 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
   - Plurals of the lowercase compounds: `phonenumbers`, `emailaddresses`, `apikeys`, `accesstokens`, `refreshtokens`, `sessionids`, `firstnames`, `lastnames`, `fullnames`, `payloads`.
   - Bracketed form keys (`client[name]=…`) are a documented limit.
 
+**Amendment 5 (org choice, 2026-10-22)**: Basel: use the company org **`barmajiyat-ltd`** (EU region, `de`), which owns both Mutaba3a and Malafat. This replaces rule 2's "new, dedicated org" and D13's suggested slug `mutaba3a`.
+- **Why R3 is still met.** R3 rejected another product's org because its region might not be EU and its quota and alerts would be shared. `barmajiyat-ltd` is EU, and for now it holds no other product, so Mutaba3a has the quota and alerts to itself. The EU checks (D5) still run on every apply.
+- **The Barmajiyat CLAUDE.md already named this org.** The MUT-147 plan was written against the earlier option of a fresh signup and never weighed it.
+- **Unchanged.** The team slug, the `mutaba3a-…` project slugs, the scrub contract, the daily caps and the org privacy settings. The wrong-org guard (D16) still refuses any project that isn't `mutaba3a-…`.
+- **Before another product joins the org**, TD-198 has to be fixed: the guard would refuse the org, the org-wide privacy settings (`require2FA`, `enhancedPrivacy`, sensitive fields) would apply to that product too, and the free plan's one quota would be split.
+
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
 **Status**: Accepted (2026-10-17, MUT-157; auto-decided on the recommended option at Basel's request, C1)

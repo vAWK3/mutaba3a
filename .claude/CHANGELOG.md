@@ -52,6 +52,14 @@ before it becomes an expense. A receipt could not exist without an expense, and 
 ### Technical
 - ADR-167. **Production deploy held** until MUT-260 or MUT-258 ships with it (decision P4). Portal before server.
 
+## [Unreleased] - 2026-10-22 — Sentry goes in the company org `barmajiyat-ltd`
+
+**Why:** Basel: Barmajiyat owns Mutaba3a and Malafat, and its EU org already exists, so the Mutaba3a projects go there and no dedicated `mutaba3a` org is created. ADR-091 amendment 5.
+
+### Changed
+- `server/DEPLOYMENT.md` §1.5, `server/infrastructure/sentry/production.tfvars.example`, `variables.tf`, `scripts/sentry-org-settings.ts` usage, `docs/observability/README.md`, INFRA: the org slug is `barmajiyat-ltd`. No code or contract change.
+- TD-198: the settings script's `mutaba3a-…` project guard and the org-wide settings must change before another product joins the org.
+
 ## [Unreleased] - 2026-10-22 — A Malafat firm's expense categories start from the general business list
 
 **Why:** A Malafat-connected firm's first category list was legal-only (court filing fees, bar fees, expert witnesses)
