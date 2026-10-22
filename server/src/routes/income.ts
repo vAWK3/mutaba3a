@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { writeRefusal } from '../auth/writability.js';
 import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
-import { dueDateAfterRedate, dueDateForOwed, incomeCaptureRulesFor, incomeMoneyDate, isOwnCapture, isOwnProfile, owedVatFields, redateTo, resolveIncomeLinks } from '../income/compose.js';
+import { assertOwedMayMoveTo, dueDateAfterRedate, incomeCaptureRulesFor, incomeMoneyDate, isOwnCapture, isOwnProfile, owedDueDate, owedVatFields, redateTo, resolveIncomeLinks } from '../income/compose.js';
 import { ifMatch } from '../if-match.js';
 import { OWED_REDATED } from './audit.js';
 import { redateOwnCapture } from './payments.js';
@@ -37,7 +37,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Income'],
       summary: 'Capture money received or owed, directly — no agreement, no allocation dance',
       description:
-        'What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future.',
+        'What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future.',
       security: SESSION_ONLY,
       middleware: [requireScope('capture:write'), idempotent(store, 'income.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateIncomeRequestSchema) },
@@ -80,7 +80,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       }
 
       if (!links.customerId) throw new ApiError('INTERNAL', 'resolveIncomeLinks guarantees a customerId for owed');
-      const dueDate = body.dueDate ? assertIsoDate(body.dueDate, 'dueDate') : dueDateForOwed(occurredOn, undefined);
+      const dueDate = owedDueDate(body.dueDate, occurredOn, today);
       const vat = owedVatFields(amountMinor);
       const created = await store.receivables.createAdjustment(
         {
@@ -158,7 +158,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Income'],
       summary: 'Change the date of an income entry you captured (optimistic, If-Match)',
       description:
-        'Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate, unless the new date is after it: then dueDate becomes EOM_15 of the new date (MUT-392); a Received entry moves its payment\'s receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. occurredOn is not more than ten years before the organization\'s today (MUT-227); for a Received entry not later than today, for an Owed one not more than ten years after it (MUT-392). A malformed date is 422 before the entry is looked up; the bounds are checked once its kind is known.',
+        'Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate, unless the new date is after it: then dueDate becomes EOM_15 of the new date (MUT-392); a Received entry moves its payment\'s receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. An Owed entry with money applied (paid, credited or settled) may not move after today: 409 MONEY_APPLIED (MUT-392 review). occurredOn is not more than ten years before the organization\'s today (MUT-227); for a Received entry not later than today, for an Owed one not more than ten years after it (MUT-392). A malformed date is 422 before the entry is looked up; the bounds are checked once its kind is known.',
       security: SESSION_ONLY,
       middleware: [requireScope('capture:write'), ifMatch()] as const,
       request: { params: IncomeIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateIncomeRequestSchema) },
@@ -178,6 +178,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         const occurredOn = redateTo(raw, 'owed', organization, now, 'occurredOn');
         const expected = c.get('expectedVersion');
         if (receivable.version !== expected) throw versionMismatch(receivable.version);
+        assertOwedMayMoveTo(receivable, occurredOn, todayFor(organization, now));
         // Decided on this read; the write is conditional on its version, so the row it was decided from is the row it changes.
         const dueDate = dueDateAfterRedate(receivable.dueDate, occurredOn);
         const result = await store.receivables.redateAdjustment(organization.id, receivable.id, user.id, expected, occurredOn, dueDate);

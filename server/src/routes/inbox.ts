@@ -1,13 +1,14 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
-import { assertIsoDate, todayFor, validationError } from '../agreements/compose.js';
+import { todayFor, validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
 import { assertCategoryChoosable, expenseOccurredOn, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
 import { identityIdempotent, idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { assertFilableCurrency, assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
-import { dueDateForOwed, incomeCaptureRulesFor, incomeMoneyDate, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
+import { incomeCaptureRulesFor, incomeMoneyDate, owedDueDate, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
+import type { IsoDate } from '../dates.js';
 import { formatMoney, type Currency } from '../money.js';
 import type { InboxEntryRecord, LedgerStore, UpdateInboxEntryPatch } from '../repositories/ports.js';
 import {
@@ -277,7 +278,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null }, entry.currency, incomeCaptureRulesFor(writerOfRecord));
 
       const filed = await store.inboxEntries.fileAsIncome(
-        { userId: user.id, inboxEntryId: entry.id, kind: 'INCOME', write: incomeWrite(entry, body, links, organization.id, user.id, now, c.get('requestId')) },
+        { userId: user.id, inboxEntryId: entry.id, kind: 'INCOME', write: incomeWrite(entry, body, links, organization.id, user.id, now, todayFor(organization, now), c.get('requestId')) },
         now,
       );
       if (filed.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such inbox entry');
@@ -313,6 +314,7 @@ function incomeWrite(
   organizationId: string,
   userId: string,
   now: Date,
+  today: IsoDate,
   requestId: string,
 ) {
   if (body.kind === 'received') {
@@ -352,7 +354,7 @@ function incomeWrite(
       vatTreatment: vat.vatTreatment,
       vatRateBasisPoints: vat.vatRateBasisPoints,
       title: body.title ?? null,
-      dueDate: body.dueDate ? assertIsoDate(body.dueDate, 'dueDate') : dueDateForOwed(entry.occurredOn, undefined),
+      dueDate: owedDueDate(body.dueDate, entry.occurredOn, today),
       postingDate: entry.occurredOn,
       postedAt: now,
       createdByUserId: userId,

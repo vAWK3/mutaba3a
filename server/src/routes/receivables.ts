@@ -7,6 +7,7 @@ import { idempotent } from '../idempotency.js';
 import { pastMoneyDate } from '../income/compose.js';
 import { formatMoney, type Currency } from '../money.js';
 import { checkCredit, splitCredit } from '../payments/credit.js';
+import { countsOn } from '../summaries/compute.js';
 import { InsufficientCapacity, LockConflict } from '../repositories/memory.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import {
@@ -156,7 +157,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Receivables'],
       summary: 'Settle a receivable directly, with one payment and one allocation',
       description:
-        'For a session\'s own captures, not Malafat\'s multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404.',
+        'For a session\'s own captures, not Malafat\'s multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (its postingDate, MUT-392) is 422 RECEIVABLE_NOT_YET_DATED with details.postingDate: move its date to today first.',
       security: [{ session: [] }, { deviceSession: [] }],
       middleware: [requireScope('payments:write'), idempotent(store, 'receivables.settle')] as const,
       request: { params: ReceivableIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(SettleReceivableRequestSchema) },
@@ -174,6 +175,9 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       // DELETE /v1/income/{id} (routes/income.ts).
       if (!receivable || receivable.origin !== 'ADJUSTMENT') throw new ApiError('NOT_FOUND', 'No such receivable');
       const currency = receivable.currency as Currency;
+      // MUT-392 review: a future-dated Owed is work not yet done and counts in no figure until its day, so no money can
+      // be applied to it before then; the person re-dates it to today first (PATCH /v1/income/{id}).
+      if (!countsOn(receivable, today)) throw validationError('RECEIVABLE_NOT_YET_DATED', 'This entry is dated after today; move its date to today before settling it', { postingDate: receivable.postingDate });
       const outstanding = outstandingMinor(receivable);
       if (outstanding <= 0n) throw validationError('RECEIVABLE_NOT_OPEN', 'Nothing is outstanding on this receivable');
       const amountMinor = body.amount ? parseAmount(body.amount, currency) : outstanding;

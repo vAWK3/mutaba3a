@@ -9,7 +9,7 @@ import type { AgreementRecord, FeeProposalRecord, InstallmentRecord, LedgerStore
 import { latestTerms, termsTimeline } from '../retainers/terms.js';
 import { CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
 import { serializeFeeProposalSummary } from '../serializers.js';
-import { addBuckets, bucketize, customerStatus, emptyBuckets, lastPaymentOn, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
+import { addBuckets, bucketize, countsOn, customerStatus, emptyBuckets, lastPaymentOn, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
 
 /** /v1/summaries — the figures Malafat renders (M6 brief §2). Computed on read; nothing is materialized. */
@@ -22,7 +22,7 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/summaries/organization',
       tags: ['Summaries'],
       summary: 'Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer',
-      description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables whose posting date is not after today (an Owed dated ahead counts from its own date, MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer\'s row. Due items are posted before the figures are read. ?currency= narrows to one block.',
+      description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer\'s row. Due items are posted before the figures are read. ?currency= narrows to one block.',
       security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('summaries:read')] as const,
       request: { query: SummaryCurrencyQuerySchema },
@@ -34,7 +34,9 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const today = todayFor(organization, now);
       const posting = lazyPostingOf(c, store);
       await postDueItems(posting.store, organization, today, now, posting.actor);
-      const receivables = await listAll((cursor) => store.receivables.list(organization.id, { status: 'OPEN' }, { limit: 200, cursor }));
+      // MUT-392 review: an Owed dated ahead is left out here, not just from the buckets, so a client or currency with
+      // nothing else gets no row of zeros (and no Settled status) until its day.
+      const receivables = (await listAll((cursor) => store.receivables.list(organization.id, { status: 'OPEN' }, { limit: 200, cursor }))).filter((r) => countsOn(r, today));
       const payments = await listAll((cursor) => store.payments.list(organization.id, { status: 'POSTED' }, { limit: 200, cursor }));
       // M8 (D17): open proposals ride the summary, so the overview's figure and its pills share one source; a currency with proposals only still gets a block.
       const proposals = await listAll((cursor) => store.feeProposals.list(organization.id, { open: true }, { limit: 200, cursor }));
@@ -100,7 +102,8 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       // "Owed with a client, no matter" is MUT-65's default capture shape and belongs to no project, so it
       // would otherwise reach no bucket here while the organization summary counts it — the same client,
       // two different answers. Bucketed through the very helper that summary uses (ADR-033: one definition).
-      const matterless = receivables.filter((r) => r.projectId === null);
+      // MUT-392 review: as on the organization summary, a matterless Owed dated ahead opens no block until its day.
+      const matterless = receivables.filter((r) => r.projectId === null && countsOn(r, today));
       const currencies = [...new Set([...projects.map((p) => p.currency), ...payments.map((p) => p.currency), ...matterless.map((r) => r.currency)])].sort();
       const blocks = currencies.map((currency) => {
         const fmt = (m: bigint) => formatMoney({ minor: m, currency: currency as Currency });

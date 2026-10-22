@@ -391,6 +391,17 @@ describe('POST /v1/inbox/{id}/file-as-income on a personal profile', () => {
     expect(await s.listInbox()).toEqual([]);
   });
 
+  /** MUT-392 review: an explicit due date before the entry's own date is refused, as POST /v1/income refuses it. */
+  it('refuses an Owed due date before the entry date, and leaves the entry in the inbox', async () => {
+    const s = await setup();
+    const c = await customer(s, s.p.id);
+    const entry = await s.capture({ ...INCOME_ENTRY, occurredOn: '2027-06-01' });
+    const filed = await s.fileIncome(entry.id, { kind: 'owed', customerId: c.id, dueDate: '2027-05-31' });
+    expect(filed.status).toBe(422);
+    expect((await read(filed)).error.details).toMatchObject({ reason: 'DATE_INVALID', field: 'dueDate' });
+    expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
+  });
+
   /** The mirror of the expense case: POST /v1/income refuses a future Received, so filing as Received must too. */
   it('refuses a future-dated entry as Received, because POST /v1/income does, and leaves it in the inbox', async () => {
     const s = await setup();

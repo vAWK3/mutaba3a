@@ -7,6 +7,7 @@ import type { IsoDate } from './dates.js';
 import { formatMoney, type Currency } from './money.js';
 import { windowEnd } from './expenses/groups.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
+import { countsOn } from './summaries/compute.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource } from './schemas.js';
 import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
@@ -305,8 +306,9 @@ export function serializeSupplement(s: SupplementRecord, currency: string) {
   };
 }
 
+/** MUT-392 review: a future-dated Owed reads PENDING (not yet posted) until its day, as the summaries count it. */
 export function receivableStatus(r: ReceivableRecord, today: IsoDate): ItemStatus {
-  return itemStatus({ voided: false, posted: true, dueDate: r.dueDate, grossMinor: r.grossMinor, paidMinor: r.paidMinor, creditedMinor: r.creditedMinor, today });
+  return itemStatus({ voided: false, posted: countsOn(r, today), dueDate: r.dueDate, grossMinor: r.grossMinor, paidMinor: r.paidMinor, creditedMinor: r.creditedMinor, today });
 }
 
 export function serializeReceivable(r: ReceivableRecord, today: IsoDate) {

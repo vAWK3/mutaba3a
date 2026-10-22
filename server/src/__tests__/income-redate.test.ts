@@ -267,7 +267,9 @@ describe('future dates on an Owed entry (MUT-392)', () => {
     const owed = await owedEntry(s);
     await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-11-01' }, s.u.as(s.u.personal), 1));
     const rows = (await s.h.store.audit.list(s.u.personal, { action: OWED_REDATED }, { limit: 10, cursor: null })).items;
-    expect(rows[0]?.metadata).not.toHaveProperty('dueTo');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.metadata).toMatchObject({ from: '2026-10-08', to: '2026-11-01' });
+    expect(rows[0]!.metadata).not.toHaveProperty('dueTo');
   });
 
   it('more than ten years ahead → 422 bound future, nothing moved', async () => {
@@ -277,6 +279,47 @@ describe('future dates on an Owed entry (MUT-392)', () => {
     expect(res.status).toBe(422);
     expect(await errorOf(res)).toMatchObject({ details: { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' } });
     expect(await s.h.store.receivables.getById(s.u.personal, owed.id)).toMatchObject({ postingDate: '2026-10-08', version: 1 });
+  });
+
+  it('a settled Owed cannot move past today: 409 MONEY_APPLIED, nothing moved; it may still move within the past (review)', async () => {
+    const s = await setup();
+    const headers = s.u.as(s.u.personal);
+    const owed = await owedEntry(s);
+    await settle(s, owed.id);
+    const { version } = (await s.h.store.receivables.getById(s.u.personal, owed.id))!;
+    const ahead = await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-11-11' }, headers, version));
+    expect(ahead.status).toBe(409);
+    expect(await errorOf(ahead)).toMatchObject({ code: 'CONFLICT', details: { reason: 'MONEY_APPLIED' } });
+    expect(await s.h.store.receivables.getById(s.u.personal, owed.id)).toMatchObject({ postingDate: '2026-10-08', version });
+    const past = await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-10-01' }, headers, version));
+    expect(past.status).toBe(200);
+  });
+
+  it('a part-paid Owed cannot move past today either; today itself is fine (review)', async () => {
+    const s = await setup();
+    const headers = s.u.as(s.u.personal);
+    const owed = await owedEntry(s);
+    const part = await s.h.app.request(`/v1/receivables/${owed.id}/settle`, json({ amount: '100.00', paidAt: '2026-10-10' }, { ...headers, ...idem() }));
+    expect(part.status).toBe(201);
+    const { version } = (await s.h.store.receivables.getById(s.u.personal, owed.id))!;
+    const ahead = await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-10-13' }, headers, version));
+    expect(await errorOf(ahead)).toMatchObject({ details: { reason: 'MONEY_APPLIED' } });
+    expect((await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-10-12' }, headers, version))).status).toBe(200);
+  });
+
+  it('a future Owed reads PENDING and cannot be settled before its day; on its day it is DUE and settles (review)', async () => {
+    // 20:30 UTC is 23:30 on the 12th in Jerusalem; an hour later it is the 13th there, the session still well inside its limits.
+    const s = await setup('2026-10-12T20:30:00Z');
+    const headers = s.u.as(s.u.personal);
+    const owed = await income(s, { kind: 'owed', customerId: s.customer.id, occurredOn: '2026-10-13' });
+    expect(await read(await s.h.app.request(`/v1/receivables/${owed.id}`, { headers }))).toMatchObject({ status: 'PENDING' });
+    const early = await s.h.app.request(`/v1/receivables/${owed.id}/settle`, json({}, { ...headers, ...idem() }));
+    expect(early.status).toBe(422);
+    expect(await errorOf(early)).toMatchObject({ code: 'VALIDATION_FAILED', details: { reason: 'RECEIVABLE_NOT_YET_DATED', postingDate: '2026-10-13' } });
+    expect(await s.h.store.receivables.getById(s.u.personal, owed.id)).toMatchObject({ paidMinor: 0n });
+    s.h.clock.now = new Date('2026-10-12T21:30:00Z');
+    expect(await read(await s.h.app.request(`/v1/receivables/${owed.id}`, { headers }))).toMatchObject({ status: 'DUE' });
+    expect((await s.h.app.request(`/v1/receivables/${owed.id}/settle`, json({}, { ...headers, ...idem() }))).status).toBe(201);
   });
 
   it('an unknown id answers 404 even with a future date, and 422 for a malformed one (the shape is checked first)', async () => {
@@ -445,5 +488,45 @@ describe('derived reads follow the new date (AC8)', () => {
     const summary = await read(await s.h.app.request(`/v1/summaries/customers/${s.customer.id}`, { headers }));
     expect(summary.lastPaymentOn).toBe('2026-10-09');
     expect(await read(await s.h.app.request(`/v1/receivables/${owed.id}`, { headers }))).toMatchObject({ postingDate: '2026-09-30' });
+  });
+});
+
+describe('an Owed due date on create (MUT-392 review)', () => {
+  it('a dueDate before occurredOn → 422 DATE_INVALID field dueDate; the same day is fine', async () => {
+    const s = await setup();
+    const headers = { ...s.u.as(s.u.personal) };
+    const early = await s.h.app.request('/v1/income', json({ kind: 'owed', amount: '300.00', currency: 'ILS', customerId: s.customer.id, occurredOn: '2026-11-11', dueDate: '2026-11-10' }, { ...headers, ...idem() }));
+    expect(early.status).toBe(422);
+    expect(await errorOf(early)).toMatchObject({ details: { reason: 'DATE_INVALID', field: 'dueDate' } });
+    await income(s, { kind: 'owed', customerId: s.customer.id, occurredOn: '2026-11-11', dueDate: '2026-11-11' });
+  });
+
+  it('a dueDate more than ten years ahead → 422 bound future', async () => {
+    const s = await setup();
+    const res = await s.h.app.request('/v1/income', json({ kind: 'owed', amount: '300.00', currency: 'ILS', customerId: s.customer.id, occurredOn: '2026-10-08', dueDate: '2036-10-20' }, { ...s.u.as(s.u.personal), ...idem() }));
+    expect(res.status).toBe(422);
+    expect(await errorOf(res)).toMatchObject({ details: { reason: 'DATE_INVALID', field: 'dueDate', bound: 'future' } });
+  });
+});
+
+describe('summaries and a future Owed (MUT-392 D2, review)', () => {
+  it('a client whose only entry is a future Owed has no row, no block and no Settled status until its day; then it joins', async () => {
+    // 23:30 on the 12th in Jerusalem; an hour later it is the 13th there, the session still well inside its limits.
+    const s = await setup('2026-10-12T20:30:00Z');
+    const headers = s.u.as(s.u.personal);
+    await income(s, { kind: 'owed', customerId: s.customer.id, occurredOn: '2026-10-13', amount: '500.00' });
+
+    const org = await read(await s.h.app.request('/v1/summaries/organization', { headers }));
+    expect(org.currencies).toEqual([]);
+    const client = await read(await s.h.app.request(`/v1/summaries/customers/${s.customer.id}`, { headers }));
+    expect(client.currencies).toEqual([]);
+
+    s.h.clock.now = new Date('2026-10-12T21:30:00Z');
+    const later = await read(await s.h.app.request('/v1/summaries/organization', { headers }));
+    expect(later.currencies).toHaveLength(1);
+    expect(later.currencies[0]).toMatchObject({ currency: 'ILS', outstanding: '500.00', counts: { customers: 1 } });
+    expect(later.currencies[0].customers).toMatchObject([{ customerId: s.customer.id, outstanding: '500.00', status: 'UP_TO_DATE' }]);
+    const clientLater = await read(await s.h.app.request(`/v1/summaries/customers/${s.customer.id}`, { headers }));
+    expect(clientLater.currencies).toMatchObject([{ currency: 'ILS', outstanding: '500.00' }]);
   });
 });
