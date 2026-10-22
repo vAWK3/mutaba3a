@@ -269,11 +269,15 @@ describe('POST /v1/receipts/{id}/file (MUT-389): onto an expense that already ex
     expect((await h.app.request(`/v1/expenses/${gone.id}`, { method: 'DELETE', headers: as() })).status).toBe(204);
     const receipt = await upload(h, as());
 
-    expect((await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(other.id), ...idem() })).status).toBe(404);
+    const notOurReceipt = await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(other.id), ...idem() });
+    expect(notOurReceipt.status).toBe(404);
+    expect((await read(notOurReceipt)).error.details).toEqual({ reason: 'RECEIPT_NOT_FOUND' });
     const notOurs = await fileOnto(h, receipt.id, { expenseId: elsewhere.id }, { ...as(), ...idem() });
     expect(notOurs.status).toBe(404);
-    expect((await read(notOurs)).error.message).toBe('No such expense');
-    expect((await fileOnto(h, receipt.id, { expenseId: gone.id }, { ...as(), ...idem() })).status).toBe(404);
+    expect((await read(notOurs)).error).toMatchObject({ message: 'No such expense', details: { reason: 'EXPENSE_NOT_FOUND' } });
+    const deleted = await fileOnto(h, receipt.id, { expenseId: gone.id }, { ...as(), ...idem() });
+    expect(deleted.status).toBe(404);
+    expect((await read(deleted)).error.details).toEqual({ reason: 'EXPENSE_NOT_FOUND' });
     expect((await fileOnto(h, receipt.id, { expenseId: expense.id, amount: '1.00' }, { ...as(), ...idem() })).status).toBe(422);
 
     const started = await read(await h.app.request('/v1/receipts/uploads', json(FILE, { ...as(), ...idem() })));
@@ -368,15 +372,35 @@ describe('access and configuration', () => {
 
   it('mounts none of the library while RECEIPTS_LIBRARY is off (MUT-389, the production default until MUT-260/258)', async () => {
     const { h, as } = await setup({ receiptsLibrary: false });
-    const id = '00000000-0000-4000-8000-0000000000aa';
+    // A real receipt and expense: were the library mounted, these would answer 200/201, not the framework's 404.
+    const expense = await read(await h.app.request('/v1/expenses', json(approveBody, { ...as(), ...idem() })));
+    const started = await read(await h.app.request(`/v1/expenses/${expense.id}/receipts`, json(FILE, as())));
+    h.storage.put(keyOf(started.upload.url), { sizeBytes: FILE.sizeBytes, contentType: FILE.mimeType });
+    expect((await h.app.request(`/v1/expenses/${expense.id}/receipts/${started.receipt.id}/complete`, { method: 'POST', headers: as() })).status).toBe(200);
+    const id = started.receipt.id as string;
     const calls: Array<[string, RequestInit]> = [
       ['/v1/receipts/uploads', json(FILE, { ...as(), ...idem() })],
       ['/v1/receipts', { headers: as() }],
       ['/v1/receipts/counts', { headers: as() }],
+      [`/v1/receipts/${id}`, { headers: as() }],
+      [`/v1/receipts/${id}/download`, { headers: as() }],
+      [`/v1/receipts/${id}/upload-url`, { method: 'POST', headers: as() }],
+      [`/v1/receipts/${id}/complete`, { method: 'POST', headers: as() }],
+      [`/v1/receipts/${id}/suggestion`, json(SUGGESTION, { ...as(), 'if-match': '1' }, 'PATCH')],
       [`/v1/receipts/${id}/approve`, json(approveBody, { ...as(), ...idem() })],
-      [`/v1/receipts/${id}/file`, json({ expenseId: id }, { ...as(), ...idem() })],
+      [`/v1/receipts/${id}/file`, json({ expenseId: expense.id }, { ...as(), ...idem() })],
+      [`/v1/receipts/${id}`, { method: 'DELETE', headers: as() }],
     ];
-    for (const [path, init] of calls) expect((await h.app.request(path, init)).status, `${init.method ?? 'GET'} ${path}`).toBe(404);
+    for (const [path, init] of calls) {
+      const res = await h.app.request(path, init);
+      expect(res.status, `${init.method ?? 'GET'} ${path}`).toBe(404);
+      // Not a route's own "No such receipt": the library isn't there at all.
+      expect(await res.text(), `${init.method ?? 'GET'} ${path}`).not.toContain('No such receipt');
+    }
+    const doc = await read(await h.app.request('/openapi.json'));
+    expect(Object.keys(doc.paths).filter((p) => p.startsWith('/v1/receipts'))).toEqual([]);
+    // The MUT-44 receipt is untouched by all of that.
+    expect((await read(await h.app.request(`/v1/expenses/${expense.id}`, { headers: as() }))).receipts.map((r: Loose) => r.id)).toEqual([id]);
   });
 
   it("refuses Malafat's API key", async () => {

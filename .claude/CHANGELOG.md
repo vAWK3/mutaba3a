@@ -53,6 +53,19 @@ API 1.50.0 because MUT-390's worktree holds 1.49.0; whichever merges second renu
 - `fileAsExpense` shares `lockToReviewReceipt` / `markReceiptFiled` with the new filing; behavior unchanged.
 - One `tooManyReceipts()` refusal for the MUT-44 routes and the library.
 
+### Review fixes (qa-reconcile, 2026-10-22)
+- Re-filing a receipt that keeps an earlier approval no longer stores a new suggestion beside the old approval, so the
+  edit-rate pair can't change after the fact (D1; regression test on both stores, red before the fix).
+- The file route's two 404s carry `details.reason` `RECEIPT_NOT_FOUND` / `EXPENSE_NOT_FOUND` (D4);
+  `RECEIPT_ALREADY_FILED` is now in the published 409 reasons.
+- The `DELETE /v1/expenses/{id}` contract, the `Receipts` tag, ADR-167 and code comments say receipt handling
+  depends on `RECEIPTS_LIBRARY`; `fileOntoExpense` drops its unused `at`.
+- Tests (D2): a filed-onto receipt unlinked by its expense's delete; library receipts removed while the flag is off;
+  a filing that commits before a delete; concurrent file/file and file/approve of one receipt; re-approval replaces
+  an approval; the flag-off test uses real ids, covers every library route and checks `/openapi.json`; the lock
+  probe is tied to the holder's pid (`pg_blocking_pids`).
+- Known gap kept (D3): a MUT-44 completion can still race one filing to 11 receipts (ADR-167).
+
 ## [Unreleased] - 2026-10-22 — The API server reports its errors to Sentry (MUT-148, API 1.48.0)
 
 **Why:** a failing request was found only when a user complained: `onError` logged to pino and nothing else.

@@ -171,7 +171,7 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
     describe('fileOntoExpense (MUT-389): a To-review receipt onto an expense that already exists', () => {
       const MAX = 10;
       const fileOnto = (store: LedgerStore, w: Awaited<ReturnType<typeof world>>, receiptId: string, expenseId: string, extra: { organizationId?: string; suggested?: ReceiptSuggestion } = {}) =>
-        store.expenseReceipts.fileOntoExpense({ organizationId: extra.organizationId ?? w.a.id, receiptId, expenseId, maxReceipts: MAX, ...(extra.suggested ? { suggested: extra.suggested } : {}) }, at(20));
+        store.expenseReceipts.fileOntoExpense({ organizationId: extra.organizationId ?? w.a.id, receiptId, expenseId, maxReceipts: MAX, ...(extra.suggested ? { suggested: extra.suggested } : {}) });
 
       it('files it FILED onto the expense, keeps its suggestion, approves nothing, and creates no expense', async () => {
         const store = await makeStore();
@@ -255,6 +255,80 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
         const result = await fileOnto(store, w, r.id, typed.id);
         expect(result.kind === 'filed' && result.receipt).toMatchObject({ expenseId: typed.id, approved: w.approved({ amountMinor: '1600' }), approvedAt: at(2), approvedByUserId: w.user.id });
       });
+
+      it('keeps the reading an earlier approval was made against: a suggestion sent with the re-file is not stored', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const r = await w.ready({ suggested: suggestion }, 1);
+        const first = await store.expenseReceipts.fileAsExpense({ organizationId: w.a.id, receiptId: r.id, userId: w.user.id, expense: w.expense(), approved: w.approved({ amountMinor: '1600' }) }, at(2));
+        if (first.kind !== 'filed') throw new Error('setup: approve failed');
+        await store.expenses.softDelete(w.a.id, first.expense.id, at(3), 'unlink');
+        const typed = await store.expenses.create(w.expense(), at(4));
+        const result = await fileOnto(store, w, r.id, typed.id, { suggested: { readerVersion: 'phone-2.0', totalMinor: { value: '1600', source: 'ocr', confidence: 0.99 } } });
+        // The edit-rate pair (suggested vs approved) stays the one the approval was made against.
+        expect(result.kind === 'filed' && result.receipt).toMatchObject({ expenseId: typed.id, suggested: suggestion, approved: w.approved({ amountMinor: '1600' }) });
+      });
+
+      it('sends a receipt filed onto an expense back to To review, never approved, when that expense is deleted with the library on', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const e = await store.expenses.create(w.expense(), at(1));
+        const r = await w.ready({}, 2);
+        await fileOnto(store, w, r.id, e.id);
+        const deleted = await store.expenses.softDelete(w.a.id, e.id, at(3), 'unlink');
+        expect(deleted?.removedReceipts).toEqual([]);
+        expect(await store.expenseReceipts.getById(w.a.id, r.id)).toMatchObject({ filingStatus: 'TO_REVIEW', expenseId: null, approved: null, status: 'READY' });
+      });
+
+      it('deletes library receipts with their expense when the library is off: one filed onto it and one approved into it', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const e = await store.expenses.create(w.expense(), at(1));
+        const onto = await w.ready({}, 2);
+        await fileOnto(store, w, onto.id, e.id);
+        const approvedR = await w.ready({}, 3);
+        const approvedOne = await store.expenseReceipts.fileAsExpense({ organizationId: w.a.id, receiptId: approvedR.id, userId: w.user.id, expense: w.expense(), approved: w.approved() }, at(4));
+        if (approvedOne.kind !== 'filed') throw new Error('setup: approve failed');
+
+        const a = await store.expenses.softDelete(w.a.id, e.id, at(5), 'remove');
+        const b = await store.expenses.softDelete(w.a.id, approvedOne.expense.id, at(6), 'remove');
+        expect(a?.removedReceipts.map((x) => x.id)).toEqual([onto.id]);
+        expect(b?.removedReceipts.map((x) => x.id)).toEqual([approvedR.id]);
+        expect(await store.expenseReceipts.getById(w.a.id, onto.id)).toBeNull();
+        expect(await store.expenseReceipts.getById(w.a.id, approvedR.id)).toBeNull();
+      });
+
+      it('lets a second approval of a receipt unlinked by an expense delete replace the first approval', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const r = await w.ready({}, 1);
+        const first = await store.expenseReceipts.fileAsExpense({ organizationId: w.a.id, receiptId: r.id, userId: w.user.id, expense: w.expense(), approved: w.approved({ amountMinor: '1600' }) }, at(2));
+        if (first.kind !== 'filed') throw new Error('setup: approve failed');
+        await store.expenses.softDelete(w.a.id, first.expense.id, at(3), 'unlink');
+        const second = await store.expenseReceipts.fileAsExpense({ organizationId: w.a.id, receiptId: r.id, userId: w.user.id, expense: w.expense({ amountMinor: 1_700n }), approved: w.approved({ amountMinor: '1700' }) }, at(5));
+        expect(second.kind === 'filed' && second.receipt).toMatchObject({ approved: w.approved({ amountMinor: '1700' }), approvedAt: at(5), approvedByUserId: w.user.id });
+      });
+
+      if (options.concurrent) {
+        it('of two concurrent filings of one receipt (onto two expenses, or onto one and approved), exactly one files it', async () => {
+          const store = await makeStore();
+          const w = await world(store);
+          const e1 = await store.expenses.create(w.expense(), at(1));
+          const e2 = await store.expenses.create(w.expense(), at(2));
+          const r1 = await w.ready({}, 3);
+          const both = await Promise.all([fileOnto(store, w, r1.id, e1.id), fileOnto(store, w, r1.id, e2.id)]);
+          expect(both.map((x) => x.kind).sort()).toEqual(['already_filed', 'filed']);
+
+          const r2 = await w.ready({}, 4);
+          const mixed = await Promise.all([
+            fileOnto(store, w, r2.id, e1.id),
+            store.expenseReceipts.fileAsExpense({ organizationId: w.a.id, receiptId: r2.id, userId: w.user.id, expense: w.expense(), approved: w.approved() }, at(9)),
+          ]);
+          expect(mixed.map((x) => x.kind).sort()).toEqual(['already_filed', 'filed']);
+          // The approval that lost created no expense: two typed ones, plus one only if the approval won.
+          expect((await store.expenses.list(w.a.id, {}, { limit: 10, cursor: null })).items).toHaveLength(mixed[1].kind === 'filed' ? 3 : 2);
+        });
+      }
     });
 
     it('counts the edit rate per field over approvals in a range, never values', async () => {

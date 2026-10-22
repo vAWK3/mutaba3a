@@ -321,7 +321,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       path: '/v1/receipts/{receiptId}/file',
       tags: ['Receipts'],
       summary: 'File a To-review receipt onto an expense that already exists (MUT-389)',
-      description: `For the expense typed by hand and the receipt scanned later. No expense is created and none of its fields change; nothing is approved. Answers the expense with its receipts. 409 CONFLICT RECEIPT_ALREADY_FILED, with details.expenseId, when the receipt is already filed (a replay with the same Idempotency-Key answers the first 200 instead); 404 for a receipt or expense that is not this profile's, or a deleted expense; 422 ATTACHMENT_NOT_READY before the upload completes; 422 TOO_MANY_RECEIPTS once the expense holds ${MAX_RECEIPTS_PER_EXPENSE}. A 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.`,
+      description: `For the expense typed by hand and the receipt scanned later. No expense is created and none of its fields change; nothing is approved. Answers the expense with its receipts. 409 CONFLICT RECEIPT_ALREADY_FILED, with details.expenseId, when the receipt is already filed (a replay with the same Idempotency-Key answers the first 200 instead); 404 for a receipt or expense that is not this profile's, or a deleted expense, with details.reason RECEIPT_NOT_FOUND or EXPENSE_NOT_FOUND saying which; 422 ATTACHMENT_NOT_READY before the upload completes; 422 TOO_MANY_RECEIPTS once the expense holds ${MAX_RECEIPTS_PER_EXPENSE}. A 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.`,
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write'), idempotent(store, 'receipts.file')] as const,
       request: { params: ReceiptIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(FileReceiptRequestSchema) },
@@ -334,12 +334,12 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       const body = c.req.valid('json');
       const result = await store.expenseReceipts.fileOntoExpense(
         { organizationId: organization.id, receiptId, expenseId: body.expenseId, maxReceipts: MAX_RECEIPTS_PER_EXPENSE, ...(body.suggested ? { suggested: body.suggested } : {}) },
-        c.get('now')(),
       );
-      if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such receipt');
+      // Two different 404s, so the attach screen knows whether to refresh the library or pick another expense.
+      if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such receipt', { reason: 'RECEIPT_NOT_FOUND' });
       if (result.kind === 'already_filed') throw await alreadyFiled(organization.id, receiptId);
       if (result.kind === 'not_ready') throw validationError('ATTACHMENT_NOT_READY', 'The upload has not been completed');
-      if (result.kind === 'expense_not_found') throw new ApiError('NOT_FOUND', 'No such expense');
+      if (result.kind === 'expense_not_found') throw new ApiError('NOT_FOUND', 'No such expense', { reason: 'EXPENSE_NOT_FOUND' });
       if (result.kind === 'too_many_receipts') throw tooManyReceipts();
       await audit(c, 'expense_receipt.filed', 'expense_receipt', result.receipt.id, { expenseId: result.expense.id, mode: 'existing' });
       const receipts = await store.expenseReceipts.listByExpense(organization.id, result.expense.id);

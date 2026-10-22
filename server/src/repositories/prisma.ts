@@ -1687,13 +1687,16 @@ export class PrismaLedgerStore implements LedgerStore {
         const [expenseRow] = await tx.$queryRaw<Array<{ deletedAt: Date | null }>>`SELECT "deletedAt" FROM "expenses" WHERE "id" = ${params.expenseId}::uuid AND "organizationId" = ${params.organizationId}::uuid FOR NO KEY UPDATE`;
         if (!expenseRow || expenseRow.deletedAt) return { kind: 'expense_not_found' as const };
         // Counted under the expense lock, so two filings can't both take its last place (READY only, as listByExpense).
+        // A MUT-44 completion counts without this lock, so it can still race one filing to 11 (known, ADR-167 "Extended by MUT-389").
         const held = await tx.expenseReceipt.count({ where: { organizationId: params.organizationId, expenseId: params.expenseId, status: 'READY', deletedAt: null } });
         if (held >= params.maxReceipts) return { kind: 'too_many_receipts' as const };
         // TODO(blocked-by MUT-307): whether evidence may be added to an approved or posted firm expense.
         // TODO(blocked-by MUT-312): `assertOpenPeriod` for the expense's date, in this transaction.
+        // An earlier approval keeps the reading it was made against, so the edit-rate pair never changes after the fact.
+        const keepsReading = params.suggested !== undefined && (await tx.expenseReceipt.findUniqueOrThrow({ where: { id: params.receiptId }, select: { approved: true } })).approved !== null;
         const receipt = await markReceiptFiled(tx, params.organizationId, params.receiptId, {
           expenseId: params.expenseId,
-          ...(params.suggested ? { suggested: params.suggested as unknown as Prisma.InputJsonValue } : {}),
+          ...(params.suggested && !keepsReading ? { suggested: params.suggested as unknown as Prisma.InputJsonValue } : {}),
         });
         const expense = await tx.expense.findUniqueOrThrow({ where: { id: params.expenseId } });
         return { kind: 'filed' as const, expense, receipt };

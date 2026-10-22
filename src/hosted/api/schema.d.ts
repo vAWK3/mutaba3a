@@ -7253,8 +7253,8 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Delete an expense (soft; its receipts go back to the receipts library)
-         * @description 204 again for an expense already deleted; 404 for an id this profile never had. MUT-255: on the hosted server its READY receipts stay, back under To review in the receipts library; an unfinished upload is deleted with its file. The signed-out portal, which has no library, deletes them all.
+         * Delete an expense (soft)
+         * @description 204 again for an expense already deleted; 404 for an id this profile never had. Where the receipts library is on (RECEIPTS_LIBRARY, MUT-255/389), its READY receipts stay, back under To review in the library, and an unfinished upload is deleted with its file. Where it is off (the production default until MUT-260/258) and in the signed-out portal, every receipt is deleted with its file.
          */
         delete: {
             parameters: {
@@ -11132,7 +11132,7 @@ export interface paths {
         put?: never;
         /**
          * File a To-review receipt onto an expense that already exists (MUT-389)
-         * @description For the expense typed by hand and the receipt scanned later. No expense is created and none of its fields change; nothing is approved. Answers the expense with its receipts. 409 CONFLICT RECEIPT_ALREADY_FILED, with details.expenseId, when the receipt is already filed (a replay with the same Idempotency-Key answers the first 200 instead); 404 for a receipt or expense that is not this profile's, or a deleted expense; 422 ATTACHMENT_NOT_READY before the upload completes; 422 TOO_MANY_RECEIPTS once the expense holds 10. A 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.
+         * @description For the expense typed by hand and the receipt scanned later. No expense is created and none of its fields change; nothing is approved. Answers the expense with its receipts. 409 CONFLICT RECEIPT_ALREADY_FILED, with details.expenseId, when the receipt is already filed (a replay with the same Idempotency-Key answers the first 200 instead); 404 for a receipt or expense that is not this profile's, or a deleted expense, with details.reason RECEIPT_NOT_FOUND or EXPENSE_NOT_FOUND saying which; 422 ATTACHMENT_NOT_READY before the upload completes; 422 TOO_MANY_RECEIPTS once the expense holds 10. A 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.
          */
         post: {
             parameters: {

@@ -1902,7 +1902,8 @@ export class MemoryLedgerStore implements LedgerStore {
       if ((await this.expenseReceipts.listByExpense(params.organizationId, expense.id)).length >= params.maxReceipts) return { kind: 'too_many_receipts' };
       r.expenseId = expense.id;
       r.filingStatus = 'FILED';
-      if (params.suggested) r.suggested = params.suggested;
+      // An earlier approval keeps the reading it was made against (the edit-rate pair).
+      if (params.suggested && !r.approved) r.suggested = params.suggested;
       r.version += 1;
       return { kind: 'filed', expense, receipt: { ...r } };
     },

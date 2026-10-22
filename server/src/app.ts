@@ -407,6 +407,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Sessions', description: 'Hosted-portal sign-in, sign-out and the signed-in person' },
       { name: 'Profiles', description: 'A signed-in person\'s own standalone profiles: create, rename, default currency and type (sessions only; never a Malafat organization)' },
       { name: 'Expenses', description: 'A hosted profile\'s expenses, categories, receipts and expense summary (sessions only)' },
+      { name: 'Receipts', description: 'The receipts library (MUT-255/389): receipts that wait To review before their expense (sessions only). Mounted only where the deployment turns RECEIPTS_LIBRARY on; elsewhere every /v1/receipts path answers 404' },
       { name: 'Income', description: 'Received or Owed, captured directly by the signed-in person on a personal profile (sessions only)' },
       { name: 'Your data', description: 'Download my records: a profile as the records file the signed-out portal restores, and its receipt files (sessions only)' },
       { name: 'Admin', description: 'Operator provisioning: organizations, API keys, users and memberships' },

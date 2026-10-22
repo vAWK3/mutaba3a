@@ -41,29 +41,41 @@ if (!url) {
     return { o, expense, ready };
   }
 
-  /** Holds the expense's row lock from another connection, runs `change` under it, and commits on release(). */
+  /**
+   * Holds the expense's row lock from another connection, runs `change` under it, and commits on release(). `isLocked`
+   * resolves with the holder's backend pid, or rejects with `change`'s error instead of leaving the test to time out.
+   */
   function holdExpense(expenseId: string, change: (tx: Parameters<Parameters<PrismaClient['$transaction']>[0]>[0]) => Promise<unknown>) {
     let release!: () => void;
     const released = new Promise<void>((r) => (release = r));
-    let locked!: () => void;
-    const isLocked = new Promise<void>((r) => (locked = r));
+    let locked!: (pid: number) => void;
+    let failed!: (error: unknown) => void;
+    const isLocked = new Promise<number>((resolve, reject) => ((locked = resolve), (failed = reject)));
     const done = holder.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT "id" FROM "expenses" WHERE "id" = ${expenseId}::uuid FOR NO KEY UPDATE`;
-      await change(tx);
-      locked();
+      try {
+        const [me] = await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`;
+        await tx.$queryRaw`SELECT "id" FROM "expenses" WHERE "id" = ${expenseId}::uuid FOR NO KEY UPDATE`;
+        await change(tx);
+        locked(me!.pid);
+      } catch (error) {
+        failed(error);
+        throw error;
+      }
       await released;
     }, { timeout: 20_000 });
+    // Reported through isLocked; the test still awaits `done` for a failed commit.
+    done.catch(() => {});
     return { isLocked, release, done };
   }
 
-  /** Resolves once some session is waiting for a row lock while locking an expense, i.e. the filing is queued. */
-  async function filingIsWaiting(): Promise<void> {
+  /** Resolves once some session is blocked by this holder, i.e. the operation under test is queued on its lock. */
+  async function blockedBy(holderPid: number): Promise<void> {
     for (let i = 0; i < 100; i += 1) {
-      const [row] = await prober.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%FROM "expenses"%FOR NO KEY UPDATE%'`;
+      const [row] = await prober.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM pg_stat_activity WHERE ${holderPid}::int = ANY(pg_blocking_pids(pid))`;
       if (row && row.n > 0) return;
       await sleep(20);
     }
-    throw new Error('the filing never waited on the expense lock');
+    throw new Error('nothing ever waited on the expense lock');
   }
 
   describe('Prisma receipt filing lock (MUT-389)', () => {
@@ -73,10 +85,10 @@ if (!url) {
       const rival = await ready(null);
       const mine = await ready(null);
       const hold = holdExpense(expense.id, (tx) => tx.$executeRaw`UPDATE "expense_receipts" SET "expenseId" = ${expense.id}::uuid, "filingStatus" = 'FILED' WHERE "id" = ${rival.id}::uuid`);
-      await hold.isLocked;
+      const holderPid = await hold.isLocked;
 
-      const filing = store.expenseReceipts.fileOntoExpense({ organizationId: o.id, receiptId: mine.id, expenseId: expense.id, maxReceipts: MAX }, at(9));
-      await filingIsWaiting();
+      const filing = store.expenseReceipts.fileOntoExpense({ organizationId: o.id, receiptId: mine.id, expenseId: expense.id, maxReceipts: MAX });
+      await blockedBy(holderPid);
       hold.release();
       await hold.done;
 
@@ -89,15 +101,31 @@ if (!url) {
       const { o, expense, ready } = await seed(store);
       const mine = await ready(null);
       const hold = holdExpense(expense.id, (tx) => tx.$executeRaw`UPDATE "expenses" SET "deletedAt" = now() WHERE "id" = ${expense.id}::uuid`);
-      await hold.isLocked;
+      const holderPid = await hold.isLocked;
 
-      const filing = store.expenseReceipts.fileOntoExpense({ organizationId: o.id, receiptId: mine.id, expenseId: expense.id, maxReceipts: MAX }, at(9));
-      await filingIsWaiting();
+      const filing = store.expenseReceipts.fileOntoExpense({ organizationId: o.id, receiptId: mine.id, expenseId: expense.id, maxReceipts: MAX });
+      await blockedBy(holderPid);
       hold.release();
       await hold.done;
 
       expect((await filing).kind).toBe('expense_not_found');
       expect(await store.expenseReceipts.getById(o.id, mine.id)).toMatchObject({ filingStatus: 'TO_REVIEW', expenseId: null });
+    });
+
+    it('a delete that waits while a filing commits first sends the just-filed receipt back to To review (never FILED on a deleted expense)', async () => {
+      const { o, expense, ready } = await seed(store);
+      const mine = await ready(null);
+      // The holder plays the filing: the expense lock, then the receipt moved to FILED on it.
+      const hold = holdExpense(expense.id, (tx) => tx.$executeRaw`UPDATE "expense_receipts" SET "expenseId" = ${expense.id}::uuid, "filingStatus" = 'FILED', "version" = "version" + 1 WHERE "id" = ${mine.id}::uuid`);
+      const holderPid = await hold.isLocked;
+
+      const deleting = store.expenses.softDelete(o.id, expense.id, at(9), 'unlink');
+      await blockedBy(holderPid);
+      hold.release();
+      await hold.done;
+
+      expect((await deleting)?.changed).toBe(true);
+      expect(await store.expenseReceipts.getById(o.id, mine.id)).toMatchObject({ filingStatus: 'TO_REVIEW', expenseId: null, status: 'READY' });
     });
   });
 }

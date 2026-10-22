@@ -1073,6 +1073,8 @@ export const CONFLICT_REASONS = [
   'REVERSED_BY_MALAFAT',
   // MUT-66: filing an entry through the route for the other kind.
   'ENTRY_KIND_MISMATCH',
+  // MUT-255/389: approving or filing a receipt that is already filed (details.expenseId names where).
+  'RECEIPT_ALREADY_FILED',
   // MUT-100: contingency outcomes
   'OUTCOME_ALREADY_RECORDED',
   'OUTCOME_NOT_RECORDED',
