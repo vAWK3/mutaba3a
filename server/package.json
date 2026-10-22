@@ -49,6 +49,7 @@
     "billing:reconcile": "tsx src/scripts/users.ts billing-reconcile",
     "billing:status": "tsx src/scripts/users.ts billing-status",
     "smoke": "tsx src/scripts/smoke.ts",
+    "sentry:smoke": "tsx src/scripts/sentry-smoke.ts",
     "seed:demo-account": "tsx src/scripts/seed-demo-account.ts",
     "reconcile": "tsx src/scripts/reconcile.ts",
     "backfill:personal-categories": "tsx src/scripts/backfill-personal-expense-categories.ts",

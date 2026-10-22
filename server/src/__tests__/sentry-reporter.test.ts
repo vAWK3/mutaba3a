@@ -1,7 +1,14 @@
 import { addBreadcrumb } from '@sentry/node-core/light';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NOOP_REPORTER, runScript, type ErrorReporter } from '../observability/reporter.js';
-import { apiRelease, createSentryReporter, SENTRY_INTEGRATIONS, type SentryTransportFactory } from '../observability/sentry-node.js';
+import { NOOP_REPORTER, runScript, SHUTDOWN_FLUSH_TIMEOUT_MS, shutdownAndFlush, type ErrorReporter } from '../observability/reporter.js';
+import {
+  apiRelease,
+  createScriptReporter,
+  createSentryReporter,
+  SENTRY_INTEGRATIONS,
+  serverPackageVersion,
+  type SentryTransportFactory,
+} from '../observability/sentry-node.js';
 
 const DSN = 'https://publickey@o1.ingest.de.sentry.io/42';
 
@@ -88,9 +95,63 @@ describe('createSentryReporter (MUT-148)', () => {
   });
 });
 
+describe('createScriptReporter (pre-roll and post-roll, run by deploy.sh on the operator machine)', () => {
+  it('sends nothing without SENTRY_DSN', () => {
+    expect(createScriptReporter({})).toBe(NOOP_REPORTER);
+  });
+
+  it('refuses a DSN outside the EU region, like the server config', () => {
+    expect(() => createScriptReporter({ SENTRY_DSN: 'https://k@o1.ingest.us.sentry.io/2' })).toThrow(/SENTRY_DSN/);
+  });
+
+  it('files events under the release and environment deploy.sh passes', async () => {
+    const sink = capturing();
+    const reporter = createScriptReporter({ SENTRY_DSN: DSN, SENTRY_ENVIRONMENT: 'production', SERVICE_VERSION: '5119667b' }, sink.transport);
+    reporter.captureException(new Error('backfill failed'));
+    await reporter.flush(1000);
+    expect(sink.events[0]).toMatchObject({ environment: 'production', release: `mutaba3a-api@${serverPackageVersion()}+5119667b` });
+  });
+});
+
 describe('apiRelease', () => {
   it('joins the server package version and the deployed git SHA', () => {
     expect(apiRelease('0.4.1', '5119667b')).toBe('mutaba3a-api@0.4.1+5119667b');
+  });
+});
+
+describe('shutdownAndFlush (MUT-148 AC6)', () => {
+  it('stops taking requests, disconnects, then waits for pending reports before exiting', async () => {
+    const order: string[] = [];
+    const reporter: ErrorReporter = {
+      enabled: true,
+      captureException: () => undefined,
+      flush: async (timeoutMs) => {
+        order.push(`flush ${timeoutMs}`);
+        return true;
+      },
+    };
+    await shutdownAndFlush({
+      stopAccepting: () => void order.push('close'),
+      disconnect: async () => void order.push('disconnect'),
+      reporter,
+      exit: (code) => void order.push(`exit ${code}`),
+    });
+    expect(order).toEqual(['close', 'disconnect', `flush ${SHUTDOWN_FLUSH_TIMEOUT_MS}`, 'exit 0']);
+  });
+
+  it('still flushes and exits when the database disconnect fails', async () => {
+    const order: string[] = [];
+    const reporter: ErrorReporter = { enabled: true, captureException: () => undefined, flush: async () => (order.push('flush'), false) };
+    await shutdownAndFlush({
+      stopAccepting: () => undefined,
+      disconnect: async () => {
+        throw new Error('already closed');
+      },
+      reporter,
+      exit: (code) => void order.push(`exit ${code}`),
+      logError: (message) => void order.push(String(message)),
+    });
+    expect(order).toEqual(['shutdown: disconnect failed', 'flush', 'exit 0']);
   });
 });
 

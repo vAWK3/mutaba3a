@@ -10,7 +10,7 @@ function isHttpsOrLocalHttp(value: string): boolean {
 }
 
 /** ADR-091 D5: the same EU-region rule as the Sentry module's sentry_key postcondition. */
-const SENTRY_EU_DSN = /^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+\.ingest\.de\.sentry\.io\/\d+$/;
+export const SENTRY_EU_DSN =/^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+\.ingest\.de\.sentry\.io\/\d+$/;
 
 /**
  * Validated process configuration. Fails fast at boot with a readable list of
@@ -109,7 +109,8 @@ const MIN_BUILD_PLATFORMS = [
   { min: 'ANDROID_MIN_BUILD', recommended: 'ANDROID_RECOMMENDED_BUILD' },
 ] as const;
 
-export type Config = z.infer<typeof envSchema>;
+/** `loadConfig` fills SENTRY_ENVIRONMENT in from NODE_ENV, so it is always set. */
+export type Config = Omit<z.infer<typeof envSchema>, 'SENTRY_ENVIRONMENT'> & { SENTRY_ENVIRONMENT: string };
 
 export class ConfigError extends Error {
   constructor(message: string) {

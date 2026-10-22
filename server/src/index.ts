@@ -2,6 +2,8 @@ import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createLogger } from './logger.js';
+import { shutdownAndFlush } from './observability/reporter.js';
+import { apiRelease, createSentryReporter, serverPackageVersion } from './observability/sentry-node.js';
 import { SlidingWindowRateLimiter } from './rate-limit.js';
 import { PrismaLedgerStore } from './repositories/prisma.js';
 import { GcsAttachmentStorage } from './attachments/storage.js';
@@ -14,6 +16,12 @@ import { STRIPE_WEBHOOK_POLICY } from './routes/stripe-billing.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
+// MUT-148 (ADR-091): first, so a crash while wiring the rest is reported too.
+const reporter = createSentryReporter({
+  dsn: config.SENTRY_DSN,
+  environment: config.SENTRY_ENVIRONMENT,
+  release: apiRelease(serverPackageVersion(), config.SERVICE_VERSION),
+});
 const store = PrismaLedgerStore.connect(config.DATABASE_URL);
 const rateLimiter = new SlidingWindowRateLimiter(config.RATE_LIMIT_PER_MINUTE);
 const signInThrottle = new SignInThrottle();
@@ -76,6 +84,7 @@ const app = createApp({
         }
       : null,
   fxRates,
+  reporter,
   minimumBuild: {
     ios: { min: config.IOS_MIN_BUILD, recommended: config.IOS_RECOMMENDED_BUILD },
     android: { min: config.ANDROID_MIN_BUILD, recommended: config.ANDROID_RECOMMENDED_BUILD },
@@ -86,6 +95,7 @@ if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; atta
 if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; the Stripe webhook and reconcile answer 503');
 if (!config.MUTABA3A_JOB_TOKEN) logger.warn('MUTABA3A_JOB_TOKEN is not set; /jobs/* answers 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
+if (!reporter.enabled) logger.warn('SENTRY_DSN is not set; errors are logged but not reported');
 if (!config.APPLE_TEAM_ID) logger.warn('APPLE_TEAM_ID/APPLE_BUNDLE_ID/ANDROID_PACKAGE_NAME/ANDROID_SHA256_FINGERPRINTS are not set; no app-association files served');
 
 const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
@@ -108,9 +118,13 @@ pruneTimer.unref();
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'shutting down');
   clearInterval(pruneTimer);
-  server.close();
-  await store.disconnect();
-  process.exit(0);
+  await shutdownAndFlush({
+    stopAccepting: () => server.close(),
+    disconnect: () => store.disconnect(),
+    reporter,
+    exit: (code) => process.exit(code),
+    logError: (message, error) => logger.error({ err: error }, String(message)),
+  });
 }
 
 process.on('SIGTERM', () => void shutdown('SIGTERM'));

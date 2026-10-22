@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import * as Sentry from '@sentry/node-core/light';
+import { SENTRY_EU_DSN } from '../config.js';
 import { NOOP_REPORTER, type ErrorReporter } from './reporter.js';
 import { SENTRY_RULES } from './sentry-rules.js';
 import { scrubEvent } from './sentry-scrub.js';
@@ -45,6 +46,21 @@ export const apiRelease = (packageVersion: string, serviceVersion: string) => `m
 export function serverPackageVersion(): string {
   const raw = readFileSync(new URL('../../package.json', import.meta.url), 'utf8');
   return (JSON.parse(raw) as { version: string }).version;
+}
+
+/**
+ * The reporter for the operator scripts deploy.sh runs through the proxy (pre-roll, post-roll). They read
+ * no full Config, so the DSN gets the server config's EU-region check here.
+ */
+export function createScriptReporter(env: NodeJS.ProcessEnv = process.env, transport?: SentryTransportFactory): ErrorReporter {
+  const dsn = env.SENTRY_DSN;
+  if (dsn !== undefined && !SENTRY_EU_DSN.test(dsn)) throw new Error('SENTRY_DSN must be an https DSN on the EU region (ingest.de.sentry.io)');
+  return createSentryReporter({
+    dsn,
+    environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV ?? 'development',
+    release: apiRelease(serverPackageVersion(), env.SERVICE_VERSION ?? '0.0.0-dev'),
+    ...(transport ? { transport } : {}),
+  });
 }
 
 export function createSentryReporter(options: SentryReporterOptions): ErrorReporter {

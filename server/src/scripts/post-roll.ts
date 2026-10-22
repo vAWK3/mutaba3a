@@ -2,6 +2,9 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { isValidTimezone } from '../dates.js';
 import { personalProfileFor } from '../personal-profile.js';
 import type { UserLocale } from '../repositories/ports.js';
+import { runScript } from '../observability/reporter.js';
+import { createScriptReporter } from '../observability/sentry-node.js';
+import { SENTRY_RULES } from '../observability/sentry-rules.js';
 
 /**
  * Data repairs that must run after the new revision serves (deploy.sh step 6).
@@ -121,20 +124,20 @@ if (isMain) {
     console.error('post-roll: DATABASE_URL is not set');
     process.exit(1);
   }
-  const db = new PrismaClient({ datasources: { db: { url } } });
-  try {
-    const captures = await repairCaptureOrigins(db);
-    console.log(`post-roll: ${captures} captured payment(s) re-marked origin CAPTURE`);
-    const personal = await backfillPersonalProfiles(db);
-    for (const { userId, organizationId } of personal.created) console.log(`post-roll: personal profile ${organizationId} created for user ${userId}`);
-    for (const { userId, reason } of personal.skipped) console.warn(`post-roll: user ${userId} still has no personal profile (${reason}); provision one by hand`);
-    console.log(`post-roll: ${personal.created.length} personal profile(s) backfilled, ${personal.skipped.length} skipped`);
-    const stamped = await repairPersonalOwnership(db);
-    console.log(`post-roll: ${stamped} personal profile(s) stamped owned + PERSONAL`);
-  } catch (err) {
-    console.error('post-roll: failed', err);
-    process.exitCode = 1;
-  } finally {
-    await db.$disconnect();
-  }
+  const db = new PrismaClient({ datasources: { db: { url } }, errorFormat: SENTRY_RULES.serverPrismaErrorFormat });
+  // MUT-148: a crash is reported (deploy.sh passes SENTRY_DSN) and still leaves exit code 1.
+  await runScript('post-roll', createScriptReporter(), async () => {
+    try {
+      const captures = await repairCaptureOrigins(db);
+      console.log(`post-roll: ${captures} captured payment(s) re-marked origin CAPTURE`);
+      const personal = await backfillPersonalProfiles(db);
+      for (const { userId, organizationId } of personal.created) console.log(`post-roll: personal profile ${organizationId} created for user ${userId}`);
+      for (const { userId, reason } of personal.skipped) console.warn(`post-roll: user ${userId} still has no personal profile (${reason}); provision one by hand`);
+      console.log(`post-roll: ${personal.created.length} personal profile(s) backfilled, ${personal.skipped.length} skipped`);
+      const stamped = await repairPersonalOwnership(db);
+      console.log(`post-roll: ${stamped} personal profile(s) stamped owned + PERSONAL`);
+    } finally {
+      await db.$disconnect();
+    }
+  });
 }

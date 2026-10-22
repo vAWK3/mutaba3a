@@ -24,6 +24,28 @@ export const NOOP_REPORTER: ErrorReporter = Object.freeze({
 
 /** How long a script waits for its crash report before the process ends. */
 export const SCRIPT_FLUSH_TIMEOUT_MS = 2000;
+/** Cloud Run allows 10 s after SIGTERM; closing and disconnecting take well under the rest. */
+export const SHUTDOWN_FLUSH_TIMEOUT_MS = 2000;
+
+export interface ShutdownSteps {
+  stopAccepting: () => void;
+  disconnect: () => Promise<void>;
+  reporter: ErrorReporter;
+  exit: (code: number) => void;
+  logError?: (...args: unknown[]) => void;
+}
+
+/** AC6: pending reports are sent before the process ends, even when the disconnect fails. */
+export async function shutdownAndFlush(steps: ShutdownSteps): Promise<void> {
+  steps.stopAccepting();
+  try {
+    await steps.disconnect();
+  } catch (error) {
+    (steps.logError ?? console.error)('shutdown: disconnect failed', error);
+  }
+  await steps.reporter.flush(SHUTDOWN_FLUSH_TIMEOUT_MS);
+  steps.exit(0);
+}
 
 export interface RunScriptHooks {
   setExitCode?: (code: number) => void;

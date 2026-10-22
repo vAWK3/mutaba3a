@@ -2,6 +2,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import type { KeyScope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
 import { categoryNameKey } from '../expenses/names.js';
+import { SENTRY_RULES } from '../observability/sentry-rules.js';
 import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { prismaRecordsExport } from './prisma-records-export.js';
@@ -125,7 +126,8 @@ export class PrismaLedgerStore implements LedgerStore {
   constructor(private readonly prisma: PrismaClient) {}
 
   static connect(databaseUrl: string): PrismaLedgerStore {
-    return new PrismaLedgerStore(new PrismaClient({ datasources: { db: { url: databaseUrl } } }));
+    // ADR-091 (MUT-148): a minimal error never prints the query input into a log line or an error report.
+    return new PrismaLedgerStore(new PrismaClient({ datasources: { db: { url: databaseUrl } }, errorFormat: SENTRY_RULES.serverPrismaErrorFormat }));
   }
 
   async disconnect(): Promise<void> {
