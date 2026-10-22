@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — Portal Add income saves after a kind switch with More details open (MUT-408)
+
+**Why:** in the portal's Add income drawer, Owed → open More details → switch to Received → Save did nothing: no request,
+no error. The Due date and Method fields shared one slot in a ternary, so React kept the same `Controller` and renamed it
+`dueDate` → `method`; react-hook-form treats a renamed Controller as `unregister(oldName)` and drops that value. The zod
+base object (`dueDate: z.string()`) then failed on `undefined`, on a field no longer on screen. The reverse switch lost
+`method` the same way. Predates MUT-392, found while building it.
+
+### Fixed
+- `src/hosted/components/IncomeCaptureDrawer.tsx`: the Due date and Method groups are keyed (`dueDate` / `method`), so
+  each kind mounts its own Controller and the other kind's value is kept (and still left out of the request by
+  `toCreateIncomeRequest`). No other `Controller` in `src/` swaps names in one slot (the `ProfileEditForm` ternary swaps
+  a Controller for a `<p>`).
+
+### Tests
+- `IncomeCaptureDrawer.test.tsx`: Owed → More details → Received saves; Owed → Received → Owed keeps what it was for and
+  the due date; Received (Bank) → Owed → Received keeps the method. All three failed before the fix.
+- Release-QA `@portal.income.switch-kind` (`qa/features/portal/income.yaml`, `qa/specs/portal/income.spec.ts`), passing.
+
 ## [Unreleased] - 2026-10-22 — The privacy policy says the phone apps send error reports (MUT-151, ADR-091 amendment 10)
 
 **Why:** the Capture app reports crashes to Sentry from its next store release (mutaba3a-flutter `feature/mut-151-phone-sentry`), and the policy describes only what is live (ADR-090 P3).
