@@ -45,6 +45,25 @@
 ### Files
 `server/src/routes/billing.ts`, `server/src/billing/{checkout.ts,billing-countries.json,stripe/checkout-gateway.ts}`, `server/src/routes/admin-billing.ts`, `server/src/{app.ts,index.ts,config.ts,errors.ts,schemas.ts}`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/auth/store-guard.ts`, `server/src/scripts/users.ts`, `server/openapi/openapi.yaml`, `src/hosted/{components/BillingDrawer.tsx,components/RadioCards.tsx,components/ProfileTypeCards.tsx,data/billingView.ts,data/billingQueries.ts,data/countries.ts,data/filters.ts,shell/AccountDrawers.tsx,shell/UserMenu.tsx,api/client.ts,api/schema.d.ts,i18n/*.json,hosted.css}`, `qa/**`.
 
+## [Unreleased] - 2026-10-22 — Portal Add income saves after a kind switch with More details open (MUT-408)
+
+**Why:** in the portal's Add income drawer, Owed → open More details → switch to Received → Save did nothing: no request,
+no error. The Due date and Method fields shared one slot in a ternary, so React kept the same `Controller` and renamed it
+`dueDate` → `method`; react-hook-form treats a renamed Controller as `unregister(oldName)` and drops that value. The zod
+base object (`dueDate: z.string()`) then failed on `undefined`, on a field no longer on screen. The reverse switch lost
+`method` the same way. Predates MUT-392, found while building it.
+
+### Fixed
+- `src/hosted/components/IncomeCaptureDrawer.tsx`: the Due date and Method groups are keyed (`dueDate` / `method`), so
+  each kind mounts its own Controller and the other kind's value is kept (and still left out of the request by
+  `toCreateIncomeRequest`). No other `Controller` in `src/` swaps names in one slot (the `ProfileEditForm` ternary swaps
+  a Controller for a `<p>`).
+
+### Tests
+- `IncomeCaptureDrawer.test.tsx`: Owed → More details → Received saves; Owed → Received → Owed keeps what it was for and
+  the due date; Received (Bank) → Owed → Received keeps the method. All three failed before the fix.
+- Release-QA `@portal.income.switch-kind` (`qa/features/portal/income.yaml`, `qa/specs/portal/income.spec.ts`), passing.
+
 ## [Unreleased] - 2026-10-22 — The Malafat OAuth client identity moves to mtb3a.com; mutaba3a.app is retired (MUT-387, ADR-155 amendment)
 
 **Why:** the CIMD client id named `https://mutaba3a.app/...`, a domain nobody owns. Whoever registered it could publish a client document under our id.
