@@ -940,6 +940,112 @@
       "failed": "Couldn't download your records. Nothing was saved. Try again.",
       "tooNew": "Mutaba3a has been updated. Reload the page, then download again.",
       "reload": "Reload"
+    },
+    "billing": {
+      "title": "Billing",
+      "chip": {
+        "trial": "Free trial",
+        "active": "Active",
+        "ending": "Ending",
+        "grace": "Payment due",
+        "confirming": "Confirming",
+        "paymentFailed": "Payment failed",
+        "readOnly": "Read-only",
+        "locked": "Locked",
+        "covered": "Covered",
+        "help": "Needs a hand"
+      },
+      "headline": {
+        "trialDaysLeft": {
+          "one": "{count} day left in your free trial",
+          "other": "{count} days left in your free trial"
+        },
+        "trialEnded": "Your free trial has ended",
+        "locked": "Your free trial has ended",
+        "active": "Freelancer, renews {date}",
+        "ending": "Your plan ends on {date}",
+        "grace": "We couldn't take your last payment",
+        "unpaid": "Your last payment didn't go through",
+        "needsHelp": "Your subscription needs a hand from us",
+        "lapsed": "Your plan has ended",
+        "coveredByGrant": "Your account is covered by Mutaba3a",
+        "coveredUntil": "Your account is covered by Mutaba3a until {date}",
+        "coveredByMalafat": "Covered by your firm's Malafat plan",
+        "ownedByOthers": "Your profiles are covered by their owners",
+        "none": "Subscribe to keep adding records"
+      },
+      "context": {
+        "trial": "After that your records stay readable and downloadable, but you can't add new ones until you subscribe.",
+        "trialEnded": "Subscribe to add records again. Everything stays readable and downloadable. From {date} only Subscribe and Download stay open.",
+        "trialEndedNoDate": "Subscribe to add records again. Everything stays readable and downloadable.",
+        "locked": "Only Subscribe and Download my records are open. Nothing has been deleted.",
+        "ending": "Until then nothing changes. After it, your records stay readable and downloadable.",
+        "grace": "Stripe will try your card again over the next days. Check it in Manage billing.",
+        "unpaid": "Pay the open invoice to keep adding records. Your records are safe.",
+        "needsHelp": "Write to us and we'll sort it out.",
+        "lapsed": "Your records stay readable and downloadable. Subscribe to add new ones.",
+        "coveredByGrant": "There's nothing to pay. We'll write to you before that changes.",
+        "coveredUntil": "After that, subscribe to keep adding records.",
+        "coveredByMalafat": "Mutaba3a never asks you to pay for it twice.",
+        "ownedByOthers": "Each profile's billing is handled by the person who created it.",
+        "none": "Your records stay readable and downloadable."
+      },
+      "action": {
+        "subscribe": "Subscribe",
+        "manage": "Manage billing",
+        "payInPortal": "Pay in Manage billing",
+        "contactUs": "Contact us"
+      },
+      "manageNote": "Change your card, see invoices or cancel, on Stripe's page (in English).",
+      "plan": {
+        "name": "Freelancer",
+        "or": "or",
+        "aMonth": "a month",
+        "aYear": "A year",
+        "vat": "Prices exclude VAT; VAT is added where the law requires it.",
+        "cancelRule": "Cancel any time; you keep access until the end of the period you paid for."
+      },
+      "openSoon": "Subscriptions open soon. We'll let you know before your trial ends.",
+      "profilesTitle": "Covers your profiles",
+      "subscribe": {
+        "title": "Subscribe to Freelancer",
+        "back": "Back to Billing",
+        "country": "Billing address country",
+        "countryChoose": "Choose a country",
+        "countryHint": "Sets the currency: shekels in Israel, dollars elsewhere.",
+        "buyer": "You're buying",
+        "person": "For yourself",
+        "personNote": "No tax number needed",
+        "business": "For a business",
+        "businessNote": "Stripe asks for its tax number",
+        "interval": "Pay",
+        "monthly": "Monthly",
+        "yearly": "Yearly",
+        "monthsFree": {
+          "one": "{count} month free",
+          "other": "{count} months free"
+        },
+        "save": "save {amount}",
+        "summary": "You'll pay",
+        "perMonth": "a month + VAT where it applies",
+        "perYear": "a year + VAT where it applies",
+        "contactUs": "We can't sell to individuals in {country} yet. A business with a tax number can subscribe now, or write to us and we'll tell you when we open.",
+        "headsUp": "Next you'll enter your card on Stripe's secure page. It's in English; you'll come back here when you're done.",
+        "continue": "Continue to payment"
+      },
+      "states": {
+        "loadFailed": "Couldn't load your billing. Check your connection and try again.",
+        "retry": "Try again",
+        "sessionFailed": "We couldn't reach the payment page. Try again in a moment.",
+        "confirming": "Confirming your payment…",
+        "confirmingNote": "This usually takes a few seconds.",
+        "subscribed": "You're subscribed. Thank you.",
+        "slow": "Your payment went through. It can take a minute to show here; you can keep working.",
+        "cancelled": "Nothing was charged.",
+        "needsHelp": "We couldn't open billing for your account. Write to us and we'll fix it.",
+        "alreadySubscribed": "You already have a subscription. Change it from Manage billing."
+      },
+      "mailSubject": "Mutaba3a billing"
     }
   }
 }

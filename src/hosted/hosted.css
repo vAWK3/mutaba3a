@@ -736,3 +736,41 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-profiles-cap-hint { display: block; font-size: var(--text-label); }
 .hp-lost-access { margin-block-end: var(--space-4); }
 .hp-lost-access .hp-link-button { min-height: 44px; padding-inline: var(--space-2); }
+/* MUT-362: Settings › Billing. Status first (DR1), chip colour by meaning on the AAA pairs (DR8), amounts in <bdi>
+   figures (MUT-109), logical properties only, 44 px targets and a pinned full-width Continue on a phone (DR10). */
+.hp-billing { display: flex; flex-direction: column; gap: var(--space-4); }
+.hp-billing p { margin: 0; }
+.hp-billing-status { display: flex; flex-direction: column; gap: var(--space-1); }
+.hp-billing-status p { color: var(--text-secondary); }
+.hp-billing-headline { font-family: var(--font-heading); font-size: var(--text-headline); font-weight: var(--weight-bold); line-height: 1.3; margin: 0; }
+.hp-billing-headline:focus { outline: none; }
+.hp-billing-headline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hp-billing-chip { align-self: flex-start; font-size: var(--text-micro); font-weight: var(--weight-medium); padding: 0 var(--space-2); border-radius: var(--radius-pill); }
+.hp-billing-chip-mint { background: var(--success-subtle); color: var(--success); }
+.hp-billing-chip-butter { background: var(--warning-subtle); color: var(--warning); }
+.hp-billing-chip-rose { background: var(--error-subtle); color: var(--error); }
+.hp-billing-chip-lavender { background: var(--accent-subtle); color: var(--on-accent-subtle); }
+.hp-billing-action { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
+.hp-billing .btn { min-block-size: 44px; }
+.hp-billing-fine { color: var(--text-secondary); font-size: var(--text-label); }
+.hp-billing-plan { display: flex; flex-direction: column; gap: var(--space-1); border-block-start: 1px solid var(--border); padding-block-start: var(--space-3); }
+.hp-billing-plan-line { display: flex; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.hp-billing-profiles h4 { margin: 0 0 var(--space-1); font-size: var(--text-label); font-weight: var(--weight-medium); color: var(--text-secondary); }
+.hp-billing-profiles ul { list-style: none; margin: 0; padding: 0; font-size: var(--text-label); }
+.hp-billing-profiles li { display: flex; justify-content: space-between; gap: var(--space-2); padding-block: var(--space-1); }
+.hp-billing-profile-name { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-billing-field { display: flex; flex-direction: column; gap: var(--space-1); }
+.hp-billing-interval .segmented-control-option { min-block-size: 44px; }
+.hp-billing-summary { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; background: var(--surface-2); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
+.hp-billing-stack { display: flex; flex-direction: column; gap: var(--space-2); }
+.hp-billing-back { align-self: flex-start; min-block-size: 44px; padding: 0; border: 0; background: none; color: var(--accent-text); font: inherit; font-size: var(--text-label); font-weight: var(--weight-medium); cursor: pointer; }
+.hp-billing-skeleton { block-size: 0.9rem; border-radius: var(--radius-xs); background: var(--border); }
+.hp-billing-skeleton-headline { block-size: 1.4rem; inline-size: 80%; }
+.hp-billing-skeleton-button { block-size: 2.75rem; inline-size: 40%; }
+.hp-banner-ok { background: var(--success-subtle); border: 1px solid var(--success-muted); color: var(--success); }
+.hp-banner-ok .hp-banner-icon { color: var(--success); }
+@media (max-width: 760px) {
+  .hp-billing-interval { display: flex; inline-size: 100%; }
+  .hp-billing-interval .segmented-control-option { flex: 1; }
+  .hp-billing-continue { inline-size: 100%; }
+}
