@@ -3691,6 +3691,12 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **No per-key caps (supersedes D6's daily caps).** Sentry accepted the keys but returned no rate limit, and the provider reported an inconsistent result. Basel confirmed in the UI that key rate limits need a paid plan. `sentry_key` sets none; `key_rate_limit_per_day` and `monthly_event_quota` are gone, and the spike threshold need only be positive. Guards left: spike protection and the $0 pay-as-you-go budget. The risk is TD-200.
 - **Keys kept.** The four keys from that apply were tainted; `terraform untaint` keeps them (and their DSNs) instead of recreating them.
 
+**Amendment 9 (E33 shares the org, 2026-10-22)**: the settings script refused `barmajiyat-ltd` because it also holds E33's `e33-api` and `e33-flutter`. Basel chose to share the org.
+- **Guard.** `scripts/sentry-org-policy.ts` checks an allow-list of product prefixes, `mutaba3a-` and `e33-`, instead of `mutaba3a-` alone. Any other project still stops the script before it writes, naming the project (D16 holds).
+- **Org-wide settings.** E33's projects get the same org settings: 2FA required, data scrubber with the curated sensitive fields, no IP storage, Enhanced Privacy, no shared issues. Basel accepted this for E33.
+- **Quota.** E33 now shares the free plan's monthly error quota, with no per-key caps on either product (TD-200).
+- **Another product** joins only by adding its prefix with the same decision.
+
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
 **Status**: Accepted (2026-10-17, MUT-157; auto-decided on the recommended option at Basel's request, C1)

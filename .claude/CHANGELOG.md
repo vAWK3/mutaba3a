@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — The Sentry settings script allows E33's projects in barmajiyat-ltd (MUT-147, ADR-091 amendment 9)
+
+**Why:** `--apply` refused the org because it also holds `e33-api` and `e33-flutter`; Basel chose to share the org.
+
+### Changed
+- `scripts/sentry-org-policy.ts`: the wrong-org guard checks the allow-list `mutaba3a-`, `e33-` (`assertKnownProjectsOnly`);
+  any other project still stops it. Two tests added (E33 accepted, another product refused). 40/40.
+- DEPLOYMENT.md §1.5 step 5, the observability README, INFRA, TD-198 (partly resolved).
+
 ## [Unreleased] - 2026-10-22 — Sentry alerts move to `sentry_alert`; keys lose their daily caps (MUT-147, ADR-091 amendment 8)
 
 **Why:** the first `terraform apply` got 404 on every `sentry_issue_alert` (Sentry retired the classic endpoints)
