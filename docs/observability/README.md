@@ -20,8 +20,8 @@ contain. MUT-147 set it up. The surface stories wire it in:
 **Never:** the local web app (`/app`) or desktop. They send nothing, ever (ADR-024, ADR-090).
 
 Crash reports are **not** opt-in, unlike analytics. They contain no content, and the privacy
-policy says they're sent. Data goes to Sentry's EU region (`de.sentry.io`, Frankfurt), in a
-Mutaba3a-only org.
+policy says they're sent. Data goes to Sentry's EU region (`de.sentry.io`, Frankfurt), in the
+company org `barmajiyat-ltd`, which holds only `mutaba3a-…` projects for now (ADR-091 amendment 5).
 
 Only production builds may send.
 
