@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — The entries feed lists by money date, with day and logged-since filters (MUT-390, API 1.49.0)
+
+**Why:** Recent grouped entries by the day they were logged, so backdated entries all sat under "Today". ADR-168;
+plan, review and decisions D1–D6 in `.claude/designs/mut-390-feed-money-date.md`.
+
+### Added
+- `GET /v1/entries?order=occurredOn`: newest money day first (expense/conversion `occurredOn`, received `receivedOn`,
+  Owed `postingDate`), then newest logged; future-dated entries above today.
+- Filters `occurredFrom`, `occurredBefore`, `loggedSince`, each only with the order whose index bounds it (else 422);
+  `loggedSince` at most 31 days back.
+- Four indexes (migration `20261022120000_mut390_entries_money_date_indexes`).
+- Tests: merge/cursor units, memory + Postgres contract walks with filters and cursors, route 422s, EXPLAIN plans
+  for every kind and bound, fan-out for both orders.
+
+### Changed
+- The feed cursor codec moved into `entries/merge.ts`; the default order's cursor is unchanged byte for byte.
+- `/v1/entries` description: date edits between pages under `order=occurredOn` (dedupe by id); a settle or
+  correction can sit days from its partner by money date.
+
 ## [Unreleased] - 2026-10-22 — Sentry Terraform adopts the two projects made by hand (MUT-147, ADR-091 amendment 7)
 
 **Why:** Basel created `mutaba3a-web` (portal) and `mutaba3a-flutter` (capture app) in Sentry's UI. Without this the

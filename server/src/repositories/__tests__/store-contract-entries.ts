@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EntryRow, LedgerStore, Organization } from '../ports.js';
+import type { EntryRow, FeedPageRequest, LedgerStore, Organization } from '../ports.js';
 
 /**
  * MUT-270 storage contract: the entries feed. Newest logged first across expenses, payments, Owed (ADJUSTMENT)
@@ -102,6 +102,8 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       const page = await store.entries.list([w.a.id, w.b.id], { limit: 10, cursor: null });
       expect(page.items.map(idOf)).toEqual([`payment:${reversed.id}`]);
       expect(page.items[0]!.record).toMatchObject({ status: 'REVERSED', reversalReason: 'bounced' });
+      // MUT-390: the money-date order leaves out the same rows.
+      expect((await store.entries.list([w.a.id, w.b.id], { limit: 10, cursor: null, order: 'occurredOn' })).items.map(idOf)).toEqual([`payment:${reversed.id}`]);
     });
 
     it('links a settle payment to the Owed it paid, and nothing else', async () => {
@@ -156,6 +158,121 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       expect(counts.has(e2.id)).toBe(false);
       expect((await store.expenseReceipts.countReadyByExpenseIds([w.b.id], [e1.id])).size).toBe(0);
       expect((await store.expenseReceipts.countReadyByExpenseIds([w.a.id], [])).size).toBe(0);
+    });
+  });
+
+  describe(`${name} LedgerStore entries contract, money-date order and filters (MUT-390)`, () => {
+    /** A world whose rows carry their own money dates, logged at `at(s)`. */
+    async function dated(store: LedgerStore) {
+      const w = await world(store);
+      const expense = (organizationId: string, occurredOn: string, s: number) =>
+        store.expenses.create({ organizationId, occurredOn, amountMinor: 4_000n, currency: 'ILS', title: 'Paper', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: w.user.id }, at(s));
+      const conversion = (organizationId: string, occurredOn: string, s: number) =>
+        store.conversions.create({ organizationId, occurredOn, amountMinor: 10_000n, currency: 'USD', toAmountMinor: 36_500n, toCurrency: 'ILS', notes: null, createdByUserId: w.user.id }, at(s));
+      const capture = (organizationId: string, receivedOn: string, s: number) =>
+        store.payments.capture({ organizationId, customerId: null, projectId: null, currency: 'ILS', amountMinor: 25_000n, receivedOn, method: 'CASH', notes: null, requestId: null, createdByUserId: w.user.id, captureSource: 'app' }, at(s));
+      const owed = (postingDate: string, s: number) =>
+        store.receivables.createAdjustment(
+          { organizationId: w.b.id, customerId: w.client.id, projectId: null, currency: 'ILS', netMinor: 50_000n, vatMinor: 0n, grossMinor: 50_000n, vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, title: 'Logo', dueDate: '2026-10-31', postingDate, postedAt: at(s), createdByUserId: w.user.id, requestId: null },
+          at(s),
+        );
+      return { ...w, expense, conversion, capture, owed };
+    }
+
+    async function walk(store: LedgerStore, organizationIds: string[], request: Omit<FeedPageRequest, 'cursor'>): Promise<string[]> {
+      const seen: string[] = [];
+      let cursor: FeedPageRequest['cursor'] = null;
+      do {
+        const page = await store.entries.list(organizationIds, { ...request, cursor });
+        expect(page.items.length).toBeLessThanOrEqual(request.limit);
+        seen.push(...page.items.map((r) => r.record.id));
+        cursor = page.nextCursor;
+      } while (cursor);
+      return seen;
+    }
+
+    it('orders by money day, then newest logged, across kinds and profiles, and pages without gaps or repeats', async () => {
+      const store = await makeStore();
+      const w = await dated(store);
+      // Logged in an order unrelated to their money dates; three share 2026-10-20 and two share one instant.
+      const e1 = await w.expense(w.a.id, '2026-10-20', 1);
+      const o1 = await w.owed('2026-10-14', 9); // logged last, dated earliest: sorts by postingDate
+      const p1 = await w.capture(w.b.id, '2026-10-20', 4);
+      const c1 = await w.conversion(w.a.id, '2026-10-18', 4);
+      const e2 = await w.expense(w.b.id, '2026-10-20', 4);
+      const future = await w.expense(w.a.id, '2026-10-25', 2); // dated ahead: above every other day
+      const e3 = await w.expense(w.a.id, '2026-10-18', 7);
+      await w.expense(w.other.id, '2026-10-21', 5);
+
+      const all = (await store.entries.list([w.a.id, w.b.id], { limit: 20, cursor: null, order: 'occurredOn' })).items;
+      const sameInstant = [p1.id, e2.id].sort().reverse(); // logged at once: id descending
+      expect(all.map((r) => r.record.id)).toEqual([future.id, ...sameInstant, e1.id, e3.id, c1.id, o1.id]);
+
+      expect(await walk(store, [w.a.id, w.b.id], { limit: 2, order: 'occurredOn' })).toEqual(all.map((r) => r.record.id));
+    });
+
+    it('applies occurredFrom and occurredBefore to the money-date order across pages', async () => {
+      const store = await makeStore();
+      const w = await dated(store);
+      const days = ['2026-10-13', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-19', '2026-10-21'];
+      const made = await Promise.all(days.map((d, i) => w.expense(w.a.id, d, i + 1)));
+      const between = made.filter((r) => r.occurredOn >= '2026-10-15' && r.occurredOn < '2026-10-21').map((r) => r.id).reverse();
+
+      expect(await walk(store, [w.a.id], { limit: 2, order: 'occurredOn', occurredFrom: '2026-10-15', occurredBefore: '2026-10-21' })).toEqual(between);
+      expect(await walk(store, [w.a.id], { limit: 2, order: 'occurredOn', occurredFrom: '2026-10-19' })).toEqual([made[5]!.id, made[4]!.id]);
+    });
+
+    it('applies the day filters to every kind by its own money date', async () => {
+      const store = await makeStore();
+      const w = await dated(store);
+      const payment = await w.capture(w.b.id, '2026-10-16', 1);
+      await w.capture(w.b.id, '2026-10-21', 2);
+      const owed = await w.owed('2026-10-15', 3); // its dueDate, 2026-10-31, is outside the window: only postingDate counts
+      await w.owed('2026-10-14', 4);
+      const conversion = await w.conversion(w.a.id, '2026-10-20', 5);
+      await w.conversion(w.a.id, '2026-10-21', 6);
+      const expense = await w.expense(w.a.id, '2026-10-18', 7);
+      await w.expense(w.a.id, '2026-10-12', 8);
+
+      expect(await walk(store, [w.a.id, w.b.id], { limit: 1, order: 'occurredOn', occurredFrom: '2026-10-15', occurredBefore: '2026-10-21' })).toEqual([
+        conversion.id,
+        expense.id,
+        payment.id,
+        owed.id,
+      ]);
+    });
+
+    it('finds what was logged since an instant but dated before a day, across pages, newest logged first', async () => {
+      const store = await makeStore();
+      const w = await dated(store);
+      await w.expense(w.a.id, '2026-10-01', 1); // dated earlier, but logged before loggedSince
+      const backdated = [await w.expense(w.a.id, '2026-09-30', 10), await w.capture(w.b.id, '2026-10-02', 11), await w.conversion(w.a.id, '2026-10-05', 12)];
+      await w.expense(w.a.id, '2026-10-16', 13); // logged since, but inside the window
+
+      expect(await walk(store, [w.a.id, w.b.id], { limit: 2, loggedSince: at(10), occurredBefore: '2026-10-12' })).toEqual(backdated.map((r) => r.id).reverse());
+    });
+
+    it('moves an entry when its money date is edited: re-read after moving older, it shows again further down', async () => {
+      const store = await makeStore();
+      const w = await dated(store);
+      const moved = await w.expense(w.a.id, '2026-10-20', 1);
+      const middle = await w.expense(w.a.id, '2026-10-19', 2);
+      const oldest = await w.expense(w.a.id, '2026-10-10', 3);
+
+      const first = await store.entries.list([w.a.id], { limit: 1, cursor: null, order: 'occurredOn' });
+      expect(first.items.map((r) => r.record.id)).toEqual([moved.id]);
+      const edited = await store.expenses.update(w.a.id, moved.id, moved.version, { occurredOn: '2026-10-11' }, at(4));
+      expect(edited.kind).toBe('updated');
+
+      // MUT-390 D3: a page is a snapshot; the rest of the walk now meets the moved row again.
+      const rest: string[] = [];
+      let cursor = first.nextCursor;
+      while (cursor) {
+        const page = await store.entries.list([w.a.id], { limit: 1, cursor, order: 'occurredOn' });
+        rest.push(...page.items.map((r) => r.record.id));
+        cursor = page.nextCursor;
+      }
+      expect(rest).toEqual([middle.id, moved.id, oldest.id]);
     });
   });
 }

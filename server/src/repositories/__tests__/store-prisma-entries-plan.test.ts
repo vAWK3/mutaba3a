@@ -1,5 +1,6 @@
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { afterAll, describe, expect, it } from 'vitest';
+import type { FeedPageRequest } from '../ports.js';
 import { PrismaLedgerStore } from '../prisma.js';
 
 /**
@@ -16,6 +17,14 @@ const EXPECTED_INDEX: Record<string, string> = {
   payments: 'payments_organizationId_createdAt_id_idx',
   receivables: 'receivables_organizationId_origin_createdAt_id_idx',
   conversions: 'conversions_organizationId_createdAt_id_idx',
+};
+
+/** MUT-390: the money-date order reads each kind through its own (money date, createdAt, id) index. */
+const MONEY_DATE_INDEX: Record<string, { index: string; column: string }> = {
+  expenses: { index: 'expenses_organizationId_occurredOn_createdAt_id_idx', column: 'occurredOn' },
+  payments: { index: 'payments_organizationId_receivedOn_createdAt_id_idx', column: 'receivedOn' },
+  receivables: { index: 'receivables_organizationId_origin_postingDate_createdAt_id_idx', column: 'postingDate' },
+  conversions: { index: 'conversions_organizationId_occurredOn_createdAt_id_idx', column: 'occurredOn' },
 };
 
 if (!url) {
@@ -55,9 +64,9 @@ if (!url) {
     return rows.map((r) => r['QUERY PLAN']).join('\n');
   }
 
-  async function feedQueries(organizationId: string, cursor: { createdAt: Date; id: string } | null) {
+  async function feedQueries(organizationId: string, cursor: { createdAt: Date; id: string } | null, request: Omit<FeedPageRequest, 'limit' | 'cursor'> = {}) {
     queries.length = 0;
-    await store.entries.list([organizationId], { limit: 20, cursor });
+    await store.entries.list([organizationId], { limit: 20, cursor, ...request });
     return queries.filter((q) => /FROM "public"\."(expenses|payments|receivables|conversions)"/.test(q.query) && /ORDER BY/.test(q.query));
   }
 
@@ -97,5 +106,50 @@ if (!url) {
         }
       });
     }
+  });
+
+  describe('Prisma entries query plans, money-date order and filters (MUT-390)', () => {
+    const moneyCursor = { occurredOn: '2026-10-18', createdAt: new Date('2026-10-18T10:00:00Z'), id: '00000000-0000-4000-8000-000000000000' };
+    const cases: Array<{ name: string; cursor: typeof moneyCursor | null; request: Omit<FeedPageRequest, 'limit' | 'cursor'>; bounds: Array<'<=' | '>=' | '<'> }> = [
+      { name: 'first page', cursor: null, request: { order: 'occurredOn' }, bounds: [] },
+      { name: 'past a cursor', cursor: moneyCursor, request: { order: 'occurredOn' }, bounds: ['<='] },
+      { name: 'from a day', cursor: null, request: { order: 'occurredOn', occurredFrom: '2026-10-12' }, bounds: ['>='] },
+      { name: 'from a day, past a cursor (both bounds kept)', cursor: moneyCursor, request: { order: 'occurredOn', occurredFrom: '2026-10-12', occurredBefore: '2026-10-20' }, bounds: ['<=', '>=', '<'] },
+    ];
+    for (const c of cases) {
+      it(`reads every kind through its money-date index: ${c.name}`, async () => {
+        const org = await firmWithInstallments();
+        const sent = await feedQueries(org.id, c.cursor, c.request);
+        expect(sent.map((q) => /FROM "public"\."(\w+)"/.exec(q.query)![1]).sort()).toEqual(['conversions', 'expenses', 'payments', 'receivables']);
+
+        for (const q of sent) {
+          const table = /FROM "public"\."(\w+)"/.exec(q.query)![1]!;
+          const { index, column } = MONEY_DATE_INDEX[table]!;
+          const plan = await planOf(q.query, JSON.parse(q.params) as unknown[]);
+          expect(plan, `${table}:\n${plan}`).toContain('Index Scan');
+          expect(plan, `${table}:\n${plan}`).toContain(index);
+          expect(plan, `${table}:\n${plan}`).not.toMatch(/Seq Scan|Bitmap|\bSort\b/);
+          const indexCond = /Index Cond: (.*)/.exec(plan)?.[1] ?? '';
+          // A VarChar money date prints as ("occurredOn")::text in the plan.
+          for (const op of c.bounds) expect(indexCond, `${table}:\n${plan}`).toContain(`("${column}")::text ${op} `);
+        }
+      });
+    }
+
+    it('reads logged-since-and-dated-before through the (createdAt, id) indexes, bounded by loggedSince', async () => {
+      const org = await firmWithInstallments();
+      const sent = await feedQueries(org.id, null, { loggedSince: new Date('2026-10-15T00:00:00Z'), occurredBefore: '2026-10-12' });
+      expect(sent).toHaveLength(4);
+
+      for (const q of sent) {
+        const table = /FROM "public"\."(\w+)"/.exec(q.query)![1]!;
+        const plan = await planOf(q.query, JSON.parse(q.params) as unknown[]);
+        // Either (createdAt, id) index of receivables serves: loggedSince bounds both ranges to the week logged.
+        const index = table === 'receivables' ? /receivables_organizationId_(origin_)?createdAt_id_idx/ : new RegExp(EXPECTED_INDEX[table]!);
+        expect(plan, `${table}:\n${plan}`).toMatch(index);
+        expect(plan, `${table}:\n${plan}`).not.toMatch(/Seq Scan|Bitmap|\bSort\b/);
+        expect(plan, `${table}:\n${plan}`).toMatch(/Index Cond: .*"createdAt" >=/);
+      }
+    });
   });
 }

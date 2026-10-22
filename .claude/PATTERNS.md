@@ -2632,3 +2632,16 @@ Server code that reports takes an `ErrorReporter` (`server/src/observability/rep
 `NOOP_REPORTER`; only `index.ts` and the operator scripts build the real one (`sentry-node.ts`). Report exactly
 where you already log at error level, never more. Shared server code is bundled into the portal's local mode,
 which must send nothing (ADR-024), and `sentry-local-boundary.test.ts` fails if its import graph reaches `@sentry/`.
+
+## Patterns added by MUT-390 (2026-10-22, ADR-168)
+
+### Pattern: A list filter is allowed only with the order whose index bounds it
+A filter that the chosen index cannot use as a range is a residual filter: when few rows match, the last page walks
+the organization's whole history before it can say "no more". Refuse such combinations with a 422 naming the field,
+and pin each allowed one with an EXPLAIN case that finds the bound in `Index Cond`. First instance: `GET /v1/entries`
+(`server/src/routes/entries.ts`, `store-prisma-entries-plan.test.ts`).
+
+### Pattern: Keyset bounds go in separate AND entries
+A cursor and a filter on the same column (`createdAt <= t` and `createdAt >= since`) overwrite each other when spread
+into one Prisma `where` object. Push each bound as its own `AND` entry, and test a filter and a cursor together across
+pages. First instance: `feedBounds` in `server/src/repositories/prisma.ts`.

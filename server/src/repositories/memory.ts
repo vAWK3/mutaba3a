@@ -142,7 +142,7 @@ import type {
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON, STRIPE_EVENT_ERROR_MAX } from './ports.js';
-import { isBeforeCursor, mergeNewestFirst } from '../entries/merge.js';
+import { createdAtCursorOf, isBeforeCursor, isBeforeMoneyDateCursor, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf, moneyDateOf } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, ownsProfile, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
@@ -2073,14 +2073,26 @@ export class MemoryLedgerStore implements LedgerStore {
 
   readonly entries: EntriesRepository = {
     list: async (organizationIds, page) => {
-      const inScope = (row: { organizationId: string; createdAt: Date; id: string }) => organizationIds.includes(row.organizationId) && (!page.cursor || isBeforeCursor(row, page.cursor));
-      const branches: EntryRow[][] = [
-        [...this.exps.values()].filter((e) => inScope(e) && !e.deletedAt).map((e) => ({ kind: 'expense', record: { ...e } })),
-        [...this.pays.values()].filter((p) => inScope(p) && p.reversalReason !== CAPTURE_UNDO_REASON).map((p) => ({ kind: 'payment', record: { ...p } })),
-        [...this.recs.values()].filter((r) => inScope(r) && r.origin === 'ADJUSTMENT' && !r.deletedAt).map((r) => ({ kind: 'receivable', record: { ...r } })),
-        [...this.convs.values()].filter((c) => inScope(c) && !c.deletedAt).map((c) => ({ kind: 'conversion', record: { ...c } })),
-      ];
-      return mergeNewestFirst(branches, page.limit, (row) => row.record);
+      const rows: EntryRow[] = [
+        ...[...this.exps.values()].filter((e) => !e.deletedAt).map((e): EntryRow => ({ kind: 'expense', record: { ...e } })),
+        ...[...this.pays.values()].filter((p) => p.reversalReason !== CAPTURE_UNDO_REASON).map((p): EntryRow => ({ kind: 'payment', record: { ...p } })),
+        ...[...this.recs.values()].filter((r) => r.origin === 'ADJUSTMENT' && !r.deletedAt).map((r): EntryRow => ({ kind: 'receivable', record: { ...r } })),
+        ...[...this.convs.values()].filter((c) => !c.deletedAt).map((c): EntryRow => ({ kind: 'conversion', record: { ...c } })),
+      ].filter((row) => {
+        const day = moneyDateOf(row);
+        return (
+          organizationIds.includes(row.record.organizationId) &&
+          (page.occurredFrom === undefined || day >= page.occurredFrom) &&
+          (page.occurredBefore === undefined || day < page.occurredBefore) &&
+          (page.loggedSince === undefined || row.record.createdAt.getTime() >= page.loggedSince.getTime())
+        );
+      });
+      if (page.order === 'occurredOn') {
+        const cursor = moneyDateCursorOf(page.cursor);
+        return mergeByMoneyDate([rows.filter((row) => !cursor || isBeforeMoneyDateCursor(moneyDateKeyOf(row), cursor))], page.limit, moneyDateKeyOf);
+      }
+      const cursor = createdAtCursorOf(page.cursor);
+      return mergeNewestFirst([rows.filter((row) => !cursor || isBeforeCursor(row.record, cursor))], page.limit, (row) => row.record);
     },
     settledOwedIds: async (organizationIds, paymentIds) => {
       const byPayment = new Map<string, AllocationRecord[]>();
