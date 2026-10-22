@@ -124,6 +124,13 @@ describe('receipts signed out (AC2)', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
     expect(await page.readBlob(upload.url)).toBeNull();
   });
 
+  it('has no receipts library signed out (MUT-255 decision P1)', async () => {
+    const page = await openPage();
+    const profileId = await profileOf(page);
+
+    expect((await call(page, profileId, 'GET', '/v1/receipts')).status).toBe(404);
+  });
+
   it('refuses a putBlob or readBlob for anything but a local-blob URL', async () => {
     const page = await openPage();
 

@@ -86,6 +86,7 @@ function servedPaths(): ReadonlySet<string> {
     fxRates: null,
     terms: null,
     billing: false,
+    receiptsLibrary: false,
   };
   const served = new Set<string>();
   for (const factory of PORTAL_ROUTES) {

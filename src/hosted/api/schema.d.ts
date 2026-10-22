@@ -7253,8 +7253,8 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Delete an expense (soft; its receipts and their files go with it)
-         * @description 204 again for an expense already deleted; 404 for an id this profile never had.
+         * Delete an expense (soft; its receipts go back to the receipts library)
+         * @description 204 again for an expense already deleted; 404 for an id this profile never had. MUT-255: on the hosted server its READY receipts stay, back under To review in the receipts library; an unfinished upload is deleted with its file. The signed-out portal, which has no library, deletes them all.
          */
         delete: {
             parameters: {
@@ -10190,6 +10190,937 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/receipts/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a library upload: a To-review receipt with no expense, and a short-lived signed PUT URL
+         * @description PDF, JPEG or PNG up to 10 MB. PUT the bytes to upload.url with upload.headers, then POST /v1/receipts/{receiptId}/complete; if the URL expired first (a replayed request answers the original), POST …/upload-url for a fresh one. 429 (reason TOO_MANY_PENDING_UPLOADS) when the profile already holds 20 unfinished uploads from the last 24 hours; 429 past 30 starts a minute per person. Either 429 leaves the Idempotency-Key free, so the same request can be sent again with it.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateLibraryReceiptUploadRequest"];
+                };
+            };
+            responses: {
+                /** @description Upload started */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CreateReceiptUploadResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receipts/{receiptId}/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A fresh signed PUT URL for an unfinished upload
+         * @description For a client whose URL expired before it sent the bytes (signed URLs live minutes; a phone may retry hours later). 422 UPLOAD_ALREADY_COMPLETE once READY.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    receiptId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A new URL */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignedUpload"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receipts/{receiptId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish an upload: verify the object and mark the receipt READY
+         * @description 422 UPLOAD_INCOMPLETE when no object exists yet; 422 UPLOAD_MISMATCH when its size or content type differ from what was declared. Idempotent once READY.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    receiptId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description READY */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseReceipt"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The profile's receipts library, newest upload first
+         * @description READY receipts only. filingStatus TO_REVIEW is the review queue; from/to are inclusive upload days in the profile timezone.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Page size, 1–200. */
+                    limit?: number;
+                    /** @description Opaque `nextCursor` from the previous page. */
+                    cursor?: string;
+                    /** @description MUT-255: TO_REVIEW waits in the receipts library; FILED is on an expense. */
+                    filingStatus?: components["schemas"]["ReceiptFilingStatus"];
+                    /** @description Inclusive, on the upload day (receivedOn) */
+                    from?: string;
+                    /** @description Inclusive, on the upload day (receivedOn) */
+                    to?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReceiptPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receipts/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many READY receipts wait To review, and how many are filed */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReceiptCounts"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receipts/{receiptId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One receipt, with what was read and what was approved */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    receiptId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The receipt */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseReceipt"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Delete a receipt (soft; the object is removed)
+         * @description Any filing status: a filed receipt leaves its expense. 204 again for a receipt already deleted; 404 for an id this profile never had.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    receiptId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted (or already was) */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receipts/{receiptId}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A short-lived signed download URL for a READY receipt */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    receiptId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Signed URL */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AttachmentDownload"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receipts/{receiptId}/suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Replace what the device's reader suggested (optimistic, If-Match)
+         * @description To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Unknown fields in the suggestion are dropped, not refused.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    receiptId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReceiptSuggestion"];
+                };
+            };
+            responses: {
+                /** @description Replaced */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseReceipt"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/receipts/{receiptId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a To-review receipt: record its expense and file the receipt on it, in one transaction
+         * @description The body is an expense, checked exactly as POST /v1/expenses checks one. 409 CONFLICT RECEIPT_ALREADY_FILED, with details.expenseId, when the receipt is already filed (a replay with the same Idempotency-Key answers the first 201 instead); 422 ATTACHMENT_NOT_READY before the upload completes — a 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    receiptId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ApproveReceiptRequest"];
+                };
+            };
+            responses: {
+                /** @description Approved */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApproveReceiptResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/fx-rates": {
         parameters: {
             query?: never;
@@ -10685,6 +11616,68 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/receipts/edit-rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How often people change what the receipt reader suggested (MUT-255, the MUT-252 success measure)
+         * @description Receipts approved between from and to (inclusive UTC days), across every profile. Counts only: never a value, a profile or a person.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Inclusive, UTC day of approval */
+                    from: string;
+                    /** @description Inclusive, UTC day of approval */
+                    to: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Edit rates */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReceiptEditRates"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -13724,11 +14717,19 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
-            expenseId: string;
+            expenseId: string | null;
             filename: string;
             mimeType: components["schemas"]["AttachmentMimeType"];
             sizeBytes: number;
             status: components["schemas"]["AttachmentStatus"];
+            filingStatus: components["schemas"]["ReceiptFilingStatus"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            receivedOn: string;
+            suggested: components["schemas"]["ReceiptSuggestion"];
+            approved: components["schemas"]["ApprovedReceiptFields"];
+            /** Format: date-time */
+            approvedAt: string | null;
+            version: number;
             /** Format: uuid */
             uploadedByUserId: string;
             /** Format: date-time */
@@ -13736,6 +14737,79 @@ export interface components {
             /** Format: date-time */
             completedAt: string | null;
         };
+        /**
+         * @description MUT-255: TO_REVIEW waits in the receipts library; FILED is on an expense.
+         * @enum {string}
+         */
+        ReceiptFilingStatus: "TO_REVIEW" | "FILED";
+        ReceiptSuggestion: {
+            readerVersion: string;
+            date?: {
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                value: string;
+                /** @enum {string} */
+                source: "qr" | "pdf-text" | "ocr" | "vendor";
+                confidence: number;
+            };
+            totalMinor?: {
+                value: string;
+                /** @enum {string} */
+                source: "qr" | "pdf-text" | "ocr" | "vendor";
+                confidence: number;
+            };
+            currency?: {
+                value: string;
+                /** @enum {string} */
+                source: "qr" | "pdf-text" | "ocr" | "vendor";
+                confidence: number;
+            };
+            vatMinor?: {
+                value: string;
+                /** @enum {string} */
+                source: "qr" | "pdf-text" | "ocr" | "vendor";
+                confidence: number;
+            };
+            vatRateBasisPoints?: {
+                value: number;
+                /** @enum {string} */
+                source: "qr" | "pdf-text" | "ocr" | "vendor";
+                confidence: number;
+            };
+            vendorName?: {
+                value: string;
+                /** @enum {string} */
+                source: "qr" | "pdf-text" | "ocr" | "vendor";
+                confidence: number;
+            };
+            registrationNo?: {
+                value: string;
+                /** @enum {string} */
+                source: "qr" | "pdf-text" | "ocr" | "vendor";
+                confidence: number;
+            };
+            phone?: {
+                value: string;
+                /** @enum {string} */
+                source: "qr" | "pdf-text" | "ocr" | "vendor";
+                confidence: number;
+            };
+            email?: {
+                value: string;
+                /** @enum {string} */
+                source: "qr" | "pdf-text" | "ocr" | "vendor";
+                confidence: number;
+            };
+        } | null;
+        /** @description What approval wrote into the expense, in minor units like the suggestion */
+        ApprovedReceiptFields: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn: string;
+            amountMinor: string;
+            currency: string;
+            vendor: string | null;
+            /** Format: uuid */
+            categoryId: string | null;
+        } | null;
         CreateExpenseRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. */
             occurredOn: string;
@@ -13774,17 +14848,18 @@ export interface components {
         };
         CreateReceiptUploadResponse: {
             receipt: components["schemas"]["ExpenseReceipt"];
-            upload: {
-                /** Format: uri */
-                url: string;
-                /** @enum {string} */
-                method: "PUT";
-                headers: {
-                    [key: string]: string;
-                };
-                /** Format: date-time */
-                expiresAt: string;
+            upload: components["schemas"]["SignedUpload"];
+        };
+        SignedUpload: {
+            /** Format: uri */
+            url: string;
+            /** @enum {string} */
+            method: "PUT";
+            headers: {
+                [key: string]: string;
             };
+            /** Format: date-time */
+            expiresAt: string;
         };
         CreateReceiptUploadRequest: {
             filename: string;
@@ -14069,6 +15144,46 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        CreateLibraryReceiptUploadRequest: {
+            filename: string;
+            mimeType: components["schemas"]["AttachmentMimeType"];
+            sizeBytes: number;
+            suggested?: components["schemas"]["ReceiptSuggestion"] & unknown;
+        };
+        ReceiptPage: {
+            items: components["schemas"]["ExpenseReceipt"][];
+            nextCursor: string | null;
+        };
+        /** @description READY receipts in the library, per filing status */
+        ReceiptCounts: {
+            toReview: number;
+            filed: number;
+        };
+        ApproveReceiptResponse: {
+            expense: components["schemas"]["Expense"];
+            receipt: components["schemas"]["ExpenseReceipt"];
+        };
+        ApproveReceiptRequest: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. */
+            occurredOn: string;
+            /** @description Greater than zero, in the currency's fractional digits */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            title?: string;
+            vendor?: string;
+            /** Format: uuid */
+            categoryId?: string;
+            /** Format: uuid */
+            customerId?: string;
+            /**
+             * Format: uuid
+             * @description With projectId alone, customerId is the project's customer
+             */
+            projectId?: string;
+            notes?: string;
+            captureSource?: components["schemas"]["CaptureSource"];
+            suggested?: components["schemas"]["ReceiptSuggestion"] & unknown;
+        };
         PublicFxRatesResponse: {
             /**
              * @description The ECB reference date (its last business day), YYYY-MM-DD
@@ -14146,6 +15261,36 @@ export interface components {
         } | {
             /** @enum {boolean} */
             firmEnabled: false;
+        };
+        /** @description MUT-255: how often people change what the receipt reader suggested. Counts only, across every profile. */
+        ReceiptEditRates: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            from: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            to: string;
+            approved: number;
+            fields: {
+                date: {
+                    suggested: number;
+                    edited: number;
+                };
+                amount: {
+                    suggested: number;
+                    edited: number;
+                };
+                currency: {
+                    suggested: number;
+                    edited: number;
+                };
+                vendor: {
+                    suggested: number;
+                    edited: number;
+                };
+            };
+            amountAndDate: {
+                suggested: number;
+                unedited: number;
+            };
         };
         FirmRequestList: {
             data: components["schemas"]["FirmRequest"][];

@@ -3,7 +3,9 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { MiddlewareHandler } from 'hono';
 import { generateApiKey, type ApiKeyEnvironment } from '../auth/api-key.js';
 import type { AppEnv } from '../auth/middleware.js';
+import { assertIsoDate } from '../agreements/compose.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
+
 import { profileOwnerOf } from '../personal-profile.js';
 import { UniqueViolation } from '../repositories/memory.js';
 import { decodeCursor, encodeCursor, parseLimit } from '../pagination.js';
@@ -21,8 +23,13 @@ import {
   AdminOrganizationSchema,
   RevokeApiKeyRequestSchema,
   ApiKeySummarySchema,
+  ReceiptEditRatesQuerySchema,
+  ReceiptEditRatesSchema,
 } from '../schemas.js';
 import { serializeAdminOrganization, serializeApiKey, serializeAuditEvent, serializeIntegration } from '../serializers.js';
+
+/** MUT-255: the longest range one edit-rate read covers. */
+const MAX_EDIT_RATE_DAYS = 366;
 
 /**
  * Operator provisioning (plan §3.1 "organization identification, scoped API
@@ -309,6 +316,38 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
       const result = await store.organizations.declineFirmRequest(c.req.valid('param').organizationId, c.get('now')(), { actorId: null, requestId: c.get('requestId') });
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No pending firm request for this organization');
       return c.json({ organization: serializeAdminOrganization(result.organization) }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/admin/v1/receipts/edit-rates',
+      tags: ['Admin'],
+      summary: 'How often people change what the receipt reader suggested (MUT-255, the MUT-252 success measure)',
+      description: 'Receipts approved between from and to (inclusive UTC days), across every profile. Counts only: never a value, a profile or a person.',
+      security: [{ adminToken: [] }],
+      request: { query: ReceiptEditRatesQuerySchema },
+      responses: {
+        200: { description: 'Edit rates', content: { 'application/json': { schema: ReceiptEditRatesSchema } } },
+        422: { description: 'Validation failed', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const { from, to } = c.req.valid('query');
+      assertIsoDate(from, 'from');
+      assertIsoDate(to, 'to');
+      if (from > to) throw new ApiError('VALIDATION_FAILED', '`to` is before `from`', { field: 'to', reason: 'END_BEFORE_START' });
+      const start = new Date(`${from}T00:00:00.000Z`);
+      const end = new Date(`${to}T00:00:00.000Z`);
+      end.setUTCDate(end.getUTCDate() + 1);
+      // The figure is read week by week (MUT-330's Monday review); a year bounds the rows one call loads.
+      if (end.getTime() - start.getTime() > MAX_EDIT_RATE_DAYS * 24 * 60 * 60 * 1000) {
+        throw new ApiError('VALIDATION_FAILED', `At most ${MAX_EDIT_RATE_DAYS} days at a time`, { field: 'to', reason: 'RANGE_TOO_LONG' });
+      }
+      const rates = await store.expenseReceipts.editRates({ from: start, to: end });
+      return c.json({ from, to, ...rates }, 200);
     },
   );
 

@@ -2145,14 +2145,54 @@ export const ExpenseSchema = z
   })
   .openapi('Expense');
 
+export const ReceiptFilingStatusSchema = z
+  .enum(['TO_REVIEW', 'FILED'])
+  .openapi('ReceiptFilingStatus', { description: 'MUT-255: TO_REVIEW waits in the receipts library; FILED is on an expense.' });
+
+const suggestionSource = z.enum(['qr', 'pdf-text', 'ocr', 'vendor']);
+const suggestedField = <T extends z.ZodTypeAny>(value: T) => z.object({ value, source: suggestionSource, confidence: z.number().min(0).max(1) });
+const minorUnits = z.string().regex(/^(0|[1-9]\d{0,17})$/, 'minor units, digits only, no leading zeros');
+
+/**
+ * Firm-books brief §6.1 `ReceiptSuggestion`, what a device's reader read off a receipt (MUT-255 stores it). Unknown
+ * keys are dropped, not refused (MUT-255 review R11): a newer reader may send fields this server doesn't know yet,
+ * and refusing them would fail every approve until the server caught up. Every known field is bounded, so the
+ * stored object stays small.
+ */
+export const ReceiptSuggestionSchema = z
+  .object({
+    readerVersion: z.string().min(1).max(40),
+    date: suggestedField(IsoDateSchema).optional(),
+    totalMinor: suggestedField(minorUnits).optional(),
+    currency: suggestedField(z.string().regex(/^[A-Z]{3}$/)).optional(),
+    vatMinor: suggestedField(minorUnits).optional(),
+    vatRateBasisPoints: suggestedField(z.number().int().min(0).max(10_000)).optional(),
+    vendorName: suggestedField(z.string().min(1).max(200)).optional(),
+    registrationNo: suggestedField(z.string().min(1).max(64)).optional(),
+    phone: suggestedField(z.string().min(1).max(40)).optional(),
+    email: suggestedField(z.string().min(1).max(254)).optional(),
+  })
+  .openapi('ReceiptSuggestion');
+
+export const ApprovedReceiptFieldsSchema = z
+  .object({ occurredOn: IsoDateSchema, amountMinor: minorUnits, currency: z.string(), vendor: z.string().nullable(), categoryId: uuid.nullable() })
+  .openapi('ApprovedReceiptFields', { description: 'What approval wrote into the expense, in minor units like the suggestion' });
+
 export const ExpenseReceiptSchema = z
   .object({
     id: uuid,
-    expenseId: uuid,
+    /** MUT-255: null while the receipt waits in the library. */
+    expenseId: uuid.nullable(),
     filename: z.string(),
     mimeType: AttachmentMimeTypeSchema,
     sizeBytes: z.number().int(),
     status: AttachmentStatusSchema,
+    filingStatus: ReceiptFilingStatusSchema,
+    receivedOn: IsoDateSchema,
+    suggested: ReceiptSuggestionSchema.nullable(),
+    approved: ApprovedReceiptFieldsSchema.nullable(),
+    approvedAt: z.string().datetime().nullable(),
+    version: z.number().int(),
     uploadedByUserId: uuid,
     createdAt: z.string().datetime(),
     completedAt: z.string().datetime().nullable(),
@@ -2279,12 +2319,63 @@ export const CreateReceiptUploadRequestSchema = z
   .strict()
   .openapi('CreateReceiptUploadRequest');
 
+/** A short-lived signed PUT: send the bytes to `url` with `headers`, before `expiresAt`. */
+export const SignedUploadSchema = z
+  .object({ url: z.string().url(), method: z.literal('PUT'), headers: z.record(z.string(), z.string()), expiresAt: z.string().datetime() })
+  .openapi('SignedUpload');
+
 export const CreateReceiptUploadResponseSchema = z
   .object({
     receipt: ExpenseReceiptSchema,
-    upload: z.object({ url: z.string().url(), method: z.literal('PUT'), headers: z.record(z.string(), z.string()), expiresAt: z.string().datetime() }),
+    upload: SignedUploadSchema,
   })
   .openapi('CreateReceiptUploadResponse');
+
+// ---- MUT-255: the receipts library ----
+
+export const ReceiptIdParamSchema = z.object({ receiptId: uuid });
+
+export const CreateLibraryReceiptUploadRequestSchema = CreateReceiptUploadRequestSchema.extend({
+  suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the device already read, when it read before uploading' }),
+})
+  .strict()
+  .openapi('CreateLibraryReceiptUploadRequest');
+
+export const ListReceiptsQuerySchema = z.object({
+  ...pageQuery,
+  filingStatus: ReceiptFilingStatusSchema.optional(),
+  from: IsoDateSchema.optional().openapi({ description: 'Inclusive, on the upload day (receivedOn)' }),
+  to: IsoDateSchema.optional().openapi({ description: 'Inclusive, on the upload day (receivedOn)' }),
+});
+
+export const ReceiptPageSchema = z.object({ items: z.array(ExpenseReceiptSchema), nextCursor: z.string().nullable() }).openapi('ReceiptPage');
+
+export const ReceiptCountsSchema = z.object({ toReview: z.number().int(), filed: z.number().int() }).openapi('ReceiptCounts', { description: 'READY receipts in the library, per filing status' });
+
+export const ApproveReceiptRequestSchema = CreateExpenseRequestSchema.extend({
+  suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; replaces the stored one' }),
+})
+  .strict()
+  .openapi('ApproveReceiptRequest');
+
+export const ApproveReceiptResponseSchema = z.object({ expense: ExpenseSchema, receipt: ExpenseReceiptSchema }).openapi('ApproveReceiptResponse');
+
+const fieldEditRate = z.object({ suggested: z.number().int(), edited: z.number().int() });
+
+export const ReceiptEditRatesQuerySchema = z.object({
+  from: IsoDateSchema.openapi({ description: 'Inclusive, UTC day of approval' }),
+  to: IsoDateSchema.openapi({ description: 'Inclusive, UTC day of approval' }),
+});
+
+export const ReceiptEditRatesSchema = z
+  .object({
+    from: IsoDateSchema,
+    to: IsoDateSchema,
+    approved: z.number().int(),
+    fields: z.object({ date: fieldEditRate, amount: fieldEditRate, currency: fieldEditRate, vendor: fieldEditRate }),
+    amountAndDate: z.object({ suggested: z.number().int(), unedited: z.number().int() }),
+  })
+  .openapi('ReceiptEditRates', { description: 'MUT-255: how often people change what the receipt reader suggested. Counts only, across every profile.' });
 
 export const ExpenseCategorySchema = z
   .object({ id: uuid, name: z.string(), color: z.string().nullable(), archived: z.boolean(), version: z.number().int(), createdAt: z.string().datetime(), updatedAt: z.string().datetime() })

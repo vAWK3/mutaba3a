@@ -203,9 +203,16 @@ export const STORE_ACCESS: StoreAccess = {
     listByExpense: { read: 'expenses' },
     complete: { write: 'expenses' },
     softDelete: { write: 'expenses' },
-    softDeleteByExpense: { write: 'expenses' },
     // MUT-270: counts for the entries feed, across the person's own profiles (the route resolves them from memberships).
     countReadyByExpenseIds: { read: 'expenses' },
+    // MUT-255: the receipts library.
+    list: { read: 'expenses' },
+    countByFilingStatus: { read: 'expenses' },
+    countPendingSince: { read: 'expenses' },
+    setSuggested: { write: 'expenses' },
+    fileAsExpense: { write: 'expenses' },
+    // The operator's edit-rate figure (/admin only): across every profile, counts only.
+    editRates: 'operator',
   },
   /**
    * MUT-66. Capturing is the person's own business, on no profile — hence

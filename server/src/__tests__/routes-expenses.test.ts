@@ -399,15 +399,22 @@ describe('PATCH /v1/expenses/{id}', () => {
 });
 
 describe('DELETE /v1/expenses/{id}', () => {
-  it('soft-deletes once, removes receipts and their objects, answers 204 again and 404 for an unknown id', async () => {
+  it('soft-deletes once, keeps READY receipts in the library, removes unfinished uploads, answers 204 again and 404 for an unknown id', async () => {
     const { h, a, p, create } = await setup();
     const e = await read(await create({}));
     const receipt = await uploadReceipt(h, p.as(a.org.id), e.id);
+    const pending = await read(await h.app.request(`/v1/expenses/${e.id}/receipts`, json({ filename: 'half.pdf', mimeType: 'application/pdf', sizeBytes: 10 }, p.as(a.org.id))));
+    const pendingKey = new URL(pending.upload.url).pathname.replace(/^\/+/, '').replace(/^upload\//, '');
     const del = () => h.app.request(`/v1/expenses/${e.id}`, { method: 'DELETE', headers: p.as(a.org.id) });
     expect((await del()).status).toBe(204);
     expect((await h.app.request(`/v1/expenses/${e.id}`, { headers: p.as(a.org.id) })).status).toBe(404);
     expect((await read(await h.app.request('/v1/expenses', { headers: p.as(a.org.id) }))).items).toEqual([]);
-    expect(h.storage.objects.has(receipt.storageKey)).toBe(false);
+    // MUT-255: the READY receipt and its file stay, back under To review; the unfinished upload goes.
+    expect(h.storage.objects.has(receipt.storageKey)).toBe(true);
+    expect(h.storage.removed).toEqual([pendingKey]);
+    const kept = await h.store.expenseReceipts.getById(a.org.id, receipt.id);
+    expect(kept).toMatchObject({ expenseId: null, filingStatus: 'TO_REVIEW', status: 'READY' });
+    expect(await h.store.expenseReceipts.getById(a.org.id, pending.receipt.id)).toBeNull();
     expect((await del()).status).toBe(204);
     const deletions = (await h.store.audit.list(a.org.id, { action: 'expense.deleted' }, { limit: 10, cursor: null })).items;
     expect(deletions).toHaveLength(1);

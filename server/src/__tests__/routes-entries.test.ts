@@ -316,7 +316,7 @@ describe('GET /v1/entries — what counts as an entry', () => {
     const bare = await expense(h, u, a.id);
     const withReceipts = await expense(h, u, a.id);
     const receipt = async (state: 'ready' | 'pending' | 'deleted') => {
-      const r = await h.store.expenseReceipts.create({ organizationId: a.id, expenseId: withReceipts.id, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, uploadedByUserId: u.userId, requestId: null }, h.clock.now);
+      const r = await h.store.expenseReceipts.create({ organizationId: a.id, expenseId: withReceipts.id, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, receivedOn: '2026-10-11', uploadedByUserId: u.userId, requestId: null }, h.clock.now);
       if (state !== 'pending') await h.store.expenseReceipts.complete(a.id, r.id, h.clock.now);
       if (state === 'deleted') await h.store.expenseReceipts.softDelete(a.id, r.id, h.clock.now);
     };

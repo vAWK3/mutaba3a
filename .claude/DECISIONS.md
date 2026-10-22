@@ -4509,3 +4509,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
    takes only `rk_live_` keys; a Payment Link's `client_reference_id` never links; a firm tie the payer doesn't own is
    reported (`ORG_NOT_OWNED_BY_PAYER`); lookup keys are cut to the column's 100 characters.
 6. **Not changed:** co-owners still don't count for a firm tie (TD-193, pinned by a test); the job token stays (TD-197).
+
+---
+
+## ADR-167: The Receipts Library: A Receipt Belongs to Its Profile and Waits To Review; Approval Files It in One Transaction (MUT-255)
+
+**Status**: Active
+**Date**: 2026-10-22
+**Context**: Epic MUT-252 (receipt scanning) needs the original saved the moment it is shared, browsable afterwards, and approved into an expense once its fields are checked. Until now `ExpenseReceipt.expenseId` was required (MUT-42), so a receipt could not exist before its expense, and deleting an expense deleted its receipts and their files. Plan, eng review and outside voice: `.claude/designs/mut-255-receipts-library.md`. Basel answered P1–P4 on 2026-10-22.
+**Decision**:
+1. **A receipt belongs to its profile; its expense is optional.** A stored `filingStatus` (TO_REVIEW / FILED) sits beside the upload status, with a DB CHECK: FILED exactly when there is an expense. MUT-308 widens the CHECK to "or a bill" and adds `billId`; MUT-255 keeps the "already filed" answer in one place (409 `CONFLICT`, `reason: RECEIPT_ALREADY_FILED`, with `details.expenseId` naming where it is filed, so a client whose first 201 was lost can still open the expense). The expense foreign key stays RESTRICT (expenses are only soft-deleted).
+2. **Rolling-deploy-safe defaults.** `filingStatus` defaults to FILED and `receivedOn` (the upload day in the profile timezone) to the UTC day, so the previous revision's MUT-44 inserts pass during the deploy. The library route sets both itself.
+3. **What was read and what was approved are both kept.** `suggested` is the firm-books brief's `ReceiptSuggestion` (§6.1); unknown fields are dropped, not refused, so a newer reader never breaks approval. `approved` snapshots what approval wrote (minor units, like the suggestion). The edit rate per field is an operator route, `GET /admin/v1/receipts/edit-rates`, counts only.
+4. **Approval is one transaction** (`expenseReceipts.fileAsExpense`): lock the receipt, refuse unless READY and To review, insert the expense, then a conditional update files the receipt; zero rows throws so no expense is orphaned. It is idempotent (`Idempotency-Key`). Its checks are POST /v1/expenses's own (`prepareExpenseCreate`). MUT-307's approval and MUT-312's closed month plug in between the lock and the insert.
+5. **Hosted only (P1).** `/v1/receipts*` is mounted in `app.ts`, not in `PORTAL_ROUTES`. On the hosted server, deleting an expense sends its READY receipts back to To review (in the expense delete's transaction) and soft-deletes unfinished uploads; signed-out local mode, which has no library, still deletes them all (`PortalRouteDependencies.receiptsLibrary`). Local import keeps To-review receipts and their files. Local format 2 → 3.
+6. **Limits (P3, amended in qa-reconcile).** 429 `RATE_LIMITED` with `reason: TOO_MANY_PENDING_UPLOADS` at 20 unfinished uploads per profile in 24 hours (P3 said 422; Basel chose 429 on 2026-10-22 so the key stays free); 30 upload starts a minute per person (429). The idempotency layer now releases a key on any 429, as on a 5xx: nothing was done, so the same request may be sent again with it. A replayed upload start answers the original, so `POST /v1/receipts/{id}/upload-url` re-signs an expired URL.
+7. **Filing onto an existing expense** is MUT-389 (P2), not this ADR.
+8. **Release (P4).** The server change ships to production only together with the first screen that shows the library (MUT-260 or MUT-258). The portal deploys before the server (local format 3).
+**Consequences**:
+- A deleted expense no longer takes its receipts with it on the hosted server; they reappear under To review.
+- Once a To-review receipt exists, the previous server revision cannot read that row (Prisma P2032): rolling back means rolling forward, or moving the To-review rows aside first (DEPLOYMENT.md).
+- The local format number is shared with MUT-302/307/308; whoever lands next takes 4.

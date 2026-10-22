@@ -75,7 +75,9 @@ async function withIdempotency(c: Context<AppEnv>, next: Next, operation: string
   }
 
   const res = c.res;
-  if (res.status >= 500) {
+  // A 5xx or a 429 means nothing was done: release the key so the same request can be sent again with it (MUT-255
+  // review). Every other answer, 4xx included, is the request's final one and replays as such.
+  if (res.status >= 500 || res.status === 429) {
     await ops.fail({ key: claimKey, at: now });
     return;
   }

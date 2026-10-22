@@ -17,6 +17,19 @@ async function formatOneSnapshot(): Promise<StoredSnapshot> {
   return { formatVersion: 1, stateVersion: 3, savedAt: AT, maps: { ...maps, orgs, members } as unknown as StoredSnapshot['maps'] };
 }
 
+/** A format-2 snapshot, as a device saved it before MUT-255: a receipt on an expense with none of the library fields. */
+async function formatTwoSnapshot(): Promise<StoredSnapshot> {
+  const store = new MemoryLedgerStore();
+  const { user, personalOrganization: personal } = await store.users.create({ email: 'rana@studio.ps', displayName: 'Rana', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-rana', defaultCurrency: 'JOD', timezone: 'Asia/Amman' }, at: AT });
+  const expense = await store.expenses.create({ organizationId: personal.id, occurredOn: '2026-10-01', amountMinor: 1_000n, currency: 'JOD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, AT);
+  // 22:30 UTC on 1 Oct is already 2 Oct in Amman.
+  await store.expenseReceipts.create({ organizationId: personal.id, expenseId: expense.id, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, receivedOn: 'ignored', uploadedByUserId: user.id, requestId: null }, new Date('2026-10-01T22:30:00.000Z'));
+  const { maps } = store.snapshot();
+  const library = ['filingStatus', 'receivedOn', 'suggested', 'approved', 'approvedAt', 'approvedByUserId', 'version'];
+  const expReceipts = new Map([...maps.expReceipts].map(([id, r]) => [id, Object.fromEntries(Object.entries(r).filter(([field]) => !library.includes(field)))]));
+  return { formatVersion: 2, stateVersion: 7, savedAt: AT, maps: { ...maps, expReceipts } as unknown as StoredSnapshot['maps'] };
+}
+
 describe('local snapshot migrations', () => {
   it('runs up to the current format', async () => {
     expect((migrate(await formatOneSnapshot())).formatVersion).toBe(LOCAL_FORMAT_VERSION);
@@ -30,6 +43,17 @@ describe('local snapshot migrations', () => {
     expect([...after.maps.orgs.values()]).toEqual([...before.maps.orgs.values()].map((org) => ({ ...org, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null })));
     expect([...after.maps.members.values()]).toEqual([...before.maps.members.values()].map((m) => ({ ...m, role: 'OWNER' })));
     expect(after.stateVersion).toBe(before.stateVersion);
+  });
+
+  it('2 → 3 (MUT-255): receipts arrive FILED, never approved, at version 1, received on their upload day in the profile timezone', async () => {
+    const before = await formatTwoSnapshot();
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(3);
+    expect([...after.maps.expReceipts.values()]).toEqual(
+      [...before.maps.expReceipts.values()].map((r) => ({ ...r, filingStatus: 'FILED', receivedOn: '2026-10-02', suggested: null, approved: null, approvedAt: null, approvedByUserId: null, version: 1 })),
+    );
   });
 
   it("leaves the snapshot it was given untouched", async () => {
