@@ -146,7 +146,13 @@ Complexity: about 22 files touched or added, 6 new modules → structure questio
 - **API version.** 1.47.0-mut148, because main took 1.46.0 (MUT-255) and MUT-388 claims 1.45.0.
 - **First release with `sentry_enabled = true`.** The DSN secret appears in step 4, so pre-roll (step 3) warns and runs unreported; post-roll gets the DSN.
 - **TD-199.** "Not configured" 503s are reported (the AC's literal rule); a bot can spend the 60/day cap.
-- **Not done here.** The hosted bundle is checked by the import-graph test, not by grepping a build (no `check-bundles` rule yet, TD-084).
+- **Hosted bundle.** The import-graph test guards it permanently. At the gate, `npm run build:hosted` was also grepped once: 0 files with `@sentry` or `ingest.de.sentry`. There is no `check-bundles` rule yet (TD-084, MUT-149/150).
+- **Gate (2026-10-22, Node 22, merged tree).**
+  - Root: lint 0 errors (2 existing warnings); typecheck clean; test:run 414 files, 5775 passed, 4 skipped; build OK.
+  - Server: typecheck, lint and openapi:check clean; test 141 files, 2881 passed, 40 skipped (Postgres-only).
+  - Terraform: GCP 40/40, Sentry 15/15.
+  - Release-QA: `web.legal.privacy-error-reports`, `privacy-linked-language` and `links` pass; lint shows no errors.
+  - `deploy-bootstrap.test.ts` timed out once under a full parallel run earlier, passed on its own, and didn't recur at the gate.
 
 ## GSTACK REVIEW REPORT
 
