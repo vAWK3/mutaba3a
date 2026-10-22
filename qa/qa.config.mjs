@@ -67,6 +67,30 @@ export default {
       ready: 'http://127.0.0.1:5175',
       personas: {},
     },
+    'portal-live': {
+      label: 'Hosted portal on a live API (Stripe sandbox)',
+      platform: 'web',
+      // MUT-362 (eng review D8 B): Settings › Billing against a real dev API and Stripe's real hosted pages. Ships
+      // with the portal and the API, so it follows the same release tag.
+      release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
+      watch: [
+        'src/hosted/components/BillingDrawer.tsx',
+        'src/hosted/data/billingView.ts',
+        'src/hosted/data/billingQueries.ts',
+        'src/hosted/data/countries.ts',
+        'server/src/routes/billing.ts',
+        'server/src/billing/checkout.ts',
+        'server/src/billing/billing-countries.json',
+        'server/src/billing/stripe/checkout-gateway.ts',
+      ],
+      // support/billing-live.mjs: the Keychain sandbox key, a migrated QA database, the sandbox catalog,
+      // `stripe listen`, the API on :8790 and the portal on :5176 (8787-8789 are other sessions' dev APIs).
+      baseURL: 'http://127.0.0.1:5176',
+      attachURL: 'http://127.0.0.1:5176',
+      start: { cmd: `${HEAP_CAPPED} node qa/support/billing-live.mjs` },
+      ready: 'http://127.0.0.1:5176',
+      personas: {},
+    },
   },
 
   env: {

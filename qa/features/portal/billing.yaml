@@ -1,0 +1,28 @@
+app: portal
+area: billing
+title: Settings › Billing, stubbed API
+tier: secondary
+# MUT-362 (design review DR4/DR5): the states the live sandbox can't show, because it always has prices. The paying
+# flows run in the portal-live app against Stripe's real pages (qa/features/portal-live/billing.yaml).
+paths:
+  - src/hosted/components/BillingDrawer.tsx
+  - src/hosted/data/billingView.ts
+  - src/hosted/data/billingQueries.ts
+  - src/hosted/data/countries.ts
+  - src/hosted/components/RadioCards.tsx
+  - src/hosted/shell/AccountDrawers.tsx
+features:
+  - id: open-soon
+    title: Before Stripe or the GA prices are set, Billing says subscriptions open soon and offers no Subscribe
+    tier: secondary
+    paths:
+      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/i18n/en.json
+      - src/hosted/i18n/ar.json
+      - src/hosted/hosted.css
+    steps:
+      - Sign in during the free trial on a server with no Stripe configured
+      - Open Billing from the account menu
+    expect:
+      - The drawer shows the trial status first ("9 days left in your free trial")
+      - In place of Subscribe it says "Subscriptions open soon. We'll let you know before your trial ends." and shows no price

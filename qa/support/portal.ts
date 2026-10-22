@@ -43,6 +43,8 @@ export interface StubProfile {
   owners?: StubOwner[];
   /** MUT-373: the person's built-in personal profile. */
   personalDefault?: boolean;
+  /** MUT-358/362: the profile's billing entitlement as /v1/me reports it; absent = the field is left out. */
+  billing?: { state: 'ACTIVE' | 'GRACE' | 'READ_ONLY' | 'LOCKED'; source: 'MALAFAT' | 'OPERATOR' | 'STRIPE' | 'TRIAL' | 'NONE'; tier: 'FREELANCER' | 'FIRM' | null; until: string | null };
 }
 
 export const office = (id: string, name: string): StubProfile => ({ id, name, type: 'BUSINESS', owned: true, writerOfRecord: null });
@@ -70,6 +72,7 @@ export function hostedProfile(p: StubProfile) {
     firm: p.firm ?? false,
     role: p.firm ? (p.role ?? 'OWNER') : null,
     firmRequestedAt: p.owned ? (p.firmRequestedAt ?? null) : null,
+    ...(p.billing ? { billing: p.billing } : {}),
   };
 }
 

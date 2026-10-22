@@ -1,0 +1,90 @@
+app: portal-live
+area: billing
+title: Settings › Billing against Stripe's sandbox
+tier: secondary
+# MUT-362 (epic MUT-322, ADR-170; eng review D8 B): the portal on a real dev API holding a Stripe sandbox key, with
+# `stripe listen` forwarding the webhook, so the flows pay on Stripe's real hosted Checkout and cancel in its real
+# Customer Portal. Started by qa/support/billing-live.mjs. billing-countries.json ships with no consumer country
+# (Basel fills it after MUT-355), so the paying flows buy as a business; a person's card path is covered by
+# server/src/billing/__tests__/checkout.test.ts and the route tests.
+paths:
+  - src/hosted/components/BillingDrawer.tsx
+  - src/hosted/data/billingView.ts
+  - src/hosted/data/billingQueries.ts
+  - src/hosted/data/countries.ts
+  - server/src/routes/billing.ts
+  - server/src/billing/checkout.ts
+  - server/src/billing/billing-countries.json
+  - server/src/billing/stripe/checkout-gateway.ts
+features:
+  - id: subscribe
+    title: Subscribe in shekels from Israel as a business, pay with a test card, and come back subscribed
+    tier: core
+    paths:
+      - src/hosted/shell/AccountDrawers.tsx
+      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/components/RadioCards.tsx
+      - src/hosted/i18n/en.json
+      - src/hosted/i18n/ar.json
+      - src/hosted/hosted.css
+      - src/hosted/data/filters.ts
+      - server/src/billing/stripe/sync.ts
+    steps:
+      - Sign in as a new person and open Billing from the account menu
+      - Press Subscribe, choose Israel, For a business, Monthly
+      - Read the heads-up and press Continue to payment
+      - On Stripe's page, pay with 4242 4242 4242 4242 and an Israeli address, entering the business tax number
+    expect:
+      - Our drawer explains the plan, both prices, the VAT sentence and the cancel rule before any Stripe page (AC4)
+      - Stripe's page charges ₪39.00 a month and asks for the business tax number
+      - Back in the portal the drawer says "Confirming your payment…", then "You're subscribed. Thank you." once the webhook lands, with Manage billing (AC1, ILS)
+  - id: subscribe-usd
+    title: Subscribe in dollars from the Emirates as a business with a tax ID
+    tier: secondary
+    steps:
+      - Sign in as a new person, open Billing and press Subscribe
+      - Choose United Arab Emirates, For a business, Yearly
+      - Pay on Stripe's page with the test card and a UAE TRN
+    expect:
+      - The step's summary and Stripe's page show $100.00 a year; Yearly is labelled "2 months free"
+      - Back in the portal the drawer says "You're subscribed. Thank you." (AC1, USD)
+  - id: business-only
+    title: A person outside the countries open to consumers never reaches the card form; a business can go on
+    tier: secondary
+    steps:
+      - Sign in, open Billing and press Subscribe
+      - Choose Jordan and For yourself
+      - Switch to For a business
+    expect:
+      - As a person, "We can't sell to individuals in Jordan yet" with Contact us, and Continue to payment stays disabled (AC2)
+      - As a business, the summary shows $10.00 a month and Continue to payment is enabled
+  - id: manage
+    title: Manage billing opens Stripe's Customer Portal; cancelling keeps the plan until the period ends
+    tier: core
+    paths:
+      - server/src/billing/entitlement.ts
+    steps:
+      - Sign in as a person with a paid monthly subscription and open Billing
+      - Press Manage billing
+      - In Stripe's portal, cancel the plan and return to Mutaba3a
+    expect:
+      - The drawer shows Active and the renewal date before, and Stripe's Customer Portal opens on Manage billing (AC3)
+      - Back in the portal the drawer says "Your plan ends on <date>"; access stays until then
+  - id: manage-ended
+    title: After the cancelled period ends the account is read-only and Subscribe comes back
+    tier: secondary
+    steps:
+      - Sign in as a person whose cancelled subscription sits on a Stripe test clock
+      - Advance the test clock past the period end
+      - Open Billing
+    expect:
+      - The drawer says "Your plan has ended", read-only, with Subscribe (AC3: READ_ONLY after the period)
+  - id: rtl-375
+    title: Billing in Arabic on a 375 px phone
+    tier: secondary
+    steps:
+      - Sign in as an Arabic-speaking person on a 375 px screen
+      - Open Billing, then the Subscribe step, choose Israel and For a business
+    expect:
+      - Nothing overflows sideways; the headline, chip and buttons read right to left
+      - The amount reads ₪39.00 inside Arabic text (<bdi>), and Continue to payment spans the footer (AC4, DR10)
