@@ -160,7 +160,7 @@ export function describeLedgerStoreExpenseGroupsContract(name: string, makeStore
       await store.expenses.create(w.expense({ occurredOn: '2026-10-03', amountMinor: 500n }), at(3));
       await store.expenses.create(w.expense({ currency: 'USD', amountMinor: 4_000n, occurredOn: '2026-10-06' }), at(4));
       const gone = await store.expenses.create(w.expense({ amountMinor: 99_000n }), at(5));
-      await store.expenses.softDelete(w.a.id, gone.id, at(6));
+      await store.expenses.softDelete(w.a.id, gone.id, at(6), 'unlink');
 
       expect(await store.expenses.totalsByCurrency(w.a.id, { group: filterFor(g1) })).toEqual([
         { currency: 'JOD', totalMinor: 2_000n, count: 2 },

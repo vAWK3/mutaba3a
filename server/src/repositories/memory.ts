@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { editRatesOf } from '../receipts/edit-rates.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
@@ -152,8 +153,10 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 /**
  * Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it.
  * 2 (MUT-300): `orgs` gained `firmEnabledAt`, `firmRequestedAt` and `firmRequestedByUserId`; `members` gained `role`.
+ * 3 (MUT-255): `expReceipts` gained `filingStatus`, `receivedOn`, `suggested`, `approved`, `approvedAt`,
+ *   `approvedByUserId` and `version`, and `expenseId` may be null (a To-review receipt).
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 2;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 3;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -1598,12 +1601,25 @@ export class MemoryLedgerStore implements LedgerStore {
       e.updatedAt = at;
       return { kind: 'updated', record: { ...e } };
     },
-    softDelete: async (organizationId, id, at) => {
+    softDelete: async (organizationId, id, at, receipts) => {
       const e = this.exps.get(id);
       if (!e || e.organizationId !== organizationId) return null;
-      const changed = !e.deletedAt;
-      if (changed) e.deletedAt = at;
-      return { record: { ...e }, changed };
+      if (e.deletedAt) return { record: { ...e }, changed: false, removedReceipts: [] };
+      e.deletedAt = at;
+      // MUT-255: READY receipts go back to the library ('unlink'); everything left goes with the expense.
+      const removedReceipts: ExpenseReceiptRecord[] = [];
+      for (const r of this.expReceipts.values()) {
+        if (r.organizationId !== organizationId || r.expenseId !== id || r.deletedAt) continue;
+        if (receipts === 'unlink' && r.status === 'READY') {
+          r.expenseId = null;
+          r.filingStatus = 'TO_REVIEW';
+          r.version += 1;
+        } else {
+          r.deletedAt = at;
+          removedReceipts.push({ ...r });
+        }
+      }
+      return { record: { ...e }, changed: true, removedReceipts };
     },
     totalsByCurrency: async (organizationId, filter: ExpenseFilter) => {
       const totals = new Map<string, ExpenseCurrencyTotal>();
@@ -1761,8 +1777,29 @@ export class MemoryLedgerStore implements LedgerStore {
 
   readonly expenseReceipts: ExpenseReceiptRepository = {
     create: async (input: CreateExpenseReceiptInput, at) => {
-      if (!this.exps.has(input.expenseId)) throw new ForeignKeyViolation('expense_receipts.expenseId');
-      const record: ExpenseReceiptRecord = { id: randomUUID(), ...input, storageKey: '', status: 'PENDING_UPLOAD', createdAt: at, completedAt: null, deletedAt: null };
+      if (input.expenseId !== null && !this.exps.has(input.expenseId)) throw new ForeignKeyViolation('expense_receipts.expenseId');
+      const record: ExpenseReceiptRecord = {
+        id: randomUUID(),
+        organizationId: input.organizationId,
+        expenseId: input.expenseId,
+        filename: input.filename,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+        status: 'PENDING_UPLOAD',
+        filingStatus: input.expenseId ? 'FILED' : 'TO_REVIEW',
+        receivedOn: input.receivedOn,
+        storageKey: '',
+        uploadedByUserId: input.uploadedByUserId,
+        suggested: input.suggested ?? null,
+        approved: null,
+        approvedAt: null,
+        approvedByUserId: null,
+        version: 1,
+        requestId: input.requestId,
+        createdAt: at,
+        completedAt: null,
+        deletedAt: null,
+      };
       this.expReceipts.set(record.id, record);
       return { ...record };
     },
@@ -1796,20 +1833,73 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!r.deletedAt) r.deletedAt = at;
       return { ...r };
     },
-    softDeleteByExpense: async (organizationId, expenseId, at) => {
-      const live = [...this.expReceipts.values()].filter((r) => r.organizationId === organizationId && r.expenseId === expenseId && !r.deletedAt);
-      for (const r of live) r.deletedAt = at;
-      return live.map((r) => ({ ...r }));
-    },
     countReadyByExpenseIds: async (organizationIds, expenseIds) => {
       const counts = new Map<string, number>();
       for (const r of this.expReceipts.values()) {
-        if (!organizationIds.includes(r.organizationId) || !expenseIds.includes(r.expenseId) || r.status !== 'READY' || r.deletedAt) continue;
+        if (r.expenseId === null || !organizationIds.includes(r.organizationId) || !expenseIds.includes(r.expenseId) || r.status !== 'READY' || r.deletedAt) continue;
         counts.set(r.expenseId, (counts.get(r.expenseId) ?? 0) + 1);
       }
       return counts;
     },
+    list: async (organizationId, filter, page) => {
+      const rows = [...this.expReceipts.values()]
+        .filter(
+          (r) =>
+            r.organizationId === organizationId &&
+            r.status === 'READY' &&
+            !r.deletedAt &&
+            (!filter.filingStatus || r.filingStatus === filter.filingStatus) &&
+            (!filter.from || r.receivedOn >= filter.from) &&
+            (!filter.to || r.receivedOn <= filter.to) &&
+            (!page.cursor || r.createdAt < page.cursor.createdAt || (r.createdAt.getTime() === page.cursor.createdAt.getTime() && r.id < page.cursor.id)),
+        )
+        .sort((a, b) => -compareByCreatedAtThenId(a, b));
+      const items = rows.slice(0, page.limit).map((r) => ({ ...r }));
+      const last = items[items.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last ? { createdAt: last.createdAt, id: last.id } : null };
+    },
+    countByFilingStatus: async (organizationId) => {
+      const counts = { toReview: 0, filed: 0 };
+      for (const r of this.expReceipts.values()) {
+        if (r.organizationId !== organizationId || r.status !== 'READY' || r.deletedAt) continue;
+        if (r.filingStatus === 'TO_REVIEW') counts.toReview += 1;
+        else counts.filed += 1;
+      }
+      return counts;
+    },
+    countPendingSince: async (organizationId, since) =>
+      [...this.expReceipts.values()].filter((r) => r.organizationId === organizationId && r.status === 'PENDING_UPLOAD' && !r.deletedAt && r.createdAt >= since).length,
+    setSuggested: async (organizationId, id, expectedVersion, suggested) => {
+      const r = this.expReceipts.get(id);
+      if (!r || r.organizationId !== organizationId || r.deletedAt) return { kind: 'not_found' };
+      if (r.filingStatus === 'FILED') return { kind: 'filed' };
+      if (r.version !== expectedVersion) return { kind: 'stale', record: { ...r } };
+      r.suggested = suggested;
+      r.version += 1;
+      return { kind: 'updated', record: { ...r } };
+    },
+    fileAsExpense: async (params, at) => {
+      const r = this.expReceipts.get(params.receiptId);
+      if (!r || r.organizationId !== params.organizationId || r.deletedAt) return { kind: 'not_found' };
+      if (r.filingStatus === 'FILED') return { kind: 'already_filed' };
+      if (r.status !== 'READY') return { kind: 'not_ready' };
+      // A failed insert (e.g. a category deleted since the route checked) throws before the receipt is touched.
+      const expense = await this.expenses.create(params.expense, at);
+      r.expenseId = expense.id;
+      r.filingStatus = 'FILED';
+      r.approved = params.approved;
+      r.approvedAt = at;
+      r.approvedByUserId = params.userId;
+      if (params.suggested) r.suggested = params.suggested;
+      r.version += 1;
+      return { kind: 'filed', expense, receipt: { ...r } };
+    },
+    editRates: async (range) =>
+      editRatesOf(
+        [...this.expReceipts.values()].flatMap((r) => (r.approved && r.approvedAt && r.approvedAt >= range.from && r.approvedAt < range.to ? [{ suggested: r.suggested, approved: r.approved }] : [])),
+      ),
   };
+
 
   // ---- MUT-270: the entries feed -------------------------------------------
 

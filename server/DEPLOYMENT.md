@@ -125,10 +125,10 @@ Separate from the GCP rollout: `server/infrastructure/sentry/` has its own
 state, and `deploy.sh` never touches it. The rules are in
 `docs/observability/README.md`.
 
-1. **Org.** Sign in to Sentry and create a **new organization in the EU
-   (Frankfurt) region**, slug `mutaba3a` (the product, so no other product is
-   added to it by habit). The region can't be changed later. Don't reuse another
-   product's org. Turn on **two-factor authentication on your own account first**:
+1. **Org.** Use the company org **`barmajiyat-ltd`**, which is in the **EU
+   (Frankfurt) region** (ADR-091 amendment 5). If you create it again, pick the
+   EU region: the region can't be changed later. Never use an org outside
+   Barmajiyat. Turn on **two-factor authentication on your own account first**:
    step 5 makes the org require it, and Sentry refuses that setting from an
    account without 2FA.
 2. **Plan and budget.** Stay on the **Developer (free)** plan. Under
@@ -161,7 +161,7 @@ state, and `deploy.sh` never touches it. The rules are in
 
    The personal token reaches every org you belong to, and the step 5 guard runs
    after this apply. So before applying, read the org slug in the plan: every
-   resource should show `organization = "mutaba3a"`.
+   resource should show `organization = "barmajiyat-ltd"`.
 
    If the plan errors on `de.sentry.io`, or the apply stops on the "not in the
    EU region" postcondition, **stop and check the org's data region** in its
@@ -175,7 +175,7 @@ state, and `deploy.sh` never touches it. The rules are in
 
    ```bash
    cd "$(git rev-parse --show-toplevel)"
-   SENTRY_ADMIN_TOKEN="$SENTRY_ADMIN_TOKEN" SENTRY_ORG=mutaba3a npx tsx scripts/sentry-org-settings.ts --apply
+   SENTRY_ADMIN_TOKEN="$SENTRY_ADMIN_TOKEN" SENTRY_ORG=barmajiyat-ltd npx tsx scripts/sentry-org-settings.ts --apply
    ```
 
    It prints the target org and host, then exits 1 and lists any setting that
@@ -741,6 +741,8 @@ stack. Cloud Run reads the token secret by name, so deleting it first breaks the
 | After the first release carrying MUT-100 (`1.16.0-mut100`) | `npm run db:psql`, then `SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'AgreementType';` must list `CONTINGENCY` (it arrives alone in its own migration); `/openapi.json` reports `1.16.0-mut100`; `npm run smoke` passes |
 | Roll back past MUT-100 | Harmless while `SELECT count(*) FROM agreements WHERE type = 'CONTINGENCY'` is 0 (the new columns and enum value stay). **Once any exists, roll forward only:** an older revision's Prisma client has no `CONTINGENCY` in its enum, so every read that returns such an agreement (agreement lists, project and customer summaries) fails for that organization; it also reads commission installments as ordinary ones, and drops an unknown `contingency` field on create, making a FIXED agreement silently (TD-098) |
 | Roll back past MUT-235 | Harmless while `SELECT count(*) FROM users WHERE "passwordHash" IS NULL` is 0 (the new table stays unused). **Once any exists, roll forward only:** every account created since, and every `--lock`, has a NULL password, which an older revision's Prisma client cannot read (P2032), so sign-in and every lookup of those people fail with a 500 and the old admin reset cannot fix them. If a rollback is unavoidable, first set those rows to the argon2id hash of a random throwaway password (still unusable), then reissue links after rolling forward |
+| Deploy MUT-255 (receipts library, `1.46.0-mut255`) | **Hold production** until MUT-260 or MUT-258 ships with it (decision P4): without a screen that lists receipts, deleting an expense would leave receipts nobody can see. Deploy the portal first (it reads records files at format 3), then the server; the migration is safe under the old revision (`filingStatus` defaults to FILED, `receivedOn` to the UTC day). After: `/openapi.json` reports `1.46.0-mut255`; `npm run smoke` passes |
+| Roll back past MUT-255 | Harmless while `SELECT count(*) FROM expense_receipts WHERE "expenseId" IS NULL` is 0. **Once any exists, roll forward only:** an older revision's Prisma client can't read a receipt with no expense (P2032), so expense details and records exports that touch one fail. Soft-deleting them is not enough (the records export reads deleted rows too). If a rollback is unavoidable, first move them aside: `CREATE TABLE expense_receipts_to_review AS SELECT * FROM expense_receipts WHERE "expenseId" IS NULL; DELETE FROM expense_receipts WHERE "expenseId" IS NULL;` — their files stay in the bucket, and the rows go back after rolling forward |
 | Roll back past MUT-182 | Safe for the schema: the old revision writes personal profiles without `ownerUserId`/`profileType`, the CHECKs allow that, and the next deploy's post-roll `repairPersonalOwnership` stamps them. But once any user has created a profile (`SELECT count(*) FROM organizations WHERE "ownerUserId" IS NOT NULL AND "personalOwnerUserId" IS NULL` > 0), an older revision treats those as operator firms: it would issue them API keys, bind them to Malafat or share them on request. **Roll forward only** once that count is above 0, or refuse every such operator request while the old revision serves |
 | Delete a user who owns profiles (a privacy request) | Users are normally disabled, never deleted. If one must go, first remove (or hand to an operator) every organization with `"ownerUserId" = '<user id>'` and its rows: `organizations.ownerUserId` is `ON DELETE RESTRICT` (MUT-182), exactly as `personalOwnerUserId` is (MUT-120), so the user delete is refused while any remain |
 | Uptime alerts: apply, verify SMS, drill (MUT-328) | §6b |

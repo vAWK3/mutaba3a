@@ -53,7 +53,7 @@ Status: eng-reviewed 2026-10-22. Decisions R1–R4 approved, and this body is re
 - `money.ts:56-59` `parseMoney`: `if (exponent === undefined) throw new MoneyParseError(\`${currency} is not a supported currency\`)` (D3).
 - `server/src/fx-rates.ts:10-37`: `USD_PEGS = { JOD: 0.709 }` and the comments. `PeggedCurrency` narrows to `'JOD'` on its own.
 - `server/src/schemas.ts:675-684, 1181-1192`: comments only; the values are generated.
-- `server/src/app.ts:154`: `API_VERSION` → `1.45.0-mut388` (renumbered if something lands first). Update the pins in `routes-m2…m8.test.ts`.
+- `server/src/app.ts:154`: `API_VERSION` → `1.47.0-mut388` (renumbered if something lands first). Update the pins in `routes-m2…m8.test.ts`.
 - `npm --prefix server run openapi:generate` → `server/openapi/openapi.yaml`.
 - `server/README.md:158`.
 - New `server/scripts/currency-rows.sh` (D2), with the header comment style of `profile-rows.sh`. It prints table/column/value/organizationId/count, and has a `--delete-test-profiles <uuid,…>` mode that runs as one transaction and supports `--dry-run`.

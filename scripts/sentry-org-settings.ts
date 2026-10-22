@@ -3,8 +3,8 @@
  * hold: Require Data Scrubber, default scrubbers, Prevent storing IP addresses, Enhanced Privacy,
  * no shared issues, required 2FA, no safe fields, and the curated sensitive fields.
  *
- *   SENTRY_ADMIN_TOKEN=<admin token> SENTRY_ORG=mutaba3a npx tsx scripts/sentry-org-settings.ts --apply
- *   SENTRY_ADMIN_TOKEN=<admin token> SENTRY_ORG=mutaba3a npx tsx scripts/sentry-org-settings.ts --check
+ *   SENTRY_ADMIN_TOKEN=<admin token> SENTRY_ORG=barmajiyat-ltd npx tsx scripts/sentry-org-settings.ts --apply
+ *   SENTRY_ADMIN_TOKEN=<admin token> SENTRY_ORG=barmajiyat-ltd npx tsx scripts/sentry-org-settings.ts --check
  *
  * Exits 1 on drift, an org outside the EU region, or any API error. See server/DEPLOYMENT.md §1.5.
  */

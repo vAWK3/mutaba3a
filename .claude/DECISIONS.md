@@ -3665,6 +3665,12 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
   - Plurals of the lowercase compounds: `phonenumbers`, `emailaddresses`, `apikeys`, `accesstokens`, `refreshtokens`, `sessionids`, `firstnames`, `lastnames`, `fullnames`, `payloads`.
   - Bracketed form keys (`client[name]=…`) are a documented limit.
 
+**Amendment 5 (org choice, 2026-10-22)**: Basel: use the company org **`barmajiyat-ltd`** (EU region, `de`), which owns both Mutaba3a and Malafat. This replaces rule 2's "new, dedicated org" and D13's suggested slug `mutaba3a`.
+- **Why R3 is still met.** R3 rejected another product's org because its region might not be EU and its quota and alerts would be shared. `barmajiyat-ltd` is EU, and for now it holds no other product, so Mutaba3a has the quota and alerts to itself. The EU checks (D5) still run on every apply.
+- **The Barmajiyat CLAUDE.md already named this org.** The MUT-147 plan was written against the earlier option of a fresh signup and never weighed it.
+- **Unchanged.** The team slug, the `mutaba3a-…` project slugs, the scrub contract, the daily caps and the org privacy settings. The wrong-org guard (D16) still refuses any project that isn't `mutaba3a-…`.
+- **Before another product joins the org**, TD-198 has to be fixed: the guard would refuse the org, the org-wide privacy settings (`require2FA`, `enhancedPrivacy`, sensitive fields) would apply to that product too, and the free plan's one quota would be split.
+
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
 **Status**: Accepted (2026-10-17, MUT-157; auto-decided on the recommended option at Basel's request, C1)
@@ -4534,7 +4540,27 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Converting stray rows to another currency: the amount would be wrong; they are deleted (test profiles) or decided by Basel.
 
 **Consequences**:
-- API 1.45.0-mut388. Clients built against 1.35.0+ keep working: `currencies` is a plain string list.
+- API 1.47.0-mut388. Clients built against 1.35.0+ keep working: `currencies` is a plain string list.
 - A Gulf row left on a real profile still reads right but can't take a new amount until its currency changes; the gate keeps that from happening silently.
 - ADR-098 §7's "the web (MUT-282/283) reads it" and "server-ci watches docs/fx" were never or are no longer true: MUT-282/283 were not built, and CI is manual (`workflow_dispatch`).
 
+---
+
+## ADR-167: The Receipts Library: A Receipt Belongs to Its Profile and Waits To Review; Approval Files It in One Transaction (MUT-255)
+
+**Status**: Active
+**Date**: 2026-10-22
+**Context**: Epic MUT-252 (receipt scanning) needs the original saved the moment it is shared, browsable afterwards, and approved into an expense once its fields are checked. Until now `ExpenseReceipt.expenseId` was required (MUT-42), so a receipt could not exist before its expense, and deleting an expense deleted its receipts and their files. Plan, eng review and outside voice: `.claude/designs/mut-255-receipts-library.md`. Basel answered P1–P4 on 2026-10-22.
+**Decision**:
+1. **A receipt belongs to its profile; its expense is optional.** A stored `filingStatus` (TO_REVIEW / FILED) sits beside the upload status, with a DB CHECK: FILED exactly when there is an expense. MUT-308 widens the CHECK to "or a bill" and adds `billId`; MUT-255 keeps the "already filed" answer in one place (409 `CONFLICT`, `reason: RECEIPT_ALREADY_FILED`, with `details.expenseId` naming where it is filed, so a client whose first 201 was lost can still open the expense). The expense foreign key stays RESTRICT (expenses are only soft-deleted).
+2. **Rolling-deploy-safe defaults.** `filingStatus` defaults to FILED and `receivedOn` (the upload day in the profile timezone) to the UTC day, so the previous revision's MUT-44 inserts pass during the deploy. The library route sets both itself.
+3. **What was read and what was approved are both kept.** `suggested` is the firm-books brief's `ReceiptSuggestion` (§6.1); unknown fields are dropped, not refused, so a newer reader never breaks approval. `approved` snapshots what approval wrote (minor units, like the suggestion). The edit rate per field is an operator route, `GET /admin/v1/receipts/edit-rates`, counts only.
+4. **Approval is one transaction** (`expenseReceipts.fileAsExpense`): lock the receipt, refuse unless READY and To review, insert the expense, then a conditional update files the receipt; zero rows throws so no expense is orphaned. It is idempotent (`Idempotency-Key`). Its checks are POST /v1/expenses's own (`prepareExpenseCreate`). MUT-307's approval and MUT-312's closed month plug in between the lock and the insert.
+5. **Hosted only (P1).** `/v1/receipts*` is mounted in `app.ts`, not in `PORTAL_ROUTES`. On the hosted server, deleting an expense sends its READY receipts back to To review (in the expense delete's transaction) and soft-deletes unfinished uploads; signed-out local mode, which has no library, still deletes them all (`PortalRouteDependencies.receiptsLibrary`). Local import keeps To-review receipts and their files. Local format 2 → 3.
+6. **Limits (P3, amended in qa-reconcile).** 429 `RATE_LIMITED` with `reason: TOO_MANY_PENDING_UPLOADS` at 20 unfinished uploads per profile in 24 hours (P3 said 422; Basel chose 429 on 2026-10-22 so the key stays free); 30 upload starts a minute per person (429). The idempotency layer now releases a key on any 429, as on a 5xx: nothing was done, so the same request may be sent again with it. A replayed upload start answers the original, so `POST /v1/receipts/{id}/upload-url` re-signs an expired URL.
+7. **Filing onto an existing expense** is MUT-389 (P2), not this ADR.
+8. **Release (P4).** The server change ships to production only together with the first screen that shows the library (MUT-260 or MUT-258). The portal deploys before the server (local format 3).
+**Consequences**:
+- A deleted expense no longer takes its receipts with it on the hosted server; they reappear under To review.
+- Once a To-review receipt exists, the previous server revision cannot read that row (Prisma P2032): rolling back means rolling forward, or moving the To-review rows aside first (DEPLOYMENT.md).
+- The local format number is shared with MUT-302/307/308; whoever lands next takes 4.

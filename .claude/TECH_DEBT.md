@@ -211,6 +211,14 @@
 **Impact**: the 200-group cap counts live groups only, so create-and-delete churn grows `expense_groups` without bound. The list index `(organizationId, startOn DESC, id DESC)` includes the dead rows.
 **Fix**: a partial index `WHERE "deletedAt" IS NULL` in place of the full one.
 
+### TD-198: The Sentry settings script assumes the org holds only Mutaba3a projects
+**Status**: Open
+**Ticket**: none (ADR-091 amendment 5)
+**Added**: 2026-10-22
+**Priority**: Low (nothing else is in `barmajiyat-ltd` yet)
+**Impact**: `scripts/sentry-org-policy.ts` (`PROJECT_PREFIX`) refuses to apply or check settings once the org holds a project that isn't `mutaba3a-…`. The settings it writes are org-wide, so another product would inherit Mutaba3a's sensitive-field list and privacy switches. On the free Developer plan the monthly quota is per org, and `monthly_event_quota` sizes the daily caps as if Mutaba3a had the whole quota.
+**Fix**: before Malafat (or any other product) adds a Sentry project, replace the prefix guard with an allow-list of known product prefixes. Agree the org-wide settings with that product, then lower `monthly_event_quota` to Mutaba3a's share or move to a paid plan.
+
 ### TD-197: The nightly reconcile job authenticates with a static shared token, not a Google OIDC token
 **Status**: Accepted (MUT-360 D2, Basel 2026-10-21)
 **Ticket**: none (MUT-360, ADR-165)

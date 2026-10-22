@@ -44,6 +44,17 @@ const EXPENSE_OPERATIONS = [
   'PUT /v1/expense-groups/{groupId}/expenses/{expenseId}',
   'DELETE /v1/expense-groups/{groupId}/expenses/{expenseId}',
   'GET /v1/expense-groups/{groupId}/summary',
+  // MUT-255: the receipts library is the expenses domain too.
+  'POST /v1/receipts/uploads',
+  'POST /v1/receipts/{receiptId}/upload-url',
+  'POST /v1/receipts/{receiptId}/complete',
+  'GET /v1/receipts',
+  'GET /v1/receipts/counts',
+  'GET /v1/receipts/{receiptId}',
+  'GET /v1/receipts/{receiptId}/download',
+  'PATCH /v1/receipts/{receiptId}/suggestion',
+  'POST /v1/receipts/{receiptId}/approve',
+  'DELETE /v1/receipts/{receiptId}',
 ];
 
 /** MUT-65: personal-profile income capture — session-only (Malafat has its own richer payment/allocation routes). */

@@ -149,15 +149,15 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       const store = await makeStore();
       const w = await world(store);
       const e = await store.expenses.create(w.expense(), at(0));
-      const first = await store.expenses.softDelete(w.a.id, e.id, at(1));
+      const first = await store.expenses.softDelete(w.a.id, e.id, at(1), 'unlink');
       expect(first).toMatchObject({ changed: true, record: { id: e.id, deletedAt: at(1) } });
       expect(await store.expenses.getById(w.a.id, e.id)).toBeNull();
       expect((await store.expenses.list(w.a.id, {}, { limit: 50, cursor: null })).items).toEqual([]);
       expect(await store.expenses.update(w.a.id, e.id, 1, { amountMinor: 1n }, at(2))).toEqual({ kind: 'not_found' });
-      const second = await store.expenses.softDelete(w.a.id, e.id, at(3));
+      const second = await store.expenses.softDelete(w.a.id, e.id, at(3), 'unlink');
       expect(second).toMatchObject({ changed: false, record: { deletedAt: at(1) } });
-      expect(await store.expenses.softDelete(w.b.id, e.id, at(3))).toBeNull();
-      expect(await store.expenses.softDelete(w.a.id, '00000000-0000-4000-8000-00000000dead', at(3))).toBeNull();
+      expect(await store.expenses.softDelete(w.b.id, e.id, at(3), 'unlink')).toBeNull();
+      expect(await store.expenses.softDelete(w.a.id, '00000000-0000-4000-8000-00000000dead', at(3), 'unlink')).toBeNull();
     });
 
     it('keeps category names unique per organization regardless of case, lists in creation order, archives', async () => {
@@ -201,13 +201,13 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       expect((await store.expenseCategories.list(w.b.id, { includeArchived: true })).map((c) => c.name)).toEqual(['Mine']);
     });
 
-    it('creates receipts pending, keys and completes them, lists READY ones per expense, soft-deletes one or all', async () => {
+    it('creates receipts pending and FILED, keys and completes them, lists READY ones per expense, soft-deletes one; deleting the expense unlinks READY ones and removes the rest', async () => {
       const store = await makeStore();
       const w = await world(store);
       const e = await store.expenses.create(w.expense(), at(0));
-      const input = { organizationId: w.a.id, expenseId: e.id, filename: 'receipt.pdf', mimeType: 'application/pdf', sizeBytes: 1234, uploadedByUserId: w.user.id, requestId: 'req' };
+      const input = { organizationId: w.a.id, expenseId: e.id, filename: 'receipt.pdf', mimeType: 'application/pdf', sizeBytes: 1234, receivedOn: '2026-10-11', uploadedByUserId: w.user.id, requestId: 'req' };
       const r1 = await store.expenseReceipts.create(input, at(1));
-      expect(r1).toMatchObject({ status: 'PENDING_UPLOAD', storageKey: '', completedAt: null, deletedAt: null, uploadedByUserId: w.user.id });
+      expect(r1).toMatchObject({ status: 'PENDING_UPLOAD', filingStatus: 'FILED', receivedOn: '2026-10-11', suggested: null, approved: null, version: 1, storageKey: '', completedAt: null, deletedAt: null, uploadedByUserId: w.user.id });
       const keyed = await store.expenseReceipts.setKey(w.a.id, r1.id, `org/${w.a.id}/expense-receipts/${r1.id}`);
       expect(keyed!.storageKey).toBe(`org/${w.a.id}/expense-receipts/${r1.id}`);
       expect(await store.expenseReceipts.listByExpense(w.a.id, e.id)).toEqual([]);
@@ -222,10 +222,23 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       const one = await store.expenseReceipts.softDelete(w.a.id, r1.id, at(6));
       expect(one!.deletedAt).toEqual(at(6));
       expect(await store.expenseReceipts.getById(w.a.id, r1.id)).toBeNull();
-      const rest = await store.expenseReceipts.softDeleteByExpense(w.a.id, e.id, at(7));
-      expect(rest.map((r) => r.id).sort()).toEqual([r2.id, pending.id].sort());
+      // MUT-255: deleting the expense sends the READY receipt back to the library and removes the unfinished upload.
+      const deleted = await store.expenses.softDelete(w.a.id, e.id, at(7), 'unlink');
+      expect(deleted!.removedReceipts.map((r) => r.id)).toEqual([pending.id]);
+      expect(await store.expenseReceipts.getById(w.a.id, pending.id)).toBeNull();
+      expect(await store.expenseReceipts.getById(w.a.id, r2.id)).toMatchObject({ expenseId: null, filingStatus: 'TO_REVIEW', status: 'READY', version: 2 });
       expect(await store.expenseReceipts.listByExpense(w.a.id, e.id)).toEqual([]);
-      expect(await store.expenseReceipts.softDeleteByExpense(w.a.id, e.id, at(8))).toEqual([]);
+      expect(await store.expenseReceipts.countReadyByExpenseIds([w.a.id], [e.id])).toEqual(new Map());
+      expect((await store.expenses.softDelete(w.a.id, e.id, at(8), 'unlink'))!.removedReceipts).toEqual([]);
+
+      // Signed-out local mode has no library ('remove'): every receipt goes with the expense, READY ones included.
+      const local = await store.expenses.create(w.expense(), at(9));
+      const kept = await store.expenseReceipts.create({ ...input, expenseId: local.id }, at(9));
+      await store.expenseReceipts.complete(w.a.id, kept.id, at(9));
+      const half = await store.expenseReceipts.create({ ...input, expenseId: local.id }, at(9));
+      const removed = await store.expenses.softDelete(w.a.id, local.id, at(10), 'remove');
+      expect(removed!.removedReceipts.map((r) => r.id).sort()).toEqual([kept.id, half.id].sort());
+      expect(await store.expenseReceipts.getById(w.a.id, kept.id)).toBeNull();
     });
   });
 }

@@ -294,7 +294,9 @@ model User {
   firmRequests     Organization[]      @relation("FirmRequests")
 
   expenses            Expense[]
-  expenseReceipts     ExpenseReceipt[]
+  expenseReceipts     ExpenseReceipt[]     @relation("ReceiptUploadedBy")
+  /// MUT-255: receipts this person approved into an expense.
+  approvedReceipts    ExpenseReceipt[]     @relation("ReceiptApprovedBy")
   conversions         Conversion[]
   /// MUT-267: groups this person created.
   expenseGroups       ExpenseGroup[]
@@ -1085,20 +1087,43 @@ model ExpenseCategory {
   @@map("expense_categories")
 }
 
+/// MUT-255: where a receipt stands in the profile's receipts library. FILED exactly when it has an expense (DB CHECK
+/// `expense_receipts_filed_has_record`); MUT-308 widens that to "or a bill".
+enum ReceiptFilingStatus {
+  TO_REVIEW
+  FILED
+}
+
 /// A receipt file in the attachments bucket under org/{organizationId}/expense-receipts/{id}. Kept apart from `attachments`, which Malafat reads.
+/// MUT-255: a receipt belongs to its profile; its expense is optional (a To-review receipt has none yet).
 model ExpenseReceipt {
-  id               String           @id @default(uuid()) @db.Uuid
-  organizationId   String           @db.Uuid
-  organization     Organization     @relation(fields: [organizationId], references: [id])
-  expenseId        String           @db.Uuid
-  expense          Expense          @relation(fields: [expenseId], references: [id])
+  id               String              @id @default(uuid()) @db.Uuid
+  organizationId   String              @db.Uuid
+  organization     Organization        @relation(fields: [organizationId], references: [id])
+  expenseId        String?             @db.Uuid
+  /// RESTRICT, as before MUT-255: expenses are only soft-deleted, and SET NULL would break the filing CHECK.
+  expense          Expense?            @relation(fields: [expenseId], references: [id], onDelete: Restrict)
   filename         String
   mimeType         String
   sizeBytes        Int
-  status           AttachmentStatus @default(PENDING_UPLOAD)
+  status           AttachmentStatus    @default(PENDING_UPLOAD)
+  /// Defaults to FILED, not TO_REVIEW: a revision that predates MUT-255 inserts with an expense and no filing status,
+  /// and must pass the CHECK during a rolling deploy. The library route sets TO_REVIEW itself.
+  filingStatus     ReceiptFilingStatus @default(FILED)
+  /// The upload day in the profile's timezone (YYYY-MM-DD), like every other `…On` date; the library's date filter.
+  /// The UTC-day default only serves inserts from a revision that predates MUT-255 (rolling deploy); this one always sets it.
+  receivedOn       String              @default(dbgenerated("to_char((now() AT TIME ZONE 'UTC'::text), 'YYYY-MM-DD'::text)")) @db.VarChar(10)
   storageKey       String
-  uploadedByUserId String           @db.Uuid
-  uploadedBy       User             @relation(fields: [uploadedByUserId], references: [id])
+  uploadedByUserId String              @db.Uuid
+  uploadedBy       User                @relation("ReceiptUploadedBy", fields: [uploadedByUserId], references: [id])
+  /// What the device's reader suggested (firm-books brief §6.1 `ReceiptSuggestion`); null when nothing was read.
+  suggested        Json?
+  /// What approval wrote into the expense; kept after an unlink, for the edit-rate figure.
+  approved         Json?
+  approvedAt       DateTime?
+  approvedByUserId String?             @db.Uuid
+  approvedBy       User?               @relation("ReceiptApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  version          Int                 @default(1)
   requestId        String?
   createdAt        DateTime
   completedAt      DateTime?
@@ -1106,6 +1131,8 @@ model ExpenseReceipt {
 
   /// The receipts of one expense.
   @@index([organizationId, expenseId, createdAt])
+  /// MUT-255: the library list and its counts.
+  @@index([organizationId, filingStatus, receivedOn, createdAt])
   @@map("expense_receipts")
 }
 

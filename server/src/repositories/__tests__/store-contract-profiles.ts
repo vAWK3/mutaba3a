@@ -181,7 +181,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const a = await expense(groceries!.id);
       const b = await expense(custom.id);
       const deleted = await expense(custom.id);
-      await store.expenses.softDelete(profile.id, deleted.id, at(1));
+      await store.expenses.softDelete(profile.id, deleted.id, at(1), 'unlink');
       const untouched = await expense(null);
 
       expect(await store.organizations.typeChangeImpact(profile.id)).toEqual({ uncategorizedExpenses: 2, deletedCategories: 4 });

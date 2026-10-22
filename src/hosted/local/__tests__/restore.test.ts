@@ -59,6 +59,19 @@ describe('applyRestore', () => {
     expect(await (await new IndexedDbBlobStore().get(other.key))?.text()).toBe(PDF);
   });
 
+  it('keeps a To-review receipt with no expense, and its file, from a hosted backup (MUT-255 decision P1)', async () => {
+    const { other, mine, persistence, lock } = await backupThenThisDevice();
+    // A hosted "Download my records" carries library receipts that wait To review, with no expense yet.
+    const [receipt] = [...other.snapshot.maps.expReceipts.values()];
+    const library = { ...other.snapshot, maps: { ...other.snapshot.maps, expReceipts: new Map([[receipt!.id, { ...receipt!, expenseId: null, filingStatus: 'TO_REVIEW' as const }]]) } };
+    const decoded = await decodeRecordsArchive(await encodeRecordsArchive(library, other.blobs));
+
+    await applyRestore({ lock, persistence, store: mine.store, blobs: mine.blobs, now: NOW }, decoded.snapshot, (await decoded.readFiles()).files);
+
+    expect([...mine.store.snapshot().maps.expReceipts.values()]).toEqual([expect.objectContaining({ id: receipt!.id, expenseId: null, filingStatus: 'TO_REVIEW', storageKey: other.key })]);
+    expect(await (await new IndexedDbBlobStore().get(other.key))?.text()).toBe(PDF);
+  });
+
   it('keeps this device whole when the save fails: old records, their receipt files, and none of the backup\'s files left behind', async () => {
     const { archive, other, mine, persistence, lock } = await backupThenThisDevice();
     persistence.save = async () => {

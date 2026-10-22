@@ -1,6 +1,6 @@
 # Copy to production.tfvars (git-ignored). Nothing secret goes in this file: the
 # admin token is passed to each command as SENTRY_AUTH_TOKEN="$SENTRY_ADMIN_TOKEN". See server/DEPLOYMENT.md §1.5.
-organization = "mutaba3a"
+organization = "barmajiyat-ltd"
 
 # Origins each browser DSN accepts events from (R2) come from config/hosts.json
 # (MUT-326): its portal and landing origins, new and legacy. Re-apply after the domain

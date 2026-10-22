@@ -116,6 +116,11 @@ attachments bucket under `org/{id}/expense-receipts/`), `/v1/expense-categories*
 currency). Malafat's key can't reach any of it, and expense activity is left out
 of `GET /v1/audit` and `GET /v1/operations/{key}`.
 
+**Receipts library (MUT-255).** `/v1/receipts*`, hosted only and sessions only: a receipt uploaded with no expense
+waits as To review on its profile, is listed and counted, and `POST /v1/receipts/{id}/approve` records its expense
+and files it in one transaction. The operator reads how often people change what the reader suggested at
+`GET /admin/v1/receipts/edit-rates?from&to`. ADR-167.
+
 ## Verify
 
 ```bash

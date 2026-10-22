@@ -1,6 +1,6 @@
 import { test, expect } from '../../support/qa';
 import { OFFICE_A, office } from '../../support/portal';
-import { FX_RATES_ILS, FakeApi, apiError, category, expense, expenseGroup, todayInJerusalem, uid } from '../../support/portalApi';
+import { FakeApi, apiError, category, expense, expenseGroup, todayInJerusalem, uid } from '../../support/portalApi';
 
 /**
  * Expense groups in the portal (MUT-268, on MUT-267's API): Expenses › Groups,

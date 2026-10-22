@@ -38,6 +38,11 @@ export interface PortalRouteDependencies {
   terms: CurrentTerms | null;
   /** MUT-358: whether /v1/me reports billing; false in the portal's signed-out mode, which has none. */
   billing: boolean;
+  /**
+   * MUT-255 (decision P1): whether this app has the receipts library. Deleting an expense then sends its READY
+   * receipts back to the library instead of deleting them; false in the portal's signed-out mode, which has none.
+   */
+  receiptsLibrary: boolean;
 }
 
 export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => OpenAPIHono<AppEnv>> = [
@@ -47,7 +52,7 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => paymentRoutes(deps.store),
   (deps) => summaryRoutes(deps.store),
   (deps) => attachmentRoutes(deps.store, deps.attachments),
-  (deps) => expenseRoutes(deps.store, deps.attachments),
+  (deps) => expenseRoutes(deps.store, { ...deps.attachments, receiptsLibrary: deps.receiptsLibrary }),
   (deps) => expenseCategoryRoutes(deps.store),
   (deps) => incomeRoutes(deps.store),
   (deps) => expenseGroupRoutes(deps.store),

@@ -1941,8 +1941,15 @@ export interface ExpenseRepository {
   getById(organizationId: string, id: string): Promise<ExpenseRecord | null>;
   list(organizationId: string, filter: ExpenseFilter, page: { limit: number; cursor: ExpenseCursor | null }): Promise<ExpensePage>;
   update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpensePatch, at: Date): Promise<UpdateResult<ExpenseRecord>>;
-  /** Null for an id the organization never had; `changed: false` when it was already deleted. */
-  softDelete(organizationId: string, id: string, at: Date): Promise<{ record: ExpenseRecord; changed: boolean } | null>;
+  /**
+   * Null for an id the organization never had; `changed: false` when it was already deleted.
+   * In the same transaction, the expense's receipts (MUT-255): with `'unlink'` (the hosted server, which has the
+   * receipts library) READY ones go back to the library as To review, keeping `approved` for the edit-rate figure,
+   * and unfinished uploads are soft-deleted; with `'remove'` (signed-out local mode, which has no library) every
+   * one is soft-deleted, as before MUT-255. `removedReceipts` are the soft-deleted ones, whose objects the caller
+   * removes; empty when `changed` is false.
+   */
+  softDelete(organizationId: string, id: string, at: Date, receipts: 'unlink' | 'remove'): Promise<{ record: ExpenseRecord; changed: boolean; removedReceipts: ExpenseReceiptRecord[] } | null>;
   /** MUT-267: live expenses matching `filter`, summed per currency (sorted by code). One aggregate query, no rows returned. */
   totalsByCurrency(organizationId: string, filter: ExpenseFilter): Promise<ExpenseCurrencyTotal[]>;
 }
@@ -2113,17 +2120,64 @@ export interface ExpenseCategoryRepository {
   update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpenseCategoryPatch, at: Date): Promise<UpdateResult<ExpenseCategoryRecord>>;
 }
 
+/** MUT-255: where a receipt stands in its profile's library. FILED exactly when it has an expense (DB CHECK). */
+export type ReceiptFilingStatus = 'TO_REVIEW' | 'FILED';
+
+/** Firm-books brief §6.1: one field a device's reader suggests, with where it came from and how sure it is. */
+export type SuggestionSource = 'qr' | 'pdf-text' | 'ocr' | 'vendor';
+export interface SuggestedField<T> {
+  value: T;
+  source: SuggestionSource;
+  /** 0..1 */
+  confidence: number;
+}
+
+/**
+ * Firm-books brief §6.1 `ReceiptSuggestion`, shared by the phone and the portal. A field under the reader's
+ * confidence threshold is omitted, never sent wrong. Money is minor units as a decimal string.
+ */
+export interface ReceiptSuggestion {
+  readerVersion: string;
+  date?: SuggestedField<string> | undefined;
+  totalMinor?: SuggestedField<string> | undefined;
+  currency?: SuggestedField<string> | undefined;
+  vatMinor?: SuggestedField<string> | undefined;
+  vatRateBasisPoints?: SuggestedField<number> | undefined;
+  vendorName?: SuggestedField<string> | undefined;
+  registrationNo?: SuggestedField<string> | undefined;
+  phone?: SuggestedField<string> | undefined;
+  email?: SuggestedField<string> | undefined;
+}
+
+/** MUT-255: what approval wrote into the expense, kept on the receipt for the edit-rate figure. Money as minor units in a decimal string. */
+export interface ApprovedReceiptFields {
+  occurredOn: string;
+  amountMinor: string;
+  currency: string;
+  vendor: string | null;
+  categoryId: string | null;
+}
+
 /** A receipt file behind the M6 signed-URL pipeline, in its own table so Malafat's attachment routes can never reach it (MUT-42 D1). */
 export interface ExpenseReceiptRecord {
   id: string;
   organizationId: string;
-  expenseId: string;
+  /** MUT-255: null while the receipt waits in the library as To review. */
+  expenseId: string | null;
   filename: string;
   mimeType: string;
   sizeBytes: number;
   status: AttachmentStatus;
+  filingStatus: ReceiptFilingStatus;
+  /** The upload day in the profile's timezone. */
+  receivedOn: string;
   storageKey: string;
   uploadedByUserId: string;
+  suggested: ReceiptSuggestion | null;
+  approved: ApprovedReceiptFields | null;
+  approvedAt: Date | null;
+  approvedByUserId: string | null;
+  version: number;
   requestId: string | null;
   createdAt: Date;
   completedAt: Date | null;
@@ -2132,13 +2186,54 @@ export interface ExpenseReceiptRecord {
 
 export interface CreateExpenseReceiptInput {
   organizationId: string;
-  expenseId: string;
+  /** Set: a MUT-44 receipt, FILED from the start. Null: a library receipt, TO_REVIEW (MUT-255). */
+  expenseId: string | null;
   filename: string;
   mimeType: string;
   sizeBytes: number;
+  receivedOn: string;
+  suggested?: ReceiptSuggestion | null;
   uploadedByUserId: string;
   requestId: string | null;
 }
+
+export interface ReceiptLibraryFilter {
+  filingStatus?: ReceiptFilingStatus;
+  /** Inclusive, on `receivedOn`. */
+  from?: string;
+  to?: string;
+}
+
+/** Newest first: `(createdAt desc, id desc)`. */
+export interface ReceiptCursor {
+  createdAt: Date;
+  id: string;
+}
+
+export interface ReceiptPage {
+  items: ExpenseReceiptRecord[];
+  nextCursor: ReceiptCursor | null;
+}
+
+/** Per field, among approved receipts whose suggestion carried that field: how many there were, and how many the person changed. */
+export interface FieldEditRate {
+  suggested: number;
+  edited: number;
+}
+
+/** MUT-255: the epic's success measure, counts only — never a value. */
+export interface ReceiptEditRates {
+  approved: number;
+  fields: { date: FieldEditRate; amount: FieldEditRate; currency: FieldEditRate; vendor: FieldEditRate };
+  /** Approved receipts whose suggestion had both an amount and a date, and how many kept both unedited (the epic's 70% bar). */
+  amountAndDate: { suggested: number; unedited: number };
+}
+
+export type FileReceiptResult =
+  | { kind: 'filed'; expense: ExpenseRecord; receipt: ExpenseReceiptRecord }
+  | { kind: 'not_found' }
+  | { kind: 'not_ready' }
+  | { kind: 'already_filed' };
 
 export interface ExpenseReceiptRepository {
   /** Created with a placeholder key; the caller derives the real key from the id and `setKey`s it (as M6). */
@@ -2150,13 +2245,31 @@ export interface ExpenseReceiptRepository {
   listByExpense(organizationId: string, expenseId: string): Promise<ExpenseReceiptRecord[]>;
   complete(organizationId: string, id: string, at: Date): Promise<ExpenseReceiptRecord | null>;
   softDelete(organizationId: string, id: string, at: Date): Promise<ExpenseReceiptRecord | null>;
-  /** Every live receipt of the expense, pending ones included; returns those it deleted (their objects are removed by the caller). */
-  softDeleteByExpense(organizationId: string, expenseId: string, at: Date): Promise<ExpenseReceiptRecord[]>;
   /**
    * MUT-270: READY, live receipts per expense, the same rule as `listByExpense`. Expenses with none are absent from
    * the map. The caller passes organizations the person belongs to; the expense ids come from those organizations.
    */
   countReadyByExpenseIds(organizationIds: readonly string[], expenseIds: readonly string[]): Promise<Map<string, number>>;
+  /** MUT-255: READY, live receipts of the profile's library, newest upload first. */
+  list(organizationId: string, filter: ReceiptLibraryFilter, page: { limit: number; cursor: ReceiptCursor | null }): Promise<ReceiptPage>;
+  /** MUT-255: READY, live receipts per filing status (one grouped count). */
+  countByFilingStatus(organizationId: string): Promise<{ toReview: number; filed: number }>;
+  /** MUT-255: live PENDING_UPLOAD receipts created at or after `since` (the per-profile upload cap). */
+  countPendingSince(organizationId: string, since: Date): Promise<number>;
+  /**
+   * MUT-255: replace a To-review receipt's suggestion, optimistically. `not_found` also covers a filed receipt's
+   * id being absent; a FILED receipt answers `filed`.
+   */
+  setSuggested(organizationId: string, id: string, expectedVersion: number, suggested: ReceiptSuggestion): Promise<UpdateResult<ExpenseReceiptRecord> | { kind: 'filed' }>;
+  /**
+   * MUT-255 approve, one transaction: lock the receipt; refuse unless it is READY, live and To review; create the
+   * expense; then move the receipt to FILED with what was approved (and the request's suggestion, when it carries
+   * one). If that last update matches no row the transaction throws, so no expense is left behind. MUT-307's
+   * approval and MUT-312's closed-month check plug in between the lock and the insert.
+   */
+  fileAsExpense(params: { organizationId: string; receiptId: string; userId: string; expense: CreateExpenseInput; approved: ApprovedReceiptFields; suggested?: ReceiptSuggestion }, at: Date): Promise<FileReceiptResult>;
+  /** MUT-255 operator figure, across every profile: receipts approved in `[from, to)`. Counts only. */
+  editRates(range: { from: Date; to: Date }): Promise<ReceiptEditRates>;
 }
 
 // ---- MUT-270: the entries feed ----------------------------------------------
