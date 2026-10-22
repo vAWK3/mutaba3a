@@ -11,4 +11,4 @@ record the date where the item says.
 
 ## web
 
-- MUT-387 moves the Malafat OAuth client identity to `https://mtb3a.com/.well-known/oauth-client.json`. After this release, check the live document: `curl -sI` on that URL returns 200, `content-type: application/json` and no `location`, and `curl -s` on it piped to `jq -r .client_id` prints the same URL. Then, in Malafat, list `oauth_clients` rows with `client_id = 'https://mutaba3a.app/.well-known/oauth-client.json'` in each tenant schema and report the counts before deleting any. Delete this item and record the date on MUT-387.
+- MUT-387 moves the Malafat OAuth client identity to `https://mtb3a.com/.well-known/oauth-client.json`. `make release web` now waits for the live document and checks it (`npm run release:oauth-client`); it must print ✓. Then, in Malafat, list `oauth_clients` rows with `client_id = 'https://mutaba3a.app/.well-known/oauth-client.json'` in each tenant schema and report the counts before deleting any. Delete this item and record the date on MUT-387.

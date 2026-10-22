@@ -26,7 +26,6 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const OWN_VALUE_FILES = new Set([
   'public/.well-known/oauth-client.json',
   'src/services/oauth/oauth-client.ts',
-  'scripts/bundle-origins.json',
 ]);
 
 /** Hosts we never owned and must never name again (MUT-387): mutaba3a.app has no DNS and no registrant. */

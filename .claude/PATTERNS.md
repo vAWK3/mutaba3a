@@ -2580,6 +2580,12 @@ Like `@mut/local-backend`: `@mut/records-export` maps to `session/recordsExportC
 ### Pattern: A public host is read from `config/hosts.json`, never written down
 Our own hosts (landing, portal/API, legacy and new) live only in `config/hosts.json`. TypeScript reads `HOSTS` from `config/hosts.ts`; shell scripts read `npm run --silent hosts -- get <landingOrigin|portalOrigin|domain>`; Terraform reads the file with `jsondecode(file("${path.module}/${var.hosts_file}"))` (tests point `hosts_file` at `config/fixtures/`). `scripts/__tests__/no-hardcoded-hosts.test.ts` fails otherwise. Tests and examples that need *an* origin use neutral ones (`example.com`, `*.example.test`), never ours. The Malafat CIMD client id is the one deliberate exception: a fixed literal on `mtb3a.com` in three files (MUT-387). Tests import `CIMD_CLIENT_ID` rather than spelling it. Hosts we never owned go in the guard's `RETIRED_HOSTS` and may not appear even in those files.
 
+### Pattern: An origin one shipped file needs is scoped to that file (MUT-387)
+When a single dist file must name a host the rest of the bundle may not (the OAuth client document), list it in `FILE_SCOPED_ORIGINS` (`scripts/bundle-rules.ts`, keyed by dist path), never in `bundle-origins.json`. `originsNeedingReview` drops it for that file only.
+
+### Pattern: A file an outside system fetches is checked live after the release (MUT-387)
+When another service reads a document we publish (Malafat reads the CIMD document), the release waits for the deploy and checks the served copy the way that service will (`scripts/oauth-client-live.ts` pure + injected fetch/clock, `scripts/check-oauth-client.ts` CLI, run by `make release web`). Unit tests cover every refusal; the live run is the proof.
+
 ### Pattern: A move that needs DNS is staged in config, not in branches
 "The value is known" and "the value is live" are separate fields (`domain` vs `stage`). Infrastructure keys on the first; builds and links key on the second, so a commit can name the domain without the next release pointing anyone at a host that doesn't resolve yet. `npm run domain:plan -- --stage <s>` shows each stage's effect before it's committed.
 

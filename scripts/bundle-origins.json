@@ -1,5 +1,5 @@
 {
-  "$comment": "Origins each build may reference (hosted-portal.md §8; MUT-43). Most are library error links, XML namespaces and the app's own known services. A new origin fails `npm run test:bundles` until it is reviewed and added here. The *.posthog.com, sentry.io and yandex.com entries are strings inside posthog-js (MUT-154/155): the landing's lazy chunk and the portal only ever send to eu.i.posthog.com, external script loading is off, and check-bundles separately proves PostHog is never statically reachable from the local app's entry. stuk.github.io is a jszip documentation link inside an error message; the portal loads jszip only for Your data's records zip (MUT-287). Our own hosts are not listed: check-bundles adds every origin config/hosts.json names (MUT-326). The one exception is https://mtb3a.com in local: dist-web and dist-desktop ship public/.well-known/oauth-client.json, the Malafat OAuth client identity, which is a fixed literal that must not follow the config (MUT-387). It is redundant while the config names that domain, but a rollback to domain null (DEPLOYMENT.md §5a) or a later apex move would otherwise fail test:bundles. Do not remove it as a duplicate.",
+  "$comment": "Origins each build may reference (hosted-portal.md §8; MUT-43). Most are library error links, XML namespaces and the app's own known services. A new origin fails `npm run test:bundles` until it is reviewed and added here. The *.posthog.com, sentry.io and yandex.com entries are strings inside posthog-js (MUT-154/155): the landing's lazy chunk and the portal only ever send to eu.i.posthog.com, external script loading is off, and check-bundles separately proves PostHog is never statically reachable from the local app's entry. stuk.github.io is a jszip documentation link inside an error message; the portal loads jszip only for Your data's records zip (MUT-287). Our own hosts are not listed: check-bundles adds every origin config/hosts.json names (MUT-326). The Malafat OAuth client identity origin is allowed only inside .well-known/oauth-client.json (bundle-rules FILE_SCOPED_ORIGINS, MUT-387), never here: it is a fixed literal that must not follow the config, and must not open the rest of the bundle to that host.",
   "local": [
     "http://127.0.0.1:14100",
     "http://127.0.0.1:14101",
@@ -31,7 +31,6 @@
     "https://json-schema.org",
     "https://ko-fi.com",
     "https://malafat.app",
-    "https://mtb3a.com",
     "https://play.google.com",
     "https://posthog.com",
     "https://proconsult.co.il",

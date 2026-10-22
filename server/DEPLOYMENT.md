@@ -757,7 +757,9 @@ stack. Cloud Run reads the token secret by name, so deleting it first breaks the
   - `mtb3a.com` must stay the site's primary domain. With `www` as primary, Netlify 301s the
     apex, and Malafat refuses any 3xx (`cimd-fetcher.ts`).
   - The apex record stays DNS-only, with no Worker route or redirect rule. The vite-config test
-    keeps Netlify's own rules off the path at every stage.
+    keeps Netlify's own rules off the path at every stage, and `make release web` checks the
+    live document after every deploy (`npm run release:oauth-client`; run it with
+    `OAUTH_CLIENT_WAIT_SECONDS=0` any time).
   - Keep or remove the zone's apex record and the Netlify domain binding **together**. An apex
     record still pointing at Netlify after the binding is gone is a dangling record: whoever adds
     `mtb3a.com` to their own Netlify site then serves a client document under our id.

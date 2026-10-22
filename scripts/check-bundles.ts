@@ -30,6 +30,7 @@ import {
   indexedDbOutsideLocalBackend,
   fontProblems,
   newOrigins,
+  originsNeedingReview,
   posthogInEntryGraph,
   posthogPrecached,
   unresolvedUrls,
@@ -153,7 +154,8 @@ function check(dir: string, rules: Rule[], origins: string[]): string[] {
   for (const file of files(dir)) {
     const text = readFileSync(file, 'utf8');
     for (const finding of findForbidden(text, rules)) problems.push(`${file}: ${finding.rule} ("${finding.match}")`);
-    for (const origin of extractOrigins(text)) found.add(origin);
+    const inDist = relative(dir, file).split(sep).join('/');
+    for (const origin of originsNeedingReview(inDist, extractOrigins(text))) found.add(origin);
   }
   for (const origin of newOrigins(found, origins)) problems.push(`${dir}: new origin ${origin} (review, then add to scripts/bundle-origins.json)`);
   return problems;

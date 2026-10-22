@@ -5,6 +5,7 @@
  * `dist-desktop` and `dist-hosted`.
  */
 import { dirname, join, resolve, sep } from 'node:path';
+import { CIMD_CLIENT_ID } from '../src/services/oauth/oauth-client';
 
 export interface Rule {
   name: string;
@@ -77,6 +78,21 @@ export function extractOrigins(text: string): Set<string> {
 export function newOrigins(found: Set<string>, allowlist: string[]): string[] {
   const allowed = new Set(allowlist.map((o) => o.toLowerCase()));
   return [...found].filter((origin) => !allowed.has(origin)).sort();
+}
+
+/**
+ * Origins one shipped file may name and nothing else may (MUT-387), keyed by the file's path in
+ * the dist. The Malafat OAuth client document names its own host: a fixed identity that must not
+ * follow config/hosts.json, and must not open that host to the rest of the bundle either.
+ */
+export const FILE_SCOPED_ORIGINS: Readonly<Record<string, readonly string[]>> = {
+  '.well-known/oauth-client.json': [new URL(CIMD_CLIENT_ID).origin],
+};
+
+/** The origins in `file` (a dist-relative path) that still need the bundle-wide allowlist. */
+export function originsNeedingReview(file: string, origins: Iterable<string>, scoped: Readonly<Record<string, readonly string[]>> = FILE_SCOPED_ORIGINS): string[] {
+  const allowedHere = new Set((scoped[file] ?? []).map((o) => o.toLowerCase()));
+  return [...origins].filter((origin) => !allowedHere.has(origin.toLowerCase()));
 }
 
 /** `url()`s in a stylesheet, without query or fragment; `data:` URIs and `#id` references skipped. */

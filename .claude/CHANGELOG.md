@@ -46,6 +46,8 @@
 - `cimd-document.test.ts`: `bundle-origins.json` `local` must list the identity's origin.
 - DEPLOYMENT.md §5a: keep the apex record and the Netlify binding together, since a dangling record allows a takeover. The stale `api.mutaba3a.app` plan line is gone. `server/README.md`: refresh the reviewer account with the address it actually has.
 - `docs/operations/before-release.md` (web): the post-release live check of the document and the Malafat `oauth_clients` count.
+- **Live check after every web release:** `scripts/oauth-client-live.ts` (pure) and `scripts/check-oauth-client.ts` (`npm run release:oauth-client`). `make release web` runs it after the push. It waits up to `OAUTH_CLIENT_WAIT_SECONDS` (600) for Netlify to serve this release's document. It fails on a 3xx, a non-200, non-JSON, a mismatched `client_id` or a stale copy.
+- **Allowlist scoped to one file:** `https://mtb3a.com` is out of `bundle-origins.json`. `FILE_SCOPED_ORIGINS` / `originsNeedingReview` in `scripts/bundle-rules.ts` allow it only inside `.well-known/oauth-client.json`, and `check-bundles.ts` applies it per file.
 
 **Release:** the next `make release web` publishes the new document. Then `curl -s https://mtb3a.com/.well-known/oauth-client.json | jq -r .client_id` should print that URL. Operator check (Malafat): in each tenant schema, list `oauth_clients` rows with the old id before deleting any.
 
