@@ -3,17 +3,19 @@
 #
 # MUT-280 let the hosted API store AED, SAR, QAR, BHD and OMR; MUT-388 (ADR-166)
 # took them out again. Nothing in the database refuses those codes (every
-# currency column is VarChar(3)), and a row still holding one reads back with a
-# blank amount. This is the release gate: run it before and after the server
-# release that drops a currency.
+# currency column is VarChar(3)): such a row still reads back (money.ts keeps
+# their decimals for display), but it can't take a new amount and the app no
+# longer offers its currency. This is the release gate: run it before and after
+# the server release that drops a currency.
 #
-#   count                 list every row whose currency is not one of
-#                         SUPPORTED_CURRENCIES; exits 3 when there are any
-#   delete-test-profiles  delete those rows, and only those, on the profiles named
-#                         (the operator's own test profiles), in one transaction
+#   count                 list every live row whose currency is not one of
+#                         SUPPORTED_CURRENCIES, with its profile (or user, for
+#                         the Unsorted inbox); exits 3 when there are any
+#   delete-test-profiles  remove those rows on the operator's own test profiles
+#                         and users, in one transaction, after a preview
 #
 #   DATABASE_URL=… scripts/currency-rows.sh count
-#   DATABASE_URL=… scripts/currency-rows.sh delete-test-profiles --organization-id <uuid>[,<uuid>…] [--dry-run] [--yes]
+#   DATABASE_URL=… scripts/currency-rows.sh delete-test-profiles [--organization-id <uuid>[,…]] [--user-id <uuid>[,…]] [--dry-run] [--yes]
 #
 # Against production, run it through scripts/db.sh so the proxy and the URL come
 # from Terraform and never reach your shell history:
@@ -23,12 +25,17 @@
 # Rules:
 #   * The columns are read from the catalog, never listed here: any character
 #     column named currency or ending in Currency, outside the billing_* tables
-#     (Stripe's currency, not a ledger's).
+#     (Stripe's currency, not a ledger's). Soft-deleted rows don't count.
 #   * The supported list is read from server/src/money.ts, so it can't drift.
-#   * delete-test-profiles never touches a profile's own defaultCurrency: it prints
-#     those, to change in the portal (Settings › Profiles). It deletes children
-#     before parents; a row something else still points at stops the whole
-#     transaction and nothing changes. --dry-run runs it all and rolls it back.
+#   * A table with deletedAt is soft-deleted, the app's own delete: receipts,
+#     group overrides and links stay valid and the rows can be recovered. A table
+#     without one (matters, agreements, the inbox) is hard-deleted only when no
+#     other row points at the doomed rows; otherwise the script lists those rows
+#     and stops before changing anything.
+#   * A profile's own defaultCurrency is never touched: it is printed, to change
+#     in the portal (Settings › Profiles).
+#   * Every run previews in a rolled-back transaction first; without --yes it asks
+#     you to type delete before it commits.
 # Bash 3.2 compatible (macOS /bin/bash).
 set -euo pipefail
 
@@ -42,11 +49,12 @@ die()  { printf '\033[0;31m[currency-rows] %s\033[0m\n' "$*" >&2; exit 1; }
 usage() {
   cat >&2 <<'EOF'
 usage: scripts/currency-rows.sh count
-       scripts/currency-rows.sh delete-test-profiles --organization-id <uuid>[,<uuid>…] [--dry-run] [--yes]
+       scripts/currency-rows.sh delete-test-profiles [--organization-id <uuid>[,…]] [--user-id <uuid>[,…]] [--dry-run] [--yes]
 
   DATABASE_URL       the database to read (count) or change (delete-test-profiles)
   --organization-id  a test profile's id; repeat it or separate ids with commas
-  --dry-run          run the delete in one transaction and roll it back
+  --user-id          a test user's id, for their Unsorted inbox rows
+  --dry-run          preview only: run it in one transaction and roll it back
   --yes              skip the typed confirmation
 EOF
 }
@@ -59,11 +67,13 @@ case "${COMMAND}" in
 esac
 
 ORG_IDS=""
+USER_IDS=""
 DRY_RUN=0
 YES=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --organization-id) ORG_IDS="${ORG_IDS:+${ORG_IDS},}${2:-}"; shift 2 ;;
+    --user-id) USER_IDS="${USER_IDS:+${USER_IDS},}${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --yes) YES=1; shift ;;
     *) usage; die "unknown option: $1" ;;
@@ -71,7 +81,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 command -v psql >/dev/null 2>&1 || die "missing tool: psql (brew install libpq && brew link --force libpq)"
-command -v tsort >/dev/null 2>&1 || die "missing tool: tsort (coreutils)"
 # Prisma-only query parameters (schema=, connection_limit=) are not libpq's; psql gets the bare URL.
 TARGET_URL="${DATABASE_URL:?set DATABASE_URL (through scripts/db.sh run -- for production)}"
 TARGET_URL="${TARGET_URL%%\?*}"
@@ -94,30 +103,39 @@ currency_columns() {
      ORDER BY 1, 2"
 }
 
-has_org_column() { [[ "$(q -c "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '$1' AND column_name = 'organizationId'")" == 1 ]]; }
+has_column() { [[ "$(q -c "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '$1' AND column_name = '$2'")" == 1 ]]; }
 
-# Every public table, parents before children (foreign keys through tsort), as in profile-rows.sh.
-tables_in_fk_order() {
-  q -F ' ' -c "
-    SELECT p.relname, c.relname
-      FROM pg_constraint k JOIN pg_class c ON c.oid = k.conrelid JOIN pg_class p ON p.oid = k.confrelid
-     WHERE k.contype = 'f' AND k.connamespace = 'public'::regnamespace AND k.conrelid <> k.confrelid
-    UNION ALL
-    SELECT tablename, tablename FROM pg_tables WHERE schemaname = 'public'" | tsort
+# Whose row it is: the profile, or "user:<id>" for user-scoped tables (the Unsorted inbox).
+owner_of() {
+  if [[ "$1" == organizations ]]; then printf '%s' '"id"::text'
+  elif has_column "$1" organizationId; then printf '%s' '"organizationId"::text'
+  elif has_column "$1" userId; then printf '%s' "'user:' || \"userId\"::text"
+  else printf '%s' "'-'"; fi
 }
 
-COLUMNS="$(currency_columns)"
-[[ -n "${COLUMNS}" ]] || die "no currency columns found; is DATABASE_URL the Mutaba3a database?"
+# The rows a table holds outside the supported list, live ones only.
+outside_where() {
+  local table="$1" column where=""
+  for column in $(awk -v t="${table}" '$1 == t { print $2 }' <<<"${CURRENCY_COLUMNS}"); do
+    where+="${where:+ OR }\"${column}\" NOT IN (${SUPPORTED_SQL})"
+  done
+  where="(${where})"
+  if has_column "${table}" deletedAt; then where+=" AND \"deletedAt\" IS NULL"; fi
+  printf '%s' "${where}"
+}
 
-# One SELECT per column: table, column, the stored code, the profile, how many rows.
+CURRENCY_COLUMNS="$(currency_columns)"
+[[ -n "${CURRENCY_COLUMNS}" ]] || die "no currency columns found; is DATABASE_URL the Mutaba3a database?"
+CURRENCY_TABLES="$(awk '{ print $1 }' <<<"${CURRENCY_COLUMNS}" | uniq)"
+
+# One SELECT per column: table, column, the stored code, the owner, how many live rows.
 count_sql() {
-  local table column org parts=""
+  local table column parts="" live
   while read -r table column; do
-    if [[ "${table}" == organizations ]]; then org='"id"::text'
-    elif has_org_column "${table}"; then org='"organizationId"::text'
-    else org="'-'"; fi
-    parts+="${parts:+ UNION ALL }SELECT '${table}', '${column}', \"${column}\", ${org}, count(*) FROM \"${table}\" WHERE \"${column}\" NOT IN (${SUPPORTED_SQL}) GROUP BY 3, 4"
-  done <<<"${COLUMNS}"
+    live=""
+    if has_column "${table}" deletedAt; then live=" AND \"deletedAt\" IS NULL"; fi
+    parts+="${parts:+ UNION ALL }SELECT '${table}', '${column}', \"${column}\", $(owner_of "${table}"), count(*) FROM \"${table}\" WHERE \"${column}\" NOT IN (${SUPPORTED_SQL})${live} GROUP BY 3, 4"
+  done <<<"${CURRENCY_COLUMNS}"
   printf '%s ORDER BY 1, 2, 4, 3' "${parts}"
 }
 
@@ -129,48 +147,96 @@ count() {
     return 0
   fi
   warn "rows outside ${SUPPORTED}:"
-  printf 'table\tcolumn\tcurrency\tprofile\trows\n%s\n' "${rows}"
+  printf 'table\tcolumn\tcurrency\towner\trows\n%s\n' "${rows}"
   return 3
 }
 
-delete_test_profiles() {
-  [[ -n "${ORG_IDS}" ]] || die "name at least one --organization-id"
-  local id ids_sql="" table column cols
-  for id in ${ORG_IDS//,/ }; do
-    [[ "${id}" =~ ${UUID_RE} ]] || die "not a profile id: ${id}"
-    ids_sql+="${ids_sql:+,}'${id}'"
+# 'a','b' from a comma list of uuids, refusing anything else.
+uuid_list_sql() {
+  local id out=""
+  for id in ${1//,/ }; do
+    [[ "${id}" =~ ${UUID_RE} ]] || die "not an id: ${id}"
+    out+="${out:+,}'${id}'"
   done
+  printf '%s' "${out}"
+}
 
-  # The profiles' own default currency is the profile, not a row to delete.
-  local defaults
-  defaults="$(q -F $'\t' -c "SELECT id, \"defaultCurrency\" FROM organizations WHERE id::text IN (${ids_sql}) AND \"defaultCurrency\" NOT IN (${SUPPORTED_SQL})")"
-  [[ -z "${defaults}" ]] || warn "change these profiles' currency in the portal (Settings › Profiles); this script leaves them:"$'\n'"${defaults}"
+# "child_table child_column parent_column" per line: every foreign key pointing at the table.
+referencing() {
+  q -F ' ' -c "
+    SELECT c.relname, ca.attname, pa.attname
+      FROM pg_constraint k
+      JOIN pg_class c ON c.oid = k.conrelid
+      JOIN pg_attribute ca ON ca.attrelid = k.conrelid AND ca.attnum = k.conkey[1]
+      JOIN pg_attribute pa ON pa.attrelid = k.confrelid AND pa.attnum = k.confkey[1]
+     WHERE k.contype = 'f' AND k.confrelid = 'public.\"$1\"'::regclass"
+}
 
-  local sql="BEGIN;"$'\n' found=0
+delete_test_profiles() {
+  [[ -n "${ORG_IDS}${USER_IDS}" ]] || die "name at least one --organization-id or --user-id"
+  local orgs_sql="" users_sql=""
+  [[ -z "${ORG_IDS}" ]] || orgs_sql="$(uuid_list_sql "${ORG_IDS}")"
+  [[ -z "${USER_IDS}" ]] || users_sql="$(uuid_list_sql "${USER_IDS}")"
+
+  # Name what is about to change, and refuse ids that aren't there.
+  local named
+  if [[ -n "${orgs_sql}" ]]; then
+    named="$(q -F $'\t' -c "SELECT id, name, \"profileType\" FROM organizations WHERE id::text IN (${orgs_sql}) ORDER BY name")"
+    [[ "$(grep -c . <<<"${named}")" == "$(tr ',' '\n' <<<"${orgs_sql}" | grep -c .)" ]] || die "not every --organization-id is a profile here"
+    info "profiles:"$'\n'"${named}"
+    local defaults
+    defaults="$(q -F $'\t' -c "SELECT id, \"defaultCurrency\" FROM organizations WHERE id::text IN (${orgs_sql}) AND \"defaultCurrency\" NOT IN (${SUPPORTED_SQL})")"
+    [[ -z "${defaults}" ]] || warn "change these profiles' currency in the portal (Settings › Profiles); this script leaves them:"$'\n'"${defaults}"
+  fi
+  if [[ -n "${users_sql}" ]]; then
+    named="$(q -F $'\t' -c "SELECT id, email FROM users WHERE id::text IN (${users_sql}) ORDER BY email")"
+    [[ "$(grep -c . <<<"${named}")" == "$(tr ',' '\n' <<<"${users_sql}" | grep -c .)" ]] || die "not every --user-id is a user here"
+    info "users:"$'\n'"${named}"
+  fi
+
+  local sql="BEGIN;"$'\n' blockers="" table scope where child ccol pcol n
   while read -r table; do
     [[ "${table}" == organizations ]] && continue
-    cols="$(awk -v t="${table}" '$1 == t { print $2 }' <<<"${COLUMNS}")"
-    [[ -n "${cols}" ]] || continue
-    if ! has_org_column "${table}"; then warn "skipping ${table}: it has no organizationId"; continue; fi
-    local where=""
-    for column in ${cols}; do where+="${where:+ OR }\"${column}\" NOT IN (${SUPPORTED_SQL})"; done
-    sql+="WITH d AS (DELETE FROM \"${table}\" WHERE (${where}) AND \"organizationId\"::text IN (${ids_sql}) RETURNING 1) SELECT '${table}: ' || count(*) || ' deleted' FROM d;"$'\n'
-    found=1
-  done < <(tables_in_fk_order | awk '{ line[NR] = $0 } END { for (i = NR; i > 0; i--) print line[i] }')
-  [[ "${found}" == 1 ]] || { info "no currency tables to clean"; return 0; }
-
-  if [[ "${DRY_RUN}" == 1 ]]; then
-    sql+="ROLLBACK;"$'\n'"\\echo 'dry run: rolled back, nothing changed'"
-  else
-    if [[ "${YES}" != 1 ]]; then
-      [[ -r /dev/tty ]] || die "needs a terminal to confirm (or --yes)"
-      printf 'Delete every row outside %s on %s?\nType delete to continue: ' "${SUPPORTED}" "${ORG_IDS}" >/dev/tty
-      local answer; read -r answer </dev/tty
-      [[ "${answer}" == delete ]] || die "not confirmed; nothing changed"
+    if has_column "${table}" organizationId; then
+      [[ -n "${orgs_sql}" ]] || continue
+      scope="\"organizationId\"::text IN (${orgs_sql})"
+    elif has_column "${table}" userId; then
+      [[ -n "${users_sql}" ]] || continue
+      scope="\"userId\"::text IN (${users_sql})"
+    else
+      warn "skipping ${table}: it belongs to no profile or user"; continue
     fi
-    sql+="COMMIT;"$'\n'"\\echo 'committed'"
+    where="$(outside_where "${table}") AND ${scope}"
+    if has_column "${table}" deletedAt; then
+      sql+="WITH d AS (UPDATE \"${table}\" SET \"deletedAt\" = now() WHERE ${where} RETURNING 1) SELECT '${table}: ' || count(*) || ' soft-deleted' FROM d;"$'\n'
+      continue
+    fi
+    # A hard delete must not cascade, unlink or fail on anything else: list what points at the doomed rows.
+    local refs
+    refs="$(referencing "${table}")" || die "could not read the foreign keys of ${table}"
+    while read -r child ccol pcol; do
+      [[ -n "${child}" ]] || continue
+      n="$(q -c "SELECT count(*) FROM \"${child}\" WHERE \"${ccol}\" IN (SELECT \"${pcol}\" FROM \"${table}\" WHERE ${where})")"
+      [[ "${n}" == 0 ]] || blockers+="${table}: ${n} row(s) in ${child}.${ccol} point at them"$'\n'
+    done <<<"${refs}"
+    sql+="WITH d AS (DELETE FROM \"${table}\" WHERE ${where} RETURNING 1) SELECT '${table}: ' || count(*) || ' deleted' FROM d;"$'\n'
+  done <<<"${CURRENCY_TABLES}"
+  [[ -z "${blockers}" ]] || die "nothing changed; these rows can't be hard-deleted while other rows point at them:"$'\n'"${blockers%$'\n'}"
+
+  info "preview:"
+  printf '%s\n' "${sql}ROLLBACK;" | q || die "the preview failed; nothing changed"
+  if [[ "${DRY_RUN}" == 1 ]]; then
+    info "dry run: rolled back, nothing changed"
+    return 0
   fi
-  printf '%s\n' "${sql}" | q || die "the delete stopped (a row something else points at?); nothing changed"
+  if [[ "${YES}" != 1 ]]; then
+    [[ -r /dev/tty ]] || die "needs a terminal to confirm (or --yes)"
+    printf 'Apply the changes above (outside %s)?\nType delete to continue: ' "${SUPPORTED}" >/dev/tty
+    local answer; read -r answer </dev/tty
+    [[ "${answer}" == delete ]] || die "not confirmed; nothing changed"
+  fi
+  printf '%s\n' "${sql}COMMIT;" | q || die "the change stopped; nothing changed"
+  info "committed"
 }
 
 case "${COMMAND}" in
