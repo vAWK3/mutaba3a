@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
-import { todayFor, validationError } from '../agreements/compose.js';
+import { assertIsoDate, todayFor, validationError } from '../agreements/compose.js';
 import { checkFile, receiptStorageKey } from '../attachments/rules.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import { verifyUploadedObject } from '../attachments/verify.js';
@@ -80,7 +80,11 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
     return { url: upload.url, method: 'PUT' as const, headers: upload.headers, expiresAt: upload.expiresAt.toISOString() };
   }
 
-  const alreadyFiled = () => new ApiError('CONFLICT', 'This receipt is already filed', { reason: 'RECEIPT_ALREADY_FILED' });
+  /** 409 naming where the receipt is filed, so a client whose first answer was lost can still open the expense. */
+  async function alreadyFiled(organizationId: string, receiptId: string): Promise<ApiError> {
+    const filed = await store.expenseReceipts.getById(organizationId, receiptId);
+    return new ApiError('CONFLICT', 'This receipt is already filed', { reason: 'RECEIPT_ALREADY_FILED', expenseId: filed?.expenseId ?? null });
+  }
 
   app.openapi(
     createRoute({
@@ -88,7 +92,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       path: '/v1/receipts/uploads',
       tags: ['Receipts'],
       summary: 'Start a library upload: a To-review receipt with no expense, and a short-lived signed PUT URL',
-      description: `PDF, JPEG or PNG up to 10 MB. PUT the bytes to upload.url with upload.headers, then POST /v1/receipts/{receiptId}/complete; if the URL expired first (a replayed request answers the original), POST …/upload-url for a fresh one. 422 TOO_MANY_PENDING_UPLOADS when the profile already holds ${MAX_PENDING_LIBRARY_UPLOADS} unfinished uploads from the last 24 hours; 429 past ${RECEIPT_UPLOAD_POLICY.perMinute} starts a minute per person.`,
+      description: `PDF, JPEG or PNG up to 10 MB. PUT the bytes to upload.url with upload.headers, then POST /v1/receipts/{receiptId}/complete; if the URL expired first (a replayed request answers the original), POST …/upload-url for a fresh one. 429 (reason TOO_MANY_PENDING_UPLOADS) when the profile already holds ${MAX_PENDING_LIBRARY_UPLOADS} unfinished uploads from the last 24 hours; 429 past ${RECEIPT_UPLOAD_POLICY.perMinute} starts a minute per person. Either 429 leaves the Idempotency-Key free, so the same request can be sent again with it.`,
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write'), idempotent(store, 'receipts.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateLibraryReceiptUploadRequestSchema) },
@@ -107,7 +111,8 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
         throw new ApiError('RATE_LIMITED', 'Too many receipt uploads; try again shortly', { retryAfterSeconds: decision.retryAfterSeconds });
       }
       if ((await store.expenseReceipts.countPendingSince(organization.id, new Date(now.getTime() - PENDING_WINDOW_MS))) >= MAX_PENDING_LIBRARY_UPLOADS) {
-        throw validationError('TOO_MANY_PENDING_UPLOADS', `This profile already has ${MAX_PENDING_LIBRARY_UPLOADS} unfinished uploads; finish or delete one first`);
+        // A 429, not a 422: nothing was done, so the Idempotency-Key stays free for the same request once there is room.
+        throw new ApiError('RATE_LIMITED', `This profile already has ${MAX_PENDING_LIBRARY_UPLOADS} unfinished uploads; finish or delete one first`, { reason: 'TOO_MANY_PENDING_UPLOADS' });
       }
       const created = await store.expenseReceipts.create(
         { organizationId: organization.id, expenseId: null, filename: body.filename, mimeType: body.mimeType, sizeBytes: body.sizeBytes, receivedOn: todayFor(organization, now), suggested: body.suggested ?? null, uploadedByUserId: user.id, requestId: c.get('requestId') },
@@ -155,6 +160,9 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       const s = storage();
       const { organization } = sessionAuth(c);
       const receipt = await mustGet(organization.id, c.req.valid('param').receiptId);
+      // A receipt started on an expense (MUT-44) completes through that expense's route, which checks the expense is
+      // live and has room; finishing it here would skip both (review finding: MAX_RECEIPTS_PER_EXPENSE bypass).
+      if (receipt.expenseId !== null) throw new ApiError('NOT_FOUND', 'No such receipt in the library');
       if (receipt.status === 'READY') return c.json(serializeExpenseReceipt(receipt), 200);
       await verifyUploadedObject(s, receipt);
       const ready = await store.expenseReceipts.complete(organization.id, receipt.id, c.get('now')());
@@ -180,6 +188,8 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       storage();
       const { organization } = sessionAuth(c);
       const q = c.req.valid('query');
+      if (q.from) assertIsoDate(q.from, 'from');
+      if (q.to) assertIsoDate(q.to, 'to');
       if (q.from && q.to && q.from > q.to) throw validationError('END_BEFORE_START', '`to` is before `from`', { field: 'to' });
       const page = await store.expenseReceipts.list(
         organization.id,
@@ -263,7 +273,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       const { organization } = sessionAuth(c);
       const result = await store.expenseReceipts.setSuggested(organization.id, c.req.valid('param').receiptId, c.get('expectedVersion'), c.req.valid('json'));
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such receipt');
-      if (result.kind === 'filed') throw alreadyFiled();
+      if (result.kind === 'filed') throw await alreadyFiled(organization.id, c.req.valid('param').receiptId);
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
       return c.json(serializeExpenseReceipt(result.record), 200);
     },
@@ -276,7 +286,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       tags: ['Receipts'],
       summary: 'Approve a To-review receipt: record its expense and file the receipt on it, in one transaction',
       description:
-        'The body is an expense, checked exactly as POST /v1/expenses checks one. 409 CONFLICT RECEIPT_ALREADY_FILED when the receipt is already filed (a replay with the same Idempotency-Key answers the first 201 instead); 422 ATTACHMENT_NOT_READY before the upload completes — a 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.',
+        'The body is an expense, checked exactly as POST /v1/expenses checks one. 409 CONFLICT RECEIPT_ALREADY_FILED, with details.expenseId, when the receipt is already filed (a replay with the same Idempotency-Key answers the first 201 instead); 422 ATTACHMENT_NOT_READY before the upload completes — a 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.',
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write'), idempotent(store, 'receipts.approve')] as const,
       request: { params: ReceiptIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(ApproveReceiptRequestSchema) },
@@ -294,7 +304,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
         store.expenseReceipts.fileAsExpense({ organizationId: organization.id, receiptId, userId: user.id, expense, approved, ...(body.suggested ? { suggested: body.suggested } : {}) }, now),
       );
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such receipt');
-      if (result.kind === 'already_filed') throw alreadyFiled();
+      if (result.kind === 'already_filed') throw await alreadyFiled(organization.id, receiptId);
       if (result.kind === 'not_ready') throw validationError('ATTACHMENT_NOT_READY', 'The upload has not been completed');
       // The same row POST /v1/expenses writes, same keys, so anything counting expense.created counts these; receiptId marks where it came from.
       await audit(c, 'expense.created', 'expense', result.expense.id, { currency: result.expense.currency, occurredOn: result.expense.occurredOn, receiptId: result.receipt.id, ...(body.captureSource ? { captureSource: body.captureSource } : {}) });

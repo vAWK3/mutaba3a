@@ -10201,7 +10201,7 @@ export interface paths {
         put?: never;
         /**
          * Start a library upload: a To-review receipt with no expense, and a short-lived signed PUT URL
-         * @description PDF, JPEG or PNG up to 10 MB. PUT the bytes to upload.url with upload.headers, then POST /v1/receipts/{receiptId}/complete; if the URL expired first (a replayed request answers the original), POST …/upload-url for a fresh one. 422 TOO_MANY_PENDING_UPLOADS when the profile already holds 20 unfinished uploads from the last 24 hours; 429 past 30 starts a minute per person.
+         * @description PDF, JPEG or PNG up to 10 MB. PUT the bytes to upload.url with upload.headers, then POST /v1/receipts/{receiptId}/complete; if the URL expired first (a replayed request answers the original), POST …/upload-url for a fresh one. 429 (reason TOO_MANY_PENDING_UPLOADS) when the profile already holds 20 unfinished uploads from the last 24 hours; 429 past 30 starts a minute per person. Either 429 leaves the Idempotency-Key free, so the same request can be sent again with it.
          */
         post: {
             parameters: {
@@ -11021,7 +11021,7 @@ export interface paths {
         put?: never;
         /**
          * Approve a To-review receipt: record its expense and file the receipt on it, in one transaction
-         * @description The body is an expense, checked exactly as POST /v1/expenses checks one. 409 CONFLICT RECEIPT_ALREADY_FILED when the receipt is already filed (a replay with the same Idempotency-Key answers the first 201 instead); 422 ATTACHMENT_NOT_READY before the upload completes — a 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.
+         * @description The body is an expense, checked exactly as POST /v1/expenses checks one. 409 CONFLICT RECEIPT_ALREADY_FILED, with details.expenseId, when the receipt is already filed (a replay with the same Idempotency-Key answers the first 201 instead); 422 ATTACHMENT_NOT_READY before the upload completes — a 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.
          */
         post: {
             parameters: {

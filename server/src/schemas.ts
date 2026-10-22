@@ -2151,7 +2151,7 @@ export const ReceiptFilingStatusSchema = z
 
 const suggestionSource = z.enum(['qr', 'pdf-text', 'ocr', 'vendor']);
 const suggestedField = <T extends z.ZodTypeAny>(value: T) => z.object({ value, source: suggestionSource, confidence: z.number().min(0).max(1) });
-const minorUnits = z.string().regex(/^\d{1,18}$/, 'minor units, digits only');
+const minorUnits = z.string().regex(/^(0|[1-9]\d{0,17})$/, 'minor units, digits only, no leading zeros');
 
 /**
  * Firm-books brief §6.1 `ReceiptSuggestion`, what a device's reader read off a receipt (MUT-255 stores it). Unknown

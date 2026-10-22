@@ -39,7 +39,8 @@ before it becomes an expense. A receipt could not exist without an expense, and 
   expense (one transaction, Idempotency-Key), delete. Hosted only; session-only.
 - `GET /admin/v1/receipts/edit-rates`: how often people change what the reader suggested, counts only (MUT-252's
   success measure).
-- Limits: 20 unfinished library uploads per profile per day; 30 upload starts a minute per person.
+- Limits: 20 unfinished library uploads per profile per day; 30 upload starts a minute per person. Both answer 429,
+  and a 429 now releases its Idempotency-Key (like a 5xx), so the same request can be sent again with it.
 
 ### Changed
 - `ExpenseReceipt.expenseId` is optional; receipts gain `filingStatus`, `receivedOn`, `suggested`, `approved`,

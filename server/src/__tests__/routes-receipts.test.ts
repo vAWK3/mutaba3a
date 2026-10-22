@@ -107,6 +107,9 @@ describe('POST /v1/receipts/uploads → complete → GET /v1/receipts (AC1)', ()
     expect(started.receipt.suggested).toEqual(SUGGESTION);
     const bad = await h.app.request('/v1/receipts/uploads', json({ ...FILE, suggested: { ...SUGGESTION, totalMinor: { value: '15.00', source: 'ocr', confidence: 1.5 } } }, { ...as(), ...idem() }));
     expect(bad.status).toBe(422);
+    // "0100" and "100" are the same amount; refusing the padded form keeps the edit-rate comparison exact.
+    const padded = await h.app.request('/v1/receipts/uploads', json({ ...FILE, suggested: { ...SUGGESTION, totalMinor: { value: '0100', source: 'ocr', confidence: 1 } } }, { ...as(), ...idem() }));
+    expect(padded.status).toBe(422);
   });
 
   it('pages newest first and filters by upload day and status', async () => {
@@ -125,6 +128,7 @@ describe('POST /v1/receipts/uploads → complete → GET /v1/receipts (AC1)', ()
     expect((await read(await h.app.request('/v1/receipts?filingStatus=FILED', { headers: as() }))).items).toEqual([]);
     expect((await h.app.request('/v1/receipts?from=2026-10-25&to=2026-10-24', { headers: as() })).status).toBe(422);
     expect((await h.app.request('/v1/receipts?cursor=nonsense', { headers: as() })).status).toBe(422);
+    expect((await read(await h.app.request('/v1/receipts?from=2026-13-01', { headers: as() }))).error.details.reason).toBe('DATE_INVALID');
   });
 
   it('re-signs an unfinished upload, and refuses once READY', async () => {
@@ -159,7 +163,8 @@ describe('POST /v1/receipts/{id}/approve (AC2, AC3)', () => {
     expect((await read(replay)).expense.id).toBe(body.expense.id);
     const conflict = await approve(idem());
     expect(conflict.status).toBe(409);
-    expect((await read(conflict)).error.details.reason).toBe('RECEIPT_ALREADY_FILED');
+    // It names where the receipt is filed, so a client whose first answer was lost can still open the expense.
+    expect((await read(conflict)).error.details).toEqual({ reason: 'RECEIPT_ALREADY_FILED', expenseId: body.expense.id });
 
     expect((await read(await h.app.request('/v1/expenses', { headers: as() }))).items).toHaveLength(1);
     expect((await read(await h.app.request(`/v1/expenses/${body.expense.id}`, { headers: as() }))).receipts.map((r: Loose) => r.id)).toEqual([receipt.id]);
@@ -200,6 +205,9 @@ describe('POST /v1/receipts/{id}/approve (AC2, AC3)', () => {
       amountAndDate: { suggested: 1, unedited: 0 },
     });
     expect((await h.app.request('/admin/v1/receipts/edit-rates?from=2026-10-22&to=2026-10-22', { headers: as() })).status).toBe(401);
+    expect((await h.app.request('/admin/v1/receipts/edit-rates?from=2026-13-01&to=2026-13-02', { headers: admin })).status).toBe(422);
+    const tooLong = await h.app.request('/admin/v1/receipts/edit-rates?from=2024-01-01&to=2026-10-22', { headers: admin });
+    expect((await read(tooLong)).error.details.reason).toBe('RANGE_TOO_LONG');
   });
 });
 
@@ -223,17 +231,28 @@ describe('limits (decision P3)', () => {
     // An unfinished upload from 25 hours ago (seeded, as above) is outside the window.
     await h.store.expenseReceipts.create({ organizationId: org.id, expenseId: null, filename: 'old.pdf', mimeType: 'application/pdf', sizeBytes: 10, receivedOn: '2026-10-21', uploadedByUserId: userId, requestId: null }, new Date(h.clock.now.getTime() - 25 * 60 * 60 * 1000));
     for (let i = 0; i < MAX_PENDING_LIBRARY_UPLOADS; i++) expect((await h.app.request('/v1/receipts/uploads', json(FILE, { ...as(), ...idem() }))).status).toBe(201);
-    const refused = await h.app.request('/v1/receipts/uploads', json(FILE, { ...as(), ...idem() }));
-    expect(refused.status).toBe(422);
+    const key = idem();
+    const refused = await h.app.request('/v1/receipts/uploads', json(FILE, { ...as(), ...key }));
+    expect(refused.status).toBe(429);
     expect((await read(refused)).error.details.reason).toBe('TOO_MANY_PENDING_UPLOADS');
+    // Nothing was done, so the key is free: once there is room, the same request with the same key goes through.
+    const oldest = [...(h.store.snapshot().maps.expReceipts.values())].find((r) => r.status === 'PENDING_UPLOAD' && !r.deletedAt && r.filename === 'cafe.jpg');
+    expect((await h.app.request(`/v1/receipts/${oldest!.id}`, { method: 'DELETE', headers: as() })).status).toBe(204);
+    expect((await h.app.request('/v1/receipts/uploads', json(FILE, { ...as(), ...key }))).status).toBe(201);
   });
 
   it('rate-limits upload starts per person, with Retry-After', async () => {
     const { h, as } = await setup({ uploadsPerMinute: 2 });
     for (let i = 0; i < 2; i++) expect((await h.app.request('/v1/receipts/uploads', json(FILE, { ...as(), ...idem() }))).status).toBe(201);
-    const limited = await h.app.request('/v1/receipts/uploads', json(FILE, { ...as(), ...idem() }));
+    const key = idem();
+    const limited = await h.app.request('/v1/receipts/uploads', json(FILE, { ...as(), ...key }));
     expect(limited.status).toBe(429);
     expect(limited.headers.get('retry-after')).toBeTruthy();
+    // A 429 is "not done, try later": after the window, the same key goes through instead of replaying the 429.
+    h.clock.now = new Date(h.clock.now.getTime() + 61_000);
+    const retried = await h.app.request('/v1/receipts/uploads', json(FILE, { ...as(), ...key }));
+    expect(retried.status).toBe(201);
+    expect(retried.headers.get('idempotent-replayed')).toBeNull();
     expect(RECEIPT_UPLOAD_POLICY.perMinute).toBe(30);
   });
 });
@@ -284,6 +303,8 @@ describe('access and configuration', () => {
     const started = await read(await h.app.request(`/v1/expenses/${expense.id}/receipts`, json(FILE, as())));
     expect(started.receipt).toMatchObject({ expenseId: expense.id, filingStatus: 'FILED' });
     h.storage.put(keyOf(started.upload.url), { sizeBytes: FILE.sizeBytes, contentType: FILE.mimeType });
+    // Its own expense's route completes it (that one checks the expense's room); the library's refuses to.
+    expect((await h.app.request(`/v1/receipts/${started.receipt.id}/complete`, { method: 'POST', headers: as() })).status).toBe(404);
     expect((await h.app.request(`/v1/expenses/${expense.id}/receipts/${started.receipt.id}/complete`, { method: 'POST', headers: as() })).status).toBe(200);
     expect(await read(await h.app.request('/v1/receipts/counts', { headers: as() }))).toEqual({ toReview: 0, filed: 1 });
   });
