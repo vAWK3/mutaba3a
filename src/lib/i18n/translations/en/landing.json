@@ -139,7 +139,7 @@
       },
       "network": {
         "title": "What reaches the network",
-        "body": "The website's account-request form sends what you type in it to Netlify when you press Send. The website also sends the anonymous visit counts described under \"Anonymous usage counts\" to PostHog. The hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog. The mobile apps connect to Mutaba3a's servers, to the private storage that holds your receipts, and, if you turned on anonymous usage, to PostHog, always over encrypted connections."
+        "body": "The website's account-request form sends what you type in it to Netlify when you press Send. The website also sends the anonymous visit counts described under \"Anonymous usage counts\" to PostHog. The hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog. The mobile apps connect to Mutaba3a's servers, to Sentry for error reports, to the private storage that holds your receipts, and, if you turned on anonymous usage, to PostHog, always over encrypted connections."
       },
       "sharing": {
         "title": "Who else handles your data",
@@ -151,7 +151,7 @@
       },
       "noTracking": {
         "title": "No ads, no tracking",
-        "body": "None of Mutaba3a's apps use advertising or tracking that follows you across sites or apps. Our servers send error reports when something breaks on our side, as described under \"Error reports\". The free apps on Mac, Windows, and in the browser never send them. The anonymous usage counts we do keep are described under \"Anonymous usage counts\". Our servers keep standard technical logs (such as when a request arrived, its IP address, and whether it succeeded) so we can run the service. We don't use them to profile you."
+        "body": "None of Mutaba3a's apps use advertising or tracking that follows you across sites or apps. Our servers and the iPhone and Android apps send error reports when something breaks, as described under \"Error reports\". The free apps on Mac, Windows, and in the browser never send them. The anonymous usage counts we do keep are described under \"Anonymous usage counts\". Our servers keep standard technical logs (such as when a request arrived, its IP address, and whether it succeeded) so we can run the service. We don't use them to profile you."
       },
       "usageAnalytics": {
         "title": "Anonymous usage counts",
@@ -159,7 +159,7 @@
       },
       "errorReports": {
         "title": "Error reports",
-        "body": "When something breaks, we want to know before you have to tell us. An error report says where in our code the problem happened, which version you were using, your language, and your device's operating system, browser, and model. It never includes amounts, names, notes, contact details, request contents, your IP address, or anything you type. If a report includes an account at all, it is a random internal ID. Reports are stored by Sentry in the EU. Our servers send a report when a request fails on our side."
+        "body": "When something breaks, we want to know before you have to tell us. An error report says where in our code the problem happened, which version you were using, your language, and your device's operating system, browser, and model. It never includes amounts, names, notes, contact details, request contents, your IP address, or anything you type. If a report includes an account at all, it is a random internal ID. Reports are stored by Sentry in the EU. Our servers send a report when a request fails on our side. The iPhone and Android apps send a report when the app crashes or hits an error it can't recover from. They never attach screenshots or what's on your screen."
       },
       "mobileDeletion": {
         "title": "Deleting your account and data",

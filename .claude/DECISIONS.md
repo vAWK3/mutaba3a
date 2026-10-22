@@ -3697,6 +3697,15 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Quota.** E33 now shares the free plan's monthly error quota, with no per-key caps on either product (TD-200).
 - **Another product** joins only by adding its prefix with the same decision.
 
+**Amendment 10 (the phone, MUT-151, 2026-10-22)**: the Capture app reports to `mutaba3a-flutter`.
+- **Start.** Release builds only, with a DSN matching Sentry's EU ingest (`tool/sentry_dsn_pattern.txt` in the Flutter repo, which the release lanes also check). The DSN comes from the Keychain, never `.env`.
+- **Errors only.** Sessions, ANR, app-hang and watchdog tracking are off; so are the SDK's HTTP and native auto-breadcrumbs, failed-request events and client reports. Freeze reporting would need its own policy wording.
+- **Scrubbing.** A Dart port of the contract scrubber runs as `beforeSend` and `beforeBreadcrumb` and passes every contract fixture. The phone truncates text to 2,048 characters, not 8,192 (the worst case measured 150–300 ms at 8,192 in Dart). If scrubbing throws, a bare report (types, frames, release, allowed tags, `scrub_failed`) is sent instead.
+- **Native crashes** skip the Dart scrubber. A project-level Advanced Data Scrubbing rule on `mutaba3a-flutter` is their second layer (INFRA §1).
+- **ApiErrors.** Only `serverError` with status 0 (an unreadable reply) or 5xx is reported. Repositories catch errors into `Result`, so unreadable replies are reported explicitly at each site, by endpoint and error type only, never the error's text.
+- **User.** The account's internal id. The store answers therefore say crash data is **linked to identity** (App Store) and add **User IDs** (Play).
+- **Excluded.** The Share Extension, widgets and Siri intents send nothing (follow-up MUT-395).
+
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
 **Status**: Accepted (2026-10-17, MUT-157; auto-decided on the recommended option at Basel's request, C1)

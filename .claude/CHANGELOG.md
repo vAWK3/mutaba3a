@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — The privacy policy says the phone apps send error reports (MUT-151, ADR-091 amendment 10)
+
+**Why:** the Capture app reports crashes to Sentry from its next store release (mutaba3a-flutter `feature/mut-151-phone-sentry`), and the policy describes only what is live (ADR-090 P3).
+
+### Changed
+- `landing.privacyPolicy` (en + ar): `errorReports` adds the phone sentence (no screenshots or screen content), `noTracking` names the iPhone and Android apps as senders, and `network` says the mobile apps connect to Sentry.
+- `PrivacyPolicyPage.test.tsx` and release-QA `web.legal.privacy-error-reports` assert the new sentences.
+- `docs/observability/README.md`: the phone's row, DSN/token sources, errors-only options, the native-crash path, the 2,048 cap, `scrub_failed`, and the store answers (linked to identity, Play User IDs). INFRA §1: the phone's server-side scrub rule to set by hand. ADR-091 amendment 10.
+
 ## [Unreleased] - 2026-10-22 — The local API loads its own `.env` in dev
 
 **Why:** `tsx watch` restarts the API on any file edit in the shared checkout; an API started without its env (plain `npm run dev`)
