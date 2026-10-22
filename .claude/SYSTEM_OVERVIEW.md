@@ -330,6 +330,7 @@ Hosted accounts are covered by terms of service at `/terms/<version>`. The texts
   - the 14-day trial (read-only until day 30, then locked if never paid).
 - Stripe fills the mirror (MUT-360): a signed webhook (`POST /v1/billing/stripe/webhook`) re-reads each subscription an event names, and a nightly Cloud Scheduler job (`/jobs/v1/billing/stripe-reconcile`, 03:30 Israel time) re-reads them all, so a missed or out-of-order event heals by morning. A customer is linked through `mutaba3a_user_id` metadata; an operator's link always wins. Off until `stripe_enabled` is applied (DEPLOYMENT.md §6e).
 - Operators grant coverage and link pilot Stripe customers with `npm run billing:*` (admin `/admin/v1/billing/*`), audited.
+- Self-service (MUT-362, ADR-170): Settings › Billing in the portal's account menu shows where the person stands (trial, active, ending, unpaid, read-only, covered) and opens Stripe Checkout (`POST /v1/billing/checkout-session`) or the Customer Portal (`POST /v1/billing/portal-session`) on the person's own Stripe customer. Prices are the Stripe catalog's `freelancer_list_*` lookup keys; `server/src/billing/billing-countries.json` says where a person may buy without a tax ID (empty until MUT-355). Inert ("open soon") until the prices exist.
 - Billing never travels with a profile's data: it isn't in the local snapshot, in a profile export, or rolled back by a restore.
 
 ### Taking your records with you (MUT-325, ADR-156)

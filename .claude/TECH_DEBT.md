@@ -101,6 +101,22 @@
 **Impact**: `npm run typecheck` only checks `tsconfig.app.json`/`tsconfig.hosted.json`/`tsconfig.hosted-local.json`. `tsconfig.node.json` (the only config with `types: ["node"]`, which `scripts/` would need) includes only `vite.config.ts`. `npm run build`'s `tsc -b` builds every referenced project, but `tsconfig.node.json`'s narrow include means it still never typechecks `scripts/`. `vitest` transpiles via esbuild without type-checking. A type error in any `scripts/*.ts` file (including this ticket's `icon-set.ts`/`generate-icons.ts`/`validate-icon-set.ts`) would only surface as a runtime failure the next time someone runs that script, not in CI.
 **Fix**: add `"scripts"` (or `"scripts/**/*.ts"`, excluding `__tests__`) to `tsconfig.node.json`'s `include`, confirm it builds clean, then add `tsconfig.node.json` to `npm run typecheck`'s chain.
 
+### TD-201: Billing release-QA depends on Stripe's hosted pages and a sandbox set up by hand
+**Status**: Open
+**Ticket**: MUT-362 (eng review D8 B)
+**Added**: 2026-10-22
+**Priority**: Low
+**Impact**: the `portal-live` specs fill Stripe's real Checkout and Customer Portal. Stripe says its hosted pages resist automation, so a bot check or a changed field id fails a run with no product bug. The app also needs the sandbox key in the Keychain (`release-kit` / `barmajiyat/MUTABA3A_STRIPE_SANDBOX_KEY`), the Stripe CLI logged in to the Mutaba3a sandbox, and the sandbox's default Customer Portal configuration saved once in the dashboard.
+**Fix**: if the hosted-page steps turn flaky, stop the specs at the redirect and finish the subscription through the API (as `manage` already does), keeping one recorded hosted-page run per release by hand.
+
+### TD-202: A person's own Checkout never runs live while no country is open to consumers
+**Status**: Open
+**Ticket**: MUT-362; MUT-355 opens the first countries
+**Added**: 2026-10-22
+**Priority**: Low until `consumerCountries` is filled
+**Impact**: `billing-countries.json` ships empty, so live QA pays as a business (Israel with the tax-number field, the Emirates with a tax ID). The person path (no tax ID, optional number field) is proven only by `checkout.test.ts` and `billing-routes.test.ts`.
+**Fix**: when MUT-355 opens a country, add a `portal-live.billing.subscribe-person` flow for it.
+
 ### TD-200: Sentry keys have no daily cap, so one surface can use up the month's quota
 **Status**: Accepted (Basel, 2026-10-22: Developer plan, caps gated)
 **Ticket**: none (MUT-147, ADR-091 amendment 8)

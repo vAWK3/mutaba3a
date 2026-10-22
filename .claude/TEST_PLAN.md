@@ -3431,3 +3431,16 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `src/services/oauth/__tests__/oauth-client.test.ts` (changed) | Unit | 0 | `CONFIG.clientId` is `CIMD_CLIENT_ID` (was a stale literal without `.json`) |
 
 Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__tests__/vite-config.test.ts src/services/oauth`; `npm run test:bundles` for the allowlist. **Not testable locally:** the live fetch. After `make release web`, run `curl -s https://mtb3a.com/.well-known/oauth-client.json | jq -r .client_id`.
+
+## MUT-362 — Self-service billing (2026-10-22, ADR-170)
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit (server) | `server/src/billing/__tests__/checkout.test.ts` | every refusal in order (live statuses, unpaid D6, paused, no owned profile, Malafat, no-expiry grant D5, expiring grant allowed, consumer countries AC2, prices, malformed country); params (ILS/USD, three tax-ID variants, custom field optional/required, return URLs, `expires_at`, metadata), copy limits, `catalogFrom`, the shipped country file, `consumerCountryCheck`, return paths |
+| Adapter (server) | `server/src/billing/stripe/__tests__/checkout-gateway.test.ts` | real SDK over a fake fetch: customer lookup order and idempotency key, Checkout and portal bodies, no-URL session, `resource_missing` not transient, one retry with the same idempotency key, price lookup + 10-minute cache (failures not cached), non-recurring prices skipped, tax-ID count |
+| Route (server) | `server/src/__tests__/billing-routes.test.ts` | GET shapes (trial, subscription, unconfigured, Stripe failing on prices); POST checkout (customer made with the person's id and audited, linked customer reused, 409 reasons, 422 country/return path/body, 503 prices/not configured, 502, `BILLING_ACCOUNT_NEEDS_HELP` warn, 10/min); POST portal (redirect + audit, `NO_BILLING_ACCOUNT`, deleted customer, 502); admin `countryCheck` |
+| Store contract | `store-contract-billing.ts` (memory + Prisma) | `summaryOf`: trial start, linked account, subscriptions latest first; never an unlinked or another person's account |
+| Sync / CLI / security | `sync.test.ts`, `users-cli.test.ts`, `route-security.test.ts` | a Checkout-made subscription on our customer links and covers; `billing-status` CHECK line; the three routes session-only and refused to API keys |
+| Portal unit | `data/__tests__/billingView.test.ts`, `countries.test.ts`, `filters.test.ts` | every panel and action, open soon, DR3 list, checkout route, currency, computed saving, days left; country order and the Palestine name; the `billing`/`step`/`checkout` URL keys |
+| Portal component | `components/__tests__/BillingDrawer.test.tsx` | menu → URL, status first with focus, both prices, open soon, covered by grant, load error + retry, Arabic; Subscribe step (no default country, ILS, saving label, POST body, redirect), contact us vs business, Palestine + back, session failure keeps choices; return confirming → subscribed, cancelled; Manage billing, ending, unpaid, deleted customer |
+| Release-QA | `portal.billing.open-soon` (stubbed, passes); `portal-live.billing.subscribe`, `subscribe-usd`, `business-only`, `manage`, `manage-ended`, `rtl-375` (Stripe sandbox, D8 B) | recorded flows; the `portal-live` ones need the sandbox key |

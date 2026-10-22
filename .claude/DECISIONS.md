@@ -4643,3 +4643,26 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The phone (MUT-391) reads the window with `order=occurredOn&occurredFrom=<cutoff>` and the backdated card with `loggedSince&occurredBefore`, dedupes by id and versions its cache key; the server deploys first.
 - Future-dated Owed income is MUT-392.
 - API 1.49.0-mut390.
+
+
+## ADR-170: Self-Service Billing: Server-Made Checkout on the Person's Own Customer, Refusals Before Stripe, Prices from Stripe Lookup Keys, Countries from a Server File (MUT-362)
+
+**Status**: Active
+**Date**: 2026-10-22
+**Context**: After MUT-358 (entitlements) and MUT-360 (the Stripe mirror), nobody could start, change or cancel a subscription without the operator. Stripe's hosted pages have no Arabic. Plan, eng review (D1–D9) and design review (DR1–DR13): `.claude/designs/mut-362-self-service-billing.md`.
+**Decision**:
+1. **Three person-level, session-only routes** in `server/src/routes/billing.ts`, outside `PORTAL_ROUTES` and never billing-gated: `GET /v1/billing` (one read: subscription, trial, catalog, country rules), `POST /v1/billing/checkout-session`, `POST /v1/billing/portal-session`. Ten session requests a minute per person.
+2. **A separate write door** (`billing/stripe/checkout-gateway.ts`); MUT-360's read-only `StripeGateway` is unchanged (D1). The one restricted key gains Write on Customers, Checkout Sessions and Customer portal (D2).
+3. **The person's own customer** (D3): the linked account's, else one listed by exact email whose `metadata.mutaba3a_user_id` is the person, else created with that metadata and idempotency key `mut362-customer-<userId>`. No `billing_accounts` row is written there (ADR-165 D6 holds: only `syncSubscription` creates one).
+4. **Refusals before Stripe**, in this order: a live subscription (`active`, `trialing`, `past_due`, `incomplete`); `unpaid` (pay the open invoice in the portal, D6); `paused` (contact us); no owned profile; all Malafat; all under a no-expiry grant (D5); a person outside the consumer countries (AC2). Each is an existing code plus `details.reason` (the PATTERNS rule), registered in `CONFLICT_REASONS` / `VALIDATION_REASONS`; `BILLING_NOT_CONFIGURED` + `PRICES_NOT_SET`; the one new code is `STRIPE_UNAVAILABLE` (502). A linked customer Stripe no longer has is `BILLING_ACCOUNT_NEEDS_HELP` with an ids-only warn (D7).
+5. **Prices are the Stripe catalog**: lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`, a currency sold only with both prices in that currency and interval, cached ten minutes. ILS for Israel, USD elsewhere.
+6. **Countries**: `server/src/billing/billing-countries.json` (`consumerCountries`, `customTaxIdCountries`), parsed at boot. It lives beside the code, not in the repo's `config/`, because the API image's build context is `server/` and only `src/` reaches it. It ships with no consumer country until MUT-355.
+7. **Checkout parameters**: `mode=subscription`, `customer_update` address/name auto, `automatic_tax`, `billing_address_collection=required`, `client_reference_id` and `subscription_data.metadata.mutaba3a_user_id`, `locale=auto`, an Arabic + English `custom_text`, `expires_at` one hour, tax IDs required (`if_supported`) for a business outside the consumer list, a required `business_tax_number` field for IL/JO businesses outside it (optional inside).
+8. **Return from Checkout** polls `/v1/billing` and `/v1/me` (2 s, up to 30 s); no confirm endpoint (D4). The webhook and reconcile stay the only writers.
+9. **Operator flag** (D9): `GET /admin/v1/billing/status` `countryCheck` flags a linked payer billed outside the consumer countries with no tax ID.
+10. **Portal**: Settings › Billing is the account menu's drawer (DR1–DR13), Arabic first; Stripe's English pages come only after our own explanation (AC4).
+**Consequences**:
+- API 1.52.0-mut362 (MUT-392 holds 1.51.0).
+- Nothing is sold until Basel creates the four prices, configures the Customer Portal, widens the key and fills `consumerCountries` (before-release.md); until then the drawer says "Subscriptions open soon" and the POSTs refuse.
+- Release-QA drives Stripe's real hosted pages in the sandbox (`portal-live` app, D8 B); TD-201.
+- A person's own card path can't run live while the consumer list is empty; TD-202.

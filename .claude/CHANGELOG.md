@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — Settings › Billing: subscribe, manage and cancel without the operator (MUT-362, ADR-170)
+
+**Why:** the GA gate is "anyone can pay and leave with no help". After MUT-358/360 the server could mirror a subscription, but nobody could start one, change a card or cancel without Basel.
+
+### Added
+- `GET /v1/billing`, `POST /v1/billing/checkout-session`, `POST /v1/billing/portal-session` (`server/src/routes/billing.ts`); API 1.52.0-mut362, `STRIPE_UNAVAILABLE`, eight conflict reasons and `COUNTRY_NEEDS_BUSINESS`.
+- `billing/checkout.ts` (the decision and the Checkout params), `billing/stripe/checkout-gateway.ts` (the write door), `billing/billing-countries.json` (no consumer country yet), `billing.summaryOf`.
+- `billing:status` `countryCheck` (D9).
+- Portal: the account menu's Billing drawer (`BillingDrawer`, `billingView`, `billingQueries`, `countries`), Arabic first; `RadioCards` extracted from `ProfileTypeCards`.
+- Release-QA: `portal-live` app on the Stripe sandbox (six flows), `portal.billing.open-soon`.
+
+### Changed
+- The restricted Stripe key gains Write on Customers, Checkout Sessions and Customer portal (DEPLOYMENT.md §6e, pilot-runbook §1.7 steps 3a–3b, before-release.md).
+
+### Files
+`server/src/routes/billing.ts`, `server/src/billing/{checkout.ts,billing-countries.json,stripe/checkout-gateway.ts}`, `server/src/routes/admin-billing.ts`, `server/src/{app.ts,index.ts,config.ts,errors.ts,schemas.ts}`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/auth/store-guard.ts`, `server/src/scripts/users.ts`, `server/openapi/openapi.yaml`, `src/hosted/{components/BillingDrawer.tsx,components/RadioCards.tsx,components/ProfileTypeCards.tsx,data/billingView.ts,data/billingQueries.ts,data/countries.ts,data/filters.ts,shell/AccountDrawers.tsx,shell/UserMenu.tsx,api/client.ts,api/schema.d.ts,i18n/*.json,hosted.css}`, `qa/**`.
+
 ## [Unreleased] - 2026-10-22 — The Malafat OAuth client identity moves to mtb3a.com; mutaba3a.app is retired (MUT-387, ADR-155 amendment)
 
 **Why:** the CIMD client id named `https://mutaba3a.app/...`, a domain nobody owns. Whoever registered it could publish a client document under our id.
