@@ -53,10 +53,7 @@ export function ExpenseDrawer() {
       amount: prefillData?.amountMinor
         ? (prefillData.amountMinor / 10 ** currencyExponent(prefillData.currency || 'USD')).toString()
         : '',
-      // MUT-281: prefillData.currency is the universal (9-code) Currency; this
-      // drawer's own form still only offers the local app's narrower set
-      // (MUT-282 widens it) -- no local record can hold a Gulf code yet.
-      currency: (prefillData?.currency || 'USD') as FormData['currency'],
+      currency: prefillData?.currency || 'USD',
       occurredAt: prefillData?.occurredAt?.split('T')[0] || todayISO(),
       title: prefillData?.title || '',
       vendor: prefillData?.vendor || '',
@@ -125,8 +122,7 @@ export function ExpenseDrawer() {
         expenseType: 'onetime',
         profileId: existingExpense.profileId,
         amount: (existingExpense.amountMinor / 10 ** currencyExponent(existingExpense.currency)).toString(),
-        // MUT-281: see the prefillData cast above.
-        currency: existingExpense.currency as FormData['currency'],
+        currency: existingExpense.currency,
         occurredAt: existingExpense.occurredAt.split('T')[0],
         title: existingExpense.title || '',
         vendor: existingExpense.vendor || '',
@@ -150,8 +146,7 @@ export function ExpenseDrawer() {
         expenseType: 'recurring',
         profileId: existingRule.profileId,
         amount: (existingRule.amountMinor / 10 ** currencyExponent(existingRule.currency)).toString(),
-        // MUT-281: see the prefillData cast above.
-        currency: existingRule.currency as FormData['currency'],
+        currency: existingRule.currency,
         occurredAt: existingRule.startDate,
         title: existingRule.title,
         vendor: existingRule.vendor || '',

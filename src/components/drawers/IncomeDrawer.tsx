@@ -160,11 +160,7 @@ export function IncomeDrawer() {
       incomeStatus: existingTx ? getIncomeStatusFromTx(existingTx.status) : defaultStatus || 'earned',
       profileId: initialProfileId,
       amount: '',
-      // MUT-281: resolveDefaultCurrency returns the universal (9-code)
-      // Currency; this drawer's own form still only offers the local app's
-      // narrower set (MUT-282 widens it) -- no profile default can be a Gulf
-      // code yet since nothing lets a profile be created with one.
-      currency: resolveDefaultCurrency(undefined, settings) as FormData['currency'],
+      currency: resolveDefaultCurrency(undefined, settings),
       occurredAt: todayISO(),
       clientId: defaultClientId || '',
       clientDraft: '',
@@ -213,8 +209,7 @@ export function IncomeDrawer() {
   const defaultCurrency = clientCurrency ?? profileCurrency;
   useEffect(() => {
     if (!followsDefaults || currencyChosen) return;
-    // MUT-281: see the resolveDefaultCurrency cast above.
-    setValue('currency', defaultCurrency as FormData['currency']);
+    setValue('currency', defaultCurrency);
   }, [followsDefaults, currencyChosen, defaultCurrency, setValue]);
 
   // Reset form when existing transaction loads
@@ -224,8 +219,7 @@ export function IncomeDrawer() {
         incomeStatus: getIncomeStatusFromTx(existingTx.status),
         profileId: existingTx.profileId || initialProfileId,
         amount: (existingTx.amountMinor / 10 ** currencyExponent(existingTx.currency)).toString(),
-        // MUT-281: see the resolveDefaultCurrency cast above.
-        currency: existingTx.currency as FormData['currency'],
+        currency: existingTx.currency,
         occurredAt: existingTx.occurredAt.split('T')[0],
         clientId: existingTx.clientId || '',
         clientDraft: '',
@@ -245,8 +239,7 @@ export function IncomeDrawer() {
         incomeStatus: 'invoiced',
         profileId: sourceTx.profileId || initialProfileId,
         amount: (sourceTx.amountMinor / 10 ** currencyExponent(sourceTx.currency)).toString(),
-        // MUT-281: see the resolveDefaultCurrency cast above.
-        currency: sourceTx.currency as FormData['currency'],
+        currency: sourceTx.currency,
         occurredAt: todayISO(),
         clientId: sourceTx.clientId || '',
         clientDraft: '',

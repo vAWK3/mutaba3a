@@ -9,8 +9,8 @@ export function getLocaleFromLanguage(language: Language): string {
   return language === 'ar' ? 'ar' : 'en-US';
 }
 
-// Fractional digits each currency carries in minor-unit arithmetic. JOD, BHD
-// and OMR are 3-decimal; every other one is 2-decimal. Mirrors
+// Fractional digits each currency carries in minor-unit arithmetic. JOD is
+// 3-decimal; every other one is 2-decimal. Mirrors
 // server/src/money.ts's EXPONENT -- kept as a separate client-side constant
 // (client and server already duplicate Currency/SUPPORTED_CURRENCIES
 // independently, with no shared package between them).
@@ -19,11 +19,6 @@ const CURRENCY_EXPONENT: Record<Currency, number> = {
   ILS: 2,
   EUR: 2,
   JOD: 3,
-  AED: 2,
-  SAR: 2,
-  QAR: 2,
-  BHD: 3,
-  OMR: 3,
 };
 
 /** The number of decimal places a currency's minor units carry (2, or 3 for JOD). */
@@ -112,10 +107,8 @@ export function isolateAmount(text: string): string {
 const GROUP_SPACES = /[ \u00A0\u2009\u202F]+/g;
 // The only words an amount may carry: one currency symbol or code, before or after it.
 // The suffix has no leading \s* (trimmed after instead), so a long run of spaces can't backtrack.
-// Gulf currencies (MUT-281) are ISO codes only here -- the Arabic symbols people
-// actually type (\u062F.\u0625, \u0631.\u0633, \u0631.\u0642, \u062F.\u0628, \u0631.\u0639) are MUT-282's typed-amount recognition.
-const CURRENCY_PREFIX = /^(US\$|USD|ILS|NIS|EUR|JOD|AED|SAR|QAR|BHD|OMR|[$\u20AA\u20AC])\s*/i;
-const CURRENCY_SUFFIX = /(US\$|USD|ILS|NIS|EUR|JOD|AED|SAR|QAR|BHD|OMR|[$\u20AA\u20AC])$/i;
+const CURRENCY_PREFIX = /^(US\$|USD|ILS|NIS|EUR|JOD|[$\u20AA\u20AC])\s*/i;
+const CURRENCY_SUFFIX = /(US\$|USD|ILS|NIS|EUR|JOD|[$\u20AA\u20AC])$/i;
 const CURRENCY_TOKENS: Record<string, Currency> = {
   $: 'USD',
   US$: 'USD',
@@ -126,11 +119,6 @@ const CURRENCY_TOKENS: Record<string, Currency> = {
   '\u20AC': 'EUR',
   EUR: 'EUR',
   JOD: 'JOD',
-  AED: 'AED',
-  SAR: 'SAR',
-  QAR: 'QAR',
-  BHD: 'BHD',
-  OMR: 'OMR',
 };
 // No amount anyone types is longer; anything longer is refused before any pattern runs
 const MAX_AMOUNT_INPUT_LENGTH = 64;

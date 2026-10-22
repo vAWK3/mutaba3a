@@ -37,7 +37,7 @@ describe('aggregateTransactionTotalsByCurrency', () => {
     const totals = aggregateTransactionTotalsByCurrency([tx('a'), tx('b', { currency: 'GBP' as Currency })]);
 
     expect(totals.USD.paidIncomeMinor).toBe(1000);
-    expect(Object.keys(totals).sort()).toEqual(['AED', 'BHD', 'EUR', 'ILS', 'JOD', 'OMR', 'QAR', 'SAR', 'USD']);
+    expect(Object.keys(totals).sort()).toEqual(['EUR', 'ILS', 'JOD', 'USD']);
   });
 });
 
@@ -128,6 +128,6 @@ describe('sumExpensesByCurrency', () => {
       expense('d', { currency: 'GBP' as Currency, amountMinor: 5 }),
     ]);
 
-    expect(totals).toEqual({ USD: 500, ILS: 700, EUR: 0, JOD: 0, AED: 0, SAR: 0, QAR: 0, BHD: 0, OMR: 0 });
+    expect(totals).toEqual({ USD: 500, ILS: 700, EUR: 0, JOD: 0 });
   });
 });
