@@ -2235,6 +2235,9 @@ export type FileReceiptResult =
   | { kind: 'not_ready' }
   | { kind: 'already_filed' };
 
+/** MUT-389: `fileAsExpense`'s refusals, plus the existing expense's own. */
+export type FileOntoExpenseResult = FileReceiptResult | { kind: 'expense_not_found' } | { kind: 'too_many_receipts' };
+
 export interface ExpenseReceiptRepository {
   /** Created with a placeholder key; the caller derives the real key from the id and `setKey`s it (as M6). */
   create(input: CreateExpenseReceiptInput, at: Date): Promise<ExpenseReceiptRecord>;
@@ -2268,6 +2271,13 @@ export interface ExpenseReceiptRepository {
    * approval and MUT-312's closed-month check plug in between the lock and the insert.
    */
   fileAsExpense(params: { organizationId: string; receiptId: string; userId: string; expense: CreateExpenseInput; approved: ApprovedReceiptFields; suggested?: ReceiptSuggestion }, at: Date): Promise<FileReceiptResult>;
+  /**
+   * MUT-389, one transaction: the same receipt lock and refusals as `fileAsExpense`; then lock the expense (live, on
+   * this profile) and refuse it once it holds `maxReceipts` READY receipts; then move the receipt to FILED on it. No
+   * expense field changes and nothing is approved: `approved` keeps whatever an earlier approval left. A sent
+   * suggestion replaces the stored one.
+   */
+  fileOntoExpense(params: { organizationId: string; receiptId: string; expenseId: string; maxReceipts: number; suggested?: ReceiptSuggestion }, at: Date): Promise<FileOntoExpenseResult>;
   /** MUT-255 operator figure, across every profile: receipts approved in `[from, to)`. Counts only. */
   editRates(range: { from: Date; to: Date }): Promise<ReceiptEditRates>;
 }

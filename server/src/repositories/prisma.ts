@@ -1664,29 +1664,38 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     fileAsExpense: (params, at) =>
       this.prisma.$transaction(async (tx) => {
-        // Lock first: of two concurrent approvals, the second waits here and then reads FILED.
-        const [locked] = await tx.$queryRaw<Array<{ status: string; filingStatus: string; deletedAt: Date | null }>>`SELECT "status", "filingStatus", "deletedAt" FROM "expense_receipts" WHERE "id" = ${params.receiptId}::uuid AND "organizationId" = ${params.organizationId}::uuid FOR UPDATE`;
-        if (!locked || locked.deletedAt) return { kind: 'not_found' as const };
-        if (locked.filingStatus === 'FILED') return { kind: 'already_filed' as const };
-        if (locked.status !== 'READY') return { kind: 'not_ready' as const };
+        const refused = await lockToReviewReceipt(tx, params.organizationId, params.receiptId);
+        if (refused) return refused;
         // TODO(blocked-by MUT-307): firm profiles take `initialApprovalFor(role, firm)` here, before the expense is written.
         // TODO(blocked-by MUT-312): `assertOpenPeriod` for the expense's date, in this transaction.
         const expense = await createExpenseRow(tx, params.expense, at);
-        const { count } = await tx.expenseReceipt.updateMany({
-          where: { id: params.receiptId, organizationId: params.organizationId, filingStatus: 'TO_REVIEW', status: 'READY', deletedAt: null },
-          data: {
-            expenseId: expense.id,
-            filingStatus: 'FILED',
-            approved: params.approved as unknown as Prisma.InputJsonValue,
-            approvedAt: at,
-            approvedByUserId: params.userId,
-            ...(params.suggested ? { suggested: params.suggested as unknown as Prisma.InputJsonValue } : {}),
-            version: { increment: 1 },
-          },
+        const receipt = await markReceiptFiled(tx, params.organizationId, params.receiptId, {
+          expenseId: expense.id,
+          approved: params.approved as unknown as Prisma.InputJsonValue,
+          approvedAt: at,
+          approvedByUserId: params.userId,
+          ...(params.suggested ? { suggested: params.suggested as unknown as Prisma.InputJsonValue } : {}),
         });
-        // The row is locked, so this can't happen short of a bug; throwing rolls the expense back rather than leaving it orphaned.
-        if (count !== 1) throw new Error(`receipt ${params.receiptId} changed under its lock`);
-        const receipt = toExpenseReceipt(await tx.expenseReceipt.findUniqueOrThrow({ where: { id: params.receiptId } }));
+        return { kind: 'filed' as const, expense, receipt };
+      }),
+    fileOntoExpense: (params) =>
+      this.prisma.$transaction(async (tx) => {
+        const refused = await lockToReviewReceipt(tx, params.organizationId, params.receiptId);
+        if (refused) return refused;
+        // NO KEY UPDATE (DECISIONS.md:1961): queues a second filing and an expense delete behind this one, but not an
+        // insert that only references the expense. Read again under the lock, so a delete that committed meanwhile shows.
+        const [expenseRow] = await tx.$queryRaw<Array<{ deletedAt: Date | null }>>`SELECT "deletedAt" FROM "expenses" WHERE "id" = ${params.expenseId}::uuid AND "organizationId" = ${params.organizationId}::uuid FOR NO KEY UPDATE`;
+        if (!expenseRow || expenseRow.deletedAt) return { kind: 'expense_not_found' as const };
+        // Counted under the expense lock, so two filings can't both take its last place (READY only, as listByExpense).
+        const held = await tx.expenseReceipt.count({ where: { organizationId: params.organizationId, expenseId: params.expenseId, status: 'READY', deletedAt: null } });
+        if (held >= params.maxReceipts) return { kind: 'too_many_receipts' as const };
+        // TODO(blocked-by MUT-307): whether evidence may be added to an approved or posted firm expense.
+        // TODO(blocked-by MUT-312): `assertOpenPeriod` for the expense's date, in this transaction.
+        const receipt = await markReceiptFiled(tx, params.organizationId, params.receiptId, {
+          expenseId: params.expenseId,
+          ...(params.suggested ? { suggested: params.suggested as unknown as Prisma.InputJsonValue } : {}),
+        });
+        const expense = await tx.expense.findUniqueOrThrow({ where: { id: params.expenseId } });
         return { kind: 'filed' as const, expense, receipt };
       }),
     editRates: async (range) => {
@@ -2049,6 +2058,30 @@ function toExpenseReceiptOrNull(row: Prisma.ExpenseReceiptGetPayload<object> | n
 
 function createExpenseRow(tx: Tx | PrismaClient, input: CreateExpenseInput, at: Date): Promise<ExpenseRecord> {
   return translate(() => tx.expense.create({ data: { ...input, createdAt: at, updatedAt: at } }));
+}
+
+/**
+ * MUT-255/389: the first step of filing a library receipt. Locks its row, so of two concurrent filings the second
+ * waits here and then reads FILED; null when it may be filed (live, READY, To review, on this profile).
+ */
+async function lockToReviewReceipt(tx: Tx, organizationId: string, receiptId: string): Promise<{ kind: 'not_found' | 'already_filed' | 'not_ready' } | null> {
+  const [locked] = await tx.$queryRaw<Array<{ status: string; filingStatus: string; deletedAt: Date | null }>>`SELECT "status", "filingStatus", "deletedAt" FROM "expense_receipts" WHERE "id" = ${receiptId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+  if (!locked || locked.deletedAt) return { kind: 'not_found' };
+  if (locked.filingStatus === 'FILED') return { kind: 'already_filed' };
+  if (locked.status !== 'READY') return { kind: 'not_ready' };
+  return null;
+}
+
+/** MUT-255/389: the last step, under `lockToReviewReceipt`'s lock: FILED on `expenseId`, with whatever else `data` sets. */
+async function markReceiptFiled(tx: Tx, organizationId: string, receiptId: string, data: { expenseId: string } & Prisma.ExpenseReceiptUncheckedUpdateManyInput): Promise<ExpenseReceiptRecord> {
+  const { count } = await tx.expenseReceipt.updateMany({
+    where: { id: receiptId, organizationId, filingStatus: 'TO_REVIEW', status: 'READY', deletedAt: null },
+    data: { ...data, filingStatus: 'FILED', version: { increment: 1 } },
+  });
+  // The row is locked, so this can't happen short of a bug; throwing rolls the transaction back rather than leaving
+  // an expense orphaned or a receipt half-filed.
+  if (count !== 1) throw new Error(`receipt ${receiptId} changed under its lock`);
+  return toExpenseReceipt(await tx.expenseReceipt.findUniqueOrThrow({ where: { id: receiptId } }));
 }
 
 /**

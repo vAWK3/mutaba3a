@@ -168,6 +168,95 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
       });
     }
 
+    describe('fileOntoExpense (MUT-389): a To-review receipt onto an expense that already exists', () => {
+      const MAX = 10;
+      const fileOnto = (store: LedgerStore, w: Awaited<ReturnType<typeof world>>, receiptId: string, expenseId: string, extra: { organizationId?: string; suggested?: ReceiptSuggestion } = {}) =>
+        store.expenseReceipts.fileOntoExpense({ organizationId: extra.organizationId ?? w.a.id, receiptId, expenseId, maxReceipts: MAX, ...(extra.suggested ? { suggested: extra.suggested } : {}) }, at(20));
+
+      it('files it FILED onto the expense, keeps its suggestion, approves nothing, and creates no expense', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const e = await store.expenses.create(w.expense({ amountMinor: 4_200n }), at(1));
+        const r = await w.ready({ suggested: suggestion }, 2);
+        const result = await fileOnto(store, w, r.id, e.id);
+        expect(result.kind).toBe('filed');
+        if (result.kind !== 'filed') return;
+        expect(result.expense).toMatchObject({ id: e.id, amountMinor: 4_200n, version: e.version });
+        expect(result.receipt).toMatchObject({ expenseId: e.id, filingStatus: 'FILED', suggested: suggestion, approved: null, approvedAt: null, approvedByUserId: null, version: r.version + 1 });
+        expect((await store.expenseReceipts.listByExpense(w.a.id, e.id)).map((x) => x.id)).toEqual([r.id]);
+        expect((await store.expenses.list(w.a.id, {}, { limit: 10, cursor: null })).items).toHaveLength(1);
+        expect(await store.expenseReceipts.countByFilingStatus(w.a.id)).toEqual({ toReview: 0, filed: 1 });
+      });
+
+      it('replaces the stored suggestion with one sent at review time', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const e = await store.expenses.create(w.expense(), at(1));
+        const r = await w.ready({ suggested: { readerVersion: 'old' } }, 2);
+        const result = await fileOnto(store, w, r.id, e.id, { suggested: suggestion });
+        expect(result.kind === 'filed' && result.receipt.suggested).toEqual(suggestion);
+      });
+
+      it('refuses a filed receipt (on another expense or this one), an unfinished upload, and a receipt that is gone or elsewhere', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const e = await store.expenses.create(w.expense(), at(1));
+        const other = await store.expenses.create(w.expense(), at(2));
+        const onOther = await w.ready({}, 3);
+        expect((await fileOnto(store, w, onOther.id, other.id)).kind).toBe('filed');
+        expect((await fileOnto(store, w, onOther.id, e.id)).kind).toBe('already_filed');
+        expect((await fileOnto(store, w, onOther.id, other.id)).kind).toBe('already_filed');
+
+        const pending = await store.expenseReceipts.create(w.upload(), at(4));
+        expect((await fileOnto(store, w, pending.id, e.id)).kind).toBe('not_ready');
+        const deleted = await w.ready({}, 5);
+        await store.expenseReceipts.softDelete(w.a.id, deleted.id, at(6));
+        expect((await fileOnto(store, w, deleted.id, e.id)).kind).toBe('not_found');
+        const r = await w.ready({}, 7);
+        expect((await fileOnto(store, w, r.id, e.id, { organizationId: w.b.id })).kind).toBe('not_found');
+        expect(await store.expenseReceipts.getById(w.a.id, r.id)).toMatchObject({ filingStatus: 'TO_REVIEW', expenseId: null });
+      });
+
+      it("refuses a deleted expense, another profile's, and one that doesn't exist; the receipt stays To review", async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const r = await w.ready({}, 1);
+        const gone = await store.expenses.create(w.expense(), at(2));
+        await store.expenses.softDelete(w.a.id, gone.id, at(3), 'unlink');
+        const elsewhere = await store.expenses.create(w.expense({ organizationId: w.b.id }), at(4));
+        expect((await fileOnto(store, w, r.id, gone.id)).kind).toBe('expense_not_found');
+        expect((await fileOnto(store, w, r.id, elsewhere.id)).kind).toBe('expense_not_found');
+        expect((await fileOnto(store, w, r.id, '00000000-0000-4000-8000-0000000000e1')).kind).toBe('expense_not_found');
+        expect(await store.expenseReceipts.getById(w.a.id, r.id)).toMatchObject({ filingStatus: 'TO_REVIEW', expenseId: null, version: r.version });
+      });
+
+      it('refuses an expense already holding the maximum READY receipts; an unfinished upload on it does not count', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const e = await store.expenses.create(w.expense(), at(1));
+        for (let i = 0; i < MAX - 1; i += 1) await w.ready({ expenseId: e.id }, 2 + i);
+        await store.expenseReceipts.create(w.upload({ expenseId: e.id }), at(15));
+        const tenth = await w.ready({}, 16);
+        expect((await fileOnto(store, w, tenth.id, e.id)).kind).toBe('filed');
+        const eleventh = await w.ready({}, 17);
+        expect((await fileOnto(store, w, eleventh.id, e.id)).kind).toBe('too_many_receipts');
+        expect(await store.expenseReceipts.getById(w.a.id, eleventh.id)).toMatchObject({ filingStatus: 'TO_REVIEW', expenseId: null });
+        expect(await store.expenseReceipts.listByExpense(w.a.id, e.id)).toHaveLength(MAX);
+      });
+
+      it('keeps an earlier approval when a receipt unlinked by an expense delete is filed again (approves nothing new)', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const r = await w.ready({ suggested: suggestion }, 1);
+        const first = await store.expenseReceipts.fileAsExpense({ organizationId: w.a.id, receiptId: r.id, userId: w.user.id, expense: w.expense(), approved: w.approved({ amountMinor: '1600' }) }, at(2));
+        if (first.kind !== 'filed') throw new Error('setup: approve failed');
+        await store.expenses.softDelete(w.a.id, first.expense.id, at(3), 'unlink');
+        const typed = await store.expenses.create(w.expense(), at(4));
+        const result = await fileOnto(store, w, r.id, typed.id);
+        expect(result.kind === 'filed' && result.receipt).toMatchObject({ expenseId: typed.id, approved: w.approved({ amountMinor: '1600' }), approvedAt: at(2), approvedByUserId: w.user.id });
+      });
+    });
+
     it('counts the edit rate per field over approvals in a range, never values', async () => {
       const store = await makeStore();
       const w = await world(store);
