@@ -129,6 +129,18 @@ describe('POST /v1/inbox', () => {
     expect((await capture({ ...BASE, occurredOn: '2016-10-03' })).status).toBe(201);
   });
 
+  /**
+   * MUT-392 review: the lenient ceiling to match. Measured from UTC's tomorrow (2026-10-13 here), at or after every
+   * timezone's today, so capture never refuses a date filing would accept; filing applies the exact ceiling.
+   */
+  it('refuses a date more than ten years after UTC tomorrow (bound future); accepts that ceiling day', async () => {
+    const { capture } = await setup();
+    const far = await capture({ ...BASE, occurredOn: '2036-10-21' });
+    expect(far.status).toBe(422);
+    expect((await read(far)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' });
+    expect((await capture({ ...BASE, occurredOn: '2036-10-20' })).status).toBe(201);
+  });
+
   it('rejects an unknown field, as every other create route does', async () => {
     const { capture } = await setup();
     expect((await capture({ ...BASE, organizationId: '00000000-0000-4000-8000-000000000000' })).status).toBe(422);
