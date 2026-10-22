@@ -11,9 +11,10 @@ mock_provider "sentry" {
 }
 
 variables {
-  organization    = "test-org"
-  portal_origins  = ["https://portal.example.test"]
-  landing_origins = ["https://landing.example.test"]
+  organization              = "test-org"
+  import_hand_made_projects = false
+  portal_origins            = ["https://portal.example.test"]
+  landing_origins           = ["https://landing.example.test"]
 }
 
 run "rejects_a_dsn_outside_the_eu_region" {

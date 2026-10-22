@@ -23,12 +23,15 @@ locals {
 }
 
 locals {
+  # `adopted`: Basel created the project by hand in Sentry's UI (2026-10-22), so Terraform imports it
+  # (the import block below) instead of creating it. The others are created here.
   surfaces = {
-    api           = { platform = "node", allowed_domains = ["*"], browser = false }
-    portal        = { platform = "javascript-react", allowed_domains = local.portal_origins, browser = true }
-    landing       = { platform = "javascript-react", allowed_domains = local.landing_origins, browser = true }
-    "capture-app" = { platform = "flutter", allowed_domains = ["*"], browser = false }
+    api           = { slug = "mutaba3a-api", adopted = false, platform = "node", allowed_domains = ["*"], browser = false }
+    portal        = { slug = "mutaba3a-web", adopted = true, platform = "javascript-react", allowed_domains = local.portal_origins, browser = true }
+    landing       = { slug = "mutaba3a-landing", adopted = false, platform = "javascript-react", allowed_domains = local.landing_origins, browser = true }
+    "capture-app" = { slug = "mutaba3a-flutter", adopted = true, platform = "flutter", allowed_domains = ["*"], browser = false }
   }
+  adopted_projects = { for surface, project in local.surfaces : surface => project.slug if project.adopted }
 
   browser_filters = ["browser-extensions", "localhost", "web-crawlers"]
   browser_filter_pairs = {
@@ -48,12 +51,14 @@ resource "sentry_project" "this" {
 
   organization = var.organization
   teams        = [sentry_team.mutaba3a.slug]
-  name         = "mutaba3a-${each.key}"
-  slug         = "mutaba3a-${each.key}"
+  name         = each.value.slug
+  slug         = each.value.slug
   platform     = each.value.platform
 
   # R1: Sentry's automatic key has no rate limit; sentry_key below is the only DSN.
-  # Only takes effect at creation, so it must be here before the first apply.
+  # Only takes effect at creation, so it must be here before the first apply. An adopted
+  # project already has its automatic key and default alert rule: DEPLOYMENT.md §1.5 step 7
+  # has the operator revoke that key and delete that rule after the apply.
   default_key = false
   # The alerts below are the only alert rules.
   default_rules = false
@@ -64,12 +69,20 @@ resource "sentry_project" "this" {
   }
 }
 
+# The projects made by hand become Terraform's on the next apply; nothing is created twice.
+# Once imported, this block is a no-op. The offline tests turn it off (a mocked provider can't import).
+import {
+  for_each = var.import_hand_made_projects ? local.adopted_projects : {}
+  to       = sentry_project.this[each.key]
+  id       = "${var.organization}/${each.value}"
+}
+
 resource "sentry_key" "this" {
   for_each = local.surfaces
 
   organization      = var.organization
   project           = sentry_project.this[each.key].id
-  name              = "mutaba3a-${each.key}"
+  name              = each.value.slug
   rate_limit_window = 86400
   rate_limit_count  = var.key_rate_limit_per_day[each.key]
 
@@ -113,7 +126,7 @@ resource "sentry_issue_alert" "new_issue" {
 
   organization  = var.organization
   project       = sentry_project.this[each.key].id
-  name          = "New issue: mutaba3a-${each.key}"
+  name          = "New issue: ${each.value.slug}"
   action_match  = "any"
   frequency     = 30
   conditions_v2 = [{ first_seen_event = {} }]
@@ -125,7 +138,7 @@ resource "sentry_issue_alert" "regression" {
 
   organization  = var.organization
   project       = sentry_project.this[each.key].id
-  name          = "Regression: mutaba3a-${each.key}"
+  name          = "Regression: ${each.value.slug}"
   action_match  = "any"
   frequency     = 30
   conditions_v2 = [{ regression_event = {} }]
@@ -137,7 +150,7 @@ resource "sentry_issue_alert" "spike" {
 
   organization = var.organization
   project      = sentry_project.this[each.key].id
-  name         = "Spike: mutaba3a-${each.key}"
+  name         = "Spike: ${each.value.slug}"
   action_match = "any"
   frequency    = 60
   conditions_v2 = [{

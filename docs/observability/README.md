@@ -13,9 +13,9 @@ contain. MUT-147 set it up. The surface stories wire it in:
 | Surface | Sentry project | Sends |
 |---|---|---|
 | Hosted API (`server/`) | `mutaba3a-api` | Unknown errors and `ApiError`s with status 500 or higher; pre-roll and post-roll crashes (MUT-148: live once `sentry_enabled`) |
-| Hosted portal (`--mode hosted`) | `mutaba3a-portal` | Crashes, uncaught errors, unhandled rejections |
+| Hosted portal (`--mode hosted`) | `mutaba3a-web` (made by hand, imported) | Crashes, uncaught errors, unhandled rejections |
 | Landing pages (`/`, `/download`, `/privacy`, lazy chunks only) | `mutaba3a-landing` | The same as the portal, with no user context |
-| Capture app (Flutter, iOS + Android) | `mutaba3a-capture-app` | Dart, Flutter-framework and native crashes |
+| Capture app (Flutter, iOS + Android) | `mutaba3a-flutter` (made by hand, imported) | Dart, Flutter-framework and native crashes |
 
 **Never:** the local web app (`/app`) or desktop. They send nothing, ever (ADR-024, ADR-090).
 

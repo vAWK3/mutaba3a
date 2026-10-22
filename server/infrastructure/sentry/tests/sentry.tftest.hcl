@@ -13,8 +13,31 @@ mock_provider "sentry" {
 
 variables {
   organization = "test-org"
+  # A mocked provider can't import; the real apply imports mutaba3a-web and mutaba3a-flutter.
+  import_hand_made_projects = false
   # MUT-326: the origins come from the hosts config; this fixture's legacy hosts are portal/landing.example.test.
   hosts_file = "../../../config/fixtures/hosts.no-domain.json"
+}
+
+run "project_slugs_and_the_two_made_by_hand" {
+  command = plan
+
+  assert {
+    condition = { for surface, project in local.surfaces : surface => project.slug } == {
+      api = "mutaba3a-api", portal = "mutaba3a-web", landing = "mutaba3a-landing", "capture-app" = "mutaba3a-flutter"
+    }
+    error_message = "Each surface keeps its project slug; renaming one destroys that project's history and rotates its DSN."
+  }
+
+  assert {
+    condition     = local.adopted_projects == { portal = "mutaba3a-web", "capture-app" = "mutaba3a-flutter" }
+    error_message = "mutaba3a-web and mutaba3a-flutter were made by hand in Sentry and are imported, never created."
+  }
+
+  assert {
+    condition     = alltrue([for project in local.surfaces : startswith(project.slug, "mutaba3a-")])
+    error_message = "Every slug starts mutaba3a-: scripts/sentry-org-settings.ts refuses an org holding any other project (D16)."
+  }
 }
 
 run "four_projects_each_with_one_capped_key" {
