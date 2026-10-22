@@ -2598,14 +2598,22 @@ export const ListEntriesQuerySchema = z.object({
     param: { style: 'form', explode: true },
   }),
   limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ description: 'Page size, 1–100.' }),
-  cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
+  cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page, read with the same `order`.' }),
+  order: z.enum(['createdAt', 'occurredOn']).default('createdAt').openapi({
+    description:
+      '`createdAt` (default): newest logged first. `occurredOn`: newest money day first (an expense or conversion\'s occurredOn, a received payment\'s or Owed entry\'s own date), a future-dated entry above today, then newest logged. ' +
+      'A cursor pages only the order that issued it (422 otherwise).',
+  }),
+  occurredFrom: IsoDateSchema.optional().openapi({ description: 'Money date on or after this day. `order=occurredOn` only (422 otherwise).' }),
+  occurredBefore: IsoDateSchema.optional().openapi({ description: 'Money date before this day. With `order=occurredOn`, or with the default order together with `loggedSince` (422 otherwise).' }),
+  loggedSince: z.string().datetime({ offset: true }).optional().openapi({ description: 'Logged at or after this instant (ISO 8601, Z or an offset). Default order only (422 otherwise).' }),
 });
 
 /** What every feed item says about itself, whatever it is. */
 const entryEnvelope = {
   /** The profile (organization) the entry is on. */
   profileId: uuid,
-  /** When it was logged — the feed's order, newest first. Not the money date (`occurredOn`). */
+  /** When it was logged: the default order, newest first. Not the money date (`occurredOn`). */
   createdAt: z.string().datetime(),
 };
 
