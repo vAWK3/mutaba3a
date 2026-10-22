@@ -1943,11 +1943,13 @@ export interface ExpenseRepository {
   update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpensePatch, at: Date): Promise<UpdateResult<ExpenseRecord>>;
   /**
    * Null for an id the organization never had; `changed: false` when it was already deleted.
-   * MUT-255: in the same transaction, the expense's receipts go back to the library — READY ones unlinked to To
-   * review (keeping `approved` for the edit-rate figure), unfinished uploads soft-deleted. `removedReceipts` are the
-   * soft-deleted ones, whose objects the caller removes; empty when `changed` is false.
+   * In the same transaction, the expense's receipts (MUT-255): with `'unlink'` (the hosted server, which has the
+   * receipts library) READY ones go back to the library as To review, keeping `approved` for the edit-rate figure,
+   * and unfinished uploads are soft-deleted; with `'remove'` (signed-out local mode, which has no library) every
+   * one is soft-deleted, as before MUT-255. `removedReceipts` are the soft-deleted ones, whose objects the caller
+   * removes; empty when `changed` is false.
    */
-  softDelete(organizationId: string, id: string, at: Date): Promise<{ record: ExpenseRecord; changed: boolean; removedReceipts: ExpenseReceiptRecord[] } | null>;
+  softDelete(organizationId: string, id: string, at: Date, receipts: 'unlink' | 'remove'): Promise<{ record: ExpenseRecord; changed: boolean; removedReceipts: ExpenseReceiptRecord[] } | null>;
   /** MUT-267: live expenses matching `filter`, summed per currency (sorted by code). One aggregate query, no rows returned. */
   totalsByCurrency(organizationId: string, filter: ExpenseFilter): Promise<ExpenseCurrencyTotal[]>;
 }
@@ -2136,15 +2138,15 @@ export interface SuggestedField<T> {
  */
 export interface ReceiptSuggestion {
   readerVersion: string;
-  date?: SuggestedField<string>;
-  totalMinor?: SuggestedField<string>;
-  currency?: SuggestedField<string>;
-  vatMinor?: SuggestedField<string>;
-  vatRateBasisPoints?: SuggestedField<number>;
-  vendorName?: SuggestedField<string>;
-  registrationNo?: SuggestedField<string>;
-  phone?: SuggestedField<string>;
-  email?: SuggestedField<string>;
+  date?: SuggestedField<string> | undefined;
+  totalMinor?: SuggestedField<string> | undefined;
+  currency?: SuggestedField<string> | undefined;
+  vatMinor?: SuggestedField<string> | undefined;
+  vatRateBasisPoints?: SuggestedField<number> | undefined;
+  vendorName?: SuggestedField<string> | undefined;
+  registrationNo?: SuggestedField<string> | undefined;
+  phone?: SuggestedField<string> | undefined;
+  email?: SuggestedField<string> | undefined;
 }
 
 /** MUT-255: what approval wrote into the expense, kept on the receipt for the edit-rate figure. Money as minor units in a decimal string. */

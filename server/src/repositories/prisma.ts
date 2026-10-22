@@ -1422,14 +1422,16 @@ export class PrismaLedgerStore implements LedgerStore {
       if (!record) return { kind: 'not_found' };
       return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
     },
-    softDelete: (organizationId, id, at) =>
+    softDelete: (organizationId, id, at, receipts) =>
       this.prisma.$transaction(async (tx) => {
         const { count } = await tx.expense.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
         const record = await tx.expense.findFirst({ where: { id, organizationId } });
         if (!record) return null;
         if (count !== 1) return { record, changed: false, removedReceipts: [] };
-        // MUT-255: READY receipts go back to the library; unfinished uploads go with the expense.
-        await tx.expenseReceipt.updateMany({ where: { organizationId, expenseId: id, status: 'READY', deletedAt: null }, data: { expenseId: null, filingStatus: 'TO_REVIEW', version: { increment: 1 } } });
+        // MUT-255: READY receipts go back to the library ('unlink'); everything left goes with the expense.
+        if (receipts === 'unlink') {
+          await tx.expenseReceipt.updateMany({ where: { organizationId, expenseId: id, status: 'READY', deletedAt: null }, data: { expenseId: null, filingStatus: 'TO_REVIEW', version: { increment: 1 } } });
+        }
         const pending = await tx.expenseReceipt.findMany({ where: { organizationId, expenseId: id, deletedAt: null } });
         await tx.expenseReceipt.updateMany({ where: { id: { in: pending.map((r) => r.id) } }, data: { deletedAt: at } });
         return { record, changed: true, removedReceipts: pending.map((r) => toExpenseReceipt({ ...r, deletedAt: at })) };

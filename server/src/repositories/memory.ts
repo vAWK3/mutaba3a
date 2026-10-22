@@ -1601,16 +1601,16 @@ export class MemoryLedgerStore implements LedgerStore {
       e.updatedAt = at;
       return { kind: 'updated', record: { ...e } };
     },
-    softDelete: async (organizationId, id, at) => {
+    softDelete: async (organizationId, id, at, receipts) => {
       const e = this.exps.get(id);
       if (!e || e.organizationId !== organizationId) return null;
       if (e.deletedAt) return { record: { ...e }, changed: false, removedReceipts: [] };
       e.deletedAt = at;
-      // MUT-255: READY receipts go back to the library; unfinished uploads go with the expense.
+      // MUT-255: READY receipts go back to the library ('unlink'); everything left goes with the expense.
       const removedReceipts: ExpenseReceiptRecord[] = [];
       for (const r of this.expReceipts.values()) {
         if (r.organizationId !== organizationId || r.expenseId !== id || r.deletedAt) continue;
-        if (r.status === 'READY') {
+        if (receipts === 'unlink' && r.status === 'READY') {
           r.expenseId = null;
           r.filingStatus = 'TO_REVIEW';
           r.version += 1;

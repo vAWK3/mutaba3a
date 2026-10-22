@@ -21,6 +21,8 @@ import {
   AdminOrganizationSchema,
   RevokeApiKeyRequestSchema,
   ApiKeySummarySchema,
+  ReceiptEditRatesQuerySchema,
+  ReceiptEditRatesSchema,
 } from '../schemas.js';
 import { serializeAdminOrganization, serializeApiKey, serializeAuditEvent, serializeIntegration } from '../serializers.js';
 
@@ -309,6 +311,31 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
       const result = await store.organizations.declineFirmRequest(c.req.valid('param').organizationId, c.get('now')(), { actorId: null, requestId: c.get('requestId') });
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No pending firm request for this organization');
       return c.json({ organization: serializeAdminOrganization(result.organization) }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/admin/v1/receipts/edit-rates',
+      tags: ['Admin'],
+      summary: 'How often people change what the receipt reader suggested (MUT-255, the MUT-252 success measure)',
+      description: 'Receipts approved between from and to (inclusive UTC days), across every profile. Counts only: never a value, a profile or a person.',
+      security: [{ adminToken: [] }],
+      request: { query: ReceiptEditRatesQuerySchema },
+      responses: {
+        200: { description: 'Edit rates', content: { 'application/json': { schema: ReceiptEditRatesSchema } } },
+        422: { description: 'Validation failed', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const { from, to } = c.req.valid('query');
+      if (from > to) throw new ApiError('VALIDATION_FAILED', '`to` is before `from`', { field: 'to', reason: 'END_BEFORE_START' });
+      const end = new Date(`${to}T00:00:00.000Z`);
+      end.setUTCDate(end.getUTCDate() + 1);
+      const rates = await store.expenseReceipts.editRates({ from: new Date(`${from}T00:00:00.000Z`), to: end });
+      return c.json({ from, to, ...rates }, 200);
     },
   );
 

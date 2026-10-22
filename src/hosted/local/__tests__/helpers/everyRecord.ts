@@ -336,7 +336,7 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
   const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expense.id, filename: 'dup.pdf', mimeType: 'application/pdf', sizeBytes: 100, receivedOn: '2026-10-02', uploadedByUserId: userId, requestId: 'req-receipt' }, AT);
   await store.expenseReceipts.setKey(org, receipt.id, `org/${org}/expense-receipts/${receipt.id}`);
   await store.expenseReceipts.softDelete(org, receipt.id, LATER);
-  await store.expenses.softDelete(org, expense.id, LATER);
+  await store.expenses.softDelete(org, expense.id, LATER, 'unlink');
 
   // expReceipts (MUT-255): a receipt waiting in the library, never read
   const waiting = await store.expenseReceipts.create({ organizationId: org, expenseId: null, filename: 'scan.png', mimeType: 'image/png', sizeBytes: 300, receivedOn: '2026-10-03', uploadedByUserId: userId, requestId: null }, AT);

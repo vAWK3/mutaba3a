@@ -2319,12 +2319,63 @@ export const CreateReceiptUploadRequestSchema = z
   .strict()
   .openapi('CreateReceiptUploadRequest');
 
+/** A short-lived signed PUT: send the bytes to `url` with `headers`, before `expiresAt`. */
+export const SignedUploadSchema = z
+  .object({ url: z.string().url(), method: z.literal('PUT'), headers: z.record(z.string(), z.string()), expiresAt: z.string().datetime() })
+  .openapi('SignedUpload');
+
 export const CreateReceiptUploadResponseSchema = z
   .object({
     receipt: ExpenseReceiptSchema,
-    upload: z.object({ url: z.string().url(), method: z.literal('PUT'), headers: z.record(z.string(), z.string()), expiresAt: z.string().datetime() }),
+    upload: SignedUploadSchema,
   })
   .openapi('CreateReceiptUploadResponse');
+
+// ---- MUT-255: the receipts library ----
+
+export const ReceiptIdParamSchema = z.object({ receiptId: uuid });
+
+export const CreateLibraryReceiptUploadRequestSchema = CreateReceiptUploadRequestSchema.extend({
+  suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the device already read, when it read before uploading' }),
+})
+  .strict()
+  .openapi('CreateLibraryReceiptUploadRequest');
+
+export const ListReceiptsQuerySchema = z.object({
+  ...pageQuery,
+  filingStatus: ReceiptFilingStatusSchema.optional(),
+  from: IsoDateSchema.optional().openapi({ description: 'Inclusive, on the upload day (receivedOn)' }),
+  to: IsoDateSchema.optional().openapi({ description: 'Inclusive, on the upload day (receivedOn)' }),
+});
+
+export const ReceiptPageSchema = z.object({ items: z.array(ExpenseReceiptSchema), nextCursor: z.string().nullable() }).openapi('ReceiptPage');
+
+export const ReceiptCountsSchema = z.object({ toReview: z.number().int(), filed: z.number().int() }).openapi('ReceiptCounts', { description: 'READY receipts in the library, per filing status' });
+
+export const ApproveReceiptRequestSchema = CreateExpenseRequestSchema.extend({
+  suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; replaces the stored one' }),
+})
+  .strict()
+  .openapi('ApproveReceiptRequest');
+
+export const ApproveReceiptResponseSchema = z.object({ expense: ExpenseSchema, receipt: ExpenseReceiptSchema }).openapi('ApproveReceiptResponse');
+
+const fieldEditRate = z.object({ suggested: z.number().int(), edited: z.number().int() });
+
+export const ReceiptEditRatesQuerySchema = z.object({
+  from: IsoDateSchema.openapi({ description: 'Inclusive, UTC day of approval' }),
+  to: IsoDateSchema.openapi({ description: 'Inclusive, UTC day of approval' }),
+});
+
+export const ReceiptEditRatesSchema = z
+  .object({
+    from: IsoDateSchema,
+    to: IsoDateSchema,
+    approved: z.number().int(),
+    fields: z.object({ date: fieldEditRate, amount: fieldEditRate, currency: fieldEditRate, vendor: fieldEditRate }),
+    amountAndDate: z.object({ suggested: z.number().int(), unedited: z.number().int() }),
+  })
+  .openapi('ReceiptEditRates', { description: 'MUT-255: how often people change what the receipt reader suggested. Counts only, across every profile.' });
 
 export const ExpenseCategorySchema = z
   .object({ id: uuid, name: z.string(), color: z.string().nullable(), archived: z.boolean(), version: z.number().int(), createdAt: z.string().datetime(), updatedAt: z.string().datetime() })

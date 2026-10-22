@@ -76,7 +76,7 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       const store = await makeStore();
       const w = await world(store);
       const deletedExpense = await w.expense(w.a.id, 1);
-      await store.expenses.softDelete(w.a.id, deletedExpense.id, at(2));
+      await store.expenses.softDelete(w.a.id, deletedExpense.id, at(2), 'unlink');
       const deletedConversion = await w.conversion(w.a.id, 3);
       await store.conversions.softDelete(w.a.id, deletedConversion.id, at(4));
       const undone = await w.capture(w.b.id, 5);
