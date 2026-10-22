@@ -263,6 +263,35 @@ describe('POST /v1/billing/checkout-session (MUT-362)', () => {
   });
 });
 
+describe('GET /admin/v1/billing/status country check (MUT-362 eng review D9)', () => {
+  const admin = { 'x-admin-token': ADMIN_TOKEN };
+  const status = async (h: Harness, email: string) => read(await h.app.request(`/admin/v1/billing/status?email=${encodeURIComponent(email)}`, { headers: admin }));
+
+  it('flags a linked payer billed outside the consumer countries with no tax ID, and clears one with a tax ID', async () => {
+    const h = harness();
+    const u = await person(h);
+    const customer = await linkSubscription(h, u.userId);
+    await h.store.billing.saveAccount({ stripeCustomerId: customer, userId: null, country: 'JO', currency: null, at: NOW, linkAudit: [] });
+    h.checkout.taxIds.set(customer, 0);
+    expect((await status(h, u.email)).countryCheck).toEqual([{ stripeCustomerId: customer, country: 'JO', openToConsumers: false, taxIds: 0, flagged: true }]);
+    h.checkout.taxIds.set(customer, 1);
+    expect((await status(h, u.email)).countryCheck).toEqual([{ stripeCustomerId: customer, country: 'JO', openToConsumers: false, taxIds: 1, flagged: false }]);
+  });
+
+  it('without Stripe, or when Stripe fails, says it couldn’t check', async () => {
+    const h = harness();
+    const u = await person(h);
+    const customer = await linkSubscription(h, u.userId);
+    await h.store.billing.saveAccount({ stripeCustomerId: customer, userId: null, country: 'US', currency: null, at: NOW, linkAudit: [] });
+    h.checkout.failNext();
+    expect((await status(h, u.email)).countryCheck).toEqual([{ stripeCustomerId: customer, country: 'US', openToConsumers: false, taxIds: null, flagged: null }]);
+    const off = harness({ stripeOff: true });
+    const v = await person(off);
+    await linkSubscription(off, v.userId);
+    expect((await status(off, v.email)).countryCheck).toMatchObject([{ country: 'IL', openToConsumers: true, taxIds: null, flagged: false }]);
+  });
+});
+
 describe('POST /v1/billing/portal-session (MUT-362)', () => {
   it('opens the Customer Portal for the linked customer, returning to the drawer, audited', async () => {
     const h = harness();

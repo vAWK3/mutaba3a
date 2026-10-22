@@ -177,6 +177,14 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     return { url: `https://billing.stripe.com/p/session/test_${this.portalSessions.length}` };
   }
 
+  /** Tax IDs per customer (MUT-362 D9); unknown customers have none. */
+  readonly taxIds = new Map<string, number>();
+
+  async taxIdCount(customer: string): Promise<number> {
+    this.take(`taxIds:${customer}`);
+    return this.taxIds.get(customer) ?? 0;
+  }
+
   private take(call: string): void {
     this.calls.push(call);
     const failure = this.failures.shift();

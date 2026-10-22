@@ -380,6 +380,20 @@ export const BillingStatusSchema = z
     ),
     /** Each profile the person owns: `billing` as /v1/me reports it, `billingWithoutGrants` with operator grants left out. */
     profiles: z.array(z.object({ id: z.string().uuid(), name: z.string(), billing: BillingEntitlementSchema, billingWithoutGrants: BillingEntitlementSchema })),
+    /**
+     * MUT-362 (eng review D9): each linked customer's billing country against billing-countries.json. `flagged`: billed
+     * outside the consumer countries with no tax ID on the customer, so check it is a business. Null: can't tell
+     * (no country from Stripe yet, or Stripe couldn't be asked for tax IDs).
+     */
+    countryCheck: z.array(
+      z.object({
+        stripeCustomerId: z.string(),
+        country: z.string().nullable(),
+        openToConsumers: z.boolean().nullable(),
+        taxIds: z.number().int().nullable(),
+        flagged: z.boolean().nullable(),
+      }),
+    ),
   })
   .openapi('BillingStatus');
 

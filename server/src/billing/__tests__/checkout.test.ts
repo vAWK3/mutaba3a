@@ -6,6 +6,7 @@ import {
   CHECKOUT_SUBMIT_MESSAGE,
   GA_PRICE_LOOKUP_KEYS,
   catalogFrom,
+  consumerCountryCheck,
   currencyOf,
   isReturnPath,
   parseBillingCountries,
@@ -158,6 +159,22 @@ describe('planCheckout parameters (MUT-362 §2.3)', () => {
     expect(label && 'custom' in label ? label.custom.length : 0).toBeLessThanOrEqual(50);
     expect(CHECKOUT_SUBMIT_MESSAGE.length).toBeLessThanOrEqual(1200);
     expect(CHECKOUT_SUBMIT_MESSAGE).toMatch(/[؀-ۿ]/);
+  });
+});
+
+describe('consumerCountryCheck (MUT-362 eng review D9: the operator’s flag)', () => {
+  it('flags a payer outside the consumer countries with no tax ID on their customer', () => {
+    expect(consumerCountryCheck('JO', 0, COUNTRIES)).toEqual({ openToConsumers: false, flagged: true });
+  });
+
+  it('a tax ID, or a country open to consumers, clears it', () => {
+    expect(consumerCountryCheck('JO', 1, COUNTRIES)).toEqual({ openToConsumers: false, flagged: false });
+    expect(consumerCountryCheck('IL', 0, COUNTRIES)).toEqual({ openToConsumers: true, flagged: false });
+  });
+
+  it('says it doesn’t know when Stripe has no country or couldn’t be asked', () => {
+    expect(consumerCountryCheck(null, 0, COUNTRIES)).toEqual({ openToConsumers: null, flagged: null });
+    expect(consumerCountryCheck('JO', null, COUNTRIES)).toEqual({ openToConsumers: false, flagged: null });
   });
 });
 

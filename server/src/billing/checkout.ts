@@ -106,6 +106,18 @@ export function catalogFrom(prices: ReadonlyMap<string, { id: string; currency: 
   return { ILS: pairOf('ILS'), USD: pairOf('USD') };
 }
 
+/**
+ * D9: Stripe can't hold a billing address to the country the person picked, so a consumer could pay from a country
+ * not open to consumers. The operator's flag: a payer billed outside the consumer list with no tax ID on the customer.
+ * Null where it can't be told (no country from Stripe yet, or Stripe couldn't be asked).
+ */
+export function consumerCountryCheck(country: string | null, taxIds: number | null, countries: BillingCountries): { openToConsumers: boolean | null; flagged: boolean | null } {
+  if (country === null) return { openToConsumers: null, flagged: null };
+  const openToConsumers = countries.consumer.includes(country);
+  if (openToConsumers) return { openToConsumers, flagged: false };
+  return { openToConsumers, flagged: taxIds === null ? null : taxIds === 0 };
+}
+
 export function currencyOf(country: string): BillingCurrency {
   return country === 'IL' ? 'ILS' : 'USD';
 }

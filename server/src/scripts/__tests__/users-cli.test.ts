@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import pino from 'pino';
 import { createApp, type AppDependencies } from '../../app.js';
-import { FakeStripeGateway, stripeObjects } from '../../billing/stripe/__tests__/fake.js';
+import { FakeCheckoutGateway, FakeStripeGateway, stripeObjects } from '../../billing/stripe/__tests__/fake.js';
 import { sessionDigest } from '../../auth/sessions.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher } from '../../auth/users.js';
 import { SlidingWindowRateLimiter } from '../../rate-limit.js';
@@ -365,6 +365,16 @@ describe('billing verbs (MUT-358)', () => {
     expect(h.out).toContain('  no Stripe customer linked');
     expect(h.out).toContain('  no subscription');
     expect(h.out.some((l) => /^ {2}profile .+: now READ_ONLY NONE · without grants READ_ONLY NONE$/.test(l))).toBe(true);
+  });
+
+  it('billing-status asks to confirm a payer billed outside the consumer countries with no tax ID (MUT-362 D9)', async () => {
+    const checkout = new FakeCheckoutGateway();
+    const stripe = new FakeStripeGateway(() => new Date());
+    const h = harness({ stripe: { webhookGateway: stripe, reconcileGateway: stripe, checkoutGateway: checkout } });
+    const user = await person(h, 'rana@studio.ps');
+    await h.store.billing.saveAccount({ stripeCustomerId: 'cus_jo', userId: user.id, country: 'JO', currency: 'USD', at: new Date(), linkAudit: [] });
+    expect(await h.run(['billing-status', '--email', 'rana@studio.ps'])).toBe(0);
+    expect(h.out).toContain('  CHECK cus_jo: billed in JO, not open to consumers, and no tax ID — confirm it is a business');
   });
 });
 

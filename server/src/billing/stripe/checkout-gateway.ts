@@ -29,6 +29,8 @@ export interface CheckoutGateway {
   findOrCreateCustomer(person: CheckoutPerson): Promise<string>;
   createCheckoutSession(params: Stripe.Checkout.SessionCreateParams): Promise<{ url: string }>;
   createPortalSession(input: { customer: string; returnUrl: string }): Promise<{ url: string }>;
+  /** How many tax IDs the customer carries (at most 10 counted), for the operator's country check (eng review D9). */
+  taxIdCount(customer: string): Promise<number>;
 }
 
 /** A person is waiting: one retry, which the SDK makes safe with the same idempotency key. */
@@ -92,6 +94,10 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
     async createPortalSession({ customer, returnUrl }) {
       const session = await wrapped(() => stripe.billingPortal.sessions.create({ customer, return_url: returnUrl, locale: 'auto' }));
       return { url: urlOf(session.url) };
+    },
+    async taxIdCount(customer) {
+      const page = await wrapped(() => stripe.customers.listTaxIds(customer, { limit: 10 }));
+      return page.data.length;
     },
   };
 }

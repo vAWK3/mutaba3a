@@ -105,6 +105,14 @@ describe('CheckoutGateway sessions (MUT-362 §2.2)', () => {
   }, 15_000);
 });
 
+describe('CheckoutGateway tax IDs (MUT-362 eng review D9)', () => {
+  it('counts the tax IDs on a customer', async () => {
+    const { seen, gateway } = gatewayWith(() => ({ status: 200, body: list([{ id: 'txi_1', object: 'tax_id', type: 'ae_trn', value: '100000000000003' }]) }));
+    expect(await gateway.taxIdCount('cus_MINE')).toBe(1);
+    expect(seen.map(route)).toEqual(['GET /v1/customers/cus_MINE/tax_ids']);
+  });
+});
+
 describe('CheckoutGateway prices (MUT-362 §2.1)', () => {
   const keys = ['freelancer_list_monthly_ils', 'freelancer_list_yearly_ils'];
 

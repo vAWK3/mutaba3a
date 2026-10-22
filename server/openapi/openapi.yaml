@@ -7049,11 +7049,37 @@ components:
               - name
               - billing
               - billingWithoutGrants
+        countryCheck:
+          type: array
+          items:
+            type: object
+            properties:
+              stripeCustomerId:
+                type: string
+              country:
+                type: string
+                nullable: true
+              openToConsumers:
+                type: boolean
+                nullable: true
+              taxIds:
+                type: integer
+                nullable: true
+              flagged:
+                type: boolean
+                nullable: true
+            required:
+              - stripeCustomerId
+              - country
+              - openToConsumers
+              - taxIds
+              - flagged
       required:
         - user
         - accounts
         - subscriptions
         - profiles
+        - countryCheck
     BillingEntitlement:
       type: object
       properties:
@@ -16216,7 +16242,7 @@ paths:
       tags:
         - Admin
       summary: One person’s Stripe mirror and entitlement, with and without operator grants (MUT-360)
-      description: "The pilot cutover check: revoke a person’s grant only once `billingWithoutGrants` shows ACTIVE / STRIPE. Exactly one of userId and email."
+      description: "The pilot cutover check: revoke a person’s grant only once `billingWithoutGrants` shows ACTIVE / STRIPE. MUT-362: `countryCheck` flags a linked payer billed outside the consumer countries with no tax ID (asks Stripe for the customer’s tax IDs). Exactly one of userId and email."
       security:
         - adminToken: []
       parameters:
