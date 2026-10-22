@@ -437,7 +437,7 @@ test('A Malafat-fed profile offers no date change on Receivables or Payments, ev
   });
 });
 
-test('Add income in QAR from Receivables; it saves, shows QAR, and the currency filter finds it (MUT-281)', { tag: '@portal.income.currency-qar' }, async ({ page, step }) => {
+test('Add income in JOD from Receivables; it saves at 3 decimals, shows JOD, and the currency filter finds it (MUT-388)', { tag: '@portal.income.currency-jod' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 2 });
   const drawer = page.getByRole('dialog', { name: 'New income' });
   const table = page.getByRole('table', { name: 'Receivables' });
@@ -448,10 +448,11 @@ test('Add income in QAR from Receivables; it saves, shows QAR, and the currency 
     await expect(drawer).toBeVisible();
   });
 
-  await step('Open More details, choose QAR, type 1,250.50, and pick Client 1', async () => {
+  await step('Open More details, check the Currency list, choose JOD, type 1,250.505, and pick Client 1', async () => {
     await drawer.getByRole('button', { name: /More details/ }).click();
-    await drawer.getByLabel('Currency').selectOption('QAR');
-    await drawer.getByLabel('Amount').fill('1,250.50');
+    await expect(drawer.getByLabel('Currency').locator('option')).toHaveText(['USD', 'ILS', 'EUR', 'JOD']);
+    await drawer.getByLabel('Currency').selectOption('JOD');
+    await drawer.getByLabel('Amount').fill('1,250.505');
     await pickClient(page, 'Client', 'Client 1');
   });
 
@@ -459,13 +460,13 @@ test('Add income in QAR from Receivables; it saves, shows QAR, and the currency 
     await drawer.getByRole('button', { name: 'Save income' }).click();
     await expect(drawer).toHaveCount(0);
     const post = api.last('POST', /^\/v1\/income$/);
-    expect(post?.body).toMatchObject({ currency: 'QAR', amount: '1250.50' });
+    expect(post?.body).toMatchObject({ currency: 'JOD', amount: '1250.505' });
   });
 
-  await step('The row shows QAR, and the currency filter finds it', async () => {
-    await expect(table.getByRole('row', { name: /Client 1/ })).toContainText('1,250.50');
-    await page.getByLabel('Currency').selectOption('QAR');
-    await expect(page).toHaveURL(/currency=QAR/);
+  await step('The row shows JOD, and the currency filter finds it', async () => {
+    await expect(table.getByRole('row', { name: /Client 1/ })).toContainText('1,250.505');
+    await page.getByLabel('Currency').selectOption('JOD');
+    await expect(page).toHaveURL(/currency=JOD/);
     await expect(table.getByRole('row', { name: /Client 1/ })).toBeVisible();
   });
 
