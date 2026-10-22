@@ -147,6 +147,26 @@ describe('RedateDrawer — an Owed entry (?income=)', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('caps an Owed with money paid on it at today, and says why for a later date (MUT-392 review)', async () => {
+    const api = stub({ getOwed: () => json(owed({ paid: '100.00', status: 'PARTIALLY_PAID' })) });
+    const { user, onClose } = renderDrawer('owed');
+    expect((await dateInput()).max).toBe('2026-10-14');
+    await setDate(user, '2026-10-15');
+    await user.click(save());
+    expect(await screen.findByText(/Money is recorded against this entry, so its date can.t be after today/)).toBeInTheDocument();
+    expect(api.patches()).toHaveLength(0);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shows the same words under the date when the server answers 409 MONEY_APPLIED (a payment landed meanwhile)', async () => {
+    stub({ patch: () => fail(409, 'CONFLICT', { reason: 'MONEY_APPLIED' }) });
+    const { user, onClose } = renderDrawer('owed');
+    await setDate(user, '2026-11-10');
+    await user.click(save());
+    expect(await screen.findByText(/Money is recorded against this entry, so its date can.t be after today/)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('closes without a request when the date did not change', async () => {
     const api = stub();
     const { user, onClose } = renderDrawer('owed');

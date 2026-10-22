@@ -543,7 +543,8 @@
       "errors": {
         "exceedsNow": "That's more than what's left now ({amount})",
         "changed": "This entry changed while you were recording. Showing the latest.",
-        "gone": "This entry can't take a payment anymore."
+        "gone": "This entry can't take a payment anymore.",
+        "notYetDated": "This entry is dated after today. Change its date to today before recording a payment."
       }
     },
     "savedFlash": {
@@ -711,6 +712,7 @@
       "seePayments": "See this client’s payments",
       "conflict": "This changed elsewhere. The latest date is shown: check it and save again.",
       "gone": "This entry is no longer available.",
+      "moneyApplied": "Money is recorded against this entry, so its date can't be after today.",
       "dateRequired": "Pick a date."
     },
     "groups": {
