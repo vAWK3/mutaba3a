@@ -56,16 +56,6 @@ features:
     expect:
       - The headline shows JOD and USD each with its count; the ≈ line says ILS at today's ECB rate with its date and the JOD peg
       - The chart and categories switch to USD; the headline does not change
-  - id: gulf-peg-label
-    title: An OMR expense in a group on an ILS profile shows the (USD peg) label, not just JOD (MUT-281)
-    tier: secondary
-    paths:
-      - src/hosted/data/expenseGroups.ts
-      - src/hosted/pages/views/ExpenseGroupDetail.tsx
-    steps:
-      - Open a group with an OMR expense
-    expect:
-      - The headline shows OMR; the ≈ line names ILS at today's ECB rate and labels the OMR rate "(USD peg)"
   - id: category-prune
     title: Filter the members by a category and leave all of it out in one go, with one Undo
     tier: secondary

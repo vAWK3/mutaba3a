@@ -245,7 +245,7 @@ export interface ConvertedTotal {
 /**
  * The ≈ line (2A, ADR-087): each currency's total in the base at today's rate.
  * `rate` is units of the currency per 1 base, so a currency goes to the base by
- * dividing; minor units are rescaled between exponents (3 for JOD/BHD/OMR, 2 for the rest).
+ * dividing; minor units are rescaled between exponents (3 for JOD, 2 for the rest).
  */
 export function convertTotal(summary: ExpenseGroupSummary, rates: FxRatesResponse): ConvertedTotal | null {
   if (summary.currencies.length === 0) return null;

@@ -3392,7 +3392,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 **Decision**:
 1. `GET /v1/fx-rates?base=` (sessions and device sessions, no API keys, no `X-Mutaba3a-Profile`) answers every supported currency against `base`: units of that currency per 1 `base`, rounded to 6 decimal places, with the ECB `rateDate`, the instance's `fetchedAt` and `source` `live` | `stale`. `base` is required; a missing or unknown one is 422 `VALIDATION_FAILED` like every other validation failure (the ticket's "400" was amended).
 2. The server reads Frankfurter (`FX_RATES_URL`, base EUR, symbols USD and ILS) with a timeout (`FX_RATES_TIMEOUT_MS`, 3 s) and a strict body check, and crosses the euro rates for any base (`server/src/fx-rates.ts`). `FX_RATES_URL` must be https (plain http only for a localhost stub), and a redirect is a provider failure, not rates to accept.
-3. **JOD** comes from the Central Bank of Jordan's peg, 1 USD = 0.709 JOD, as a constant in code. Every pair with exactly one JOD side is marked `derived`. A re-peg is a deploy. *(Extended by ADR-098, MUT-280: JOD is one of six USD pegs, and `derived` is "either side pegged".)*
+3. **JOD** comes from the Central Bank of Jordan's peg, 1 USD = 0.709 JOD, as a constant in code. Every pair with exactly one JOD side is marked `derived`. A re-peg is a deploy. *(Extended by ADR-098, MUT-280: JOD is one of six USD pegs, and `derived` is "either side pegged". Narrowed again by ADR-166, MUT-388: JOD is the only peg; the "either side pegged" rule stays.)*
 4. **Display only.** No record stores a rate, and no amount is converted on the server.
 5. **Cache in process, per instance**, like the rate limiter (TD-017). A snapshot is fresh for `FX_RATES_TTL_MINUTES` (240). Concurrent misses share one provider call. A failed refresh serves the last snapshot as `stale` and does not call the provider again for 60 s. With nothing cached, the route answers 503 `FX_RATES_UNAVAILABLE`, never a zero rate. So a new instance that starts while the provider is down answers 503 until it is back; the phone keeps its own last copy and shows "as of" (MUT-229). Production runs one instance, so every deploy starts empty: `index.ts` fills the cache once at startup (6b).
 6. The refresh runs inline on the request that finds the snapshot expired (at most `FX_RATES_TIMEOUT_MS`, 3 s by default, once per window per instance): a background refresh is unreliable if Cloud Run throttles CPU between requests. Stale-while-revalidate was considered in the pre-landing review and kept out for the same reason.
@@ -3678,7 +3678,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Release and environment.** `mutaba3a-api@<server package.json version>+<SERVICE_VERSION>`; `SENTRY_ENVIRONMENT` (Terraform sets the environment), defaulting to `NODE_ENV`.
 - **Config.** `SENTRY_DSN` is optional and must match the EU DSN shape at boot, the same rule as the Sentry stack's postcondition and `sentry.tf`'s precondition (D5).
 - **Infra.** `sentry_enabled` (default false) reads the stack's `dsn` with `terraform_remote_state`, stores `mutaba3a-api-sentry-dsn`, mounts it; `guard_sentry_release` refuses a release that would unmount it, as the Stripe guard does.
-- **Proof in production (D4).** `/health` reports `errorReporting: on|off` (API 1.47.0-mut148) and every release smoke checks it; `npm run sentry:smoke` sends one deliberate event.
+- **Proof in production (D4).** `/health` reports `errorReporting: on|off` (API 1.48.0-mut148) and every release smoke checks it; `npm run sentry:smoke` sends one deliberate event.
 - **Privacy (D5).** The policy names only the servers as senders until MUT-149..151 ship their surfaces (ADR-090 P3).
 
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
@@ -3897,7 +3897,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 ## ADR-098: Gulf Currencies Come From Their USD Pegs; Every Currency the ECB Doesn't Price Must Have One
 
-**Status**: Active (extends ADR-087 §3)
+**Status**: Partially superseded by ADR-166 (MUT-388): the five Gulf currencies are removed; the peg table, USD crossing, `derived` rule and `currencies` list stay (extends ADR-087 §3)
 **Date**: 2026-10-18
 **Context**: MUT-280, epic MUT-278 (brief `.claude/designs/gulf-currencies.md`, approved by Basel 2026-10-18; plan `.claude/designs/mut-280-gulf-currencies-server.md`). People who bill in the Gulf couldn't record AED, SAR, QAR, BHD or OMR. Basel kept Frankfurter (ECB) as the only rate provider and left KWD out (its rate follows an undisclosed basket, so there is no fixed USD rate). Numbered 098 because the unmerged MUT-285 branch already wrote ADR-097.
 
@@ -4519,6 +4519,40 @@ pass and a red team) found that billing could fail open. Accepted fixes:
    takes only `rk_live_` keys; a Payment Link's `client_reference_id` never links; a firm tie the payer doesn't own is
    reported (`ORG_NOT_OWNED_BY_PAYER`); lookup keys are cut to the column's 100 characters.
 6. **Not changed:** co-owners still don't count for a firm tie (TD-193, pinned by a test); the job token stays (TD-197).
+
+---
+
+## ADR-166: The Hosted API Offers Only ECB-Priced Currencies Plus JOD; the Gulf Five Are Removed (MUT-388) (Partial Override of ADR-098)
+
+**Status**: Active
+**Date**: 2026-10-22
+**Context**: MUT-388, epic MUT-278 (plan `~/.gstack/projects/vAWK3-mutaba3a-flutter/MUT-388-plan.md`, eng-reviewed with an outside voice). Basel decided to offer only currencies Frankfurter (the ECB) prices, plus JOD, which was supported before ADR-098 and stays on its peg. AED, SAR, QAR, BHD and OMR shipped in `api-v0.3.13` through `api-v0.4.1` and in phone 0.1.7; MUT-282/283 (their local-app half) never landed in code.
+
+**Decision**:
+1. **Four currencies.** `SUPPORTED_CURRENCIES` is `ILS, USD, EUR, JOD` again; `USD_PEGS` is `{ JOD: 0.709 }` and `docs/fx/pegs.json` follows. Every reader of the list (`/v1/me.currencies`, sessions, device sessions, import, `/v1/fx-rates`) narrows with it. ADR-098's machinery stays: every pair through USD, `derived` = either side pegged, `currencies` as plain strings. Bringing a currency back is a list and peg edit.
+2. **A stored row can outlive its currency.** Columns are `VarChar(3)`, so nothing refuses a Gulf row written while it was supported.
+   - **Reads show its real amount.** `money.ts` keeps `RETIRED_EXPONENT` (AED/SAR/QAR 2, BHD/OMR 3) for `formatMoney` only (review D1). A blank amount would have failed every phone build's whole Recent page: the phone keeps the Gulf enum values, and `MoneyCodec` throws on `""`.
+   - **Writes refuse it.** `parseMoney` throws `MoneyParseError` when the currency has no supported exponent, which every write already maps to 422 `AMOUNT_INVALID`, so a PATCH that falls back to the stored currency can't rescale the amount (12.345 BHD became 12345). Moving the row to a supported currency with its amount works.
+   - **Filing an inbox entry** in a removed code answers 422 `UNSUPPORTED_CURRENCY` (`assertFilableCurrency`, review D2): filing copies the entry's currency outside the request schema.
+3. **A release gate, not a migration.** `server/scripts/currency-rows.sh count` lists every live row outside the list, by profile or (for the inbox) user. Its columns are read from the catalog and its list from `money.ts`; `billing_*` is left out and soft-deleted rows don't count. It exits 3 when there are any.
+   - It runs through `npm run db:run` before and after the server release.
+   - Rows on the operator's own test profiles and users go with `delete-test-profiles` (review D3). It soft-deletes where a table has `deletedAt`, the app's own delete. Elsewhere it hard-deletes only rows nothing points at; otherwise it lists the blockers and changes nothing. It always previews first.
+   - Rows on anyone else's profile stop the release for Basel's call (`docs/operations/pilot-runbook.md` §10).
+   - **Portal local mode (signed-out, IndexedDB) is outside the gate.** Such rows read back with their amounts (point 2) and refuse a new amount until their currency changes.
+4. **The phone keeps its Gulf enum values, unused.** It offers only what `/v1/me.currencies` lists (MUT-279 D4), so the server is the switch; its parity tests become subset checks. Only lists that don't follow the server change there (the iOS FX widget picker, the release notes).
+5. **Analytics contract 2.0.0** (four currencies): a removal is a major version (`docs/analytics/README.md`).
+6. **Release order:** web, the gate, then `make release server` (the portal ships with it). No phone release is needed for correctness.
+
+**Alternatives rejected**:
+- Removing the enum values from the phone: needs tolerant outbox and preset loaders first and rewrites ~10 test files, for no user-visible gain (Basel, D5).
+- A new `UNSUPPORTED_CURRENCY` error for the write guard: every write already maps `MoneyParseError` to a 422 (Basel, D2).
+- A hand-listed column set for the gate: the catalog can't drift (Basel, D3).
+- Converting stray rows to another currency: the amount would be wrong; they are deleted (test profiles) or decided by Basel.
+
+**Consequences**:
+- API 1.47.0-mut388. Clients built against 1.35.0+ keep working: `currencies` is a plain string list.
+- A Gulf row left on a real profile still reads right but can't take a new amount until its currency changes; the gate keeps that from happening silently.
+- ADR-098 §7's "the web (MUT-282/283) reads it" and "server-ci watches docs/fx" were never or are no longer true: MUT-282/283 were not built, and CI is manual (`workflow_dispatch`).
 
 ---
 

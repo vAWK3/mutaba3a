@@ -107,12 +107,7 @@
       "USD": "US dollars",
       "ILS": "shekels",
       "EUR": "euros",
-      "JOD": "Jordanian dinars",
-      "AED": "UAE dirhams",
-      "SAR": "Saudi riyals",
-      "QAR": "Qatari riyals",
-      "BHD": "Bahraini dinars",
-      "OMR": "Omani rials"
+      "JOD": "Jordanian dinars"
     },
     "footer": {
       "copyright": "Mutaba3a",

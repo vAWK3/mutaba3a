@@ -1,7 +1,7 @@
 import { assertIsoDate, assertNotTooOld, parseAmount, validationError } from '../agreements/compose.js';
 import { addDays, todayIn, type IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
-import type { Currency } from '../money.js';
+import { isSupportedCurrency, type Currency } from '../money.js';
 import type { InboxEntryKind } from '../repositories/ports.js';
 
 /**
@@ -45,6 +45,17 @@ export function inboxDate(value: string, now: Date): IsoDate {
  * defensive 409, checked before any store call so a mismatch can never consume
  * the entry.
  */
+/**
+ * MUT-388 (ADR-166): filing copies the entry's currency into a new record, outside the request schema's enum. An
+ * entry captured while a since-removed code was supported must not become a new record in it. Changing the entry's
+ * currency (with its amount) first, then filing, still works.
+ */
+export function assertFilableCurrency(entry: { currency: string }): void {
+  if (!isSupportedCurrency(entry.currency)) {
+    throw validationError('UNSUPPORTED_CURRENCY', `${entry.currency} is no longer supported. Change this entry's currency, then file it`, { field: 'currency' });
+  }
+}
+
 export function assertKind(entry: { kind: InboxEntryKind }, expected: InboxEntryKind): void {
   if (entry.kind !== expected) {
     throw new ApiError('CONFLICT', `This entry was captured as ${entry.kind.toLowerCase()}, and cannot be filed as the other kind`, { reason: 'ENTRY_KIND_MISMATCH' });

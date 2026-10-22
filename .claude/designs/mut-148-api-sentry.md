@@ -143,7 +143,7 @@ Complexity: about 22 files touched or added, 6 new modules → structure questio
 - **D1 placement.** `shutdownAndFlush` lives in `reporter.ts` beside `runScript`, not in `sentry-node.ts`: it needs only the interface. Still 4 files.
 - **Script reporter.** `createScriptReporter(env)` reads `SENTRY_DSN`, `SENTRY_ENVIRONMENT` and `SERVICE_VERSION` and gives the DSN the server config's EU check (`SENTRY_EU_DSN`, now exported).
 - **Unparseable body.** The shell answers the validator's 400 as 422 VALIDATION_FAILED, which isn't reported (test corrected).
-- **API version.** 1.47.0-mut148, because main took 1.46.0 (MUT-255) and MUT-388 claims 1.45.0.
+- **API version.** 1.48.0-mut148, because main took 1.46.0 (MUT-255) and MUT-388 claims 1.45.0.
 - **First release with `sentry_enabled = true`.** The DSN secret appears in step 4, so pre-roll (step 3) warns and runs unreported; post-roll gets the DSN.
 - **TD-199.** "Not configured" 503s are reported (the AC's literal rule); a bot can spend the 60/day cap.
 - **Hosted bundle.** The import-graph test guards it permanently. At the gate, `npm run build:hosted` was also grepped once: 0 files with `@sentry` or `ingest.de.sentry`. There is no `check-bundles` rule yet (TD-084, MUT-149/150).

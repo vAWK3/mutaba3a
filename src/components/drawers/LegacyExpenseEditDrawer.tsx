@@ -86,11 +86,7 @@ export function LegacyExpenseEditDrawer() {
     if (existingTransaction) {
       form.reset({
         amount: (existingTransaction.amountMinor / 10 ** currencyExponent(existingTransaction.currency)).toString(),
-        // MUT-281: existingTransaction.currency is the universal (9-code)
-        // Currency; this legacy drawer's own form still only offers
-        // CURRENCY_OPTIONS (MUT-282 widens it) -- no local record can hold a
-        // Gulf code yet.
-        currency: existingTransaction.currency as FormData['currency'],
+        currency: existingTransaction.currency,
         occurredAt: existingTransaction.occurredAt,
         title: existingTransaction.title || '',
         categoryId: existingTransaction.categoryId || '',

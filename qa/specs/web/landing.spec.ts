@@ -657,3 +657,27 @@ test("the landing page's mocks word their overdue ages correctly in Arabic", { t
     for (const age of ages) expect(age).not.toMatch(/\d+ يوم(?!ًا)/);
   });
 });
+
+test('the FAQ lists ILS, USD, EUR and JOD and no Gulf currency, in English and Arabic (MUT-388)', { tag: '@web.landing.currencies' }, async ({ page, step }) => {
+  await step('Open the landing page in English and open "Which currencies does it support?"', async () => {
+    await openLanding(page, 'en');
+    const question = page.getByRole('button', { name: 'Which currencies does it support?' });
+    await question.scrollIntoViewIfNeeded();
+    await question.click();
+    const answer = page.getByText(/Each amount keeps the currency it was earned in/);
+    await expect(answer).toBeVisible();
+    for (const name of ['US dollars', 'shekels', 'euros', 'Jordanian dinars']) await expect(answer).toContainText(name);
+    await expect(answer).not.toContainText(/dirham|riyal|Bahraini|Omani/i);
+  });
+
+  await step('Switch to Arabic and open "ما العملات المدعومة؟"', async () => {
+    await openLanding(page, 'ar');
+    const question = page.getByRole('button', { name: 'ما العملات المدعومة؟' });
+    await question.scrollIntoViewIfNeeded();
+    await question.click();
+    const answer = page.getByText(/يحتفظ كل مبلغ بالعملة التي كُسب بها/);
+    await expect(answer).toBeVisible();
+    for (const name of ['الدولار الأمريكي', 'الشيكل', 'اليورو', 'الدينار الأردني']) await expect(answer).toContainText(name);
+    await expect(answer).not.toContainText(/درهم|ريال|البحريني|العماني/);
+  });
+});

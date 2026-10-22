@@ -1014,11 +1014,11 @@ describe('sumExpensesByCurrency', () => {
 
     const result = sumExpensesByCurrency(expenses);
 
-    expect(result).toEqual({ USD: 20000, ILS: 20000, EUR: 0, JOD: 0, AED: 0, SAR: 0, QAR: 0, BHD: 0, OMR: 0 });
+    expect(result).toEqual({ USD: 20000, ILS: 20000, EUR: 0, JOD: 0 });
   });
 
   it('returns zeros for empty input', () => {
-    expect(sumExpensesByCurrency([])).toEqual({ USD: 0, ILS: 0, EUR: 0, JOD: 0, AED: 0, SAR: 0, QAR: 0, BHD: 0, OMR: 0 });
+    expect(sumExpensesByCurrency([])).toEqual({ USD: 0, ILS: 0, EUR: 0, JOD: 0 });
   });
 
   it('sums JOD expenses in their own bucket (MUT-140 x MUT-94 merge)', () => {

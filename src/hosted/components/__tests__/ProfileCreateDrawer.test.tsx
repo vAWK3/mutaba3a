@@ -71,7 +71,7 @@ describe('New profile drawer (MUT-183)', () => {
     expect(screen.getByRole('combobox', { name: 'Time zone' })).toBeInTheDocument();
   });
 
-  it('MUT-281: the currency picker offers every Gulf currency and sends the one chosen', async () => {
+  it('MUT-388: the currency picker offers the four supported currencies, no Gulf one, and sends the one chosen', async () => {
     let list = [builtIn];
     const { user, api } = portal(`/p/${ORG_A}`, {
       'GET /v1/me': () => ok(me(list)),
@@ -82,14 +82,12 @@ describe('New profile drawer (MUT-183)', () => {
     });
     await openFromSwitcher(user);
     const currencySelect = screen.getByRole('combobox', { name: 'Currency' });
-    for (const code of ['AED', 'SAR', 'QAR', 'BHD', 'OMR']) {
-      expect(within(currencySelect).getByRole('option', { name: code })).toBeInTheDocument();
-    }
-    await user.selectOptions(currencySelect, 'AED');
+    expect(within(currencySelect).getAllByRole('option').map((o) => o.textContent)).toEqual(['USD', 'ILS', 'EUR', 'JOD']);
+    await user.selectOptions(currencySelect, 'JOD');
     await fill(user, '  Dubai Office ');
     await user.click(screen.getByRole('button', { name: 'Create profile' }));
     await waitFor(() => expect(posts(api.calls)).toHaveLength(1));
-    expect(posts(api.calls)[0].body).toMatchObject({ defaultCurrency: 'AED' });
+    expect(posts(api.calls)[0].body).toMatchObject({ defaultCurrency: 'JOD' });
   });
 
   it('CR3: creates with the exact body and lands on the new profile, named in the switcher', async () => {

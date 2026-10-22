@@ -349,21 +349,6 @@ describe('ConversionDrawer (hosted) edit mode (MUT-194)', () => {
     expect(patch.body).toMatchObject({ amount: '99.125', currency: 'JOD', toAmount: '141.00', toCurrency: 'USD' });
   });
 
-  it('edits and saves an AED-to-OMR conversion, each leg at its own precision (MUT-281)', async () => {
-    const user = userEvent.setup();
-    const calls = server({ current: () => conversion({ amount: '100.00', currency: 'AED', toAmount: '10.456', toCurrency: 'OMR', version: 1 }) });
-    const { onClose } = renderDrawer({ mode: 'edit', conversionId: ID });
-    await waitFor(() => expect(fields().fromAmount.value).toBe('100.00'));
-    expect(fields().fromCurrency.value).toBe('AED');
-    expect(fields().toCurrency.value).toBe('OMR');
-    await user.clear(fields().fromAmount);
-    await user.type(fields().fromAmount, '99.50');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
-    const patch = calls.find((c) => c.method === 'PATCH')!;
-    expect(patch.body).toMatchObject({ amount: '99.50', currency: 'AED', toAmount: '10.456', toCurrency: 'OMR' });
-  });
-
   it('shows the Arabic edit title and delete confirm (AC9)', async () => {
     const user = userEvent.setup();
     localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');

@@ -241,21 +241,6 @@ describe('Group page (2A, 4A, 5A, 6A, 7A)', () => {
     expect(screen.getByText('Per day').parentElement).toHaveTextContent('JOD 22.800');
   });
 
-  it('shows the (USD peg) label for a Gulf currency, not just JOD (MUT-281)', async () => {
-    const omrExpense = expense('omr-dinner', { occurredOn: '2026-10-05', amount: '9.500', currency: 'OMR', title: 'Dinner' });
-    portal(`${BASE}/${G1}`, {
-      members: [omrExpense],
-      routes: {
-        'GET /v1/fx-rates': () =>
-          ok({ ...rates, rates: [...rates.rates, { currency: 'OMR', rate: 0.104, derived: true }] }),
-      },
-    });
-    const headline = await screen.findByRole('group', { name: 'Total spent' });
-    expect(headline).toHaveTextContent('OMR 9.500');
-    expect(await screen.findByText(/at today's ECB rate \(Oct 17, 2026\)/)).toBeInTheDocument();
-    expect(screen.getByText(/1 OMR = .+ ILS \(USD peg\)/)).toBeInTheDocument();
-  });
-
   it('lists members by day, oldest first, the kept flight under "before the trip"', async () => {
     portal(`${BASE}/${G1}`, { members: [pass, taxi, flight] });
     const table = await screen.findByRole('table', { name: 'Expenses in this group' });

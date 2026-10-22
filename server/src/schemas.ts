@@ -1184,7 +1184,7 @@ export const ContingencyTermsSchema = z
   })
   .openapi('ContingencyTerms');
 
-/** "0.709 JOD, 3.6725 AED, …" for the `derived` description (MUT-280, ADR-098). */
+/** "0.709 JOD" for the `derived` description (MUT-280, ADR-098; JOD only since ADR-166). */
 const PEG_LIST = Object.entries(USD_PEGS).map(([currency, peg]) => `${peg} ${currency}`).join(', ');
 
 /** MUT-228 (ADR-087): reference exchange rates for display. Never stored on a record. */

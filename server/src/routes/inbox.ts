@@ -5,7 +5,7 @@ import { ApiError } from '../errors.js';
 import { assertCategoryChoosable, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
 import { identityIdempotent, idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
-import { assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
+import { assertFilableCurrency, assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
 import { dueDateForOwed, incomeCaptureRulesFor, owedVatFields, pastMoneyDate, resolveIncomeLinks } from '../income/compose.js';
 import { formatMoney, type Currency } from '../money.js';
@@ -205,6 +205,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const now = c.get('now')();
       const entry = await mustGet(user.id, c.req.valid('param').entryId);
       assertKind(entry, 'EXPENSE');
+      assertFilableCurrency(entry);
       // Every destination-side rule is checked before the transaction opens, so a refusal can never consume the entry.
       // No future-date check: POST /v1/expenses has none, and filing must be refused in exactly the places a
       // direct create is — not more. The income route below does check, because POST /v1/income does.
@@ -270,6 +271,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const now = c.get('now')();
       const entry = await mustGet(user.id, c.req.valid('param').entryId);
       assertKind(entry, 'INCOME');
+      assertFilableCurrency(entry);
       pastMoneyDate(entry.occurredOn, todayFor(organization, now), 'occurredOn');
       // MUT-65's own validators, reused rather than reimplemented. This route stays on payments:write, so a Malafat-fed
       // profile is refused before this line and only personal-profile rules ever apply here (TD-094).

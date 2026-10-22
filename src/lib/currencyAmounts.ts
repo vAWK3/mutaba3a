@@ -18,11 +18,6 @@ const DISPLAY_POSITION = {
   ILS: 1,
   EUR: 2,
   JOD: 3,
-  AED: 4,
-  SAR: 5,
-  QAR: 6,
-  BHD: 7,
-  OMR: 8,
 } satisfies Record<Currency, number>;
 
 const CURRENCIES_IN_ORDER = (Object.keys(DISPLAY_POSITION) as Currency[]).sort(

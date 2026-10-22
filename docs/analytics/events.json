@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
-  "currencies": ["AED", "BHD", "EUR", "ILS", "JOD", "OMR", "QAR", "SAR", "USD"],
+  "version": "2.0.0",
+  "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
       "type": "enum",

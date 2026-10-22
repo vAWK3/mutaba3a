@@ -200,8 +200,8 @@ features:
     expect:
       - The first save is refused with "This changed elsewhere…" and the date field shows the other device's day
       - The second save goes through with If-Match 2
-  - id: currency-qar
-    title: Add income in QAR from Receivables; it saves, shows QAR, and the currency filter finds it (MUT-281)
+  - id: currency-jod
+    title: Add income in JOD from Receivables; it saves at 3 decimals, shows JOD, and the currency filter finds it (MUT-388)
     tier: secondary
     paths:
       - src/hosted/components/FilterControls.tsx
@@ -209,13 +209,14 @@ features:
       - src/hosted/data/filters.ts
     steps:
       - Open Receivables and choose + Add income
-      - Open More details, choose QAR, type 1,250.50, and pick Client 1
+      - Open More details, check the Currency list, choose JOD, type 1,250.505, and pick Client 1
       - Save income
-      - Filter the list by QAR, then by a different currency
+      - Filter the list by JOD, then by a different currency
     expect:
-      - POST /v1/income sends currency QAR with the canonical amount 1250.50
-      - The row shows 1,250.50
-      - Filtering by QAR keeps the row; filtering by USD hides it
+      - The Currency list offers USD, ILS, EUR and JOD only
+      - POST /v1/income sends currency JOD with the canonical amount 1250.505
+      - The row shows 1,250.505
+      - Filtering by JOD keeps the row; filtering by USD hides it
   - id: redate-malafat-readonly
     title: A Malafat-fed profile offers no date change on Receivables or Payments, even from a deep link (MUT-224)
     tier: secondary

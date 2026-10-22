@@ -105,7 +105,7 @@ describe('planImport', () => {
     expect(plan[3]).toMatchObject({ action: 'create' });
   });
 
-  it('plans a project in a Gulf currency like any other, and still refuses KWD (MUT-280)', () => {
+  it('refuses a project in a removed Gulf currency (MUT-388) as it refuses KWD', () => {
     const plan = planImport(
       [
         { entityType: 'CUSTOMER', externalId: 'c1', name: 'Acme' },
@@ -114,7 +114,7 @@ describe('planImport', () => {
       ],
       state(),
     );
-    expect(plan[1]).toMatchObject({ action: 'create' });
+    expect(plan[1]).toMatchObject({ action: 'conflict', reason: 'VALIDATION', detail: 'UNSUPPORTED_CURRENCY' });
     expect(plan[2]).toMatchObject({ action: 'conflict', reason: 'VALIDATION', detail: 'UNSUPPORTED_CURRENCY' });
   });
 

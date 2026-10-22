@@ -12999,12 +12999,7 @@ export interface components {
              *       "ILS",
              *       "USD",
              *       "EUR",
-             *       "JOD",
-             *       "AED",
-             *       "SAR",
-             *       "QAR",
-             *       "BHD",
-             *       "OMR"
+             *       "JOD"
              *     ]
              */
             currencies: string[];
@@ -13062,7 +13057,7 @@ export interface components {
             } | null;
         };
         /** @enum {string} */
-        Currency: "ILS" | "USD" | "EUR" | "JOD" | "AED" | "SAR" | "QAR" | "BHD" | "OMR";
+        Currency: "ILS" | "USD" | "EUR" | "JOD";
         IncomeCaptureRules: {
             received: boolean;
             owed: boolean;
@@ -15093,7 +15088,7 @@ export interface components {
              * @example 0.322356
              */
             rate: number;
-            /** @description True when either side of the pair is pegged to the US dollar (never base→base): the ECB publishes no rate for it, so the rate comes from its USD peg (1 USD = 0.709 JOD, 3.6725 AED, 3.75 SAR, 3.64 QAR, 0.376 BHD, 0.3845 OMR) */
+            /** @description True when either side of the pair is pegged to the US dollar (never base→base): the ECB publishes no rate for it, so the rate comes from its USD peg (1 USD = 0.709 JOD) */
             derived: boolean;
         };
         CreateProfileRequest: {

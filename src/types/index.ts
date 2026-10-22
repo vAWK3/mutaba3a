@@ -1,5 +1,5 @@
 // Currency types
-export type Currency = 'USD' | 'ILS' | 'EUR' | 'JOD' | 'AED' | 'SAR' | 'QAR' | 'BHD' | 'OMR';
+export type Currency = 'USD' | 'ILS' | 'EUR' | 'JOD';
 
 // Currency mode for reports (BOTH shows separate totals per currency)
 export type CurrencyMode = 'USD' | 'ILS' | 'BOTH';

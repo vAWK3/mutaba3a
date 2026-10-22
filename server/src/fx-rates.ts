@@ -7,9 +7,9 @@ import { SUPPORTED_CURRENCIES, type Currency } from './money.js';
  * Reference exchange rates for display (MUT-228, ADR-087).
  *
  * The ECB publishes a daily euro reference rate for USD and ILS; Frankfurter
- * serves it as JSON with no key. JOD and the Gulf currencies are not in the
- * ECB set; each is fixed to the US dollar by its central bank, so its rate
- * comes from that peg (USD_PEGS, ADR-098). Every pair is priced through USD.
+ * serves it as JSON with no key. JOD is not in the ECB set; it is fixed to
+ * the US dollar by its central bank, so its rate comes from that peg (USD_PEGS,
+ * ADR-098, narrowed to JOD by ADR-166). Every pair is priced through USD.
  * Rates here are a hint for people entering money in another currency:
  * nothing stores them on a record.
  *
@@ -29,11 +29,6 @@ export type PeggedCurrency = Exclude<Currency, EcbCurrency>;
  */
 export const USD_PEGS: Readonly<Record<PeggedCurrency, number>> = {
   JOD: 0.709, // Central Bank of Jordan, since 1995
-  AED: 3.6725, // Central Bank of the UAE
-  SAR: 3.75, // Saudi Central Bank
-  QAR: 3.64, // Qatar Central Bank
-  BHD: 0.376, // Central Bank of Bahrain
-  OMR: 0.3845, // Central Bank of Oman
 };
 
 export function isPegged(currency: Currency): currency is PeggedCurrency {

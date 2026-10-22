@@ -102,13 +102,11 @@ describe('POST /v1/profiles', () => {
     expect(await h.store.organizations.getById(profile.id)).toMatchObject({ ownerUserId: u.userId, profileType: 'BUSINESS', personalOwnerUserId: null });
   });
 
-  it('creates a SAR profile and moves it to QAR (MUT-280)', async () => {
+  it('refuses a SAR profile, and moving a profile to QAR (MUT-388)', async () => {
     const { create, patch } = await setup();
-    const created = await read(await create({ ...STUDIO, defaultCurrency: 'SAR' }));
-    expect(created.defaultCurrency).toBe('SAR');
-    const moved = await patch(created.id, { defaultCurrency: 'QAR' });
-    expect(moved.status).toBe(200);
-    expect((await read(moved)).profile.defaultCurrency).toBe('QAR');
+    expect((await create({ ...STUDIO, defaultCurrency: 'SAR' })).status).toBe(422);
+    const created = await read(await create({ ...STUDIO, defaultCurrency: 'JOD' }));
+    expect((await patch(created.id, { defaultCurrency: 'QAR' })).status).toBe(422);
   });
 
   it('replays the same key and body, and refuses the same key with another body (R2)', async () => {
