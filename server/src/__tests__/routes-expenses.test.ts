@@ -196,12 +196,17 @@ describe('POST /v1/expenses', () => {
     expect((await read(patched)).error.details).toMatchObject({ reason: 'CATEGORY_NOT_FOUND', field: 'categoryId' });
   });
 
-  it('records an OMR expense at 3 decimals and refuses a 4th (MUT-280)', async () => {
+  it('records a JOD expense at 3 decimals and refuses a 4th', async () => {
     const { create } = await setup();
-    const res = await create({ amount: '0.385', currency: 'OMR' });
+    const res = await create({ amount: '0.385', currency: 'JOD' });
     expect(res.status).toBe(201);
-    expect(await read(res)).toMatchObject({ amount: '0.385', currency: 'OMR' });
-    expect((await create({ amount: '0.3851', currency: 'OMR' })).status).toBe(422);
+    expect(await read(res)).toMatchObject({ amount: '0.385', currency: 'JOD' });
+    expect((await create({ amount: '0.3851', currency: 'JOD' })).status).toBe(422);
+  });
+
+  it('refuses an OMR expense: MUT-388 removed the Gulf currencies', async () => {
+    const { create } = await setup();
+    expect((await create({ amount: '0.385', currency: 'OMR' })).status).toBe(422);
   });
 
   it('refuses an unsupported currency at the schema', async () => {
@@ -277,6 +282,34 @@ describe('PATCH /v1/expenses/{id}', () => {
     const summary = await h.app.request('/v1/summaries/expenses?from=2001-01-01&to=2001-12-31', { headers: p.as(a.org.id) });
     expect(summary.status).toBe(200);
     expect((await read(summary)).currencies.map((c: Loose) => c.total)).toEqual(['50.00']);
+  });
+
+  it('MUT-388: a row still in a removed Gulf currency reads back with its real amount, in the list and on its own', async () => {
+    const { h, a, p } = await setup();
+    const old = await h.store.expenses.create(
+      { organizationId: a.org.id, occurredOn: '2026-10-20', amountMinor: 12_345n, currency: 'BHD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId },
+      h.clock.now,
+    );
+    // A blank amount would fail every phone build's whole Recent page (MoneyCodec throws on ""), not just this row.
+    expect(await read(await h.app.request(`/v1/expenses/${old.id}`, { headers: p.as(a.org.id) }))).toMatchObject({ amount: '12.345', currency: 'BHD' });
+    const listed = await read(await h.app.request('/v1/expenses?from=2026-10-01&to=2026-10-31', { headers: p.as(a.org.id) }));
+    expect(listed.items.find((x: Loose) => x.id === old.id)).toMatchObject({ amount: '12.345', currency: 'BHD' });
+  });
+
+  it('MUT-388: a row still in a removed Gulf currency refuses a new amount (422) instead of rescaling it, and moves to a supported one', async () => {
+    const { h, a, p } = await setup();
+    const old = await h.store.expenses.create(
+      { organizationId: a.org.id, occurredOn: '2026-10-20', amountMinor: 12_345n, currency: 'BHD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId },
+      h.clock.now,
+    );
+    const url = `/v1/expenses/${old.id}`;
+    const refused = await h.app.request(url, json({ amount: '12.345' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(refused.status).toBe(422);
+    expect((await read(refused)).error.details).toMatchObject({ reason: 'AMOUNT_INVALID', field: 'amount' });
+    expect(await h.store.expenses.getById(a.org.id, old.id)).toMatchObject({ amountMinor: 12_345n, currency: 'BHD', version: 1 });
+    const moved = await h.app.request(url, json({ amount: '12.345', currency: 'JOD' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(moved.status).toBe(200);
+    expect(await read(moved)).toMatchObject({ amount: '12.345', currency: 'JOD' });
   });
 
   it('needs If-Match, refuses a stale version, clears with null, re-parses the amount in the row’s currency', async () => {

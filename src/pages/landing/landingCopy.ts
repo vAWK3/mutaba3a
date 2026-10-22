@@ -11,11 +11,6 @@ export const CURRENCY_NAME_KEYS: Record<Currency, string> = {
   ILS: 'landing.currency.ILS',
   EUR: 'landing.currency.EUR',
   JOD: 'landing.currency.JOD',
-  AED: 'landing.currency.AED',
-  SAR: 'landing.currency.SAR',
-  QAR: 'landing.currency.QAR',
-  BHD: 'landing.currency.BHD',
-  OMR: 'landing.currency.OMR',
 };
 
 /** Number of FAQ entries; keys are `landing.faq.q1..qN` / `a1..aN`. */

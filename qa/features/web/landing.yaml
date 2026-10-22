@@ -159,3 +159,16 @@ features:
       - Open the landing page in Arabic, its default, and scroll to the Clients and client-profile pictures
     expect:
       - 'The ages read "الأقدم 3 أيام", "الأقدم 227 يومًا", "الأقدم 158 يومًا" and "متأخر 34 يومًا"; no count above 2 is followed by a bare "يوم"'
+  - id: currencies
+    title: The FAQ lists the four currencies, ILS, USD, EUR and JOD, and no Gulf currency, in English and Arabic (MUT-388)
+    tier: secondary
+    tickets: [MUT-388]
+    paths:
+      - src/pages/landing/landingCopy.ts
+      - src/pages/landing/components/FAQSection.tsx
+    steps:
+      - Open the landing page in English and open "Which currencies does it support?"
+      - Switch to Arabic and open "ما العملات المدعومة؟"
+    expect:
+      - The English answer names US dollars, shekels, euros and Jordanian dinars, and no dirham or riyal
+      - The Arabic answer names الدولار الأمريكي والشيكل واليورو والدينار الأردني, and no درهم or ريال

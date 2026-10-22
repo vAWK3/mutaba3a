@@ -28,6 +28,31 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — The hosted API offers ILS, USD, EUR and JOD only; the Gulf currencies go (MUT-388)
+
+**Why:** Basel: offer only currencies we get a market rate for. The ECB (Frankfurter) prices USD and ILS against the
+euro; JOD stays on its USD peg, as before MUT-280. AED, SAR, QAR, BHD and OMR had shipped in `api-v0.3.13`..`v0.4.1`.
+
+### Changed
+- `server/src/money.ts` `SUPPORTED_CURRENCIES` / `EXPONENT` and `fx-rates.ts` `USD_PEGS` back to the four and JOD;
+  `docs/fx/pegs.json` follows. API 1.47.0-mut388; analytics contract 2.0.0 (a removal is major).
+- `parseMoney` refuses a currency with no exponent (`MoneyParseError` → 422 `AMOUNT_INVALID`), so a row stored in a
+  removed currency can't have its amount silently rescaled by a PATCH. `formatMoney` still shows such a row's amount
+  (`RETIRED_EXPONENT`, display only): a blank one failed the phone's whole Recent page.
+- Filing an inbox entry in a removed currency answers 422 `UNSUPPORTED_CURRENCY` instead of creating a new Gulf row.
+- Portal `HOSTED_CURRENCIES`, the local app's `Currency` and tables (undoing 804b0375 and its drawer casts), and the
+  landing page's currency names (en, ar) back to four.
+- New `server/scripts/currency-rows.sh`: the release gate (count live rows by profile or inbox user, exit 3;
+  delete-test-profiles soft-deletes where it can, hard-deletes only unreferenced rows, previews first). Runbook §10.
+- ADR-166 partly overrides ADR-098.
+
+### Technical
+- Server: Gulf write/rate/profile/import tests now expect 422; a stored-BHD PATCH test; `currency-rows.test.ts`
+  (test:db) against a migrated database, under bash 3.2 and 5.
+- Release-QA: `portal.income.currency-qar` → `currency-jod`; `portal.expense-groups.gulf-peg-label` deleted.
+
+---
+
 ## [Unreleased] - 2026-10-22 — The receipts library: a receipt can wait To review before its expense (MUT-255, API 1.46.0)
 
 **Why:** Receipt scanning (MUT-252) saves the original the moment it is shared and lets the person check what was read

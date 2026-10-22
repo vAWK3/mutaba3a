@@ -15,7 +15,6 @@
 - [ ] Is this a Malafat firm? If so, use block C, not this offer.
 - [ ] Does the request say they use the free app? Mention moving their records.
 - [ ] /terms is live (MUT-324). Until it is, leave out the terms line.
-- [ ] Mention the Gulf currencies only once MUT-329's release is live.
 - [ ] Keep the VAT sentence word for word. Don't name a rate: that's MUT-355, and it must be settled before the first invoice goes out.
 
 ---
@@ -40,7 +39,7 @@ What you get:
 - Your records on every device you sign in on: the web, iPhone and Android.
 - Your personal money and each business you run, kept apart, up to six.
 - Who owes you, what they've paid, and your expenses with their receipts.
-- Each amount kept in its own currency (ILS, USD, EUR, JOD{, and the Gulf currencies}).
+- Each amount kept in its own currency (ILS, USD, EUR, JOD).
 
 {B only:} Firm books come to the Firm plan first: a receipts library, vendors and VAT on expenses. You'll have them as soon as they ship.
 
@@ -81,7 +80,7 @@ Mutaba3a, by Barmajiyat Ltd
 - سجلاتك على كل جهاز تسجّل الدخول منه: الويب والآيفون والأندرويد.
 - أموالك الشخصية وكل عمل تديره، كلٌّ على حدة، حتى ستة.
 - من يدين لك، وما دفعه، ومصاريفك مع إيصالاتها.
-- كل مبلغ بعملته (الشيكل والدولار واليورو والدينار الأردني{، وعملات الخليج}).
+- كل مبلغ بعملته (الشيكل والدولار واليورو والدينار الأردني).
 
 {ب فقط:} دفاتر المكتب تصل إلى باقة المكتب أولًا: مكتبة الإيصالات، والمورّدون، وضريبة القيمة المضافة على المصاريف. تحصل عليها فور صدورها.
 

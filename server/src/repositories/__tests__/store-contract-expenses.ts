@@ -59,6 +59,7 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       expect(await store.expenses.getById(w.b.id, created.id)).toBeNull();
     });
 
+    // MUT-388 removed BHD from the API, but a row written while it was supported must still round-trip untouched.
     it('MUT-280: stores a Gulf currency and its fils exactly, with no migration (VarChar(3))', async () => {
       const store = await makeStore();
       const w = await world(store);

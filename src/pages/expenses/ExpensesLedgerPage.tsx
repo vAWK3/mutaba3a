@@ -133,7 +133,7 @@ export function ExpensesLedgerPage() {
   // currency -- never converted or combined (ADR-004), so this is exactly
   // the sum of the ledger's rows, by construction, not by coincidence.
   const stripTotalsByCurrency = useMemo(() => {
-    const totals: Record<Currency, number> = { USD: 0, ILS: 0, EUR: 0, JOD: 0, AED: 0, SAR: 0, QAR: 0, BHD: 0, OMR: 0 };
+    const totals: Record<Currency, number> = { USD: 0, ILS: 0, EUR: 0, JOD: 0 };
     for (const expense of expenses) {
       totals[expense.currency] += expense.amountMinor;
     }

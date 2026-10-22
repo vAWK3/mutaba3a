@@ -301,24 +301,24 @@ describe('converted total', () => {
     expect(convertTotal(summary([]), rates())).toBeNull();
   });
 
-  it('carries the derived flag per rate line, not just a single JOD check (MUT-281, the peg-label bug)', () => {
-    // A mixed group: OMR (pegged, like JOD) and EUR (not pegged) into an ILS base.
+  it('carries the derived flag per rate line, not a currency check (MUT-281, the peg-label bug)', () => {
+    // A mixed group: JOD (pegged) and EUR (not pegged) into an ILS base.
     // Before this fix, `used` carried only {currency, rate} -- the component had
     // to re-derive "is this pegged?" itself, and it only ever checked === 'JOD'.
-    const s = summary([block('OMR', [bucket('2026-10-05', '9.500')]), block('EUR', [bucket('2026-10-05', '10.00')])]);
+    const s = summary([block('JOD', [bucket('2026-10-05', '9.500')]), block('EUR', [bucket('2026-10-05', '10.00')])]);
     const c = convertTotal(
       s,
       rates({
         rates: [
           { currency: 'ILS', rate: 1, derived: false },
           { currency: 'EUR', rate: 0.25, derived: false },
-          { currency: 'OMR', rate: 0.104, derived: true },
+          { currency: 'JOD', rate: 0.2, derived: true },
         ],
       })
     );
     expect(c?.used).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ currency: 'OMR', derived: true }),
+        expect.objectContaining({ currency: 'JOD', derived: true }),
         expect.objectContaining({ currency: 'EUR', derived: false }),
       ])
     );

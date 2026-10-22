@@ -58,13 +58,12 @@ The table lists **only what has shipped** (the same rule as the /hosted copy). A
 | Clients and matters / projects | ✓ | ✓ |
 | Expenses with categories and receipt photos | ✓ | ✓ |
 | Trip and expense groups | ✓ | ✓ |
-| Currencies: ILS, USD, EUR, JOD, AED, SAR, QAR, BHD, OMR, each kept in its own currency, with reference conversion rates | ✓ | ✓ |
+| Currencies: ILS, USD, EUR, JOD, each kept in its own currency, with reference conversion rates | ✓ | ✓ |
 | Arabic and English, Arabic by default | ✓ | ✓ |
 | Firm books v1–v2 when they ship: receipts library, vendors, VAT on expenses | | ✓ |
 | **Coming, no date promised:** roles and invites for staff, bills and what the firm owes, staff reimbursements, month close, VAT summary, accountant pack (CSV / XLSX + receipts) | | Coming |
 
 **Hold before sending:**
-- **The Gulf currencies** are only claimable once MUT-329's release is live. Until then the list is ILS, USD, EUR and JOD.
 - **Download all my records** (MUT-325) isn't shipped yet. Until it is, promise that "we export your records for you on request".
 
 ## 4. What the pilot promises
@@ -109,7 +108,6 @@ The account itself is still provisioned by hand (pilot runbook, MUT-327).
 - **The VAT rate per customer country:** MUT-355, for Barmajiyat Ltd's accountant. It blocks the first invoice, not this sign-off. Until then the wording in §2 is all we say.
 - **The reply address** *(default)*: replies go from the address the request emails' reply-to points at (see the reply template).
 - **Copy that waits on other tickets:**
-  - the Gulf currencies, until MUT-329's release is live;
   - "download your records yourself", until MUT-325 ships;
   - the terms link, until MUT-324's /terms is live.
 
@@ -156,7 +154,7 @@ The account itself is still provisioned by hand (pilot runbook, MUT-327).
   - حتى 6 ملفات شخصية وتجارية.
   - الدخل المستلم والمستحق والدفعات، والعملاء والقضايا.
   - المصاريف مع صور الإيصالات، ومجموعات المصاريف للرحلات.
-  - تسع عملات، كلٌّ يبقى بعملته. **قبل الإرسال:** لا نذكر عملات الخليج إلا بعد إطلاق MUT-329؛ وحتى ذلك الحين القائمة: الشيكل والدولار واليورو والدينار الأردني.
+  - أربع عملات، كلٌّ يبقى بعملته: الشيكل والدولار واليورو والدينار الأردني.
   - العربية والإنجليزية، والعربية هي الأساس.
 - **باقة المكتب تضيف:** دفاتر المكتب عند صدورها: مكتبة الإيصالات، والمورّدين، وضريبة القيمة المضافة على المصاريف.
 - **قادم دون موعد محدد:** أدوار الموظفين، والفواتير المستحقة على المكتب، وإغلاق الشهر، وملف المحاسب.

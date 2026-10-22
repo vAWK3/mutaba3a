@@ -363,7 +363,7 @@
 **Fix**: add a fingerprint case per persisted map in `LocalSnapshotMaps`, built from a real `MemoryLedgerStore` record. Better still, assert that every key of `LocalSnapshotMaps` has a case, so a new map can't be added uncovered.
 
 ### TD-170: The portal's typed API client lags the spec until MUT-281
-**Status**: Resolved (MUT-281, 2026-10-19)
+**Status**: Resolved (MUT-281, 2026-10-19). MUT-388 (2026-10-22) narrowed the list to four again; the types were regenerated with it.
 **Ticket**: MUT-281 (MUT-280 eng review D2, 2026-10-18)
 **Added**: 2026-10-18
 **Priority**: Medium (blocks any unrelated `npm run hosted:types` until MUT-281 lands)

@@ -3365,3 +3365,18 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Scripts (review) | `pre-roll.test.ts` | BOOKKEEPER rows pass; built-in personal profile strays; confirm clears a flagged row |
 | Portal (review) | `ProfileOwnersSection.test.tsx`, `endSession.test.ts`, `RedateDrawer.test.tsx`, `incomeAffordances.test.ts` | focus to next Remove (fails on the old code), cancel, NOT_CREATOR, close while pending, leave errors/404/not-open, lost-access dismiss/deep link/sign-out reset, partner's Owed entry not re-datable |
 | Release-QA | `portal.profiles.co-owner-write|remove|leave|removed|full-rights` | recorded flows |
+
+### MUT-388 — the Gulf currencies go (2026-10-22)
+
+| Test | Covers |
+|---|---|
+| `money.test.ts` | the four codes and exponents; AED…OMR unsupported; `parseMoney` refuses a removed code instead of rescaling |
+| `fx-rates.test.ts`, `routes-fx-rates.test.ts` | 4 × 4 grid through USD; only JOD pairs derived; `?base=JOD` 3 derived; `?base=AED` 422; peg fixture parity |
+| `income-routes`, `routes-expenses`, `routes-conversions`, `routes-profiles`, `import/plan.test.ts` | a Gulf write, leg, profile currency or import row → 422 / `UNSUPPORTED_CURRENCY`; JOD 3-decimal expense |
+| `routes-expenses.test.ts` › MUT-388 | a stored BHD expense reads back as 12.345 (single and list); PATCH amount → 422 `AMOUNT_INVALID`, row unchanged; moving it to JOD with its amount → 200 |
+| `inbox-filing.test.ts` › MUT-388 | an AED inbox entry: filing as expense, received or owed → 422 `UNSUPPORTED_CURRENCY`, entry kept |
+| `store-contract-expenses.ts` › MUT-280 | a row in a removed currency still round-trips untouched (VarChar(3)) |
+| `src/scripts/__tests__/currency-rows.test.ts` (test:db, macOS `/bin/bash`) | count ignores soft-deleted rows, lists table, column, code and owner (`user:` for the inbox), exits 3; dry run previews and changes nothing; a referenced matter stops the run with blockers listed; soft-delete keeps a receipt valid; inbox cleared by `--user-id`; others untouched; bad or unknown id refused |
+| Portal unit tests | pickers offer exactly USD, ILS, EUR, JOD; Gulf filters dropped; per-line derived flag with JOD + EUR |
+| Release-QA | `portal.income.currency-jod`, `portal.expense-groups.currencies-converted` |
+

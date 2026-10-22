@@ -453,3 +453,35 @@ describe('MUT-61: filing as Received is a capture', () => {
     expect(await s.h.store.payments.getById(s.p.id, filed.id)).toMatchObject({ origin: 'CAPTURE', captureSource: 'widget', createdByUserId: s.userId });
   });
 });
+
+describe('MUT-388: an entry still in a removed Gulf currency', () => {
+  // Captured while AED was supported. Filing copies the entry's currency into the new row, so without a check an old
+  // AED entry would become a new AED expense or payment after the currency was removed.
+  async function gulfEntry(s: Setup, kind: 'expense' | 'income') {
+    const { id } = await s.capture(kind === 'expense' ? EXPENSE_ENTRY : INCOME_ENTRY);
+    const updated = await s.h.store.inboxEntries.update(s.userId, id, 1, { currency: 'AED', amountMinor: 12_050n }, s.h.clock.now);
+    expect(updated.kind).toBe('updated');
+    return id;
+  }
+
+  it('refuses filing it as an expense (422) and leaves the entry where it was', async () => {
+    const s = await setup();
+    const id = await gulfEntry(s, 'expense');
+    const res = await s.fileExpense(id);
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'UNSUPPORTED_CURRENCY', field: 'currency' });
+    expect((await s.listInbox()).map((e) => e.id)).toContain(id);
+    expect(await s.expenses(s.p.id)).toEqual([]);
+  });
+
+  it.each([['received', {}], ['owed', 'client']] as const)('refuses filing it as %s income (422)', async (kind, extra) => {
+    const s = await setup();
+    const id = await gulfEntry(s, 'income');
+    const body: Record<string, unknown> = { kind };
+    if (extra === 'client') body.customerId = (await customer(s, s.p.id)).id;
+    const res = await s.fileIncome(id, body);
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'UNSUPPORTED_CURRENCY', field: 'currency' });
+    expect((await s.listInbox()).map((e) => e.id)).toContain(id);
+  });
+});
