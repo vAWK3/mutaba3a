@@ -260,6 +260,8 @@ export const STORE_ACCESS: StoreAccess = {
    */
   billing: {
     factsFor: 'sessionOnly',
+    // MUT-362: Settings › Billing reads the person's own account; the route passes the session's user, never a parameter.
+    summaryOf: 'sessionOnly',
     setTrialStart: 'operator',
     createGrant: 'operator',
     revokeGrant: 'operator',
