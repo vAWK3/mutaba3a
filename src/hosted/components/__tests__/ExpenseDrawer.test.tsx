@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../Toast';
@@ -228,6 +228,33 @@ describe('ExpenseDrawer (hosted)', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(keys[1]).toBe(keys[0]);
     expect(trackPortal).toHaveBeenCalledOnce();
+  });
+
+  it('sends a date past the picker\'s ten-year max to the server, and says "more than ten years ahead" when it refuses (MUT-392)', async () => {
+    const user = userEvent.setup();
+    let posted: unknown = null;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input), 'http://portal.test');
+      const method = (init.method ?? 'GET').toUpperCase();
+      if (method === 'GET' && url.pathname === '/v1/expense-categories') return ok(EMPTY_CATEGORIES);
+      if (method === 'GET' && (url.pathname === '/v1/customers' || url.pathname === '/v1/projects')) return ok(EMPTY_DIRECTORY);
+      if (method === 'POST' && url.pathname === '/v1/expenses') {
+        posted = JSON.parse(String(init.body));
+        return fail(422, 'VALIDATION_FAILED', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' });
+      }
+      return fail(404, 'NOT_FOUND');
+    });
+
+    const { onClose } = renderDrawer();
+    await user.type(await screen.findByPlaceholderText('0.00'), '12.50');
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+    // Typed past the date input's max: the form must not let the browser block Save silently.
+    fireEvent.change(screen.getByLabelText(/^Date/), { target: { value: '2060-01-01' } });
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText("The date can't be more than ten years ahead")).toBeInTheDocument();
+    expect(posted).toMatchObject({ occurredOn: '2060-01-01' });
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('defaults the date to today in the profile\'s zone when the list passes it (MUT-133 D5)', async () => {

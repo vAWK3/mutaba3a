@@ -250,7 +250,9 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
         </>
       }
     >
-      <form id="hosted-expense-form" onSubmit={picks.guard(handleSubmit(onSubmit))}>
+      {/* noValidate: the zod schema and the server's refusals say what is wrong at the field; the browser's own check on the
+          date's ten-year max (MUT-392) would otherwise block Save with no message the drawer can show. */}
+      <form id="hosted-expense-form" onSubmit={picks.guard(handleSubmit(onSubmit))} noValidate>
         <ExpenseFormFields
           control={control}
           dateMax={moneyDateCeiling(timezone ? todayInZone(timezone) : todayLocalISO())}
