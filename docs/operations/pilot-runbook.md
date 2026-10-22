@@ -804,3 +804,29 @@ Filled in by Basel after running §8 against production backups (AC1).
 Problems found and tickets opened:
 
 -
+
+## 10. Retire a currency (MUT-388, ADR-166)
+
+The database doesn't refuse a currency the API no longer supports: a row stored while it was supported reads back
+with a blank amount. So a server release that drops a currency (MUT-388 dropped AED, SAR, QAR, BHD and OMR) runs this
+gate **before and after** `make release server`. Before, so you know; after, because the old API accepts the codes
+until the new one is live.
+
+1. Count (read-only). Exit 0 means nothing to do; exit 3 prints table, column, code, profile and rows:
+
+   ```bash
+   npm run db:run -- scripts/currency-rows.sh count
+   ```
+
+2. Rows on **your own test or operator profiles** go. Rehearse, then do it:
+
+   ```bash
+   npm run db:run -- scripts/currency-rows.sh delete-test-profiles --organization-id <uuid>[,<uuid>…] --dry-run
+   npm run db:run -- scripts/currency-rows.sh delete-test-profiles --organization-id <uuid>[,<uuid>…]
+   ```
+
+   A test profile whose own currency is a removed one is printed, not deleted: change it in the portal
+   (Settings › Profiles).
+3. A row on **anyone else's profile** stops the release. Basel decides what happens to it; note it in the log.
+4. After the release, count again. It must exit 0 (or list only rows Basel has decided to keep).
+
