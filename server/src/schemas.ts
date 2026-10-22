@@ -2145,14 +2145,54 @@ export const ExpenseSchema = z
   })
   .openapi('Expense');
 
+export const ReceiptFilingStatusSchema = z
+  .enum(['TO_REVIEW', 'FILED'])
+  .openapi('ReceiptFilingStatus', { description: 'MUT-255: TO_REVIEW waits in the receipts library; FILED is on an expense.' });
+
+const suggestionSource = z.enum(['qr', 'pdf-text', 'ocr', 'vendor']);
+const suggestedField = <T extends z.ZodTypeAny>(value: T) => z.object({ value, source: suggestionSource, confidence: z.number().min(0).max(1) });
+const minorUnits = z.string().regex(/^\d{1,18}$/, 'minor units, digits only');
+
+/**
+ * Firm-books brief §6.1 `ReceiptSuggestion`, what a device's reader read off a receipt (MUT-255 stores it). Unknown
+ * keys are dropped, not refused (MUT-255 review R11): a newer reader may send fields this server doesn't know yet,
+ * and refusing them would fail every approve until the server caught up. Every known field is bounded, so the
+ * stored object stays small.
+ */
+export const ReceiptSuggestionSchema = z
+  .object({
+    readerVersion: z.string().min(1).max(40),
+    date: suggestedField(IsoDateSchema).optional(),
+    totalMinor: suggestedField(minorUnits).optional(),
+    currency: suggestedField(z.string().regex(/^[A-Z]{3}$/)).optional(),
+    vatMinor: suggestedField(minorUnits).optional(),
+    vatRateBasisPoints: suggestedField(z.number().int().min(0).max(10_000)).optional(),
+    vendorName: suggestedField(z.string().min(1).max(200)).optional(),
+    registrationNo: suggestedField(z.string().min(1).max(64)).optional(),
+    phone: suggestedField(z.string().min(1).max(40)).optional(),
+    email: suggestedField(z.string().min(1).max(254)).optional(),
+  })
+  .openapi('ReceiptSuggestion');
+
+export const ApprovedReceiptFieldsSchema = z
+  .object({ occurredOn: IsoDateSchema, amountMinor: minorUnits, currency: z.string(), vendor: z.string().nullable(), categoryId: uuid.nullable() })
+  .openapi('ApprovedReceiptFields', { description: 'What approval wrote into the expense, in minor units like the suggestion' });
+
 export const ExpenseReceiptSchema = z
   .object({
     id: uuid,
-    expenseId: uuid,
+    /** MUT-255: null while the receipt waits in the library. */
+    expenseId: uuid.nullable(),
     filename: z.string(),
     mimeType: AttachmentMimeTypeSchema,
     sizeBytes: z.number().int(),
     status: AttachmentStatusSchema,
+    filingStatus: ReceiptFilingStatusSchema,
+    receivedOn: IsoDateSchema,
+    suggested: ReceiptSuggestionSchema.nullable(),
+    approved: ApprovedReceiptFieldsSchema.nullable(),
+    approvedAt: z.string().datetime().nullable(),
+    version: z.number().int(),
     uploadedByUserId: uuid,
     createdAt: z.string().datetime(),
     completedAt: z.string().datetime().nullable(),

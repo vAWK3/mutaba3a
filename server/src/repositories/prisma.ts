@@ -5,6 +5,7 @@ import { categoryNameKey } from '../expenses/names.js';
 import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { prismaRecordsExport } from './prisma-records-export.js';
+import { editRatesOf } from '../receipts/edit-rates.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import type { TermsLocale } from '../legal.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
@@ -96,7 +97,10 @@ import type {
   ExpenseGroupOverrideMode,
   ExpenseGroupOverrideRecord,
   ExpenseGroupRepository,
+  ApprovedReceiptFields,
+  ExpenseReceiptRecord,
   ExpenseReceiptRepository,
+  ReceiptSuggestion,
   ExpenseRecord,
   ExpenseRepository,
   CreateExpenseInput,
@@ -1418,11 +1422,18 @@ export class PrismaLedgerStore implements LedgerStore {
       if (!record) return { kind: 'not_found' };
       return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
     },
-    softDelete: async (organizationId, id, at) => {
-      const { count } = await this.prisma.expense.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
-      const record = await this.prisma.expense.findFirst({ where: { id, organizationId } });
-      return record ? { record, changed: count === 1 } : null;
-    },
+    softDelete: (organizationId, id, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.expense.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
+        const record = await tx.expense.findFirst({ where: { id, organizationId } });
+        if (!record) return null;
+        if (count !== 1) return { record, changed: false, removedReceipts: [] };
+        // MUT-255: READY receipts go back to the library; unfinished uploads go with the expense.
+        await tx.expenseReceipt.updateMany({ where: { organizationId, expenseId: id, status: 'READY', deletedAt: null }, data: { expenseId: null, filingStatus: 'TO_REVIEW', version: { increment: 1 } } });
+        const pending = await tx.expenseReceipt.findMany({ where: { organizationId, expenseId: id, deletedAt: null } });
+        await tx.expenseReceipt.updateMany({ where: { id: { in: pending.map((r) => r.id) } }, data: { deletedAt: at } });
+        return { record, changed: true, removedReceipts: pending.map((r) => toExpenseReceipt({ ...r, deletedAt: at })) };
+      }),
     totalsByCurrency: async (organizationId, filter) => {
       const rows = await this.prisma.expense.groupBy({
         by: ['currency'],
@@ -1565,28 +1576,43 @@ export class PrismaLedgerStore implements LedgerStore {
   };
 
   readonly expenseReceipts: ExpenseReceiptRepository = {
-    create: (input, at) => translate(() => this.prisma.expenseReceipt.create({ data: { ...input, storageKey: '', status: 'PENDING_UPLOAD', createdAt: at } })),
+    create: async (input, at) =>
+      toExpenseReceipt(
+        await translate(() =>
+          this.prisma.expenseReceipt.create({
+            data: {
+              organizationId: input.organizationId,
+              expenseId: input.expenseId,
+              filename: input.filename,
+              mimeType: input.mimeType,
+              sizeBytes: input.sizeBytes,
+              receivedOn: input.receivedOn,
+              uploadedByUserId: input.uploadedByUserId,
+              requestId: input.requestId,
+              filingStatus: input.expenseId ? 'FILED' : 'TO_REVIEW',
+              suggested: input.suggested ? (input.suggested as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+              storageKey: '',
+              status: 'PENDING_UPLOAD',
+              createdAt: at,
+            },
+          }),
+        ),
+      ),
     setKey: async (organizationId, id, storageKey) => {
       const { count } = await this.prisma.expenseReceipt.updateMany({ where: { id, organizationId }, data: { storageKey } });
-      return count === 1 ? this.prisma.expenseReceipt.findUnique({ where: { id } }) : null;
+      return count === 1 ? toExpenseReceiptOrNull(await this.prisma.expenseReceipt.findUnique({ where: { id } })) : null;
     },
-    getById: (organizationId, id) => this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } }),
-    listByExpense: (organizationId, expenseId) =>
-      this.prisma.expenseReceipt.findMany({ where: { organizationId, expenseId, status: 'READY', deletedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+    getById: async (organizationId, id) => toExpenseReceiptOrNull(await this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } })),
+    listByExpense: async (organizationId, expenseId) =>
+      (await this.prisma.expenseReceipt.findMany({ where: { organizationId, expenseId, status: 'READY', deletedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toExpenseReceipt),
     complete: async (organizationId, id, at) => {
       await this.prisma.expenseReceipt.updateMany({ where: { id, organizationId, deletedAt: null, status: 'PENDING_UPLOAD' }, data: { status: 'READY', completedAt: at } });
-      return this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } });
+      return toExpenseReceiptOrNull(await this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } }));
     },
     softDelete: async (organizationId, id, at) => {
       await this.prisma.expenseReceipt.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
-      return this.prisma.expenseReceipt.findFirst({ where: { id, organizationId } });
+      return toExpenseReceiptOrNull(await this.prisma.expenseReceipt.findFirst({ where: { id, organizationId } }));
     },
-    softDeleteByExpense: (organizationId, expenseId, at) =>
-      this.prisma.$transaction(async (tx) => {
-        const live = await tx.expenseReceipt.findMany({ where: { organizationId, expenseId, deletedAt: null } });
-        await tx.expenseReceipt.updateMany({ where: { id: { in: live.map((r) => r.id) }, deletedAt: null }, data: { deletedAt: at } });
-        return live.map((r) => ({ ...r, deletedAt: at }));
-      }),
     countReadyByExpenseIds: async (organizationIds, expenseIds) => {
       if (expenseIds.length === 0) return new Map();
       const groups = await this.prisma.expenseReceipt.groupBy({
@@ -1594,9 +1620,82 @@ export class PrismaLedgerStore implements LedgerStore {
         where: { organizationId: { in: [...organizationIds] }, expenseId: { in: [...expenseIds] }, status: 'READY', deletedAt: null },
         _count: { _all: true },
       });
-      return new Map(groups.map((g) => [g.expenseId, g._count._all]));
+      return new Map(groups.flatMap((g) => (g.expenseId ? [[g.expenseId, g._count._all] as const] : [])));
+    },
+    list: async (organizationId, filter, page) => {
+      const rows = await this.prisma.expenseReceipt.findMany({
+        where: {
+          organizationId,
+          status: 'READY',
+          deletedAt: null,
+          ...(filter.filingStatus ? { filingStatus: filter.filingStatus } : {}),
+          ...(filter.from || filter.to ? { receivedOn: { ...(filter.from ? { gte: filter.from } : {}), ...(filter.to ? { lte: filter.to } : {}) } } : {}),
+          ...(page.cursor ? { OR: [{ createdAt: { lt: page.cursor.createdAt } }, { createdAt: page.cursor.createdAt, id: { lt: page.cursor.id } }] } : {}),
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: page.limit + 1,
+      });
+      const items = rows.slice(0, page.limit).map(toExpenseReceipt);
+      const last = items[items.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last ? { createdAt: last.createdAt, id: last.id } : null };
+    },
+    countByFilingStatus: async (organizationId) => {
+      const groups = await this.prisma.expenseReceipt.groupBy({ by: ['filingStatus'], where: { organizationId, status: 'READY', deletedAt: null }, _count: { _all: true } });
+      const of = (status: 'TO_REVIEW' | 'FILED') => groups.find((g) => g.filingStatus === status)?._count._all ?? 0;
+      return { toReview: of('TO_REVIEW'), filed: of('FILED') };
+    },
+    countPendingSince: (organizationId, since) => this.prisma.expenseReceipt.count({ where: { organizationId, status: 'PENDING_UPLOAD', deletedAt: null, createdAt: { gte: since } } }),
+    setSuggested: async (organizationId, id, expectedVersion, suggested) => {
+      const existing = await this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } });
+      if (!existing) return { kind: 'not_found' };
+      if (existing.filingStatus === 'FILED') return { kind: 'filed' };
+      const { count } = await this.prisma.expenseReceipt.updateMany({
+        where: { id, organizationId, deletedAt: null, filingStatus: 'TO_REVIEW', version: expectedVersion },
+        data: { suggested: suggested as unknown as Prisma.InputJsonValue, version: { increment: 1 } },
+      });
+      const record = await this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } });
+      if (!record) return { kind: 'not_found' };
+      if (count === 0 && record.filingStatus === 'FILED') return { kind: 'filed' };
+      return count === 1 ? { kind: 'updated', record: toExpenseReceipt(record) } : { kind: 'stale', record: toExpenseReceipt(record) };
+    },
+    fileAsExpense: (params, at) =>
+      this.prisma.$transaction(async (tx) => {
+        // Lock first: of two concurrent approvals, the second waits here and then reads FILED.
+        const [locked] = await tx.$queryRaw<Array<{ status: string; filingStatus: string; deletedAt: Date | null }>>`SELECT "status", "filingStatus", "deletedAt" FROM "expense_receipts" WHERE "id" = ${params.receiptId}::uuid AND "organizationId" = ${params.organizationId}::uuid FOR UPDATE`;
+        if (!locked || locked.deletedAt) return { kind: 'not_found' as const };
+        if (locked.filingStatus === 'FILED') return { kind: 'already_filed' as const };
+        if (locked.status !== 'READY') return { kind: 'not_ready' as const };
+        // TODO(blocked-by MUT-307): firm profiles take `initialApprovalFor(role, firm)` here, before the expense is written.
+        // TODO(blocked-by MUT-312): `assertOpenPeriod` for the expense's date, in this transaction.
+        const expense = await createExpenseRow(tx, params.expense, at);
+        const { count } = await tx.expenseReceipt.updateMany({
+          where: { id: params.receiptId, organizationId: params.organizationId, filingStatus: 'TO_REVIEW', status: 'READY', deletedAt: null },
+          data: {
+            expenseId: expense.id,
+            filingStatus: 'FILED',
+            approved: params.approved as unknown as Prisma.InputJsonValue,
+            approvedAt: at,
+            approvedByUserId: params.userId,
+            ...(params.suggested ? { suggested: params.suggested as unknown as Prisma.InputJsonValue } : {}),
+            version: { increment: 1 },
+          },
+        });
+        // The row is locked, so this can't happen short of a bug; throwing rolls the expense back rather than leaving it orphaned.
+        if (count !== 1) throw new Error(`receipt ${params.receiptId} changed under its lock`);
+        const receipt = toExpenseReceipt(await tx.expenseReceipt.findUniqueOrThrow({ where: { id: params.receiptId } }));
+        return { kind: 'filed' as const, expense, receipt };
+      }),
+    editRates: async (range) => {
+      // Counted in JS from the week's approvals (a few hundred rows at most for the operator's Monday read), so the
+      // memory and Prisma stores share one definition (`editRatesOf`).
+      const rows = await this.prisma.expenseReceipt.findMany({
+        where: { approvedAt: { gte: range.from, lt: range.to }, approved: { not: Prisma.DbNull } },
+        select: { suggested: true, approved: true },
+      });
+      return editRatesOf(rows.map((r) => ({ suggested: r.suggested as unknown as ReceiptSuggestion | null, approved: r.approved as unknown as ApprovedReceiptFields })));
     },
   };
+
 
   // ---- MUT-270: the entries feed -------------------------------------------
 
@@ -1935,6 +2034,15 @@ async function replaceCategories(tx: Tx, organizationId: string, preset: readonl
  * transaction), MUT-66's filing passes its own open `tx` so the insert and the
  * inbox-entry delete commit or roll back together.
  */
+/** The row as the port types it: the two JSON columns carry `ReceiptSuggestion` / `ApprovedReceiptFields` (validated on the way in). */
+function toExpenseReceipt(row: Prisma.ExpenseReceiptGetPayload<object>): ExpenseReceiptRecord {
+  return { ...row, suggested: row.suggested as unknown as ReceiptSuggestion | null, approved: row.approved as unknown as ApprovedReceiptFields | null };
+}
+
+function toExpenseReceiptOrNull(row: Prisma.ExpenseReceiptGetPayload<object> | null): ExpenseReceiptRecord | null {
+  return row ? toExpenseReceipt(row) : null;
+}
+
 function createExpenseRow(tx: Tx | PrismaClient, input: CreateExpenseInput, at: Date): Promise<ExpenseRecord> {
   return translate(() => tx.expense.create({ data: { ...input, createdAt: at, updatedAt: at } }));
 }

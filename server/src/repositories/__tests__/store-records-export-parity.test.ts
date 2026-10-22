@@ -63,7 +63,7 @@ async function seed(store: LedgerStore) {
   for (const title of ['Taxi', 'Hotel', 'Lunch']) {
     expenses.push(await store.expenses.create({ organizationId: org, occurredOn: '2026-10-02', amountMinor: 4_500n, currency: 'ILS', title, vendor: 'Yellow', categoryId: category.id, customerId: customer.id, projectId: project.id, notes: null, createdByUserId: user.id }, AT));
   }
-  const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expenses[0]!.id, filename: 'taxi.pdf', mimeType: 'application/pdf', sizeBytes: 512, uploadedByUserId: user.id, requestId: null }, AT);
+  const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expenses[0]!.id, filename: 'taxi.pdf', mimeType: 'application/pdf', sizeBytes: 512, receivedOn: '2026-10-11', uploadedByUserId: user.id, requestId: null }, AT);
   await store.expenseReceipts.setKey(org, receipt.id, `org/${org}/expense-receipts/${receipt.id}`);
   await store.expenseReceipts.complete(org, receipt.id, AT);
   await store.conversions.create({ organizationId: org, occurredOn: '2026-10-03', amountMinor: 10_000n, currency: 'USD', toAmountMinor: 36_500n, toCurrency: 'ILS', notes: null, createdByUserId: user.id }, AT);

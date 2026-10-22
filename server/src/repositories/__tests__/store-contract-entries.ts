@@ -142,7 +142,7 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       const e1 = await w.expense(w.a.id, 1);
       const e2 = await w.expense(w.a.id, 2);
       const receipt = async (expenseId: string, state: 'ready' | 'pending' | 'deleted') => {
-        const r = await store.expenseReceipts.create({ organizationId: w.a.id, expenseId, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, uploadedByUserId: w.user.id, requestId: null }, at(3));
+        const r = await store.expenseReceipts.create({ organizationId: w.a.id, expenseId, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, receivedOn: '2026-10-11', uploadedByUserId: w.user.id, requestId: null }, at(3));
         if (state !== 'pending') await store.expenseReceipts.complete(w.a.id, r.id, at(4));
         if (state === 'deleted') await store.expenseReceipts.softDelete(w.a.id, r.id, at(5));
       };

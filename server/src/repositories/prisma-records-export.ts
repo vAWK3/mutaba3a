@@ -89,6 +89,8 @@ const EXPENSE_CATEGORY = cols<ExpenseCategoryRecord>()({ id: true, organizationI
 const EXPENSE_RECEIPT = cols<ExpenseReceiptRecord>()({
   id: true, organizationId: true, expenseId: true, filename: true, mimeType: true, sizeBytes: true, status: true, storageKey: true, uploadedByUserId: true,
   requestId: true, createdAt: true, completedAt: true, deletedAt: true,
+  // MUT-255: the receipts library — To-review receipts (no expense) export too, with what was read and approved.
+  filingStatus: true, receivedOn: true, suggested: true, approved: true, approvedAt: true, approvedByUserId: true, version: true,
 });
 const CONVERSION = cols<ConversionRecord>()({
   id: true, organizationId: true, amountMinor: true, currency: true, toAmountMinor: true, toCurrency: true, occurredOn: true, notes: true, createdByUserId: true,

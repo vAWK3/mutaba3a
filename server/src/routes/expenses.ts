@@ -206,8 +206,8 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       method: 'delete',
       path: '/v1/expenses/{expenseId}',
       tags: ['Expenses'],
-      summary: 'Delete an expense (soft; its receipts and their files go with it)',
-      description: '204 again for an expense already deleted; 404 for an id this profile never had.',
+      summary: 'Delete an expense (soft; its receipts go back to the receipts library)',
+      description: '204 again for an expense already deleted; 404 for an id this profile never had. MUT-255: its READY receipts stay, back under To review in the receipts library; an unfinished upload is deleted with its file.',
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ExpenseIdParamSchema },
@@ -219,9 +219,8 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const deleted = await store.expenses.softDelete(organization.id, c.req.valid('param').expenseId, now);
       if (!deleted) throw new ApiError('NOT_FOUND', 'No such expense');
       if (deleted.changed) {
-        const receipts = await store.expenseReceipts.softDeleteByExpense(organization.id, deleted.record.id, now);
-        if (options.storage) for (const r of receipts) if (r.storageKey) await options.storage.remove(r.storageKey);
-        await audit(c, 'expense.deleted', 'expense', deleted.record.id, { receipts: receipts.length });
+        if (options.storage) for (const r of deleted.removedReceipts) if (r.storageKey) await options.storage.remove(r.storageKey);
+        await audit(c, 'expense.deleted', 'expense', deleted.record.id, { pendingReceiptsRemoved: deleted.removedReceipts.length });
       }
       return c.body(null, 204);
     },
@@ -250,7 +249,10 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       if (!check.ok) throw validationError(check.reason, `Upload refused: ${check.reason}`);
       const expense = await mustGet(organization.id, c.req.valid('param').expenseId);
       await assertRoomForReceipt(organization.id, expense.id);
-      const created = await store.expenseReceipts.create({ organizationId: organization.id, expenseId: expense.id, filename: body.filename, mimeType: body.mimeType, sizeBytes: body.sizeBytes, uploadedByUserId: user.id, requestId: c.get('requestId') }, now);
+      const created = await store.expenseReceipts.create(
+        { organizationId: organization.id, expenseId: expense.id, filename: body.filename, mimeType: body.mimeType, sizeBytes: body.sizeBytes, receivedOn: todayFor(organization, now), uploadedByUserId: user.id, requestId: c.get('requestId') },
+        now,
+      );
       const keyed = (await store.expenseReceipts.setKey(organization.id, created.id, receiptStorageKey(organization.id, created.id))) ?? created;
       const upload = await s.signUpload(keyed.storageKey, { mimeType: body.mimeType, sizeBytes: body.sizeBytes, ttlSeconds: options.urlTtlSeconds, now });
       return c.json({ receipt: serializeExpenseReceipt(keyed), upload: { url: upload.url, method: 'PUT' as const, headers: upload.headers, expiresAt: upload.expiresAt.toISOString() } }, 201);

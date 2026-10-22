@@ -135,9 +135,27 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
     { organizationId: org, occurredOn: '2026-10-02', amountMinor: 4_500n, currency: 'ILS', title: 'Taxi', vendor: 'Yellow Cab', categoryId: category.id, customerId: customer.id, projectId: project.id, notes: null, createdByUserId: user.id },
     AT,
   );
-  const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expense.id, filename: 'taxi.pdf', mimeType: 'application/pdf', sizeBytes: 512, uploadedByUserId: user.id, requestId: null }, AT);
+  const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expense.id, filename: 'taxi.pdf', mimeType: 'application/pdf', sizeBytes: 512, receivedOn: '2026-10-02', uploadedByUserId: user.id, requestId: null }, AT);
   await store.expenseReceipts.setKey(org, receipt.id, `org/${org}/expense-receipts/${receipt.id}`);
   await store.expenseReceipts.complete(org, receipt.id, AT);
+
+  // expReceipts (MUT-255): a library receipt with a reader's suggestion, approved into its own expense
+  const scanned = await store.expenseReceipts.create(
+    { organizationId: org, expenseId: null, filename: 'cafe.jpg', mimeType: 'image/jpeg', sizeBytes: 2048, receivedOn: '2026-10-02', suggested: { readerVersion: 'phone-1.0', totalMinor: { value: '1500', source: 'ocr', confidence: 0.9 } }, uploadedByUserId: user.id, requestId: null },
+    AT,
+  );
+  await store.expenseReceipts.setKey(org, scanned.id, `org/${org}/expense-receipts/${scanned.id}`);
+  await store.expenseReceipts.complete(org, scanned.id, AT);
+  await store.expenseReceipts.fileAsExpense(
+    {
+      organizationId: org,
+      receiptId: scanned.id,
+      userId: user.id,
+      expense: { organizationId: org, occurredOn: '2026-10-02', amountMinor: 1_500n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id },
+      approved: { occurredOn: '2026-10-02', amountMinor: '1500', currency: 'ILS', vendor: 'Cafe', categoryId: null },
+    },
+    AT,
+  );
 
   // convs: a conversion
   await store.conversions.create({ organizationId: org, occurredOn: '2026-10-03', amountMinor: 10_000n, currency: 'USD', toAmountMinor: 36_500n, toCurrency: 'ILS', notes: null, createdByUserId: user.id }, AT);
@@ -315,10 +333,15 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
     { organizationId: org, occurredOn: '2026-10-02', amountMinor: 900n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: 'Duplicate', createdByUserId: userId },
     AT,
   );
-  const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expense.id, filename: 'dup.pdf', mimeType: 'application/pdf', sizeBytes: 100, uploadedByUserId: userId, requestId: 'req-receipt' }, AT);
+  const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expense.id, filename: 'dup.pdf', mimeType: 'application/pdf', sizeBytes: 100, receivedOn: '2026-10-02', uploadedByUserId: userId, requestId: 'req-receipt' }, AT);
   await store.expenseReceipts.setKey(org, receipt.id, `org/${org}/expense-receipts/${receipt.id}`);
   await store.expenseReceipts.softDelete(org, receipt.id, LATER);
   await store.expenses.softDelete(org, expense.id, LATER);
+
+  // expReceipts (MUT-255): a receipt waiting in the library, never read
+  const waiting = await store.expenseReceipts.create({ organizationId: org, expenseId: null, filename: 'scan.png', mimeType: 'image/png', sizeBytes: 300, receivedOn: '2026-10-03', uploadedByUserId: userId, requestId: null }, AT);
+  await store.expenseReceipts.setKey(org, waiting.id, `org/${org}/expense-receipts/${waiting.id}`);
+  await store.expenseReceipts.complete(org, waiting.id, AT);
 
   // convs, expGroups: with notes, deleted
   const conversion = await store.conversions.create({ organizationId: org, occurredOn: '2026-10-03', amountMinor: 1_000n, currency: 'USD', toAmountMinor: 3_650n, toCurrency: 'ILS', notes: 'Twice by mistake', createdByUserId: userId }, AT);
