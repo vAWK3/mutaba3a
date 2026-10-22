@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import raw from '../../config/hosts.json';
 import { parseHostsConfig } from '../../config/hosts';
+import { CIMD_CLIENT_ID } from '../../src/services/oauth/oauth-client';
 
 /**
  * MUT-326 AC1 (ADR-155): our public hosts live in config/hosts.json and nowhere else,
@@ -18,18 +19,18 @@ const BINARY = /\.(png|jpe?g|gif|webp|ico|icns|otf|ttf|woff2?|pdf|zip|gz|mp4|mov
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * The Malafat OAuth client identity (CIMD_CLIENT_ID) stays on its own value whatever domain
- * is chosen (MUT-326 scope), so these files may name mutaba3a.app even if it becomes the domain.
+ * The Malafat OAuth client identity (CIMD_CLIENT_ID) is a fixed literal on its own host
+ * (MUT-387, ADR-155 amendment): it must not move with a future domain change, so these files
+ * may name the chosen domain. cimd-document.test.ts pins the literal to the published document.
  */
 const OWN_VALUE_FILES = new Set([
   'public/.well-known/oauth-client.json',
   'src/services/oauth/oauth-client.ts',
-  'src/services/oauth/__tests__/oauth-client.test.ts',
-  'src/services/oauth/__tests__/cimd-document.test.ts',
-  'scripts/bundle-origins.json',
-  // This file names it for the rehearsal below.
-  'scripts/__tests__/no-hardcoded-hosts.test.ts',
 ]);
+
+/** Hosts we never owned and must never name again (MUT-387): mutaba3a.app has no DNS and no registrant. */
+const RETIRED_HOSTS = ['mutaba3a.app'];
+const THIS_FILE = 'scripts/__tests__/no-hardcoded-hosts.test.ts';
 
 /** Every host the config names, plus any Mutaba3a Cloud Run or Netlify host (a new service URL must go through the config too). */
 const hostPattern = (host: string) => new RegExp(`(?<![a-z0-9-])${escape(host)}(?![a-z0-9-])`, 'i');
@@ -75,7 +76,8 @@ describe('no hardcoded hosts (MUT-326)', () => {
     expect(hardcodedHosts('const ok = "https://example.a.run.app";', planted)).toEqual([]);
   });
 
-  function findings(legacy: RegExp[], domains: RegExp[]): string[] {
+  /** Every scanned file's hits, each file checked against the patterns `patternsFor` picks for it. */
+  function findings(patternsFor: (file: string) => RegExp[]): string[] {
     return scannedFiles().flatMap((file) => {
       let text: string;
       try {
@@ -83,17 +85,27 @@ describe('no hardcoded hosts (MUT-326)', () => {
       } catch {
         return []; // deleted in the working tree
       }
-      const filePatterns = OWN_VALUE_FILES.has(file) ? legacy : [...legacy, ...domains];
-      return hardcodedHosts(text, filePatterns).map((hit) => `${file}:${hit}`);
+      return hardcodedHosts(text, patternsFor(file)).map((hit) => `${file}:${hit}`);
     });
   }
 
   it('finds our hosts in no code, test, script, Terraform or CI file outside config/hosts.json', () => {
-    expect(findings(legacyPatterns(raw), domainPatterns(raw)), 'read the host from config/hosts.ts, `npm run hosts -- get`, or Terraform var.hosts_file').toEqual([]);
+    const legacy = legacyPatterns(raw);
+    const all = [...legacy, ...domainPatterns(raw)];
+    expect(findings((file) => (OWN_VALUE_FILES.has(file) ? legacy : all)), 'read the host from config/hosts.ts, `npm run hosts -- get`, or Terraform var.hosts_file').toEqual([]);
   });
 
-  it('would stay green on the day the likeliest domain (mutaba3a.app) is set', () => {
-    const rehearsal = { ...raw, production: { ...raw.production, domain: 'mutaba3a.app', stage: 'live' } };
-    expect(findings(legacyPatterns(rehearsal), domainPatterns(rehearsal))).toEqual([]);
+  it('names no retired host in any code, test, script, Terraform or CI file, own-value files included', () => {
+    const retired = RETIRED_HOSTS.map(hostPattern);
+    expect(findings((file) => (file === THIS_FILE ? [] : retired))).toEqual([]);
+  });
+
+  it('keeps the OAuth client identity on the configured apex, so a domain move must decide its fate (MUT-387)', () => {
+    // The identity is a fixed literal, but Netlify serves it only while its host is the site's
+    // primary domain, and Terraform builds that binding from this config.
+    const message =
+      'Moving the apex? Keep the OAuth client identity host bound to the Netlify site (alias) with its zone, ' +
+      'per server/DEPLOYMENT.md §5a "What doesn\'t move", then update this check';
+    expect(raw.production.domain, message).toBe(new URL(CIMD_CLIENT_ID).hostname);
   });
 });

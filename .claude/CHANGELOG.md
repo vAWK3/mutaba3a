@@ -82,6 +82,48 @@ was past-only on the server and expenses had no upper bound at all. Plan, eng re
   `mapIncomeError` / `mapRedateError` take `kind` explicitly.
 - QA support: `daysAfter`, `ceilingOf` and `DAYS_IN_FUTURE_LIMIT` live once in `qa/support/portalApi.ts`.
 
+## [Unreleased] - 2026-10-22 — Portal Add income saves after a kind switch with More details open (MUT-408)
+
+**Why:** in the portal's Add income drawer, Owed → open More details → switch to Received → Save did nothing: no request,
+no error. The Due date and Method fields shared one slot in a ternary, so React kept the same `Controller` and renamed it
+`dueDate` → `method`; react-hook-form treats a renamed Controller as `unregister(oldName)` and drops that value. The zod
+base object (`dueDate: z.string()`) then failed on `undefined`, on a field no longer on screen. The reverse switch lost
+`method` the same way. Predates MUT-392, found while building it.
+
+### Fixed
+- `src/hosted/components/IncomeCaptureDrawer.tsx`: the Due date and Method groups are keyed (`dueDate` / `method`), so
+  each kind mounts its own Controller and the other kind's value is kept (and still left out of the request by
+  `toCreateIncomeRequest`). No other `Controller` in `src/` swaps names in one slot (the `ProfileEditForm` ternary swaps
+  a Controller for a `<p>`).
+
+### Tests
+- `IncomeCaptureDrawer.test.tsx`: Owed → More details → Received saves; Owed → Received → Owed keeps what it was for and
+  the due date; Received (Bank) → Owed → Received keeps the method. All three failed before the fix.
+- Release-QA `@portal.income.switch-kind` (`qa/features/portal/income.yaml`, `qa/specs/portal/income.spec.ts`), passing.
+
+## [Unreleased] - 2026-10-22 — The Malafat OAuth client identity moves to mtb3a.com; mutaba3a.app is retired (MUT-387, ADR-155 amendment)
+
+**Why:** the CIMD client id named `https://mutaba3a.app/...`, a domain nobody owns. Whoever registered it could publish a client document under our id.
+
+### Changed
+- `CIMD_CLIENT_ID` and `public/.well-known/oauth-client.json` (`client_id`, `client_uri`, `logo_uri`) are on `https://mtb3a.com`. The id is a fixed literal, never derived from `config/hosts.json`.
+- `scripts/bundle-origins.json`: `https://mtb3a.com` replaces `https://mutaba3a.app` in `local`, so a `domain: null` rollback still passes `test:bundles`.
+- `no-hardcoded-hosts.test.ts`: `OWN_VALUE_FILES` shrinks to three files. `RETIRED_HOSTS` forbids `mutaba3a.app` in every non-prose file. The `mutaba3a.app` rehearsal is deleted.
+- `vite-config.test.ts`: no `_redirects` rule at any stage, and no forced `netlify.toml` rule, covers the document's path.
+- `cimd-document.test.ts`: `client_uri` and `logo_uri` share the `client_id` origin. `oauth-client.test.ts` imports the constant.
+- `server/DEPLOYMENT.md` §5a "What doesn't move" and `frontdoor/main.tf` comments: serving the document depends on the config-built zone and Netlify binding. `server/README.md`: the reviewer seed example is `review@mtb3a.com`.
+
+### Review fixes (/qa-reconcile, 2026-10-22)
+- `vite-config.test.ts`: the no-redirect matcher reads Netlify `from`s as paths or full URLs, with `*` splats and `:name` segments. It was blind to a forced apex `/*` 301 and to placeholder rules.
+- `no-hardcoded-hosts.test.ts`: tripwire, `config/hosts.json`'s domain must equal the identity's host, so a domain move decides its fate on purpose. Both repo scans share one `findings(patternsFor)`.
+- `cimd-document.test.ts`: `bundle-origins.json` `local` must list the identity's origin.
+- DEPLOYMENT.md §5a: keep the apex record and the Netlify binding together, since a dangling record allows a takeover. The stale `api.mutaba3a.app` plan line is gone. `server/README.md`: refresh the reviewer account with the address it actually has.
+- `docs/operations/before-release.md` (web): the post-release live check of the document and the Malafat `oauth_clients` count.
+- **Live check after every web release:** `scripts/oauth-client-live.ts` (pure) and `scripts/check-oauth-client.ts` (`npm run release:oauth-client`). `make release web` runs it after the push. It waits up to `OAUTH_CLIENT_WAIT_SECONDS` (600) for Netlify to serve this release's document. It fails on a 3xx, a non-200, non-JSON, a mismatched `client_id` or a stale copy.
+- **Allowlist scoped to one file:** `https://mtb3a.com` is out of `bundle-origins.json`. `FILE_SCOPED_ORIGINS` / `originsNeedingReview` in `scripts/bundle-rules.ts` allow it only inside `.well-known/oauth-client.json`, and `check-bundles.ts` applies it per file.
+
+**Release:** the next `make release web` publishes the new document. Then `curl -s https://mtb3a.com/.well-known/oauth-client.json | jq -r .client_id` should print that URL. Operator check (Malafat): in each tenant schema, list `oauth_clients` rows with the old id before deleting any.
+
 ## [Unreleased] - 2026-10-22 — The privacy policy says the phone apps send error reports (MUT-151, ADR-091 amendment 10)
 
 **Why:** the Capture app reports crashes to Sentry from its next store release (mutaba3a-flutter `feature/mut-151-phone-sentry`), and the policy describes only what is live (ADR-090 P3).

@@ -19,7 +19,13 @@ import {
   staticGraph,
   staticImports,
   unresolvedUrls,
+  FILE_SCOPED_ORIGINS,
+  originsNeedingReview,
 } from '../bundle-rules';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import reviewed from '../bundle-origins.json';
+import { CIMD_CLIENT_ID } from '../../src/services/oauth/oauth-client';
 
 /** hosted-portal.md §8: the checks that keep the local builds and the portal apart. */
 
@@ -87,6 +93,25 @@ describe('origins', () => {
 
   it('reports only origins that are not on the allowlist', () => {
     expect(newOrigins(new Set(['https://github.com', 'https://evil.example']), ['https://github.com'])).toEqual(['https://evil.example']);
+  });
+
+  describe('file-scoped origins (MUT-387)', () => {
+    const scoped = { '.well-known/oauth-client.json': ['https://id.example'] };
+
+    it('drops an origin only inside the one file it is scoped to', () => {
+      expect(originsNeedingReview('.well-known/oauth-client.json', ['https://id.example', 'https://other.example'], scoped)).toEqual(['https://other.example']);
+      expect(originsNeedingReview('assets/index-abc.js', ['https://id.example'], scoped)).toEqual(['https://id.example']);
+    });
+
+    it('scopes the OAuth client identity origin to the published document, which public/ ships at that path', () => {
+      expect(FILE_SCOPED_ORIGINS['.well-known/oauth-client.json']).toEqual([new URL(CIMD_CLIENT_ID).origin]);
+      expect(existsSync(resolve(process.cwd(), 'public/.well-known/oauth-client.json'))).toBe(true);
+    });
+
+    it('keeps the identity origin off the bundle-wide allowlist, so nothing else may quietly use it', () => {
+      expect(reviewed.local).not.toContain(new URL(CIMD_CLIENT_ID).origin);
+      expect(reviewed.hosted).not.toContain(new URL(CIMD_CLIENT_ID).origin);
+    });
   });
 });
 

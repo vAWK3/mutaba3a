@@ -284,7 +284,13 @@ release-web: preflight-web
 	scripts/tag-release.sh web "$$version" --push; \
 	printf '\n$(C_GREEN)✓ v%s pushed to %s — Netlify is building$(C_OFF)\n' "$$version" '$(RELEASE_BRANCH)'; \
 	printf '$(C_DIM)Watch the build, then hard-reload the site and confirm the version in Settings.$(C_OFF)\n'; \
-	$(CI_REMINDER) web
+	printf '\n$(C_BOLD)Live OAuth client document (MUT-387)$(C_OFF)\n'; \
+	oauth_ok=1; npm run --silent release:oauth-client || oauth_ok=0; \
+	$(CI_REMINDER) web; \
+	if [ "$$oauth_ok" = 0 ]; then \
+	  printf '$(C_YEL)v%s is pushed, but the live OAuth client document is wrong (above). Re-check with: OAUTH_CLIENT_WAIT_SECONDS=0 npm run release:oauth-client$(C_OFF)\n' "$$version"; \
+	  exit 1; \
+	fi
 
 # ---------------------------------------------------------------------------
 # release server — server/scripts/deploy.sh owns the rollout (image, migrate,

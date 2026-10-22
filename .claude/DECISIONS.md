@@ -4213,6 +4213,16 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Browser-saved passwords don't follow the host: people sign in once on the new host (MUT-112 release note). Google Password Manager affiliation through web↔web `assetlinks.json` statements is left to MUT-112 (it changes the API contract).
 - `cloudflare_zone_setting` can't be destroyed from Terraform.
 
+**Amendment (MUT-387, 2026-10-22): the Malafat OAuth client identity moves to `mtb3a.com`, and `mutaba3a.app` is retired.**
+- **Why:** decision 1 kept `CIMD_CLIENT_ID` at `https://mutaba3a.app/.well-known/oauth-client.json`, but nobody owns `mutaba3a.app` (no DNS, no whois record, checked 2026-10-21). Basel chose to move the identity, not register the domain. Plan, eng review and decisions D1–D7: `.claude/designs/mut-387-cimd-identity-move.md`.
+- **The id is a fixed literal:** `CIMD_CLIENT_ID = 'https://mtb3a.com/.well-known/oauth-client.json'`, never derived from `config/hosts.json`. It is the one exception to decision 1. `OWN_VALUE_FILES` holds only the document, `oauth-client.ts` and `bundle-origins.json`. `cimd-document.test.ts`'s byte-equality case pins the literal to the static document.
+- **`mutaba3a.app` is retired:** `RETIRED_HOSTS` in `no-hardcoded-hosts.test.ts` forbids it in every non-prose file. The `mutaba3a.app` rehearsal is gone: once the domain was chosen, it could no longer fail.
+- **Serving still depends on infra built from the config:** the zone and `netlify_site_domain_settings.landing`. An apex change must keep `mtb3a.com` bound to the Netlify site and primary (DEPLOYMENT.md §5a, comments in `frontdoor/main.tf`). The vite-config test keeps every stage's `_redirects` and any forced `netlify.toml` rule off the document's path; Malafat refuses a 3xx.
+- **The bundle check allows the identity origin in one file only:** `FILE_SCOPED_ORIGINS` in `scripts/bundle-rules.ts` permits it inside `.well-known/oauth-client.json`, never bundle-wide, so a `domain: null` rollback still passes `test:bundles` and nothing else can quietly use the host.
+- **Checked live after every web release:** `make release web` runs `npm run release:oauth-client`, which waits for Netlify and fails on a 3xx, non-JSON, a mismatched `client_id` or a stale document.
+- **Tripwire:** `no-hardcoded-hosts.test.ts` fails if `config/hosts.json`'s domain stops being the identity's host, so a domain move must decide the identity's fate.
+- **What it doesn't change:** Malafat marks every CIMD client outside its allowlist UNVERIFIED (MAL-224), ours included (loopback redirects). Someone can still register `mutaba3a.app` and name a client "Mutaba3a". The move makes the one id we ship ours. Nothing calls the flow yet (TD-075).
+
 ## ADR-156: Signed In, "Download My Records" Writes the Local-Mode Records File — Built in the Portal From a Streamed Per-Profile Export (MUT-325)
 
 **Date:** 2026-10-20 · **Status:** Accepted (D1–D5 reviewed and accepted by Basel, 2026-10-20; see the members note under Consequences) · **Epic:** MUT-322 (pilot gate) · **Format owner:** MUT-286/287

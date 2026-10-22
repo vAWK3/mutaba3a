@@ -655,3 +655,38 @@ test('Picking a matter with no client fills the client, and each matter names it
     await expect(drawer.getByLabel('Matter (optional)')).toHaveValue('');
   });
 });
+
+test('Add income switched from Owed to Received after opening More details still saves (MUT-408)', { tag: '@portal.income.switch-kind' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 2 });
+  const drawer = page.getByRole('dialog', { name: 'New income' });
+
+  await step('Open Receivables and choose + Add income: Owed is chosen', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.locator('[data-income-add]').click();
+    await expect(drawer.getByRole('radio', { name: 'Owed' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  await step('Type 500, pick Client 1, and open More details', async () => {
+    await drawer.getByLabel('Amount').fill('500');
+    await pickClient(page, 'Client', 'Client 1');
+    await drawer.getByRole('button', { name: /More details/ }).click();
+    await expect(drawer.getByLabel('Due date (optional)')).toBeVisible();
+  });
+
+  await step('Switch Kind to Received and choose Bank transfer', async () => {
+    await drawer.getByRole('radio', { name: 'Received' }).click();
+    await expect(drawer.getByLabel('Due date (optional)')).toHaveCount(0);
+    await drawer.getByRole('radio', { name: 'Bank transfer' }).click();
+  });
+
+  await step('Save income', async () => {
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer).toHaveCount(0);
+    await expect(page.getByTestId('toast-live')).toHaveText(/Saved · .*500\.00.* received from .*Client 1/);
+  });
+
+  await step('The server got Received with its method and none of the Owed-only fields', async () => {
+    const post = api.last('POST', /^\/v1\/income$/);
+    expect(post?.body).toEqual({ kind: 'received', amount: '500.00', currency: 'ILS', occurredOn: todayInJerusalem(), customerId: C1, method: 'BANK' });
+  });
+});

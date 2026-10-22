@@ -3438,3 +3438,23 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `server/src/__tests__/inbox-{routes,filing}.test.ts`, `inbox/__tests__/compose.test.ts` (review) | Route + unit | +3 | capture refuses past the lenient ceiling (UTC tomorrow + 3660), accepts the ceiling day; file-as-Owed refuses a dueDate before the entry date |
 | `src/hosted/data/__tests__/incomeAffordances.test.ts`, `components/__tests__/{RedateDrawer,incomeApiErrors}.test.*` (review) | Unit + component | +5 | PENDING not settleable; `owedMayMoveAhead`; the drawer caps a paid Owed at today and says why, also on a 409 MONEY_APPLIED; settle maps RECEIVABLE_NOT_YET_DATED |
 
+
+## MUT-387 — The Malafat OAuth client identity moves to mtb3a.com (2026-10-22, ADR-155 amendment)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `scripts/__tests__/no-hardcoded-hosts.test.ts` (changed) | Unit (node, repo scan) | +2, −1 | `RETIRED_HOSTS` (`mutaba3a.app`) appears in no code, test, script, Terraform or CI file, own-value files included (red on the old tree: 6 hits). The rehearsal that could not fail is deleted. Tripwire: `config/hosts.json` production domain equals `CIMD_CLIENT_ID`'s host, so a domain move must decide the identity's fate (review fix). One shared `findings(patternsFor)` scan |
+| `scripts/__tests__/vite-config.test.ts` (changed) | Unit (node) | +4 | No `_redirects` rule at stages proxy/live/redirect covers `CIMD_CLIENT_ID`'s path, with the identity host as apex or as the legacy landing after a move; no forced `netlify.toml` rule covers it. A planted `/.well-known/*` legacy path fails it. The matcher reads a `from` as a site path or a full URL, `*` as a splat and `:name` as one segment; planted shapes (`/*`, an apex `/*` 301, `/.well-known/:file`) match and unrelated ones do not (review fix, red first) |
+| `src/services/oauth/__tests__/cimd-document.test.ts` (changed) | Unit | +1 | `client_uri` and `logo_uri` share the `client_id` origin. The existing byte-equality case pins the fixed literal. |
+| `scripts/__tests__/oauth-client-live.test.ts` (new) | Unit (node, fake fetch + clock) | 11 | The live check accepts the published document (charset and whitespace tolerated). It refuses a 3xx with its location, a non-200, a non-JSON content type, a non-JSON body, a mismatched `client_id`, and a stale copy. It waits through network errors until the deadline and checks once at 0 |
+| `scripts/__tests__/check-bundles.test.ts` (changed) | Unit (node) | +3 | `originsNeedingReview` drops an origin only in its scoped file. `FILE_SCOPED_ORIGINS` scopes the identity origin to `.well-known/oauth-client.json`, which `public/` ships. `bundle-origins.json` does not list it bundle-wide |
+| `src/services/oauth/__tests__/oauth-client.test.ts` (changed) | Unit | 0 | `CONFIG.clientId` is `CIMD_CLIENT_ID` (was a stale literal without `.json`) |
+
+Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__tests__/vite-config.test.ts src/services/oauth`; `npm run test:bundles` for the allowlist. **Not testable locally:** the live fetch. After `make release web`, run `curl -s https://mtb3a.com/.well-known/oauth-client.json | jq -r .client_id`.
+
+## MUT-408 — portal Add income saves after a kind switch with More details open (2026-10-22)
+
+| Test | Covers |
+|---|---|
+| `src/hosted/components/__tests__/IncomeCaptureDrawer.test.tsx` › MUT-408 (3) | Owed → More details → Received → Save posts Received with `method: CASH` and no Owed fields; Owed (what for + due date) → Received (Bank) → Owed posts the title and due date; Received (Bank) → Owed → Received posts `method: BANK`. Red before the keyed Due date / Method groups (`dueDate` or `method` dropped by the Controller rename) |
+| Release-QA `@portal.income.switch-kind` | Receivables → + Add income (Owed) → 500, Client 1, More details → Received, Bank transfer → Save: drawer closes, "Saved · ₪500.00 received from Client 1", POST body `{kind received, 500.00, ILS, today, C1, BANK}` |

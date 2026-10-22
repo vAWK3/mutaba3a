@@ -224,6 +224,46 @@ describe('IncomeCaptureDrawer (MUT-133)', () => {
     expect(strip(screen.getByTestId('toast-live').textContent)).toBe('Saved · ₪500.00 received');
   });
 
+  it('saves Received after switching from Owed with More details open (MUT-408)', async () => {
+    const posts = stub((r) => created(r.body));
+    const { user, onClose } = renderDrawer({ defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '500');
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    expect(screen.getByLabelText('Due date (optional)')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Received' }));
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(posts[0].body).toEqual({ kind: 'received', amount: '500.00', currency: 'ILS', occurredOn: '2026-10-14', customerId: C1, method: 'CASH' });
+  });
+
+  it('saves Owed with what it was for and a due date after a round trip through Received (MUT-408)', async () => {
+    const posts = stub((r) => created(r.body));
+    const { user, onClose } = renderDrawer({ defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '500');
+    await user.type(screen.getByLabelText('What was it for?'), 'Logo');
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    await user.type(screen.getByLabelText('Due date (optional)'), '2026-11-01');
+    await user.click(screen.getByRole('radio', { name: 'Received' }));
+    await user.click(screen.getByRole('radio', { name: 'Bank transfer' }));
+    await user.click(screen.getByRole('radio', { name: 'Owed' }));
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(posts[0].body).toEqual({ kind: 'owed', amount: '500.00', currency: 'ILS', occurredOn: '2026-10-14', customerId: C1, title: 'Logo', dueDate: '2026-11-01' });
+  });
+
+  it('saves Received after switching back from Owed with the method still set (MUT-408)', async () => {
+    const posts = stub((r) => created(r.body));
+    const { user, onClose } = renderDrawer({ initialKind: 'received', defaultCustomerId: C1 });
+    await user.type(screen.getByLabelText('Amount'), '500');
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    await user.click(screen.getByRole('radio', { name: 'Bank transfer' }));
+    await user.click(screen.getByRole('radio', { name: 'Owed' }));
+    await user.click(screen.getByRole('radio', { name: 'Received' }));
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(posts[0].body).toEqual({ kind: 'received', amount: '500.00', currency: 'ILS', occurredOn: '2026-10-14', customerId: C1, method: 'BANK' });
+  });
+
   it('summarises the hidden defaults, and opens More details when the server faults a hidden field (1A)', async () => {
     stub(() => fail(422, 'VALIDATION_FAILED', { reason: 'DATE_INVALID', field: 'occurredOn' }));
     const { user } = renderDrawer({ defaultCustomerId: C1 });

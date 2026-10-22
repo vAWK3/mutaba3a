@@ -123,6 +123,18 @@ features:
       - The refusal shows "This client isn't on this profile" under Client
       - The dropped save shows "Couldn't reach the server. Try again." and keeps the values
       - The retry saves once under the same Idempotency-Key as the dropped try (a different one from the refused body), and the entry is open on Receivables with Record payment
+  - id: switch-kind
+    title: Add income switched from Owed to Received after opening More details still saves, as Received with its method (MUT-408)
+    tier: secondary
+    steps:
+      - Open Receivables and choose + Add income
+      - Type 500, pick Client 1, and open More details
+      - Switch Kind to Received and choose Bank transfer
+      - Save income
+    expect:
+      - Owed is chosen and More details shows Due date; after the switch it shows Method instead
+      - POST /v1/income gets {kind received, amount 500.00, ILS, today, Client 1, BANK} and no Owed-only fields
+      - The drawer closes and "Saved · ₪500.00 received from Client 1" is announced
   - id: record-payment
     title: Record payment on an open Owed entry offers what is left, says what a typed amount leaves, refuses more than is left, and shows the entry partly paid
     tier: secondary
