@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect, type Step } from '../../support/qa';
 import { OFFICE_A, customer, office, type StubProfile } from '../../support/portal';
 import { traceIconScale, readIconScale } from '../../support/motion';
-import { FakeApi, STORAGE, apiError, category, expense, project, todayInJerusalem } from '../../support/portalApi';
+import { FakeApi, STORAGE, apiError, category, ceilingOf, daysAfter, expense, project, todayInJerusalem } from '../../support/portalApi';
 
 /**
  * Expenses in the portal (MUT-44): the list, the Record/Edit expense drawer and
@@ -303,12 +303,6 @@ test('An expense changed on another device: Save is refused, the drawer shows th
   });
 });
 
-const daysAfter = (iso: string, days: number) => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-};
-
 test('An expense may be dated ahead up to ten years; the server’s ten-year refusal is said at the date (MUT-392)', { tag: '@portal.expenses.date-too-far' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, categories: [office_] });
   const drawer = page.getByRole('dialog', { name: 'Record expense' });
@@ -317,7 +311,7 @@ test('An expense may be dated ahead up to ten years; the server’s ten-year ref
   await step('Open Expenses and choose Record expense', async () => {
     await api.open(page, `/p/${OFFICE_A}/expenses`);
     await page.getByRole('button', { name: 'Record expense' }).first().click();
-    await expect(drawer.getByLabel('Date')).toHaveAttribute('max', daysAfter(todayInJerusalem(), 3660));
+    await expect(drawer.getByLabel('Date')).toHaveAttribute('max', ceilingOf(todayInJerusalem()));
   });
 
   await step('Type 40, pick Office supplies, set the date 3 days ahead and save', async () => {

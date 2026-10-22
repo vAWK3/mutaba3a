@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { FIRM, OFFICE_A, customer, malafatFirm, office } from '../../support/portal';
-import { FakeApi, allocation, apiError, customerSummary, payment, project, receivable, todayInJerusalem } from '../../support/portalApi';
+import { FakeApi, allocation, apiError, ceilingOf, customerSummary, daysAfter, payment, project, receivable, todayInJerusalem } from '../../support/portalApi';
 
 /**
  * Income on an owned hosted profile (MUT-133): Add income (Received or Owed)
@@ -306,14 +306,7 @@ test('Add income from a client’s page starts as Owed with that client filled i
 
 const owedEntry = () => receivable(31, { customerId: C1, gross: '500.00', dueDate: '2026-11-15', postingDate: '2026-10-08' });
 const receivedEntry = () => payment(41, { customerId: C1, amount: '300.00', receivedOn: '2026-10-08', mine: true });
-const daysAfter = (iso: string, days: number) => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-};
 const dayAfter = (iso: string) => daysAfter(iso, 1);
-/** MUT-392: the latest Owed or expense date the server takes, today + 3660 days. */
-const ceilingOf = (iso: string) => daysAfter(iso, 3660);
 
 test('An Owed entry’s date is changed from Receivables; the Date column shows it and its due date stays', { tag: '@portal.income.redate-owed' }, async ({ page, step }) => {
   const owed = owedEntry();
