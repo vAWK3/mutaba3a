@@ -80,12 +80,12 @@ App access):
 ```bash
 export MUTABA3A_ADMIN_TOKEN=$(gcloud secrets versions access latest \
   --secret=mutaba3a-api-admin-token --project=$GCP_PROJECT_ID)
-npm run seed:demo-account -- --url "$URL" --email review@mutaba3a.app --name "App Review"
+npm run seed:demo-account -- --url "$URL" --email review@mtb3a.com --name "App Review"
 ```
 
 To refresh its data later **without** breaking the credentials you handed out
 (a rotation also signs the reviewer out), pass the current password back:
-`MUTABA3A_SEED_PASSWORD='<current>' npm run seed:demo-account -- --url "$URL" --email review@mutaba3a.app`.
+`MUTABA3A_SEED_PASSWORD='<current>' npm run seed:demo-account -- --url "$URL" --email review@mtb3a.com`.
 A wrong value fails without touching the account.
 
 Every script takes `--url` (default `http://localhost:8787`). Password hashing

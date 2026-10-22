@@ -52,6 +52,8 @@ resource "google_secret_manager_secret_version" "front_door_token" {
 # ---------------------------------------------------------------------------
 # DNS and TLS (Cloudflare). If the domain was bought at Cloudflare Registrar the zone
 # already exists: `terraform import 'cloudflare_zone.this[0]' <zone-id>` first (§5a).
+# The apex record stays DNS-only with no Worker route or redirect rule: it serves the Malafat
+# OAuth client document (MUT-387; see netlify_site_domain_settings below).
 # ---------------------------------------------------------------------------
 
 resource "cloudflare_zone" "this" {
@@ -131,6 +133,9 @@ resource "cloudflare_workers_route" "portal" {
 
 # ---------------------------------------------------------------------------
 # The landing's custom domain (Netlify). netlify.app keeps answering beside it.
+# The apex must stay the PRIMARY domain: it serves the Malafat OAuth client document
+# (src/services/oauth/oauth-client.ts, MUT-387), a fixed URL Malafat refuses behind any 3xx.
+# Making www primary 301s the apex; changing the domain unbinds the old one. See §5a.
 # ---------------------------------------------------------------------------
 
 resource "netlify_site_domain_settings" "landing" {

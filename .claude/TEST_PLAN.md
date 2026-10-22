@@ -3418,3 +3418,14 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `server/src/repositories/__tests__/store-prisma-entries-plan.test.ts` (changed; test:db) | Query plan | +5 | each kind's money-date query uses its new index (first page, past a cursor, from a day, all bounds together in `Index Cond`); `loggedSince`+`occurredBefore` stays a `createdAt >=` range |
 | `server/src/repositories/__tests__/store-prisma-entries-fanout.test.ts` (changed) | Unit (fake Prisma) | +1 | at most 4 queries in flight under both orders |
 | review fixes (/qa-reconcile, 2026-10-22) | Unit + route + contract | +7 | the default order's malformed-cursor error is byte-identical to `pagination.ts`; a cursor instant past ±8.64e15 is 422; each store refuses the other order's cursor; `loggedSince` older than 31 days is 422 (31 accepted); offsets read as the instant they name; `loggedSince` alone filters and pages; the day filters apply to every kind by its own money date (memory + Postgres) |
+
+## MUT-387 — The Malafat OAuth client identity moves to mtb3a.com (2026-10-22, ADR-155 amendment)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `scripts/__tests__/no-hardcoded-hosts.test.ts` (changed) | Unit (node, repo scan) | +1, −1 | `RETIRED_HOSTS` (`mutaba3a.app`) appears in no code, test, script, Terraform or CI file, own-value files included (red on the old tree: 6 hits). The rehearsal that could not fail is deleted |
+| `scripts/__tests__/vite-config.test.ts` (changed) | Unit (node) | +3 | No `_redirects` rule at stages proxy/live/redirect covers `CIMD_CLIENT_ID`'s path, with the identity host as apex or as the legacy landing after a move; no forced `netlify.toml` rule covers it. A planted `/.well-known/*` legacy path fails it |
+| `src/services/oauth/__tests__/cimd-document.test.ts` (changed) | Unit | +1 | `client_uri` and `logo_uri` share the `client_id` origin. The existing byte-equality case pins the fixed literal |
+| `src/services/oauth/__tests__/oauth-client.test.ts` (changed) | Unit | 0 | `CONFIG.clientId` is `CIMD_CLIENT_ID` (was a stale literal without `.json`) |
+
+Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__tests__/vite-config.test.ts src/services/oauth`; `npm run test:bundles` for the allowlist. **Not testable locally:** the live fetch. After `make release web`, run `curl -s https://mtb3a.com/.well-known/oauth-client.json | jq -r .client_id`.

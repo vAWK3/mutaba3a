@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — The Malafat OAuth client identity moves to mtb3a.com; mutaba3a.app is retired (MUT-387, ADR-155 amendment)
+
+**Why:** the CIMD client id named `https://mutaba3a.app/...`, a domain nobody owns. Whoever registered it could publish a client document under our id.
+
+### Changed
+- `CIMD_CLIENT_ID` and `public/.well-known/oauth-client.json` (`client_id`, `client_uri`, `logo_uri`) are on `https://mtb3a.com`. The id is a fixed literal, never derived from `config/hosts.json`.
+- `scripts/bundle-origins.json`: `https://mtb3a.com` replaces `https://mutaba3a.app` in `local`, so a `domain: null` rollback still passes `test:bundles`.
+- `no-hardcoded-hosts.test.ts`: `OWN_VALUE_FILES` shrinks to three files. `RETIRED_HOSTS` forbids `mutaba3a.app` in every non-prose file. The `mutaba3a.app` rehearsal is deleted.
+- `vite-config.test.ts`: no `_redirects` rule at any stage, and no forced `netlify.toml` rule, covers the document's path.
+- `cimd-document.test.ts`: `client_uri` and `logo_uri` share the `client_id` origin. `oauth-client.test.ts` imports the constant.
+- `server/DEPLOYMENT.md` §5a "What doesn't move" and `frontdoor/main.tf` comments: serving the document depends on the config-built zone and Netlify binding. `server/README.md`: the reviewer seed example is `review@mtb3a.com`.
+
+**Release:** the next `make release web` publishes the new document. Then `curl -s https://mtb3a.com/.well-known/oauth-client.json | jq -r .client_id` should print that URL. Operator check (Malafat): in each tenant schema, list `oauth_clients` rows with the old id before deleting any.
+
 ## [Unreleased] - 2026-10-22 — The privacy policy says the phone apps send error reports (MUT-151, ADR-091 amendment 10)
 
 **Why:** the Capture app reports crashes to Sentry from its next store release (mutaba3a-flutter `feature/mut-151-phone-sentry`), and the policy describes only what is live (ADR-090 P3).
