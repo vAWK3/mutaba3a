@@ -20,7 +20,7 @@ const admin = { 'x-admin-token': ADMIN_TOKEN };
 const COOKIE = '__Host-mut_session';
 const SAME_ORIGIN = { origin: 'http://localhost' };
 
-function harness(opts: { bucket?: boolean; uploadsPerMinute?: number } = {}) {
+function harness(opts: { bucket?: boolean; uploadsPerMinute?: number; receiptsLibrary?: boolean } = {}) {
   const store = new MemoryLedgerStore();
   const storage = new MemoryAttachmentStorage();
   const clock = { now: new Date('2026-10-22T21:30:00Z') };
@@ -35,6 +35,7 @@ function harness(opts: { bucket?: boolean; uploadsPerMinute?: number } = {}) {
     attachments: opts.bucket === false ? null : storage,
     attachmentUrlTtlSeconds: 600,
     receiptUploadLimiter: new SlidingWindowRateLimiter(opts.uploadsPerMinute ?? 1_000),
+    receiptsLibrary: opts.receiptsLibrary ?? true,
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 },
   });
   return { app, store, storage, clock };
@@ -45,7 +46,7 @@ const json = (body: unknown, headers: Record<string, string> = {}, method = 'POS
 let ik = 0;
 const idem = () => ({ 'idempotency-key': `key-${++ik}-${Math.random().toString(36).slice(2, 8)}` });
 
-async function setup(opts: { bucket?: boolean; uploadsPerMinute?: number } = {}) {
+async function setup(opts: { bucket?: boolean; uploadsPerMinute?: number; receiptsLibrary?: boolean } = {}) {
   const h = harness(opts);
   const org = await read(await h.app.request('/admin/v1/organizations', json({ name: `Firm ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
   const other = await read(await h.app.request('/admin/v1/organizations', json({ name: `Other ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
@@ -363,6 +364,19 @@ describe('access and configuration', () => {
       expect(res.status, `${init.method ?? 'GET'} ${path}`).toBe(503);
       expect((await read(res)).error.code).toBe('ATTACHMENTS_NOT_CONFIGURED');
     }
+  });
+
+  it('mounts none of the library while RECEIPTS_LIBRARY is off (MUT-389, the production default until MUT-260/258)', async () => {
+    const { h, as } = await setup({ receiptsLibrary: false });
+    const id = '00000000-0000-4000-8000-0000000000aa';
+    const calls: Array<[string, RequestInit]> = [
+      ['/v1/receipts/uploads', json(FILE, { ...as(), ...idem() })],
+      ['/v1/receipts', { headers: as() }],
+      ['/v1/receipts/counts', { headers: as() }],
+      [`/v1/receipts/${id}/approve`, json(approveBody, { ...as(), ...idem() })],
+      [`/v1/receipts/${id}/file`, json({ expenseId: id }, { ...as(), ...idem() })],
+    ];
+    for (const [path, init] of calls) expect((await h.app.request(path, init)).status, `${init.method ?? 'GET'} ${path}`).toBe(404);
   });
 
   it("refuses Malafat's API key", async () => {

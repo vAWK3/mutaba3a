@@ -174,6 +174,8 @@ beforeAll(async () => {
     adminToken: ADMIN_TOKEN,
     keyEnvironment: 'test',
     version: 'test',
+    // The whole session surface, the receipts library included (on wherever RECEIPTS_LIBRARY is set).
+    receiptsLibrary: true,
   });
   const doc = (await (await app.request('/openapi.json')).json()) as { paths: Record<string, Record<string, Loose>> };
   operations = Object.entries(doc.paths)

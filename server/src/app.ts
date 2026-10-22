@@ -94,6 +94,11 @@ export interface AppDependencies {
   stripeWebhookIpLimiter?: RateLimiter;
   /** MUT-255: per-person budget for starting receipts-library uploads. Defaults to RECEIPT_UPLOAD_POLICY. */
   receiptUploadLimiter?: RateLimiter;
+  /**
+   * MUT-389 (RECEIPTS_LIBRARY): mounts the receipts library and makes deleting an expense keep its READY receipts To
+   * review. Absent or false = no /v1/receipts* routes, and a deleted expense takes its receipts with it (pre-MUT-255).
+   */
+  receiptsLibrary?: boolean;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
 }
@@ -266,20 +271,23 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     fxRates: deps.fxRates ?? null,
     terms,
     billing: true,
-    receiptsLibrary: true,
+    receiptsLibrary: deps.receiptsLibrary ?? false,
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.
   app.route('/', recordsExportRoutes(store, { storage: deps.attachments ?? null, logger: deps.logger }));
   // MUT-255 (decision P1): the receipts library is hosted only, so outside PORTAL_ROUTES; signed-out local mode has none.
-  app.route(
-    '/',
-    receiptRoutes(store, {
-      storage: deps.attachments ?? null,
-      urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900,
-      uploadLimiter: deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute),
-    }),
-  );
+  // MUT-389: and only where RECEIPTS_LIBRARY turns it on.
+  if (deps.receiptsLibrary) {
+    app.route(
+      '/',
+      receiptRoutes(store, {
+        storage: deps.attachments ?? null,
+        urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900,
+        uploadLimiter: deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute),
+      }),
+    );
+  }
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));

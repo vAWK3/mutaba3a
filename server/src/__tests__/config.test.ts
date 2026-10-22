@@ -96,6 +96,18 @@ describe('loadConfig — custom-domain front door (MUT-326)', () => {
   });
 });
 
+describe('loadConfig — receipts library switch (MUT-389)', () => {
+  it('is off unless RECEIPTS_LIBRARY is exactly "true"; "false" is off (z.coerce.boolean would read it as on)', () => {
+    expect(loadConfig(base).RECEIPTS_LIBRARY).toBe(false);
+    expect(loadConfig({ ...base, RECEIPTS_LIBRARY: 'false' }).RECEIPTS_LIBRARY).toBe(false);
+    expect(loadConfig({ ...base, RECEIPTS_LIBRARY: 'true' }).RECEIPTS_LIBRARY).toBe(true);
+  });
+
+  it.each(['1', 'yes', 'TRUE', ''])('refuses RECEIPTS_LIBRARY=%j', (value) => {
+    expect(() => loadConfig({ ...base, RECEIPTS_LIBRARY: value })).toThrow(/RECEIPTS_LIBRARY/);
+  });
+});
+
 describe('loadConfig — device sessions (MUT-64)', () => {
   it('defaults idle to 30 days, absolute to 180 days', () => {
     const config = loadConfig(base);
