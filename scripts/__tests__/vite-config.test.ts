@@ -175,12 +175,30 @@ describe('vite.config', () => {
      */
     describe('never redirects the Malafat OAuth client document (MUT-387)', () => {
       const cimd = new URL(CIMD_CLIENT_ID);
-      const matches = (from: string) =>
-        from.endsWith('/*') ? `${cimd.origin}${cimd.pathname}`.startsWith(from.slice(0, -1)) : from === `${cimd.origin}${cimd.pathname}`;
+      const target = `${cimd.origin}${cimd.pathname}`;
+      const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      /** A Netlify `from` (a path on this site or a full URL; `*` splats the rest, `:name` is one segment) covering the document. */
+      const matches = (from: string) => {
+        const absolute = /^https?:\/\//.test(from) ? from : `${cimd.origin}${from}`;
+        const pattern = absolute
+          .split('/')
+          .map((segment) => (segment === '*' ? '.*' : segment.startsWith(':') ? '[^/]+' : escapeRegExp(segment)))
+          .join('/');
+        return new RegExp(`^${pattern}$`).test(target);
+      };
       const cases = {
         'the identity host is the apex': { domain: cimd.hostname },
         'the identity host is the legacy landing after an apex move': { domain: 'placeholder.example', legacy: { ...LEGACY, landing: cimd.origin } },
       };
+
+      it('recognises every Netlify `from` shape that would cover the document', () => {
+        for (const from of [`${cimd.origin}/*`, '/*', '/.well-known/*', `${cimd.origin}/.well-known/:file`, '/:dir/oauth-client.json', cimd.pathname]) {
+          expect(matches(from), from).toBe(true);
+        }
+        for (const from of ['/download/mac', '/app/*', `${cimd.origin}/app`, 'https://placeholder.example/*', '/.well-known/apple-app-site-association']) {
+          expect(matches(from), from).toBe(false);
+        }
+      });
 
       for (const [name, env] of Object.entries(cases)) {
         it(`emits no _redirects rule for it at any stage when ${name}`, () => {
@@ -196,7 +214,7 @@ describe('vite.config', () => {
         const rules = readFileSync(repoPath('netlify.toml'), 'utf8').split('[[redirects]]').slice(1);
         const forced = rules.filter((rule) => /^\s*force\s*=\s*true/m.test(rule));
         const froms = forced.map((rule) => /^\s*from\s*=\s*"([^"]+)"/m.exec(rule)?.[1] ?? '');
-        expect(froms.map((from) => `${cimd.origin}${from}`).filter(matches)).toEqual([]);
+        expect(froms.filter(matches)).toEqual([]);
       });
     });
   });

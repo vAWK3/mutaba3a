@@ -86,7 +86,11 @@ npm run seed:demo-account -- --url "$URL" --email review@mtb3a.com --name "App R
 To refresh its data later **without** breaking the credentials you handed out
 (a rotation also signs the reviewer out), pass the current password back:
 `MUTABA3A_SEED_PASSWORD='<current>' npm run seed:demo-account -- --url "$URL" --email review@mtb3a.com`.
-A wrong value fails without touching the account.
+A wrong value fails without touching the account. Pass the address the existing
+account actually has: a different `--email` creates a second account with a new
+password. An account created before MUT-387 may still use the old, unowned
+`mutaba3a.app` domain; keep using its address until the stored email is migrated
+(see MUT-359), then hand the reviewers the new one.
 
 Every script takes `--url` (default `http://localhost:8787`). Password hashing
 is argon2id; `ARGON2_MEMORY_KIB` / `ARGON2_TIME_COST` / `ARGON2_PARALLELISM`

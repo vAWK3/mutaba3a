@@ -40,6 +40,13 @@
 - `cimd-document.test.ts`: `client_uri` and `logo_uri` share the `client_id` origin. `oauth-client.test.ts` imports the constant.
 - `server/DEPLOYMENT.md` §5a "What doesn't move" and `frontdoor/main.tf` comments: serving the document depends on the config-built zone and Netlify binding. `server/README.md`: the reviewer seed example is `review@mtb3a.com`.
 
+### Review fixes (/qa-reconcile, 2026-10-22)
+- `vite-config.test.ts`: the no-redirect matcher reads Netlify `from`s as paths or full URLs, with `*` splats and `:name` segments. It was blind to a forced apex `/*` 301 and to placeholder rules.
+- `no-hardcoded-hosts.test.ts`: tripwire, `config/hosts.json`'s domain must equal the identity's host, so a domain move decides its fate on purpose. Both repo scans share one `findings(patternsFor)`.
+- `cimd-document.test.ts`: `bundle-origins.json` `local` must list the identity's origin.
+- DEPLOYMENT.md §5a: keep the apex record and the Netlify binding together, since a dangling record allows a takeover. The stale `api.mutaba3a.app` plan line is gone. `server/README.md`: refresh the reviewer account with the address it actually has.
+- `docs/operations/before-release.md` (web): the post-release live check of the document and the Malafat `oauth_clients` count.
+
 **Release:** the next `make release web` publishes the new document. Then `curl -s https://mtb3a.com/.well-known/oauth-client.json | jq -r .client_id` should print that URL. Operator check (Malafat): in each tenant schema, list `oauth_clients` rows with the old id before deleting any.
 
 ## [Unreleased] - 2026-10-22 — The privacy policy says the phone apps send error reports (MUT-151, ADR-091 amendment 10)

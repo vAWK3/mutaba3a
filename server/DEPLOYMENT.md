@@ -758,6 +758,9 @@ stack. Cloud Run reads the token secret by name, so deleting it first breaks the
     apex, and Malafat refuses any 3xx (`cimd-fetcher.ts`).
   - The apex record stays DNS-only, with no Worker route or redirect rule. The vite-config test
     keeps Netlify's own rules off the path at every stage.
+  - Keep or remove the zone's apex record and the Netlify domain binding **together**. An apex
+    record still pointing at Netlify after the binding is gone is a dangling record: whoever adds
+    `mtb3a.com` to their own Netlify site then serves a client document under our id.
   - Rollback rows 1–2 and the planned Cloudflare-account split take the document offline until
     the zone is back. Nothing calls the flow today (TD-075), so no user notices.
 - **Browser-saved passwords** in Safari/iCloud Keychain and Chrome are tied to run.app. They
@@ -1340,9 +1343,9 @@ Also still unconfirmed: the daily `npm run reconcile` schedule
 4. **Confirm or create the daily reconcile run.**
 5. **Hosted portal:** MUT-43 (read views) and MUT-44 (expense capture) built
    the pages; MUT-45 serves them live from this service, on the same origin as
-   the API (§4c). Still open: a branded custom domain (`api.mutaba3a.app`),
-   deliberately out of MUT-45's scope — would need a proxy or load balancer in
-   front of the one service and its own ticket (§5).
+   the API (§4c). The branded custom domain was out of MUT-45's scope; it
+   shipped later as `app.<apex>` behind the Cloudflare Worker front door
+   (MUT-326/MUT-112, §5a). `mutaba3a.app` was never ours (MUT-387): don't use it.
 6. **Debt that gates scale, not the pilot:**
    - TD-017 (one instance until a shared rate limiter exists);
    - TD-041 (the expense summary aggregates in the service);

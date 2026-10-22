@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import raw from '../../config/hosts.json';
 import { parseHostsConfig } from '../../config/hosts';
+import { CIMD_CLIENT_ID } from '../../src/services/oauth/oauth-client';
 
 /**
  * MUT-326 AC1 (ADR-155): our public hosts live in config/hosts.json and nowhere else,
@@ -76,7 +77,8 @@ describe('no hardcoded hosts (MUT-326)', () => {
     expect(hardcodedHosts('const ok = "https://example.a.run.app";', planted)).toEqual([]);
   });
 
-  function findings(legacy: RegExp[], domains: RegExp[]): string[] {
+  /** Every scanned file's hits, each file checked against the patterns `patternsFor` picks for it. */
+  function findings(patternsFor: (file: string) => RegExp[]): string[] {
     return scannedFiles().flatMap((file) => {
       let text: string;
       try {
@@ -84,28 +86,27 @@ describe('no hardcoded hosts (MUT-326)', () => {
       } catch {
         return []; // deleted in the working tree
       }
-      const filePatterns = OWN_VALUE_FILES.has(file) ? legacy : [...legacy, ...domains];
-      return hardcodedHosts(text, filePatterns).map((hit) => `${file}:${hit}`);
+      return hardcodedHosts(text, patternsFor(file)).map((hit) => `${file}:${hit}`);
     });
   }
 
   it('finds our hosts in no code, test, script, Terraform or CI file outside config/hosts.json', () => {
-    expect(findings(legacyPatterns(raw), domainPatterns(raw)), 'read the host from config/hosts.ts, `npm run hosts -- get`, or Terraform var.hosts_file').toEqual([]);
+    const legacy = legacyPatterns(raw);
+    const all = [...legacy, ...domainPatterns(raw)];
+    expect(findings((file) => (OWN_VALUE_FILES.has(file) ? legacy : all)), 'read the host from config/hosts.ts, `npm run hosts -- get`, or Terraform var.hosts_file').toEqual([]);
   });
 
   it('names no retired host in any code, test, script, Terraform or CI file, own-value files included', () => {
     const retired = RETIRED_HOSTS.map(hostPattern);
-    const hits = scannedFiles()
-      .filter((file) => file !== THIS_FILE)
-      .flatMap((file) => {
-        let text: string;
-        try {
-          text = readFileSync(file, 'utf8');
-        } catch {
-          return [];
-        }
-        return hardcodedHosts(text, retired).map((hit) => `${file}:${hit}`);
-      });
-    expect(hits).toEqual([]);
+    expect(findings((file) => (file === THIS_FILE ? [] : retired))).toEqual([]);
+  });
+
+  it('keeps the OAuth client identity on the configured apex, so a domain move must decide its fate (MUT-387)', () => {
+    // The identity is a fixed literal, but Netlify serves it only while its host is the site's
+    // primary domain, and Terraform builds that binding from this config.
+    const message =
+      'Moving the apex? Keep the OAuth client identity host bound to the Netlify site (alias) with its zone, ' +
+      'per server/DEPLOYMENT.md §5a "What doesn\'t move", then update this check';
+    expect(raw.production.domain, message).toBe(new URL(CIMD_CLIENT_ID).hostname);
   });
 });

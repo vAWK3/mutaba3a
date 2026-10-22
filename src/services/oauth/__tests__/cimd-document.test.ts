@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { OAUTH_LOOPBACK_PORTS, loopbackRedirectUris, CIMD_CLIENT_ID } from '../oauth-client';
+import origins from '../../../../scripts/bundle-origins.json';
 
 /**
  * Guards the Client ID Metadata Document we publish at CIMD_CLIENT_ID. Byte-equality with
@@ -89,6 +90,12 @@ describe('published CIMD document', () => {
     const { client_uri, logo_uri } = loadDocument();
     expect(new URL(String(client_uri)).origin).toBe(origin);
     expect(new URL(String(logo_uri)).origin).toBe(origin);
+  });
+
+  it('allowlists its origin for the local bundles without relying on config/hosts.json (MUT-387)', () => {
+    // dist-web and dist-desktop ship this document; after a `domain: null` rollback the config no
+    // longer names its origin, so bundle-origins.json must, or test:bundles fails.
+    expect(origins.local).toContain(new URL(CIMD_CLIENT_ID).origin);
   });
 
   it('declares a client_id the server will accept as a CIMD URL', () => {
