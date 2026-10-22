@@ -3671,6 +3671,16 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Unchanged.** The team slug, the `mutaba3a-…` project slugs, the scrub contract, the daily caps and the org privacy settings. The wrong-org guard (D16) still refuses any project that isn't `mutaba3a-…`.
 - **Before another product joins the org**, TD-198 has to be fixed: the guard would refuse the org, the org-wide privacy settings (`require2FA`, `enhancedPrivacy`, sensitive fields) would apply to that product too, and the free plan's one quota would be split.
 
+**Amendment 6 (MUT-148 build, 2026-10-22)**: the API surface. Basel's answers D1–D5 in `.claude/designs/mut-148-api-sentry.md`.
+- **SDK (D2).** `@sentry/node-core/light` 10.76.2, exact pin: errors only, no OpenTelemetry installed, default integrations off (only event filters, function-to-string, linked errors, dedupe, context lines, node context, uncaught exception, unhandled rejection in `strict` mode, which keeps Node 22's crash).
+- **One seam.** `server/src/observability/`: `sentry-rules.ts` (the contract embedded, parity-tested), `sentry-scrub.ts` (the pure whole-event scrubber, every surface's fixtures; MUT-149/150 reuse it), `reporter.ts` (`ErrorReporter`, `NOOP_REPORTER`, `runScript`, `shutdownAndFlush`) and `sentry-node.ts`, the only SDK importer. `app-shell.ts` takes the reporter by injection because the portal's local mode bundles it; a root test walks the import graph to prove the local app never reaches `@sentry/`.
+- **What reports.** Exactly what `onError` already logs as an error: unknown errors and ApiErrors at `serverReportsStatusAtLeast` (500) or higher, tagged `request_id` and the route template. Pre-roll and post-roll report their crashes (D3 default: no new tag; the frames name the script). `server_name` is fixed to `mutaba3a-api`, because the SDK would otherwise send the host name, which on the operator's laptop is a person's.
+- **Release and environment.** `mutaba3a-api@<server package.json version>+<SERVICE_VERSION>`; `SENTRY_ENVIRONMENT` (Terraform sets the environment), defaulting to `NODE_ENV`.
+- **Config.** `SENTRY_DSN` is optional and must match the EU DSN shape at boot, the same rule as the Sentry stack's postcondition and `sentry.tf`'s precondition (D5).
+- **Infra.** `sentry_enabled` (default false) reads the stack's `dsn` with `terraform_remote_state`, stores `mutaba3a-api-sentry-dsn`, mounts it; `guard_sentry_release` refuses a release that would unmount it, as the Stripe guard does.
+- **Proof in production (D4).** `/health` reports `errorReporting: on|off` (API 1.47.0-mut148) and every release smoke checks it; `npm run sentry:smoke` sends one deliberate event.
+- **Privacy (D5).** The policy names only the servers as senders until MUT-149..151 ship their surfaces (ADR-090 P3).
+
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
 **Status**: Accepted (2026-10-17, MUT-157; auto-decided on the recommended option at Basel's request, C1)

@@ -211,6 +211,14 @@
 **Impact**: the 200-group cap counts live groups only, so create-and-delete churn grows `expense_groups` without bound. The list index `(organizationId, startOn DESC, id DESC)` includes the dead rows.
 **Fix**: a partial index `WHERE "deletedAt" IS NULL` in place of the full one.
 
+### TD-199: A "not configured" 503 is reported like a crash
+**Status**: Open
+**Ticket**: none (MUT-148, ADR-091 amendment 6)
+**Added**: 2026-10-22
+**Priority**: Low (the api key is capped at 60 events a day, so the worst case is a lost day of reports)
+**Impact**: `onError` reports every ApiError at 500 or higher, as the ticket asks, and that includes the configuration states `ATTACHMENTS_NOT_CONFIGURED`, `BILLING_NOT_CONFIGURED`, `JOBS_NOT_CONFIGURED` and `FX_RATES_UNAVAILABLE`. A bot probing `/v1/billing/stripe/webhook` while `stripe_enabled` is false (or `/jobs/*` without the job token) files a report per hit and can use up the api key's daily cap, hiding real errors for the rest of that day. The pino log line is unchanged.
+**Fix**: mark the configuration-state codes in `ERROR_CODES` and skip them in `onError`'s report (keep the log), or let Sentry's own fingerprinting plus an inbound filter drop them. Do it if a day's cap is ever spent on them (the api project's quota view shows it).
+
 ### TD-198: The Sentry settings script assumes the org holds only Mutaba3a projects
 **Status**: Open
 **Ticket**: none (ADR-091 amendment 5)

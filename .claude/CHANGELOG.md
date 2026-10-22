@@ -28,6 +28,32 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — The API server reports its errors to Sentry (MUT-148, API 1.47.0)
+
+**Why:** a failing request was found only when a user complained: `onError` logged to pino and nothing else.
+ADR-091 amendment 6; plan and decisions D1–D5 in `.claude/designs/mut-148-api-sentry.md`.
+
+### Added
+- `server/src/observability/`: the embedded Sentry rules, the pure whole-event scrubber, the `ErrorReporter` seam
+  (`NOOP_REPORTER`, `runScript`, `shutdownAndFlush`) and `sentry-node.ts`, the only importer of
+  `@sentry/node-core/light` 10.76.2.
+- `onError` reports unknown errors and ApiErrors ≥ 500 with `request_id` and the route template; never below 500.
+- Release `mutaba3a-api@<package version>+<SERVICE_VERSION>`; pending reports are flushed on SIGTERM (2 s).
+- Pre-roll and post-roll report their crashes; deploy.sh hands them the DSN from Secret Manager.
+- Config `SENTRY_DSN` (EU-region shape only) and `SENTRY_ENVIRONMENT` (default `NODE_ENV`).
+- `/health` `errorReporting: on|off`; `smoke.ts --expect-error-reporting`; `npm run sentry:smoke`.
+- Terraform `sentry_enabled` (default false) + `sentry.tf`; `guard_sentry_release` in `release-guard.sh`.
+- Privacy policy (en + ar): an Error reports section; "No ads, no tracking" drops the no-crash-reporting promise;
+  Sentry named among processors. Server-only wording (D5).
+- Tests: `scripts/__tests__/sentry-server-scrub.test.ts` (in contracts-ci) and `sentry-local-boundary.test.ts`;
+  server `sentry-reporter`, `error-reporting`, config, smoke and release-guard cases; `tests/sentry_dsn.tftest.hcl`;
+  release-QA `web.legal.privacy-error-reports`.
+
+### Changed
+- Every server Prisma client uses `errorFormat: 'minimal'` (contract `serverPrismaErrorFormat`), so Prisma's error
+  text in pino logs is shorter too.
+- TD-199: "not configured" 503s are reported like crashes.
+
 ## [Unreleased] - 2026-10-22 — The receipts library: a receipt can wait To review before its expense (MUT-255, API 1.46.0)
 
 **Why:** Receipt scanning (MUT-252) saves the original the moment it is shared and lets the person check what was read

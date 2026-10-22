@@ -2626,3 +2626,9 @@ the values already stored, and the reader should stop trusting a covering state 
 When two paths both decide from a row and write it (`saveAccount` and `linkAccount`), lock it `FOR UPDATE` first, then
 any second row, in the same order on both paths; re-read after locking, and write only the fields this call decided.
 Never write back a value read before the lock. Pin it with a `Promise.all` contract test that runs on Postgres.
+
+### Error reports go through an injected `ErrorReporter`, never the SDK (MUT-148)
+Server code that reports takes an `ErrorReporter` (`server/src/observability/reporter.ts`), defaulting to
+`NOOP_REPORTER`; only `index.ts` and the operator scripts build the real one (`sentry-node.ts`). Report exactly
+where you already log at error level, never more. Shared server code is bundled into the portal's local mode,
+which must send nothing (ADR-024), and `sentry-local-boundary.test.ts` fails if its import graph reaches `@sentry/`.

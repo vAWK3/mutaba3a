@@ -3365,3 +3365,17 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Scripts (review) | `pre-roll.test.ts` | BOOKKEEPER rows pass; built-in personal profile strays; confirm clears a flagged row |
 | Portal (review) | `ProfileOwnersSection.test.tsx`, `endSession.test.ts`, `RedateDrawer.test.tsx`, `incomeAffordances.test.ts` | focus to next Remove (fails on the old code), cancel, NOT_CREATOR, close while pending, leave errors/404/not-open, lost-access dismiss/deep link/sign-out reset, partner's Owed entry not re-datable |
 | Release-QA | `portal.profiles.co-owner-write|remove|leave|removed|full-rights` | recorded flows |
+
+## API error reports to Sentry (MUT-148, added 2026-10-22)
+
+| Layer | File | Covers |
+|---|---|---|
+| Contract (root, contracts-ci) | `scripts/__tests__/sentry-server-scrub.test.ts` | embedded rules equal `sentry-rules.json` field by field; every surface's fixtures exact; AC4 body/cookie/Authorization/API key gone; ignored errors per surface; SDK-shaped breadcrumbs; input not mutated |
+| Boundary (root) | `scripts/__tests__/sentry-local-boundary.test.ts` | nothing reachable from `createLocalApp.ts` or `app-shell.ts` imports `@sentry/` or `sentry-node.ts`; walker sanity |
+| Unit (server) | `sentry-reporter.test.ts` | no DSN = no-op; event tags/release/environment/server_name; scrubber runs; AbortError dropped; integration list; script reporter EU check; `shutdownAndFlush` order and failed disconnect; `runScript` crash/success |
+| Route (server) | `error-reporting.test.ts` | unknown error and ApiError ≥ 500 reported with request id and route template; 4xx and unparseable body never; createApp wiring; `/health` errorReporting |
+| Config / smoke | `config.test.ts`, `smoke.test.ts` | EU DSN only, SENTRY_ENVIRONMENT default; `--expect-error-reporting` pass/fail |
+| Deploy | `release-guard.test.ts` | `guard_sentry_release` refuse/allow/fail-closed/skip; deploy.sh wiring (smoke flag, script DSN) |
+| Terraform | `tests/sentry_dsn.tftest.hcl` | off by default; on mounts the secret from remote state; US DSN refused |
+| UI / Release-QA | `PrivacyPolicyPage.test.tsx`, `web.legal.privacy-error-reports` | Error reports section en + ar, server-only wording |
+| Manual | `npm run sentry:smoke` (DEPLOYMENT.md §1.5 step 8) | one real event lands in `mutaba3a-api` |

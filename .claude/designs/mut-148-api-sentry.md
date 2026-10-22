@@ -136,6 +136,18 @@ Complexity: about 22 files touched or added, 6 new modules → structure questio
 - D4 Smoke → **/health flag + laptop event**: `/health` adds `errorReporting: "on" | "off"` (OpenAPI change → API minor bump `-mut148`, `openapi:check`), `smoke.ts` asserts `"on"` once `sentry_enabled` (deploy.sh passes the expectation), plus `npm run sentry:smoke` (operator, one event through the real scrubber). Approved.
 - D5 Privacy → **server-only wording now**, en + ar as drafted above; MUT-149 extends it. Approved.
 
+## Build notes (eng-build, 2026-10-22)
+
+- **SDK entry.** `@sentry/node-core/light` 10.76.2 (published 2026-10-08). node-core's OpenTelemetry peers are optional and not installed; `light` runs without them. A probe confirmed init, capture and an injected transport.
+- **`server_name`.** Not in the plan: the SDK sends the host name by default, which on the operator's laptop (pre-roll, post-roll) is a person's name. Fixed to `mutaba3a-api`, with a test.
+- **D1 placement.** `shutdownAndFlush` lives in `reporter.ts` beside `runScript`, not in `sentry-node.ts`: it needs only the interface. Still 4 files.
+- **Script reporter.** `createScriptReporter(env)` reads `SENTRY_DSN`, `SENTRY_ENVIRONMENT` and `SERVICE_VERSION` and gives the DSN the server config's EU check (`SENTRY_EU_DSN`, now exported).
+- **Unparseable body.** The shell answers the validator's 400 as 422 VALIDATION_FAILED, which isn't reported (test corrected).
+- **API version.** 1.47.0-mut148, because main took 1.46.0 (MUT-255) and MUT-388 claims 1.45.0.
+- **First release with `sentry_enabled = true`.** The DSN secret appears in step 4, so pre-roll (step 3) warns and runs unreported; post-roll gets the DSN.
+- **TD-199.** "Not configured" 503s are reported (the AC's literal rule); a bot can spend the 60/day cap.
+- **Not done here.** The hosted bundle is checked by the import-graph test, not by grepping a build (no `check-bundles` rule yet, TD-084).
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
