@@ -28,6 +28,31 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — File a To-review receipt onto an expense that already exists; the receipts library ships dark (MUT-389, API 1.50.0)
+
+**Why:** the expense typed by hand and the receipt scanned later had no way to meet: approval always created a new
+expense. Basel also chose (D5) to make MUT-255's production hold a switch, so main can deploy again. ADR-167
+"Extended by MUT-389"; plan, eng review and decisions in `.claude/designs/mut-389-file-receipt-to-existing-expense.md`.
+API 1.50.0 because MUT-390's worktree holds 1.49.0; whichever merges second renumbers.
+
+### Added
+- `POST /v1/receipts/{receiptId}/file` with `{ expenseId, suggested? }`: 200 `FileReceiptResponse` (the expense with
+  its receipts, and the filed receipt); 409 `RECEIPT_ALREADY_FILED` with `details.expenseId`; 404 for another profile's
+  receipt or expense or a deleted expense; 422 `ATTACHMENT_NOT_READY` / `TOO_MANY_RECEIPTS`. Audit
+  `expense_receipt.filed {expenseId, mode: 'existing'}`.
+- `expenseReceipts.fileOntoExpense` on both stores, with the expense locked `FOR NO KEY UPDATE` and its receipts counted
+  under the lock.
+- `RECEIPTS_LIBRARY` config (only `"true"` turns it on) and Terraform `receipts_library_enabled` (default false), with
+  `tests/receipts_library.tftest.hcl`. DEPLOYMENT.md §6: when to turn it on, and not back off.
+- Tests: contract cases on memory and Prisma; `store-prisma-receipt-file-lock.test.ts` (forced overlap: a rival 10th
+  receipt, an expense delete); route cases for AC1–AC4; library-off 404s and delete-takes-receipts; config parse.
+
+### Changed
+- Off by default: `createApp` mounts the library only with `receiptsLibrary: true`, and production sets nothing, so the
+  API behaves as before MUT-255 until the flag goes on (ADR-167 decision 8 amended).
+- `fileAsExpense` shares `lockToReviewReceipt` / `markReceiptFiled` with the new filing; behavior unchanged.
+- One `tooManyReceipts()` refusal for the MUT-44 routes and the library.
+
 ## [Unreleased] - 2026-10-22 — The API server reports its errors to Sentry (MUT-148, API 1.48.0)
 
 **Why:** a failing request was found only when a user complained: `onError` logged to pino and nothing else.
