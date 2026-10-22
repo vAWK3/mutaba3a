@@ -86,6 +86,12 @@ const envSchema = z.object({
    */
   PORTAL_LEGACY_REDIRECT: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
+   * MUT-255/389: the receipts library (/v1/receipts*, and deleting an expense keeps its receipts To review). Off,
+   * the server behaves as before MUT-255, so main can deploy before any screen shows the library (decision P4: on
+   * when MUT-260 or MUT-258 ships, Terraform receipts_library_enabled). Only "true" turns it on, as above.
+   */
+  RECEIPTS_LIBRARY: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
    * MUT-360: Stripe (Secret Manager, mounted only once stripe_enabled is applied). A restricted key, read-only on
    * billing objects; both or neither — unset, the webhook and reconcile answer 503. A live key only where
    * API_KEY_ENVIRONMENT is live, so a test server can never read the real account.

@@ -40,7 +40,8 @@ export interface PortalRouteDependencies {
   billing: boolean;
   /**
    * MUT-255 (decision P1): whether this app has the receipts library. Deleting an expense then sends its READY
-   * receipts back to the library instead of deleting them; false in the portal's signed-out mode, which has none.
+   * receipts back to the library instead of deleting them; false in the portal's signed-out mode, which has none, and
+   * on the hosted server unless RECEIPTS_LIBRARY is on (MUT-389).
    */
   receiptsLibrary: boolean;
 }

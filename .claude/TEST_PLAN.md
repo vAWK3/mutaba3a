@@ -3394,6 +3394,20 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Portal unit tests | pickers offer exactly USD, ILS, EUR, JOD; Gulf filters dropped; per-line derived flag with JOD + EUR |
 | Release-QA | `portal.income.currency-jod`, `portal.expense-groups.currencies-converted` |
 
+
+### MUT-389 — file a To-review receipt onto an existing expense; the library behind RECEIPTS_LIBRARY (2026-10-22)
+
+| Test | Covers |
+|---|---|
+| `store-contract-receipts.ts` › fileOntoExpense (memory + Prisma) | filed onto the expense, version + 1, no expense created, nothing approved; a sent suggestion replaces the stored one; already filed (another expense or this one); unfinished upload; deleted, other-profile receipt; deleted, other-profile or missing expense; 10 READY refuse, a pending upload doesn't count; an earlier approval survives a re-file |
+| `store-prisma-receipt-file-lock.test.ts` (test:db) | forced overlap under the expense row lock: a rival 10th receipt → `too_many_receipts`; an expense delete → `expense_not_found`. Both fail ("never waited") without the lock |
+| `routes-receipts.test.ts` › POST /v1/receipts/{id}/file | AC1–AC4: 200 with `expense.receipts`, replay identical, 409 with `details.expenseId`, 404s, strict body 422, `ATTACHMENT_NOT_READY`, `TOO_MANY_RECEIPTS` equal to the MUT-44 answer, one `expense_receipt.filed` audit with `mode: 'existing'` and no `expense.created`, edit rate unchanged; 503 with no bucket; 404 for the whole library while `RECEIPTS_LIBRARY` is off |
+| `routes-expenses.test.ts` | with the library off, deleting an expense takes its receipts and files (pre-MUT-255) |
+| `config.test.ts` | `RECEIPTS_LIBRARY` off unless exactly `"true"`; `"false"` off; `1`/`yes`/`TRUE`/empty refused |
+| `route-security`, `writability-routes`, `store-guard` | the new route is session-only and in the expenses domain (store-guard walks every `expenseReceipts` method) |
+| Terraform `tests/receipts_library.tftest.hcl` | off by default with no `RECEIPTS_LIBRARY` env; on sets it to `"true"` exactly once |
+| qa-reconcile additions (2026-10-22) | `store-contract-receipts.ts`: re-file keeps the earlier reading (D1, red before the fix); filed-onto receipt unlinked by delete; library receipts removed with the flag off; re-approval replaces an approval; concurrent file/file and file/approve (Prisma). `store-prisma-receipt-file-lock.test.ts`: filing commits before a waiting delete → unlinked; probe tied to the holder via `pg_blocking_pids`. `routes-receipts.test.ts`: 404 `details.reason`; flag-off covers all 11 library routes with real ids and `/openapi.json` |
+
 ## MUT-390 — GET /v1/entries by money date (2026-10-22, ADR-168)
 
 | File | Kind | Tests | What it proves |

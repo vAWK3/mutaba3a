@@ -49,6 +49,7 @@ const app = createApp({
   version: config.SERVICE_VERSION,
   attachments: config.ATTACHMENTS_BUCKET ? new GcsAttachmentStorage(config.ATTACHMENTS_BUCKET) : null,
   attachmentUrlTtlSeconds: config.ATTACHMENTS_URL_TTL_SECONDS,
+  receiptsLibrary: config.RECEIPTS_LIBRARY,
   passwordHasher: createArgon2Hasher({
     memoryKiB: config.ARGON2_MEMORY_KIB,
     timeCost: config.ARGON2_TIME_COST,

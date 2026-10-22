@@ -94,6 +94,11 @@ export interface AppDependencies {
   stripeWebhookIpLimiter?: RateLimiter;
   /** MUT-255: per-person budget for starting receipts-library uploads. Defaults to RECEIPT_UPLOAD_POLICY. */
   receiptUploadLimiter?: RateLimiter;
+  /**
+   * MUT-389 (RECEIPTS_LIBRARY): mounts the receipts library and makes deleting an expense keep its READY receipts To
+   * review. Absent or false = no /v1/receipts* routes, and a deleted expense takes its receipts with it (pre-MUT-255).
+   */
+  receiptsLibrary?: boolean;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
 }
@@ -157,7 +162,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.49.0-mut390';
+export const API_VERSION = '1.50.0-mut389';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -266,20 +271,23 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     fxRates: deps.fxRates ?? null,
     terms,
     billing: true,
-    receiptsLibrary: true,
+    receiptsLibrary: deps.receiptsLibrary ?? false,
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.
   app.route('/', recordsExportRoutes(store, { storage: deps.attachments ?? null, logger: deps.logger }));
   // MUT-255 (decision P1): the receipts library is hosted only, so outside PORTAL_ROUTES; signed-out local mode has none.
-  app.route(
-    '/',
-    receiptRoutes(store, {
-      storage: deps.attachments ?? null,
-      urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900,
-      uploadLimiter: deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute),
-    }),
-  );
+  // MUT-389: and only where RECEIPTS_LIBRARY turns it on.
+  if (deps.receiptsLibrary) {
+    app.route(
+      '/',
+      receiptRoutes(store, {
+        storage: deps.attachments ?? null,
+        urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900,
+        uploadLimiter: deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute),
+      }),
+    );
+  }
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
@@ -399,6 +407,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Sessions', description: 'Hosted-portal sign-in, sign-out and the signed-in person' },
       { name: 'Profiles', description: 'A signed-in person\'s own standalone profiles: create, rename, default currency and type (sessions only; never a Malafat organization)' },
       { name: 'Expenses', description: 'A hosted profile\'s expenses, categories, receipts and expense summary (sessions only)' },
+      { name: 'Receipts', description: 'The receipts library (MUT-255/389): receipts that wait To review before their expense (sessions only). Mounted only where the deployment turns RECEIPTS_LIBRARY on; elsewhere every /v1/receipts path answers 404' },
       { name: 'Income', description: 'Received or Owed, captured directly by the signed-in person on a personal profile (sessions only)' },
       { name: 'Your data', description: 'Download my records: a profile as the records file the signed-out portal restores, and its receipt files (sessions only)' },
       { name: 'Admin', description: 'Operator provisioning: organizations, API keys, users and memberships' },

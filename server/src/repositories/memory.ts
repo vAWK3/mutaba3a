@@ -1880,9 +1880,8 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     fileAsExpense: async (params, at) => {
       const r = this.expReceipts.get(params.receiptId);
-      if (!r || r.organizationId !== params.organizationId || r.deletedAt) return { kind: 'not_found' };
-      if (r.filingStatus === 'FILED') return { kind: 'already_filed' };
-      if (r.status !== 'READY') return { kind: 'not_ready' };
+      const refused = toReviewRefusal(r, params.organizationId);
+      if (refused || !r) return refused ?? { kind: 'not_found' };
       // A failed insert (e.g. a category deleted since the route checked) throws before the receipt is touched.
       const expense = await this.expenses.create(params.expense, at);
       r.expenseId = expense.id;
@@ -1891,6 +1890,20 @@ export class MemoryLedgerStore implements LedgerStore {
       r.approvedAt = at;
       r.approvedByUserId = params.userId;
       if (params.suggested) r.suggested = params.suggested;
+      r.version += 1;
+      return { kind: 'filed', expense, receipt: { ...r } };
+    },
+    fileOntoExpense: async (params) => {
+      const r = this.expReceipts.get(params.receiptId);
+      const refused = toReviewRefusal(r, params.organizationId);
+      if (refused || !r) return refused ?? { kind: 'not_found' };
+      const expense = await this.expenses.getById(params.organizationId, params.expenseId);
+      if (!expense) return { kind: 'expense_not_found' };
+      if ((await this.expenseReceipts.listByExpense(params.organizationId, expense.id)).length >= params.maxReceipts) return { kind: 'too_many_receipts' };
+      r.expenseId = expense.id;
+      r.filingStatus = 'FILED';
+      // An earlier approval keeps the reading it was made against (the edit-rate pair).
+      if (params.suggested && !r.approved) r.suggested = params.suggested;
       r.version += 1;
       return { kind: 'filed', expense, receipt: { ...r } };
     },
@@ -2449,4 +2462,12 @@ function paginate<T extends { id: string; createdAt: Date }>(rows: T[], page: Pa
   const last = items[items.length - 1];
   const nextCursor = ordered.length > page.limit && last ? { createdAt: last.createdAt, id: last.id } : null;
   return { items, nextCursor };
+}
+
+/** MUT-255/389: why a library receipt can't be filed, or null when it can (live, READY, To review, on this profile). */
+function toReviewRefusal(r: ExpenseReceiptRecord | undefined, organizationId: string): { kind: 'not_found' | 'already_filed' | 'not_ready' } | null {
+  if (!r || r.organizationId !== organizationId || r.deletedAt) return { kind: 'not_found' };
+  if (r.filingStatus === 'FILED') return { kind: 'already_filed' };
+  if (r.status !== 'READY') return { kind: 'not_ready' };
+  return null;
 }

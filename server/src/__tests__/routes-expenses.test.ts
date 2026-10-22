@@ -20,7 +20,7 @@ const COOKIE = '__Host-mut_session';
 const SAME_ORIGIN = { origin: 'http://localhost' };
 const TTL = 600;
 
-function harness(opts: { bucket?: boolean } = {}) {
+function harness(opts: { bucket?: boolean; receiptsLibrary?: boolean } = {}) {
   const store = new MemoryLedgerStore();
   const storage = new MemoryAttachmentStorage();
   const clock = { now: new Date('2026-10-20T09:00:00Z') };
@@ -34,6 +34,7 @@ function harness(opts: { bucket?: boolean } = {}) {
     now: () => clock.now,
     attachments: opts.bucket === false ? null : storage,
     attachmentUrlTtlSeconds: TTL,
+    receiptsLibrary: opts.receiptsLibrary ?? true,
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 },
   });
   return { app, store, storage, clock };
@@ -74,7 +75,7 @@ async function partner(h: Harness, organizationIds: string[], locale: 'en' | 'ar
   return { as, asDevice, userId: created.user.id as string, personalProfileId: created.personalProfile.id as string };
 }
 
-async function setup(opts: { bucket?: boolean; locale?: 'en' | 'ar' } = {}) {
+async function setup(opts: { bucket?: boolean; locale?: 'en' | 'ar'; receiptsLibrary?: boolean } = {}) {
   const h = harness(opts);
   const a = await firm(h, { malafat: true });
   const b = await firm(h, { malafat: false });
@@ -452,6 +453,15 @@ describe('DELETE /v1/expenses/{id}', () => {
     const deletions = (await h.store.audit.list(a.org.id, { action: 'expense.deleted' }, { limit: 10, cursor: null })).items;
     expect(deletions).toHaveLength(1);
     expect((await h.app.request('/v1/expenses/00000000-0000-4000-8000-0000000000dd', { method: 'DELETE', headers: p.as(a.org.id) })).status).toBe(404);
+  });
+
+  it('with the receipts library off (RECEIPTS_LIBRARY unset), takes every receipt and its file with the expense, as before MUT-255', async () => {
+    const { h, a, p, create } = await setup({ receiptsLibrary: false });
+    const e = await read(await create({}));
+    const receipt = await uploadReceipt(h, p.as(a.org.id), e.id);
+    expect((await h.app.request(`/v1/expenses/${e.id}`, { method: 'DELETE', headers: p.as(a.org.id) })).status).toBe(204);
+    expect(h.storage.removed).toEqual([receipt.storageKey]);
+    expect(await h.store.expenseReceipts.getById(a.org.id, receipt.id)).toBeNull();
   });
 });
 

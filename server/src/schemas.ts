@@ -1073,6 +1073,8 @@ export const CONFLICT_REASONS = [
   'REVERSED_BY_MALAFAT',
   // MUT-66: filing an entry through the route for the other kind.
   'ENTRY_KIND_MISMATCH',
+  // MUT-255/389: approving or filing a receipt that is already filed (details.expenseId names where).
+  'RECEIPT_ALREADY_FILED',
   // MUT-100: contingency outcomes
   'OUTCOME_ALREADY_RECORDED',
   'OUTCOME_NOT_RECORDED',
@@ -2365,6 +2367,19 @@ export const ApproveReceiptRequestSchema = CreateExpenseRequestSchema.extend({
   .openapi('ApproveReceiptRequest');
 
 export const ApproveReceiptResponseSchema = z.object({ expense: ExpenseSchema, receipt: ExpenseReceiptSchema }).openapi('ApproveReceiptResponse');
+
+/** MUT-389: file a To-review receipt onto an expense that already exists. */
+export const FileReceiptRequestSchema = z
+  .object({
+    expenseId: z.string().uuid(),
+    suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; replaces the stored one' }),
+  })
+  .strict()
+  .openapi('FileReceiptRequest');
+
+export const FileReceiptResponseSchema = z
+  .object({ expense: ExpenseDetailSchema, receipt: ExpenseReceiptSchema })
+  .openapi('FileReceiptResponse', { description: 'The expense with its READY receipts (the filed one among them), and the filed receipt' });
 
 const fieldEditRate = z.object({ suggested: z.number().int(), edited: z.number().int() });
 

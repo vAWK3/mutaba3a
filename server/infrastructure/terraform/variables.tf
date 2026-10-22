@@ -74,6 +74,12 @@ variable "sentry_enabled" {
   default     = false
 }
 
+variable "receipts_library_enabled" {
+  description = "MUT-255/389: sets RECEIPTS_LIBRARY=true on Cloud Run, which mounts the receipts library (/v1/receipts*) and makes deleting an expense keep its receipts To review. false (default) = the API behaves as before MUT-255. Turn it on when MUT-260 (portal) or MUT-258 (phone) ships, and don't turn it back off: To-review receipts would stay stored but unseen (DEPLOYMENT.md)."
+  type        = bool
+  default     = false
+}
+
 variable "sentry_state_bucket" {
   description = "MUT-148: the GCS bucket holding the Sentry stack's state. null (default) = <project_id>-terraform-state, the bucket both stacks use (DEPLOYMENT.md §1.3)."
   type        = string

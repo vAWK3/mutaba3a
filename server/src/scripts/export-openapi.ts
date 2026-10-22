@@ -22,6 +22,8 @@ const app = createApp({
   adminToken: 'x'.repeat(32),
   keyEnvironment: 'live',
   version: 'generated',
+  // The contract documents every route, whatever a deployment turns on (MUT-389).
+  receiptsLibrary: true,
 });
 
 const res = await app.request('/openapi.json');

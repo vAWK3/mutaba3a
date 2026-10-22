@@ -54,6 +54,8 @@ const EXPENSE_OPERATIONS = [
   'GET /v1/receipts/{receiptId}/download',
   'PATCH /v1/receipts/{receiptId}/suggestion',
   'POST /v1/receipts/{receiptId}/approve',
+  // MUT-389: filing onto an existing expense.
+  'POST /v1/receipts/{receiptId}/file',
   'DELETE /v1/receipts/{receiptId}',
 ];
 
@@ -172,6 +174,8 @@ beforeAll(async () => {
     adminToken: ADMIN_TOKEN,
     keyEnvironment: 'test',
     version: 'test',
+    // The whole session surface, the receipts library included (on wherever RECEIPTS_LIBRARY is set).
+    receiptsLibrary: true,
   });
   const doc = (await (await app.request('/openapi.json')).json()) as { paths: Record<string, Record<string, Loose>> };
   operations = Object.entries(doc.paths)

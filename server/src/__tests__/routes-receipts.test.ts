@@ -5,6 +5,7 @@ import { MemoryAttachmentStorage } from '../attachments/storage.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { MAX_RECEIPTS_PER_EXPENSE } from '../expenses/compose.js';
 import { MAX_PENDING_LIBRARY_UPLOADS, RECEIPT_UPLOAD_POLICY } from '../routes/receipts.js';
 import { provisionUser } from './helpers/provision.js';
 
@@ -19,7 +20,7 @@ const admin = { 'x-admin-token': ADMIN_TOKEN };
 const COOKIE = '__Host-mut_session';
 const SAME_ORIGIN = { origin: 'http://localhost' };
 
-function harness(opts: { bucket?: boolean; uploadsPerMinute?: number } = {}) {
+function harness(opts: { bucket?: boolean; uploadsPerMinute?: number; receiptsLibrary?: boolean } = {}) {
   const store = new MemoryLedgerStore();
   const storage = new MemoryAttachmentStorage();
   const clock = { now: new Date('2026-10-22T21:30:00Z') };
@@ -34,6 +35,7 @@ function harness(opts: { bucket?: boolean; uploadsPerMinute?: number } = {}) {
     attachments: opts.bucket === false ? null : storage,
     attachmentUrlTtlSeconds: 600,
     receiptUploadLimiter: new SlidingWindowRateLimiter(opts.uploadsPerMinute ?? 1_000),
+    receiptsLibrary: opts.receiptsLibrary ?? true,
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 },
   });
   return { app, store, storage, clock };
@@ -44,7 +46,7 @@ const json = (body: unknown, headers: Record<string, string> = {}, method = 'POS
 let ik = 0;
 const idem = () => ({ 'idempotency-key': `key-${++ik}-${Math.random().toString(36).slice(2, 8)}` });
 
-async function setup(opts: { bucket?: boolean; uploadsPerMinute?: number } = {}) {
+async function setup(opts: { bucket?: boolean; uploadsPerMinute?: number; receiptsLibrary?: boolean } = {}) {
   const h = harness(opts);
   const org = await read(await h.app.request('/admin/v1/organizations', json({ name: `Firm ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
   const other = await read(await h.app.request('/admin/v1/organizations', json({ name: `Other ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
@@ -211,6 +213,93 @@ describe('POST /v1/receipts/{id}/approve (AC2, AC3)', () => {
   });
 });
 
+describe('POST /v1/receipts/{id}/file (MUT-389): onto an expense that already exists', () => {
+  const typed = async (h: Harness, headers: Record<string, string>) => read(await h.app.request('/v1/expenses', json(approveBody, { ...headers, ...idem() })));
+  const fileOnto = (h: Harness, receiptId: string, body: object, headers: Record<string, string>) => h.app.request(`/v1/receipts/${receiptId}/file`, json(body, headers));
+  /** A READY receipt attached through the MUT-44 route. */
+  async function attach(h: Harness, headers: Record<string, string>, expenseId: string) {
+    const started = await read(await h.app.request(`/v1/expenses/${expenseId}/receipts`, json(FILE, headers)));
+    h.storage.put(keyOf(started.upload.url), { sizeBytes: FILE.sizeBytes, contentType: FILE.mimeType });
+    expect((await h.app.request(`/v1/expenses/${expenseId}/receipts/${started.receipt.id}/complete`, { method: 'POST', headers })).status).toBe(200);
+  }
+
+  it('files the receipt onto the expense with no new expense, answering the expense with its receipts; a replay answers the same; a new key gets 409 (AC1, AC2, AC4)', async () => {
+    const { h, org, as } = await setup();
+    const expense = await typed(h, as());
+    const receipt = await upload(h, as(), { ...FILE, suggested: SUGGESTION });
+    const key = idem();
+
+    const first = await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(), ...key });
+    expect(first.status).toBe(200);
+    const body = await read(first);
+    expect(body.expense).toMatchObject({ id: expense.id, amount: '15.00', version: expense.version });
+    expect(body.expense.receipts.map((r: Loose) => r.id)).toEqual([receipt.id]);
+    expect(body.receipt).toMatchObject({ id: receipt.id, expenseId: expense.id, filingStatus: 'FILED', suggested: SUGGESTION, approved: null, approvedAt: null });
+
+    const replay = await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(), ...key });
+    expect(replay.status).toBe(200);
+    expect(await read(replay)).toEqual(body);
+    const conflict = await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(), ...idem() });
+    expect(conflict.status).toBe(409);
+    expect((await read(conflict)).error.details).toEqual({ reason: 'RECEIPT_ALREADY_FILED', expenseId: expense.id });
+
+    expect((await read(await h.app.request('/v1/expenses', { headers: as() }))).items).toHaveLength(1);
+    expect((await read(await h.app.request(`/v1/expenses/${expense.id}`, { headers: as() }))).receipts.map((r: Loose) => r.id)).toEqual([receipt.id]);
+    expect(await read(await h.app.request('/v1/receipts/counts', { headers: as() }))).toEqual({ toReview: 0, filed: 1 });
+    const filed = (await h.store.audit.list(org.id, { action: 'expense_receipt.filed' }, { limit: 10, cursor: null })).items;
+    expect(filed.map((a) => [a.entityId, a.metadata])).toEqual([[receipt.id, { expenseId: expense.id, mode: 'existing' }]]);
+    expect((await h.store.audit.list(org.id, { action: 'expense.created' }, { limit: 10, cursor: null })).items).toHaveLength(1);
+    // Nothing was approved, so the operator's edit rate has nothing to count.
+    expect((await read(await h.app.request('/admin/v1/receipts/edit-rates?from=2026-10-22&to=2026-10-23', { headers: admin }))).approved).toBe(0);
+  });
+
+  it('replaces the stored suggestion with one read at review time', async () => {
+    const { h, as } = await setup();
+    const expense = await typed(h, as());
+    const receipt = await upload(h, as());
+    const res = await fileOnto(h, receipt.id, { expenseId: expense.id, suggested: SUGGESTION }, { ...as(), ...idem() });
+    expect((await read(res)).receipt.suggested).toEqual(SUGGESTION);
+  });
+
+  it("answers 404 for another profile's receipt or expense and for a deleted expense, 422 before the upload completes; the receipt stays To review (AC2)", async () => {
+    const { h, other, as } = await setup();
+    const expense = await typed(h, as());
+    const elsewhere = await typed(h, as(other.id));
+    const gone = await typed(h, as());
+    expect((await h.app.request(`/v1/expenses/${gone.id}`, { method: 'DELETE', headers: as() })).status).toBe(204);
+    const receipt = await upload(h, as());
+
+    const notOurReceipt = await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(other.id), ...idem() });
+    expect(notOurReceipt.status).toBe(404);
+    expect((await read(notOurReceipt)).error.details).toEqual({ reason: 'RECEIPT_NOT_FOUND' });
+    const notOurs = await fileOnto(h, receipt.id, { expenseId: elsewhere.id }, { ...as(), ...idem() });
+    expect(notOurs.status).toBe(404);
+    expect((await read(notOurs)).error).toMatchObject({ message: 'No such expense', details: { reason: 'EXPENSE_NOT_FOUND' } });
+    const deleted = await fileOnto(h, receipt.id, { expenseId: gone.id }, { ...as(), ...idem() });
+    expect(deleted.status).toBe(404);
+    expect((await read(deleted)).error.details).toEqual({ reason: 'EXPENSE_NOT_FOUND' });
+    expect((await fileOnto(h, receipt.id, { expenseId: expense.id, amount: '1.00' }, { ...as(), ...idem() })).status).toBe(422);
+
+    const started = await read(await h.app.request('/v1/receipts/uploads', json(FILE, { ...as(), ...idem() })));
+    const early = await fileOnto(h, started.receipt.id, { expenseId: expense.id }, { ...as(), ...idem() });
+    expect((await read(early)).error.details.reason).toBe('ATTACHMENT_NOT_READY');
+    expect((await read(await h.app.request(`/v1/receipts/${receipt.id}`, { headers: as() }))).filingStatus).toBe('TO_REVIEW');
+  });
+
+  it('refuses an expense already holding 10 receipts with 422 TOO_MANY_RECEIPTS, the same answer as the MUT-44 route (AC3)', async () => {
+    const { h, as } = await setup();
+    const expense = await typed(h, as());
+    for (let i = 0; i < MAX_RECEIPTS_PER_EXPENSE; i += 1) await attach(h, as(), expense.id);
+    const receipt = await upload(h, as());
+    const full = await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(), ...idem() });
+    expect(full.status).toBe(422);
+    const viaLibrary = (await read(full)).error;
+    const viaExpense = (await read(await h.app.request(`/v1/expenses/${expense.id}/receipts`, json(FILE, as())))).error;
+    expect(viaLibrary).toMatchObject({ code: viaExpense.code, message: viaExpense.message, details: { reason: 'TOO_MANY_RECEIPTS' } });
+    expect(viaExpense.details.reason).toBe('TOO_MANY_RECEIPTS');
+  });
+});
+
 describe('PATCH /v1/receipts/{id}/suggestion', () => {
   it('replaces a To-review suggestion with If-Match; a stale version is 409, a filed receipt is 409 RECEIPT_ALREADY_FILED', async () => {
     const { h, as } = await setup();
@@ -271,6 +360,7 @@ describe('access and configuration', () => {
       [`/v1/receipts/${id}/download`, { headers: as() }],
       [`/v1/receipts/${id}/suggestion`, json(SUGGESTION, { ...as(), 'if-match': '1' }, 'PATCH')],
       [`/v1/receipts/${id}/approve`, json(approveBody, { ...as(), ...idem() })],
+      [`/v1/receipts/${id}/file`, json({ expenseId: id }, { ...as(), ...idem() })],
       [`/v1/receipts/${id}`, { method: 'DELETE', headers: as() }],
     ];
     for (const [path, init] of calls) {
@@ -278,6 +368,39 @@ describe('access and configuration', () => {
       expect(res.status, `${init.method ?? 'GET'} ${path}`).toBe(503);
       expect((await read(res)).error.code).toBe('ATTACHMENTS_NOT_CONFIGURED');
     }
+  });
+
+  it('mounts none of the library while RECEIPTS_LIBRARY is off (MUT-389, the production default until MUT-260/258)', async () => {
+    const { h, as } = await setup({ receiptsLibrary: false });
+    // A real receipt and expense: were the library mounted, these would answer 200/201, not the framework's 404.
+    const expense = await read(await h.app.request('/v1/expenses', json(approveBody, { ...as(), ...idem() })));
+    const started = await read(await h.app.request(`/v1/expenses/${expense.id}/receipts`, json(FILE, as())));
+    h.storage.put(keyOf(started.upload.url), { sizeBytes: FILE.sizeBytes, contentType: FILE.mimeType });
+    expect((await h.app.request(`/v1/expenses/${expense.id}/receipts/${started.receipt.id}/complete`, { method: 'POST', headers: as() })).status).toBe(200);
+    const id = started.receipt.id as string;
+    const calls: Array<[string, RequestInit]> = [
+      ['/v1/receipts/uploads', json(FILE, { ...as(), ...idem() })],
+      ['/v1/receipts', { headers: as() }],
+      ['/v1/receipts/counts', { headers: as() }],
+      [`/v1/receipts/${id}`, { headers: as() }],
+      [`/v1/receipts/${id}/download`, { headers: as() }],
+      [`/v1/receipts/${id}/upload-url`, { method: 'POST', headers: as() }],
+      [`/v1/receipts/${id}/complete`, { method: 'POST', headers: as() }],
+      [`/v1/receipts/${id}/suggestion`, json(SUGGESTION, { ...as(), 'if-match': '1' }, 'PATCH')],
+      [`/v1/receipts/${id}/approve`, json(approveBody, { ...as(), ...idem() })],
+      [`/v1/receipts/${id}/file`, json({ expenseId: expense.id }, { ...as(), ...idem() })],
+      [`/v1/receipts/${id}`, { method: 'DELETE', headers: as() }],
+    ];
+    for (const [path, init] of calls) {
+      const res = await h.app.request(path, init);
+      expect(res.status, `${init.method ?? 'GET'} ${path}`).toBe(404);
+      // Not a route's own "No such receipt": the library isn't there at all.
+      expect(await res.text(), `${init.method ?? 'GET'} ${path}`).not.toContain('No such receipt');
+    }
+    const doc = await read(await h.app.request('/openapi.json'));
+    expect(Object.keys(doc.paths).filter((p) => p.startsWith('/v1/receipts'))).toEqual([]);
+    // The MUT-44 receipt is untouched by all of that.
+    expect((await read(await h.app.request(`/v1/expenses/${expense.id}`, { headers: as() }))).receipts.map((r: Loose) => r.id)).toEqual([id]);
   });
 
   it("refuses Malafat's API key", async () => {

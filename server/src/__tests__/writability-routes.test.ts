@@ -74,6 +74,8 @@ function harness() {
     version: '0.1.0-test',
     now: () => clock.now,
     attachments: new MemoryAttachmentStorage(),
+    // The whole surface, the receipts library included (MUT-389: on wherever RECEIPTS_LIBRARY is set).
+    receiptsLibrary: true,
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 },
   });
   return { app, base, calls, clock };

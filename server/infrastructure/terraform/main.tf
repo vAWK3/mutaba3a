@@ -605,6 +605,15 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
+      # MUT-389: the receipts library, once receipts_library_enabled (on with MUT-260 or MUT-258).
+      dynamic "env" {
+        for_each = var.receipts_library_enabled ? { RECEIPTS_LIBRARY = "true" } : {}
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
       dynamic "env" {
         for_each = local.app_association_env
         content {

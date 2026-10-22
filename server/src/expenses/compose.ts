@@ -1,5 +1,6 @@
 import { assertIsoDate, assertNotTooOld, parseAmount, validationError } from '../agreements/compose.js';
 import type { IsoDate } from '../dates.js';
+import type { ApiError } from '../errors.js';
 import type { Currency } from '../money.js';
 import { ForeignKeyViolation } from '../repositories/memory.js';
 import type { CreateExpenseInput, ExpenseRecord, LedgerStore, UpdateExpensePatch } from '../repositories/ports.js';
@@ -13,6 +14,11 @@ import type { CreateExpenseInput, ExpenseRecord, LedgerStore, UpdateExpensePatch
 export const EXPENSE_ENTITY_TYPES = ['expense', 'expense_receipt', 'expense_category', 'expense_group'] as const;
 
 export const MAX_RECEIPTS_PER_EXPENSE = 10;
+
+/** The one refusal for a full expense, from the MUT-44 routes and the library's filing (MUT-389) alike. */
+export function tooManyReceipts(): ApiError {
+  return validationError('TOO_MANY_RECEIPTS', `An expense holds at most ${MAX_RECEIPTS_PER_EXPENSE} receipts`);
+}
 
 /** An expense amount: canonical, in the currency's digits, greater than zero. */
 export function parseExpenseAmount(text: string, currency: Currency): bigint {

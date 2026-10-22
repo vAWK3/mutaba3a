@@ -211,6 +211,8 @@ export const STORE_ACCESS: StoreAccess = {
     countPendingSince: { read: 'expenses' },
     setSuggested: { write: 'expenses' },
     fileAsExpense: { write: 'expenses' },
+    // MUT-389: onto an expense that already exists.
+    fileOntoExpense: { write: 'expenses' },
     // The operator's edit-rate figure (/admin only): across every profile, counts only.
     editRates: 'operator',
   },
