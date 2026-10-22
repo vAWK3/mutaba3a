@@ -28,6 +28,38 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — Log Owed income and expenses with a future date (MUT-392, ADR-169, API 1.51.0)
+
+**Why:** Basel wants to log money that hasn't moved yet: Owed income dated next month, a bill due in three days. Income
+was past-only on the server and expenses had no upper bound at all. Plan, eng review and decisions D1–D4:
+`~/.gstack/projects/vAWK3-mutaba3a/MUT-392-plan.md` (Jira comment 12410). The phone half is mutaba3a-flutter
+`feature/mut-392-future-dates`. Release the API first.
+
+### Added
+- Server: `incomeMoneyDate(raw, kind, today, field)` — an Owed may be dated up to ten years ahead; Received keeps
+  `pastMoneyDate`. Used by `POST /v1/income`, `PATCH /v1/income/{id}` (`redateTo` takes the kind) and file-as-income.
+- Server: `countsOn(r, today)` in `summaries/compute.ts` — a future-dated Owed is in no bucket and no matter total until
+  its date (D2).
+- Server: `dueDateAfterRedate` — an Owed re-dated past its due date gets EOM_15 of the new date in the same versioned
+  write; `redateAdjustment(..., dueDate?)` on both stores; audit `dueFrom`/`dueTo` (D3).
+- Portal: `moneyDateCeiling`, `owedDefaultDueDate` (`format/dates.ts`); `hosted.income.errors.dateTooFar`,
+  `hosted.expenses.errors.dateTooFar`, `hosted.redate.dueMoves` (en + ar); `ExpenseFormFields` `dateMax`.
+- Release-QA: `portal.income.add-owed-future`, `portal.income.redate-owed-future`, `portal.expenses.date-too-far`.
+
+### Changed
+- Server: expenses get the ten-year ceiling (`expenseOccurredOn`), at create, PATCH, inbox filing and receipts
+  approval (D4). PATCH /v1/income checks the date's shape first and its bounds once the kind is known (an unknown id
+  with a future date is 404).
+- OpenAPI 1.51.0-mut392: income dates say Received is past-only and Owed up to ten years ahead; expense dates say both
+  bounds; summaries say a receivable counts from its posting date.
+- Portal: income capture and re-date set the date `max` by kind and say "more than ten years ahead" past the ceiling;
+  the re-date note says where the due date moves; the expense drawer's date max is the ceiling.
+- `portal.income.redate-no-future` now covers a payment (past-only).
+
+### Fixed
+- Portal: the hosted expense form is `noValidate`, so the browser's own check on the new date max can't block Save
+  without a message (found by `portal.expenses.date-too-far`).
+
 ## [Unreleased] - 2026-10-22 — The privacy policy says the phone apps send error reports (MUT-151, ADR-091 amendment 10)
 
 **Why:** the Capture app reports crashes to Sentry from its next store release (mutaba3a-flutter `feature/mut-151-phone-sentry`), and the policy describes only what is live (ADR-090 P3).
