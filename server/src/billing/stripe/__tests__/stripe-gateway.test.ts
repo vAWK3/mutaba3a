@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
+import { fakeStripe } from './fake-http.js';
 import { createStripeGateway, InvalidStripeSignature, RECONCILE_BUDGET, STRIPE_API_VERSION, StripeGatewayError, WEBHOOK_BUDGET } from '../gateway.js';
 
 /**
@@ -14,25 +15,6 @@ const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/${
 const KEY = 'rk_test_mut360_fixture_key';
 const WHSEC = 'whsec_mut360_fixture';
 const NOW = new Date('2026-11-01T09:00:00.000Z');
-
-interface Seen {
-  method: string;
-  path: string;
-  query: URLSearchParams;
-  headers: Headers;
-}
-
-function fakeStripe(respond: (seen: Seen, call: number) => { status: number; body: unknown; headers?: Record<string, string> }) {
-  const seen: Seen[] = [];
-  const fakeFetch = async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
-    const request: Seen = { method: init?.method ?? 'GET', path: url.pathname, query: url.searchParams, headers: new Headers(init?.headers) };
-    seen.push(request);
-    const { status, body, headers } = respond(request, seen.length);
-    return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'request-id': `req_${seen.length}`, ...headers } });
-  };
-  return { seen, httpClient: Stripe.createFetchHttpClient(fakeFetch as typeof fetch) };
-}
 
 const gateway = (httpClient: Stripe.HttpClient, budget: { timeoutMs: number; maxNetworkRetries: number } = WEBHOOK_BUDGET) =>
   createStripeGateway({ secretKey: KEY, webhookSecret: WHSEC, ...budget, now: () => NOW, httpClient });

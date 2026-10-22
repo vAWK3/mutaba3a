@@ -86,6 +86,26 @@ export type CheckoutParams = Omit<Stripe.Checkout.SessionCreateParams, 'customer
 
 export type CheckoutPlan = { ok: false; code: CheckoutRefusal } | { ok: true; currency: BillingCurrency; params: CheckoutParams };
 
+/** Every lookup key the catalog needs, for one `prices.list` call. */
+export const ALL_GA_LOOKUP_KEYS: readonly string[] = Object.values(GA_PRICE_LOOKUP_KEYS).flatMap((pair) => [pair.month, pair.year]);
+
+/**
+ * The sellable catalog from the prices Stripe returned: a currency needs both its prices, each in that currency and
+ * interval. A key put on the wrong price in the dashboard leaves that currency unsellable rather than mischarging.
+ */
+export function catalogFrom(prices: ReadonlyMap<string, { id: string; currency: string; unitAmount: number; interval: BillingInterval }>): Catalog {
+  const pairOf = (currency: BillingCurrency) => {
+    const pick = (interval: BillingInterval) => {
+      const price = prices.get(GA_PRICE_LOOKUP_KEYS[currency][interval]);
+      return price && price.currency === currency && price.interval === interval ? { id: price.id, unitAmount: price.unitAmount } : null;
+    };
+    const month = pick('month');
+    const year = pick('year');
+    return month && year ? { month, year } : null;
+  };
+  return { ILS: pairOf('ILS'), USD: pairOf('USD') };
+}
+
 export function currencyOf(country: string): BillingCurrency {
   return country === 'IL' ? 'ILS' : 'USD';
 }

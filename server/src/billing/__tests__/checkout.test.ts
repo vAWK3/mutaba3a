@@ -5,6 +5,7 @@ import {
   CHECKOUT_SESSION_TTL_SECONDS,
   CHECKOUT_SUBMIT_MESSAGE,
   GA_PRICE_LOOKUP_KEYS,
+  catalogFrom,
   currencyOf,
   isReturnPath,
   parseBillingCountries,
@@ -164,6 +165,23 @@ describe('billing countries, currency and return paths', () => {
   it('ILS for Israel, USD everywhere else', () => {
     expect(currencyOf('IL')).toBe('ILS');
     expect(['PS', 'JO', 'AE', 'GB', 'US'].map(currencyOf)).toEqual(['USD', 'USD', 'USD', 'USD', 'USD']);
+  });
+
+  it('a currency is in the catalog only with both prices, each in its own currency and interval', () => {
+    const fact = (id: string, currency: string, unitAmount: number, interval: 'month' | 'year') => ({ id, currency, unitAmount, interval });
+    const prices = new Map([
+      ['freelancer_list_monthly_ils', fact('p1', 'ILS', 3900, 'month')],
+      ['freelancer_list_yearly_ils', fact('p2', 'ILS', 39000, 'year')],
+      ['freelancer_list_monthly_usd', fact('p3', 'USD', 1000, 'month')],
+    ]);
+    expect(catalogFrom(prices)).toEqual({ ILS: { month: { id: 'p1', unitAmount: 3900 }, year: { id: 'p2', unitAmount: 39000 } }, USD: null });
+    // A key pointing at the wrong currency or interval is a dashboard mistake: never sell it.
+    prices.set('freelancer_list_yearly_usd', fact('p4', 'EUR', 10000, 'year'));
+    expect(catalogFrom(prices).USD).toBeNull();
+    prices.set('freelancer_list_yearly_usd', fact('p4', 'USD', 10000, 'month'));
+    expect(catalogFrom(prices).USD).toBeNull();
+    prices.set('freelancer_list_yearly_usd', fact('p4', 'USD', 10000, 'year'));
+    expect(catalogFrom(prices).USD).toEqual({ month: { id: 'p3', unitAmount: 1000 }, year: { id: 'p4', unitAmount: 10000 } });
   });
 
   it('the lookup keys follow the spike’s convention', () => {
