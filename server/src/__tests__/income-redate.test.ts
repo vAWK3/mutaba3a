@@ -238,6 +238,56 @@ describe('versions and dates (AC4)', () => {
   });
 });
 
+describe('future dates on an Owed entry (MUT-392)', () => {
+  it('moves an Owed into the future and keeps a due date that is still on or after it', async () => {
+    const s = await setup();
+    const headers = s.u.as(s.u.personal);
+    const owed = await owedEntry(s);
+    const ahead = await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-11-11' }, headers, 1));
+    expect(ahead.status).toBe(200);
+    expect(await read(ahead)).toMatchObject({ occurredOn: '2026-11-11', dueDate: '2026-11-15', version: 2 });
+    const onDue = await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-11-15' }, headers, 2));
+    expect(await read(onDue)).toMatchObject({ occurredOn: '2026-11-15', dueDate: '2026-11-15', version: 3 });
+  });
+
+  it('moves the due date to EOM_15 of the new date when the date passes it, in the same write, and audits both (D3)', async () => {
+    const s = await setup();
+    const owed = await owedEntry(s);
+    const res = await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-12-01' }, s.u.as(s.u.personal), 1));
+    expect(res.status).toBe(200);
+    expect(await read(res)).toMatchObject({ occurredOn: '2026-12-01', dueDate: '2027-01-15', version: 2 });
+    expect(await s.h.store.receivables.getById(s.u.personal, owed.id)).toMatchObject({ postingDate: '2026-12-01', dueDate: '2027-01-15', version: 2 });
+    const rows = (await s.h.store.audit.list(s.u.personal, { action: OWED_REDATED }, { limit: 10, cursor: null })).items;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ metadata: { from: '2026-10-08', to: '2026-12-01', dueFrom: '2026-11-15', dueTo: '2027-01-15', version: 2 } });
+  });
+
+  it('a re-date that keeps the due date records no due-date change', async () => {
+    const s = await setup();
+    const owed = await owedEntry(s);
+    await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2026-11-01' }, s.u.as(s.u.personal), 1));
+    const rows = (await s.h.store.audit.list(s.u.personal, { action: OWED_REDATED }, { limit: 10, cursor: null })).items;
+    expect(rows[0]?.metadata).not.toHaveProperty('dueTo');
+  });
+
+  it('more than ten years ahead → 422 bound future, nothing moved', async () => {
+    const s = await setup();
+    const owed = await owedEntry(s);
+    const res = await s.h.app.request(`/v1/income/${owed.id}`, patch({ occurredOn: '2036-10-20' }, s.u.as(s.u.personal), 1));
+    expect(res.status).toBe(422);
+    expect(await errorOf(res)).toMatchObject({ details: { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' } });
+    expect(await s.h.store.receivables.getById(s.u.personal, owed.id)).toMatchObject({ postingDate: '2026-10-08', version: 1 });
+  });
+
+  it('an unknown id answers 404 even with a future date, and 422 for a malformed one (the shape is checked first)', async () => {
+    const s = await setup();
+    const headers = s.u.as(s.u.personal);
+    const unknown = '00000000-0000-4000-8000-000000000000';
+    expect((await s.h.app.request(`/v1/income/${unknown}`, patch({ occurredOn: '2026-11-11' }, headers, 1))).status).toBe(404);
+    expect((await s.h.app.request(`/v1/income/${unknown}`, patch({ occurredOn: '2026-02-30' }, headers, 1))).status).toBe(422);
+  });
+});
+
 describe('what may not be touched (AC5)', () => {
   it("another person's entry → 404 on both routes", async () => {
     const s = await setup();

@@ -366,8 +366,19 @@ describe('POST /v1/inbox/{id}/file-as-income on a personal profile', () => {
     for (const key of Object.keys(directMeta)) expect(filedMeta[key], key).toEqual(directMeta[key]);
   });
 
-  /** The mirror of the expense case: POST /v1/income does refuse a future date, so filing must too. */
-  it('refuses a future-dated entry, because POST /v1/income does, and leaves it in the inbox', async () => {
+  /** MUT-392: POST /v1/income takes a future Owed, so filing as Owed does too, with the default due date after it. */
+  it('files a future-dated entry as Owed, because POST /v1/income takes one', async () => {
+    const s = await setup();
+    const c = await customer(s, s.p.id);
+    const entry = await s.capture({ ...INCOME_ENTRY, occurredOn: '2027-06-01' });
+    const filed = await s.fileIncome(entry.id, { kind: 'owed', customerId: c.id });
+    expect(filed.status).toBe(201);
+    expect(await read(filed)).toMatchObject({ kind: 'owed', occurredOn: '2027-06-01', dueDate: '2027-07-15' });
+    expect(await s.listInbox()).toEqual([]);
+  });
+
+  /** The mirror of the expense case: POST /v1/income refuses a future Received, so filing as Received must too. */
+  it('refuses a future-dated entry as Received, because POST /v1/income does, and leaves it in the inbox', async () => {
     const s = await setup();
     const entry = await s.capture({ ...INCOME_ENTRY, occurredOn: '2027-06-01' });
     const filed = await s.fileIncome(entry.id, { kind: 'received' });
@@ -376,6 +387,7 @@ describe('POST /v1/inbox/{id}/file-as-income on a personal profile', () => {
 
     expect(filed.status).toBe(direct.status);
     expect(filed.status).toBe(422);
+    expect(filedBody.error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' });
     expect(filedBody.error.details).toEqual(directBody.error.details);
     expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
   });

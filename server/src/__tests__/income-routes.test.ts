@@ -185,14 +185,27 @@ describe('POST /v1/income on a personal profile', () => {
     expect(body.error.details).toMatchObject({ field: 'customerId', reason: 'CUSTOMER_REQUIRED_FOR_OWED' });
   });
 
-  it.each([['received', BASE_RECEIVED], ['owed', BASE_OWED]])('%s: future occurredOn → 422 DATE_INVALID; backdated and today accepted (AC 7)', async (_label, base) => {
+  it('received: future occurredOn → 422 DATE_INVALID bound future; backdated and today accepted (AC 7, MUT-392)', async () => {
     const { h, p, u, create } = await setup();
     const c = await customer(h, u, p.id);
-    const future = await create({ ...(base as Loose), customerId: c.id, occurredOn: '2026-10-13' });
+    const future = await create({ ...BASE_RECEIVED, customerId: c.id, occurredOn: '2026-10-13' });
     expect(future.status).toBe(422);
-    expect((await read(future)).error.details).toMatchObject({ reason: 'DATE_INVALID', field: 'occurredOn' });
-    expect((await create({ ...(base as Loose), customerId: c.id, occurredOn: '2026-10-12' })).status).toBe(201);
-    expect((await create({ ...(base as Loose), customerId: c.id, occurredOn: '2026-09-01' })).status).toBe(201);
+    expect((await read(future)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' });
+    expect((await create({ ...BASE_RECEIVED, customerId: c.id, occurredOn: '2026-10-12' })).status).toBe(201);
+    expect((await create({ ...BASE_RECEIVED, customerId: c.id, occurredOn: '2026-09-01' })).status).toBe(201);
+  });
+
+  it('owed: a future occurredOn is accepted up to ten years ahead, with the default due date after it; one day more → 422 bound future (MUT-392)', async () => {
+    const { h, p, u, create } = await setup();
+    const c = await customer(h, u, p.id);
+    const ahead = await create({ ...BASE_OWED, customerId: c.id, occurredOn: '2026-11-11' });
+    expect(ahead.status).toBe(201);
+    expect(await read(ahead)).toMatchObject({ kind: 'owed', occurredOn: '2026-11-11', dueDate: '2026-12-15', status: 'open' });
+    // The org's today is 2026-10-12 (Jerusalem, 12:00), so the ceiling is 3660 days later: 2036-10-19.
+    expect((await create({ ...BASE_OWED, customerId: c.id, occurredOn: '2036-10-19' })).status).toBe(201);
+    const tooFar = await create({ ...BASE_OWED, customerId: c.id, occurredOn: '2036-10-20' });
+    expect(tooFar.status).toBe(422);
+    expect((await read(tooFar)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' });
   });
 
   it.each([['received', BASE_RECEIVED], ['owed', BASE_OWED]])('%s: occurredOn more than ten years back → 422 DATE_INVALID bound past; the floor day is accepted (MUT-227)', async (_label, base) => {

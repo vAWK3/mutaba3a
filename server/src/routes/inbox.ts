@@ -7,7 +7,7 @@ import { identityIdempotent, idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { assertFilableCurrency, assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
-import { dueDateForOwed, incomeCaptureRulesFor, owedVatFields, pastMoneyDate, resolveIncomeLinks } from '../income/compose.js';
+import { dueDateForOwed, incomeCaptureRulesFor, incomeMoneyDate, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
 import { formatMoney, type Currency } from '../money.js';
 import type { InboxEntryRecord, LedgerStore, UpdateInboxEntryPatch } from '../repositories/ports.js';
 import {
@@ -259,7 +259,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Inbox'],
       summary: 'File an unsorted entry as income on a profile',
       description:
-        'Received or Owed is chosen here, not at capture: the distinction only means something once a client is (or deliberately is not) in the picture. MUT-65\'s rules apply unchanged — Owed requires a client, and a Malafat-fed profile refuses the write with READ_ONLY_PROFILE, leaving the entry in place. 409 ENTRY_KIND_MISMATCH for an entry captured as an expense.',
+        'Received or Owed is chosen here, not at capture: the distinction only means something once a client is (or deliberately is not) in the picture. The date rules are POST /v1/income\'s for the chosen kind: an Owed may be up to ten years ahead, a Received not later than today (MUT-392). MUT-65\'s rules apply unchanged — Owed requires a client, and a Malafat-fed profile refuses the write with READ_ONLY_PROFILE, leaving the entry in place. 409 ENTRY_KIND_MISMATCH for an entry captured as an expense.',
       security: SESSION_ONLY,
       middleware: [requireScope('payments:write'), idempotent(store, 'inbox.fileAsIncome')] as const,
       request: { params: InboxEntryIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(FileAsIncomeRequestSchema) },
@@ -272,7 +272,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const entry = await mustGet(user.id, c.req.valid('param').entryId);
       assertKind(entry, 'INCOME');
       assertFilableCurrency(entry);
-      pastMoneyDate(entry.occurredOn, todayFor(organization, now), 'occurredOn');
+      incomeMoneyDate(entry.occurredOn, body.kind, todayFor(organization, now), 'occurredOn');
       // MUT-65's own validators, reused rather than reimplemented. This route stays on payments:write, so a Malafat-fed
       // profile is refused before this line and only personal-profile rules ever apply here (TD-094).
       const links = await resolveIncomeLinks(store, organization.id, body.kind, { customerId: body.customerId ?? null, projectId: body.projectId ?? null }, entry.currency, incomeCaptureRulesFor(writerOfRecord));
