@@ -7,7 +7,7 @@ import type { AttachmentStorage } from '../attachments/storage.js';
 import { verifyUploadedObject } from '../attachments/verify.js';
 import { endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
-import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
+import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, tooManyReceipts, withCategoryForeignKey } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
 import { groupFilter } from '../expenses/groups.js';
 import { summarizeExpenses } from '../expenses/summary.js';
@@ -40,7 +40,7 @@ export interface ExpenseRouteOptions {
   /** The M6 attachments bucket; receipts use it under their own prefix (MUT-42 D1). Null: receipt routes answer 503. */
   storage: AttachmentStorage | null;
   urlTtlSeconds: number;
-  /** MUT-255: this app has the receipts library (hosted), so a deleted expense's READY receipts go back to it. */
+  /** MUT-255/389: this app has the receipts library (hosted with RECEIPTS_LIBRARY on), so a deleted expense's READY receipts go back to it. */
   receiptsLibrary: boolean;
 }
 
@@ -201,8 +201,8 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       method: 'delete',
       path: '/v1/expenses/{expenseId}',
       tags: ['Expenses'],
-      summary: 'Delete an expense (soft; its receipts go back to the receipts library)',
-      description: '204 again for an expense already deleted; 404 for an id this profile never had. MUT-255: on the hosted server its READY receipts stay, back under To review in the receipts library; an unfinished upload is deleted with its file. The signed-out portal, which has no library, deletes them all.',
+      summary: 'Delete an expense (soft)',
+      description: '204 again for an expense already deleted; 404 for an id this profile never had. Where the receipts library is on (RECEIPTS_LIBRARY, MUT-255/389), its READY receipts stay, back under To review in the library, and an unfinished upload is deleted with its file. Where it is off (the production default until MUT-260/258) and in the signed-out portal, every receipt is deleted with its file.',
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ExpenseIdParamSchema },
@@ -359,9 +359,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
   );
 
   async function assertRoomForReceipt(organizationId: string, expenseId: string): Promise<void> {
-    if ((await store.expenseReceipts.listByExpense(organizationId, expenseId)).length >= MAX_RECEIPTS_PER_EXPENSE) {
-      throw validationError('TOO_MANY_RECEIPTS', `An expense holds at most ${MAX_RECEIPTS_PER_EXPENSE} receipts`);
-    }
+    if ((await store.expenseReceipts.listByExpense(organizationId, expenseId)).length >= MAX_RECEIPTS_PER_EXPENSE) throw tooManyReceipts();
   }
 
   return app;

@@ -37,6 +37,53 @@
 - `PrivacyPolicyPage.test.tsx` and release-QA `web.legal.privacy-error-reports` assert the new sentences.
 - `docs/observability/README.md`: the phone's row, DSN/token sources, errors-only options, the native-crash path, the 2,048 cap, `scrub_failed`, and the store answers (linked to identity, Play User IDs). INFRA §1: the phone's server-side scrub rule to set by hand. ADR-091 amendment 10.
 
+## [Unreleased] - 2026-10-22 — The local API loads its own `.env` in dev
+
+**Why:** `tsx watch` restarts the API on any file edit in the shared checkout; an API started without its env (plain `npm run dev`)
+crashed on that restart and the phone QA run failed sign-in with "Couldn't reach the server". Same root cause as Flutter 5675a269.
+
+### Fixed
+- `server/package.json`: `dev` is `tsx watch --env-file-if-exists=.env src/index.ts`. Variables already set in the shell still win;
+  with no `.env` it starts anyway and the config schema reports what is missing. Needs Node ≥ 22.9 (engines say ≥ 22).
+
+## [Unreleased] - 2026-10-22 — File a To-review receipt onto an expense that already exists; the receipts library ships dark (MUT-389, API 1.50.0)
+
+**Why:** the expense typed by hand and the receipt scanned later had no way to meet: approval always created a new
+expense. Basel also chose (D5) to make MUT-255's production hold a switch, so main can deploy again. ADR-167
+"Extended by MUT-389"; plan, eng review and decisions in `.claude/designs/mut-389-file-receipt-to-existing-expense.md`.
+API 1.50.0, after MUT-390's 1.49.0.
+
+### Added
+- `POST /v1/receipts/{receiptId}/file` with `{ expenseId, suggested? }`: 200 `FileReceiptResponse` (the expense with
+  its receipts, and the filed receipt); 409 `RECEIPT_ALREADY_FILED` with `details.expenseId`; 404 for another profile's
+  receipt or expense or a deleted expense; 422 `ATTACHMENT_NOT_READY` / `TOO_MANY_RECEIPTS`. Audit
+  `expense_receipt.filed {expenseId, mode: 'existing'}`.
+- `expenseReceipts.fileOntoExpense` on both stores, with the expense locked `FOR NO KEY UPDATE` and its receipts counted
+  under the lock.
+- `RECEIPTS_LIBRARY` config (only `"true"` turns it on) and Terraform `receipts_library_enabled` (default false), with
+  `tests/receipts_library.tftest.hcl`. DEPLOYMENT.md §6: when to turn it on, and not back off.
+- Tests: contract cases on memory and Prisma; `store-prisma-receipt-file-lock.test.ts` (forced overlap: a rival 10th
+  receipt, an expense delete); route cases for AC1–AC4; library-off 404s and delete-takes-receipts; config parse.
+
+### Changed
+- Off by default: `createApp` mounts the library only with `receiptsLibrary: true`, and production sets nothing, so the
+  API behaves as before MUT-255 until the flag goes on (ADR-167 decision 8 amended).
+- `fileAsExpense` shares `lockToReviewReceipt` / `markReceiptFiled` with the new filing; behavior unchanged.
+- One `tooManyReceipts()` refusal for the MUT-44 routes and the library.
+
+### Review fixes (qa-reconcile, 2026-10-22)
+- Re-filing a receipt that keeps an earlier approval no longer stores a new suggestion beside the old approval, so the
+  edit-rate pair can't change after the fact (D1; regression test on both stores, red before the fix).
+- The file route's two 404s carry `details.reason` `RECEIPT_NOT_FOUND` / `EXPENSE_NOT_FOUND` (D4);
+  `RECEIPT_ALREADY_FILED` is now in the published 409 reasons.
+- The `DELETE /v1/expenses/{id}` contract, the `Receipts` tag, ADR-167 and code comments say receipt handling
+  depends on `RECEIPTS_LIBRARY`; `fileOntoExpense` drops its unused `at`.
+- Tests (D2): a filed-onto receipt unlinked by its expense's delete; library receipts removed while the flag is off;
+  a filing that commits before a delete; concurrent file/file and file/approve of one receipt; re-approval replaces
+  an approval; the flag-off test uses real ids, covers every library route and checks `/openapi.json`; the lock
+  probe is tied to the holder's pid (`pg_blocking_pids`).
+- Known gap kept (D3): a MUT-44 completion can still race one filing to 11 receipts (ADR-167).
+
 ## [Unreleased] - 2026-10-22 — The Sentry settings script allows E33's projects in barmajiyat-ltd (MUT-147, ADR-091 amendment 9)
 
 **Why:** `--apply` refused the org because it also holds `e33-api` and `e33-flutter`; Basel chose to share the org.
