@@ -383,6 +383,58 @@ export const BillingStatusSchema = z
   })
   .openapi('BillingStatus');
 
+const CatalogPairSchema = z
+  .object({ month: z.number().int().positive(), year: z.number().int().positive() })
+  .nullable()
+  .openapi({ description: 'Minor units. Null: this currency has no complete pair of GA prices yet, so it is not sold.' });
+
+/** MUT-362: Settings › Billing in one read (GET /v1/billing). */
+export const BillingOverviewSchema = z
+  .object({
+    /** False on a server without Stripe keys: the portal shows "Subscriptions open soon" (design review DR5). */
+    configured: z.boolean(),
+    /** The person's latest subscription (by period end), or null if they never had one. */
+    subscription: z
+      .object({
+        tier: z.enum(['FREELANCER', 'FIRM']),
+        status: z.string(),
+        interval: z.enum(['month', 'year']).nullable(),
+        currency: z.string(),
+        currentPeriodEnd: z.string().datetime(),
+        cancelAtPeriodEnd: z.boolean(),
+      })
+      .nullable(),
+    /** A Stripe customer is linked to this person, so the Customer Portal can open. */
+    canManage: z.boolean(),
+    /** The free trial (14 days, then read-only until day 30, then locked); null for an account that never had one. */
+    trial: z.object({ startedAt: z.string().datetime(), endsAt: z.string().datetime(), lockAt: z.string().datetime() }).nullable(),
+    catalog: z.object({ ILS: CatalogPairSchema, USD: CatalogPairSchema }),
+    /** billing-countries.json: where a person may buy without a tax ID, and where a business types its number. */
+    countries: z.object({ consumer: z.array(z.string()), customTaxId: z.array(z.string()) }),
+  })
+  .openapi('BillingOverview');
+
+const ReturnPathSchema = z
+  .string()
+  .max(200)
+  .openapi({ description: 'Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin.' });
+
+export const CheckoutSessionRequestSchema = z
+  .object({
+    interval: z.enum(['month', 'year']),
+    /** ISO 3166-1 alpha-2, the billing address country the person picked; it sets ILS (IL) or USD. */
+    country: z.string().regex(/^[A-Z]{2}$/),
+    buyer: z.enum(['person', 'business']),
+    returnPath: ReturnPathSchema,
+  })
+  .strict()
+  .openapi('CheckoutSessionRequest');
+
+export const PortalSessionRequestSchema = z.object({ returnPath: ReturnPathSchema }).strict().openapi('PortalSessionRequest');
+
+/** A Stripe-hosted page to send the browser to. */
+export const BillingRedirectSchema = z.object({ url: z.string().url() }).openapi('BillingRedirect');
+
 /** MUT-360: what the webhook answers Stripe; `result` shows in Stripe's delivery log. */
 export const StripeWebhookResponseSchema = z
   .object({ received: z.literal(true), result: z.enum(['ignored', 'duplicate', 'noop', 'processed', 'error']) })
@@ -1079,6 +1131,15 @@ export const CONFLICT_REASONS = [
   'OUTCOME_ALREADY_RECORDED',
   'OUTCOME_NOT_RECORDED',
   'OUTCOME_HAS_PAYMENTS',
+  // MUT-362 (ADR-169): why Settings › Billing can't open Checkout or the Customer Portal for this person.
+  'ALREADY_SUBSCRIBED',
+  'RESUME_IN_PORTAL',
+  'CONTACT_US',
+  'NOTHING_TO_COVER',
+  'COVERED_BY_MALAFAT',
+  'COVERED_BY_GRANT',
+  'NO_BILLING_ACCOUNT',
+  'BILLING_ACCOUNT_NEEDS_HELP',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -1167,6 +1228,8 @@ export const VALIDATION_REASONS = [
   // MUT-194 (ADR-075) / MUT-272 (ADR-096): a currency travels with its amount; a conversion's legs differ
   'AMOUNT_REQUIRED',
   'SAME_CURRENCY',
+  // MUT-362: a person (no tax ID) in a country not yet open to consumers (billing-countries.json); a business can buy.
+  'COUNTRY_NEEDS_BUSINESS',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----

@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import type { CheckoutGateway, CheckoutPerson, PriceFact } from '../checkout-gateway.js';
 import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGateway } from '../gateway.js';
 
 /**
@@ -112,3 +113,73 @@ export const stripeObjects = {
     } as unknown as Stripe.Subscription;
   },
 };
+
+/**
+ * MUT-362: the write door in memory for route tests. Records each call, answers with deterministic URLs, and can be
+ * told to fail the next call (transient by default, or with a Stripe code such as `resource_missing`).
+ */
+export class FakeCheckoutGateway implements CheckoutGateway {
+  readonly prices = new Map<string, PriceFact>();
+  /** Customers by id, with the person their metadata names. */
+  readonly customers = new Map<string, { email: string; userId: string }>();
+  readonly checkoutSessions: Stripe.Checkout.SessionCreateParams[] = [];
+  readonly portalSessions: { customer: string; returnUrl: string }[] = [];
+  readonly calls: string[] = [];
+  private failures: StripeGatewayError[] = [];
+  private pricesFail = false;
+
+  /** All four GA prices, in their currencies (the founder ratio: a year is 10× a month). */
+  withGaPrices(): this {
+    const add = (key: string, currency: string, unitAmount: number, interval: 'month' | 'year') => this.prices.set(key, { id: `price_${key}`, currency, unitAmount, interval });
+    add('freelancer_list_monthly_ils', 'ILS', 3900, 'month');
+    add('freelancer_list_yearly_ils', 'ILS', 39000, 'year');
+    add('freelancer_list_monthly_usd', 'USD', 1000, 'month');
+    add('freelancer_list_yearly_usd', 'USD', 10000, 'year');
+    return this;
+  }
+
+  failNext(code: string | null = null): void {
+    this.failures.push(new StripeGatewayError({ code, type: code === null ? 'StripeAPIError' : 'StripeInvalidRequestError', requestId: 'req_fake', transient: code === null }));
+  }
+
+  /** The next price lookup fails (transiently); `failNext` leaves lookups alone, as the real gateway's cache would. */
+  failPricesNext(): void {
+    this.pricesFail = true;
+  }
+
+  async pricesByLookupKey(keys: readonly string[]): Promise<Map<string, PriceFact>> {
+    this.calls.push('prices');
+    if (this.pricesFail) {
+      this.pricesFail = false;
+      throw new StripeGatewayError({ code: null, type: 'StripeAPIError', requestId: 'req_fake', transient: true });
+    }
+    return new Map(keys.flatMap((k) => (this.prices.has(k) ? [[k, this.prices.get(k)!] as const] : [])));
+  }
+
+  async findOrCreateCustomer(person: CheckoutPerson): Promise<string> {
+    this.take(`customer:${person.userId}`);
+    const existing = [...this.customers.entries()].find(([, c]) => c.userId === person.userId);
+    if (existing) return existing[0];
+    const id = `cus_new_${this.customers.size + 1}`;
+    this.customers.set(id, { email: person.email, userId: person.userId });
+    return id;
+  }
+
+  async createCheckoutSession(params: Stripe.Checkout.SessionCreateParams): Promise<{ url: string }> {
+    this.take(`checkout:${String(params.customer)}`);
+    this.checkoutSessions.push(params);
+    return { url: `https://checkout.stripe.com/c/pay/cs_test_${this.checkoutSessions.length}` };
+  }
+
+  async createPortalSession(input: { customer: string; returnUrl: string }): Promise<{ url: string }> {
+    this.take(`portal:${input.customer}`);
+    this.portalSessions.push(input);
+    return { url: `https://billing.stripe.com/p/session/test_${this.portalSessions.length}` };
+  }
+
+  private take(call: string): void {
+    this.calls.push(call);
+    const failure = this.failures.shift();
+    if (failure) throw failure;
+  }
+}

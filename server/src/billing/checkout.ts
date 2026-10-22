@@ -115,7 +115,7 @@ export function isReturnPath(path: string): boolean {
 }
 
 export function planCheckout(input: CheckoutInput, person: PersonBilling, countries: BillingCountries, catalog: Catalog): CheckoutPlan {
-  const refusal = refusalOf(input, person, countries);
+  const refusal = checkoutRefusalOf(input, person, countries);
   if (refusal) return { ok: false, code: refusal };
   const currency = currencyOf(input.country);
   const prices = catalog[currency];
@@ -123,7 +123,8 @@ export function planCheckout(input: CheckoutInput, person: PersonBilling, countr
   return { ok: true, currency, params: paramsOf(input, prices[input.interval], countries) };
 }
 
-function refusalOf(input: CheckoutInput, person: PersonBilling, countries: BillingCountries): CheckoutRefusal | null {
+/** Every refusal that needs no price: the route checks these before asking Stripe for the catalog. */
+export function checkoutRefusalOf(input: Pick<CheckoutInput, 'country' | 'buyer'>, person: PersonBilling, countries: BillingCountries): CheckoutRefusal | null {
   const statuses = person.subscriptions.map((s) => s.status);
   if (statuses.some((s) => LIVE_STATUSES.has(s))) return 'ALREADY_SUBSCRIBED';
   // Stripe keeps an unpaid subscription and its open invoice, and locks the customer's currency while it exists (D6).

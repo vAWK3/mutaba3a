@@ -312,10 +312,11 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       expect(rows).toHaveLength(1);
     });
 
-    it('summaryOf returns the person’s linked account and its subscriptions, latest period first (MUT-362)', async () => {
+    it('summaryOf returns the person’s trial start, linked account and its subscriptions, latest period first (MUT-362)', async () => {
       const store = await makeStore();
       const { user } = await store.users.create(userInput());
-      expect(await store.billing.summaryOf(user.id)).toEqual({ account: null, subscriptions: [] });
+      expect(await store.billing.summaryOf(user.id)).toEqual({ account: null, subscriptions: [], trialStartedAt: null });
+      await store.billing.setTrialStart(user.id, at(5));
 
       const customer = `cus_${unique()}`;
       await store.billing.saveAccount(account(customer, user.id, { country: 'IL', currency: 'ILS' }));
@@ -325,6 +326,7 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       await store.billing.saveSubscription(newer);
 
       const summary = await store.billing.summaryOf(user.id);
+      expect(summary.trialStartedAt).toEqual(at(5));
       expect(summary.account).toMatchObject({ userId: user.id, stripeCustomerId: customer, country: 'IL', currency: 'ILS' });
       expect(summary.subscriptions.map((s) => [s.stripeSubscriptionId, s.status])).toEqual([
         [newer.stripeSubscriptionId, 'active'],
@@ -343,9 +345,9 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       await store.billing.saveAccount(account(others, other.id));
       await store.billing.saveSubscription(subscription(others));
 
-      expect(await store.billing.summaryOf(user.id)).toEqual({ account: null, subscriptions: [] });
+      expect(await store.billing.summaryOf(user.id)).toEqual({ account: null, subscriptions: [], trialStartedAt: null });
       expect((await store.billing.summaryOf(other.id)).account?.stripeCustomerId).toBe(others);
-      expect(await store.billing.summaryOf(randomUUID())).toEqual({ account: null, subscriptions: [] });
+      expect(await store.billing.summaryOf(randomUUID())).toEqual({ account: null, subscriptions: [], trialStartedAt: null });
     });
   });
 }

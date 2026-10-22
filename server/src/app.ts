@@ -22,7 +22,10 @@ import { adminAuth, adminRoutes, jobAuth } from './routes/admin.js';
 import { adminBillingRoutes } from './routes/admin-billing.js';
 import { STRIPE_WEBHOOK_POLICY, stripeBillingRoutes } from './routes/stripe-billing.js';
 import type { StripeGateway } from './billing/stripe/gateway.js';
+import type { CheckoutGateway } from './billing/stripe/checkout-gateway.js';
+import { BILLING_COUNTRIES, type BillingCountries } from './billing/checkout.js';
 import { createStripeSync } from './billing/stripe/sync.js';
+import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES, BILLING_SESSION_POLICY, billingRoutes } from './routes/billing.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
@@ -85,9 +88,14 @@ export interface AppDependencies {
   minimumBuild?: MinimumBuildConfig | null;
   /**
    * MUT-360: Stripe, one gateway per budget (D7: the webhook answers fast, reconcile is patient). Null or absent = the
-   * webhook and both reconcile routes answer 503 BILLING_NOT_CONFIGURED.
+   * webhook and both reconcile routes answer 503 BILLING_NOT_CONFIGURED. MUT-362: `checkoutGateway` is the write door
+   * for Settings › Billing; absent = GET /v1/billing says `configured: false` and its two POSTs answer 503.
    */
-  stripe?: { webhookGateway: StripeGateway; reconcileGateway: StripeGateway } | null;
+  stripe?: { webhookGateway: StripeGateway; reconcileGateway: StripeGateway; checkoutGateway?: CheckoutGateway } | null;
+  /** MUT-362: the consumer-country rules. Defaults to the shipped billing-countries.json. */
+  billingCountries?: BillingCountries;
+  /** MUT-362: per-person budget for billing session requests. Defaults to BILLING_SESSION_POLICY. */
+  billingSessionLimiter?: RateLimiter;
   /** MUT-360 D2: the nightly Scheduler job's token. Null or absent = /jobs/* answers 503 JOBS_NOT_CONFIGURED. */
   jobToken?: string | null;
   /** Per-IP budget for the Stripe webhook. Defaults to STRIPE_WEBHOOK_POLICY. */
@@ -162,7 +170,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.50.0-mut389';
+export const API_VERSION = '1.52.0-mut362';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -216,7 +224,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       rateLimiter: deps.rateLimiter,
       sessions,
       routeAccess: resolveRouteAccess,
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
@@ -276,6 +284,17 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.
   app.route('/', recordsExportRoutes(store, { storage: deps.attachments ?? null, logger: deps.logger }));
+  // MUT-362: signed in only and person-level, so outside PORTAL_ROUTES (the signed-out portal has no billing).
+  app.route(
+    '/',
+    billingRoutes(store, {
+      checkout: deps.stripe?.checkoutGateway ?? null,
+      countries: deps.billingCountries ?? BILLING_COUNTRIES,
+      limiter: deps.billingSessionLimiter ?? new SlidingWindowRateLimiter(BILLING_SESSION_POLICY.perMinute),
+      portalOrigin: sessions.portalOrigin,
+      logger: deps.logger,
+    }),
+  );
   // MUT-255 (decision P1): the receipts library is hosted only, so outside PORTAL_ROUTES; signed-out local mode has none.
   // MUT-389: and only where RECEIPTS_LIBRARY turns it on.
   if (deps.receiptsLibrary) {

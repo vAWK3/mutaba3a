@@ -109,6 +109,20 @@ describe('Stripe sync (MUT-360)', () => {
     expect(linked[0]).toMatchObject({ actorType: 'SYSTEM', entityType: 'user', entityId: u.userId, metadata: { stripeCustomerId: 'cus_new', userId: u.userId, source: 'stripe' } });
   });
 
+  it('a Checkout from Settings › Billing (MUT-362) links the customer CheckoutGateway made and covers the person’s profiles', async () => {
+    const h = await harness();
+    const u = await h.person();
+    // As findOrCreateCustomer leaves it: our metadata, no billing_accounts row (ADR-165 D6), and a GA list price.
+    h.stripe.customers.set('cus_m362', stripeObjects.customer('cus_m362', { mutaba3a_user_id: u.userId }, 'IL'));
+    h.stripe.subscriptions.set('sub_m362', stripeObjects.subscription({ id: 'sub_m362', customer: 'cus_m362', product: 'prod_F', lookupKey: 'freelancer_list_monthly_ils' }));
+    const checkout = h.event('checkout.session.completed', { id: 'cs_m362', mode: 'subscription', subscription: 'sub_m362', customer: 'cus_m362', client_reference_id: u.userId });
+    expect(await h.sync.handleEvent(checkout, null)).toMatchObject({ status: 200, result: 'processed' });
+    expect(await h.store.billing.summaryOf(u.userId)).toMatchObject({
+      account: { stripeCustomerId: 'cus_m362', userId: u.userId, country: 'IL', currency: 'ILS' },
+      subscriptions: [{ stripeSubscriptionId: 'sub_m362', status: 'active', tier: 'FREELANCER', priceLookupKey: 'freelancer_list_monthly_ils' }],
+    });
+  });
+
   it('customer.updated refreshes an existing account and never creates one', async () => {
     const h = await harness();
     const u = await h.person();

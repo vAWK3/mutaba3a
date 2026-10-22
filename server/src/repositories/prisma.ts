@@ -1808,13 +1808,14 @@ export class PrismaLedgerStore implements LedgerStore {
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       }),
     summaryOf: async (userId) => {
-      const found = await this.prisma.billingAccount.findUnique({
-        where: { userId },
-        include: { subscriptions: { orderBy: [{ currentPeriodEnd: 'desc' }, { id: 'asc' }] } },
-      });
-      if (!found) return { account: null, subscriptions: [] };
+      const [found, person] = await Promise.all([
+        this.prisma.billingAccount.findUnique({ where: { userId }, include: { subscriptions: { orderBy: [{ currentPeriodEnd: 'desc' }, { id: 'asc' }] } } }),
+        this.prisma.user.findUnique({ where: { id: userId }, select: { trialStartedAt: true } }),
+      ]);
+      const trialStartedAt = person?.trialStartedAt ?? null;
+      if (!found) return { account: null, subscriptions: [], trialStartedAt };
       const { subscriptions, ...account } = found;
-      return { account, subscriptions };
+      return { account, subscriptions, trialStartedAt };
     },
     saveAccount: async (input) => {
       const attempt = () =>
