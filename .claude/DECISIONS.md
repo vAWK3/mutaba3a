@@ -3681,6 +3681,11 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Proof in production (D4).** `/health` reports `errorReporting: on|off` (API 1.48.0-mut148) and every release smoke checks it; `npm run sentry:smoke` sends one deliberate event.
 - **Privacy (D5).** The policy names only the servers as senders until MUT-149..151 ship their surfaces (ADR-090 P3).
 
+**Amendment 7 (hand-made projects, 2026-10-22)**: Basel created two projects in Sentry's UI before the first apply: `mutaba3a-web` for the portal and `mutaba3a-flutter` for the capture app. Terraform adopts them instead of creating `mutaba3a-portal` and `mutaba3a-capture-app`.
+- **How.** `local.surfaces` carries each surface's slug and an `adopted` flag. An `import` block (behind `import_hand_made_projects`, default true; the offline tests set it false because a mocked provider can't import) brings the two under Terraform on the next apply. `mutaba3a-api` and `mutaba3a-landing` are still created. Keys, alerts and spike protection are named after the slugs.
+- **What import can't do.** `default_key = false` and `default_rules = false` apply only at creation, so the adopted projects keep Sentry's uncapped `Default` key and default alert rule. DEPLOYMENT.md §1.5 step 7 has the operator revoke both; the `mutaba3a-web` Default key's DSN was also pasted outside Sentry.
+- **Unchanged.** Every slug still starts `mutaba3a-`, so the settings script's wrong-org guard (D16) holds without change. Surface keys (`portal`, `capture-app`) are unchanged, so the DSN homes in the README stay the same.
+
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
 **Status**: Accepted (2026-10-17, MUT-157; auto-decided on the recommended option at Basel's request, C1)

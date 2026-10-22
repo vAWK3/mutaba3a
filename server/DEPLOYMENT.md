@@ -163,6 +163,13 @@ state, and `deploy.sh` never touches it. The rules are in
    after this apply. So before applying, read the org slug in the plan: every
    resource should show `organization = "barmajiyat-ltd"`.
 
+   **Two projects already exist.** You made `mutaba3a-web` (portal) and `mutaba3a-flutter`
+   (capture app) by hand in Sentry's UI, so the plan shows them as **2 to import**, not
+   to add. Terraform creates `mutaba3a-api` and `mutaba3a-landing`. The import may also
+   show in-place changes on the two (team `mutaba3a`, allowed domains): that's expected.
+   If the plan wants to *create* `mutaba3a-web` or `mutaba3a-flutter`, stop: the slug in
+   Sentry differs from `local.surfaces` in `main.tf`.
+
    If the plan errors on `de.sentry.io`, or the apply stops on the "not in the
    EU region" postcondition, **stop and check the org's data region** in its
    settings. Never retry against `sentry.io`: that would hide an org created in
@@ -189,7 +196,16 @@ state, and `deploy.sh` never touches it. The rules are in
 
    The api DSN needs no copying: step 8 reads it from this stack's state. The
    other three wait for MUT-149..151. Then `unset SENTRY_ADMIN_TOKEN`.
-7. **Read back.** In Sentry, confirm:
+7. **Clean up the two hand-made projects.** Sentry gave each an automatic key with no rate
+   limit and a default alert rule; Terraform can't remove either (it only sets `default_key
+   = false` at creation). In `mutaba3a-web` and `mutaba3a-flutter`:
+   - Settings › Client Keys: **revoke the key named `Default`**, keeping only the one named
+     after the project (the capped Terraform key). The `mutaba3a-web` Default key is the DSN
+     from Sentry's onboarding snippet, which has been pasted outside Sentry, so it must go.
+   - Alerts: delete the default rule ("Send a notification for high priority issues" or
+     similar), keeping the three Terraform alerts.
+
+   **Read back.** In Sentry, confirm:
    - four projects, each with one key, capped per day;
    - spike protection on;
    - three alerts per project;
