@@ -41,7 +41,14 @@ function leakyRequestEvent(): Record<string, unknown> {
   };
 }
 
+/** Contract fields no surface reads at runtime: the region and surface list are checked by Terraform, the org settings by the settings script. */
+const NOT_EMBEDDED = ['region', 'surfaces', 'orgSettings', 'orgSensitiveFields'];
+
 describe('server Sentry rules (MUT-148, ADR-091)', () => {
+  it('embeds every contract field a scrubber reads, so a new rule cannot be skipped silently', () => {
+    expect(Object.keys(rules).filter((key) => !NOT_EMBEDDED.includes(key)).sort()).toEqual(Object.keys(SENTRY_RULES).sort());
+  });
+
   it.each(Object.keys(SENTRY_RULES))('embeds %s exactly as the contract file holds it', (key) => {
     expect(SENTRY_RULES[key as keyof typeof SENTRY_RULES]).toEqual(rules[key]);
   });
