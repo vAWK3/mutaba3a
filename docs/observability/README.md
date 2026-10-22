@@ -229,16 +229,17 @@ and refuses an org outside the EU region before writing anything (D5).
     text the fixtures keep (D2).
   - **Hand-added fields.** `--apply` keeps sensitive fields added by hand.
 
-**Quota (D6).**
+**Quota (D6, amended 2026-10-22: no per-key caps).**
 
 - **The shared quota.** The plan's monthly error quota is shared by all four projects, and three
   of the DSNs are public (the landing and portal JavaScript, and the phone binary). The origin
   allow-list doesn't stop a script.
-- **Daily caps.** So each key is capped **per day**: api 60, capture-app 60, portal 20 and
-  landing 20. Together that's 160 a day, under the 5,000 a month over 31 days.
-- **What that buys.** One abused or crash-looping surface loses the rest of its own day, but can
-  never use up the month and blind the API.
-- **Guard.** Terraform refuses caps whose sum would overrun `monthly_event_quota`.
+- **No daily caps on the free plan.** Per-key rate limits are a paid-plan feature: on the first
+  apply Sentry ignored them and the provider failed (ADR-091 amendment 8). The keys are uncapped.
+- **What's left.** Spike protection on every project, and the $0 pay-as-you-go budget, so overage
+  is dropped and never billed.
+- **The risk (TD-200).** One abused or crash-looping surface can use up the month's quota and hide
+  the other surfaces' errors until it resets. The API's errors still reach Cloud Logging.
 
 ## Changing the contract
 

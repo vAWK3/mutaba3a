@@ -134,8 +134,8 @@ state, and `deploy.sh` never touches it. The rules are in
 2. **Plan and budget.** Stay on the **Developer (free)** plan. Under
    Settings › Subscription, set the **pay-as-you-go budget to $0**, so overage
    is dropped and never billed, and keep Sentry's **quota notification emails**
-   on. Check the plan's current monthly error quota on Sentry's pricing page; if
-   it isn't 5,000, set `monthly_event_quota` in `production.tfvars` to match.
+   on. The free plan can't cap a key per day (ADR-091 amendment 8, TD-200), so this
+   budget and spike protection are the only quota guards.
 3. **Two tokens, two names** (D8).
    - **Admin token**, `SENTRY_ADMIN_TOKEN`: a **personal (user) auth token**
      (`sntryu_…`) created on your 2FA-enabled account, with `org:write`,
@@ -162,6 +162,11 @@ state, and `deploy.sh` never touches it. The rules are in
    The personal token reaches every org you belong to, and the step 5 guard runs
    after this apply. So before applying, read the org slug in the plan: every
    resource should show `organization = "barmajiyat-ltd"`.
+
+   **If an earlier apply stopped with "inconsistent result" on `sentry_key`** (it did on
+   2026-10-22, before ADR-091 amendment 8), the four keys are tainted. Keep them, and their
+   DSNs, before planning again:
+   `for s in api portal landing capture-app; do terraform untaint "sentry_key.this[\"$s\"]"; done`.
 
    **Two projects already exist.** You made `mutaba3a-web` (portal) and `mutaba3a-flutter`
    (capture app) by hand in Sentry's UI, so the plan shows them as **2 to import**, not
@@ -206,7 +211,9 @@ state, and `deploy.sh` never touches it. The rules are in
      similar), keeping the three Terraform alerts.
 
    **Read back.** In Sentry, confirm:
-   - four projects, each with one key, capped per day;
+   - four projects, each with one key (no rate limit: the free plan can't set one);
+   - the **Spike** alert's filter reads "more than 10 events in 1 hour" with no trigger, so it
+     runs on every event. If Sentry shows it never fires, tell the team: it may need a trigger;
    - spike protection on;
    - three alerts per project;
    - the portal and landing projects' Allowed Domains.

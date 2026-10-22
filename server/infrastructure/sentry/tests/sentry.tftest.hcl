@@ -9,6 +9,11 @@ mock_provider "sentry" {
       dsn = { public = "https://public@o0.ingest.de.sentry.io/0" }
     }
   }
+  mock_data "sentry_project_error_monitor" {
+    defaults = {
+      id = "4512000000000001"
+    }
+  }
 }
 
 variables {
@@ -40,7 +45,7 @@ run "project_slugs_and_the_two_made_by_hand" {
   }
 }
 
-run "four_projects_each_with_one_capped_key" {
+run "four_projects_each_with_one_key" {
   command = apply
 
   assert {
@@ -61,11 +66,6 @@ run "four_projects_each_with_one_capped_key" {
   assert {
     condition     = toset(keys(sentry_key.this)) == toset(keys(sentry_project.this))
     error_message = "Every project has exactly one managed key."
-  }
-
-  assert {
-    condition     = alltrue([for key in sentry_key.this : key.rate_limit_window == 86400 && key.rate_limit_count > 0])
-    error_message = "Every key is capped per day (D6)."
   }
 }
 
@@ -117,7 +117,7 @@ run "three_email_alerts_per_project" {
 
   assert {
     condition = alltrue([
-      for alerts in [sentry_issue_alert.new_issue, sentry_issue_alert.regression, sentry_issue_alert.spike] :
+      for alerts in [sentry_alert.new_issue, sentry_alert.regression, sentry_alert.spike] :
       toset(keys(alerts)) == toset(keys(sentry_project.this))
     ])
     error_message = "Each of the four projects has a new-issue, a regression and a spike alert."
@@ -125,14 +125,31 @@ run "three_email_alerts_per_project" {
 
   assert {
     condition = alltrue([
-      for alert in concat(values(sentry_issue_alert.new_issue), values(sentry_issue_alert.regression), values(sentry_issue_alert.spike)) :
-      alert.actions_v2[0].notify_email.target_type == "IssueOwners" && alert.actions_v2[0].notify_email.fallthrough_type == "AllMembers"
+      for surface, alert in merge(sentry_alert.new_issue, sentry_alert.regression, sentry_alert.spike) :
+      alert.monitor_ids == toset([data.sentry_project_error_monitor.this[surface].id])
+    ])
+    error_message = "Every alert runs on its own project's default error monitor."
+  }
+
+  assert {
+    condition = alltrue([
+      for alert in concat(values(sentry_alert.new_issue), values(sentry_alert.regression), values(sentry_alert.spike)) :
+      alert.action_filters[0].actions[0].email.target_type == "issue_owners" && alert.action_filters[0].actions[0].email.fallthrough_type == "AllMembers"
     ])
     error_message = "Every alert emails the issue owners, falling through to all members (Basel on a one-seat org)."
   }
 
   assert {
-    condition     = alltrue([for alert in sentry_issue_alert.spike : alert.conditions_v2[0].event_frequency.value == 10 && alert.conditions_v2[0].event_frequency.interval == "1h"])
+    condition = alltrue([for alert in sentry_alert.new_issue : alert.trigger_conditions[0].first_seen_event != null]) && alltrue([
+      for alert in sentry_alert.regression : alert.trigger_conditions[0].regression_event != null
+    ])
+    error_message = "The new-issue alert triggers on a first-seen event, the regression alert on a regression."
+  }
+
+  assert {
+    condition = alltrue([for alert in sentry_alert.spike :
+      alert.action_filters[0].conditions[0].event_frequency_count.value == 10 && alert.action_filters[0].conditions[0].event_frequency_count.interval == "1h"
+    ])
     error_message = "The spike alert fires above the default 10 events of one issue per hour."
   }
 }
@@ -193,43 +210,11 @@ run "no_extras_still_allows_the_configured_origins" {
   }
 }
 
-run "rejects_a_zero_rate_limit" {
+run "rejects_a_non_positive_spike_threshold" {
   command = plan
 
   variables {
-    key_rate_limit_per_day = { api = 0, portal = 20, landing = 20, "capture-app" = 60 }
-  }
-
-  expect_failures = [var.key_rate_limit_per_day]
-}
-
-run "rejects_a_rate_limit_map_missing_a_surface" {
-  command = plan
-
-  variables {
-    key_rate_limit_per_day = { api = 60 }
-  }
-
-  expect_failures = [var.key_rate_limit_per_day]
-}
-
-run "rejects_daily_caps_that_overrun_the_monthly_quota" {
-  command = plan
-
-  # D6: 200 a day x 31 days is more than the 5,000-event monthly quota.
-  variables {
-    key_rate_limit_per_day = { api = 100, portal = 20, landing = 20, "capture-app" = 60 }
-  }
-
-  expect_failures = [var.key_rate_limit_per_day]
-}
-
-run "rejects_a_spike_threshold_the_daily_caps_never_reach" {
-  command = plan
-
-  # Convergence review: portal and landing keys drop everything past 20 a day, so 50 an hour can never happen there.
-  variables {
-    spike_threshold_per_hour = 50
+    spike_threshold_per_hour = 0
   }
 
   expect_failures = [var.spike_threshold_per_hour]

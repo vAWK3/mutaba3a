@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — Sentry alerts move to `sentry_alert`; keys lose their daily caps (MUT-147, ADR-091 amendment 8)
+
+**Why:** the first `terraform apply` got 404 on every `sentry_issue_alert` (Sentry retired the classic endpoints)
+and an inconsistent result on every `sentry_key` (per-key rate limits need a paid plan, confirmed in the UI).
+
+### Changed
+- `server/infrastructure/sentry/main.tf`: the new-issue, regression and spike alerts are `sentry_alert` on each
+  project's `sentry_project_error_monitor`; `sentry_key` sets no rate limit. TD-159 resolved; no deprecation warning.
+- `variables.tf`: `key_rate_limit_per_day` and `monthly_event_quota` removed; `spike_threshold_per_hour` > 0 only.
+- Tests: alerts asserted on monitor, triggers, email and the spike filter; the cap runs are gone. 13/13 pass.
+- Docs: DEPLOYMENT.md §1.5 (untaint the four keys from the failed apply; read-back without caps; check the spike
+  alert), README quota section, INFRA rows, TD-200 (no caps: one surface can use up the month).
+
 ## [Unreleased] - 2026-10-22 — The entries feed lists by money date, with day and logged-since filters (MUT-390, API 1.49.0)
 
 **Why:** Recent grouped entries by the day they were logged, so backdated entries all sat under "Today". ADR-168;

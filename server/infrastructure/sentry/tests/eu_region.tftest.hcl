@@ -8,6 +8,11 @@ mock_provider "sentry" {
       dsn = { public = "https://public@o0.ingest.de.sentry.io/0" }
     }
   }
+  mock_data "sentry_project_error_monitor" {
+    defaults = {
+      id = "4512000000000001"
+    }
+  }
 }
 
 variables {

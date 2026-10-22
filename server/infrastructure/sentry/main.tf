@@ -80,11 +80,12 @@ import {
 resource "sentry_key" "this" {
   for_each = local.surfaces
 
-  organization      = var.organization
-  project           = sentry_project.this[each.key].id
-  name              = each.value.slug
-  rate_limit_window = 86400
-  rate_limit_count  = var.key_rate_limit_per_day[each.key]
+  organization = var.organization
+  project      = sentry_project.this[each.key].id
+  name         = each.value.slug
+  # No per-key rate limit (ADR-091 amendment 8): Sentry's Developer plan ignores it, the API
+  # answers null, and the provider then reports an inconsistent result. Spike protection and
+  # the $0 pay-as-you-go budget are the guards on this plan.
 
   lifecycle {
     # D5: reports must land in Sentry's EU region (ADR-091). A US-region org hands out
@@ -113,48 +114,57 @@ resource "sentry_all_projects_spike_protection" "this" {
 }
 
 # Three alerts per project, emailed to the issue owners and falling through to
-# all members, which is Basel on a one-seat org. `frequency` is the minutes
-# between repeat emails for the same issue. sentry_issue_alert is deprecated in
-# favour of sentry_alert, which needs workflow monitor ids per project;
-# TECH_DEBT records the move.
+# all members, which is Basel on a one-seat org. `frequency_minutes` is the gap
+# between repeat emails for the same issue. Sentry retired the classic issue-alert
+# endpoints (sentry_issue_alert answered 404 on the first apply, 2026-10-22), so
+# these are sentry_alert workflows on each project's default error monitor
+# (ADR-091 amendment 8, TD-159 resolved).
 locals {
-  alert_email = [{ notify_email = { target_type = "IssueOwners", fallthrough_type = "AllMembers" } }]
+  alert_email = [{ email = { target_type = "issue_owners", fallthrough_type = "AllMembers" } }]
 }
 
-resource "sentry_issue_alert" "new_issue" {
-  for_each = local.surfaces
-
-  organization  = var.organization
-  project       = sentry_project.this[each.key].id
-  name          = "New issue: ${each.value.slug}"
-  action_match  = "any"
-  frequency     = 30
-  conditions_v2 = [{ first_seen_event = {} }]
-  actions_v2    = local.alert_email
-}
-
-resource "sentry_issue_alert" "regression" {
-  for_each = local.surfaces
-
-  organization  = var.organization
-  project       = sentry_project.this[each.key].id
-  name          = "Regression: ${each.value.slug}"
-  action_match  = "any"
-  frequency     = 30
-  conditions_v2 = [{ regression_event = {} }]
-  actions_v2    = local.alert_email
-}
-
-resource "sentry_issue_alert" "spike" {
+data "sentry_project_error_monitor" "this" {
   for_each = local.surfaces
 
   organization = var.organization
-  project      = sentry_project.this[each.key].id
-  name         = "Spike: ${each.value.slug}"
-  action_match = "any"
-  frequency    = 60
-  conditions_v2 = [{
-    event_frequency = { comparison_type = "count", value = var.spike_threshold_per_hour, interval = "1h" }
+  project      = sentry_project.this[each.key].slug
+}
+
+resource "sentry_alert" "new_issue" {
+  for_each = local.surfaces
+
+  organization       = var.organization
+  name               = "New issue: ${each.value.slug}"
+  monitor_ids        = [data.sentry_project_error_monitor.this[each.key].id]
+  frequency_minutes  = 30
+  trigger_conditions = [{ first_seen_event = {} }]
+  action_filters     = [{ logic_type = "all", actions = local.alert_email }]
+}
+
+resource "sentry_alert" "regression" {
+  for_each = local.surfaces
+
+  organization       = var.organization
+  name               = "Regression: ${each.value.slug}"
+  monitor_ids        = [data.sentry_project_error_monitor.this[each.key].id]
+  frequency_minutes  = 30
+  trigger_conditions = [{ regression_event = {} }]
+  action_filters     = [{ logic_type = "all", actions = local.alert_email }]
+}
+
+# No trigger condition: it runs on every event, and the filter keeps only an issue
+# seen more than spike_threshold_per_hour times in the last hour. DEPLOYMENT.md §1.5
+# step 7 checks in Sentry that it reads that way.
+resource "sentry_alert" "spike" {
+  for_each = local.surfaces
+
+  organization      = var.organization
+  name              = "Spike: ${each.value.slug}"
+  monitor_ids       = [data.sentry_project_error_monitor.this[each.key].id]
+  frequency_minutes = 60
+  action_filters = [{
+    logic_type = "all"
+    conditions = [{ event_frequency_count = { interval = "1h", value = var.spike_threshold_per_hour } }]
+    actions    = local.alert_email
   }]
-  actions_v2 = local.alert_email
 }

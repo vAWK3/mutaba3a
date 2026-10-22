@@ -3686,6 +3686,11 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **What import can't do.** `default_key = false` and `default_rules = false` apply only at creation, so the adopted projects keep Sentry's uncapped `Default` key and default alert rule. DEPLOYMENT.md §1.5 step 7 has the operator revoke both; the `mutaba3a-web` Default key's DSN was also pasted outside Sentry.
 - **Unchanged.** Every slug still starts `mutaba3a-`, so the settings script's wrong-org guard (D16) holds without change. Surface keys (`portal`, `capture-app`) are unchanged, so the DSN homes in the README stay the same.
 
+**Amendment 8 (first apply, 2026-10-22)**: the first `terraform apply` created the projects, team, keys, filters and spike protection, then failed twice.
+- **Alerts → `sentry_alert`.** Every `sentry_issue_alert` create answered 404: Sentry retired the classic issue-alert endpoints in August 2026. The three alerts per project are now `sentry_alert` workflows whose `monitor_ids` is the project's default error monitor (`data "sentry_project_error_monitor"`). Same triggers (`first_seen_event`, `regression_event`; the spike has no trigger and filters on `event_frequency_count` > 10 in 1h) and the same email to issue owners, falling through to all members. TD-159 resolved.
+- **No per-key caps (supersedes D6's daily caps).** Sentry accepted the keys but returned no rate limit, and the provider reported an inconsistent result. Basel confirmed in the UI that key rate limits need a paid plan. `sentry_key` sets none; `key_rate_limit_per_day` and `monthly_event_quota` are gone, and the spike threshold need only be positive. Guards left: spike protection and the $0 pay-as-you-go budget. The risk is TD-200.
+- **Keys kept.** The four keys from that apply were tainted; `terraform untaint` keeps them (and their DSNs) instead of recreating them.
+
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
 **Status**: Accepted (2026-10-17, MUT-157; auto-decided on the recommended option at Basel's request, C1)
