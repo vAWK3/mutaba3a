@@ -35,6 +35,7 @@ import pkg from '../../package.json';
 import { repoPath } from '../../src/test/css/brandCss';
 import { pngSize } from '../../src/test/pngSize';
 import { HOSTS, parseHostsConfig, resolveHosts } from '../../config/hosts';
+import { CIMD_CLIENT_ID } from '../../src/services/oauth/oauth-client';
 
 /**
  * hosted-portal.md §8: the hosted build target is additive. The `web` and
@@ -164,6 +165,57 @@ describe('vite.config', () => {
       expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:domain-move-redirects');
       expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:domain-move-redirects');
       expect(netlifyRedirects(HOSTS)).toEqual(HOSTS.stage === 'legacy' || HOSTS.stage === 'proxy' ? '' : expect.stringContaining('/app'));
+    });
+
+    /**
+     * MUT-387: Malafat fetches our OAuth client document from CIMD_CLIENT_ID and refuses a 3xx
+     * (cimd-fetcher.ts), so no rule may ever sit in front of it. Keyed on the identity's own
+     * origin, not the config apex: the identity stays put when the apex moves, and may then be
+     * the legacy landing host whose pages stage "redirect" sends on.
+     */
+    describe('never redirects the Malafat OAuth client document (MUT-387)', () => {
+      const cimd = new URL(CIMD_CLIENT_ID);
+      const target = `${cimd.origin}${cimd.pathname}`;
+      const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      /** A Netlify `from` (a path on this site or a full URL; `*` splats the rest, `:name` is one segment) covering the document. */
+      const matches = (from: string) => {
+        const absolute = /^https?:\/\//.test(from) ? from : `${cimd.origin}${from}`;
+        const pattern = absolute
+          .split('/')
+          .map((segment) => (segment === '*' ? '.*' : segment.startsWith(':') ? '[^/]+' : escapeRegExp(segment)))
+          .join('/');
+        return new RegExp(`^${pattern}$`).test(target);
+      };
+      const cases = {
+        'the identity host is the apex': { domain: cimd.hostname },
+        'the identity host is the legacy landing after an apex move': { domain: 'placeholder.example', legacy: { ...LEGACY, landing: cimd.origin } },
+      };
+
+      it('recognises every Netlify `from` shape that would cover the document', () => {
+        for (const from of [`${cimd.origin}/*`, '/*', '/.well-known/*', `${cimd.origin}/.well-known/:file`, '/:dir/oauth-client.json', cimd.pathname]) {
+          expect(matches(from), from).toBe(true);
+        }
+        for (const from of ['/download/mac', '/app/*', `${cimd.origin}/app`, 'https://placeholder.example/*', '/.well-known/apple-app-site-association']) {
+          expect(matches(from), from).toBe(false);
+        }
+      });
+
+      for (const [name, env] of Object.entries(cases)) {
+        it(`emits no _redirects rule for it at any stage when ${name}`, () => {
+          // "legacy" has no domain and emits nothing (above).
+          for (const stage of ['proxy', 'live', 'redirect']) {
+            const froms = netlifyRedirects(hosts({ ...env, stage })).split('\n').filter(Boolean).map((line) => line.split(' ')[0]);
+            expect(froms.filter(matches), stage).toEqual([]);
+          }
+        });
+      }
+
+      it('has no forced netlify.toml rule over its path (an unforced rule never shadows a published file)', () => {
+        const rules = readFileSync(repoPath('netlify.toml'), 'utf8').split('[[redirects]]').slice(1);
+        const forced = rules.filter((rule) => /^\s*force\s*=\s*true/m.test(rule));
+        const froms = forced.map((rule) => /^\s*from\s*=\s*"([^"]+)"/m.exec(rule)?.[1] ?? '');
+        expect(froms.filter(matches)).toEqual([]);
+      });
     });
   });
 

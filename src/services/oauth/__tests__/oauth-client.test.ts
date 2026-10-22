@@ -6,6 +6,7 @@ import {
   parseCallbackParams,
   exchangeCodeForTokens,
   refreshTokens,
+  CIMD_CLIENT_ID,
   type AuthorizationServerMetadata,
   type OAuthClientConfig,
 } from '../oauth-client';
@@ -23,7 +24,7 @@ const META: AuthorizationServerMetadata = {
 
 const CONFIG: OAuthClientConfig = {
   // Byte-equal to the hosted CIMD document URL — the server compares exactly.
-  clientId: 'https://mutaba3a.app/.well-known/oauth-client',
+  clientId: CIMD_CLIENT_ID,
   redirectUri: 'http://127.0.0.1:1410/callback',
   scopes: ['clients:read', 'tasks:read'],
 };

@@ -37,8 +37,13 @@ import type { PkcePair } from './oauth-pkce';
  * The `.json` suffix is load-bearing: Malafat refuses a document whose
  * content-type is not JSON, and Netlify's SPA fallback would serve index.html
  * as text/html for an extensionless path.
+ *
+ * A fixed literal, never derived from config/hosts.json (MUT-387, ADR-155
+ * amendment): the id must not change when the domain does. Serving it still
+ * needs this host bound to the Netlify site as its primary domain, with no
+ * redirect in front (server/DEPLOYMENT.md §5a).
  */
-export const CIMD_CLIENT_ID = 'https://mutaba3a.app/.well-known/oauth-client.json';
+export const CIMD_CLIENT_ID = 'https://mtb3a.com/.well-known/oauth-client.json';
 
 /**
  * Loopback ports we are willing to bind, in preference order.
