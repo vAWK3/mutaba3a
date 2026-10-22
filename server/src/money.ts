@@ -19,6 +19,13 @@ export type Currency = (typeof SUPPORTED_CURRENCIES)[number];
 
 const EXPONENT: Record<Currency, number> = { ILS: 2, USD: 2, EUR: 2, JOD: 3 };
 
+/**
+ * MUT-388 (ADR-166): codes this API supported once and no longer accepts. Display only: `formatMoney` reads them so a
+ * row written while one was supported comes back with its real amount (a blank one fails every phone build's whole
+ * Recent page). Never a reason to accept one: `parseMoney`, `isSupportedCurrency` and the schemas use EXPONENT only.
+ */
+const RETIRED_EXPONENT: Readonly<Record<string, number>> = { AED: 2, SAR: 2, QAR: 2, BHD: 3, OMR: 3 };
+
 export function isSupportedCurrency(value: string): value is Currency {
   return (SUPPORTED_CURRENCIES as readonly string[]).includes(value);
 }
@@ -77,7 +84,7 @@ export function parseMoney(text: string, currency: Currency): Money {
 }
 
 export function formatMoney(money: Money): string {
-  const exponent = currencyExponent(money.currency);
+  const exponent = currencyExponent(money.currency) ?? RETIRED_EXPONENT[money.currency] ?? 2;
   const negative = money.minor < 0n;
   const abs = (negative ? -money.minor : money.minor).toString().padStart(exponent + 1, '0');
   const whole = abs.slice(0, abs.length - exponent);

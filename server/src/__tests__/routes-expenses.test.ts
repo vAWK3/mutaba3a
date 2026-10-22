@@ -284,6 +284,18 @@ describe('PATCH /v1/expenses/{id}', () => {
     expect((await read(summary)).currencies.map((c: Loose) => c.total)).toEqual(['50.00']);
   });
 
+  it('MUT-388: a row still in a removed Gulf currency reads back with its real amount, in the list and on its own', async () => {
+    const { h, a, p } = await setup();
+    const old = await h.store.expenses.create(
+      { organizationId: a.org.id, occurredOn: '2026-10-20', amountMinor: 12_345n, currency: 'BHD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId },
+      h.clock.now,
+    );
+    // A blank amount would fail every phone build's whole Recent page (MoneyCodec throws on ""), not just this row.
+    expect(await read(await h.app.request(`/v1/expenses/${old.id}`, { headers: p.as(a.org.id) }))).toMatchObject({ amount: '12.345', currency: 'BHD' });
+    const listed = await read(await h.app.request('/v1/expenses?from=2026-10-01&to=2026-10-31', { headers: p.as(a.org.id) }));
+    expect(listed.items.find((x: Loose) => x.id === old.id)).toMatchObject({ amount: '12.345', currency: 'BHD' });
+  });
+
   it('MUT-388: a row still in a removed Gulf currency refuses a new amount (422) instead of rescaling it, and moves to a supported one', async () => {
     const { h, a, p } = await setup();
     const old = await h.store.expenses.create(

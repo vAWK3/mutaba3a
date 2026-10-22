@@ -106,6 +106,12 @@ describe('currency support', () => {
 });
 
 describe('a currency this server no longer supports (MUT-388)', () => {
+  it('still formats a stored amount at its own decimals, so a row written while it was supported reads back', () => {
+    expect(formatMoney({ minor: 12_345n, currency: 'BHD' as Currency })).toBe('12.345');
+    expect(formatMoney({ minor: 125_050n, currency: 'AED' as Currency })).toBe('1250.50');
+    expect(formatMoney({ minor: 1n, currency: 'OMR' as Currency })).toBe('0.001');
+  });
+
   it('refuses to parse an amount instead of rescaling it', () => {
     // A stored row's `as Currency` cast can still carry a removed code; an undefined exponent once turned 12.345 into 12345.
     expect(() => parseMoney('12.345', 'AED' as Currency)).toThrow(MoneyParseError);
