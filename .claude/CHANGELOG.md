@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — The local API loads its own `.env` in dev
+
+**Why:** `tsx watch` restarts the API on any file edit in the shared checkout; an API started without its env (plain `npm run dev`)
+crashed on that restart and the phone QA run failed sign-in with "Couldn't reach the server". Same root cause as Flutter 5675a269.
+
+### Fixed
+- `server/package.json`: `dev` is `tsx watch --env-file-if-exists=.env src/index.ts`. Variables already set in the shell still win;
+  with no `.env` it starts anyway and the config schema reports what is missing. Needs Node ≥ 22.9 (engines say ≥ 22).
+
 ## [Unreleased] - 2026-10-22 — File a To-review receipt onto an expense that already exists; the receipts library ships dark (MUT-389, API 1.50.0)
 
 **Why:** the expense typed by hand and the receipt scanned later had no way to meet: approval always created a new
