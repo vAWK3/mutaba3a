@@ -2366,6 +2366,19 @@ export const ApproveReceiptRequestSchema = CreateExpenseRequestSchema.extend({
 
 export const ApproveReceiptResponseSchema = z.object({ expense: ExpenseSchema, receipt: ExpenseReceiptSchema }).openapi('ApproveReceiptResponse');
 
+/** MUT-389: file a To-review receipt onto an expense that already exists. */
+export const FileReceiptRequestSchema = z
+  .object({
+    expenseId: z.string().uuid(),
+    suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; replaces the stored one' }),
+  })
+  .strict()
+  .openapi('FileReceiptRequest');
+
+export const FileReceiptResponseSchema = z
+  .object({ expense: ExpenseDetailSchema, receipt: ExpenseReceiptSchema })
+  .openapi('FileReceiptResponse', { description: 'The expense with its READY receipts (the filed one among them), and the filed receipt' });
+
 const fieldEditRate = z.object({ suggested: z.number().int(), edited: z.number().int() });
 
 export const ReceiptEditRatesQuerySchema = z.object({

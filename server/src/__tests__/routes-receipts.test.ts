@@ -5,6 +5,7 @@ import { MemoryAttachmentStorage } from '../attachments/storage.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { MAX_RECEIPTS_PER_EXPENSE } from '../expenses/compose.js';
 import { MAX_PENDING_LIBRARY_UPLOADS, RECEIPT_UPLOAD_POLICY } from '../routes/receipts.js';
 import { provisionUser } from './helpers/provision.js';
 
@@ -211,6 +212,89 @@ describe('POST /v1/receipts/{id}/approve (AC2, AC3)', () => {
   });
 });
 
+describe('POST /v1/receipts/{id}/file (MUT-389): onto an expense that already exists', () => {
+  const typed = async (h: Harness, headers: Record<string, string>) => read(await h.app.request('/v1/expenses', json(approveBody, { ...headers, ...idem() })));
+  const fileOnto = (h: Harness, receiptId: string, body: object, headers: Record<string, string>) => h.app.request(`/v1/receipts/${receiptId}/file`, json(body, headers));
+  /** A READY receipt attached through the MUT-44 route. */
+  async function attach(h: Harness, headers: Record<string, string>, expenseId: string) {
+    const started = await read(await h.app.request(`/v1/expenses/${expenseId}/receipts`, json(FILE, headers)));
+    h.storage.put(keyOf(started.upload.url), { sizeBytes: FILE.sizeBytes, contentType: FILE.mimeType });
+    expect((await h.app.request(`/v1/expenses/${expenseId}/receipts/${started.receipt.id}/complete`, { method: 'POST', headers })).status).toBe(200);
+  }
+
+  it('files the receipt onto the expense with no new expense, answering the expense with its receipts; a replay answers the same; a new key gets 409 (AC1, AC2, AC4)', async () => {
+    const { h, org, as } = await setup();
+    const expense = await typed(h, as());
+    const receipt = await upload(h, as(), { ...FILE, suggested: SUGGESTION });
+    const key = idem();
+
+    const first = await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(), ...key });
+    expect(first.status).toBe(200);
+    const body = await read(first);
+    expect(body.expense).toMatchObject({ id: expense.id, amount: '15.00', version: expense.version });
+    expect(body.expense.receipts.map((r: Loose) => r.id)).toEqual([receipt.id]);
+    expect(body.receipt).toMatchObject({ id: receipt.id, expenseId: expense.id, filingStatus: 'FILED', suggested: SUGGESTION, approved: null, approvedAt: null });
+
+    const replay = await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(), ...key });
+    expect(replay.status).toBe(200);
+    expect(await read(replay)).toEqual(body);
+    const conflict = await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(), ...idem() });
+    expect(conflict.status).toBe(409);
+    expect((await read(conflict)).error.details).toEqual({ reason: 'RECEIPT_ALREADY_FILED', expenseId: expense.id });
+
+    expect((await read(await h.app.request('/v1/expenses', { headers: as() }))).items).toHaveLength(1);
+    expect((await read(await h.app.request(`/v1/expenses/${expense.id}`, { headers: as() }))).receipts.map((r: Loose) => r.id)).toEqual([receipt.id]);
+    expect(await read(await h.app.request('/v1/receipts/counts', { headers: as() }))).toEqual({ toReview: 0, filed: 1 });
+    const filed = (await h.store.audit.list(org.id, { action: 'expense_receipt.filed' }, { limit: 10, cursor: null })).items;
+    expect(filed.map((a) => [a.entityId, a.metadata])).toEqual([[receipt.id, { expenseId: expense.id, mode: 'existing' }]]);
+    expect((await h.store.audit.list(org.id, { action: 'expense.created' }, { limit: 10, cursor: null })).items).toHaveLength(1);
+    // Nothing was approved, so the operator's edit rate has nothing to count.
+    expect((await read(await h.app.request('/admin/v1/receipts/edit-rates?from=2026-10-22&to=2026-10-23', { headers: admin }))).approved).toBe(0);
+  });
+
+  it('replaces the stored suggestion with one read at review time', async () => {
+    const { h, as } = await setup();
+    const expense = await typed(h, as());
+    const receipt = await upload(h, as());
+    const res = await fileOnto(h, receipt.id, { expenseId: expense.id, suggested: SUGGESTION }, { ...as(), ...idem() });
+    expect((await read(res)).receipt.suggested).toEqual(SUGGESTION);
+  });
+
+  it("answers 404 for another profile's receipt or expense and for a deleted expense, 422 before the upload completes; the receipt stays To review (AC2)", async () => {
+    const { h, other, as } = await setup();
+    const expense = await typed(h, as());
+    const elsewhere = await typed(h, as(other.id));
+    const gone = await typed(h, as());
+    expect((await h.app.request(`/v1/expenses/${gone.id}`, { method: 'DELETE', headers: as() })).status).toBe(204);
+    const receipt = await upload(h, as());
+
+    expect((await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(other.id), ...idem() })).status).toBe(404);
+    const notOurs = await fileOnto(h, receipt.id, { expenseId: elsewhere.id }, { ...as(), ...idem() });
+    expect(notOurs.status).toBe(404);
+    expect((await read(notOurs)).error.message).toBe('No such expense');
+    expect((await fileOnto(h, receipt.id, { expenseId: gone.id }, { ...as(), ...idem() })).status).toBe(404);
+    expect((await fileOnto(h, receipt.id, { expenseId: expense.id, amount: '1.00' }, { ...as(), ...idem() })).status).toBe(422);
+
+    const started = await read(await h.app.request('/v1/receipts/uploads', json(FILE, { ...as(), ...idem() })));
+    const early = await fileOnto(h, started.receipt.id, { expenseId: expense.id }, { ...as(), ...idem() });
+    expect((await read(early)).error.details.reason).toBe('ATTACHMENT_NOT_READY');
+    expect((await read(await h.app.request(`/v1/receipts/${receipt.id}`, { headers: as() }))).filingStatus).toBe('TO_REVIEW');
+  });
+
+  it('refuses an expense already holding 10 receipts with 422 TOO_MANY_RECEIPTS, the same answer as the MUT-44 route (AC3)', async () => {
+    const { h, as } = await setup();
+    const expense = await typed(h, as());
+    for (let i = 0; i < MAX_RECEIPTS_PER_EXPENSE; i += 1) await attach(h, as(), expense.id);
+    const receipt = await upload(h, as());
+    const full = await fileOnto(h, receipt.id, { expenseId: expense.id }, { ...as(), ...idem() });
+    expect(full.status).toBe(422);
+    const viaLibrary = (await read(full)).error;
+    const viaExpense = (await read(await h.app.request(`/v1/expenses/${expense.id}/receipts`, json(FILE, as())))).error;
+    expect(viaLibrary).toMatchObject({ code: viaExpense.code, message: viaExpense.message, details: { reason: 'TOO_MANY_RECEIPTS' } });
+    expect(viaExpense.details.reason).toBe('TOO_MANY_RECEIPTS');
+  });
+});
+
 describe('PATCH /v1/receipts/{id}/suggestion', () => {
   it('replaces a To-review suggestion with If-Match; a stale version is 409, a filed receipt is 409 RECEIPT_ALREADY_FILED', async () => {
     const { h, as } = await setup();
@@ -271,6 +355,7 @@ describe('access and configuration', () => {
       [`/v1/receipts/${id}/download`, { headers: as() }],
       [`/v1/receipts/${id}/suggestion`, json(SUGGESTION, { ...as(), 'if-match': '1' }, 'PATCH')],
       [`/v1/receipts/${id}/approve`, json(approveBody, { ...as(), ...idem() })],
+      [`/v1/receipts/${id}/file`, json({ expenseId: id }, { ...as(), ...idem() })],
       [`/v1/receipts/${id}`, { method: 'DELETE', headers: as() }],
     ];
     for (const [path, init] of calls) {

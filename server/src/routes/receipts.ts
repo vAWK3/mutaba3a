@@ -6,7 +6,7 @@ import { checkFile, receiptStorageKey } from '../attachments/rules.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import { verifyUploadedObject } from '../attachments/verify.js';
 import { ApiError } from '../errors.js';
-import { prepareExpenseCreate, withCategoryForeignKey } from '../expenses/compose.js';
+import { MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, tooManyReceipts, withCategoryForeignKey } from '../expenses/compose.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import type { RateLimiter } from '../rate-limit.js';
@@ -20,6 +20,8 @@ import {
   CreateReceiptUploadResponseSchema,
   ErrorEnvelopeSchema,
   ExpenseReceiptSchema,
+  FileReceiptRequestSchema,
+  FileReceiptResponseSchema,
   IfMatchHeaderSchema,
   ListReceiptsQuerySchema,
   ReceiptCountsSchema,
@@ -310,6 +312,38 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       await audit(c, 'expense.created', 'expense', result.expense.id, { currency: result.expense.currency, occurredOn: result.expense.occurredOn, receiptId: result.receipt.id, ...(body.captureSource ? { captureSource: body.captureSource } : {}) });
       await audit(c, 'expense_receipt.filed', 'expense_receipt', result.receipt.id, { expenseId: result.expense.id, mode: 'new' });
       return c.json({ expense: serializeExpense(result.expense), receipt: serializeExpenseReceipt(result.receipt) }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/receipts/{receiptId}/file',
+      tags: ['Receipts'],
+      summary: 'File a To-review receipt onto an expense that already exists (MUT-389)',
+      description: `For the expense typed by hand and the receipt scanned later. No expense is created and none of its fields change; nothing is approved. Answers the expense with its receipts. 409 CONFLICT RECEIPT_ALREADY_FILED, with details.expenseId, when the receipt is already filed (a replay with the same Idempotency-Key answers the first 200 instead); 404 for a receipt or expense that is not this profile's, or a deleted expense; 422 ATTACHMENT_NOT_READY before the upload completes; 422 TOO_MANY_RECEIPTS once the expense holds ${MAX_RECEIPTS_PER_EXPENSE}. A 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.`,
+      security: SESSION_ONLY,
+      middleware: [requireScope('expenses:write'), idempotent(store, 'receipts.file')] as const,
+      request: { params: ReceiptIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(FileReceiptRequestSchema) },
+      responses: { 200: { description: 'Filed', content: { 'application/json': { schema: FileReceiptResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
+    }),
+    async (c) => {
+      storage();
+      const { organization } = sessionAuth(c);
+      const receiptId = c.req.valid('param').receiptId;
+      const body = c.req.valid('json');
+      const result = await store.expenseReceipts.fileOntoExpense(
+        { organizationId: organization.id, receiptId, expenseId: body.expenseId, maxReceipts: MAX_RECEIPTS_PER_EXPENSE, ...(body.suggested ? { suggested: body.suggested } : {}) },
+        c.get('now')(),
+      );
+      if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such receipt');
+      if (result.kind === 'already_filed') throw await alreadyFiled(organization.id, receiptId);
+      if (result.kind === 'not_ready') throw validationError('ATTACHMENT_NOT_READY', 'The upload has not been completed');
+      if (result.kind === 'expense_not_found') throw new ApiError('NOT_FOUND', 'No such expense');
+      if (result.kind === 'too_many_receipts') throw tooManyReceipts();
+      await audit(c, 'expense_receipt.filed', 'expense_receipt', result.receipt.id, { expenseId: result.expense.id, mode: 'existing' });
+      const receipts = await store.expenseReceipts.listByExpense(organization.id, result.expense.id);
+      return c.json({ expense: { ...serializeExpense(result.expense), receipts: receipts.map(serializeExpenseReceipt) }, receipt: serializeExpenseReceipt(result.receipt) }, 200);
     },
   );
 

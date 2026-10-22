@@ -6054,6 +6054,30 @@ components:
         - amount
         - currency
       additionalProperties: false
+    FileReceiptResponse:
+      type: object
+      properties:
+        expense:
+          $ref: "#/components/schemas/ExpenseDetail"
+        receipt:
+          $ref: "#/components/schemas/ExpenseReceipt"
+      required:
+        - expense
+        - receipt
+      description: The expense with its READY receipts (the filed one among them), and the filed receipt
+    FileReceiptRequest:
+      type: object
+      properties:
+        expenseId:
+          type: string
+          format: uuid
+        suggested:
+          allOf:
+            - $ref: "#/components/schemas/ReceiptSuggestion"
+            - description: What the reader suggested, when it read at review time; replaces the stored one
+      required:
+        - expenseId
+      additionalProperties: false
     PublicFxRatesResponse:
       type: object
       properties:
@@ -14743,6 +14767,86 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApproveReceiptResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/receipts/{receiptId}/file:
+    post:
+      tags:
+        - Receipts
+      summary: File a To-review receipt onto an expense that already exists (MUT-389)
+      description: For the expense typed by hand and the receipt scanned later. No expense is created and none of its fields change; nothing is approved. Answers the expense with its receipts. 409 CONFLICT RECEIPT_ALREADY_FILED, with details.expenseId, when the receipt is already filed (a replay with the same Idempotency-Key answers the first 200 instead); 404 for a receipt or expense that is not this profile's, or a deleted expense; 422 ATTACHMENT_NOT_READY before the upload completes; 422 TOO_MANY_RECEIPTS once the expense holds 10. A 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: receiptId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileReceiptRequest"
+      responses:
+        "200":
+          description: Filed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileReceiptResponse"
         "401":
           description: Missing, malformed, unknown, revoked, expired or wrong-environment key
           content:

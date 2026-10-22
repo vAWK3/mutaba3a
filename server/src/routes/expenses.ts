@@ -7,7 +7,7 @@ import type { AttachmentStorage } from '../attachments/storage.js';
 import { verifyUploadedObject } from '../attachments/verify.js';
 import { endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
-import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
+import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, tooManyReceipts, withCategoryForeignKey } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
 import { groupFilter } from '../expenses/groups.js';
 import { summarizeExpenses } from '../expenses/summary.js';
@@ -359,9 +359,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
   );
 
   async function assertRoomForReceipt(organizationId: string, expenseId: string): Promise<void> {
-    if ((await store.expenseReceipts.listByExpense(organizationId, expenseId)).length >= MAX_RECEIPTS_PER_EXPENSE) {
-      throw validationError('TOO_MANY_RECEIPTS', `An expense holds at most ${MAX_RECEIPTS_PER_EXPENSE} receipts`);
-    }
+    if ((await store.expenseReceipts.listByExpense(organizationId, expenseId)).length >= MAX_RECEIPTS_PER_EXPENSE) throw tooManyReceipts();
   }
 
   return app;
