@@ -1,4 +1,4 @@
-import { assertIsoDate, assertNotTooOld, parseAmount, validationError } from '../agreements/compose.js';
+import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld, parseAmount, validationError } from '../agreements/compose.js';
 import type { IsoDate } from '../dates.js';
 import type { ApiError } from '../errors.js';
 import type { Currency } from '../money.js';
@@ -33,11 +33,13 @@ export function expenseDate(value: string): IsoDate {
 }
 
 /**
- * MUT-227: the date an expense is recorded or moved to — valid, and not more than ten years back. No future check:
- * POST /v1/expenses has never had one, and filing must refuse exactly where a direct create does.
+ * The date an expense is recorded or moved to: valid, not more than ten years back (MUT-227) and not more than ten
+ * years ahead (MUT-392, eng review D4). An expense may be dated ahead (a bill you'll pay in three days); a typo year is
+ * refused. Filing uses this too, so it refuses exactly where a direct create does.
  */
 export function expenseOccurredOn(value: string, today: IsoDate): IsoDate {
   const date = expenseDate(value);
+  assertNotAbsurdDate(date, today, 'occurredOn');
   assertNotTooOld(date, today, 'occurredOn');
   return date;
 }

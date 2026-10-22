@@ -1,8 +1,8 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
-import { assertIsoDate, assertNotTooOld, todayFor, validationError } from '../agreements/compose.js';
+import { assertIsoDate, todayFor, validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
-import { assertCategoryChoosable, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
+import { assertCategoryChoosable, expenseOccurredOn, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
 import { identityIdempotent, idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { assertFilableCurrency, assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
@@ -207,10 +207,9 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       assertKind(entry, 'EXPENSE');
       assertFilableCurrency(entry);
       // Every destination-side rule is checked before the transaction opens, so a refusal can never consume the entry.
-      // No future-date check: POST /v1/expenses has none, and filing must be refused in exactly the places a
-      // direct create is — not more. The income route below does check, because POST /v1/income does.
-      // The ten-year floor (MUT-227) applies, because POST /v1/expenses applies it.
-      assertNotTooOld(entry.occurredOn, todayFor(organization, now), 'occurredOn');
+      // POST /v1/expenses' own date rule (MUT-227 floor, MUT-392 ceiling), so filing is refused exactly where a direct
+      // create is, not more.
+      expenseOccurredOn(entry.occurredOn, todayFor(organization, now));
       const links = await resolveLinks(store, organization.id, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
       if (body.categoryId) await assertCategoryChoosable(store, organization.id, body.categoryId);
 

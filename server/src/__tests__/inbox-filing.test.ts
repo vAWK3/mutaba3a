@@ -255,6 +255,20 @@ describe('POST /v1/inbox/{id}/file-as-expense', () => {
     expect(await s.listInbox()).toEqual([]);
   });
 
+  /** MUT-392: POST /v1/expenses refuses a date more than ten years ahead, so filing does too. */
+  it('refuses an entry dated more than ten years ahead, because POST /v1/expenses does, and leaves it in the inbox', async () => {
+    const s = await setup();
+    const entry = await s.capture({ ...EXPENSE_ENTRY, occurredOn: '2036-10-20' });
+    const filed = await s.fileExpense(entry.id);
+    const direct = await s.h.app.request('/v1/expenses', json({ occurredOn: '2036-10-20', amount: '120.50', currency: 'ILS' }, s.as(s.p.id, idem())));
+    const [filedBody, directBody] = [await read(filed), await read(direct)];
+
+    expect(filed.status).toBe(422);
+    expect(filedBody.error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' });
+    expect(filedBody.error.details).toEqual(directBody.error.details);
+    expect((await s.listInbox()).map((e) => e.id)).toEqual([entry.id]);
+  });
+
   /**
    * MUT-227: POST /v1/expenses refuses a date more than ten years back, so filing does too. 2016-10-03 passes
    * capture's lenient floor (UTC yesterday − 3660) but sits one day under this profile's exact floor (2016-10-04).
