@@ -182,7 +182,8 @@ state, and `deploy.sh` never touches it. The rules are in
 5. **Apply the org privacy settings.** The Terraform provider can't hold them,
    so this script sets them and reads them back. Before writing anything it
    refuses an org outside the EU region, and an org holding any project that
-   isn't `mutaba3a-…`, which catches a mistyped `SENTRY_ORG`. Run it from the
+   isn't `mutaba3a-…` or `e33-…`, which catches a mistyped `SENTRY_ORG`. The settings
+   are org-wide, so they apply to E33's projects too (ADR-091 amendment 9). Run it from the
    repo root:
 
    ```bash

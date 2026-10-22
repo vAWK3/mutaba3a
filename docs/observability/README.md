@@ -281,7 +281,8 @@ DSNs come from `terraform output -json dsn` in `server/infrastructure/sentry`.
     command at a time, never exported as `SENTRY_AUTH_TOKEN`, so a later build in the same shell
     can't pick it up.
   - **Wrong-org guard.** A personal token reaches every org its owner belongs to. So the
-    settings script refuses an org holding any project that isn't `mutaba3a-…` (D16).
+    settings script refuses an org holding any project outside its allow-list, `mutaba3a-…` and
+    `e33-…` (D16, amendment 9). The settings are org-wide: E33's projects get them too.
   - **Where the settings script sends it.** Only to `https://sentry.io` or
     `https://<region>.sentry.io`.
 

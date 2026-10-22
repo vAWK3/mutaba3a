@@ -185,6 +185,17 @@ describe('syncOrgSettings', () => {
     expect(fetch.mock.calls.map(([, init]) => init?.method)).toEqual(['GET', 'GET']);
   });
 
+  it('accepts the products known to share barmajiyat-ltd: Mutaba3a and E33 (ADR-091 amendment 9)', async () => {
+    const shared = [{ slug: 'mutaba3a-api' }, { slug: 'mutaba3a-web' }, { slug: 'e33-api' }, { slug: 'e33-flutter' }];
+    const fetch = respond(okResponse(euOrg(desired)), okResponse(shared));
+    await expect(syncOrgSettings({ ...args, mode: 'check' }, desired, EU, fetch)).resolves.toEqual([]);
+  });
+
+  it('still refuses a project of any other product, naming it', async () => {
+    const fetch = respond(okResponse(euOrg(desired)), okResponse([{ slug: 'e33-api' }, { slug: 'kataloj-web' }]));
+    await expect(syncOrgSettings({ ...args, mode: 'check' }, desired, EU, fetch)).rejects.toThrow('kataloj-web');
+  });
+
   it('refuses when the project list runs past one page, since it can\'t see every project (cycle-3 review)', async () => {
     const paged = new Response(JSON.stringify(mutaba3aProjects), {
       status: 200,

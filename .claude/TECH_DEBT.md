@@ -228,7 +228,7 @@
 **Fix**: mark the configuration-state codes in `ERROR_CODES` and skip them in `onError`'s report (keep the log), or let Sentry's own fingerprinting plus an inbound filter drop them. Do it if a day's cap is ever spent on them (the api project's quota view shows it).
 
 ### TD-198: The Sentry settings script assumes the org holds only Mutaba3a projects
-**Status**: Open
+**Status**: Partly resolved 2026-10-22 (ADR-091 amendment 9): the guard is an allow-list, `mutaba3a-` and `e33-`, and E33 accepts the org-wide settings. Still open: one free-plan quota shared by both products (see TD-200), and the next product needs its own decision.
 **Ticket**: none (ADR-091 amendment 5)
 **Added**: 2026-10-22
 **Priority**: Low (nothing else is in `barmajiyat-ltd` yet)
