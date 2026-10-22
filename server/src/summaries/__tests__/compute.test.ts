@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgreementRecord, InstallmentRecord, PaymentRecord, ReceivableRecord } from '../../repositories/ports.js';
-import { bucketize, countsOn, customerStatus, fixedStatus, lastPaymentOn, projectFigures, retainerStatus, unallocatedOf } from '../compute.js';
+import { bucketize, customerStatus, fixedStatus, lastPaymentOn, projectFigures, retainerStatus, unallocatedOf } from '../compute.js';
 
 const rec = (over: Partial<ReceivableRecord>): ReceivableRecord => ({ id: 'r', organizationId: 'o', customerId: 'c', projectId: 'p', agreementId: 'a', origin: 'INSTALLMENT', originId: null, currency: 'ILS', netMinor: 1000n, vatMinor: 0n, grossMinor: 1000n, paidMinor: 0n, creditedMinor: 0n, vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, dueDate: '2026-10-20', postingDate: '2026-10-01', postedAt: new Date(0), status: 'OPEN', title: null, createdByUserId: null, deletedAt: null, version: 1, createdAt: new Date(0), ...over });
 const pay = (over: Partial<PaymentRecord>): PaymentRecord => ({ id: 'p', organizationId: 'o', customerId: 'c', projectId: null, number: 'PAY-2026-0001', currency: 'ILS', amountMinor: 500n, allocatedMinor: 0n, receivedOn: '2026-10-05', method: 'BANK', reference: null, notes: null, status: 'POSTED', reversedAt: null, reversalReason: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, version: 1, createdAt: new Date(0), updatedAt: new Date(0), ...over });
@@ -23,10 +23,14 @@ describe('buckets', () => {
     expect(bucketize([future], '2026-12-16')).toEqual({ outstanding: 1000n, overdue: 1000n, dueToday: 0n, notYetDue: 0n });
   });
 
-  it('countsOn: a receivable counts from its posting date, that day included', () => {
-    expect(countsOn({ postingDate: '2026-10-20' }, '2026-10-20')).toBe(true);
-    expect(countsOn({ postingDate: '2026-10-21' }, '2026-10-20')).toBe(false);
-    expect(countsOn({ postingDate: '2026-01-01' }, '2026-10-20')).toBe(true);
+  it('counts a future Owed on its own day, and never holds back an installment Malafat posted ahead (MUT-392 review)', () => {
+    const today = '2026-10-20';
+    const owedToday = rec({ id: 'o', origin: 'ADJUSTMENT', agreementId: null, postingDate: today, dueDate: '2026-11-15' });
+    // An IMMEDIATE installment on an agreement dated ahead posts with that future postingDate (agreements/compose.ts postingDateFor).
+    const installmentAhead = rec({ id: 'i', origin: 'INSTALLMENT', postingDate: '2026-12-01', dueDate: '2026-12-31' });
+    const chargeAhead = rec({ id: 'c', origin: 'RETAINER_CHARGE', postingDate: '2026-11-01', dueDate: '2026-11-30' });
+    expect(bucketize([owedToday, installmentAhead, chargeAhead], today)).toEqual({ outstanding: 3000n, overdue: 0n, dueToday: 0n, notYetDue: 3000n });
+    expect(projectFigures({ agreements: [], installments: [], receivables: [installmentAhead], today }).postedMinor).toBe(1000n);
   });
 
   it('counts unallocated funds on POSTED payments only and the last POSTED received-on date', () => {
