@@ -2,7 +2,7 @@ import { assertIsoDate, assertNotTooOld, parseAmount, validationError } from '..
 import type { IsoDate } from '../dates.js';
 import type { Currency } from '../money.js';
 import { ForeignKeyViolation } from '../repositories/memory.js';
-import type { ExpenseRecord, LedgerStore, UpdateExpensePatch } from '../repositories/ports.js';
+import type { CreateExpenseInput, ExpenseRecord, LedgerStore, UpdateExpensePatch } from '../repositories/ports.js';
 
 /**
  * Expense rules shared by the routes (MUT-42 brief §3 D6, §10). Pure except
@@ -93,6 +93,32 @@ export async function assertCategoryChoosable(store: LedgerStore, organizationId
   const category = await store.expenseCategories.getById(organizationId, categoryId);
   if (!category) throw validationError('CATEGORY_NOT_FOUND', 'No such category in this profile', { field: 'categoryId' });
   if (category.archivedAt) throw validationError('CATEGORY_ARCHIVED', 'This category is archived; choose another or restore it', { field: 'categoryId' });
+}
+
+/** The fields a create body carries: POST /v1/expenses and MUT-255's receipt approval take the same ones. */
+export interface ExpenseCreateBody {
+  occurredOn: string;
+  amount: string;
+  currency: Currency;
+  title?: string | undefined;
+  vendor?: string | undefined;
+  categoryId?: string | undefined;
+  customerId?: string | undefined;
+  projectId?: string | undefined;
+  notes?: string | undefined;
+}
+
+/**
+ * Every check a new expense passes before it is written, and the row it becomes (MUT-255 review R6): the date floor,
+ * the amount in the currency's digits, links inside the profile, a choosable category. Shared so approving a receipt
+ * refuses exactly where recording an expense does.
+ */
+export async function prepareExpenseCreate(store: LedgerStore, organizationId: string, createdByUserId: string, today: IsoDate, body: ExpenseCreateBody): Promise<CreateExpenseInput> {
+  const occurredOn = expenseOccurredOn(body.occurredOn, today);
+  const amountMinor = parseExpenseAmount(body.amount, body.currency);
+  const links = await resolveLinks(store, organizationId, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
+  if (body.categoryId) await assertCategoryChoosable(store, organizationId, body.categoryId);
+  return { organizationId, occurredOn, amountMinor, currency: body.currency, title: body.title ?? null, vendor: body.vendor ?? null, categoryId: body.categoryId ?? null, ...links, notes: body.notes ?? null, createdByUserId };
 }
 
 /**

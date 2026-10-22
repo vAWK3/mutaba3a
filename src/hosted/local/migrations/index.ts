@@ -1,5 +1,5 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
-import type { MembershipRecord, Organization } from '../../../../server/src/repositories/ports.js';
+import type { ExpenseReceiptRecord, MembershipRecord, Organization } from '../../../../server/src/repositories/ports.js';
 
 /**
  * The portal's local-mode migrations key off `CURRENT_STORE_SNAPSHOT_VERSION`
@@ -50,12 +50,54 @@ function addFirmFields(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-255, 2 → 3: receipts gain their place in the receipts library. Every
+ * receipt saved before this had an expense, so it is FILED, never approved
+ * through the library, at version 1; its upload day is its `createdAt` in its
+ * profile's timezone, the same backfill the server's migration does.
+ */
+function addReceiptLibraryFields(snapshot: StoredSnapshot): StoredSnapshot {
+  // `server/src/dates.ts` `todayIn` does the same; it isn't on the local backend's import allowlist (ADR-097 §9).
+  const dayIn = (timeZone: string, at: Date) => {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(at);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    return `${get('year')}-${get('month')}-${get('day')}`;
+  };
+  type Stored = Omit<ExpenseReceiptRecord, 'filingStatus' | 'receivedOn' | 'suggested' | 'approved' | 'approvedAt' | 'approvedByUserId' | 'version'>;
+  const receipts = snapshot.maps.expReceipts as Map<string, Stored>;
+  const orgs = snapshot.maps.orgs as Map<string, Organization>;
+  return {
+    ...snapshot,
+    maps: {
+      ...snapshot.maps,
+      expReceipts: new Map(
+        [...receipts].map(([id, r]) => [
+          id,
+          {
+            ...r,
+            filingStatus: 'FILED' as const,
+            receivedOn: dayIn(orgs.get(r.organizationId)?.timezone ?? 'UTC', r.createdAt),
+            suggested: null,
+            approved: null,
+            approvedAt: null,
+            approvedByUserId: null,
+            version: 1,
+          },
+        ]),
+      ),
+    },
+  };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
  * forgotten one (`__tests__/format-fingerprint.test.ts`).
  */
-export const MIGRATIONS: readonly Migration[] = [{ from: 1, to: 2, migrate: addFirmFields }];
+export const MIGRATIONS: readonly Migration[] = [
+  { from: 1, to: 2, migrate: addFirmFields },
+  { from: 2, to: 3, migrate: addReceiptLibraryFields },
+];
 
 /**
  * Applies every migration in order starting from `snapshot.formatVersion`

@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — The receipts library: a receipt can wait To review before its expense (MUT-255, API 1.46.0)
+
+**Why:** Receipt scanning (MUT-252) saves the original the moment it is shared and lets the person check what was read
+before it becomes an expense. A receipt could not exist without an expense, and nothing listed a profile's receipts.
+
+### Added
+- `/v1/receipts`: upload with no expense (To review), re-sign an expired upload URL, complete, list newest first by
+  upload day and filing status, counts, detail, download, replace the reader's suggestion (If-Match), approve into an
+  expense (one transaction, Idempotency-Key), delete. Hosted only; session-only.
+- `GET /admin/v1/receipts/edit-rates`: how often people change what the reader suggested, counts only (MUT-252's
+  success measure).
+- Limits: 20 unfinished library uploads per profile per day; 30 upload starts a minute per person. Both answer 429,
+  and a 429 now releases its Idempotency-Key (like a 5xx), so the same request can be sent again with it.
+
+### Changed
+- `ExpenseReceipt.expenseId` is optional; receipts gain `filingStatus`, `receivedOn`, `suggested`, `approved`,
+  `approvedAt` and `version` (migration `20261022090000_mut255_receipts_library`, local format 3).
+- Deleting an expense on the hosted server keeps its READY receipts, back under To review; unfinished uploads are
+  deleted. Signed-out local mode still deletes them all.
+- POST /v1/expenses and approval share `prepareExpenseCreate`; both receipt completes share `verifyUploadedObject`.
+
+### Technical
+- ADR-167. **Production deploy held** until MUT-260 or MUT-258 ships with it (decision P4). Portal before server.
+
 ## [Unreleased] - 2026-10-22 — Sentry goes in the company org `barmajiyat-ltd`
 
 **Why:** Basel: Barmajiyat owns Mutaba3a and Malafat, and its EU org already exists, so the Mutaba3a projects go there and no dedicated `mutaba3a` org is created. ADR-091 amendment 5.

@@ -41,6 +41,7 @@ import { installmentRoutes } from './routes/installments.js';
 import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { recordsExportRoutes } from './routes/records-export.js';
+import { RECEIPT_UPLOAD_POLICY, receiptRoutes } from './routes/receipts.js';
 import { retainerRoutes } from './routes/retainers.js';
 import { vatRoutes } from './routes/vat.js';
 import { healthRoutes } from './routes/health.js';
@@ -91,6 +92,8 @@ export interface AppDependencies {
   jobToken?: string | null;
   /** Per-IP budget for the Stripe webhook. Defaults to STRIPE_WEBHOOK_POLICY. */
   stripeWebhookIpLimiter?: RateLimiter;
+  /** MUT-255: per-person budget for starting receipts-library uploads. Defaults to RECEIPT_UPLOAD_POLICY. */
+  receiptUploadLimiter?: RateLimiter;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
 }
@@ -154,7 +157,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'Mutaba3a Financial API';
-export const API_VERSION = '1.45.0-mut148';
+export const API_VERSION = '1.47.0-mut148';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -263,10 +266,20 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     fxRates: deps.fxRates ?? null,
     terms,
     billing: true,
+    receiptsLibrary: true,
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.
   app.route('/', recordsExportRoutes(store, { storage: deps.attachments ?? null, logger: deps.logger }));
+  // MUT-255 (decision P1): the receipts library is hosted only, so outside PORTAL_ROUTES; signed-out local mode has none.
+  app.route(
+    '/',
+    receiptRoutes(store, {
+      storage: deps.attachments ?? null,
+      urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900,
+      uploadLimiter: deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute),
+    }),
+  );
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));

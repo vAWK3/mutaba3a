@@ -65,7 +65,8 @@ describe('STORE_ACCESS', () => {
 
   it('puts every expense repository method in the expenses domain, reads included (MUT-42)', () => {
     const expenseRepos = ['expenses', 'expenseCategories', 'expenseReceipts'];
-    const methods = entries.filter(([repo]) => expenseRepos.includes(repo));
+    // MUT-255: the operator's cross-profile edit-rate figure is the one exception, kept to /admin.
+    const methods = entries.filter(([repo, method]) => expenseRepos.includes(repo) && `${repo}.${method}` !== 'expenseReceipts.editRates');
     expect(new Set(methods.map(([repo]) => repo))).toEqual(new Set(expenseRepos));
     for (const [repo, method, access] of methods) {
       expect(typeof access === 'object' && ('read' in access ? access.read : access.write), `${repo}.${method}`).toBe('expenses');
@@ -98,6 +99,8 @@ describe('STORE_ACCESS', () => {
       'billing.saveAccount',
       'billing.saveSubscription',
       'billing.setTrialStart',
+      // MUT-255: the receipt-scanning success measure, across every profile (counts only).
+      'expenseReceipts.editRates',
       'memberships.grant',
       // MUT-373: co-owners are added by the operator only (the pilot path; invites are MUT-306).
       'memberships.grantOwner',
