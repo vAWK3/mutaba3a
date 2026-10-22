@@ -118,7 +118,7 @@ import type {
 } from './ports.js';
 import { CAPTURE_UNDO_REASON, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
-import { mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateOf } from '../entries/merge.js';
+import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
 
 /**
  * Production LedgerStore over Postgres.
@@ -1884,8 +1884,9 @@ export class PrismaLedgerStore implements LedgerStore {
       const take = page.limit + 1;
       const byMoneyDate = page.order === 'occurredOn';
       const moneyCursor = byMoneyDate ? moneyDateCursorOf(page.cursor) : null;
-      const bounds = (dateColumn: 'occurredOn' | 'receivedOn' | 'postingDate') => ({ AND: feedBounds(dateColumn, page, moneyCursor) });
-      const orderBy = (dateColumn: 'occurredOn' | 'receivedOn' | 'postingDate') =>
+      const loggedCursor = byMoneyDate ? null : createdAtCursorOf(page.cursor);
+      const bounds = (dateColumn: MoneyDateColumn) => ({ AND: feedBounds(dateColumn, page, moneyCursor, loggedCursor) });
+      const orderBy = (dateColumn: MoneyDateColumn) =>
         byMoneyDate ? [{ [dateColumn]: 'desc' as const }, { createdAt: 'desc' as const }, { id: 'desc' as const }] : [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
       const branchesOf = (organizationId: string) => [
         this.prisma.expense
@@ -1903,7 +1904,7 @@ export class PrismaLedgerStore implements LedgerStore {
       ];
       const branches: EntryRow[][] = [];
       for (const organizationId of organizationIds) branches.push(...(await Promise.all(branchesOf(organizationId))));
-      if (byMoneyDate) return mergeByMoneyDate(branches, page.limit, (row) => ({ occurredOn: moneyDateOf(row), createdAt: row.record.createdAt, id: row.record.id }));
+      if (byMoneyDate) return mergeByMoneyDate(branches, page.limit, moneyDateKeyOf);
       return mergeNewestFirst(branches, page.limit, (row) => row.record);
     },
     settledOwedIds: async (organizationIds, paymentIds) => {
@@ -2329,23 +2330,20 @@ function toAuditEvent(r: { id: string; organizationId: string; actorType: AuditE
   };
 }
 
-/**
- * MUT-270: newest first — rows strictly after the cursor in (createdAt, id) descending order, written as
- * `createdAt <= t AND (createdAt < t OR id < i)`. Equivalent to `(createdAt < t) OR (createdAt = t AND id < i)`,
- * but the leading `createdAt <= t` becomes the index range: the plain OR form made Postgres scan and sort the whole
- * organization (store-prisma-entries-plan.test.ts).
- */
+/** Each feed kind's money date column (`moneyDateOf` in entries/merge.ts reads the same ones). */
+type MoneyDateColumn = 'occurredOn' | 'receivedOn' | 'postingDate';
+
 /**
  * MUT-390: one kind's feed bounds as AND entries — the cursor of either order and the filters, on the kind's money
  * date column. The money-date cursor is `day <= o AND (day < o OR (createdAt <= t AND (createdAt < t OR id < i)))`:
  * the leading `day <= o` is the index range, as `createdAt <= t` is in `feedCursorWhere`.
  */
-function feedBounds(dateColumn: string, page: FeedPageRequest, moneyCursor: MoneyDateCursor | null): Array<Record<string, unknown>> {
+function feedBounds(dateColumn: MoneyDateColumn, page: FeedPageRequest, moneyCursor: MoneyDateCursor | null, createdAtCursor: PageCursor | null): Array<Record<string, unknown>> {
   const and: Array<Record<string, unknown>> = [];
   if (moneyCursor) {
     and.push({ [dateColumn]: { lte: moneyCursor.occurredOn } }, { OR: [{ [dateColumn]: { lt: moneyCursor.occurredOn } }, feedCursorWhere(moneyCursor)] });
-  } else if (page.cursor) {
-    and.push(feedCursorWhere(page.cursor));
+  } else if (createdAtCursor) {
+    and.push(feedCursorWhere(createdAtCursor));
   }
   if (page.occurredFrom !== undefined) and.push({ [dateColumn]: { gte: page.occurredFrom } });
   if (page.occurredBefore !== undefined) and.push({ [dateColumn]: { lt: page.occurredBefore } });
@@ -2353,6 +2351,12 @@ function feedBounds(dateColumn: string, page: FeedPageRequest, moneyCursor: Mone
   return and;
 }
 
+/**
+ * MUT-270: newest first — rows strictly after the cursor in (createdAt, id) descending order, written as
+ * `createdAt <= t AND (createdAt < t OR id < i)`. Equivalent to `(createdAt < t) OR (createdAt = t AND id < i)`,
+ * but the leading `createdAt <= t` becomes the index range: the plain OR form made Postgres scan and sort the whole
+ * organization (store-prisma-entries-plan.test.ts).
+ */
 function feedCursorWhere(cursor: PageCursor | null): { createdAt?: { lte: Date }; OR?: Array<Record<string, unknown>> } {
   if (!cursor) return {};
   return { createdAt: { lte: cursor.createdAt }, OR: [{ createdAt: { lt: cursor.createdAt } }, { id: { lt: cursor.id } }] };

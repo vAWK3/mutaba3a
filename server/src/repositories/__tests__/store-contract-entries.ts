@@ -222,6 +222,26 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       expect(await walk(store, [w.a.id], { limit: 2, order: 'occurredOn', occurredFrom: '2026-10-19' })).toEqual([made[5]!.id, made[4]!.id]);
     });
 
+    it('applies the day filters to every kind by its own money date', async () => {
+      const store = await makeStore();
+      const w = await dated(store);
+      const payment = await w.capture(w.b.id, '2026-10-16', 1);
+      await w.capture(w.b.id, '2026-10-21', 2);
+      const owed = await w.owed('2026-10-15', 3); // its dueDate, 2026-10-31, is outside the window: only postingDate counts
+      await w.owed('2026-10-14', 4);
+      const conversion = await w.conversion(w.a.id, '2026-10-20', 5);
+      await w.conversion(w.a.id, '2026-10-21', 6);
+      const expense = await w.expense(w.a.id, '2026-10-18', 7);
+      await w.expense(w.a.id, '2026-10-12', 8);
+
+      expect(await walk(store, [w.a.id, w.b.id], { limit: 1, order: 'occurredOn', occurredFrom: '2026-10-15', occurredBefore: '2026-10-21' })).toEqual([
+        conversion.id,
+        expense.id,
+        payment.id,
+        owed.id,
+      ]);
+    });
+
     it('finds what was logged since an instant but dated before a day, across pages, newest logged first', async () => {
       const store = await makeStore();
       const w = await dated(store);

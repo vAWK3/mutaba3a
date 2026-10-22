@@ -7,6 +7,10 @@ import { EntryPageSchema, ListEntriesQuerySchema } from '../schemas.js';
 import { serializeEntry } from '../serializers.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
 
+/** MUT-390 review: how far back `loggedSince` may reach. The phone asks for 7 days; 31 leaves room without a whole-history walk. */
+export const LOGGED_SINCE_MAX_DAYS = 31;
+const DAY_MS = 86_400_000;
+
 // MUT-64: a device session is the same 'session' principal, so it reaches every route a cookie session does.
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 
@@ -35,7 +39,7 @@ export function entriesRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         'Expenses, received payments, Owed entries and conversions on every profile you belong to (or the profiles you name), ordered by when each was logged (default) or, with order=occurredOn, by its money date. ' +
         'Everything on a profile, whoever logged it, Malafat\'s payments included; scheduled installments and retainer charges are not entries. ' +
         'No X-Mutaba3a-Profile. Unsorted entries are listed by GET /v1/inbox. ' +
-        'Filters: occurredFrom with order=occurredOn; occurredBefore with order=occurredOn, or with loggedSince; loggedSince with the default order. Any other combination answers 422, since it could not be served from an index. ' +
+        'Filters: occurredFrom with order=occurredOn; occurredBefore with order=occurredOn, or with loggedSince; loggedSince with the default order, at most 31 days back. Any other combination answers 422, since it could not be served from an index. ' +
         'A page is a snapshot: an entry edited or deleted later changes only when that page is read again (a deleted one is simply absent), so cache only the pages you re-read. ' +
         'With order=occurredOn an entry whose date changes between page reads can show twice or be missed until page one is read again: dedupe by id, and re-read page one after an edit. ' +
         'A settle shows as a received payment with settlesOwedId (its Owed is settled once paid in full, open before); a Malafat correction as a received payment with replacesPaymentId. In the default order each usually sits next to its partner; by money date they can be days apart.',
@@ -49,6 +53,10 @@ export function entriesRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (q.occurredFrom !== undefined && q.order !== 'occurredOn') throw new ApiError('VALIDATION_FAILED', 'occurredFrom needs order=occurredOn', { field: 'occurredFrom' });
       if (q.loggedSince !== undefined && q.order !== 'createdAt') throw new ApiError('VALIDATION_FAILED', 'loggedSince needs the default order', { field: 'loggedSince' });
       if (q.occurredBefore !== undefined && q.order === 'createdAt' && q.loggedSince === undefined) throw new ApiError('VALIDATION_FAILED', 'occurredBefore needs order=occurredOn or loggedSince', { field: 'occurredBefore' });
+      // loggedSince bounds the index range, so it may not reach back past LOGGED_SINCE_MAX_DAYS either.
+      if (q.loggedSince !== undefined && new Date(q.loggedSince).getTime() < c.get('now')().getTime() - LOGGED_SINCE_MAX_DAYS * DAY_MS) {
+        throw new ApiError('VALIDATION_FAILED', `loggedSince may be at most ${LOGGED_SINCE_MAX_DAYS} days back`, { field: 'loggedSince' });
+      }
       const cursor = q.cursor ? decodeFeedCursor(q.cursor, q.order) : null;
       const memberships = await store.memberships.listByUser(c.get('identity').user.id);
       const mine = memberships.map((m) => m.organizationId);

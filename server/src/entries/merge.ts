@@ -51,6 +51,11 @@ export function moneyDateOf(row: EntryRow): IsoDate {
   }
 }
 
+/** A feed row's key in the money-date order; both stores page and merge by it. */
+export function moneyDateKeyOf(row: EntryRow): MoneyDateCursor {
+  return { occurredOn: moneyDateOf(row), createdAt: row.record.createdAt, id: row.record.id };
+}
+
 /** Sort comparator: newest money day first, then newest logged, then id descending. */
 export function compareMoneyDateNewestFirst(a: MoneyDateCursor, b: MoneyDateCursor): number {
   if (a.occurredOn !== b.occurredOn) return a.occurredOn < b.occurredOn ? 1 : -1;
@@ -77,6 +82,12 @@ export function moneyDateCursorOf(cursor: PageCursor | MoneyDateCursor | null): 
   return cursor;
 }
 
+/** The page's cursor for the default order: a money-date one would page by its createdAt alone, a silently wrong page. */
+export function createdAtCursorOf(cursor: PageCursor | MoneyDateCursor | null): PageCursor | null {
+  if (cursor && 'occurredOn' in cursor) throw new Error('An occurredOn cursor cannot page the createdAt order');
+  return cursor;
+}
+
 function mergeTop<T, C>(branches: readonly (readonly T[])[], limit: number, compare: (a: T, b: T) => number, cursorOf: (last: T) => C): { items: T[]; nextCursor: C | null } {
   const ranked = branches.flat().sort(compare);
   const items = ranked.slice(0, limit);
@@ -98,21 +109,28 @@ export function decodeFeedCursor(encoded: string, order: 'createdAt'): PageCurso
 export function decodeFeedCursor(encoded: string, order: 'occurredOn'): MoneyDateCursor;
 export function decodeFeedCursor(encoded: string, order: FeedOrder): PageCursor | MoneyDateCursor;
 export function decodeFeedCursor(encoded: string, order: FeedOrder): PageCursor | MoneyDateCursor {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
-  } catch {
-    throw invalidFeedCursor();
-  }
+  const parsed = parseCursorJson(encoded);
   const isMoneyDate = !!parsed && typeof parsed === 'object' && 'k' in parsed;
   if (order === 'createdAt') {
     if (isMoneyDate) throw invalidFeedCursor();
+    // pagination.ts answers anything else, so a request without the new params gets today's error, byte for byte.
     return decodeCursor(encoded);
   }
   if (!isMoneyDate) throw invalidFeedCursor();
   const { k, o, t, id } = parsed as { k?: unknown; o?: unknown; t?: unknown; id?: unknown };
-  if (k !== 'o' || typeof o !== 'string' || !ISO_DATE_RE.test(o) || typeof t !== 'number' || !Number.isFinite(t) || typeof id !== 'string' || !UUID_RE.test(id)) throw invalidFeedCursor();
-  return { occurredOn: o, createdAt: new Date(t), id };
+  if (k !== 'o' || typeof o !== 'string' || !ISO_DATE_RE.test(o) || typeof t !== 'number' || typeof id !== 'string' || !UUID_RE.test(id)) throw invalidFeedCursor();
+  const createdAt = new Date(t);
+  // A finite number past ±8.64e15 ms is no date; Prisma would reject it as a 500.
+  if (Number.isNaN(createdAt.getTime())) throw invalidFeedCursor();
+  return { occurredOn: o, createdAt, id };
+}
+
+function parseCursorJson(encoded: string): unknown {
+  try {
+    return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+  } catch {
+    return undefined;
+  }
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

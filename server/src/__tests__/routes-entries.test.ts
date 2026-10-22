@@ -410,22 +410,54 @@ describe('GET /v1/entries — by money date (MUT-390)', () => {
     expect(ids(await read(await feed(`?order=occurredOn&profileId=${a.id}`)))).toEqual([future.id, late.id, c1.id, e1.id]);
   });
 
+  /** When the feed says `entryId` was logged, read off the default order's envelope. */
+  async function loggedAt(feed: (query?: string) => Response | Promise<Response>, entryId: string): Promise<string> {
+    const body = await read(await feed('?limit=100'));
+    return body.items[ids(body).indexOf(entryId)].createdAt as string;
+  }
+
   it('filters by money day, and by logged since plus dated before', async () => {
-    const { h, feed, e1, c1, r1, o1, future } = await world();
+    const { feed, e1, c1, r1, o1, future } = await world();
 
     expect(ids(await read(await feed('?order=occurredOn&occurredFrom=2026-10-10&occurredBefore=2026-10-20')))).toEqual([r1.id, c1.id, e1.id]);
     expect(ids(await read(await feed('?order=occurredOn&occurredBefore=2026-10-10')))).toEqual([o1.id]);
 
-    // Logged since the conversion (inclusive), dated before 2026-10-11: the conversion and the Owed, newest logged first.
-    const since = new Date(h.clock.now.getTime() - 3_000).toISOString(); // the conversion's instant: 3 ticks before the last write
-    expect(ids(await read(await feed(`?loggedSince=${since}&occurredBefore=2026-10-11`)))).toEqual([o1.id, c1.id]);
-    expect(future.id).toBeDefined();
+    // Logged since the conversion (inclusive), dated before 2026-10-11: the Owed and the conversion, newest logged first.
+    const since = await loggedAt(feed, c1.id);
+    const backdated = ids(await read(await feed(`?loggedSince=${encodeURIComponent(since)}&occurredBefore=2026-10-11`)));
+    expect(backdated).toEqual([o1.id, c1.id]);
+    expect(backdated).not.toContain(future.id);
   });
 
-  it('accepts loggedSince with a UTC offset', async () => {
-    const { feed } = await world();
-    const res = await feed(`?loggedSince=${encodeURIComponent('2026-10-12T12:00:00+03:00')}&occurredBefore=2026-10-11`);
-    expect(res.status).toBe(200);
+  it('filters the default order by loggedSince alone, and pages it', async () => {
+    const { feed, c1, r1, o1, future } = await world();
+    const since = encodeURIComponent(await loggedAt(feed, c1.id));
+
+    expect(ids(await read(await feed(`?loggedSince=${since}`)))).toEqual([future.id, o1.id, r1.id, c1.id]);
+    const first = await read(await feed(`?loggedSince=${since}&limit=3`));
+    const second = await read(await feed(`?loggedSince=${since}&limit=3&cursor=${first.nextCursor}`));
+    expect([...ids(first), ...ids(second)]).toEqual([future.id, o1.id, r1.id, c1.id]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('reads loggedSince with a UTC offset as the instant it names', async () => {
+    const { feed, e1, c1, o1 } = await world();
+    // 12:00:00+03:00 is the harness start, 09:00:00Z: every row was logged after it.
+    expect(ids(await read(await feed(`?loggedSince=${encodeURIComponent('2026-10-12T12:00:00+03:00')}&occurredBefore=2026-10-11`)))).toEqual([o1.id, c1.id, e1.id]);
+    // The conversion's own instant written in +03:00: the expense, logged a second earlier, drops out.
+    const since = new Date(await loggedAt(feed, c1.id));
+    const local = new Date(since.getTime() + 3 * 3_600_000).toISOString().replace('Z', '+03:00');
+    expect(ids(await read(await feed(`?loggedSince=${encodeURIComponent(local)}&occurredBefore=2026-10-11`)))).toEqual([o1.id, c1.id]);
+  });
+
+  it('refuses a loggedSince more than 31 days back, so no read walks a firm\'s history', async () => {
+    const { h, feed } = await setup();
+    const daysBack = (days: number) => encodeURIComponent(new Date(h.clock.now.getTime() - days * 86_400_000).toISOString());
+
+    const tooOld = await feed(`?loggedSince=${daysBack(32)}&occurredBefore=2026-10-01`);
+    expect(tooOld.status).toBe(422);
+    expect((await read(tooOld)).error.details.field).toBe('loggedSince');
+    expect((await feed(`?loggedSince=${daysBack(31)}`)).status).toBe(200);
   });
 
   it('refuses each filter without the order whose index bounds it', async () => {

@@ -2606,7 +2606,7 @@ export const ListEntriesQuerySchema = z.object({
   }),
   occurredFrom: IsoDateSchema.optional().openapi({ description: 'Money date on or after this day. `order=occurredOn` only (422 otherwise).' }),
   occurredBefore: IsoDateSchema.optional().openapi({ description: 'Money date before this day. With `order=occurredOn`, or with the default order together with `loggedSince` (422 otherwise).' }),
-  loggedSince: z.string().datetime({ offset: true }).optional().openapi({ description: 'Logged at or after this instant (ISO 8601, Z or an offset). Default order only (422 otherwise).' }),
+  loggedSince: z.string().datetime({ offset: true }).optional().openapi({ description: 'Logged at or after this instant (ISO 8601, Z or an offset), at most 31 days back. Default order only (422 otherwise).' }),
 });
 
 /** What every feed item says about itself, whatever it is. */

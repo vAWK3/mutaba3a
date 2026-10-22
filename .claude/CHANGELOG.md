@@ -36,7 +36,8 @@ plan, review and decisions D1–D6 in `.claude/designs/mut-390-feed-money-date.m
 ### Added
 - `GET /v1/entries?order=occurredOn`: newest money day first (expense/conversion `occurredOn`, received `receivedOn`,
   Owed `postingDate`), then newest logged; future-dated entries above today.
-- Filters `occurredFrom`, `occurredBefore`, `loggedSince`, each only with the order whose index bounds it (else 422).
+- Filters `occurredFrom`, `occurredBefore`, `loggedSince`, each only with the order whose index bounds it (else 422);
+  `loggedSince` at most 31 days back.
 - Four indexes (migration `20261022120000_mut390_entries_money_date_indexes`).
 - Tests: merge/cursor units, memory + Postgres contract walks with filters and cursors, route 422s, EXPLAIN plans
   for every kind and bound, fan-out for both orders.

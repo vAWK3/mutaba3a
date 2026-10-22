@@ -142,7 +142,7 @@ import type {
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON, STRIPE_EVENT_ERROR_MAX } from './ports.js';
-import { isBeforeCursor, isBeforeMoneyDateCursor, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateOf } from '../entries/merge.js';
+import { createdAtCursorOf, isBeforeCursor, isBeforeMoneyDateCursor, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf, moneyDateOf } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, ownsProfile, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
@@ -2089,10 +2089,10 @@ export class MemoryLedgerStore implements LedgerStore {
       });
       if (page.order === 'occurredOn') {
         const cursor = moneyDateCursorOf(page.cursor);
-        const keyOf = (row: EntryRow) => ({ occurredOn: moneyDateOf(row), createdAt: row.record.createdAt, id: row.record.id });
-        return mergeByMoneyDate([rows.filter((row) => !cursor || isBeforeMoneyDateCursor(keyOf(row), cursor))], page.limit, keyOf);
+        return mergeByMoneyDate([rows.filter((row) => !cursor || isBeforeMoneyDateCursor(moneyDateKeyOf(row), cursor))], page.limit, moneyDateKeyOf);
       }
-      return mergeNewestFirst([rows.filter((row) => !page.cursor || isBeforeCursor(row.record, page.cursor))], page.limit, (row) => row.record);
+      const cursor = createdAtCursorOf(page.cursor);
+      return mergeNewestFirst([rows.filter((row) => !cursor || isBeforeCursor(row.record, cursor))], page.limit, (row) => row.record);
     },
     settledOwedIds: async (organizationIds, paymentIds) => {
       const byPayment = new Map<string, AllocationRecord[]>();

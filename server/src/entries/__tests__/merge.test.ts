@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../errors.js';
 import { encodeCursor } from '../../pagination.js';
 import type { EntryRow, MoneyDateCursor } from '../../repositories/ports.js';
-import { decodeFeedCursor, encodeFeedCursor, isBeforeCursor, isBeforeMoneyDateCursor, mergeByMoneyDate, mergeNewestFirst, moneyDateOf } from '../merge.js';
+import { createdAtCursorOf, decodeFeedCursor, encodeFeedCursor, isBeforeCursor, isBeforeMoneyDateCursor, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateOf } from '../merge.js';
+import { decodeCursor } from '../../pagination.js';
 
 /** MUT-270: one newest-first page out of per-organization, per-kind branches, each already newest first. */
 type Row = { id: string; createdAt: Date };
@@ -141,11 +142,48 @@ describe('feed cursors', () => {
     rejects(() => decodeFeedCursor(encodeFeedCursor(byMoney), 'createdAt'));
   });
 
+  it('keeps the default order\'s error for a cursor that is not one, byte for byte', () => {
+    for (const garbage of ['%%%', raw({ t: 'x', id: id(5) }), raw(null)]) {
+      let before: unknown;
+      try {
+        decodeCursor(garbage);
+      } catch (err) {
+        before = err;
+      }
+      let after: unknown;
+      try {
+        decodeFeedCursor(garbage, 'createdAt');
+      } catch (err) {
+        after = err;
+      }
+      expect(after).toEqual(before);
+      expect((after as ApiError).message).toBe((before as ApiError).message);
+    }
+  });
+
+  it('rejects a money-date cursor whose instant is not a date', () => {
+    rejects(() => decodeFeedCursor(raw({ k: 'o', o: '2026-10-20', t: 1e16, id: id(5) }), 'occurredOn'));
+  });
+
   it('rejects a malformed money-date cursor', () => {
     rejects(() => decodeFeedCursor(raw({ k: 'o', o: '2026-10', t: 1, id: id(5) }), 'occurredOn'));
     rejects(() => decodeFeedCursor(raw({ k: 'o', o: '2026-10-20', t: 'x', id: id(5) }), 'occurredOn'));
     rejects(() => decodeFeedCursor(raw({ k: 'o', o: '2026-10-20', t: 1, id: 'nope' }), 'occurredOn'));
     rejects(() => decodeFeedCursor('%%%', 'occurredOn'));
     rejects(() => decodeFeedCursor('%%%', 'createdAt'));
+  });
+});
+
+describe('cursor guards in the stores', () => {
+  const logged = { createdAt: at('10:00:05'), id: id(5) };
+  const byMoney: MoneyDateCursor = { occurredOn: '2026-10-20', ...logged };
+
+  it('lets each order take only its own cursor', () => {
+    expect(moneyDateCursorOf(byMoney)).toBe(byMoney);
+    expect(moneyDateCursorOf(null)).toBeNull();
+    expect(() => moneyDateCursorOf(logged)).toThrow();
+    expect(createdAtCursorOf(logged)).toBe(logged);
+    expect(createdAtCursorOf(null)).toBeNull();
+    expect(() => createdAtCursorOf(byMoney)).toThrow();
   });
 });
