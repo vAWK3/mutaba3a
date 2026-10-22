@@ -111,7 +111,7 @@ test('a link from the phone or the portal opens the privacy policy in its langua
   });
 });
 
-test('the privacy policy says our servers send error reports, and what they never hold', { tag: '@web.legal.privacy-error-reports' }, async ({ page, step }) => {
+test('the privacy policy says our servers and the phone apps send error reports, and what they never hold', { tag: '@web.legal.privacy-error-reports' }, async ({ page, step }) => {
   const section = (title: string) => page.locator('section', { has: page.getByRole('heading', { level: 2, name: title }) });
 
   await step('Open the privacy policy in English: an Error reports section right after Anonymous usage counts', async () => {
@@ -123,7 +123,9 @@ test('the privacy policy says our servers send error reports, and what they neve
     const reports = section(privacy.en.errorReports.title);
     await expect(reports).toContainText('It never includes amounts, names, notes, contact details, request contents, your IP address, or anything you type');
     await expect(reports).toContainText('Our servers send a report when a request fails on our side');
-    await expect(reports).not.toContainText(/hosted portal sends|Our website sends|iPhone and Android apps send/);
+    await expect(reports).toContainText("The iPhone and Android apps send a report when the app crashes or hits an error it can't recover from");
+    await expect(reports).toContainText("They never attach screenshots or what's on your screen");
+    await expect(reports).not.toContainText(/hosted portal sends|Our website sends/);
   });
 
   await step('"No ads, no tracking" drops the no-crash-reporting promise; "Who else handles your data" names Sentry in the EU', async () => {
@@ -131,6 +133,7 @@ test('the privacy policy says our servers send error reports, and what they neve
     await expect(noTracking).not.toContainText('crash reporting');
     await expect(noTracking).toContainText('The free apps on Mac, Windows, and in the browser never send them');
     await expect(section(privacy.en.sharing.title)).toContainText('Sentry, hosted in the EU, receives the error reports');
+    await expect(section(privacy.en.network.title)).toContainText("The mobile apps connect to Mutaba3a's servers, to Sentry for error reports");
   });
 
   await step('Open it in Arabic: the same section, right to left', async () => {
@@ -138,6 +141,7 @@ test('the privacy policy says our servers send error reports, and what they neve
     await page.goto('/privacy');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(section(privacy.ar.errorReports.title)).toContainText('ترسل خوادمنا تقريرًا عندما يفشل طلب بسبب خلل من جهتنا');
+    await expect(section(privacy.ar.errorReports.title)).toContainText('ويرسل تطبيقا iPhone وAndroid تقريرًا عندما يتعطّل التطبيق');
     await expect(section(privacy.ar.noTracking.title)).toContainText('فلا ترسلها أبدًا');
   });
 });

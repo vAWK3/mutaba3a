@@ -15,7 +15,7 @@ contain. MUT-147 set it up. The surface stories wire it in:
 | Hosted API (`server/`) | `mutaba3a-api` | Unknown errors and `ApiError`s with status 500 or higher; pre-roll and post-roll crashes (MUT-148: live once `sentry_enabled`) |
 | Hosted portal (`--mode hosted`) | `mutaba3a-web` (made by hand, imported) | Crashes, uncaught errors, unhandled rejections |
 | Landing pages (`/`, `/download`, `/privacy`, lazy chunks only) | `mutaba3a-landing` | The same as the portal, with no user context |
-| Capture app (Flutter, iOS + Android) | `mutaba3a-flutter` (made by hand, imported) | Dart, Flutter-framework and native crashes |
+| Capture app (Flutter, iOS + Android) | `mutaba3a-flutter` (made by hand, imported) | Dart, Flutter-framework and native crashes, and replies the app couldn't read (type and endpoint only). MUT-151: live in the first store release built with a DSN. The Share Extension, widgets and Siri intents send nothing (MUT-395) |
 
 **Never:** the local web app (`/app`) or desktop. They send nothing, ever (ADR-024, ADR-090).
 
@@ -28,9 +28,9 @@ Only production builds may send.
 - **Web.** Only production builds get a DSN, so dev, QA and preview builds send nothing.
 - **Phone.** The phone is the exception: its `.env` also feeds `make run` (the Flutter
   Makefile passes `--dart-define-from-file=.env`), so a DSN placed there reaches debug
-  sessions too. Therefore the phone starts Sentry only in release builds (`kReleaseMode`),
-  and fastlane passes the DSN with its own `--dart-define` rather than the shared `.env`
-  (MUT-151).
+  sessions too. Therefore the phone starts Sentry only in release builds (`kReleaseMode`) with
+  an EU DSN, and fastlane passes the DSN with its own `--dart-define` rather than the shared
+  `.env` (MUT-151). The lanes refuse a `.env` that holds the DSN or any Sentry token.
 
 ## The two files
 
@@ -64,6 +64,13 @@ than write a second one. A contract change updates `sentry-rules.ts` in the same
    - `includeLocalVariables: false`: frames never carry local variable values (D10).
    - The phone sets `attachScreenshot: false` and `attachViewHierarchy: false`, because the view
      hierarchy holds on-screen text: amounts and names.
+   - The phone sends errors only (MUT-151): no sessions, ANR, app-hang or watchdog reports, no
+     native auto-breadcrumbs, no SDK HTTP breadcrumbs or failed-request events (its own Dio
+     interceptor adds method, path and status), no client reports.
+   - **Native crashes skip the phone's Dart scrubber**: the iOS and Android SDKs send them on
+     the next launch. They carry only the scope synced from Dart (already scrubbed crumbs, the
+     allowed tags, the user id), and a server-side Advanced Data Scrubbing rule on
+     `mutaba3a-flutter` is their second layer (INFRA §1).
    - The server builds its Prisma client with `errorFormat: 'minimal'` (`serverPrismaErrorFormat`),
      so a validation error never prints the query input (D4).
 2. **Requests and URLs.**
@@ -110,6 +117,10 @@ than write a second one. A contract change updates `sentry-rules.ts` in the same
      IP address.
    - Tags must be in `allowedTags`: `surface`, `request_id`, `route` (the route template, never the
      raw path), `locale`, `release`, `environment`, `app_build`.
+   - **Phone only: `scrub_failed`.** If the phone's scrubber throws, it sends a report built from
+     scratch instead (level, release, the allowed tags, exception types and frames, and
+     `scrub_failed: true`), never the event's text, so a broken scrubber shows up rather than
+     every report vanishing (MUT-151 D14).
 6. **Breadcrumbs.**
    - No `console` breadcrumbs.
    - HTTP breadcrumbs (fetch, xhr, Dio) keep `method`, path-only `url` and `status_code`.
@@ -175,8 +186,8 @@ than write a second one. A contract change updates `sentry-rules.ts` in the same
        characters. Rescanning after harmless labels is quadratic, so the cap is what bounds it.
      - **Measured worst case.** About 20–35 ms in Node; the contract test times it with a
        generous budget. In Dart (`dart run` on a Mac) the same worst case took 150–300 ms, so
-       MUT-151 measures it on a low-end Android phone and lowers the phone's cap if
-       `beforeSend` gets slow.
+       the phone truncates to **2,048** characters instead (MUT-151, ADR-091 amendment 10): about
+       25 ms in its own worst case, under a 100 ms test guard.
      - **SDK default.** Sentry's JS SDK already truncates values to 250 characters by default.
    - **First line only.** An exception keeps only its first line when a
      `firstLineOnlyExceptionTypes` pattern matches its type **or the start of its value**:
@@ -260,7 +271,7 @@ and refuses an org outside the EU region before writing anything (D5).
 | api | Secret Manager → Cloud Run env `SENTRY_DSN`. MUT-148 reads it from this module's state with `terraform_remote_state`, so deploys need no Sentry token | none needed (source ships in the image) |
 | portal | `VITE_SENTRY_DSN` in the **hosted** build env (`server/scripts/deploy.sh` step 1) | `SENTRY_AUTH_TOKEN` in the operator shell for `make release server` (`deploy.env` holds no secrets, and `release.env` is the desktop signing file; MUT-149 decides whether deploy.sh reads a git-ignored file) |
 | landing | `VITE_SENTRY_DSN` in Netlify's **production context only** | `SENTRY_AUTH_TOKEN` in Netlify's build env, **scoped to the Production deploy context and marked "Contains secret values"**, so deploy-preview and branch builds (which run PR code) can never read it |
-| capture-app | `SENTRY_DSN` passed by the fastlane release lanes with their own `--dart-define` (not the shared `.env`, which `make run` reads too); the SDK starts only under `kReleaseMode` | `SENTRY_AUTH_TOKEN` in the **fastlane shell env** |
+| capture-app | `MUTABA3A_SENTRY_DSN`, passed by the fastlane release lanes with their own `--dart-define` from the login Keychain (service `release-kit`, account `barmajiyat/MUTABA3A_SENTRY_DSN`; never the shared `.env`, which `make run` reads too). The lanes check it against the app's EU pattern before building. The SDK starts only under `kReleaseMode` | `SENTRY_AUTH_TOKEN` from the Keychain (`barmajiyat/SENTRY_AUTH_TOKEN`) or the fastlane shell env; `sentry_dart_plugin` uploads the dSYMs, Dart debug files and R8 mapping per build |
 
 DSNs come from `terraform output -json dsn` in `server/infrastructure/sentry`.
 
@@ -271,7 +282,8 @@ DSNs come from `terraform output -json dsn` in `server/infrastructure/sentry`.
   run on the ship paths once TD-084 is fixed.
 - **The Flutter `.env` is compiled into the app.** fastlane and the Makefile pass it with
   `--dart-define-from-file`, so every value in it ships inside the binary. A
-  `SENTRY_AUTH_TOKEN` placed there ships to every phone. Keep it in the shell env (MUT-151).
+  `SENTRY_AUTH_TOKEN` placed there ships to every phone. Keep it in the Keychain; the lanes
+  refuse to build when `.env` holds a token or the DSN (MUT-151).
 - **Two different tokens, two different names** (D8).
   - **Upload token.** `SENTRY_AUTH_TOKEN`: an org auth token (`sntrys_…`) with release and
     upload scopes only. It goes wherever builds run.
@@ -345,6 +357,11 @@ surface adds itself to `noTracking.body`'s list.
 
 ### Phone app (MUT-151)
 
+**Published with MUT-151 (2026-10-22, deploy before the first store release built with a DSN).** The
+sentences below, and `noTracking.body` now names the phones: EN "Our servers and the iPhone and
+Android apps send error reports when something breaks…", AR «ترسل خوادمنا وتطبيقا iPhone وAndroid
+تقارير أعطال عند حدوث خلل…».
+
 **`errorReports` sentence.**
 
 - EN: "The iPhone and Android apps send a report when the app crashes or hits an error it can't recover from. They never attach screenshots or what's on your screen."
@@ -356,12 +373,16 @@ that holds your receipts…". AR «…تتصل بخوادم متابعة، وب�
 
 ## Store disclosures (MUT-151)
 
+The phone's reports carry the signed-in account's internal id (MUT-151 D10), so the crash data is
+linked to identity in both stores' terms.
+
 **Apple App Store › App Privacy.** Diagnostics › *Crash Data* and *Other Diagnostic Data*.
-Purpose: App Functionality. Linked to identity: **No**. Used for tracking: **No**.
+Purpose: App Functionality. Linked to identity: **Yes**. Used for tracking: **No**.
 
 **Google Play › Data safety.**
 
-- Category: *App info and performance › Crash logs* and *Diagnostics*.
+- Category: *App info and performance › Crash logs* and *Diagnostics*, and *Personal info ›
+  User IDs* (the internal account id the reports carry).
 - Collected: **Yes**. Shared: **No** (Sentry processes it for us).
 - Collection is **required**: not optional.
 - Purpose: *App functionality*.

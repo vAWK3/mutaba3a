@@ -83,7 +83,7 @@ describe('PrivacyPolicyPage', () => {
     expect(body(/The short version/)).not.toMatch(/The one thing our website can send us/);
   });
 
-  it('says the servers send error reports, what they hold, and that Sentry in the EU keeps them (MUT-148, ADR-091)', () => {
+  it('says the servers and the phone apps send error reports, what they hold, and that Sentry in the EU keeps them (MUT-148, MUT-151, ADR-091)', () => {
     renderPage('en');
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
     expect(headings.indexOf('Error reports')).toBe(headings.indexOf('Anonymous usage counts') + 1);
@@ -91,23 +91,27 @@ describe('PrivacyPolicyPage', () => {
     const reports = body(/Error reports/);
     expect(reports).toMatch(/It never includes amounts, names, notes, contact details, request contents, your IP address, or anything you type/);
     expect(reports).toMatch(/Our servers send a report when a request fails on our side/);
-    // Only what is live (ADR-090 P3): the portal, website and phones get their sentences with MUT-149..151.
-    expect(reports).not.toMatch(/hosted portal sends|Our website sends|iPhone and Android apps send/);
+    expect(reports).toMatch(/The iPhone and Android apps send a report when the app crashes or hits an error it can't recover from/);
+    expect(reports).toMatch(/They never attach screenshots or what's on your screen/);
+    // Only what is live (ADR-090 P3): the portal and website get their sentences with MUT-149/150.
+    expect(reports).not.toMatch(/hosted portal sends|Our website sends/);
     const noTracking = body(/No ads, no tracking/);
     expect(noTracking).not.toMatch(/crash reporting/);
-    expect(noTracking).toMatch(/Our servers send error reports when something breaks on our side/);
+    expect(noTracking).toMatch(/Our servers and the iPhone and Android apps send error reports when something breaks/);
     expect(noTracking).toMatch(/The free apps on Mac, Windows, and in the browser never send them/);
     expect(body(/Who else handles your data/)).toMatch(/Sentry, hosted in the EU, receives the error reports/);
+    expect(body(/What reaches the network/)).toMatch(/The mobile apps connect to Mutaba3a's servers, to Sentry for error reports/);
   });
 
   it('says the same about error reports in Arabic', () => {
     renderPage('ar');
     const reports = screen.getByRole('heading', { level: 2, name: 'تقارير الأعطال' }).parentElement?.textContent ?? '';
     expect(reports).toContain('ترسل خوادمنا تقريرًا عندما يفشل طلب بسبب خلل من جهتنا');
+    expect(reports).toContain('ويرسل تطبيقا iPhone وAndroid تقريرًا عندما يتعطّل التطبيق');
     expect(reports).toContain('Sentry');
     const noTracking = screen.getByRole('heading', { level: 2, name: 'لا إعلانات، لا تتبّع' }).parentElement?.textContent ?? '';
     expect(noTracking).not.toContain('أو تقارير الأعطال أو');
-    expect(noTracking).toContain('ترسل خوادمنا تقارير أعطال عند حدوث خلل من جهتنا');
+    expect(noTracking).toContain('ترسل خوادمنا وتطبيقا iPhone وAndroid تقارير أعطال عند حدوث خلل');
   });
 
   it('says what the portal counts, where it is turned off, and that it reaches PostHog only if turned on (MUT-155)', () => {
@@ -129,7 +133,7 @@ describe('PrivacyPolicyPage', () => {
     expect(usage).toMatch(/If you turn it off in Settings/);
     expect(usage.indexOf('The iPhone and Android apps ask you once')).toBeLessThan(usage.indexOf('These counts are used only'));
     const network = body(/What reaches the network/);
-    expect(network).toMatch(/The mobile apps connect to Mutaba3a's servers, to the private storage that holds your receipts, and, if you turned on anonymous usage, to PostHog/);
+    expect(network).toMatch(/The mobile apps connect to Mutaba3a's servers, to Sentry for error reports, to the private storage that holds your receipts, and, if you turned on anonymous usage, to PostHog/);
     expect(network).not.toMatch(/The mobile apps connect only to/);
   });
 

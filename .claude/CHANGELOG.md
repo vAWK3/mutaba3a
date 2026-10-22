@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — The privacy policy says the phone apps send error reports (MUT-151, ADR-091 amendment 10)
+
+**Why:** the Capture app reports crashes to Sentry from its next store release (mutaba3a-flutter `feature/mut-151-phone-sentry`), and the policy describes only what is live (ADR-090 P3).
+
+### Changed
+- `landing.privacyPolicy` (en + ar): `errorReports` adds the phone sentence (no screenshots or screen content), `noTracking` names the iPhone and Android apps as senders, and `network` says the mobile apps connect to Sentry.
+- `PrivacyPolicyPage.test.tsx` and release-QA `web.legal.privacy-error-reports` assert the new sentences.
+- `docs/observability/README.md`: the phone's row, DSN/token sources, errors-only options, the native-crash path, the 2,048 cap, `scrub_failed`, and the store answers (linked to identity, Play User IDs). INFRA §1: the phone's server-side scrub rule to set by hand. ADR-091 amendment 10.
+
 ## [Unreleased] - 2026-10-22 — The Sentry settings script allows E33's projects in barmajiyat-ltd (MUT-147, ADR-091 amendment 9)
 
 **Why:** `--apply` refused the org because it also holds `e33-api` and `e33-flutter`; Basel chose to share the org.
