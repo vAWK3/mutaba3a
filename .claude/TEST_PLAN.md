@@ -3394,3 +3394,12 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Portal unit tests | pickers offer exactly USD, ILS, EUR, JOD; Gulf filters dropped; per-line derived flag with JOD + EUR |
 | Release-QA | `portal.income.currency-jod`, `portal.expense-groups.currencies-converted` |
 
+## MUT-390 — GET /v1/entries by money date (2026-10-22, ADR-168)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `server/src/entries/__tests__/merge.test.ts` (changed) | Unit | +8 | money-date order by day, logged instant, id (future day on top); the cursor carries the day; `isBeforeMoneyDateCursor` at each tie level; `moneyDateOf` per kind; cursor codec round-trips, the default cursor unchanged, the other order's cursor and malformed ones 422 `cursor` |
+| `server/src/repositories/__tests__/store-contract-entries.ts` (changed; memory + Postgres) | Contract | +4, +1 assertion | limit-2 walk across two profiles and four kinds equals the full list; `occurredFrom`/`occurredBefore` and `loggedSince`+`occurredBefore` walked with cursors; an edited-older expense shows again later (D3); exclusions hold under the money-date order |
+| `server/src/__tests__/routes-entries.test.ts` (changed) | Route (memory store) | +7 | every kind by money day with a future expense on top, paged once each; profile narrowing; the filters; `loggedSince` with an offset; each refused combination 422 naming its field; bad order/day/instant 422; each order pages only with its own cursor |
+| `server/src/repositories/__tests__/store-prisma-entries-plan.test.ts` (changed; test:db) | Query plan | +5 | each kind's money-date query uses its new index (first page, past a cursor, from a day, all bounds together in `Index Cond`); `loggedSince`+`occurredBefore` stays a `createdAt >=` range |
+| `server/src/repositories/__tests__/store-prisma-entries-fanout.test.ts` (changed) | Unit (fake Prisma) | +1 | at most 4 queries in flight under both orders |
