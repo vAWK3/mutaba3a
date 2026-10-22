@@ -112,11 +112,13 @@ import type {
   InboxEntryRepository,
   EntriesRepository,
   EntryRow,
+  FeedPageRequest,
+  MoneyDateCursor,
   PageCursor,
 } from './ports.js';
 import { CAPTURE_UNDO_REASON, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
-import { mergeNewestFirst } from '../entries/merge.js';
+import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
 
 /**
  * Production LedgerStore over Postgres.
@@ -1888,26 +1890,33 @@ export class PrismaLedgerStore implements LedgerStore {
   readonly entries: EntriesRepository = {
     // D3: one typed, index-bounded query per organization and kind (limit + 1 rows each), merged in memory. Review D1:
     // one organization at a time, its 4 kinds in parallel, so a request holds at most 4 pooled connections.
+    // MUT-390: `order=occurredOn` reads the same branches by each kind's money date column (`moneyDateOf`), on its own
+    // index. Every bound (cursor, filters) is its own AND entry, so two on one column never overwrite each other.
     list: async (organizationIds, page) => {
       const take = page.limit + 1;
-      const after = feedCursorWhere(page.cursor);
-      const newestFirst = [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
+      const byMoneyDate = page.order === 'occurredOn';
+      const moneyCursor = byMoneyDate ? moneyDateCursorOf(page.cursor) : null;
+      const loggedCursor = byMoneyDate ? null : createdAtCursorOf(page.cursor);
+      const bounds = (dateColumn: MoneyDateColumn) => ({ AND: feedBounds(dateColumn, page, moneyCursor, loggedCursor) });
+      const orderBy = (dateColumn: MoneyDateColumn) =>
+        byMoneyDate ? [{ [dateColumn]: 'desc' as const }, { createdAt: 'desc' as const }, { id: 'desc' as const }] : [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
       const branchesOf = (organizationId: string) => [
         this.prisma.expense
-          .findMany({ where: { organizationId, deletedAt: null, ...after }, orderBy: newestFirst, take })
+          .findMany({ where: { organizationId, deletedAt: null, ...bounds('occurredOn') }, orderBy: orderBy('occurredOn'), take })
           .then((rows) => rows.map((record): EntryRow => ({ kind: 'expense', record }))),
         this.prisma.payment
-          .findMany({ where: { organizationId, AND: [after, { OR: [{ reversalReason: null }, { reversalReason: { not: CAPTURE_UNDO_REASON } }] }] }, orderBy: newestFirst, take })
+          .findMany({ where: { organizationId, OR: [{ reversalReason: null }, { reversalReason: { not: CAPTURE_UNDO_REASON } }], ...bounds('receivedOn') }, orderBy: orderBy('receivedOn'), take })
           .then((rows) => rows.map((record): EntryRow => ({ kind: 'payment', record }))),
         this.prisma.receivable
-          .findMany({ where: { organizationId, origin: 'ADJUSTMENT', deletedAt: null, ...after }, orderBy: newestFirst, take })
+          .findMany({ where: { organizationId, origin: 'ADJUSTMENT', deletedAt: null, ...bounds('postingDate') }, orderBy: orderBy('postingDate'), take })
           .then((rows) => rows.map((record): EntryRow => ({ kind: 'receivable', record }))),
         this.prisma.conversion
-          .findMany({ where: { organizationId, deletedAt: null, ...after }, orderBy: newestFirst, take })
+          .findMany({ where: { organizationId, deletedAt: null, ...bounds('occurredOn') }, orderBy: orderBy('occurredOn'), take })
           .then((rows) => rows.map((record): EntryRow => ({ kind: 'conversion', record }))),
       ];
       const branches: EntryRow[][] = [];
       for (const organizationId of organizationIds) branches.push(...(await Promise.all(branchesOf(organizationId))));
+      if (byMoneyDate) return mergeByMoneyDate(branches, page.limit, moneyDateKeyOf);
       return mergeNewestFirst(branches, page.limit, (row) => row.record);
     },
     settledOwedIds: async (organizationIds, paymentIds) => {
@@ -2355,6 +2364,27 @@ function toAuditEvent(r: { id: string; organizationId: string; actorType: AuditE
     requestId: r.requestId,
     createdAt: r.createdAt,
   };
+}
+
+/** Each feed kind's money date column (`moneyDateOf` in entries/merge.ts reads the same ones). */
+type MoneyDateColumn = 'occurredOn' | 'receivedOn' | 'postingDate';
+
+/**
+ * MUT-390: one kind's feed bounds as AND entries — the cursor of either order and the filters, on the kind's money
+ * date column. The money-date cursor is `day <= o AND (day < o OR (createdAt <= t AND (createdAt < t OR id < i)))`:
+ * the leading `day <= o` is the index range, as `createdAt <= t` is in `feedCursorWhere`.
+ */
+function feedBounds(dateColumn: MoneyDateColumn, page: FeedPageRequest, moneyCursor: MoneyDateCursor | null, createdAtCursor: PageCursor | null): Array<Record<string, unknown>> {
+  const and: Array<Record<string, unknown>> = [];
+  if (moneyCursor) {
+    and.push({ [dateColumn]: { lte: moneyCursor.occurredOn } }, { OR: [{ [dateColumn]: { lt: moneyCursor.occurredOn } }, feedCursorWhere(moneyCursor)] });
+  } else if (createdAtCursor) {
+    and.push(feedCursorWhere(createdAtCursor));
+  }
+  if (page.occurredFrom !== undefined) and.push({ [dateColumn]: { gte: page.occurredFrom } });
+  if (page.occurredBefore !== undefined) and.push({ [dateColumn]: { lt: page.occurredBefore } });
+  if (page.loggedSince !== undefined) and.push({ createdAt: { gte: page.loggedSince } });
+  return and;
 }
 
 /**

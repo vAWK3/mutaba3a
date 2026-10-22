@@ -101,8 +101,16 @@
 **Impact**: `npm run typecheck` only checks `tsconfig.app.json`/`tsconfig.hosted.json`/`tsconfig.hosted-local.json`. `tsconfig.node.json` (the only config with `types: ["node"]`, which `scripts/` would need) includes only `vite.config.ts`. `npm run build`'s `tsc -b` builds every referenced project, but `tsconfig.node.json`'s narrow include means it still never typechecks `scripts/`. `vitest` transpiles via esbuild without type-checking. A type error in any `scripts/*.ts` file (including this ticket's `icon-set.ts`/`generate-icons.ts`/`validate-icon-set.ts`) would only surface as a runtime failure the next time someone runs that script, not in CI.
 **Fix**: add `"scripts"` (or `"scripts/**/*.ts"`, excluding `__tests__`) to `tsconfig.node.json`'s `include`, confirm it builds clean, then add `tsconfig.node.json` to `npm run typecheck`'s chain.
 
+### TD-200: Sentry keys have no daily cap, so one surface can use up the month's quota
+**Status**: Accepted (Basel, 2026-10-22: Developer plan, caps gated)
+**Ticket**: none (MUT-147, ADR-091 amendment 8)
+**Added**: 2026-10-22
+**Priority**: Low while traffic is a pilot's
+**Impact**: per-key rate limits need a paid Sentry plan, so D6's daily caps (api 60, capture-app 60, portal 20, landing 20) are gone. Three DSNs are public. A script hitting one, or a crash loop, can spend the 5,000-error month: the $0 pay-as-you-go budget drops the rest, so every project goes dark until the quota resets. Spike protection slows it but doesn't stop it. The API's errors still reach Cloud Logging, and Sentry's quota emails say when it happens.
+**Fix**: move to a plan with key rate limits and put the caps back (`rate_limit_window`/`rate_limit_count` on `sentry_key`), or give the public surfaces a project in a second org with its own quota. Do it if the quota runs out once, or before the pilot opens to the public.
+
 ### TD-159: The Sentry alerts use the deprecated `sentry_issue_alert` resource
-**Status**: Open
+**Status**: Resolved 2026-10-22 (ADR-091 amendment 8: the first apply got 404s because Sentry retired the classic endpoints; the three alerts are now `sentry_alert` on each project's `sentry_project_error_monitor`)
 **Ticket**: none (MUT-147, 2026-10-17)
 **Added**: 2026-10-17
 **Priority**: Low. The resource works in provider 0.15.8 and only prints a deprecation warning.
@@ -220,7 +228,7 @@
 **Fix**: mark the configuration-state codes in `ERROR_CODES` and skip them in `onError`'s report (keep the log), or let Sentry's own fingerprinting plus an inbound filter drop them. Do it if a day's cap is ever spent on them (the api project's quota view shows it).
 
 ### TD-198: The Sentry settings script assumes the org holds only Mutaba3a projects
-**Status**: Open
+**Status**: Partly resolved 2026-10-22 (ADR-091 amendment 9): the guard is an allow-list, `mutaba3a-` and `e33-`, and E33 accepts the org-wide settings. Still open: one free-plan quota shared by both products (see TD-200), and the next product needs its own decision.
 **Ticket**: none (ADR-091 amendment 5)
 **Added**: 2026-10-22
 **Priority**: Low (nothing else is in `barmajiyat-ltd` yet)

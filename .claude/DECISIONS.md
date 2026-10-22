@@ -3681,6 +3681,22 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Proof in production (D4).** `/health` reports `errorReporting: on|off` (API 1.48.0-mut148) and every release smoke checks it; `npm run sentry:smoke` sends one deliberate event.
 - **Privacy (D5).** The policy names only the servers as senders until MUT-149..151 ship their surfaces (ADR-090 P3).
 
+**Amendment 7 (hand-made projects, 2026-10-22)**: Basel created two projects in Sentry's UI before the first apply: `mutaba3a-web` for the portal and `mutaba3a-flutter` for the capture app. Terraform adopts them instead of creating `mutaba3a-portal` and `mutaba3a-capture-app`.
+- **How.** `local.surfaces` carries each surface's slug and an `adopted` flag. An `import` block (behind `import_hand_made_projects`, default true; the offline tests set it false because a mocked provider can't import) brings the two under Terraform on the next apply. `mutaba3a-api` and `mutaba3a-landing` are still created. Keys, alerts and spike protection are named after the slugs.
+- **What import can't do.** `default_key = false` and `default_rules = false` apply only at creation, so the adopted projects keep Sentry's uncapped `Default` key and default alert rule. DEPLOYMENT.md §1.5 step 7 has the operator revoke both; the `mutaba3a-web` Default key's DSN was also pasted outside Sentry.
+- **Unchanged.** Every slug still starts `mutaba3a-`, so the settings script's wrong-org guard (D16) holds without change. Surface keys (`portal`, `capture-app`) are unchanged, so the DSN homes in the README stay the same.
+
+**Amendment 8 (first apply, 2026-10-22)**: the first `terraform apply` created the projects, team, keys, filters and spike protection, then failed twice.
+- **Alerts → `sentry_alert`.** Every `sentry_issue_alert` create answered 404: Sentry retired the classic issue-alert endpoints in August 2026. The three alerts per project are now `sentry_alert` workflows whose `monitor_ids` is the project's default error monitor (`data "sentry_project_error_monitor"`). Same triggers (`first_seen_event`, `regression_event`; the spike has no trigger and filters on `event_frequency_count` > 10 in 1h) and the same email to issue owners, falling through to all members. TD-159 resolved.
+- **No per-key caps (supersedes D6's daily caps).** Sentry accepted the keys but returned no rate limit, and the provider reported an inconsistent result. Basel confirmed in the UI that key rate limits need a paid plan. `sentry_key` sets none; `key_rate_limit_per_day` and `monthly_event_quota` are gone, and the spike threshold need only be positive. Guards left: spike protection and the $0 pay-as-you-go budget. The risk is TD-200.
+- **Keys kept.** The four keys from that apply were tainted; `terraform untaint` keeps them (and their DSNs) instead of recreating them.
+
+**Amendment 9 (E33 shares the org, 2026-10-22)**: the settings script refused `barmajiyat-ltd` because it also holds E33's `e33-api` and `e33-flutter`. Basel chose to share the org.
+- **Guard.** `scripts/sentry-org-policy.ts` checks an allow-list of product prefixes, `mutaba3a-` and `e33-`, instead of `mutaba3a-` alone. Any other project still stops the script before it writes, naming the project (D16 holds).
+- **Org-wide settings.** E33's projects get the same org settings: 2FA required, data scrubber with the curated sensitive fields, no IP storage, Enhanced Privacy, no shared issues. Basel accepted this for E33.
+- **Quota.** E33 now shares the free plan's monthly error quota, with no per-key caps on either product (TD-200).
+- **Another product** joins only by adding its prefix with the same decision.
+
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
 **Status**: Accepted (2026-10-17, MUT-157; auto-decided on the recommended option at Basel's request, C1)
@@ -4581,3 +4597,30 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A deleted expense no longer takes its receipts with it on the hosted server; they reappear under To review (since MUT-389, only while `RECEIPTS_LIBRARY` is on).
 - Once a To-review receipt exists, the previous server revision cannot read that row (Prisma P2032): rolling back means rolling forward, or moving the To-review rows aside first (DEPLOYMENT.md).
 - The local format number is shared with MUT-302/307/308; whoever lands next takes 4.
+
+
+## ADR-168: The Entries Feed Also Lists by Money Date, With Index-Bounded Day and Logged-Since Filters (MUT-390)
+
+**Status**: Accepted (2026-10-22, MUT-390; decisions D1–D6 from the eng review, Basel's answers)
+
+**Context**: Recent grouped entries by the day they were logged, so seven entries Basel typed today for seven different dates all sat under "Today" (MUT-391). Recent must group by the day money moved. The feed (ADR-093) only pages by `(createdAt, id)`, and a phone-only regroup would miss an expense logged ahead with a date that has since arrived, or an old entry edited into the window. Basel chose the exact server fix (D4).
+
+**Decision**:
+1. **A second order.** `GET /v1/entries?order=occurredOn` lists newest money day first, then newest logged, then id: each kind's own money date (expense and conversion `occurredOn`, received payment `receivedOn`, Owed `postingDate`), so a future-dated entry sorts above today. `order=createdAt` stays the default, byte for byte. All four dates are NOT NULL, so no row lacks one.
+2. **Filters, each only with the order whose index bounds it (D5).** `occurredFrom` (money date ≥) with `order=occurredOn`; `occurredBefore` (money date <) with `order=occurredOn`, or with the default order together with `loggedSince`; `loggedSince` (instant ≥, Z or an offset) with the default order. Any other combination answers 422 naming the field: it would walk a firm's whole history to fill its last page. `loggedSince` may reach at most 31 days back (`LOGGED_SINCE_MAX_DAYS`, review fix): it is the index range of the default-order read, so an older value would walk the history too.
+3. **Cursor (D1).** The codec lives in `entries/merge.ts`: the default order keeps `pagination.ts`'s `{t, id}` unchanged, the money-date order adds `k: 'o'` and the day. A cursor from the other order answers 422 `field: cursor`, both ways.
+4. **Queries.** Same fan-out as ADR-093 (one organization at a time, 4 kinds in parallel). Each bound is its own `AND` entry, so a filter and the cursor on one column never overwrite each other. The money-date cursor is `day <= o AND (day < o OR (createdAt <= t AND (createdAt < t OR id < i)))`, the leading conjunct being the index range. New indexes `(organizationId, occurredOn desc, createdAt desc, id desc)` on expenses and conversions, `(organizationId, receivedOn desc, createdAt desc, id desc)` on payments, `(organizationId, origin, postingDate desc, createdAt desc, id desc)` on receivables; the EXPLAIN test pins each.
+5. **Cursors fail as 422, never as a wrong page or a 500 (review).** A cursor whose instant is no date is refused; each store also refuses the other order's cursor (`createdAtCursorOf`, `moneyDateCursorOf`), and the default order leaves malformed cursors to `pagination.ts`, so their error is unchanged byte for byte.
+6. **Date edits between pages (D3).** By money date the sort key is editable, so an entry whose date changes between page reads can show twice or be missed until page one is read again. Documented on the route; clients dedupe by id and re-read page one after an edit.
+
+**Alternatives considered**:
+- **Regroup on the phone only (D4 B/C).** Rejected by Basel: misses future-dated rows logged over a week ago and dates edited into the window.
+- **Freeze pages server-side with the first page's time (D3 B).** Rejected: a field and an `updatedAt` filter on every query, and it still misses rows moved newer than the cursor.
+- **Allow every filter with either order.** Rejected: residual-only filters force a whole-history scan on the last page.
+- **The same order on `/v1/inbox`.** Not needed: Unsorted is not grouped by day.
+
+**Consequences**:
+- Four more indexes on hot insert paths; plain `CREATE INDEX` locks each table for well under a second at pilot size.
+- The phone (MUT-391) reads the window with `order=occurredOn&occurredFrom=<cutoff>` and the backdated card with `loggedSince&occurredBefore`, dedupes by id and versions its cache key; the server deploys first.
+- Future-dated Owed income is MUT-392.
+- API 1.49.0-mut390.

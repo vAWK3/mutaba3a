@@ -364,3 +364,136 @@ describe('GET /v1/entries — who may call it, and what it accepts', () => {
     expect((await feed('?limit=100')).status).toBe(200);
   });
 });
+
+/** MUT-390: order=occurredOn and the day / logged-since filters. The harness's today is 2026-10-12. */
+describe('GET /v1/entries — by money date (MUT-390)', () => {
+  async function dated(h: Harness, u: Person, profile: string, path: '/v1/expenses' | '/v1/conversions' | '/v1/income', body: Record<string, unknown>) {
+    h.tick();
+    const base = path === '/v1/expenses' ? { amount: '40.00', currency: 'ILS', title: 'Paper' } : path === '/v1/conversions' ? { amount: '100.00', currency: 'USD', toAmount: '370.00', toCurrency: 'ILS' } : { amount: '250.00', currency: 'ILS' };
+    const res = await h.app.request(path, json({ ...base, ...body }, { ...u.as(profile), ...idem() }));
+    expect(res.status).toBe(201);
+    return (await read(res)) as { id: string };
+  }
+
+  async function world() {
+    const s = await setup();
+    const { h, a, b, u } = s;
+    const e1 = await dated(h, u, a.id, '/v1/expenses', { occurredOn: '2026-10-10' });
+    const c1 = await dated(h, u, a.id, '/v1/conversions', { occurredOn: '2026-10-10' });
+    const r1 = await dated(h, u, b.id, '/v1/income', { kind: 'received', occurredOn: '2026-10-12' });
+    const customerB = await customer(h, u.as(b.id));
+    const o1 = await dated(h, u, b.id, '/v1/income', { kind: 'owed', customerId: customerB.id, title: 'Logo', occurredOn: '2026-10-01' });
+    const future = await dated(h, u, a.id, '/v1/expenses', { occurredOn: '2026-10-20' }); // a bill due ahead
+    return { ...s, e1, c1, r1, o1, future };
+  }
+
+  it('lists every kind newest money day first, a future-dated expense on top, and pages every row once', async () => {
+    const { feed, e1, c1, r1, o1, future } = await world();
+
+    const all = await read(await feed('?order=occurredOn'));
+    expect(ids(all)).toEqual([future.id, r1.id, c1.id, e1.id, o1.id]);
+    expect(all.nextCursor).toBeNull();
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: Loose = await read(await feed(`?order=occurredOn&limit=2${cursor ? `&cursor=${cursor}` : ''}`));
+      seen.push(...ids(page));
+      cursor = page.nextCursor;
+    } while (cursor);
+    expect(seen).toEqual(ids(all));
+  });
+
+  it('keeps to the named profiles in money-date order', async () => {
+    const { h, u, feed, a, e1, c1, future } = await world();
+    const late = await dated(h, u, a.id, '/v1/expenses', { occurredOn: '2026-10-11' }); // logged last, dated before the future bill
+    expect(ids(await read(await feed(`?order=occurredOn&profileId=${a.id}`)))).toEqual([future.id, late.id, c1.id, e1.id]);
+  });
+
+  /** When the feed says `entryId` was logged, read off the default order's envelope. */
+  async function loggedAt(feed: (query?: string) => Response | Promise<Response>, entryId: string): Promise<string> {
+    const body = await read(await feed('?limit=100'));
+    return body.items[ids(body).indexOf(entryId)].createdAt as string;
+  }
+
+  it('filters by money day, and by logged since plus dated before', async () => {
+    const { feed, e1, c1, r1, o1, future } = await world();
+
+    expect(ids(await read(await feed('?order=occurredOn&occurredFrom=2026-10-10&occurredBefore=2026-10-20')))).toEqual([r1.id, c1.id, e1.id]);
+    expect(ids(await read(await feed('?order=occurredOn&occurredBefore=2026-10-10')))).toEqual([o1.id]);
+
+    // Logged since the conversion (inclusive), dated before 2026-10-11: the Owed and the conversion, newest logged first.
+    const since = await loggedAt(feed, c1.id);
+    const backdated = ids(await read(await feed(`?loggedSince=${encodeURIComponent(since)}&occurredBefore=2026-10-11`)));
+    expect(backdated).toEqual([o1.id, c1.id]);
+    expect(backdated).not.toContain(future.id);
+  });
+
+  it('filters the default order by loggedSince alone, and pages it', async () => {
+    const { feed, c1, r1, o1, future } = await world();
+    const since = encodeURIComponent(await loggedAt(feed, c1.id));
+
+    expect(ids(await read(await feed(`?loggedSince=${since}`)))).toEqual([future.id, o1.id, r1.id, c1.id]);
+    const first = await read(await feed(`?loggedSince=${since}&limit=3`));
+    const second = await read(await feed(`?loggedSince=${since}&limit=3&cursor=${first.nextCursor}`));
+    expect([...ids(first), ...ids(second)]).toEqual([future.id, o1.id, r1.id, c1.id]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('reads loggedSince with a UTC offset as the instant it names', async () => {
+    const { feed, e1, c1, o1 } = await world();
+    // 12:00:00+03:00 is the harness start, 09:00:00Z: every row was logged after it.
+    expect(ids(await read(await feed(`?loggedSince=${encodeURIComponent('2026-10-12T12:00:00+03:00')}&occurredBefore=2026-10-11`)))).toEqual([o1.id, c1.id, e1.id]);
+    // The conversion's own instant written in +03:00: the expense, logged a second earlier, drops out.
+    const since = new Date(await loggedAt(feed, c1.id));
+    const local = new Date(since.getTime() + 3 * 3_600_000).toISOString().replace('Z', '+03:00');
+    expect(ids(await read(await feed(`?loggedSince=${encodeURIComponent(local)}&occurredBefore=2026-10-11`)))).toEqual([o1.id, c1.id]);
+  });
+
+  it('refuses a loggedSince more than 31 days back, so no read walks a firm\'s history', async () => {
+    const { h, feed } = await setup();
+    const daysBack = (days: number) => encodeURIComponent(new Date(h.clock.now.getTime() - days * 86_400_000).toISOString());
+
+    const tooOld = await feed(`?loggedSince=${daysBack(32)}&occurredBefore=2026-10-01`);
+    expect(tooOld.status).toBe(422);
+    expect((await read(tooOld)).error.details.field).toBe('loggedSince');
+    expect((await feed(`?loggedSince=${daysBack(31)}`)).status).toBe(200);
+  });
+
+  it('refuses each filter without the order whose index bounds it', async () => {
+    const { feed } = await setup();
+    const cases: Array<[string, string]> = [
+      ['?occurredFrom=2026-10-01', 'occurredFrom'],
+      ['?order=occurredOn&loggedSince=2026-10-01T00:00:00Z', 'loggedSince'],
+      ['?occurredBefore=2026-10-01', 'occurredBefore'],
+    ];
+    for (const [query, field] of cases) {
+      const res = await feed(query);
+      expect(res.status, query).toBe(422);
+      const body = await read(res);
+      expect(body.error.code).toBe('VALIDATION_FAILED');
+      expect(body.error.details.field).toBe(field);
+    }
+  });
+
+  it('rejects a bad order, a bad day and a bad instant', async () => {
+    const { feed } = await setup();
+    for (const query of ['?order=sideways', '?order=occurredOn&occurredFrom=2026-10', '?order=occurredOn&occurredBefore=yesterday', '?loggedSince=soon&occurredBefore=2026-10-01']) {
+      const res = await feed(query);
+      expect(res.status, query).toBe(422);
+      expect((await read(res)).error.code).toBe('VALIDATION_FAILED');
+    }
+  });
+
+  it('pages each order only with its own cursor', async () => {
+    const { feed } = await world();
+    const byLogged = await read(await feed('?limit=1'));
+    const byMoney = await read(await feed('?order=occurredOn&limit=1'));
+
+    for (const query of [`?order=occurredOn&cursor=${byLogged.nextCursor}`, `?cursor=${byMoney.nextCursor}`]) {
+      const res = await feed(query);
+      expect(res.status, query).toBe(422);
+      expect((await read(res)).error.details.field).toBe('cursor');
+    }
+  });
+});

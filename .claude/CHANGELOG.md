@@ -33,7 +33,7 @@
 **Why:** the expense typed by hand and the receipt scanned later had no way to meet: approval always created a new
 expense. Basel also chose (D5) to make MUT-255's production hold a switch, so main can deploy again. ADR-167
 "Extended by MUT-389"; plan, eng review and decisions in `.claude/designs/mut-389-file-receipt-to-existing-expense.md`.
-API 1.50.0 because MUT-390's worktree holds 1.49.0; whichever merges second renumbers.
+API 1.50.0, after MUT-390's 1.49.0.
 
 ### Added
 - `POST /v1/receipts/{receiptId}/file` with `{ expenseId, suggested? }`: 200 `FileReceiptResponse` (the expense with
@@ -65,6 +65,61 @@ API 1.50.0 because MUT-390's worktree holds 1.49.0; whichever merges second renu
   an approval; the flag-off test uses real ids, covers every library route and checks `/openapi.json`; the lock
   probe is tied to the holder's pid (`pg_blocking_pids`).
 - Known gap kept (D3): a MUT-44 completion can still race one filing to 11 receipts (ADR-167).
+
+## [Unreleased] - 2026-10-22 — The Sentry settings script allows E33's projects in barmajiyat-ltd (MUT-147, ADR-091 amendment 9)
+
+**Why:** `--apply` refused the org because it also holds `e33-api` and `e33-flutter`; Basel chose to share the org.
+
+### Changed
+- `scripts/sentry-org-policy.ts`: the wrong-org guard checks the allow-list `mutaba3a-`, `e33-` (`assertKnownProjectsOnly`);
+  any other project still stops it. Two tests added (E33 accepted, another product refused). 40/40.
+- DEPLOYMENT.md §1.5 step 5, the observability README, INFRA, TD-198 (partly resolved).
+
+## [Unreleased] - 2026-10-22 — Sentry alerts move to `sentry_alert`; keys lose their daily caps (MUT-147, ADR-091 amendment 8)
+
+**Why:** the first `terraform apply` got 404 on every `sentry_issue_alert` (Sentry retired the classic endpoints)
+and an inconsistent result on every `sentry_key` (per-key rate limits need a paid plan, confirmed in the UI).
+
+### Changed
+- `server/infrastructure/sentry/main.tf`: the new-issue, regression and spike alerts are `sentry_alert` on each
+  project's `sentry_project_error_monitor`; `sentry_key` sets no rate limit. TD-159 resolved; no deprecation warning.
+- `variables.tf`: `key_rate_limit_per_day` and `monthly_event_quota` removed; `spike_threshold_per_hour` > 0 only.
+- Tests: alerts asserted on monitor, triggers, email and the spike filter; the cap runs are gone. 13/13 pass.
+- Docs: DEPLOYMENT.md §1.5 (untaint the four keys from the failed apply; read-back without caps; check the spike
+  alert), README quota section, INFRA rows, TD-200 (no caps: one surface can use up the month).
+
+## [Unreleased] - 2026-10-22 — The entries feed lists by money date, with day and logged-since filters (MUT-390, API 1.49.0)
+
+**Why:** Recent grouped entries by the day they were logged, so backdated entries all sat under "Today". ADR-168;
+plan, review and decisions D1–D6 in `.claude/designs/mut-390-feed-money-date.md`.
+
+### Added
+- `GET /v1/entries?order=occurredOn`: newest money day first (expense/conversion `occurredOn`, received `receivedOn`,
+  Owed `postingDate`), then newest logged; future-dated entries above today.
+- Filters `occurredFrom`, `occurredBefore`, `loggedSince`, each only with the order whose index bounds it (else 422);
+  `loggedSince` at most 31 days back.
+- Four indexes (migration `20261022120000_mut390_entries_money_date_indexes`).
+- Tests: merge/cursor units, memory + Postgres contract walks with filters and cursors, route 422s, EXPLAIN plans
+  for every kind and bound, fan-out for both orders.
+
+### Changed
+- The feed cursor codec moved into `entries/merge.ts`; the default order's cursor is unchanged byte for byte.
+- `/v1/entries` description: date edits between pages under `order=occurredOn` (dedupe by id); a settle or
+  correction can sit days from its partner by money date.
+
+## [Unreleased] - 2026-10-22 — Sentry Terraform adopts the two projects made by hand (MUT-147, ADR-091 amendment 7)
+
+**Why:** Basel created `mutaba3a-web` (portal) and `mutaba3a-flutter` (capture app) in Sentry's UI. Without this the
+first apply would create `mutaba3a-portal` and `mutaba3a-capture-app` beside them.
+
+### Changed
+- `server/infrastructure/sentry/main.tf`: per-surface slugs and an `adopted` flag in `local.surfaces`; an `import` block
+  (variable `import_hand_made_projects`, default true) for the two; keys and alerts are named after the slugs.
+  `mutaba3a-api` and `mutaba3a-landing` are still created.
+- Tests: a run pins the four slugs and the two adoptions; both test files set `import_hand_made_projects = false`
+  (a mocked provider can't import). 16/16 pass.
+- `server/DEPLOYMENT.md` §1.5: the plan shows 2 imports; step 7 revokes the adopted projects' uncapped `Default` key
+  (the pasted onboarding DSN) and default alert rule. README and INFRA name the new slugs.
 
 ## [Unreleased] - 2026-10-22 — The API server reports its errors to Sentry (MUT-148, API 1.48.0)
 

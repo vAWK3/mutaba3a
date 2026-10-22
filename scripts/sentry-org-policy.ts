@@ -37,7 +37,12 @@ const DEFAULT_BASE_URL = 'https://de.sentry.io';
 /** Only Sentry's own API hosts ever receive the admin token (D9). */
 const SENTRY_HOST = /^https:\/\/([a-z0-9-]+\.)?sentry\.io$/;
 /** Every Terraform-managed project slug starts with this (server/infrastructure/sentry/main.tf). */
-const PROJECT_PREFIX = 'mutaba3a-';
+/**
+ * ADR-091 amendment 9: the products whose projects share barmajiyat-ltd. The org settings this script
+ * writes apply to all of them, which E33's owner (Basel) accepted on 2026-10-22. Add a product here only
+ * with that same decision; anything else in the org means the token points at the wrong org.
+ */
+const ALLOWED_PROJECT_PREFIXES = ['mutaba3a-', 'e33-'];
 /** A stalled connection fails the run instead of hanging the operator's shell. */
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -109,21 +114,24 @@ const readOrg = async (fetchFn: typeof fetch, url: string, token: string) =>
 const withoutTrailingSlash = (url: string | undefined) => url?.replace(/\/+$/, '');
 
 /**
- * ADR-091: the org is Mutaba3a-only. A personal admin token reaches every org its owner belongs
- * to, so refuse one holding any other product's project before writing a thing (D16). An empty
- * org passes: on the first run Terraform may not have created the projects yet.
+ * ADR-091 (D16, amendment 9): the org holds only the allowed products' projects. A personal admin
+ * token reaches every org its owner belongs to, so refuse one holding any other project before
+ * writing a thing. An empty org passes: on the first run Terraform may not have created the projects yet.
  */
-async function assertMutaba3aOnly(fetchFn: typeof fetch, orgUrl: string, args: OrgSettingsArgs) {
+async function assertKnownProjectsOnly(fetchFn: typeof fetch, orgUrl: string, args: OrgSettingsArgs) {
   const response = await call(fetchFn, 'GET', `${orgUrl}projects/`, args.token);
   // Sentry pages this list (Link header); a project past page one would go unseen, so fail closed.
   if (/rel="next"; results="true"/.test(response.headers.get('link') ?? '')) {
-    throw new Error(`Org "${args.org}" has more than one page of projects, so it can't be Mutaba3a-only. Stop: check SENTRY_ORG.`);
+    throw new Error(`Org "${args.org}" has more than one page of projects, so it can't check every project. Stop: check SENTRY_ORG.`);
   }
   const projects = (await response.json()) as Array<{ slug?: string }>;
-  const foreign = projects.map((project) => project.slug ?? '(no slug)').filter((slug) => !slug.startsWith(PROJECT_PREFIX));
+  const foreign = projects
+    .map((project) => project.slug ?? '(no slug)')
+    .filter((slug) => !ALLOWED_PROJECT_PREFIXES.some((prefix) => slug.startsWith(prefix)));
   if (foreign.length > 0) {
     throw new Error(
-      `Org "${args.org}" holds projects that aren't Mutaba3a's (${foreign.join(', ')}). Stop: check SENTRY_ORG; ADR-091 needs a Mutaba3a-only org.`,
+      `Org "${args.org}" holds projects outside ${ALLOWED_PROJECT_PREFIXES.map((prefix) => `${prefix}…`).join(' and ')} (${foreign.join(', ')}). ` +
+        'Stop: check SENTRY_ORG. These settings apply to every project in the org, so a new product joins only by decision (ADR-091 amendment 9).',
     );
   }
 }
@@ -152,7 +160,7 @@ export async function syncOrgSettings(
       `Org "${args.org}" is in ${actualRegion ?? 'an unknown region'}, not ${regionUrl}. Stop: Mutaba3a's reports must stay in the EU (ADR-091).`,
     );
   }
-  await assertMutaba3aOnly(fetchFn, url, args);
+  await assertKnownProjectsOnly(fetchFn, url, args);
   if (args.mode === 'check') return orgSettingsDrift(before, desired);
   // The PUT's body is never read: the GET after it is the verification.
   await call(fetchFn, 'PUT', url, args.token, { ...desired, sensitiveFields: mergeFields(before.sensitiveFields, desired.sensitiveFields) });

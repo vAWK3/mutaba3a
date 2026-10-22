@@ -9,6 +9,12 @@ variable "base_url" {
   default     = "https://de.sentry.io/api/"
 }
 
+variable "import_hand_made_projects" {
+  description = "Imports mutaba3a-web and mutaba3a-flutter, which Basel created in Sentry's UI, instead of creating them. Leave true; only the offline tests set it false, because a mocked provider can't import."
+  type        = bool
+  default     = true
+}
+
 variable "team_slug" {
   description = "Team that owns the four projects."
   type        = string
@@ -41,37 +47,12 @@ variable "landing_origins" {
   }
 }
 
-variable "monthly_event_quota" {
-  description = "Error events the org's plan includes per month (Developer plan: about 5,000; check at signup). With a $0 pay-as-you-go budget, events past it are dropped for every surface."
-  type        = number
-  default     = 5000
-}
-
-variable "key_rate_limit_per_day" {
-  description = "Events per day each project's DSN accepts (D6). The caps add up to no more than the monthly quota over 31 days, so a public DSN (landing, portal, the phone's) abused or stuck in a crash loop can't use up the shared quota and blind the API for the month. A surface that hits its cap drops the rest of that day's events."
-  type        = map(number)
-  default = {
-    api           = 60
-    portal        = 20
-    landing       = 20
-    "capture-app" = 60
-  }
-  validation {
-    condition     = toset(keys(var.key_rate_limit_per_day)) == toset(["api", "portal", "landing", "capture-app"]) && alltrue([for limit in values(var.key_rate_limit_per_day) : limit > 0])
-    error_message = "key_rate_limit_per_day needs a positive limit for exactly api, portal, landing and capture-app."
-  }
-  validation {
-    condition     = sum(values(var.key_rate_limit_per_day)) * 31 <= var.monthly_event_quota
-    error_message = "The daily caps over 31 days must fit within monthly_event_quota, or one surface can exhaust the quota for all."
-  }
-}
-
 variable "spike_threshold_per_hour" {
-  description = "The spike alert fires when one issue gets more than this many events in an hour. It must sit below the smallest daily key cap: a key drops everything past its cap, so a higher threshold could never be reached and the alert would never fire."
+  description = "The spike alert fires when one issue gets more than this many events in an hour."
   type        = number
   default     = 10
   validation {
-    condition     = var.spike_threshold_per_hour > 0 && var.spike_threshold_per_hour < min(values(var.key_rate_limit_per_day)...)
-    error_message = "spike_threshold_per_hour must be positive and below the smallest key_rate_limit_per_day, or the spike alert can never fire."
+    condition     = var.spike_threshold_per_hour > 0
+    error_message = "spike_threshold_per_hour must be positive."
   }
 }

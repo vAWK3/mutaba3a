@@ -134,8 +134,8 @@ state, and `deploy.sh` never touches it. The rules are in
 2. **Plan and budget.** Stay on the **Developer (free)** plan. Under
    Settings › Subscription, set the **pay-as-you-go budget to $0**, so overage
    is dropped and never billed, and keep Sentry's **quota notification emails**
-   on. Check the plan's current monthly error quota on Sentry's pricing page; if
-   it isn't 5,000, set `monthly_event_quota` in `production.tfvars` to match.
+   on. The free plan can't cap a key per day (ADR-091 amendment 8, TD-200), so this
+   budget and spike protection are the only quota guards.
 3. **Two tokens, two names** (D8).
    - **Admin token**, `SENTRY_ADMIN_TOKEN`: a **personal (user) auth token**
      (`sntryu_…`) created on your 2FA-enabled account, with `org:write`,
@@ -163,6 +163,18 @@ state, and `deploy.sh` never touches it. The rules are in
    after this apply. So before applying, read the org slug in the plan: every
    resource should show `organization = "barmajiyat-ltd"`.
 
+   **If an earlier apply stopped with "inconsistent result" on `sentry_key`** (it did on
+   2026-10-22, before ADR-091 amendment 8), the four keys are tainted. Keep them, and their
+   DSNs, before planning again:
+   `for s in api portal landing capture-app; do terraform untaint "sentry_key.this[\"$s\"]"; done`.
+
+   **Two projects already exist.** You made `mutaba3a-web` (portal) and `mutaba3a-flutter`
+   (capture app) by hand in Sentry's UI, so the plan shows them as **2 to import**, not
+   to add. Terraform creates `mutaba3a-api` and `mutaba3a-landing`. The import may also
+   show in-place changes on the two (team `mutaba3a`, allowed domains): that's expected.
+   If the plan wants to *create* `mutaba3a-web` or `mutaba3a-flutter`, stop: the slug in
+   Sentry differs from `local.surfaces` in `main.tf`.
+
    If the plan errors on `de.sentry.io`, or the apply stops on the "not in the
    EU region" postcondition, **stop and check the org's data region** in its
    settings. Never retry against `sentry.io`: that would hide an org created in
@@ -170,7 +182,8 @@ state, and `deploy.sh` never touches it. The rules are in
 5. **Apply the org privacy settings.** The Terraform provider can't hold them,
    so this script sets them and reads them back. Before writing anything it
    refuses an org outside the EU region, and an org holding any project that
-   isn't `mutaba3a-…`, which catches a mistyped `SENTRY_ORG`. Run it from the
+   isn't `mutaba3a-…` or `e33-…`, which catches a mistyped `SENTRY_ORG`. The settings
+   are org-wide, so they apply to E33's projects too (ADR-091 amendment 9). Run it from the
    repo root:
 
    ```bash
@@ -189,8 +202,19 @@ state, and `deploy.sh` never touches it. The rules are in
 
    The api DSN needs no copying: step 8 reads it from this stack's state. The
    other three wait for MUT-149..151. Then `unset SENTRY_ADMIN_TOKEN`.
-7. **Read back.** In Sentry, confirm:
-   - four projects, each with one key, capped per day;
+7. **Clean up the two hand-made projects.** Sentry gave each an automatic key with no rate
+   limit and a default alert rule; Terraform can't remove either (it only sets `default_key
+   = false` at creation). In `mutaba3a-web` and `mutaba3a-flutter`:
+   - Settings › Client Keys: **revoke the key named `Default`**, keeping only the one named
+     after the project (the capped Terraform key). The `mutaba3a-web` Default key is the DSN
+     from Sentry's onboarding snippet, which has been pasted outside Sentry, so it must go.
+   - Alerts: delete the default rule ("Send a notification for high priority issues" or
+     similar), keeping the three Terraform alerts.
+
+   **Read back.** In Sentry, confirm:
+   - four projects, each with one key (no rate limit: the free plan can't set one);
+   - the **Spike** alert's filter reads "more than 10 events in 1 hour" with no trigger, so it
+     runs on every event. If Sentry shows it never fires, tell the team: it may need a trigger;
    - spike protection on;
    - three alerts per project;
    - the portal and landing projects' Allowed Domains.
