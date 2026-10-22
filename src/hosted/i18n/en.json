@@ -426,6 +426,7 @@
         "amountInvalid": "Enter a valid amount",
         "dateInvalid": "Enter a valid date",
         "dateTooOld": "The date can't be more than ten years ago",
+        "dateTooFar": "The date can't be more than ten years ahead",
         "conflict": "This expense changed elsewhere — showing the latest version",
         "network": "Couldn't reach the server. Try again."
       }
@@ -511,6 +512,7 @@
         "dateRequired": "Choose a date",
         "dateFuture": "The date can't be later than today",
         "dateTooOld": "The date can't be more than ten years ago",
+        "dateTooFar": "The date can't be more than ten years ahead",
         "clientRequiredOwed": "Owed needs a client",
         "clientRequired": "Choose a client",
         "clientNotFound": "This client isn't on this profile",
@@ -702,6 +704,7 @@
       "date": "Date",
       "receivedOn": "Received on",
       "dueStays": "Due {date} — stays as it is",
+      "dueMoves": "Due {date} — moves with the new date",
       "number": "Payment {number}",
       "payments": "Payments on this entry",
       "paymentLine": "{date} · {amount}",

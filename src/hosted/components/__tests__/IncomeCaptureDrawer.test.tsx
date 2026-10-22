@@ -249,14 +249,22 @@ describe('IncomeCaptureDrawer (MUT-133)', () => {
     expect(posts).toHaveLength(0);
   });
 
-  it('caps the date at today in the profile\'s zone, not the browser\'s (R3)', async () => {
+  it('caps a Received date at today in the profile\'s zone, not the browser\'s (R3)', async () => {
     // 22:30Z on the 13th is already the 14th in Jerusalem.
+    vi.setSystemTime(new Date('2026-10-13T22:30:00Z'));
+    stub((r) => created(r.body));
+    const { user } = renderDrawer({ defaultCustomerId: C1, initialKind: 'received' });
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    expect(screen.getByLabelText('Date')).toHaveValue('2026-10-14');
+    expect(screen.getByLabelText('Date')).toHaveAttribute('max', '2026-10-14');
+  });
+
+  it('lets an Owed date go up to ten years ahead of the profile\'s today (MUT-392)', async () => {
     vi.setSystemTime(new Date('2026-10-13T22:30:00Z'));
     stub((r) => created(r.body));
     const { user } = renderDrawer({ defaultCustomerId: C1 });
     await user.click(screen.getByRole('button', { name: /More details/ }));
-    expect(screen.getByLabelText('Date')).toHaveValue('2026-10-14');
-    expect(screen.getByLabelText('Date')).toHaveAttribute('max', '2026-10-14');
+    expect(screen.getByLabelText('Date')).toHaveAttribute('max', '2036-10-21');
   });
 
   it('resends the same Idempotency-Key when Save is retried after a network failure, and a new one after an edit', async () => {

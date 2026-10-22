@@ -236,6 +236,8 @@ describe('ExpenseDrawer (hosted)', () => {
     try {
       renderDrawer({ timezone: 'Asia/Jerusalem' });
       expect(await screen.findByDisplayValue('2026-10-14')).toBeInTheDocument();
+      // MUT-392: an expense may be dated ahead, up to the server's ten-year ceiling.
+      expect(screen.getByDisplayValue('2026-10-14')).toHaveAttribute('max', '2036-10-21');
     } finally {
       vi.useRealTimers();
     }

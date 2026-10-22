@@ -88,6 +88,8 @@ export interface ExpenseFormFieldsProps<T extends ExpenseFormFieldsShape> {
   showDate?: boolean;
   /** Rendered in the date field's place when `showDate` is false. */
   dateSlotOverride?: ReactNode;
+  /** Hosted (MUT-392): the latest date the server takes, today + ten years in the profile's zone. Local leaves it unset. */
+  dateMax?: string;
   /** False only for local's recurring mode, which has no notes field. Hosted always leaves this true. */
   showNotes?: boolean;
   /** True only for local's recurring mode, where title is mandatory (enforced by the host's own schema, not this one). Hosted leaves this false — title is always optional there. */
@@ -108,6 +110,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
   currencyDisabled = false,
   showDate = true,
   dateSlotOverride,
+  dateMax,
   showNotes = true,
   titleRequired = false,
 }: ExpenseFormFieldsProps<T>) {
@@ -187,6 +190,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
                 type="date"
                 className={cn('input', errors.occurredAt && 'input-error')}
                 disabled={disabled}
+                max={dateMax}
                 {...field}
               />
             )}

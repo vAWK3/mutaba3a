@@ -20,6 +20,9 @@ describe('mapIncomeError (MUT-133)', () => {
     expect(mapIncomeError(v('DATE_INVALID', { field: 'occurredOn', bound: 'future' })).fields).toEqual([{ field: 'occurredOn', key: 'hosted.income.errors.dateFuture' }]);
     // An older server sends no bound: keep today's message.
     expect(mapIncomeError(v('DATE_INVALID', { field: 'occurredOn' })).fields).toEqual([{ field: 'occurredOn', key: 'hosted.income.errors.dateFuture' }]);
+    // MUT-392: an Owed is refused ahead only past the ten-year ceiling.
+    expect(mapIncomeError(v('DATE_INVALID', { field: 'occurredOn', bound: 'future' }), 'owed').fields).toEqual([{ field: 'occurredOn', key: 'hosted.income.errors.dateTooFar' }]);
+    expect(mapIncomeError(v('DATE_INVALID', { field: 'occurredOn', bound: 'future' }), 'received').fields).toEqual([{ field: 'occurredOn', key: 'hosted.income.errors.dateFuture' }]);
   });
 
   it('says a Malafat capture must be in its matter\'s currency, under the matter, naming that currency (MUT-318 review D2)', () => {
@@ -69,6 +72,9 @@ describe('mapRedateError dates (MUT-227)', () => {
     expect(mapRedateError(v('DATE_INVALID', { field: 'occurredOn', bound: 'past' })).fields).toEqual([{ field: 'date', key: 'hosted.income.errors.dateTooOld' }]);
     expect(mapRedateError(v('DATE_INVALID', { field: 'receivedOn', bound: 'future' })).fields).toEqual([{ field: 'date', key: 'hosted.income.errors.dateFuture' }]);
     expect(mapRedateError(v('DATE_INVALID', { field: 'occurredOn' })).fields).toEqual([{ field: 'date', key: 'hosted.income.errors.dateFuture' }]);
+    // MUT-392: an Owed is refused ahead only past the ten-year ceiling; a payment's date is past-only.
+    expect(mapRedateError(v('DATE_INVALID', { field: 'occurredOn', bound: 'future' }), 'owed').fields).toEqual([{ field: 'date', key: 'hosted.income.errors.dateTooFar' }]);
+    expect(mapRedateError(v('DATE_INVALID', { field: 'receivedOn', bound: 'future' }), 'payment').fields).toEqual([{ field: 'date', key: 'hosted.income.errors.dateFuture' }]);
   });
 });
 
