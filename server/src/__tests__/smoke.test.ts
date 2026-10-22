@@ -74,6 +74,19 @@ describe('post-deploy smoke checks', () => {
     expect(results.filter((r) => !r.ok)).toHaveLength(1);
   });
 
+  it('checks error reporting only when asked, and fails when the deployed instance reports differently (MUT-148 D4)', async () => {
+    const unasked = await runSmoke({ baseUrl: BASE, fetch: appFetch() });
+    expect(unasked.some((r) => r.name === 'Error reporting matches the release')).toBe(false);
+
+    const expectedOff = await runSmoke({ baseUrl: BASE, fetch: appFetch(), expectErrorReporting: 'off' });
+    expect(expectedOff.find((r) => r.name === 'Error reporting matches the release')?.ok).toBe(true);
+
+    const expectedOn = await runSmoke({ baseUrl: BASE, fetch: appFetch(), expectErrorReporting: 'on' });
+    const check = expectedOn.find((r) => r.name === 'Error reporting matches the release');
+    expect(check).toMatchObject({ ok: false, detail: 'off vs on' });
+    expect(expectedOn.filter((r) => !r.ok)).toHaveLength(1);
+  });
+
   it('with an admin token, provisions, validates, revokes and proves the revoked key is rejected', async () => {
     const lines: string[] = [];
     const results = await runSmoke({ baseUrl: BASE, fetch: appFetch(), adminToken: ADMIN_TOKEN, log: (l) => lines.push(l) });

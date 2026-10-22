@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.44.0-mut360
+  version: 1.45.0-mut148
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -140,10 +140,16 @@ components:
         time:
           type: string
           format: date-time
+        errorReporting:
+          type: string
+          enum:
+            - on
+            - off
       required:
         - status
         - version
         - time
+        - errorReporting
     Ready:
       type: object
       properties:
