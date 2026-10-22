@@ -1191,7 +1191,7 @@ Stripe tells the API about subscriptions through `POST /v1/billing/stripe/webhoo
    terraform plan -var-file=production.tfvars -var image_tag="$TAG" "${STRIPE[@]}"
    ```
    Expect **`Plan: 9 to add, 0 to change, 0 to destroy`**: the 8 targets and `google_project_service.apis["cloudscheduler.googleapis.com"]`, which the secrets pull in. Anything marked change or destroy means stop and ask. Apply the same command with `apply` in place of `plan`. Skipping this step is fine: the next `make release server` creates the same resources and mounts the job token.
-2. In the Stripe dashboard, create a **restricted key** with read access to Customers, Subscriptions, Products, Prices, Checkout Sessions, Invoices and Events, and nothing else. Add it without a trailing newline or a shell-history entry:
+2. In the Stripe dashboard, create a **restricted key** with read access to Customers, Subscriptions, Products, Prices, Checkout Sessions, Invoices and Events, and from MUT-362 (eng review D2) **Write** on Customers, Checkout Sessions and Customer portal (billing portal sessions) for Settings › Billing; nothing else. A key made before MUT-362 is edited in place (Developers › API keys › the key › Edit): its secret doesn't change, so Secret Manager needs nothing. Add a new key without a trailing newline or a shell-history entry:
    ```bash
    read -rs KEY && printf '%s' "$KEY" | gcloud secrets versions add mutaba3a-api-stripe-secret-key --data-file=- --project=$GCP_PROJECT_ID; unset KEY
    ```
