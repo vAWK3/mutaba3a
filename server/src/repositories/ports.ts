@@ -2284,12 +2284,46 @@ export type EntryRow =
   | { kind: 'receivable'; record: ReceivableRecord }
   | { kind: 'conversion'; record: ConversionRecord };
 
+/**
+ * MUT-390: the feed's two orders. `createdAt` (the default) is newest logged first, (createdAt, id) descending.
+ * `occurredOn` is newest money day first (each kind's own money date, `moneyDateOf`), then (createdAt, id) descending.
+ */
+export type FeedOrder = 'createdAt' | 'occurredOn';
+
+/** Keyset cursor of the `occurredOn` order. */
+export interface MoneyDateCursor extends PageCursor {
+  occurredOn: IsoDate;
+}
+
+/**
+ * One feed page to read. The route allows each filter only with the order whose index bounds it (MUT-390 D5):
+ * `occurredFrom` with `occurredOn`; `loggedSince` with `createdAt`; `occurredBefore` with `occurredOn`, or with
+ * `createdAt` together with `loggedSince`. A `MoneyDateCursor` goes with `occurredOn` only.
+ */
+export interface FeedPageRequest {
+  limit: number;
+  order?: FeedOrder;
+  cursor: PageCursor | MoneyDateCursor | null;
+  /** Money date on or after. */
+  occurredFrom?: IsoDate;
+  /** Money date before. */
+  occurredBefore?: IsoDate;
+  /** Logged at or after. */
+  loggedSince?: Date;
+}
+
+export interface FeedPage<T> {
+  items: T[];
+  nextCursor: PageCursor | MoneyDateCursor | null;
+}
+
 export interface EntriesRepository {
   /**
-   * Newest first, (createdAt, id) descending, strictly after `page.cursor`. Trusts `organizationIds`: the route
-   * resolves them from the person's memberships. Never lazy-posts (MUT-270 D2): a read here never writes.
+   * In `page.order` (createdAt when absent), strictly after `page.cursor`, within its filters. Trusts
+   * `organizationIds`: the route resolves them from the person's memberships. Never lazy-posts (MUT-270 D2): a read
+   * here never writes.
    */
-  list(organizationIds: readonly string[], page: PageRequest): Promise<Page<EntryRow>>;
+  list(organizationIds: readonly string[], page: FeedPageRequest): Promise<FeedPage<EntryRow>>;
   /**
    * MUT-270 review (D2): for each payment with exactly one allocation, to an Owed (ADJUSTMENT) receivable, that
    * receivable's id: the Owed it paid toward, which a settle (full or partial) is. Judged by shape, not by which route

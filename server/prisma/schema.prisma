@@ -814,6 +814,8 @@ model Receivable {
   @@index([organizationId, createdAt, id])
   /// MUT-270: the entries feed reads Owed (ADJUSTMENT) rows only, newest logged first.
   @@index([organizationId, origin, createdAt, id])
+  /// MUT-390: the entries feed's Owed rows by money date (postingDate), newest day first, then newest logged.
+  @@index([organizationId, origin, postingDate(sort: Desc), createdAt(sort: Desc), id(sort: Desc)])
   @@map("receivables")
 }
 
@@ -880,6 +882,8 @@ model Payment {
   @@index([organizationId, customerId])
   @@index([organizationId, projectId])
   @@index([organizationId, createdAt, id])
+  /// MUT-390: the entries feed by money date (receivedOn), newest day first, then newest logged.
+  @@index([organizationId, receivedOn(sort: Desc), createdAt(sort: Desc), id(sort: Desc)])
   @@map("payments")
 }
 
@@ -1063,6 +1067,8 @@ model Expense {
   @@index([categoryId])
   /// MUT-270: the entries feed, newest logged first within an organization.
   @@index([organizationId, createdAt(sort: Desc), id(sort: Desc)])
+  /// MUT-390: the entries feed by money date, newest day first, then newest logged.
+  @@index([organizationId, occurredOn(sort: Desc), createdAt(sort: Desc), id(sort: Desc)])
   @@map("expenses")
 }
 
@@ -1165,6 +1171,8 @@ model Conversion {
   @@index([organizationId, occurredOn(sort: Desc), id(sort: Desc)])
   /// MUT-270: the entries feed, newest logged first within an organization.
   @@index([organizationId, createdAt(sort: Desc), id(sort: Desc)])
+  /// MUT-390: the entries feed by money date, newest day first, then newest logged.
+  @@index([organizationId, occurredOn(sort: Desc), createdAt(sort: Desc), id(sort: Desc)])
   @@map("conversions")
 }
 
