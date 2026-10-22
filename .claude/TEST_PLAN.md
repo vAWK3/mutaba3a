@@ -3431,3 +3431,10 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `src/services/oauth/__tests__/oauth-client.test.ts` (changed) | Unit | 0 | `CONFIG.clientId` is `CIMD_CLIENT_ID` (was a stale literal without `.json`) |
 
 Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__tests__/vite-config.test.ts src/services/oauth`; `npm run test:bundles` for the allowlist. **Not testable locally:** the live fetch. After `make release web`, run `curl -s https://mtb3a.com/.well-known/oauth-client.json | jq -r .client_id`.
+
+## MUT-408 — portal Add income saves after a kind switch with More details open (2026-10-22)
+
+| Test | Covers |
+|---|---|
+| `src/hosted/components/__tests__/IncomeCaptureDrawer.test.tsx` › MUT-408 (3) | Owed → More details → Received → Save posts Received with `method: CASH` and no Owed fields; Owed (what for + due date) → Received (Bank) → Owed posts the title and due date; Received (Bank) → Owed → Received posts `method: BANK`. Red before the keyed Due date / Method groups (`dueDate` or `method` dropped by the Controller rename) |
+| Release-QA `@portal.income.switch-kind` | Receivables → + Add income (Owed) → 500, Client 1, More details → Received, Bank transfer → Save: drawer closes, "Saved · ₪500.00 received from Client 1", POST body `{kind received, 500.00, ILS, today, C1, BANK}` |

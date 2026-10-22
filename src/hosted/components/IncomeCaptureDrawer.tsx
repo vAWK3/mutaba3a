@@ -298,8 +298,10 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
                 </div>
               </div>
 
+              {/* Keyed: unkeyed, React reuses one Controller and renames it, and react-hook-form unregisters
+                  (drops) the old name's value, so Save silently fails on a field no longer shown (MUT-408). */}
               {kind === 'owed' ? (
-                <div className="form-group">
+                <div className="form-group" key="dueDate">
                   <label className="form-label" htmlFor="hosted-income-due">
                     {t('hosted.income.dueDate')}
                   </label>
@@ -312,7 +314,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
                   {fieldError('dueDate')}
                 </div>
               ) : (
-                <div className="form-group">
+                <div className="form-group" key="method">
                   <span className="form-label" id="hosted-income-method-label">
                     {t('hosted.income.method')}
                   </span>
