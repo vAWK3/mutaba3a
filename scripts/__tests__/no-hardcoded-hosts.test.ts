@@ -18,18 +18,19 @@ const BINARY = /\.(png|jpe?g|gif|webp|ico|icns|otf|ttf|woff2?|pdf|zip|gz|mp4|mov
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * The Malafat OAuth client identity (CIMD_CLIENT_ID) stays on its own value whatever domain
- * is chosen (MUT-326 scope), so these files may name mutaba3a.app even if it becomes the domain.
+ * The Malafat OAuth client identity (CIMD_CLIENT_ID) is a fixed literal on its own host
+ * (MUT-387, ADR-155 amendment): it must not move with a future domain change, so these files
+ * may name the chosen domain. cimd-document.test.ts pins the literal to the published document.
  */
 const OWN_VALUE_FILES = new Set([
   'public/.well-known/oauth-client.json',
   'src/services/oauth/oauth-client.ts',
-  'src/services/oauth/__tests__/oauth-client.test.ts',
-  'src/services/oauth/__tests__/cimd-document.test.ts',
   'scripts/bundle-origins.json',
-  // This file names it for the rehearsal below.
-  'scripts/__tests__/no-hardcoded-hosts.test.ts',
 ]);
+
+/** Hosts we never owned and must never name again (MUT-387): mutaba3a.app has no DNS and no registrant. */
+const RETIRED_HOSTS = ['mutaba3a.app'];
+const THIS_FILE = 'scripts/__tests__/no-hardcoded-hosts.test.ts';
 
 /** Every host the config names, plus any Mutaba3a Cloud Run or Netlify host (a new service URL must go through the config too). */
 const hostPattern = (host: string) => new RegExp(`(?<![a-z0-9-])${escape(host)}(?![a-z0-9-])`, 'i');
@@ -92,8 +93,19 @@ describe('no hardcoded hosts (MUT-326)', () => {
     expect(findings(legacyPatterns(raw), domainPatterns(raw)), 'read the host from config/hosts.ts, `npm run hosts -- get`, or Terraform var.hosts_file').toEqual([]);
   });
 
-  it('would stay green on the day the likeliest domain (mutaba3a.app) is set', () => {
-    const rehearsal = { ...raw, production: { ...raw.production, domain: 'mutaba3a.app', stage: 'live' } };
-    expect(findings(legacyPatterns(rehearsal), domainPatterns(rehearsal))).toEqual([]);
+  it('names no retired host in any code, test, script, Terraform or CI file, own-value files included', () => {
+    const retired = RETIRED_HOSTS.map(hostPattern);
+    const hits = scannedFiles()
+      .filter((file) => file !== THIS_FILE)
+      .flatMap((file) => {
+        let text: string;
+        try {
+          text = readFileSync(file, 'utf8');
+        } catch {
+          return [];
+        }
+        return hardcodedHosts(text, retired).map((hit) => `${file}:${hit}`);
+      });
+    expect(hits).toEqual([]);
   });
 });

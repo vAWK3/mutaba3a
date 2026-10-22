@@ -4,8 +4,9 @@ import { resolve } from 'node:path';
 import { OAUTH_LOOPBACK_PORTS, loopbackRedirectUris, CIMD_CLIENT_ID } from '../oauth-client';
 
 /**
- * Guards the Client ID Metadata Document we publish at
- * https://mutaba3a.app/.well-known/oauth-client.json
+ * Guards the Client ID Metadata Document we publish at CIMD_CLIENT_ID. Byte-equality with
+ * this static file is also what keeps the id a fixed literal (MUT-387): deriving the constant
+ * from config/hosts.json would break it at the next apex move.
  *
  * Malafat fetches this document and validates it in
  * apps/web/src/features/oauth/domain/cimd-url.ts. Two of those checks fail in
@@ -81,6 +82,13 @@ describe('published CIMD document', () => {
 
   it('declares a client_id byte-equal to the URL it is published at', () => {
     expect(loadDocument().client_id).toBe(CIMD_CLIENT_ID);
+  });
+
+  it('serves client_uri and logo_uri from the client_id origin, so the document moves as one', () => {
+    const origin = new URL(CIMD_CLIENT_ID).origin;
+    const { client_uri, logo_uri } = loadDocument();
+    expect(new URL(String(client_uri)).origin).toBe(origin);
+    expect(new URL(String(logo_uri)).origin).toBe(origin);
   });
 
   it('declares a client_id the server will accept as a CIMD URL', () => {

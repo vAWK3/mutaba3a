@@ -35,6 +35,7 @@ import pkg from '../../package.json';
 import { repoPath } from '../../src/test/css/brandCss';
 import { pngSize } from '../../src/test/pngSize';
 import { HOSTS, parseHostsConfig, resolveHosts } from '../../config/hosts';
+import { CIMD_CLIENT_ID } from '../../src/services/oauth/oauth-client';
 
 /**
  * hosted-portal.md §8: the hosted build target is additive. The `web` and
@@ -164,6 +165,39 @@ describe('vite.config', () => {
       expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:domain-move-redirects');
       expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:domain-move-redirects');
       expect(netlifyRedirects(HOSTS)).toEqual(HOSTS.stage === 'legacy' || HOSTS.stage === 'proxy' ? '' : expect.stringContaining('/app'));
+    });
+
+    /**
+     * MUT-387: Malafat fetches our OAuth client document from CIMD_CLIENT_ID and refuses a 3xx
+     * (cimd-fetcher.ts), so no rule may ever sit in front of it. Keyed on the identity's own
+     * origin, not the config apex: the identity stays put when the apex moves, and may then be
+     * the legacy landing host whose pages stage "redirect" sends on.
+     */
+    describe('never redirects the Malafat OAuth client document (MUT-387)', () => {
+      const cimd = new URL(CIMD_CLIENT_ID);
+      const matches = (from: string) =>
+        from.endsWith('/*') ? `${cimd.origin}${cimd.pathname}`.startsWith(from.slice(0, -1)) : from === `${cimd.origin}${cimd.pathname}`;
+      const cases = {
+        'the identity host is the apex': { domain: cimd.hostname },
+        'the identity host is the legacy landing after an apex move': { domain: 'placeholder.example', legacy: { ...LEGACY, landing: cimd.origin } },
+      };
+
+      for (const [name, env] of Object.entries(cases)) {
+        it(`emits no _redirects rule for it at any stage when ${name}`, () => {
+          // "legacy" has no domain and emits nothing (above).
+          for (const stage of ['proxy', 'live', 'redirect']) {
+            const froms = netlifyRedirects(hosts({ ...env, stage })).split('\n').filter(Boolean).map((line) => line.split(' ')[0]);
+            expect(froms.filter(matches), stage).toEqual([]);
+          }
+        });
+      }
+
+      it('has no forced netlify.toml rule over its path (an unforced rule never shadows a published file)', () => {
+        const rules = readFileSync(repoPath('netlify.toml'), 'utf8').split('[[redirects]]').slice(1);
+        const forced = rules.filter((rule) => /^\s*force\s*=\s*true/m.test(rule));
+        const froms = forced.map((rule) => /^\s*from\s*=\s*"([^"]+)"/m.exec(rule)?.[1] ?? '');
+        expect(froms.map((from) => `${cimd.origin}${from}`).filter(matches)).toEqual([]);
+      });
     });
   });
 
