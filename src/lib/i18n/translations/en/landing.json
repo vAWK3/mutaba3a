@@ -123,7 +123,7 @@
     },
     "privacyPolicy": {
       "title": "Privacy Policy",
-      "updated": "Last updated October 19, 2026",
+      "updated": "Last updated October 22, 2026",
       "intro": "This policy covers Mutaba3a's hosted web portal and its iPhone and Android apps. They all work the same way: you sign in with an account, and what you enter is saved to Mutaba3a's servers. It does not cover any other product.",
       "backLink": "Back to the homepage",
       "scope": {
@@ -148,7 +148,7 @@
       },
       "sharing": {
         "title": "Who else handles your data",
-        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Our website runs on Netlify, which receives the account-request form and checks each request for spam with Akismet (made by Automattic). PostHog, hosted in the EU, processes the anonymous usage counts described under \"Anonymous usage counts\" for us. If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
+        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Sentry, hosted in the EU, receives the error reports described under \"Error reports\" and stores them for us. Our website runs on Netlify, which receives the account-request form and checks each request for spam with Akismet (made by Automattic). PostHog, hosted in the EU, processes the anonymous usage counts described under \"Anonymous usage counts\" for us. If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
       },
       "security": {
         "title": "Keeping the mobile apps secure",
@@ -156,11 +156,15 @@
       },
       "noTracking": {
         "title": "No ads, no tracking",
-        "body": "None of Mutaba3a's apps use advertising, crash reporting, or tracking that follows you across sites or apps. The anonymous usage counts we do keep are described under \"Anonymous usage counts\". Our servers keep standard technical logs (such as when a request arrived, its IP address, and whether it succeeded) so we can run the service. We don't use them to profile you."
+        "body": "None of Mutaba3a's apps use advertising or tracking that follows you across sites or apps. Our servers send error reports when something breaks on our side, as described under \"Error reports\". The free apps on Mac, Windows, and in the browser never send them. The anonymous usage counts we do keep are described under \"Anonymous usage counts\". Our servers keep standard technical logs (such as when a request arrived, its IP address, and whether it succeeded) so we can run the service. We don't use them to profile you."
       },
       "usageAnalytics": {
         "title": "Anonymous usage counts",
         "body": "Where we count usage, we use PostHog, hosted in the EU. We never send amounts, names, notes, contact details, your location, or anything you type, and nothing we send is linked to your account. Our website counts page visits and which buttons are pressed, without cookies and without storing anything on your device. To tell visits apart for a single day, PostHog combines your IP address and browser details into a code that changes every day and keeps neither, so a visit can't be linked to you or to visits on other days. The hosted portal asks you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, it sends a short note when you turn it on (saying whether you did so from the prompt or the account menu), each time you open the portal, and each time you save an income or an expense. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the portal's version and its analytics library's version, its language, your browser's type, your device's operating system and its version, and whether it's a computer, tablet, or phone. Notes are sent under a random ID kept only in your browser, not linked to your account, and replaced when you sign out. If you turn it off from the account menu, we send one last note saying you turned it off, then stop and delete the random ID. The iPhone and Android apps ask you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, they send a short note each time you turn it on (saying whether you did so from the prompt or Settings), once more the first time you turn it on after signing in, and each time you add a client or save an income or an expense. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the app's version and its analytics library's version, its language, your phone's operating system and its version, and whether it's a phone or a tablet. Notes are sent under a random ID kept only on your phone, not linked to your account, and replaced when you sign out. If you turn it off in Settings, we send one last note saying you turned it off, then stop and delete the random ID. These counts are used only to understand which parts of Mutaba3a people use. They're never used for advertising, and no one but PostHog, which processes them for us, receives them."
+      },
+      "errorReports": {
+        "title": "Error reports",
+        "body": "When something breaks, we want to know before you have to tell us. An error report says where in our code the problem happened, which version you were using, your language, and your device's operating system, browser, and model. It never includes amounts, names, notes, contact details, request contents, your IP address, or anything you type. If a report includes an account at all, it is a random internal ID. Reports are stored by Sentry in the EU. Our servers send a report when a request fails on our side."
       },
       "mobileDeletion": {
         "title": "Deleting your account and data",

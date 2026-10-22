@@ -47,6 +47,22 @@ features:
       - Without ?lang the site is still in Arabic
       - The Arabic policy shows, reading right to left, and the site stays in English
       - An unknown language shows the site's own language
+  - id: privacy-error-reports
+    title: The privacy policy says our servers send error reports, what a report holds, that Sentry keeps them in the EU, and that the free apps never send them (MUT-148, ADR-091)
+    tier: secondary
+    legacy: [MUT-148]
+    paths:
+      - src/pages/landing/PrivacyPolicyPage.tsx
+      - src/lib/i18n/translations/en/landing.json
+      - src/lib/i18n/translations/ar/landing.json
+    steps:
+      - Open the privacy policy in English, then in Arabic
+    expect:
+      - An "Error reports" section follows "Anonymous usage counts" and says a report never holds amounts, names, notes, contact details, request contents, an IP address or anything typed
+      - It says only our servers send reports; the portal, the website and the phone apps aren't named as senders yet
+      - '"No ads, no tracking" no longer says the apps use no crash reporting, and says the free Mac, Windows and browser apps never send reports'
+      - '"Who else handles your data" names Sentry, hosted in the EU'
+      - The Arabic page says the same, right to left
   - id: links
     title: The terms are linked from the landing footer and under the /hosted request form, and the privacy policy explains hosted accounts (MUT-324)
     tier: secondary
