@@ -47,6 +47,20 @@ plan, review and decisions D1–D6 in `.claude/designs/mut-390-feed-money-date.m
 - `/v1/entries` description: date edits between pages under `order=occurredOn` (dedupe by id); a settle or
   correction can sit days from its partner by money date.
 
+## [Unreleased] - 2026-10-22 — Sentry Terraform adopts the two projects made by hand (MUT-147, ADR-091 amendment 7)
+
+**Why:** Basel created `mutaba3a-web` (portal) and `mutaba3a-flutter` (capture app) in Sentry's UI. Without this the
+first apply would create `mutaba3a-portal` and `mutaba3a-capture-app` beside them.
+
+### Changed
+- `server/infrastructure/sentry/main.tf`: per-surface slugs and an `adopted` flag in `local.surfaces`; an `import` block
+  (variable `import_hand_made_projects`, default true) for the two; keys and alerts are named after the slugs.
+  `mutaba3a-api` and `mutaba3a-landing` are still created.
+- Tests: a run pins the four slugs and the two adoptions; both test files set `import_hand_made_projects = false`
+  (a mocked provider can't import). 16/16 pass.
+- `server/DEPLOYMENT.md` §1.5: the plan shows 2 imports; step 7 revokes the adopted projects' uncapped `Default` key
+  (the pasted onboarding DSN) and default alert rule. README and INFRA name the new slugs.
+
 ## [Unreleased] - 2026-10-22 — The API server reports its errors to Sentry (MUT-148, API 1.48.0)
 
 **Why:** a failing request was found only when a user complained: `onError` logged to pino and nothing else.

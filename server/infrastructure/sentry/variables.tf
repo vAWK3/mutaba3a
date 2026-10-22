@@ -9,6 +9,12 @@ variable "base_url" {
   default     = "https://de.sentry.io/api/"
 }
 
+variable "import_hand_made_projects" {
+  description = "Imports mutaba3a-web and mutaba3a-flutter, which Basel created in Sentry's UI, instead of creating them. Leave true; only the offline tests set it false, because a mocked provider can't import."
+  type        = bool
+  default     = true
+}
+
 variable "team_slug" {
   description = "Team that owns the four projects."
   type        = string
