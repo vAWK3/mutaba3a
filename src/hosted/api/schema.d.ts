@@ -7254,7 +7254,7 @@ export interface paths {
         post?: never;
         /**
          * Delete an expense (soft; its receipts go back to the receipts library)
-         * @description 204 again for an expense already deleted; 404 for an id this profile never had. MUT-255: its READY receipts stay, back under To review in the receipts library; an unfinished upload is deleted with its file.
+         * @description 204 again for an expense already deleted; 404 for an id this profile never had. MUT-255: on the hosted server its READY receipts stay, back under To review in the receipts library; an unfinished upload is deleted with its file. The signed-out portal, which has no library, deletes them all.
          */
         delete: {
             parameters: {
