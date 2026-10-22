@@ -113,20 +113,10 @@ async function project(h: Harness, u: Awaited<ReturnType<typeof person>>, profil
   return (await read(res)) as { id: string };
 }
 
-describe('POST /v1/income in the Gulf currencies (MUT-280)', () => {
-  it('records AED at 2 decimals and BHD at 3', async () => {
-    const { create } = await setup();
-    const aed = await create({ ...BASE_RECEIVED, amount: '1250.50', currency: 'AED' });
-    expect(aed.status).toBe(201);
-    expect(await read(aed)).toMatchObject({ amount: '1250.50', currency: 'AED' });
-    const received = await create({ ...BASE_RECEIVED, amount: '12.345', currency: 'BHD' });
-    expect(received.status).toBe(201);
-    expect(await read(received)).toMatchObject({ amount: '12.345', currency: 'BHD' });
-  });
-
+describe('POST /v1/income in a currency this server does not support (MUT-388)', () => {
   it.each([
-    ['BHD with a 4th decimal', { amount: '12.3456', currency: 'BHD' }],
-    ['AED with a 3rd decimal', { amount: '1.234', currency: 'AED' }],
+    ['AED, removed by MUT-388', { amount: '1250.50', currency: 'AED' }],
+    ['BHD, removed by MUT-388', { amount: '12.345', currency: 'BHD' }],
     ['KWD, which is not supported', { amount: '1.000', currency: 'KWD' }],
   ])('refuses %s with 422 VALIDATION_FAILED', async (_label, over) => {
     const { create } = await setup();

@@ -86,11 +86,6 @@ describe('GET /v1/fx-rates', () => {
         { currency: 'USD', rate: 0.322356, derived: false },
         { currency: 'EUR', rate: 0.287613, derived: false },
         { currency: 'JOD', rate: 0.22855, derived: true },
-        { currency: 'AED', rate: 1.183853, derived: true },
-        { currency: 'SAR', rate: 1.208835, derived: true },
-        { currency: 'QAR', rate: 1.173376, derived: true },
-        { currency: 'BHD', rate: 0.121206, derived: true },
-        { currency: 'OMR', rate: 0.123946, derived: true },
       ],
     });
   });
@@ -104,21 +99,26 @@ describe('GET /v1/fx-rates', () => {
     expect((await rates(h, '?base=USD', { ...s.asCookie, 'x-mutaba3a-profile': s.orgId })).status).toBe(200);
   });
 
-  it.each(['AED', 'BHD'])('answers base %s with all nine currencies, every row but the base derived (MUT-280)', async (base) => {
+  it('answers base JOD with the four currencies, every row but the base derived', async () => {
     const h = harness();
     const s = await signedIn(h);
-    const res = await rates(h, `?base=${base}`, s.asDevice);
+    const res = await rates(h, '?base=JOD', s.asDevice);
     expect(res.status).toBe(200);
     const body = await read(res);
-    expect(body.rates.map((r: Loose) => r.currency)).toEqual(['ILS', 'USD', 'EUR', 'JOD', 'AED', 'SAR', 'QAR', 'BHD', 'OMR']);
-    expect(body.rates.filter((r: Loose) => r.derived).map((r: Loose) => r.currency)).not.toContain(base);
-    expect(body.rates.filter((r: Loose) => r.derived)).toHaveLength(8);
+    expect(body.rates.map((r: Loose) => r.currency)).toEqual(['ILS', 'USD', 'EUR', 'JOD']);
+    expect(body.rates.filter((r: Loose) => r.derived).map((r: Loose) => r.currency)).toEqual(['ILS', 'USD', 'EUR']);
+  });
+
+  it('refuses base AED with 422: MUT-388 removed the Gulf currencies', async () => {
+    const h = harness();
+    const s = await signedIn(h);
+    expect((await rates(h, '?base=AED', s.asDevice)).status).toBe(422);
   });
 
   it('answers 503 for a pegged base too when the provider is down and nothing is cached (MUT-280)', async () => {
     const h = harness({ providerDown: true });
     const s = await signedIn(h);
-    const res = await rates(h, '?base=AED', s.asDevice);
+    const res = await rates(h, '?base=JOD', s.asDevice);
     expect(res.status).toBe(503);
     expect((await read(res)).error.code).toBe('FX_RATES_UNAVAILABLE');
   });

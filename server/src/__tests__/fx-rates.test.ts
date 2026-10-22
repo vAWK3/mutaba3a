@@ -45,8 +45,8 @@ describe('crossRates', () => {
     expect(rateOf(crossRates(SNAPSHOT, 'ILS'), 'JOD').rate).toBe(0.22855); // 1.1208 × 0.709 / 3.4769
   });
 
-  // MUT-280 (ADR-098): literal pegs here, not USD_PEGS, so a typo in the table fails.
-  const PEGS: Record<string, number> = { JOD: 0.709, AED: 3.6725, SAR: 3.75, QAR: 3.64, BHD: 0.376, OMR: 0.3845 };
+  // MUT-280 (ADR-098): literal pegs here, not USD_PEGS, so a typo in the table fails. JOD only since MUT-388 (ADR-166).
+  const PEGS: Record<string, number> = { JOD: 0.709 };
   const perUsd: Record<string, number> = {
     USD: 1,
     EUR: 1 / SNAPSHOT.perEur.USD,
@@ -55,19 +55,12 @@ describe('crossRates', () => {
   };
   const round6 = (n: number) => Number(n.toFixed(6));
 
-  it('prices every pair through USD: rate = perUsd[to] / perUsd[from] (9 × 9)', () => {
+  it('prices every pair through USD: rate = perUsd[to] / perUsd[from] (4 × 4)', () => {
     for (const base of SUPPORTED_CURRENCIES) {
       for (const { currency, rate } of crossRates(SNAPSHOT, base)) {
         expect(rate, `${base}→${currency}`).toBe(base === currency ? 1 : round6(perUsd[currency]! / perUsd[base]!));
       }
     }
-  });
-
-  it('a pegged↔pegged rate is the plain ratio of the two pegs, with no ECB figure in it', () => {
-    expect(rateOf(crossRates(SNAPSHOT, 'AED'), 'SAR').rate).toBe(1.021103); // 3.75 / 3.6725
-    expect(rateOf(crossRates(SNAPSHOT, 'BHD'), 'OMR').rate).toBe(1.022606); // 0.3845 / 0.376
-    expect(rateOf(crossRates(SNAPSHOT, 'JOD'), 'AED').rate).toBe(round6(3.6725 / 0.709));
-    expect(rateOf(crossRates({ rateDate: '2026-10-15', perEur: { USD: 0.9, ILS: 4.2 } }, 'AED'), 'SAR').rate).toBe(1.021103);
   });
 
   it('marks a rate derived when either side of the pair is pegged, never base→base', () => {
@@ -76,13 +69,13 @@ describe('crossRates', () => {
         expect(derived, `${base}→${currency}`).toBe(base !== currency && (base in PEGS || currency in PEGS));
       }
     }
-    expect(crossRates(SNAPSHOT, 'AED').filter((r) => r.derived)).toHaveLength(8);
-    expect(crossRates(SNAPSHOT, 'USD').filter((r) => r.derived).map((r) => r.currency)).toEqual(['JOD', 'AED', 'SAR', 'QAR', 'BHD', 'OMR']);
+    expect(crossRates(SNAPSHOT, 'JOD').filter((r) => r.derived)).toHaveLength(3);
+    expect(crossRates(SNAPSHOT, 'USD').filter((r) => r.derived).map((r) => r.currency)).toEqual(['JOD']);
   });
 
-  it('keeps the six central-bank pegs, and only those currencies are pegged', () => {
+  it('keeps the one central-bank peg, JOD, and no other currency is pegged', () => {
     expect(USD_PEGS).toEqual(PEGS);
-    expect(SUPPORTED_CURRENCIES.filter(isPegged)).toEqual(['JOD', 'AED', 'SAR', 'QAR', 'BHD', 'OMR']);
+    expect(SUPPORTED_CURRENCIES.filter(isPegged)).toEqual(['JOD']);
   });
 });
 

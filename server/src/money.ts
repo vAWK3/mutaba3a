@@ -10,11 +10,14 @@
  * desktop hard-codes `/100`; the service carries the exponent per currency so
  * a zero-decimal currency can be added without touching arithmetic.
  */
-/** New codes are appended, so existing positions (rates order, the OpenAPI enum) never move. The Gulf five are MUT-280. */
-export const SUPPORTED_CURRENCIES = ['ILS', 'USD', 'EUR', 'JOD', 'AED', 'SAR', 'QAR', 'BHD', 'OMR'] as const;
+/**
+ * New codes are appended, so existing positions (rates order, the OpenAPI enum) never move. MUT-280 added the Gulf
+ * five and MUT-388 (ADR-166) took them out again: the hosted API offers only what the ECB prices, plus JOD.
+ */
+export const SUPPORTED_CURRENCIES = ['ILS', 'USD', 'EUR', 'JOD'] as const;
 export type Currency = (typeof SUPPORTED_CURRENCIES)[number];
 
-const EXPONENT: Record<Currency, number> = { ILS: 2, USD: 2, EUR: 2, JOD: 3, AED: 2, SAR: 2, QAR: 2, BHD: 3, OMR: 3 };
+const EXPONENT: Record<Currency, number> = { ILS: 2, USD: 2, EUR: 2, JOD: 3 };
 
 export function isSupportedCurrency(value: string): value is Currency {
   return (SUPPORTED_CURRENCIES as readonly string[]).includes(value);
@@ -57,6 +60,9 @@ export function parseMoney(text: string, currency: Currency): Money {
   const m = DECIMAL_RE.exec(text);
   if (!m) throw new MoneyParseError(`"${text}" is not a canonical decimal amount`);
   const exponent = currencyExponent(currency);
+  // MUT-388: a stored row can still carry a code this server no longer supports (the Gulf five). Its `as Currency`
+  // cast hides that, and an undefined exponent would silently rescale the amount.
+  if (exponent === undefined) throw new MoneyParseError(`${currency} is not a supported currency`);
   const sign = m[1] ? -1n : 1n;
   const whole = m[2] ?? '0';
   const frac = m[3] ?? '';

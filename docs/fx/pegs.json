@@ -1,4 +1,4 @@
 {
   "source": "server/src/fx-rates.ts USD_PEGS. Units of each currency per 1 USD, fixed by its central bank. Edit both together; server/src/__tests__/fx-rates.test.ts checks they match.",
-  "unitsPerUsd": { "JOD": 0.709, "AED": 3.6725, "SAR": 3.75, "QAR": 3.64, "BHD": 0.376, "OMR": 0.3845 }
+  "unitsPerUsd": { "JOD": 0.709 }
 }

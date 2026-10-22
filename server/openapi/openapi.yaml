@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.44.0-mut360
+  version: 1.45.0-mut388
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -205,11 +205,6 @@ components:
             - USD
             - EUR
             - JOD
-            - AED
-            - SAR
-            - QAR
-            - BHD
-            - OMR
         terms:
           type: object
           nullable: true
@@ -382,11 +377,6 @@ components:
         - USD
         - EUR
         - JOD
-        - AED
-        - SAR
-        - QAR
-        - BHD
-        - OMR
     IncomeCaptureRules:
       type: object
       properties:
@@ -5556,7 +5546,7 @@ components:
           example: 0.322356
         derived:
           type: boolean
-          description: "True when either side of the pair is pegged to the US dollar (never base→base): the ECB publishes no rate for it, so the rate comes from its USD peg (1 USD = 0.709 JOD, 3.6725 AED, 3.75 SAR, 3.64 QAR, 0.376 BHD, 0.3845 OMR)"
+          description: "True when either side of the pair is pegged to the US dollar (never base→base): the ECB publishes no rate for it, so the rate comes from its USD peg (1 USD = 0.709 JOD)"
       required:
         - currency
         - rate
