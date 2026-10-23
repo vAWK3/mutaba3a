@@ -1746,8 +1746,11 @@ export interface ClaimDeliveryInput {
   since: Date;
   /** A PENDING claim created before this is a crashed send and may be claimed again. */
   staleBefore: Date;
-  /** `total`: rows in the window this claim may not reach (the mailer passes the cap less the reserve for non-security mail). */
-  limit: { total: number; perRecipient: number };
+  /**
+   * `total`: rows in the window this claim may not reach (the mailer passes the cap less the reserve for anything but
+   * recovery mail). `perRecipient: null`: this mail is outside the per-recipient cap.
+   */
+  limit: { total: number; perRecipient: number | null };
 }
 
 export type ClaimDeliveryResult =
@@ -1764,12 +1767,13 @@ export interface EmailRepository {
   /** Keeps the first row for an address (a redelivered or later event changes nothing). */
   suppress(input: EmailSuppressionInput): Promise<{ created: boolean }>;
   /**
-   * Claims a send. A SENT key, or a PENDING one newer than `staleBefore`, is a duplicate; a FAILED or stale PENDING
-   * one is claimed again with `createdAt = at`. Then the window's non-FAILED rows are counted, globally and for the
-   * recipient. No lock: one instance (TD-017), and an overshoot of a mail or two during a deploy is harmless.
+   * Claims a send. A SENT key, or a PENDING one newer than `staleBefore`, is a duplicate; a FAILED, UNCERTAIN or
+   * stale PENDING one is claimed again with `createdAt = at`. Then the window's rows other than FAILED are counted,
+   * globally and for the recipient. Not atomic on its own: the mailer serializes its claims (one instance, TD-017).
    */
   claimDelivery(input: ClaimDeliveryInput): Promise<ClaimDeliveryResult>;
-  finishDelivery(id: string, outcome: { providerId: string; at: Date } | { error: string; at: Date }): Promise<void>;
+  /** `uncertain`: a timeout or dropped connection, which the provider may still have accepted; it keeps counting. */
+  finishDelivery(id: string, outcome: { providerId: string; at: Date } | { error: string; uncertain: boolean; at: Date }): Promise<void>;
   /** Deletes send-log rows created before `before`; returns how many. */
   pruneDeliveries(before: Date): Promise<number>;
 }

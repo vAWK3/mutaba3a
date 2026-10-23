@@ -1900,9 +1900,8 @@ export class PrismaLedgerStore implements LedgerStore {
   };
 
   /**
-   * MUT-359 (D2). No lock: production runs one instance (TD-017), so two claims racing past the count can overshoot
-   * a cap by a mail or two during a deploy, which is harmless for an abuse cap. A concurrent claim of the same key
-   * loses on the unique keyDigest and is answered as a duplicate.
+   * MUT-359 (D2). Count then insert, without a database lock: the mailer serializes its claims, and production runs
+   * one instance (TD-017). A concurrent claim of the same key loses on the unique keyDigest and is a duplicate.
    */
   readonly email: EmailRepository = {
     isSuppressed: async (email) => (await this.prisma.emailSuppression.count({ where: { email } })) > 0,
@@ -1915,7 +1914,8 @@ export class PrismaLedgerStore implements LedgerStore {
       if (existing && (existing.status === 'SENT' || (existing.status === 'PENDING' && existing.createdAt >= input.staleBefore))) return { status: 'duplicate' };
       const window = { createdAt: { gte: input.since, lte: input.at }, status: { not: 'FAILED' as const }, keyDigest: { not: input.keyDigest } };
       if ((await this.prisma.emailDelivery.count({ where: window })) >= input.limit.total) return { status: 'capped', scope: 'global' };
-      if ((await this.prisma.emailDelivery.count({ where: { ...window, recipientDigest: input.recipientDigest } })) >= input.limit.perRecipient) return { status: 'capped', scope: 'recipient' };
+      const perRecipient = input.limit.perRecipient;
+      if (perRecipient !== null && (await this.prisma.emailDelivery.count({ where: { ...window, recipientDigest: input.recipientDigest } })) >= perRecipient) return { status: 'capped', scope: 'recipient' };
       const row = { recipientDigest: input.recipientDigest, template: input.template, locale: input.locale, status: 'PENDING' as const, providerId: null, error: null, createdAt: input.at, finishedAt: null };
       if (existing) {
         // Re-claim only the row as it was read: a concurrent re-claim changes status or createdAt first and wins.
@@ -1934,7 +1934,10 @@ export class PrismaLedgerStore implements LedgerStore {
     finishDelivery: async (id, outcome) => {
       await this.prisma.emailDelivery.update({
         where: { id },
-        data: 'providerId' in outcome ? { status: 'SENT', providerId: outcome.providerId.slice(0, 100), finishedAt: outcome.at } : { status: 'FAILED', error: outcome.error.slice(0, 200), finishedAt: outcome.at },
+        data:
+          'providerId' in outcome
+            ? { status: 'SENT', providerId: outcome.providerId.slice(0, 100), finishedAt: outcome.at }
+            : { status: outcome.uncertain ? 'UNCERTAIN' : 'FAILED', error: outcome.error.slice(0, 200), finishedAt: outcome.at },
       });
     },
     pruneDeliveries: async (before) => (await this.prisma.emailDelivery.deleteMany({ where: { createdAt: { lt: before } } })).count,

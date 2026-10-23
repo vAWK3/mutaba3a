@@ -2223,7 +2223,8 @@ then flushes; `shutdownAndFlush` closes, disconnects, flushes (2 s), exits. `cre
 The one way the server sends mail. `createMailer({ transport, store, logger, now, fromAddress, replyTo, limits })` →
 `mailer.send({ to, template, locale, vars, idempotencyKey })` → an outcome, never a throw for an expected case.
 Templates: add an id to `TEMPLATE_IDS`, its vars to `TemplateVars` (no money, no dates) and its en + ar copy to
-`templates/copy.ts`; mark it in `SECURITY_TEMPLATES` if it gets someone back into their account. Transports:
+`templates/copy.ts`; mark it in `RECOVERY_TEMPLATES` if it gets someone back into their account (it may then use
+the cap's reserve), and in `RECIPIENT_CAP_EXEMPT` only if it is credential-gated. Transports:
 `createResendTransport`, `createLogTransport`, `MemoryMailTransport` (also the dev outbox), `NOOP_TRANSPORT`.
 `verifySvixSignature` (`svix.ts`) and `suppressionsFrom` (`resend-webhook.ts`) serve the webhook.
 `sendPasswordNotice(mailer, logger, person, { first, signInLink, requestId })` is the template for a post-commit

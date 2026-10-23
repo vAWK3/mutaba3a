@@ -7,7 +7,7 @@
 --   DROP TYPE "EmailSuppressionReason"; DROP TYPE "EmailDeliveryStatus";
 
 -- CreateEnum
-CREATE TYPE "EmailDeliveryStatus" AS ENUM ('PENDING', 'SENT', 'FAILED');
+CREATE TYPE "EmailDeliveryStatus" AS ENUM ('PENDING', 'SENT', 'FAILED', 'UNCERTAIN');
 
 -- CreateEnum
 CREATE TYPE "EmailSuppressionReason" AS ENUM ('HARD_BOUNCE', 'COMPLAINT');

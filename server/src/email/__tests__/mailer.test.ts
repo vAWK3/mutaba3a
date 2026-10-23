@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import pino from 'pino';
 import { Writable } from 'node:stream';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
-import { createMailer, MAIL_CAP_REACHED, MAIL_PROVIDER_FAILED, MAIL_PROVIDER_RATE_LIMITED, type MailerOptions } from '../mailer.js';
-import { MailTransportError, TEMPLATE_IDS, type MailTransport, type OutgoingMail } from '../ports.js';
+import { createMailer, MAIL_CAP_REACHED, MAIL_LOG_UNAVAILABLE, MAIL_PROVIDER_FAILED, MAIL_PROVIDER_RATE_LIMITED, type MailerOptions } from '../mailer.js';
+import { MailTransportError, TEMPLATE_IDS, UNOWNED_DOMAINS, type MailTransport, type OutgoingMail } from '../ports.js';
 import { MemoryMailTransport } from '../transports/memory.js';
 import { NOOP_TRANSPORT } from '../transports/noop.js';
 
@@ -94,8 +94,8 @@ describe('mailer (memory transport)', () => {
 
   it('refuses an unowned domain and anything that is not one plain address', async () => {
     const h = harness();
-    expect(await h.mailer.send(signup('review@mutaba3a.app'))).toEqual({ status: 'refused', reason: 'UNOWNED_DOMAIN' });
-    expect(await h.mailer.send(signup('x@eu.mutaba3a.app'))).toEqual({ status: 'refused', reason: 'UNOWNED_DOMAIN' });
+    expect(await h.mailer.send(signup(`review@${UNOWNED_DOMAINS[0]}`))).toEqual({ status: 'refused', reason: 'UNOWNED_DOMAIN' });
+    expect(await h.mailer.send(signup(`x@eu.${UNOWNED_DOMAINS[0]}`))).toEqual({ status: 'refused', reason: 'UNOWNED_DOMAIN' });
     for (const to of ['a@b.example, c@d.example', 'a@b.example\r\nBcc: c@d.example', 'Rana <a@b.example>', 'not-an-address', '']) {
       expect(await h.mailer.send(signup(to))).toEqual({ status: 'refused', reason: 'INVALID_ADDRESS' });
     }
@@ -108,14 +108,14 @@ describe('mailer (memory transport)', () => {
     expect(await h.mailer.send(signup('p500@studio.example'))).toEqual({ status: 'capped', scope: 'global' });
     const capLog = h.lines.find((l) => l.msg === MAIL_CAP_REACHED);
     expect(capLog?.level).toBe(50);
-    expect(capLog).toMatchObject({ scope: 'global', cap: 500, template: 'finish-signup' });
+    expect(capLog).toMatchObject({ scope: 'global', cap: 500, daily: 500, template: 'finish-signup' });
     expect(JSON.stringify(h.lines)).not.toContain('p500@studio.example');
 
     h.clock.now = new Date(h.clock.now.getTime() + 24 * 3_600_000 + 1);
     expect((await h.mailer.send(signup('p501@studio.example'))).status).toBe('sent');
   });
 
-  it('keeps the reserve for security mail: a reset still goes out when signups have used their share', async () => {
+  it('keeps the reserve for recovery mail: a reset still goes out when signups have used their share', async () => {
     const h = harness({ limits: { daily: 10, securityReserve: 2, perRecipient: 100 } });
     for (let i = 0; i < 8; i++) expect((await h.mailer.send(signup(`s${i}@studio.example`))).status).toBe('sent');
     expect(await h.mailer.send(signup('s8@studio.example'))).toEqual({ status: 'capped', scope: 'global' });
@@ -169,5 +169,64 @@ describe('mailer (memory transport)', () => {
   it('throws on a caller bug (a link that is not http)', async () => {
     const h = harness();
     await expect(h.mailer.send({ ...signup('a@studio.example'), vars: { link: 'javascript:alert(1)', validHours: 24 } })).rejects.toThrow(/link/);
+  });
+  it('with the production default reserve, stops other mail at the cap less the reserve and logs that limit', async () => {
+    const h = harness({ limits: { daily: 500, securityReserve: 50, perRecipient: 10_000 } });
+    for (let i = 0; i < 450; i++) expect((await h.mailer.send(signup(`d${i}@studio.example`))).status).toBe('sent');
+    expect(await h.mailer.send(signup('d450@studio.example'))).toEqual({ status: 'capped', scope: 'global' });
+    expect(h.lines.find((l) => l.msg === MAIL_CAP_REACHED)).toMatchObject({ cap: 450, daily: 500, reserve: 50, recovery: false });
+  });
+
+  it('gives the password notice no reserve, but keeps it outside the per-recipient cap', async () => {
+    const h = harness({ limits: { daily: 10, securityReserve: 2, perRecipient: 2 } });
+    const notice = (n: number) => ({ to: 'owner@studio.example', template: 'password-changed' as const, locale: 'en' as const, vars: vars['password-changed'], idempotencyKey: `notice-${n}` });
+    // Others used up the address's own allowance (e.g. signup or recovery requests for it): the notice still goes.
+    for (let i = 0; i < 2; i++) expect((await h.mailer.send(signup('owner@studio.example'))).status).toBe('sent');
+    expect(await h.mailer.send(signup('owner@studio.example'))).toEqual({ status: 'capped', scope: 'recipient' });
+    for (let i = 0; i < 6; i++) expect((await h.mailer.send(notice(i))).status).toBe('sent');
+    // 8 sent: the notice stops at the cap less the reserve, which stays for recovery.
+    expect(await h.mailer.send(notice(6))).toEqual({ status: 'capped', scope: 'global' });
+    expect((await h.mailer.send({ to: 'r@studio.example', template: 'reset-password', locale: 'en', vars: vars['reset-password'], idempotencyKey: 'reset-x' })).status).toBe('sent');
+  });
+
+  it('serializes claims, so concurrent sends to one address never pass its cap', async () => {
+    const h = harness({ limits: { daily: 500, securityReserve: 0, perRecipient: 2 } });
+    // A store that reads the count, yields, then writes, as the Prisma store does across its awaits.
+    const claimed: string[] = [];
+    h.store.email.claimDelivery = async (input) => {
+      const count = claimed.filter((r) => r === input.recipientDigest).length;
+      await new Promise((r) => setTimeout(r, 5));
+      if (input.limit.perRecipient !== null && count >= input.limit.perRecipient) return { status: 'capped', scope: 'recipient' };
+      claimed.push(input.recipientDigest);
+      return { status: 'claimed', id: `c${claimed.length}` };
+    };
+    const results = await Promise.all(Array.from({ length: 6 }, () => h.mailer.send(signup('burst@studio.example'))));
+    expect(results.filter((r) => r.status === 'sent')).toHaveLength(2);
+    expect(results.filter((r) => r.status === 'capped')).toHaveLength(4);
+  });
+
+  it('reports a delivered mail as sent even when the send log can’t record it', async () => {
+    const h = harness();
+    h.store.email.finishDelivery = async () => { throw new Error('connection pool timeout'); };
+    expect((await h.mailer.send(signup('a@studio.example'))).status).toBe('sent');
+    expect(h.lines.find((l) => l.msg === MAIL_PROVIDER_FAILED)).toBeUndefined();
+    expect(h.lines.find((l) => l.msg === MAIL_LOG_UNAVAILABLE)?.level).toBe(50);
+  });
+
+  it('answers failed, never throws, when the send log is down, and sends nothing', async () => {
+    const h = harness();
+    h.store.email.isSuppressed = async () => { throw new Error('database is down'); };
+    expect(await h.mailer.send(signup('a@studio.example'))).toEqual({ status: 'failed', reason: 'unavailable' });
+    expect(h.transport.list()).toHaveLength(0);
+    expect(h.lines.find((l) => l.msg === MAIL_LOG_UNAVAILABLE)?.level).toBe(50);
+  });
+
+  it('keeps counting a timed-out send, which Resend may still have accepted', async () => {
+    let calls = 0;
+    const slow: MailTransport = { kind: 'resend', deliver: async () => { calls++; throw new MailTransportError('timeout', 'Resend did not answer within 5000 ms'); } };
+    const h = harness({ transport: slow, limits: { daily: 1, securityReserve: 0, perRecipient: 10 } });
+    expect(await h.mailer.send(signup('a@studio.example'))).toEqual({ status: 'failed', reason: 'timeout' });
+    expect(await h.mailer.send(signup('b@studio.example'))).toEqual({ status: 'capped', scope: 'global' });
+    expect(calls).toBe(1);
   });
 });

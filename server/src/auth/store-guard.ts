@@ -278,10 +278,11 @@ export const STORE_ACCESS: StoreAccess = {
     pruneStripeEvents: 'operator',
   },
   /**
-   * MUT-359: mail bookkeeping a request may need (the password notice runs inside a route), so `control`; the
-   * Resend webhook and the mailer are built on the unguarded store in any case.
+   * MUT-359: only server code reaches the mail send log and the suppression list: the mailer and the Resend webhook,
+   * both built on the unguarded store. No principal's request may (a key could otherwise stop mail to an address or
+   * wipe the cap ledger).
    */
-  email: { isSuppressed: 'control', suppress: 'control', claimDelivery: 'control', finishDelivery: 'control', pruneDeliveries: 'control' },
+  email: { isSuppressed: 'operator', suppress: 'operator', claimDelivery: 'operator', finishDelivery: 'operator', pruneDeliveries: 'operator' },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };

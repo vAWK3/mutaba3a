@@ -2667,9 +2667,11 @@ event from the other product. First instance: `suppressionsFrom` in `server/src/
 
 ### Pattern: Abuse caps and idempotency in a digest-only log
 Counts that must survive restarts live in Postgres, but the table stores sha256 digests of the key and the recipient,
-never the address or the content. Claim before the side effect, finish after; a FAILED or long-PENDING claim may be
-re-claimed. Keep a reserve of the global cap for the traffic that must never be starved (recovery mail). First
-instance: `email_deliveries` and `createMailer`.
+never the address or the content. Claim before the side effect, finish after; a FAILED, UNCERTAIN (timed out) or
+long-PENDING claim may be re-claimed, and UNCERTAIN keeps counting. A count-then-insert spans awaits, so serialize
+claims (in process while there is one instance). Keep a reserve of the global cap for traffic that must never be
+starved (recovery mail), and keep it away from anything a user can trigger at will. First instance:
+`email_deliveries` and `createMailer`.
 
 ### Pattern: A post-commit notice never changes the answer
 A side effect after the commit (a notice mail) is awaited with a bounded timeout, wrapped so it can't throw, and keyed

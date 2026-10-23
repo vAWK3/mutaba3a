@@ -259,7 +259,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly grants = new Map<string, EntitlementGrantRecord>();
   private readonly trialStarts = new Map<string, Date>();
   /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
-  private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED'; createdAt: Date }>();
+  private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED' | 'UNCERTAIN'; createdAt: Date }>();
   private readonly emailSuppressions = new Map<string, { reason: string; eventId: string; createdAt: Date }>();
   /** MUT-360: Stripe webhook events by id (processedAt null until handled), also outside the snapshot. */
   private readonly stripeEvents = new Map<string, { type: string; receivedAt: Date; processedAt: Date | null; error: string | null }>();
@@ -1951,13 +1951,14 @@ export class MemoryLedgerStore implements LedgerStore {
         .filter(([key, row]) => key !== input.keyDigest && row.status !== 'FAILED' && row.createdAt >= input.since && row.createdAt <= input.at)
         .map(([, row]) => row);
       if (counted.length >= input.limit.total) return { status: 'capped', scope: 'global' };
-      if (counted.filter((row) => row.recipientDigest === input.recipientDigest).length >= input.limit.perRecipient) return { status: 'capped', scope: 'recipient' };
+      const perRecipient = input.limit.perRecipient;
+      if (perRecipient !== null && counted.filter((row) => row.recipientDigest === input.recipientDigest).length >= perRecipient) return { status: 'capped', scope: 'recipient' };
       const id = existing?.id ?? randomUUID();
       this.emailDeliveries.set(input.keyDigest, { id, recipientDigest: input.recipientDigest, status: 'PENDING', createdAt: input.at });
       return { status: 'claimed', id };
     },
     finishDelivery: async (id, outcome) => {
-      for (const row of this.emailDeliveries.values()) if (row.id === id) row.status = 'providerId' in outcome ? 'SENT' : 'FAILED';
+      for (const row of this.emailDeliveries.values()) if (row.id === id) row.status = 'providerId' in outcome ? 'SENT' : outcome.uncertain ? 'UNCERTAIN' : 'FAILED';
     },
     pruneDeliveries: async (before) => {
       let removed = 0;

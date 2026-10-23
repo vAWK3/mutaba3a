@@ -33,7 +33,7 @@
 **Why:** signup and forgot-password (ADR-159), firm invites (MUT-306), passkey notices (MUT-414) and trial mails (MUT-419) all need email; the server had none.
 
 ### Added
-- `server/src/email/`: the `Mailer` port, en/ar templates (nine, RTL Arabic, inline styles, no images, no amounts), transports `resend` (fetch, no tracking options, Idempotency-Key), `log`, `memory`, `noop`; `createMailer` (address check, unowned-domain refusal, suppression, the global cap with a 10 % security reserve, the per-recipient cap, idempotency); Svix signature check; `sendPasswordNotice`.
+- `server/src/email/`: the `Mailer` port, en/ar templates (nine, RTL Arabic, inline styles, no images, no amounts), transports `resend` (fetch, no tracking options, Idempotency-Key), `log`, `memory`, `noop`; `createMailer` (address check, unowned-domain refusal, suppression, the global cap with a 10 % reserve for recovery mail, the per-recipient cap with the password notice exempt, serialized claims, idempotency; a down send log is an outcome, never a throw); Svix signature check; `sendPasswordNotice`.
 - "Your password is set / was changed" after every setup-link redeem and `POST /v1/me/password`; the answer never depends on it.
 - `POST /v1/email/resend/webhook` (Svix-signed; hard bounces and complaints sent from our own domain suppress the address). New codes `INVALID_WEBHOOK_SIGNATURE` (401), `MAILER_NOT_CONFIGURED` (503). API 1.54.0-mut359.
 - `GET /admin/v1/dev-outbox` for `MAILER=memory` outside production (not published).

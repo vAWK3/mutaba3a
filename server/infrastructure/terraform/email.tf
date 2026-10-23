@@ -88,7 +88,7 @@ locals {
       display_name = "Mail cap reached"
       severity     = "ERROR"
       filter       = "${local.email_api_logs} AND jsonPayload.msg=\"mail cap reached; nothing sent\" AND jsonPayload.scope=\"global\""
-      doc          = "The API refused mail because MAIL_DAILY_CAP was reached in the last 24 h: signup and recovery links are not going out (security mail keeps a 10 % reserve). An attack, or real growth: read the API logs (search `mail cap`), then raise `mail_daily_cap` (below the Resend plan's limit) or wait. DEPLOYMENT.md §6f."
+      doc          = "The API refused mail at its daily cap. The log's `cap` says which limit: `daily` less `reserve` stops everything but recovery mail (signup links and password notices stop; reset and finish-setup links still go out), and `daily` itself stops recovery mail too. An attack, or real growth: read the API logs (search `mail cap`), then raise `mail_daily_cap` (below the Resend plan's limit) or wait. DEPLOYMENT.md §6f."
     }
     provider = {
       display_name = "Mail provider failing"

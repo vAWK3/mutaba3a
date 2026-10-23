@@ -8,6 +8,7 @@ import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 import { CURRENT_TERMS } from '../legal.js';
 import { setupTokenOf, SETUP_TEST_PASSWORD } from './helpers/provision.js';
+import { signInLinkOf } from '../routes/account-setup.js';
 
 /**
  * MUT-359 A5 (D8): "your password was set / changed" goes out after a setup-link redeem and after
@@ -90,12 +91,31 @@ describe('password notices (MUT-359)', () => {
     expect(res.status).toBe(204);
   });
 
-  it('with no mailer configured, the routes answer exactly as before', async () => {
+  it('with no mailer configured, both routes answer exactly as before', async () => {
     const store = new MemoryLedgerStore();
     const app = createApp({ store, logger: pino({ level: 'silent' }), rateLimiter: new SlidingWindowRateLimiter(100_000), adminToken: ADMIN['x-admin-token'], keyEnvironment: 'test', version: '0.1.0-test', now: () => NOW });
     const res = await app.request('/admin/v1/users', json({ email: 'plain@studio.example', displayName: 'Rana', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', locale: 'en' }, ADMIN));
     const created = (await res.json()) as Loose;
     const redeemed = await app.request('/v1/account-setup', json({ token: setupTokenOf(created.setupLink.url), password: SETUP_TEST_PASSWORD, acceptedTermsVersion: CURRENT_TERMS.version }, { origin: 'http://localhost' }));
     expect(redeemed.status).toBe(200);
+    const { token } = (await (await app.request('/v1/device-sessions', json({ email: 'plain@studio.example', password: SETUP_TEST_PASSWORD }))).json()) as Loose;
+    const changed = await app.request('/v1/me/password', json({ currentPassword: SETUP_TEST_PASSWORD, newPassword: 'another long enough passphrase' }, { authorization: `Bearer ${token}` }));
+    expect(changed.status).toBe(204);
+  });
+
+  it('a send log that is down changes neither answer', async () => {
+    const h = harness();
+    h.store.email.isSuppressed = async () => { throw new Error('database is down'); };
+    const p = await provision(h, 'en');
+    expect((await redeem(h, p.token)).status).toBe(200);
+    const { token } = (await (await h.app.request('/v1/device-sessions', json({ email: p.email, password: SETUP_TEST_PASSWORD }))).json()) as Loose;
+    const res = await h.app.request('/v1/me/password', json({ currentPassword: SETUP_TEST_PASSWORD, newPassword: 'another long enough passphrase' }, { authorization: `Bearer ${token}` }));
+    expect(res.status).toBe(204);
+  });
+
+  it('links to the portal over https when no portal origin is configured, never the plain-http request URL', () => {
+    expect(signInLinkOf({}, 'http://mutaba3a-api.example.test/v1/me/password')).toBe('https://mutaba3a-api.example.test/');
+    expect(signInLinkOf({}, 'http://localhost:8787/v1/me/password')).toBe('http://localhost:8787/');
+    expect(signInLinkOf({ portalOrigin: 'https://portal.example.test/' }, 'http://x.example.test/')).toBe('https://portal.example.test/');
   });
 });

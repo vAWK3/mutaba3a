@@ -28,7 +28,7 @@ Out of scope (ticket): the signup and recovery routes (MUT-366), invites (MUT-30
 | A signed public webhook | `routes/stripe-billing.ts` (`POST /v1/billing/stripe/webhook`, `security: []`): raw body, signature first, per-IP limiter on failed signatures only, `bodyLimit` | The Resend webhook copies it, under `/v1` too (D19) |
 | Durable idempotency for events | `StripeEvent` table, `beginStripeEvent/finishStripeEvent` | Not reused directly: suppression is an upsert keyed on the address, naturally idempotent |
 | Repository contract tests on memory + Prisma | `store-contract-*.ts` + `store-memory-*.test.ts` + `store-prisma-*.test.ts` | `store-contract-email.ts` |
-| Store guard classification | `auth/store-guard.ts` (every repository method is classified) | `email: { … 'control' }` (request bookkeeping, §3.8) |
+| Store guard classification | `auth/store-guard.ts` (every repository method is classified) | `email: { … 'operator' }` (only the mailer and the webhook, on the unguarded store; code review) |
 | Hosts from one file | `config/hosts.json` → Terraform `domain.tf` locals → Cloud Run env | `MAIL_FROM_ADDRESS = no-reply@<domain>` derived in `domain.tf`; never hardcoded (`no-hardcoded-hosts.test.ts`) |
 | Log-match alerts | `monitoring.tf` `stripe_alerts` | An `email_alerts` map (cap reached, provider failing) |
 | Secrets created empty, mounted behind a flag | `stripe_secret_key` / `stripe_enabled` | `resend_api_key` / `resend_webhook_secret`, mounted when `mailer = "resend"` |
@@ -183,7 +183,7 @@ After the redeem commits (`routes/account-setup.ts`) and after `changePassword` 
 - `idempotencyKey` = `password-notice:${userId}:${at.toISOString()}`;
 - it never throws: any non-`sent` outcome is logged at debug (`failed`/`capped` are already logged by the mailer). The HTTP response is unchanged.
 
-The mailer is a new optional `AppDependencies.mailer` (default: a `noop` mailer), built from the **base** store in `index.ts` / tests and passed to `accountSetupRoutes` and `sessionRoutes`. The `email` repository's methods are classified `'control'` in the store guard (bookkeeping a request needs, outside voice #13), so even a request-scoped store could send; a test pins that the notice is delivered through a request.
+The mailer is a new optional `AppDependencies.mailer` (default: a `noop` mailer), built from the **base** store in `index.ts` / tests and passed to `accountSetupRoutes` and `sessionRoutes`. **As built (code review):** the `email` repository's methods are classified `'operator'` in the store guard: only the mailer and the webhook reach them, both on the unguarded store, so no principal's request can stop mail to an address or wipe the cap ledger. A test pins that the notice is delivered through a request.
 
 ### 3.9 Config (`config.ts`)
 
@@ -275,7 +275,7 @@ Root: `npm run lint`, `npm run typecheck`, `npm run test:run`, `npm run build`. 
 | # | Decision | Why |
 |---|---|---|
 | D1 | Email DNS records go in the **frontdoor** stack, not a new `server/infrastructure/email` stack | Basel's comment 12321 (newer than ADR-159's "new stack"); the zone already lives there |
-| D2 | Caps and idempotency are a **Postgres send log** (`email_deliveries`, digests only), without a lock; a deploy-time overshoot of a mail or two is accepted | Counts must survive restarts and deploys; one instance (TD-017) makes a lock unnecessary (eng review) |
+| D2 | Caps and idempotency are a **Postgres send log** (`email_deliveries`, digests only). **As built (code review):** no database lock; the mailer serializes its claims in process, which holds while production runs one instance (TD-017) | Counts must survive restarts and deploys; a count-then-insert across awaits would otherwise overshoot by the request concurrency |
 | D3 | No new dependencies: Resend over `fetch`, svix verification hand-written (HMAC-SHA256, tested on Svix's published vector) | Two small HTTP/HMAC surfaces; keeps the image and supply chain small |
 | D4 | `email:check --api` uses a separate full-access key (`RESEND_CHECK_API_KEY`) from the operator's Keychain, fails without it, and treats a missing tracking field as "on" | The production key is sending-only and can't read domains |
 | D5 | **As built:** From name "MTB3A" in both languages (an Arabic display name needs RFC 2047 encoding whose handling by Resend can only be seen live, TD-210); address `no-reply@<apex>` from `config/hosts.json` via Terraform | ADR-159's no-hardcoded sender; MUT-400 naming follows after the live check |
@@ -290,8 +290,8 @@ Root: `npm run lint`, `npm run typecheck`, `npm run test:run`, `npm run build`. 
 | D14 | `log` and `memory` are refused when `NODE_ENV=production`; Terraform's `mailer` accepts only `noop` and `resend` | `log` would write setup-link tokens into Cloud Logging; `memory` would silently drop mail; the stack always runs production |
 | D15 | Transport timeout 5 s, no automatic retry; Resend 429 is its own error and log line | A blind retry could double a mail; the idempotency key makes a manual retry safe; a shared-account rate limit isn't an outage |
 | D16 | The send log stores `sha256(idempotencyKey)` and `sha256(address)`, template, locale and status only, never the address or body; Resend gets the key digest as its `Idempotency-Key` | Least data; callers may put an email in their key |
-| D17 | A per-recipient cap (`MAIL_RECIPIENT_DAILY_CAP`, default 10/24 h) in the mailer, under MUT-366's route limits | Eng review (outside voice #1): one address can't burn the global cap |
-| D18 | 10 % of the global cap is reserved for security mail (reset, finish-setup, password notice); `MAIL_DAILY_CAP` has no default under `resend` | Eng review (outside voice #1): a flood of signups can't stop recovery mail; the operator sets the cap from the real plan |
+| D17 | A per-recipient cap (`MAIL_RECIPIENT_DAILY_CAP`, default 10/24 h) in the mailer, under MUT-366's route limits. **As built (code review):** the password notice is outside it | Eng review (outside voice #1): one address can't burn the global cap; code review: signup/recovery requests others make for an address must never silence a takeover notice |
+| D18 | 10 % of the global cap is reserved for recovery mail. **As built (code review):** reset and finish-setup only, not the password notice (any signed-in person can trigger it); `MAIL_DAILY_CAP` has no default under `resend`; timed-out sends keep counting (status UNCERTAIN) | Eng review (outside voice #1): a flood of signups can't stop recovery mail; the operator sets the cap from the real plan |
 | D19 | The webhook lives at `POST /v1/email/resend/webhook` (not the ticket's `/webhooks/email/resend`) and is pinned in both public-surface tests | Eng review (outside voice #3): the Stripe webhook is under `/v1` too; the pins only see `/v1` |
 | D20 | The webhook ignores events not sent from `MAIL_FROM_ADDRESS`'s domain, and works whenever its secret is set | Eng review (outside voice #2): the Resend account and its webhooks are shared with Malafat |
 | D21 | `email:check` has a keyless DNS mode (the preflight's) and an `--api` mode (the ticket's tracking/region check, run by the operator) | Eng review (outside voice #9): no full-access key on every release |
@@ -332,7 +332,7 @@ Dispositions: all accepted (auto-decided, pending Basel).
 **Section 2, Code quality:**
 - [P2] (8/10) a crashed send leaves a PENDING row that blocks its key and counts forever. Accepted → §3.5 stale re-claim.
 - [P2] (7/10) `to` isn't validated; a list or CRLF in `to` would reach Resend. Accepted → `refused: INVALID_ADDRESS`.
-- [P3] (7/10) store-guard class `'operator'` would refuse sends through a request-scoped store. Accepted → `'control'`.
+- [P3] (7/10) store-guard class `'operator'` would refuse sends through a request-scoped store. Accepted → `'control'` (reverted to `'operator'` in code review: the mailer is always on the unguarded store, and `control` let any key reach `suppress`).
 - [P3] (6/10) the advisory lock is new machinery for one instance. Accepted → removed (D2).
 Dispositions: all accepted.
 

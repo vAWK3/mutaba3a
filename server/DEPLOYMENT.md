@@ -1250,7 +1250,7 @@ The API mails people through a `Mailer` port (`server/src/email/`). Today it sen
 | Alerts "Mail cap reached" and "Mail provider failing" | `email.tf`, on the §6b channels | Don't exist. Created with `mailer = "resend"` |
 | `guard_mailer_release` | `scripts/lib/release-guard.sh` | Refuses a release that would switch mail off while the service mounts `RESEND_API_KEY` (`SKIP_MAILER_GUARD=1` to mean it) |
 
-**Limits.** `MAIL_DAILY_CAP` mails in any 24 h, every template counted. 10 % of it (`MAIL_SECURITY_RESERVE`) is kept for recovery and password mail, so a flood of signups can't block resets. `MAIL_RECIPIENT_DAILY_CAP` (10) per address. Past the global cap the API logs `mail cap reached; nothing sent` at error and the alert fires. The send log (`email_deliveries`) holds digests only and is pruned after 30 days.
+**Limits.** `MAIL_DAILY_CAP` mails in any 24 h, every template counted, including sends that timed out (Resend may still have taken them). 10 % of it (`MAIL_SECURITY_RESERVE`) is kept for recovery mail (reset and finish-setup links), so a flood of signups or password changes can't block resets. `MAIL_RECIPIENT_DAILY_CAP` (10) per address; the password notice is outside it, so requests others make for an address can never silence a takeover notice. Past a cap the API logs `mail cap reached; nothing sent` at error with the limit it met (`cap`, `daily`, `reserve`) and the alert fires. The send log (`email_deliveries`) holds digests only and is pruned after 30 days.
 
 **Cost:** the Barmajiyat Resend plan. The free plan allows 100 mails a day for **both** products together. Pro ($20/month) allows 50,000 a month.
 
@@ -1277,7 +1277,7 @@ The API mails people through a `Mailer` port (`server/src/email/`). Today it sen
    * Run `make release server`. The plan adds `MAILER=resend`, the two secret env vars, `MAIL_FROM_ADDRESS`, `MAIL_REPLY_TO` and `MAIL_DAILY_CAP`, and the two alert policies.
 8. **Live check (MUT-359 AC):** change your own password on the portal in Arabic, then in English. The notice must reach a Gmail and an Outlook inbox, not spam, with the From `MTB3A <no-reply@<apex>>`. Delete the MUT-359 line from `docs/operations/before-release.md` and record the date in §7.
 
-**Turn it off:** set `mailer = "noop"` and apply from `infrastructure/terraform` with `SKIP_MAILER_GUARD=1` for the next release. The secrets stay.
+**Turn it off:** set `mailer = "noop"` in every checkout you release from, then either apply from `infrastructure/terraform` (a plain apply isn't guarded) or release with `SKIP_MAILER_GUARD=1`. Once the service no longer mounts `RESEND_API_KEY`, later releases pass the guard. The secrets stay.
 
 **Rotate the sending key:** add a new version as in step 4, then `./scripts/deploy.sh`. Revoke the old key in Resend once the new revision serves.
 

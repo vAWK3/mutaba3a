@@ -126,7 +126,7 @@ const envSchema = z.object({
   RESEND_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9+/=]+$/, 'must be a Resend/Svix signing secret (whsec_…)').optional(),
   /** Sends in any rolling 24 h. Required with resend, set below the shared Resend plan's limit (D18); 500 elsewhere. */
   MAIL_DAILY_CAP: z.coerce.number().int().min(1).optional(),
-  /** The part of the daily cap only security mail may use. Default: 10 % of the cap, rounded up. */
+  /** The part of the daily cap only recovery mail (reset, finish setup) may use. Default: 10 % of the cap, rounded up. */
   MAIL_SECURITY_RESERVE: z.coerce.number().int().min(0).optional(),
   /** Sends to one address in any rolling 24 h (D17). */
   MAIL_RECIPIENT_DAILY_CAP: z.coerce.number().int().min(1).default(10),
@@ -224,7 +224,8 @@ function mailConfig(config: z.infer<typeof envSchema>): { MAIL_DAILY_CAP: number
     if (address && isUnownedDomain(address)) refuse(name, `${address.split('@')[1]} is not a domain we own; mail there reaches whoever registers it`);
   }
   const daily = config.MAIL_DAILY_CAP ?? DEFAULT_MAIL_DAILY_CAP;
-  const reserve = config.MAIL_SECURITY_RESERVE ?? Math.ceil(daily / 10);
+  // 10 % rounded up, but never the whole cap: a cap of 1 leaves no reserve rather than refusing to start.
+  const reserve = config.MAIL_SECURITY_RESERVE ?? Math.min(Math.ceil(daily / 10), daily - 1);
   if (reserve >= daily) refuse('MAIL_SECURITY_RESERVE', `must be below MAIL_DAILY_CAP (${reserve} >= ${daily})`);
   return { MAIL_DAILY_CAP: daily, MAIL_SECURITY_RESERVE: reserve };
 }

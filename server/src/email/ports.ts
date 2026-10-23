@@ -21,8 +21,17 @@ export const TEMPLATE_IDS = [
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
-/** Mail that gets someone back into their account: these may use the global cap's reserve (§3.5, D18). */
-export const SECURITY_TEMPLATES: ReadonlySet<MailTemplateId> = new Set<MailTemplateId>(['reset-password', 'finish-setup', 'password-changed']);
+/**
+ * Mail that gets someone back into their account: only these may use the global cap's reserve (D18), so a flood of
+ * anything else can't stop recovery. Not the password notice: any signed-in person can trigger it at will.
+ */
+export const RECOVERY_TEMPLATES: ReadonlySet<MailTemplateId> = new Set<MailTemplateId>(['reset-password', 'finish-setup']);
+
+/**
+ * Mail outside the per-recipient cap (D17): the password notice is gated by the password itself, and requests other
+ * people can trigger for an address (signup, recovery) must never use up the one mail that reports a takeover.
+ */
+export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTemplateId>(['password-changed']);
 
 export interface TemplateVars {
   /** MUT-366: a SIGNUP link to /setup. */

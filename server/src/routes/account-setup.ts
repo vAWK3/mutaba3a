@@ -1,6 +1,6 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
-import { setupLinkState, type SetupLinkState } from '../auth/account-setup.js';
+import { setupLinkOrigin, setupLinkState, type SetupLinkState } from '../auth/account-setup.js';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { isSamePortalOrigin, requestClientIp, sessionDigest, type SignInThrottle } from '../auth/sessions.js';
 import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
@@ -179,7 +179,7 @@ function unusable(state: SetupLinkRefusal): ApiError {
   return new ApiError('SETUP_LINK_UNUSABLE', 'This setup link can no longer be used; ask for a new one', { state });
 }
 
-/** MUT-359: where a password notice's "Sign in" goes: the portal's public origin, else this request's own. */
+/** MUT-359: where a password notice's "Sign in" goes: the same origin a setup link uses (https off loopback). */
 export function signInLinkOf(settings: Pick<SessionSettings, 'portalOrigin'>, requestUrl: string): string {
-  return `${settings.portalOrigin ?? new URL(requestUrl).origin}/`;
+  return `${setupLinkOrigin(settings.portalOrigin, requestUrl).replace(/\/+$/, '')}/`;
 }

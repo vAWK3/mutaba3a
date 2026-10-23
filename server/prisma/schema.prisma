@@ -1308,11 +1308,13 @@ model StripeEvent {
   @@map("stripe_events")
 }
 
-/// MUT-359 (ADR-159 §5): where a send stands. FAILED rows don't count toward the caps and may be claimed again.
+/// MUT-359 (ADR-159 §5): where a send stands. FAILED rows don't count toward the caps; UNCERTAIN ones (a timeout the
+/// provider may still have accepted) do. Both may be claimed again.
 enum EmailDeliveryStatus {
   PENDING
   SENT
   FAILED
+  UNCERTAIN
 }
 
 /// MUT-359: why an address gets no more mail. Only Resend's permanent bounces and complaints (D10).

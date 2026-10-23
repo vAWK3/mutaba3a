@@ -79,7 +79,7 @@ describe.each(TEMPLATE_IDS)('template %s', (id) => {
         for (const link of LINKS_OF(vars)) rest = rest.split(link).join('');
         for (const n of allowed) rest = rest.split(n).join('');
         expect(rest).not.toMatch(CURRENCY);
-        expect(rest).not.toMatch(/\d/);
+        expect(rest).not.toMatch(/[\d٠-٩۰-۹]/u);
       }
     }
   });

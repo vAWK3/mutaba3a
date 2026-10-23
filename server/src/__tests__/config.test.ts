@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig } from '../config.js';
+import { UNOWNED_DOMAINS } from '../email/ports.js';
 
 const base = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
@@ -350,6 +351,8 @@ describe('loadConfig — mail (MUT-359)', () => {
     expect(loadConfig({ ...base, ...resend })).toMatchObject({ MAILER: 'resend', MAIL_DAILY_CAP: 90, MAIL_SECURITY_RESERVE: 9 });
     expect(loadConfig({ ...base, ...resend, MAIL_DAILY_CAP: '95' }).MAIL_SECURITY_RESERVE).toBe(10);
     expect(loadConfig({ ...base, ...resend, MAIL_SECURITY_RESERVE: '0' }).MAIL_SECURITY_RESERVE).toBe(0);
+    // Terraform accepts a cap of 1: it boots with no reserve rather than refusing.
+    expect(loadConfig({ ...base, ...resend, MAIL_DAILY_CAP: '1' })).toMatchObject({ MAIL_DAILY_CAP: 1, MAIL_SECURITY_RESERVE: 0 });
   });
 
   it.each(['MAIL_FROM_ADDRESS', 'MAIL_REPLY_TO', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET', 'MAIL_DAILY_CAP'])('refuses MAILER=resend without %s', (name) => {
@@ -370,8 +373,8 @@ describe('loadConfig — mail (MUT-359)', () => {
   });
 
   it('refuses an unowned domain as the sender or the reply-to', () => {
-    expect(() => loadConfig({ ...base, ...resend, MAIL_FROM_ADDRESS: 'no-reply@mutaba3a.app' })).toThrow('MAIL_FROM_ADDRESS');
-    expect(() => loadConfig({ ...base, ...resend, MAIL_REPLY_TO: 'help@mutaba3a.app' })).toThrow('MAIL_REPLY_TO');
+    expect(() => loadConfig({ ...base, ...resend, MAIL_FROM_ADDRESS: `no-reply@${UNOWNED_DOMAINS[0]}` })).toThrow('MAIL_FROM_ADDRESS');
+    expect(() => loadConfig({ ...base, ...resend, MAIL_REPLY_TO: `help@${UNOWNED_DOMAINS[0]}` })).toThrow('MAIL_REPLY_TO');
   });
 
   it('allows the webhook secret alone, but only with the sender address it filters events by', () => {

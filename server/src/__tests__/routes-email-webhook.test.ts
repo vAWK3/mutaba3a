@@ -113,12 +113,23 @@ describe(`POST ${EMAIL_WEBHOOK_PATH}`, () => {
     expect(await h.store.email.suppress({ email: 'twice@studio.example', reason: 'COMPLAINT', eventId: 'later', at: NOW })).toEqual({ created: false });
   });
 
-  it('acknowledges a signed body that is not an event, without writing', async () => {
+  it('acknowledges a signed body that is not JSON, or not an event it acts on, without writing', async () => {
     const h = harness();
-    const res = await post(h, { ...delivery({}), body: '' });
-    expect(res.status).toBe(401);
-    const odd = delivery({ type: 'email.bounced', data: { to: 'not-a-list', bounce: { type: 'Permanent' } } });
+    const id = 'msg_not_json';
+    const ts = String(Math.floor(NOW.getTime() / 1000));
+    const key = Buffer.from(SECRET.slice('whsec_'.length), 'base64');
+    const signature = `v1,${createHmac('sha256', key).update(`${id}.${ts}.not json`).digest('base64')}`;
+    const notJson = await post(h, { method: 'POST', headers: { 'content-type': 'application/json', 'svix-id': id, 'svix-timestamp': ts, 'svix-signature': signature }, body: 'not json' });
+    expect(notJson.status).toBe(200);
+    expect(await notJson.json()).toEqual({ received: true, result: 'ignored' });
+    const odd = delivery({ type: 'email.bounced', data: { from: `no-reply@${FROM_DOMAIN}`, to: 'not-a-list', bounce: { type: 'Permanent' } } });
     expect(await (await post(h, odd)).json()).toEqual({ received: true, result: 'ignored' });
+  });
+
+  it('refuses a body changed after signing', async () => {
+    const h = harness();
+    expect((await post(h, { ...delivery(bounced(['x@studio.example'])), body: JSON.stringify(bounced(['y@studio.example'])) })).status).toBe(401);
+    expect(await h.store.email.isSuppressed('y@studio.example')).toBe(false);
   });
 
   it('answers 503 when the server has no webhook secret', async () => {

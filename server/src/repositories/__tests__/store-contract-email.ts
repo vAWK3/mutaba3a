@@ -58,7 +58,7 @@ export function describeLedgerStoreEmailContract(name: string, makeStore: () => 
       const failedInput = claim(at);
       const failed = await store.email.claimDelivery(failedInput);
       if (failed.status !== 'claimed') throw new Error('expected a claim');
-      await store.email.finishDelivery(failed.id, { error: 'timeout', at });
+      await store.email.finishDelivery(failed.id, { error: 'rejected', uncertain: false, at });
       expect((await store.email.claimDelivery({ ...failedInput, at: minutes(at, 1) })).status).toBe('claimed');
 
       const crashedInput = claim(at);
@@ -86,11 +86,23 @@ export function describeLedgerStoreEmailContract(name: string, makeStore: () => 
       const limit = { total: 1, perRecipient: 100 };
       const first = await store.email.claimDelivery(claim(at, { limit }));
       if (first.status !== 'claimed') throw new Error('expected a claim');
-      await store.email.finishDelivery(first.id, { error: 'rejected', at });
+      await store.email.finishDelivery(first.id, { error: 'rejected', uncertain: false, at });
       expect((await store.email.claimDelivery(claim(minutes(at, 1), { since: minutes(at, 1 - DAY), limit }))).status).toBe('claimed');
     });
 
-    it('caps one recipient without touching another', async () => {
+    it('keeps counting an uncertain send (a timeout), which may still be claimed again', async () => {
+      const store = await makeStore();
+      const at = base();
+      const limit = { total: 1, perRecipient: 100 };
+      const input = claim(at, { limit });
+      const first = await store.email.claimDelivery(input);
+      if (first.status !== 'claimed') throw new Error('expected a claim');
+      await store.email.finishDelivery(first.id, { error: 'timeout', uncertain: true, at });
+      expect(await store.email.claimDelivery(claim(minutes(at, 1), { since: minutes(at, 1 - DAY), limit }))).toEqual({ status: 'capped', scope: 'global' });
+      expect((await store.email.claimDelivery({ ...input, at: minutes(at, 1), limit: { total: 2, perRecipient: 100 } })).status).toBe('claimed');
+    });
+
+    it('caps one recipient without touching another, and never a mail outside the recipient cap', async () => {
       const store = await makeStore();
       const at = base();
       const recipientDigest = digest(`${unique()}@example.test`);
@@ -98,6 +110,7 @@ export function describeLedgerStoreEmailContract(name: string, makeStore: () => 
       for (let i = 0; i < 2; i++) expect((await store.email.claimDelivery(claim(minutes(at, i), { since: minutes(at, i - DAY), recipientDigest, limit }))).status).toBe('claimed');
       expect(await store.email.claimDelivery(claim(minutes(at, 2), { since: minutes(at, 2 - DAY), recipientDigest, limit }))).toEqual({ status: 'capped', scope: 'recipient' });
       expect((await store.email.claimDelivery(claim(minutes(at, 2), { since: minutes(at, 2 - DAY), limit }))).status).toBe('claimed');
+      expect((await store.email.claimDelivery(claim(minutes(at, 3), { since: minutes(at, 3 - DAY), recipientDigest, limit: { total: 100, perRecipient: null } }))).status).toBe('claimed');
     });
 
     it('answers a concurrent claim of the same key as a duplicate, never an error', async () => {
@@ -111,12 +124,15 @@ export function describeLedgerStoreEmailContract(name: string, makeStore: () => 
     it('prunes rows created before a time', async () => {
       const store = await makeStore();
       const at = base();
-      const old = await store.email.claimDelivery(claim(at));
+      const oldInput = claim(at);
+      const old = await store.email.claimDelivery(oldInput);
       const recent = claim(minutes(at, 60));
       await store.email.claimDelivery(recent);
       if (old.status !== 'claimed') throw new Error('expected a claim');
+      await store.email.finishDelivery(old.id, { providerId: 'res_old', at });
       expect(await store.email.pruneDeliveries(minutes(at, 30))).toBeGreaterThanOrEqual(1);
-      // The pruned key can be claimed again; the recent one is still a duplicate.
+      // The pruned key is gone, so it can be claimed again (a SENT key would otherwise be a duplicate for good); the recent one is still a duplicate.
+      expect((await store.email.claimDelivery({ ...claim(minutes(at, 61)), keyDigest: oldInput.keyDigest })).status).toBe('claimed');
       expect((await store.email.claimDelivery({ ...claim(minutes(at, 61)), keyDigest: recent.keyDigest })).status).toBe('duplicate');
     });
   });
