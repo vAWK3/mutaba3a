@@ -19,7 +19,7 @@ export async function openFreshApp(page: Page, path = '/'): Promise<void> {
     }
   }, LANGUAGE_KEYS);
   await page.goto(`/app${path}`);
-  const welcome = page.getByRole('dialog', { name: 'Welcome to Mutaba3a' });
+  const welcome = page.getByRole('dialog', { name: 'Welcome to MTB3A' });
   await welcome.getByRole('button', { name: 'Skip for now' }).click();
   await expect(welcome).toBeHidden();
 }

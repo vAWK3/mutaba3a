@@ -105,3 +105,21 @@ features:
       - The Overview shows "Firm features are on for Khatib Law. New tools show up here as they're released." with Dismiss
       - Dismiss removes it, and it stays gone after the reload
       - In Arabic the page is right to left and the note reads "ميزات المكتب مفعّلة لملف …" with إغلاق
+  - id: mtb3a-name
+    title: Sign-in and the sidebar name the product MTB3A in English and متابعة in Arabic, and the tab title follows (MUT-402)
+    tier: secondary
+    legacy: [MUT-402]
+    paths:
+      - src/hosted/components/Brand.tsx
+      - src/hosted/hosted.css
+      - hosted.html
+      - src/components/brand/Logotype.tsx
+      - src/components/brand/Logotype.css
+    steps:
+      - Open sign-in in English on a cold load
+      - Switch to Arabic
+      - Sign in at desktop width and look at the sidebar
+    expect:
+      - Sign-in shows a 40px mark with the MTB3A logotype, the tab says MTB3A, and the logotype file is fetched once (the preload is used; Chromium only)
+      - In Arabic the lockup writes متابعة as live text with no logotype, and the tab says متابعة
+      - The sidebar shows a 32px mark with the MTB3A logotype

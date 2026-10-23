@@ -249,7 +249,7 @@ test(
     });
 
     await step('No business is left, so the welcome comes back; Skip for now', async () => {
-      const welcome = page.getByRole('dialog', { name: 'Welcome to Mutaba3a' });
+      const welcome = page.getByRole('dialog', { name: 'Welcome to MTB3A' });
       await expect(welcome).toBeVisible();
       await welcome.getByRole('button', { name: 'Skip for now' }).click();
       await expect(welcome).toBeHidden();

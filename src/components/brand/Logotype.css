@@ -57,15 +57,25 @@
   background-color: var(--mark-dot);
 }
 
+/* Forced colours force a background to Canvas, so the mask must opt out. Opted out, currentColor is
+   the unforced ink (Chromium, measured in qa web.brand.mtb3a-name), so each context names the system
+   colour its live text gets instead: LinkText (VisitedText) inside a link, CanvasText elsewhere.
+   The two names and the dot stay one colour (design D11, D14). */
 @media (forced-colors: active) {
-  .logotype {
-    background-color: currentColor;
+  .logotype,
+  .wordmark-separator {
     forced-color-adjust: none;
+    background-color: CanvasText;
   }
 
-  .wordmark-separator {
-    background-color: currentColor;
-    forced-color-adjust: none;
+  a .logotype,
+  a .wordmark-separator {
+    background-color: LinkText;
+  }
+
+  a:visited .logotype,
+  a:visited .wordmark-separator {
+    background-color: VisitedText;
   }
 
   /* Images keep their colours, so the mark's light petals fade on a dark high-contrast canvas.

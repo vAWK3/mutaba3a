@@ -136,15 +136,13 @@ describe('Logotype.css', () => {
     });
   });
 
-  it('keeps the logotype and the dot in the text colour in forced colours, so the lockup is one colour (design D11, D14)', () => {
+  it('paints the logotype and the dot in the system colour their live text gets in forced colours, so the lockup is one colour (design D11, D14)', () => {
+    // Opted out of forcing, currentColor would be the unforced ink, so each context names its colour
     for (const selector of ['.logotype', '.wordmark-separator']) {
-      expect(decls(selector, FORCED), selector).toMatchObject({ 'background-color': 'currentColor', 'forced-color-adjust': 'none' });
+      expect(decls(selector, FORCED), selector).toMatchObject({ 'background-color': 'CanvasText', 'forced-color-adjust': 'none' });
+      expect(decls(`a ${selector}`, FORCED)['background-color'], `a ${selector}`).toBe('LinkText');
+      expect(decls(`a:visited ${selector}`, FORCED)['background-color'], `a:visited ${selector}`).toBe('VisitedText');
     }
-    const canvasText: string[] = [];
-    css.walkDecls((decl) => {
-      if (/CanvasText/.test(decl.value)) canvasText.push(`${(decl.parent as Rule).selector} ${decl.prop}`);
-    });
-    expect(canvasText).toEqual(['.wordmark .wordmark-mark outline']);
   });
 
   it('rings the mark on its square box in forced colours, never rounding (and so clipping) the image (design D15, R2, OV-13)', () => {

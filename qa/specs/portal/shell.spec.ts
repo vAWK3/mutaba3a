@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '../../support/qa';
 import { attachScreenshot } from '../../support/brand';
-import { OFFICE_A, OFFICE_B, customer, malafatFirm, office } from '../../support/portal';
+import { OFFICE_A, OFFICE_B, customer, malafatFirm, office, openSignedInPortal } from '../../support/portal';
 import { FakeApi, currencyBlock, customerSummary, payment, project, receivable, attachment, uid } from '../../support/portalApi';
 
 /**
@@ -116,7 +116,7 @@ test('switching profile keeps the section, and a profile that is not yours says 
     await expect(menu.getByRole('menuitemradio', { name: /Nour Studio/ })).toHaveAttribute('aria-checked', 'true');
     await expect(menu.getByRole('menuitemradio', { name: /Nour Accounting/ })).toContainText('Business');
     await expect(menu.getByRole('menuitemradio', { name: /Haddad & Partners/ })).toContainText('Income recorded by Malafat');
-    await expect(menu).toContainText('Your local profiles stay in the Mutaba3a app on your device.');
+    await expect(menu).toContainText('Your local profiles stay in the MTB3A app on your device.');
   });
 
   await step('Escape closes it and gives focus back to the switcher', async () => {
@@ -270,5 +270,62 @@ test('once firm features are on, the Overview shows one note that Dismiss keeps 
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('note').filter({ hasText: 'ميزات المكتب مفعّلة لملف Sader Office' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'إغلاق' })).toBeVisible();
+  });
+});
+
+/** The logotype's mask file, in the dev server (/src/assets/…) or a build (/assets/wordmark-<hash>.svg). */
+const WORDMARK_FILE = /\/wordmark[^/]*\.svg$/;
+
+test('sign-in and the sidebar name the product MTB3A in English and متابعة in Arabic, and the tab follows', { tag: '@portal.shell.mtb3a-name' }, async ({ page, step }) => {
+  const wordmarkFetches: string[] = [];
+  page.on('request', (request) => {
+    if (WORDMARK_FILE.test(new URL(request.url()).pathname)) wordmarkFetches.push(request.url());
+  });
+
+  await step('Open sign-in in English on a cold load: a 40px mark with the MTB3A logotype, fetched once', async () => {
+    await page.route('**/v1/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) }));
+    await page.addInitScript(() => {
+      if (localStorage.getItem('mutaba3a-portal-language') === null) localStorage.setItem('mutaba3a-portal-language', 'en');
+    });
+    await page.goto('/sign-in');
+    const lockup = page.locator('.hp-wordmark');
+    await expect(lockup.getByRole('img', { name: 'MTB3A' })).toBeVisible();
+    await expect(lockup.locator('img')).toHaveAttribute('width', '40');
+    await expect(page).toHaveTitle('MTB3A');
+    await page.waitForLoadState('networkidle');
+    // The preload is used, not fetched a second time (eng re-run R3); Chromium only (R6)
+    expect(wordmarkFetches).toHaveLength(1);
+    await attachScreenshot(page, 'mtb3a-signin-en');
+  });
+
+  await step('In forced colours (high contrast) the logotype is the page text’s colour, and the mark has a ring', async () => {
+    await page.emulateMedia({ forcedColors: 'active' });
+    const colours = await page.locator('.hp-wordmark').evaluate((lockup) => ({
+      logotype: getComputedStyle(lockup.querySelector('.logotype')!).backgroundColor,
+      text: getComputedStyle(document.querySelector('h1')!).color,
+      ring: getComputedStyle(lockup.querySelector('.wordmark-mark')!).outlineStyle,
+    }));
+    expect(colours.logotype).toBe(colours.text);
+    expect(colours.ring).toBe('solid');
+    await attachScreenshot(page, 'mtb3a-signin-en-forced-colors');
+    await page.emulateMedia({ forcedColors: 'none' });
+  });
+
+  await step('Switch to Arabic: متابعة as live text, no logotype, and the tab follows', async () => {
+    await page.getByRole('button', { name: 'عربي' }).click();
+    await expect(page.locator('.hp-wordmark .brand-name-ar')).toHaveText('متابعة');
+    await expect(page.getByRole('img', { name: 'MTB3A' })).toHaveCount(0);
+    await expect(page).toHaveTitle('متابعة');
+    await attachScreenshot(page, 'mtb3a-signin-ar');
+  });
+
+  await step('Sign in at desktop width: the sidebar shows a 32px mark with the MTB3A logotype', async () => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await openSignedInPortal(page, { profiles: [office(OFFICE_A, 'Sader Office')], path: '/' });
+    const sidebar = page.locator('.hp-side-wordmark');
+    await expect(sidebar.getByRole('img', { name: 'MTB3A' })).toBeVisible();
+    await expect(sidebar.locator('img')).toHaveAttribute('width', '32');
+    await expect(page).toHaveTitle('MTB3A');
+    await attachScreenshot(page, 'mtb3a-sidebar-en');
   });
 });

@@ -170,3 +170,28 @@ features:
     expect:
       - The splash's background is the canvas the token file names for that scheme
       - The mark is loaded (the dark file under OS dark), 80 px, and centred in the window (±1 px)
+  - id: mtb3a-name
+    title: The landing header and the app name the product MTB3A in English and متابعة in Arabic, as the MUT-401 logotype (MUT-402)
+    tier: secondary
+    legacy: [MUT-402]
+    paths:
+      - src/components/brand/Logotype.tsx
+      - src/components/brand/Logotype.css
+      - src/components/brand/Wordmark.tsx
+      - src/pages/landing/components/LandingHeader.tsx
+      - src/pages/landing/LandingPage.css
+      - src/lib/i18n/translations/en/*.json
+      - src/lib/i18n/translations/ar/landing.json
+    steps:
+      - Open the landing page in English at 1280px, then switch to Arabic
+      - Open it at 320 and 360px in English and in Arabic
+      - Turn on forced colours (high contrast)
+      - Open the download page in English
+    expect:
+      - The header link shows the mark, the MTB3A logotype, the dot and متابعة, in the page's reading order, named "MTB3A متابعة" in English and "متابعة MTB3A" in Arabic
+      - The logotype is 12.8px tall in the link's own colour, and no English page text says Mutaba3a
+      - The tab title is the English meta title, then the Arabic one
+      - At 320 and 360px only the mark and the active name show, with nothing wrapped or overflowing
+      - In forced colours the logotype, the dot and متابعة are one colour and the mark has a ring
+      - The download page's tab title is "MTB3A — Download"
+      - Screenshots of both languages are attached for comparison with the Wordmark Kit preview

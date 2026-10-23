@@ -109,7 +109,7 @@ function boxesOverlap(a: { x: number; y: number; width: number; height: number }
 test('the header button appears only once the hero button has scrolled away, and goes to the same place', { tag: '@web.landing.header-cta' }, async ({ page, step }) => {
   await step('Open the landing page: the bar shows the wordmark and the language switch, not the button', async () => {
     await openLanding(page);
-    await expect(header(page).getByRole('link', { name: 'Mutaba3a · متابعة' })).toBeVisible();
+    await expect(header(page).getByRole('link', { name: 'MTB3A متابعة' })).toBeVisible();
     await expect(headerCta(page)).toBeHidden();
   });
 
@@ -211,7 +211,7 @@ test('hovering a landing control in OS light mode keeps its label colour and rea
 
   await step('The wordmark, the Get it cards and the bar’s button keep their colours too', async () => {
     const controls = [
-      header(page).getByRole('link', { name: 'Mutaba3a · متابعة' }),
+      header(page).getByRole('link', { name: 'MTB3A متابعة' }),
       page.locator('a.landing-get-it-option').first(),
     ];
     for (const control of controls) {
@@ -277,7 +277,7 @@ for (const [width, language] of [[375, 'en'], [375, 'ar'], [320, 'en'], [320, 'a
 
 test('the tab title follows the language', { tag: '@web.landing.title' }, async ({ page }) => {
   await openLanding(page);
-  await expect(page).toHaveTitle('Mutaba3a — Track your finances, securely');
+  await expect(page).toHaveTitle(en.landing.meta.title);
   await page.locator('.landing-lang-toggle').click();
   await expect(page).toHaveTitle(ar.landing.meta.title);
 });
