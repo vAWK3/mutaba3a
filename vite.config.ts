@@ -1,4 +1,6 @@
-import { defineConfig, type HtmlTagDescriptor, type Plugin, type UserConfig } from "vite";
+import { defineConfig, type HtmlTagDescriptor, type Plugin, type PluginOption, type UserConfig } from "vite";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
+import { SENTRY_INGEST_ORIGIN } from "./server/src/observability/sentry-ingest";
 import react from "@vitejs/plugin-react";
 import { VitePWA, type ManifestOptions, type VitePWAOptions } from "vite-plugin-pwa";
 import { readdirSync, readFileSync } from "node:fs";
@@ -95,6 +97,75 @@ export function posthogKey(override: string | undefined): string {
     throw new Error("MUTABA3A_POSTHOG_KEY must be a PostHog project key (phc_ followed by at least 20 letters or digits)");
   }
   return override;
+}
+
+/** The Sentry org and project the portal reports to, and where its source maps go (MUT-149, ADR-091). */
+const SENTRY_ORG = "barmajiyat-ltd";
+const SENTRY_PORTAL_PROJECT = "mutaba3a-web";
+const SENTRY_EU_API = "https://de.sentry.io";
+const SENTRY_HOSTED_MAPS = "dist-hosted/**/*.map";
+
+/**
+ * The portal's Sentry DSN (MUT-149 D3): "" when MUTABA3A_SENTRY_DSN is unset,
+ * which compiles crash reporting out of the portal. Only a DSN on the org's EU
+ * ingest host is accepted, the one origin PORTAL_CSP allows, so the build
+ * fails rather than ship reports the browser would block.
+ */
+export function sentryDsn(override: string | undefined): string {
+  if (override === undefined || override === "") return "";
+  const host = new URL(SENTRY_INGEST_ORIGIN).host.replace(/\./g, "\\.");
+  if (!new RegExp(`^https://[0-9a-f]{32}@${host}/\\d+$`).test(override)) {
+    throw new Error(`MUTABA3A_SENTRY_DSN must be a DSN on ${SENTRY_INGEST_ORIGIN} (the EU ingest host PORTAL_CSP allows)`);
+  }
+  return override;
+}
+
+/** `mutaba3a-portal@<server version>+<sha>` from deploy.sh; the app version otherwise. */
+export function sentryRelease(override: string | undefined): string {
+  if (override === undefined || override === "") return `mutaba3a-portal@${pkg.version}`;
+  if (!/^mutaba3a-portal@\S+$/.test(override)) throw new Error("MUTABA3A_SENTRY_RELEASE must be mutaba3a-portal@<version>");
+  return override;
+}
+
+/** The environment events are filed under (deploy.sh ENVIRONMENT); development otherwise. */
+export function sentryEnvironment(override: string | undefined): string {
+  if (override === undefined || override === "") return "development";
+  if (!/^[a-z0-9-]{1,64}$/.test(override)) throw new Error("MUTABA3A_SENTRY_ENVIRONMENT must be lowercase letters, digits or dashes");
+  return override;
+}
+
+/**
+ * The hosted build's crash reporting (MUT-149 D3, D6): the defines, and, when
+ * a DSN and an upload token are both set, hidden source maps uploaded to
+ * Sentry and then deleted, so no map is ever served. The token is read here
+ * only, never defined into the bundle.
+ */
+function hostedSentry(env: NodeJS.ProcessEnv): { define: Record<string, string>; sourcemap: "hidden" | false; plugins: PluginOption[] } {
+  const dsn = sentryDsn(env.MUTABA3A_SENTRY_DSN);
+  const release = sentryRelease(env.MUTABA3A_SENTRY_RELEASE);
+  const define = {
+    __SENTRY_ENABLED__: JSON.stringify(dsn !== ""),
+    __SENTRY_DSN__: JSON.stringify(dsn),
+    __SENTRY_RELEASE__: JSON.stringify(release),
+    __SENTRY_ENVIRONMENT__: JSON.stringify(sentryEnvironment(env.MUTABA3A_SENTRY_ENVIRONMENT)),
+  };
+  const authToken = env.SENTRY_AUTH_TOKEN;
+  if (!dsn || !authToken) return { define, sourcemap: false, plugins: [] };
+  return {
+    define,
+    sourcemap: "hidden",
+    plugins: [
+      sentryVitePlugin({
+        org: SENTRY_ORG,
+        project: SENTRY_PORTAL_PROJECT,
+        url: SENTRY_EU_API,
+        authToken,
+        telemetry: false,
+        release: { name: release, inject: false },
+        sourcemaps: { filesToDeleteAfterUpload: [SENTRY_HOSTED_MAPS] },
+      }),
+    ],
+  };
 }
 
 /** The portal origin the web build links to; a bad MUTABA3A_PORTAL_URL fails the build (MUT-187). */
@@ -404,6 +475,7 @@ export function scopeServerBufferShim(): Plugin {
  * proxy, like the API service will serve it in production.
  */
 function hostedConfig(): UserConfig {
+  const sentry = hostedSentry(process.env);
   return {
     base: "/",
     publicDir: "src/hosted/public",
@@ -442,8 +514,10 @@ function hostedConfig(): UserConfig {
       __TERMS_URL__: JSON.stringify(termsUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
       // Opt-in, anonymous usage counts (MUT-155, ADR-090); "" turns analytics off
       __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
+      // Crash reports, signed in only (MUT-149, ADR-091 am.11); no DSN compiles them out
+      ...sentry.define,
     },
-    plugins: [react(), emitHostedEntryAsIndex(), scopeServerBufferShim()],
+    plugins: [react(), emitHostedEntryAsIndex(), scopeServerBufferShim(), ...sentry.plugins],
     clearScreen: false,
     server: {
       port: HOSTED_DEV_PORT,
@@ -458,6 +532,8 @@ function hostedConfig(): UserConfig {
     build: {
       target: "esnext",
       outDir: "dist-hosted",
+      // Maps only for the upload, and no sourceMappingURL comment (MUT-149 AC4)
+      sourcemap: sentry.sourcemap,
       rollupOptions: {
         input: fileURLToPath(new URL("./hosted.html", import.meta.url)),
         output: {

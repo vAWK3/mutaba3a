@@ -19,6 +19,9 @@ import configFn, {
   portalUrl,
   posthogKey,
   scopeServerBufferShim,
+  sentryDsn,
+  sentryEnvironment,
+  sentryRelease,
   socialMetaTags,
   withPageMeta,
 } from '../../vite.config';
@@ -36,6 +39,7 @@ import { repoPath } from '../../src/test/css/brandCss';
 import { pngSize } from '../../src/test/pngSize';
 import { HOSTS, parseHostsConfig, resolveHosts } from '../../config/hosts';
 import { CIMD_CLIENT_ID } from '../../src/services/oauth/oauth-client';
+import { SENTRY_INGEST_ORIGIN } from '../../server/src/observability/sentry-ingest';
 
 /**
  * hosted-portal.md §8: the hosted build target is additive. The `web` and
@@ -411,6 +415,89 @@ describe('vite.config', () => {
         expect(resolve('desktop').define?.__POSTHOG_KEY__).toBe(JSON.stringify(''));
       } finally {
         vi.unstubAllEnvs();
+      }
+    });
+  });
+
+  describe('Sentry (MUT-149, ADR-091 am.11)', () => {
+    const HOST = new URL(SENTRY_INGEST_ORIGIN).host;
+    const DSN = `https://0123456789abcdef0123456789abcdef@${HOST}/4512250374062160`;
+    const withEnv = <T,>(env: Record<string, string>, run: () => T): T => {
+      for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+      try {
+        return run();
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    };
+    const QUIET = { MUTABA3A_SENTRY_DSN: '', SENTRY_AUTH_TOKEN: '', MUTABA3A_SENTRY_RELEASE: '', MUTABA3A_SENTRY_ENVIRONMENT: '' };
+
+    it('pins the org ingest host on the EU region (D7)', () => {
+      expect(SENTRY_INGEST_ORIGIN).toMatch(/^https:\/\/o\d+\.ingest\.de\.sentry\.io$/);
+    });
+
+    it('is empty when MUTABA3A_SENTRY_DSN is unset, so the portal reports nothing', () => {
+      expect(sentryDsn(undefined)).toBe('');
+      expect(sentryDsn('')).toBe('');
+    });
+
+    it("takes a DSN on the org's EU ingest host", () => {
+      expect(sentryDsn(DSN)).toBe(DSN);
+    });
+
+    it.each([
+      ['the US region', DSN.replace('.de.', '.')],
+      ['another org', DSN.replace(HOST, 'o1.ingest.de.sentry.io')],
+      ['sentry.io itself', 'https://0123456789abcdef0123456789abcdef@sentry.io/1'],
+      ['plain http', DSN.replace('https:', 'http:')],
+      ['not a DSN', 'phc_AbCdEf'],
+    ])('refuses %s, failing the build (CSP and DSN must not drift)', (_name, value) => {
+      expect(() => sentryDsn(value)).toThrow(/MUTABA3A_SENTRY_DSN/);
+    });
+
+    it('names the release after the portal, from deploy.sh or the app version', () => {
+      expect(sentryRelease(undefined)).toBe(`mutaba3a-portal@${pkg.version}`);
+      expect(sentryRelease('mutaba3a-portal@1.52.0+abc1234')).toBe('mutaba3a-portal@1.52.0+abc1234');
+      expect(() => sentryRelease('api@1.0.0')).toThrow(/MUTABA3A_SENTRY_RELEASE/);
+    });
+
+    it('takes the environment from deploy.sh, development otherwise', () => {
+      expect(sentryEnvironment(undefined)).toBe('development');
+      expect(sentryEnvironment('production')).toBe('production');
+      expect(() => sentryEnvironment('Prod Env')).toThrow(/MUTABA3A_SENTRY_ENVIRONMENT/);
+    });
+
+    it('turns the gate on in the hosted build only when a DSN is set', () => {
+      withEnv({ ...QUIET, MUTABA3A_SENTRY_DSN: DSN }, () => {
+        const define = resolve('hosted').define;
+        expect(define?.__SENTRY_ENABLED__).toBe('true');
+        expect(define?.__SENTRY_DSN__).toBe(JSON.stringify(DSN));
+      });
+      withEnv(QUIET, () => {
+        expect(resolve('hosted').define?.__SENTRY_ENABLED__).toBe('false');
+        expect(resolve('hosted').define?.__SENTRY_DSN__).toBe(JSON.stringify(''));
+      });
+    });
+
+    it.each(['web', 'desktop'])('gives the %s build no Sentry define at all (AC1)', (mode) => {
+      withEnv({ ...QUIET, MUTABA3A_SENTRY_DSN: DSN, SENTRY_AUTH_TOKEN: 'sntrys_test' }, () => {
+        expect(Object.keys(resolve(mode).define ?? {}).filter((key) => key.includes('SENTRY'))).toEqual([]);
+        expect(pluginNames(resolve(mode).plugins)).not.toContain('sentry-vite-plugin');
+      });
+    });
+
+    it('uploads hidden source maps only with a DSN and an upload token (AC4, D6)', () => {
+      withEnv({ ...QUIET, MUTABA3A_SENTRY_DSN: DSN, SENTRY_AUTH_TOKEN: 'sntrys_test' }, () => {
+        const config = resolve('hosted');
+        expect(config.build?.sourcemap).toBe('hidden');
+        expect(pluginNames(config.plugins)).toContain('sentry-vite-plugin');
+      });
+      for (const env of [QUIET, { ...QUIET, MUTABA3A_SENTRY_DSN: DSN }, { ...QUIET, SENTRY_AUTH_TOKEN: 'sntrys_test' }]) {
+        withEnv(env, () => {
+          const config = resolve('hosted');
+          expect(config.build?.sourcemap ?? false).toBe(false);
+          expect(pluginNames(config.plugins)).not.toContain('sentry-vite-plugin');
+        });
       }
     });
   });
