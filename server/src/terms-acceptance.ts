@@ -25,20 +25,25 @@ export function staleTerms(terms: CurrentTerms): ApiError {
  * (ownedOrCoOwnedProfilesOf).
  */
 export async function termsAcceptedAudit(store: LedgerStore, person: UserRecord, acceptance: TermsAcceptanceInput, requestId: string): Promise<AuditEventInput[]> {
-  return (await ownedOrCoOwnedProfilesOf(store, person.id)).map((organization) => ({
-      organizationId: organization.id,
-      actorType: 'USER' as const,
-      actorId: person.id,
-      action: 'user.terms_accepted',
-      entityType: 'user',
-      entityId: person.id,
-      metadata: {
-        version: acceptance.version,
-        locale: acceptance.locale,
-        surface: acceptance.surface,
-        textSha256: acceptance.textSha256,
-        clientRelease: acceptance.clientRelease,
-      },
-      requestId,
-    }));
+  return (await ownedOrCoOwnedProfilesOf(store, person.id)).map((organization) => termsAcceptedEvent(organization.id, person.id, acceptance, requestId));
+}
+
+/** One `user.terms_accepted` row; MUT-366's signup writes it on the personal profile its redeem creates. */
+export function termsAcceptedEvent(organizationId: string, userId: string, acceptance: TermsAcceptanceInput, requestId: string): AuditEventInput {
+  return {
+    organizationId,
+    actorType: 'USER',
+    actorId: userId,
+    action: 'user.terms_accepted',
+    entityType: 'user',
+    entityId: userId,
+    metadata: {
+      version: acceptance.version,
+      locale: acceptance.locale,
+      surface: acceptance.surface,
+      textSha256: acceptance.textSha256,
+      clientRelease: acceptance.clientRelease,
+    },
+    requestId,
+  };
 }

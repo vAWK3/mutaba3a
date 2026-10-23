@@ -2218,3 +2218,24 @@ contract embedded in `SENTRY_RULES`. Pure, no `node:*`: MUT-149 (portal) and MUT
 The reporting seam (see PATTERNS). `runScript(name, reporter, body)` logs, reports and sets exit code 1 on a crash,
 then flushes; `shutdownAndFlush` closes, disconnects, flushes (2 s), exits. `createSentryReporter` /
 `createScriptReporter` / `apiRelease` in `sentry-node.ts` build the real one.
+
+### Mailer / createMailer / renderMail / sendPasswordNotice — `server/src/email/` (MUT-359, ADR-174)
+The one way the server sends mail. `createMailer({ transport, store, logger, now, fromAddress, replyTo, limits })` →
+`mailer.send({ to, template, locale, vars, idempotencyKey })` → an outcome, never a throw for an expected case.
+Templates: add an id to `TEMPLATE_IDS`, its vars to `TemplateVars` (no money, no dates) and its en + ar copy to
+`templates/copy.ts`; mark it in `RECOVERY_TEMPLATES` if it gets someone back into their account (it may then use
+the cap's reserve), and in `RECIPIENT_CAP_EXEMPT` only if it is credential-gated. Transports:
+`createResendTransport`, `createLogTransport`, `MemoryMailTransport` (also the dev outbox), `NOOP_TRANSPORT`.
+`verifySvixSignature` (`svix.ts`) and `suppressionsFrom` (`resend-webhook.ts`) serve the webhook.
+`sendPasswordNotice(mailer, logger, person, { first, signInLink, requestId })` is the template for a post-commit
+notice. Tests: `server/src/email/__tests__/`.
+
+### selfServiceRoutes / SELF_SERVICE_POLICY / createTurnstileVerifier — `server/src/routes/self-service.ts`, `server/src/auth/{self-service,turnstile}.ts` (MUT-366, ADR-175)
+`selfServiceRoutes({ store, settings, mailer, logger, options })` mounts `POST /v1/signups` and
+`POST /v1/account-recovery`; `defaultSelfServiceOptions()` gives the production budgets with signup off.
+`SELF_SERVICE_POLICY` holds the link lives, budgets and floors; `signupLinkState`, `recoveryPurposeOf`,
+`signupAccountOutcome` (MUT-367's seam), `defaultDisplayName` and `answerNoEarlierThan` are the pure rules.
+`createTurnstileVerifier({ secret, fetch?, timeoutMs?, logger? })` → `verify(token, { ip, action, idempotencyKey })`;
+`UNCONFIGURED_TURNSTILE` refuses everything. Reuse the verifier for any other public form (MUT-197's landing form).
+Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src/__tests__/routes-self-service.test.ts`.
+

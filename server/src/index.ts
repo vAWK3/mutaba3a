@@ -15,6 +15,16 @@ import { createStripeGateway, RECONCILE_BUDGET, WEBHOOK_BUDGET } from './billing
 import { CHECKOUT_BUDGET, createCheckoutGateway } from './billing/stripe/checkout-gateway.js';
 import { STRIPE_WEBHOOK_POLICY } from './routes/stripe-billing.js';
 import { BILLING_SESSION_POLICY } from './routes/billing.js';
+import { EMAIL_WEBHOOK_POLICY } from './routes/email-webhook.js';
+import { createMailer } from './email/mailer.js';
+import type { MailTransport } from './email/ports.js';
+import { createResendTransport } from './email/transports/resend.js';
+import { createLogTransport } from './email/transports/log.js';
+import { MemoryMailTransport } from './email/transports/memory.js';
+import { NOOP_TRANSPORT } from './email/transports/noop.js';
+import { SELF_SERVICE_POLICY } from './auth/self-service.js';
+import { createTurnstileVerifier, UNCONFIGURED_TURNSTILE } from './auth/turnstile.js';
+import { defaultSelfServiceOptions } from './routes/self-service.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -43,6 +53,41 @@ const stripe = config.STRIPE_SECRET_KEY
     }
   : null;
 const billingSessionLimiter = new SlidingWindowRateLimiter(BILLING_SESSION_POLICY.perMinute);
+const emailWebhookIpLimiter = new SlidingWindowRateLimiter(EMAIL_WEBHOOK_POLICY.ipPerMinute);
+
+// MUT-359 (ADR-159 §5): config has already refused every half-configured mailer, and log/memory in production.
+const memoryOutbox = config.MAILER === 'memory' ? new MemoryMailTransport() : null;
+const mailTransport: MailTransport =
+  config.MAILER === 'resend' ? createResendTransport({ apiKey: config.RESEND_API_KEY! })
+  : config.MAILER === 'log' ? createLogTransport(logger)
+  : memoryOutbox ?? NOOP_TRANSPORT;
+const mailer = createMailer({
+  transport: mailTransport,
+  store,
+  logger,
+  now: () => new Date(),
+  fromAddress: config.MAIL_FROM_ADDRESS ?? 'no-reply@example.invalid',
+  replyTo: config.MAIL_REPLY_TO ?? null,
+  limits: { daily: config.MAIL_DAILY_CAP, securityReserve: config.MAIL_SECURITY_RESERVE, perRecipient: config.MAIL_RECIPIENT_DAILY_CAP },
+});
+/** MUT-359 (D2): the send log keeps 30 days; pruned hourly. */
+const MAIL_LOG_RETENTION_MS = 30 * 24 * 3_600_000;
+const MAIL_PRUNE_EVERY_MS = 3_600_000;
+
+// MUT-366 (ADR-159): signup and recovery. Config has refused a production server that could mail a link without a
+// real Turnstile secret; with none here (production, mail off) the check fails closed and recovery mails nothing anyway.
+const selfService = {
+  ...defaultSelfServiceOptions(),
+  // Built here (not taken from the defaults) so the timer below can prune them.
+  ipLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.ipPerHour, 3_600_000),
+  addressMinuteLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerMinute),
+  addressDayLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerDay, 24 * 3_600_000),
+  signupEnabled: config.SELF_SIGNUP_ENABLED,
+  turnstile: config.TURNSTILE_SECRET ? createTurnstileVerifier({ secret: config.TURNSTILE_SECRET, logger }) : UNCONFIGURED_TURNSTILE,
+  floors: { signupMs: config.SIGNUP_RESPONSE_FLOOR_MS, recoveryMs: config.RECOVERY_RESPONSE_FLOOR_MS },
+};
+/** D9: unredeemed SIGNUP links are deleted a week after they expire; checked hourly, like the mail log. */
+const SIGNUP_LINK_RETENTION_MS = SELF_SERVICE_POLICY.pruneAfterExpiryDays * 24 * 3_600_000;
 
 const fxRates = new CachedFxRates({
   source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
@@ -85,6 +130,11 @@ const app = createApp({
   jobToken: config.MUTABA3A_JOB_TOKEN ?? null,
   stripeWebhookIpLimiter,
   billingSessionLimiter,
+  mailer,
+  emailWebhook: config.RESEND_WEBHOOK_SECRET && config.MAIL_FROM_ADDRESS ? { secret: config.RESEND_WEBHOOK_SECRET, fromDomain: config.MAIL_FROM_ADDRESS.split('@')[1]! } : null,
+  emailWebhookIpLimiter,
+  devOutbox: config.NODE_ENV !== 'production' ? memoryOutbox : null,
+  selfService,
   portal: config.PORTAL_DIST_DIR ? { distDir: config.PORTAL_DIST_DIR } : null,
   appAssociation:
     config.APPLE_TEAM_ID && config.APPLE_BUNDLE_ID && config.ANDROID_PACKAGE_NAME && config.ANDROID_SHA256_FINGERPRINTS
@@ -106,6 +156,10 @@ const app = createApp({
 if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; attachments routes answer 503');
 if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; the Stripe webhook, reconcile and billing sessions answer 503');
 if (!config.MUTABA3A_JOB_TOKEN) logger.warn('MUTABA3A_JOB_TOKEN is not set; /jobs/* answers 503');
+if (config.MAILER === 'noop') logger.warn('MAILER is noop; no mail is sent (password notices included)');
+if (!config.SELF_SIGNUP_ENABLED) logger.info('SELF_SIGNUP_ENABLED is off; POST /v1/signups answers 404 (recovery still works)');
+if (!config.TURNSTILE_SECRET) logger.warn('TURNSTILE_SECRET is not set; signup and recovery fail their check (403 CHECK_FAILED)');
+if (!config.RESEND_WEBHOOK_SECRET) logger.warn('RESEND_WEBHOOK_SECRET is not set; the Resend webhook answers 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
 if (!reporter.enabled) logger.warn('SENTRY_DSN is not set; errors are logged but not reported');
 if (!config.APPLE_TEAM_ID) logger.warn('APPLE_TEAM_ID/APPLE_BUNDLE_ID/ANDROID_PACKAGE_NAME/ANDROID_SHA256_FINGERPRINTS are not set; no app-association files served');
@@ -125,12 +179,22 @@ const pruneTimer = setInterval(() => {
   publicFxIpLimiter.prune(now);
   stripeWebhookIpLimiter.prune(now);
   billingSessionLimiter.prune(now);
+  emailWebhookIpLimiter.prune(now);
+  selfService.ipLimiter.prune(now);
+  selfService.addressMinuteLimiter.prune(now);
+  selfService.addressDayLimiter.prune(now);
 }, 60_000);
 pruneTimer.unref();
+const mailPruneTimer = setInterval(() => {
+  void store.email.pruneDeliveries(new Date(Date.now() - MAIL_LOG_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'mail send log prune failed'));
+  void store.accountSetup.pruneSignupLinks(new Date(Date.now() - SIGNUP_LINK_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'signup link prune failed'));
+}, MAIL_PRUNE_EVERY_MS);
+mailPruneTimer.unref();
 
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'shutting down');
   clearInterval(pruneTimer);
+  clearInterval(mailPruneTimer);
   await shutdownAndFlush({
     stopAccepting: () => server.close(),
     disconnect: () => store.disconnect(),

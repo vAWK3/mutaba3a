@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-23 — A personal profile's logging streak, and entries logged on the day the phone saved them (MUT-339, ADR-176)
+## [Unreleased] - 2026-10-23 — A personal profile's logging streak, and entries logged on the day the phone saved them (MUT-339, ADR-177)
 
 **Why:** MUT-339 shows personal users a streak from 3 days of logging in a row (Basel's S1–S3), and an entry saved offline must count on the day it was logged, not the day it uploaded (S4). Plan and eng review R1–R12: mutaba3a-flutter `.claude/designs/mut-339-logging-streaks.md` (Jira comment 12456).
 
@@ -36,12 +36,12 @@
 - **`GET /v1/expenses/streak`** (session-only, `expenses:read`): `{ today, current, startedOn, lastLoggedOn, aliveUntil, previous }` for a personal profile the caller owns; 409 CONFLICT `NOT_PERSONAL` elsewhere. Alive through yesterday; `previous` is a run of 3+ days that ended within 7.
 - **`capturedAt`** on `POST /v1/expenses` and `POST /v1/income`: kept as the row's `createdAt`, clamped to [now − 48 h, now] (`loggedAtOf`).
 - `entries.loggedDays(organizationId, since, timezone)`: distinct logged days in the zone over the feed's live rows (expenses not deleted, payments not undone, Owed not deleted), one bounded query on the existing `(organizationId, createdAt)` indexes. `expenses/streak.ts` works the run out (`computeStreak`, `zonedMidnightUtc`).
-- **API `1.55.0-mut339`**.
+- **API `1.56.0-mut339`**.
 
 ### Technical
 - `streak.test.ts` (runs, gaps, previous window, DST midnight, the 48 h clamp); `streak-routes.test.ts` (any entry counts, deleted and undone don't, the offline 23:50 case, backdating clamped, 409 on business and firm, no API key); `store-contract-entries.ts` loggedDays on memory and Postgres (zone shift, live rows, conversions out, the bound). `route-security`, `writability-routes` and `routes-expenses` inventories take the new read.
 
-## [Unreleased] - 2026-10-23 — A Received capture answers the profile's payment count (MUT-340, ADR-175)
+## [Unreleased] - 2026-10-23 — A Received capture answers the profile's payment count (MUT-340, ADR-176)
 
 **Why:** MUT-340 celebrates income milestones on the phone (the 1st, 10th, 50th, 100th, 250th, 500th and 1000th payment received, Basel's M1). Nothing exposed a payment count, and the phone saves through an outbox, so the count has to come back with the upload. Plan and eng review R1–R12: mutaba3a-flutter `.claude/designs/mut-340-income-milestones.md` (Jira comment 12455).
 
@@ -51,11 +51,54 @@
 
 ### Changed
 - **`payments.capture` returns `{ payment, postedCount }`**, counted inside its transaction after the `(organization, year)` counter upsert, which already row-locks, so two captures in flight never answer the same count. The memory store counts up to its own row. `payments.create`'s year-race retry is now `paymentWrite`, shared by both.
-- **API `1.54.0-mut340`**.
+- **API `1.54.0-mut340` (released in `1.56.0-mut339` with MUT-339)**.
 
 ### Technical
 - `income-routes.test.ts`: 1, 2, 3; an undo drops out; Owed has none; an Idempotency-Key replay answers the stored count; Malafat's payments count; the feed never carries it.
 - `store-contract-capture.ts` (memory and Postgres): counts after capture and undo, per organization; four parallel captures get 2–5.
+## [Unreleased] - 2026-10-23 — Anyone can ask for an account or a new password by email; signup stays shut until GA (MUT-366, ADR-175)
+
+**Why:** ADR-159 opens signup and forgot-password for GA; until now only the operator could create an account or reset a password.
+
+### Added
+- `POST /v1/signups {email, locale, turnstileToken}`: behind `SELF_SIGNUP_ENABLED` (404 while off). A new address gets a 24-hour SIGNUP link (`finish-signup`); an active account gets `account-exists` (sign-in and `/recover` links); a suppressed or disabled address gets nothing.
+- `POST /v1/account-recovery {email, locale?, turnstileToken}`: never behind the switch. An active account gets a 1-hour RESET link (nothing changes until it is used, ADR-088 §3); an operator-created account that never set a password gets a 24-hour SETUP link; disabled, unknown and suppressed addresses get nothing.
+- Both: same-origin, 10 an hour per client address, a server-side Turnstile check (403 `CHECK_FAILED`, new; fails closed; Cloudflare's test secrets answered locally), 1 a minute and 5 a day per email address (counted only after the check), and the same `202 {status:"sent"}` no earlier than 3000 / 1500 ms.
+- The SIGNUP purpose: redeeming the link (`POST /v1/account-setup`, with `defaultCurrency`, `timezone`, optional `displayName`) creates the user, personal profile, membership, 14-day trial and terms acceptance in one transaction, audits `user.signed_up`, and issues no session. `check` answers `purpose: "SIGNUP"` with the address and language.
+- Migration `20261023180000_mut366_signup_links`: `SIGNUP`, nullable `account_setup_tokens.userId` plus `email`/`locale` (three CHECKs), `mailed`, and `users.emailVerifiedAt` (a signup, or a mailed recovery link).
+- Config `TURNSTILE_SECRET`, `SIGNUP_RESPONSE_FLOOR_MS`, `RECOVERY_RESPONSE_FLOOR_MS`; hourly prune of unredeemed SIGNUP links a week after expiry. API 1.55.0-mut366.
+- Terraform: `mutaba3a-api-turnstile-secret` (empty; mounted with `mailer = "resend"`) and `self_signup_enabled` (needs resend). Docs: DEPLOYMENT.md §6f, `before-release.md`, `.env.example`.
+
+### Changed
+- `SlidingWindowRateLimiter` takes a window length (default 60 s).
+- `no-self-registration.test.ts` and `route-security.test.ts` list the two new public operations as reviewed exceptions, and pin signup's 404 while off.
+- The portal's setup page accepts the `SIGNUP` purpose (setup copy until MUT-368).
+- A mailed (recovery) link cancels only earlier mailed links; redeeming any link cancels the person's other open links (code review #2).
+- The portal's local snapshot format is 4: `people` gain `emailVerifiedAt` (3 → 4 migration, null).
+- Code review: Turnstile's idempotency key is server-generated and its action must match; mail is raced against the floor; a branch's store failure still answers 202; `MAILER=resend` needs `TURNSTILE_SECRET` in every environment.
+
+**Files:** `src/hosted/local/{migrations/index.ts,__tests__/**}`, `server/src/auth/{self-service,turnstile,account-setup,store-guard}.ts`, `server/src/routes/{self-service,account-setup,admin-users}.ts`, `server/src/{app,config,errors,schemas,index,rate-limit,terms-acceptance}.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/records-file/export.ts`, `server/prisma/**`, `server/infrastructure/terraform/**`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/pages/auth/SetupPage.tsx`, docs.
+
+## [Unreleased] - 2026-10-23 — The server can send transactional mail through Resend (MUT-359, ADR-174)
+
+**Why:** signup and forgot-password (ADR-159), firm invites (MUT-306), passkey notices (MUT-414) and trial mails (MUT-419) all need email; the server had none.
+
+### Added
+- `server/src/email/`: the `Mailer` port, en/ar templates (nine, RTL Arabic, inline styles, no images, no amounts), transports `resend` (fetch, no tracking options, Idempotency-Key), `log`, `memory`, `noop`; `createMailer` (address check, unowned-domain refusal, suppression, the global cap with a 10 % reserve for recovery mail, the per-recipient cap with the password notice exempt, serialized claims, idempotency; a down send log is an outcome, never a throw); Svix signature check; `sendPasswordNotice`.
+- "Your password is set / was changed" after every setup-link redeem and `POST /v1/me/password`; the answer never depends on it.
+- `POST /v1/email/resend/webhook` (Svix-signed; hard bounces and complaints sent from our own domain suppress the address). New codes `INVALID_WEBHOOK_SIGNATURE` (401), `MAILER_NOT_CONFIGURED` (503). API 1.54.0-mut359.
+- `GET /admin/v1/dev-outbox` for `MAILER=memory` outside production (not published).
+- Migration `20261023120000_mut359_email`: `email_deliveries` (digests only) and `email_suppressions`.
+- Config: `MAILER`, `SELF_SIGNUP_ENABLED`, `MAIL_FROM_ADDRESS`, `MAIL_REPLY_TO`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `MAIL_DAILY_CAP`, `MAIL_SECURITY_RESERVE`, `MAIL_RECIPIENT_DAILY_CAP`, `OPERATOR_ALERT_EMAIL`, with the refusals in ADR-174.
+- `npm --prefix server run email:check` (DNS; `--api` for verification, region and tracking).
+- Terraform: `infrastructure/terraform/email.tf` (secrets, mail env, two log-match alerts; `mailer` defaults to noop) and `infrastructure/frontdoor/email.tf` (DKIM, `send.` MX + SPF, DMARC `p=none`, off until `resend_dkim_value`). Prepared, not applied.
+- `guard_mailer_release` in `server/scripts/lib/release-guard.sh`, and a Mail section in `scripts/preflight.sh`.
+- Docs: `server/DEPLOYMENT.md` §6f, `docs/operations/before-release.md`, `server/.env.example`.
+
+### Changed
+- The public-surface pins (`no-self-registration.test.ts`, `route-security.test.ts`) list the Resend webhook.
+
+**Files:** `server/src/email/**`, `server/src/routes/{email-webhook,dev-outbox,account-setup,sessions}.ts`, `server/src/{app,config,errors,schemas,index}.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/auth/store-guard.ts`, `server/prisma/**`, `server/src/scripts/email-check.ts`, `server/scripts/{deploy.sh,lib/release-guard.sh}`, `scripts/preflight.sh`, `server/infrastructure/{terraform,frontdoor}/**`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, docs.
 
 ## [Unreleased] - 2026-10-23 — The hosted portal reports crashes to Sentry, signed in only (MUT-149, ADR-091 am.11)
 

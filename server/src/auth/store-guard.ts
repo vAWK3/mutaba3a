@@ -84,7 +84,8 @@ export const STORE_ACCESS: StoreAccess = {
   memberships: { grant: 'operator', revoke: 'operator', grantOwner: 'operator', removeOwner: 'sessionOnly', find: 'read', listByUser: 'read', listByOrganization: 'read', listOwnersOf: 'read' },
   sessions: { create: { write: 'identity' }, findByDigest: 'read', touch: 'control', revoke: { write: 'identity' }, revokeAllForUser: 'operator' },
   // MUT-235: issued by /admin, redeemed by the two public setup routes; both run with no guard, so every principal is refused here.
-  accountSetup: { issue: 'operator', findByDigest: 'operator', redeem: 'operator' },
+  // MUT-366: the self-service routes are public, so they run with no guard (like redeem); no credential may call these.
+  accountSetup: { issue: 'operator', findByDigest: 'operator', redeem: 'operator', issueSignup: 'operator', redeemSignup: 'operator', pruneSignupLinks: 'operator' },
   integrations: {
     findByOrganizationAndProvider: 'read',
     findByProviderAndTenant: 'read',
@@ -277,6 +278,12 @@ export const STORE_ACCESS: StoreAccess = {
     finishStripeEvent: 'operator',
     pruneStripeEvents: 'operator',
   },
+  /**
+   * MUT-359: only server code reaches the mail send log and the suppression list: the mailer and the Resend webhook,
+   * both built on the unguarded store. No principal's request may (a key could otherwise stop mail to an address or
+   * wipe the cap ledger).
+   */
+  email: { isSuppressed: 'operator', suppress: 'operator', claimDelivery: 'operator', finishDelivery: 'operator', pruneDeliveries: 'operator' },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };

@@ -1,5 +1,5 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
-import type { ExpenseReceiptRecord, MembershipRecord, Organization } from '../../../../server/src/repositories/ports.js';
+import type { ExpenseReceiptRecord, MembershipRecord, Organization, UserRecord } from '../../../../server/src/repositories/ports.js';
 
 /**
  * The portal's local-mode migrations key off `CURRENT_STORE_SNAPSHOT_VERSION`
@@ -89,6 +89,18 @@ function addReceiptLibraryFields(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-366, 3 → 4: people gain `emailVerifiedAt`. A device's person never proved an address by mail (local mode has
+ * no mail), so it is null.
+ */
+function addEmailVerifiedAt(snapshot: StoredSnapshot): StoredSnapshot {
+  const people = snapshot.maps.people as Map<string, Omit<UserRecord, 'emailVerifiedAt'>>;
+  return {
+    ...snapshot,
+    maps: { ...snapshot.maps, people: new Map([...people].map(([id, person]) => [id, { ...person, emailVerifiedAt: null }])) },
+  };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -97,6 +109,7 @@ function addReceiptLibraryFields(snapshot: StoredSnapshot): StoredSnapshot {
 export const MIGRATIONS: readonly Migration[] = [
   { from: 1, to: 2, migrate: addFirmFields },
   { from: 2, to: 3, migrate: addReceiptLibraryFields },
+  { from: 3, to: 4, migrate: addEmailVerifiedAt },
 ];
 
 /**

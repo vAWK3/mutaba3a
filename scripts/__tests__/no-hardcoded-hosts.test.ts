@@ -31,6 +31,11 @@ const OWN_VALUE_FILES = new Set([
 /** Hosts we never owned and must never name again (MUT-387): mutaba3a.app has no DNS and no registrant. */
 const RETIRED_HOSTS = ['mutaba3a.app'];
 const THIS_FILE = 'scripts/__tests__/no-hardcoded-hosts.test.ts';
+/**
+ * MUT-359 (D7): the one file that names a retired host in order to refuse it. The mailer never sends there and config
+ * refuses it as a sender or reply-to; tests read the value from UNOWNED_DOMAINS instead of spelling it.
+ */
+const RETIRED_HOST_REFUSERS = new Set(['server/src/email/ports.ts']);
 
 /** Every host the config names, plus any Mutaba3a Cloud Run or Netlify host (a new service URL must go through the config too). */
 const hostPattern = (host: string) => new RegExp(`(?<![a-z0-9-])${escape(host)}(?![a-z0-9-])`, 'i');
@@ -97,7 +102,12 @@ describe('no hardcoded hosts (MUT-326)', () => {
 
   it('names no retired host in any code, test, script, Terraform or CI file, own-value files included', () => {
     const retired = RETIRED_HOSTS.map(hostPattern);
-    expect(findings((file) => (file === THIS_FILE ? [] : retired))).toEqual([]);
+    expect(findings((file) => (file === THIS_FILE || RETIRED_HOST_REFUSERS.has(file) ? [] : retired))).toEqual([]);
+  });
+
+  it('lets the refusal list name each retired host and nothing else does it for them', () => {
+    const source = readFileSync('server/src/email/ports.ts', 'utf8');
+    for (const host of RETIRED_HOSTS) expect(source).toMatch(new RegExp(`UNOWNED_DOMAINS[^\\n]*'${escape(host)}'`));
   });
 
   it('keeps the OAuth client identity on the configured apex, so a domain move must decide its fate (MUT-387)', () => {

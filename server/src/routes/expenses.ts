@@ -130,7 +130,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       tags: ['Expenses'],
       summary: 'This personal profile’s logging streak',
       description:
-        'MUT-339 (ADR-176): consecutive days, in the profile’s timezone, on which the profile logged an entry — an expense, money received or an Owed, by when it was logged (createdAt; a capture’s capturedAt within 48 hours). Live rows by the entries feed’s rules; conversions don’t count. Alive through yesterday (D3). Only on a personal profile the caller owns: 409 CONFLICT, details.reason NOT_PERSONAL, elsewhere.',
+        'MUT-339 (ADR-177): consecutive days, in the profile’s timezone, on which the profile logged an entry — an expense, money received or an Owed, by when it was logged (createdAt; a capture’s capturedAt within 48 hours). Live rows by the entries feed’s rules; conversions don’t count. Alive through yesterday (D3). Only on a personal profile the caller owns: 409 CONFLICT, details.reason NOT_PERSONAL, elsewhere.',
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:read')] as const,
       responses: { 200: { description: 'Streak', content: { 'application/json': { schema: StreakResponseSchema } } }, ...conflictResponse, ...errorResponses },

@@ -2657,3 +2657,44 @@ and pin each allowed one with an EXPLAIN case that finds the bound in `Index Con
 A cursor and a filter on the same column (`createdAt <= t` and `createdAt >= since`) overwrite each other when spread
 into one Prisma `where` object. Push each bound as its own `AND` entry, and test a filter and a cursor together across
 pages. First instance: `feedBounds` in `server/src/repositories/prisma.ts`.
+
+## Patterns added by MUT-359 (2026-10-23, ADR-174)
+
+### Pattern: A webhook on a shared provider account acts only on its own traffic
+When the provider account is shared (Resend with Malafat), its webhooks deliver the other product's events too. After
+verifying the signature, filter on a field that names us (the sender's domain) before writing anything, and test an
+event from the other product. First instance: `suppressionsFrom` in `server/src/email/resend-webhook.ts`.
+
+### Pattern: Abuse caps and idempotency in a digest-only log
+Counts that must survive restarts live in Postgres, but the table stores sha256 digests of the key and the recipient,
+never the address or the content. Claim before the side effect, finish after; a FAILED, UNCERTAIN (timed out) or
+long-PENDING claim may be re-claimed, and UNCERTAIN keeps counting. A count-then-insert spans awaits, so serialize
+claims (in process while there is one instance). Keep a reserve of the global cap for traffic that must never be
+starved (recovery mail), and keep it away from anything a user can trigger at will. First instance:
+`email_deliveries` and `createMailer`.
+
+### Pattern: A post-commit notice never changes the answer
+A side effect after the commit (a notice mail) is awaited with a bounded timeout, wrapped so it can't throw, and keyed
+by the request id so a retry can't double it. First instance: `sendPasswordNotice` in the setup-link redeem and
+`POST /v1/me/password`.
+
+## Patterns added by MUT-366 (2026-10-23, ADR-175)
+
+### Pattern: A public route that must not reveal an account answers on a floor
+Every branch (account, no account, suppressed) returns the same status and body, and waits until a fixed time after
+the request began, measured on a monotonic clock (never the injectable `now`). Do the branch's work, side effects
+included, before the floor; log when it overshoots. Refuse early only for what depends on the request alone (switch,
+origin, client budget, body, bot check, the address's budget). First instance: `routes/self-service.ts` with
+`answerNoEarlierThan`.
+
+### Pattern: A bot check verified by the server, failing closed, with offline test secrets
+The server calls the provider itself with a timeout, and anything but an explicit pass is a refusal. The provider's
+published test secrets are recognised and answered locally, so tests and QA never reach it, and production config
+refuses them. First instance: `server/src/auth/turnstile.ts`.
+
+### Pattern: A link bound to an address, serialised by an advisory lock
+When a row must not exist until a link is redeemed (no user yet), lock on the natural key with
+`pg_advisory_xact_lock(<namespace>, hashtext(key))` in both the issue and the redeem, and re-check "nobody holds it"
+inside the redeem's transaction; also catch the unique violation a writer that doesn't take the lock can cause.
+First instance: `accountSetup.issueSignup` / `redeemSignup`.
+

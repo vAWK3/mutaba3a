@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.55.0-mut339
+  version: 1.56.0-mut339
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CURRENT_PASSWORD_WRONG, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, CURRENT_PASSWORD_WRONG, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -29,6 +29,8 @@ info:
     Fee proposals (M7, lifecycle revised in M8) hold the negotiation before a fixed-fee agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer's open proposals and their per-currency total (proposed).
 
     Users (MUT-37) are operator-provisioned through /admin/v1/users*: no signup, invite or self-service password reset exists in any environment. A user reaches organizations through memberships.
+
+    Email (MUT-359): when the deployment configures a mailer, setting a password through a setup link and POST /v1/me/password each send the person a "your password was set/changed" notice in their language; the response never depends on it. POST /v1/email/resend/webhook is Resend's Svix-signed bounce and complaint webhook: it suppresses addresses that hard-bounce or complain, so they get no more mail.
 
     Writability (MUT-39): a session may read a hosted profile's ledger but not write it. A session calling an operation that writes customers, projects, agreements, payments or attachments gets 403 READ_ONLY_PROFILE with details { domain, writerOfRecord } (writerOfRecord is MALAFAT when the profile's Malafat integration is connected, otherwise null); other operations it may not use answer 403 PRINCIPAL_NOT_ACCEPTED.
 
@@ -80,6 +82,8 @@ tags:
     description: Received or Owed, captured directly by the signed-in person on a personal profile (sessions only)
   - name: Your data
     description: "Download my records: a profile as the records file the signed-out portal restores, and its receipt files (sessions only)"
+  - name: Email
+    description: Resend's bounce and complaint webhook (MUT-359)
   - name: Admin
     description: "Operator provisioning: organizations, API keys, users and memberships"
 components:
@@ -455,6 +459,7 @@ components:
                 - API_KEY_EXPIRED
                 - API_KEY_ENVIRONMENT_MISMATCH
                 - ADMIN_UNAUTHORIZED
+                - INVALID_WEBHOOK_SIGNATURE
                 - JOB_UNAUTHORIZED
                 - INVALID_CREDENTIALS
                 - SESSION_EXPIRED
@@ -462,6 +467,7 @@ components:
                 - PRINCIPAL_NOT_ACCEPTED
                 - READ_ONLY_PROFILE
                 - CROSS_SITE_REQUEST
+                - CHECK_FAILED
                 - CURRENT_PASSWORD_WRONG
                 - NOT_FOUND
                 - ORGANIZATION_MISMATCH
@@ -480,6 +486,7 @@ components:
                 - STRIPE_UNAVAILABLE
                 - ATTACHMENTS_NOT_CONFIGURED
                 - BILLING_NOT_CONFIGURED
+                - MAILER_NOT_CONFIGURED
                 - JOBS_NOT_CONFIGURED
                 - FX_RATES_UNAVAILABLE
                 - APP_UPDATE_REQUIRED
@@ -608,6 +615,7 @@ components:
       enum:
         - SETUP
         - RESET
+        - SIGNUP
     SetupLinkCheckRequest:
       type: object
       properties:
@@ -642,9 +650,59 @@ components:
           pattern: ^[\x21-\x7E]+$
           description: The client release that showed the terms, e.g. the portal’s `web-v<x>` tag (MUT-354). Stored as sent.
           example: web-v0.1.16
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        defaultCurrency:
+          $ref: "#/components/schemas/Currency"
+        timezone:
+          type: string
+          minLength: 1
       required:
         - token
         - password
+    SelfServiceAccepted:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - sent
+      required:
+        - status
+    SignupRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 320
+          description: Normalised (trim, NFKC, lower-case) before use.
+        locale:
+          allOf:
+            - $ref: "#/components/schemas/UserLocale"
+            - description: Defaults to ar (ADR-077).
+        turnstileToken:
+          type: string
+          maxLength: 2048
+      required:
+        - email
+        - turnstileToken
+    AccountRecoveryRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 320
+          description: Normalised (trim, NFKC, lower-case) before use.
+        locale:
+          $ref: "#/components/schemas/UserLocale"
+        turnstileToken:
+          type: string
+          maxLength: 2048
+      required:
+        - email
+        - turnstileToken
     IntegrationStatusResponse:
       type: object
       properties:
@@ -7237,6 +7295,21 @@ components:
         - unlinked
         - errors
         - pruned
+    EmailWebhookResponse:
+      type: object
+      properties:
+        received:
+          type: boolean
+          enum:
+            - true
+        result:
+          type: string
+          enum:
+            - suppressed
+            - ignored
+      required:
+        - received
+        - result
   parameters: {}
 paths:
   /health:
@@ -7591,6 +7664,86 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/signups:
+    post:
+      tags:
+        - Sessions
+      summary: "Ask for an account: mails a link that finishes creating it (SELF_SIGNUP_ENABLED; same answer for every address)"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+      responses:
+        "202":
+          description: Accepted. The same answer for every address, whether or not it has an account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SelfServiceAccepted"
+        "403":
+          description: CROSS_SITE_REQUEST, or CHECK_FAILED (the Turnstile check, action "signup")
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND: signup is not open on this server"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/account-recovery:
+    post:
+      tags:
+        - Sessions
+      summary: "Forgot your password: mails a link that sets a new one (same answer for every address; nothing changes until it is used)"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountRecoveryRequest"
+      responses:
+        "202":
+          description: Accepted. The same answer for every address, whether or not it has an account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SelfServiceAccepted"
+        "403":
+          description: CROSS_SITE_REQUEST, or CHECK_FAILED (the Turnstile check, action "recover")
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds"
           content:
             application/json:
               schema:
@@ -12355,7 +12508,7 @@ paths:
       tags:
         - Expenses
       summary: This personal profile’s logging streak
-      description: "MUT-339 (ADR-176): consecutive days, in the profile’s timezone, on which the profile logged an entry — an expense, money received or an Owed, by when it was logged (createdAt; a capture’s capturedAt within 48 hours). Live rows by the entries feed’s rules; conversions don’t count. Alive through yesterday (D3). Only on a personal profile the caller owns: 409 CONFLICT, details.reason NOT_PERSONAL, elsewhere."
+      description: "MUT-339 (ADR-177): consecutive days, in the profile’s timezone, on which the profile logged an entry — an expense, money received or an Owed, by when it was logged (createdAt; a capture’s capturedAt within 48 hours). Live rows by the entries feed’s rules; conversions don’t count. Alive through yesterday (D3). Only on a personal profile the caller owns: 409 CONFLICT, details.reason NOT_PERSONAL, elsewhere."
       security:
         - session: []
         - deviceSession: []
@@ -16517,6 +16670,50 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           description: BILLING_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/email/resend/webhook:
+    post:
+      tags:
+        - Email
+      summary: "Resend webhook: suppresses addresses that hard-bounce or complain"
+      description: "Called by Resend (Svix-signed) only. The raw body is verified against `svix-id`, `svix-timestamp` and `svix-signature` with the endpoint secret, within 5 minutes; anything else is 401 and nothing is stored. Only events sent from this server's own mail domain count: `email.bounced` with a Permanent bounce and `email.complained` suppress every recipient, so no more mail goes to them; every other event is acknowledged and ignored. Failed signatures are rate-limited to 60 per minute per address. A database failure is 500, so Resend redelivers."
+      security: []
+      responses:
+        "200":
+          description: Suppressed, or acknowledged and ignored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailWebhookResponse"
+        "401":
+          description: INVALID_WEBHOOK_SIGNATURE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "413":
+          description: PAYLOAD_TOO_LARGE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many failed signatures from this address; `Retry-After` says when to try again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: The event could not be stored now; Resend redelivers it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: MAILER_NOT_CONFIGURED
           content:
             application/json:
               schema:

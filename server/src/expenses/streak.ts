@@ -1,7 +1,7 @@
 import { addDays, compareIsoDates, type IsoDate } from '../dates.js';
 
 /**
- * MUT-339 (ADR-176): a personal profile's logging streak, worked from its distinct logged days, newest first
+ * MUT-339 (ADR-177): a personal profile's logging streak, worked from its distinct logged days, newest first
  * (`entries.loggedDays`). Pure: the route passes `today` in the profile's timezone.
  */
 export interface Streak {

@@ -68,6 +68,44 @@ variable "stripe_enabled" {
   default     = false
 }
 
+variable "mailer" {
+  description = "MUT-359 (ADR-159 §5): noop (default) sends no mail; resend mounts the Resend secrets (RESEND_API_KEY, RESEND_WEBHOOK_SECRET) and sends from no-reply@<domain> in config/hosts.json. Turn it on only after both secrets hold a version, the domain is verified in Resend and `npm --prefix server run email:check -- --api` passes (DEPLOYMENT.md §6f). log and memory are development-only and refused in production, so they aren't offered here."
+  type        = string
+  default     = "noop"
+  validation {
+    condition     = contains(["noop", "resend"], var.mailer)
+    error_message = "mailer must be noop or resend (log and memory are for local development only)."
+  }
+}
+
+variable "self_signup_enabled" {
+  description = "MUT-366 (ADR-159): opens POST /v1/signups (SELF_SIGNUP_ENABLED). Needs mailer = \"resend\" and the Turnstile secret's version. Basel turns it on at GA, after billing and account closing are live (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "mail_reply_to" {
+  description = "MUT-359 (D6): where replies to MTB3A mail go (MAIL_REPLY_TO). Required with mailer = \"resend\". Today's only support address is on Malafat's domain; a mailbox on the apex is a follow-up."
+  type        = string
+  default     = null
+}
+
+variable "mail_daily_cap" {
+  description = "MUT-359 (D18): mails the API sends in any 24 h (MAIL_DAILY_CAP); 10 % is kept for recovery mail. Required with mailer = \"resend\", and below the Barmajiyat Resend plan's daily limit, which Malafat shares (the free plan allows 100 a day across both)."
+  type        = number
+  default     = null
+  validation {
+    condition     = var.mail_daily_cap == null || try(var.mail_daily_cap >= 1 && floor(var.mail_daily_cap) == var.mail_daily_cap, false)
+    error_message = "mail_daily_cap must be a whole number of at least 1."
+  }
+}
+
+variable "operator_alert_email" {
+  description = "MUT-359: where the API mails the operator (MUT-367's signup review digest), as OPERATOR_ALERT_EMAIL. null (default) = unset."
+  type        = string
+  default     = null
+}
+
 variable "sentry_enabled" {
   description = "MUT-148 (ADR-091): reads the api DSN from the Sentry stack's state, stores it in Secret Manager and mounts SENTRY_DSN into Cloud Run. false (default) = no error reports. Turn it on only after DEPLOYMENT.md §1.5 has applied server/infrastructure/sentry, or the plan fails reading its state. Once on, deploy.sh refuses a release whose tfvars turns it off (SKIP_SENTRY_GUARD=1 skips that)."
   type        = bool

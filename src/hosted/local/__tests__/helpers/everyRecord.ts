@@ -194,6 +194,9 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
     personal: { name: 'Personal', slug: 'personal-nour', defaultCurrency: 'USD', timezone: 'Asia/Jerusalem' }, at: AT,
   });
   await store.users.recordSignIn(other.id, AT);
+  // MUT-366: and reset it through a mailed link, which verified the address (before the lockout, which a redeem clears).
+  const mailed = await store.accountSetup.issue({ userId: other.id, tokenDigest: 'f'.repeat(64), purpose: 'RESET', at: AT, expiresAt: LATER, lock: false, mailed: true, audit: [] });
+  await store.accountSetup.redeem({ tokenDigest: mailed.tokenDigest, passwordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$bmV3', at: AT, audit: [], terms: { version: '2026-10-19', locale: 'ar', textSha256: 'e'.repeat(64), surface: 'portal', clientRelease: null }, termsAudit: [] });
   await store.users.recordFailedSignIn(other.id, LATER, new Date('2026-10-05T08:15:00.000Z'));
   await store.users.updateMalafatSuggestions(other.id, { off: true }, LATER);
 

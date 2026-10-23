@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { generateSetupToken, NEW_PASSWORD_POLICY, SETUP_LINK_POLICY, setupLinkOrigin, setupLinkState, setupUrl } from '../auth/account-setup.js';
 import { NewPasswordSchema } from '../schemas.js';
-import type { AccountSetupTokenRecord, UserRecord } from '../repositories/ports.js';
+import type { PersonSetupLinkRecord, UserRecord } from '../repositories/ports.js';
 
 /** MUT-235 (ADR-088): the pure rules behind a setup link. */
 const at = (hour: number) => new Date(Date.UTC(2026, 9, 16, hour, 0, 0));
 
-const link = (overrides: Partial<AccountSetupTokenRecord> = {}): AccountSetupTokenRecord => ({
+const link = (overrides: Partial<PersonSetupLinkRecord> = {}): PersonSetupLinkRecord => ({
   id: 'l1',
   userId: 'u1',
+  email: null,
+  locale: null,
+  mailed: false,
   tokenDigest: 'd'.repeat(64),
   purpose: 'SETUP',
   createdAt: at(0),

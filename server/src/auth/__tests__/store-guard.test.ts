@@ -81,7 +81,11 @@ describe('STORE_ACCESS', () => {
       // MUT-235: issued by /admin and redeemed by the two public setup routes, neither of which runs a guard.
       'accountSetup.findByDigest',
       'accountSetup.issue',
+      // MUT-366: the SIGNUP links the public signup route issues and the public redeem claims; pruned by the server's timer.
+      'accountSetup.issueSignup',
+      'accountSetup.pruneSignupLinks',
       'accountSetup.redeem',
+      'accountSetup.redeemSignup',
       'apiKeys.create',
       // MUT-358: grants, links, trial starts and Stripe's mirror are the operator's (and, from MUT-360, the webhook's).
       // MUT-360: the Stripe webhook's event bookkeeping, also on the unguarded store.
@@ -99,6 +103,12 @@ describe('STORE_ACCESS', () => {
       'billing.saveAccount',
       'billing.saveSubscription',
       'billing.setTrialStart',
+      // MUT-359: the mail send log and suppression list, reached only by the mailer and the Resend webhook (unguarded store).
+      'email.claimDelivery',
+      'email.finishDelivery',
+      'email.isSuppressed',
+      'email.pruneDeliveries',
+      'email.suppress',
       // MUT-255: the receipt-scanning success measure, across every profile (counts only).
       'expenseReceipts.editRates',
       'memberships.grant',

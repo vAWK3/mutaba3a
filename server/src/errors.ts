@@ -20,6 +20,8 @@ export const ERROR_CODES = {
   API_KEY_EXPIRED: 401,
   API_KEY_ENVIRONMENT_MISMATCH: 401,
   ADMIN_UNAUTHORIZED: 401,
+  /** MUT-359 (D12): a Resend webhook whose Svix signature doesn't verify against the endpoint's secret (or is too old). */
+  INVALID_WEBHOOK_SIGNATURE: 401,
   /** MUT-360 D2: /jobs/* without the Scheduler's X-Job-Token. */
   JOB_UNAUTHORIZED: 401,
   INVALID_CREDENTIALS: 401,
@@ -28,6 +30,8 @@ export const ERROR_CODES = {
   PRINCIPAL_NOT_ACCEPTED: 403,
   READ_ONLY_PROFILE: 403,
   CROSS_SITE_REQUEST: 403,
+  /** MUT-366: the Turnstile check on signup or recovery was missing, failed, or Cloudflare couldn't be asked (fails closed). */
+  CHECK_FAILED: 403,
   /** MUT-237: the typed current password is wrong, or the account is locked. Not 401 — the session is still valid; a
    * 401 here would trip the portal's generic "session expired" handler and sign the person out mid-form. */
   CURRENT_PASSWORD_WRONG: 403,
@@ -55,6 +59,8 @@ export const ERROR_CODES = {
   ATTACHMENTS_NOT_CONFIGURED: 503,
   /** MUT-360: no Stripe keys on this server, so neither the webhook nor reconcile can run. */
   BILLING_NOT_CONFIGURED: 503,
+  /** MUT-359: the Resend webhook has no signing secret on this server. */
+  MAILER_NOT_CONFIGURED: 503,
   /** MUT-360 D2: no job token on this server; /jobs/* refuses everything rather than compare an empty one. */
   JOBS_NOT_CONFIGURED: 503,
   /** MUT-228: no reference rates to serve (provider down or unusable, and nothing servable cached on this instance; or not configured). */

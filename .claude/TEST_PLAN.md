@@ -3525,13 +3525,45 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 - Release-QA: `portal.error-reports.{crash-reported, crash-reported-ar, handled-api-error-not-reported, signed-out-silent, crash-screen}` and `web.legal.privacy-error-reports`, all passing 2026-10-23.
 - Manual: deploy.sh's DSN-without-token stop and the Makefile's Keychain fallback (no shell harness; `make -n release-server` shows the token never printed). The first release's console smoke is in `docs/operations/before-release.md`.
 
-## MUT-340 — receivedCount on Received captures (2026-10-23, ADR-175)
+## MUT-359 — transactional mail through Resend (2026-10-23, ADR-174)
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit (server) | `server/src/email/__tests__/templates.test.ts` | every template in en and ar; RTL/LTR html; no image, style, script or foreign link; links in text and in `<bdi dir="ltr">`; no amount, currency or date; escaping; non-http link refused; first-set vs changed wording; Arabic hour agreement |
+| Unit (server) | `svix.test.ts` | Svix's published vector; wrong secret, body, id, timestamp; ±5 min; rotation lists; other versions; missing headers; malformed secret |
+| Adapter (server) | `resend-transport.test.ts` | exact body keys (no tracking, tags or headers), reply_to optional, headers incl. Idempotency-Key; 429/4xx/5xx mapping; timeout; network; 2xx without id |
+| Unit (server) | `mailer.test.ts`, `password-notice.test.ts` | each template × language through the memory outbox; duplicate key; suppression spends no cap; unowned domain and non-plain addresses refused; the 501st mail capped with an error log and a day later allowed; security reserve; per-recipient cap (warn); provider failure logged and retryable; 429 logged apart; noop warns once; caller bug throws; the notice never throws |
+| Store contract | `store-contract-email.ts` (memory + Prisma) | suppression first-wins; claim/duplicate; FAILED and stale PENDING re-claimed; global and recipient caps; FAILED not counted; concurrent claims → one; prune |
+| Route (server) | `routes-email-webhook.test.ts` | signed hard bounce suppresses (normalized) and the mailer then refuses; complaint; transient, other events and other domains ignored; unsigned, mis-signed and replayed → 401, nothing written; redelivery; non-event body; 503 unconfigured; failed-signature rate limit; published as public |
+| Route (server) | `routes-password-notice.test.ts`, `dev-outbox.test.ts` | redeem (first, Arabic), reset link and `POST /v1/me/password` each mail one notice; a failing provider changes neither answer; no mailer = unchanged behaviour; outbox admin-only, filtered, unpublished, absent without memory |
+| Config / scripts | `config.test.ts`, `email-check.test.ts`, `release-guard.test.ts` | defaults and every refusal; DNS and API modes of email:check (stubbed); `guard_mailer_release` paths and deploy.sh wiring |
+| Pins | `no-self-registration.test.ts`, `route-security.test.ts` | the public operations now include `POST /v1/email/resend/webhook` |
+| Terraform | `terraform/tests/email.tftest.hcl`, `frontdoor/tests/frontdoor.tftest.hcl` | noop default mounts nothing; resend mounts secrets, sender from hosts, reply-to, cap, alerts; resend without a domain or cap fails; `log` not offered; DNS records only with a DKIM value, DNS only, rua optional, region moves the MX |
+| Release-QA | none: server-only, no user-visible flow (`server/src/**` is outside every app's watch). MUT-368's `signup.*`/`recover.*` specs will read `GET /admin/v1/dev-outbox` | — |
+| Live (deferred) | DEPLOYMENT.md §6f step 8 | a real mail reaches Gmail and Outlook inboxes in both languages: at Basel's end-of-run go-live |
+
+## MUT-366 — signup and recovery routes (2026-10-23, ADR-176)
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit (server) | `server/src/auth/__tests__/self-service.test.ts` | the policy numbers; `signupLinkState` (held address → used; used/superseded/expired order); `recoveryPurposeOf` (disabled, RESET, never-set SETUP, locked RESET); `signupAccountOutcome`; display-name default; the floor waits and reports overshoot |
+| Unit (server) | `turnstile.test.ts`, `rate-limit.test.ts` | test secrets answered locally (pass/fail/spent, no fetch); siteverify body (secret, response, remoteip, idempotency key), timeout signal; fails closed on success:false, other action, non-200, bad JSON, network error, timeout, empty token; hour and day windows and pruning |
+| Store contract | `store-contract-signup.ts` (memory + Prisma) | issue binds to the address and supersedes; duplicate digest; redeem creates one user + personal profile + membership + trial + verified address + terms + audit; no-trial variant; refusals write nothing (second use, expiry instant, cancelled, unknown, person link, operator create meanwhile); concurrent redeems of one link and of two links → one account; a later link can't make a second; mailed person link verifies, operator link doesn't; prune only stale unredeemed SIGNUP links |
+| Migration | `migration-mut366.test.ts` (test:db) | applies in one transaction (enum value + CHECKs), keeps existing links, refuses each bad shape, matches the schema |
+| Route (server) | `routes-self-service.test.ts` | A1 new/existing/suppressed: same status, body, ≥ floor, outbox differs; A2 check + redeem creates exactly one account with trial, terms and audit, no session, no notice, sign-in works, second use 410 used; 422 without currency; stale terms 409 before creating; concurrent redeems and superseded link; operator create meanwhile → 410 used; disabled address no mail; A3 recovery changes nothing until used, then revokes sessions, clears the lockout, verifies the address, notice sent; never-set account gets SETUP; disabled/unknown/suppressed same answer and no mail; A4 missing (422) / empty / failed check (403) sends nothing; IP 429 shared; address 429 with or without an account, not spent by a failed check; day limit; A5 switch off 404 and recovery works; cross-site 403; malformed 422 at once; failing provider still 202 |
+| Config | `config.test.ts` | floor defaults and bounds; test secret default outside production; production refuses a test secret and a missing one with mail on |
+| Pins | `no-self-registration.test.ts`, `route-security.test.ts`, `store-guard.test.ts`, `routes-m*.test.ts` | the two public operations as reviewed exceptions; signup 404 while off; the new store methods operator-only; API 1.55.0-mut366 |
+| Terraform | `terraform/tests/email.tftest.hcl` | Turnstile secret and grant exist empty; `SELF_SIGNUP_ENABLED=false` by default; mounted with resend; signup on needs resend |
+| Code review fixes | `routes-self-service.test.ts` "code review fixes", `store-contract-signup.ts`, `turnstile.test.ts`, `config.test.ts` | #1 the Turnstile key is never the client's `X-Request-Id`; #2 recovery leaves the operator link valid, redeeming one supersedes the other (store: mailed cancels mailed only, operator cancels all); #3 a 600 ms provider doesn't hold the answer past the floor; #4 a store failure on either branch answers 202 after the floor; #5 no or empty action fails; #6 staging with resend needs a secret |
+| Local snapshot | `src/hosted/local/__tests__/{format-fingerprint,migrations}.test.ts` | `people.emailVerifiedAt` in the fingerprint (fixture verifies an address through a mailed link); 3 → 4 adds it as null |
+| Release-QA | none: server-only. MUT-368's `signup.*`/`recover.*` portal specs drive these routes through `GET /admin/v1/dev-outbox` | — |
+## MUT-340 — receivedCount on Received captures (2026-10-23, ADR-176)
 - Route: `src/__tests__/income-routes.test.ts`: counts 1, 2, 3; an undone capture drops out; Owed has no count; an Idempotency-Key replay answers the stored count; Malafat's own payments count; the entries feed never carries it.
 - Store contract (memory and Postgres): `src/repositories/__tests__/store-contract-capture.ts`: count after each capture, after an undo, per organization; four parallel captures get four different counts (proved on Postgres on a scratch database).
 - OpenAPI: `npm run openapi:check` with `IncomeCaptureResponse`.
 - Release-QA: the phone's `ios.capture.milestone-*` flows (mutaba3a-flutter) cover it end to end.
 
-## MUT-339 — logging streak and capturedAt (2026-10-23, ADR-176)
+## MUT-339 — logging streak and capturedAt (2026-10-23, ADR-177)
 - Unit: `src/expenses/__tests__/streak.test.ts`: runs and gaps, alive through yesterday, previous (3+ days, within 7), DST midnight, the 48 h clamp.
 - Route: `src/__tests__/streak-routes.test.ts`: any entry counts (S1); deleted and undone don't; the 23:50-offline case counts on its day (S4); an old capturedAt is clamped; 409 NOT_PERSONAL on business and firm; no API key.
 - Store contract (memory and Postgres): `store-contract-entries.ts` loggedDays: zone shift, live rows only, conversions out, the since bound, Owed counted.

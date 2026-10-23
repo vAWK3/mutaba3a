@@ -257,8 +257,9 @@ enum UserStatus {
 }
 
 /// A person who may sign in to the hosted portal (MUT-37, ADR-037). Issued by
-/// an operator only; there is no signup, invite or self-service reset. Not
-/// organization-scoped: access is the Membership join.
+/// the operator, or (MUT-366, ADR-159) created by redeeming a self-service
+/// SIGNUP link; recovery mails a reset link. Not organization-scoped: access
+/// is the Membership join.
 model User {
   id                 String     @id @default(uuid()) @db.Uuid
   /// Normalised before storage (trim, NFKC, lower-case), so uniqueness is case-insensitive.
@@ -275,6 +276,8 @@ model User {
   lockedUntil        DateTime?
   passwordChangedAt  DateTime
   lastSignInAt       DateTime?
+  /// MUT-366 (D18): when the person proved they read this address: a signup, or redeeming a mailed recovery link.
+  emailVerifiedAt    DateTime?
   /// MUT-191: `{ off, dismissed[] }` for the Malafat suggestions; NULL = on, nothing dismissed.
   malafatSuggestions Json?
   createdAt          DateTime
@@ -383,23 +386,35 @@ enum SessionKind {
 enum SetupLinkPurpose {
   SETUP
   RESET
+  /// MUT-366 (ADR-159): a self-service signup, bound to an address; the user is created when it is redeemed.
+  SIGNUP
 }
 
 /// MUT-235 (ADR-088): a one-time setup link. Only the HMAC digest of its token
 /// is stored (the session digest, same pepper). At most one of usedAt /
 /// cancelledAt is ever set; a newer link for the same person cancels this one.
+/// MUT-366: a SIGNUP link has no user yet: it holds the normalised address and the signup page's language instead.
+/// CHECK constraints (migration 20261023180000_mut366_signup_links): userId is null exactly for SIGNUP, and then
+/// email and locale are set; otherwise both are null.
 model AccountSetupToken {
   id          String           @id @default(uuid()) @db.Uuid
-  userId      String           @db.Uuid
-  user        User             @relation(fields: [userId], references: [id])
+  userId      String?          @db.Uuid
+  user        User?            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  /// MUT-366: SIGNUP only, normalised (trim, NFKC, lower-case).
+  email       String?
+  /// MUT-366: SIGNUP only: 'en' | 'ar', the language the person signed up in.
+  locale      String?          @db.VarChar(5)
   tokenDigest String           @unique @db.VarChar(64)
   purpose     SetupLinkPurpose
+  /// MUT-366: mailed to the address (signup, recovery), not handed over by the operator. Redeeming one verifies the address.
+  mailed      Boolean          @default(false)
   createdAt   DateTime
   expiresAt   DateTime
   usedAt      DateTime?
   cancelledAt DateTime?
 
   @@index([userId])
+  @@index([email])
   @@map("account_setup_tokens")
 }
 
@@ -1306,4 +1321,52 @@ model StripeEvent {
   error       String?
 
   @@map("stripe_events")
+}
+
+/// MUT-359 (ADR-159 §5): where a send stands. FAILED rows don't count toward the caps; UNCERTAIN ones (a timeout the
+/// provider may still have accepted) do. Both may be claimed again.
+enum EmailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  UNCERTAIN
+}
+
+/// MUT-359: why an address gets no more mail. Only Resend's permanent bounces and complaints (D10).
+enum EmailSuppressionReason {
+  HARD_BOUNCE
+  COMPLAINT
+}
+
+/// MUT-359 (D2, D16): the send log behind the mail caps and idempotency. Digests only: never an address or a body.
+/// Pruned after 30 days by the API's hourly timer.
+model EmailDelivery {
+  id              String              @id @db.Uuid
+  /// sha256 hex of the caller's idempotency key; also Resend's Idempotency-Key.
+  keyDigest       String              @unique @db.VarChar(64)
+  /// sha256 hex of the normalized recipient, for the per-recipient cap.
+  recipientDigest String              @db.VarChar(64)
+  template        String              @db.VarChar(40)
+  locale          String              @db.VarChar(5)
+  status          EmailDeliveryStatus
+  providerId      String?             @db.VarChar(100)
+  error           String?             @db.VarChar(200)
+  createdAt       DateTime
+  finishedAt      DateTime?
+
+  @@index([createdAt])
+  @@index([recipientDigest, createdAt])
+  @@map("email_deliveries")
+}
+
+/// MUT-359 (D10): addresses the Resend webhook reported as a hard bounce or a complaint. The first event wins.
+model EmailSuppression {
+  /// normalizeEmail()'d.
+  email     String                 @id
+  reason    EmailSuppressionReason
+  /// The svix-id of the webhook delivery that suppressed it.
+  eventId   String                 @db.VarChar(100)
+  createdAt DateTime
+
+  @@map("email_suppressions")
 }

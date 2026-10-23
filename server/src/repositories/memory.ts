@@ -7,6 +7,7 @@ import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js
 import type {
   BillingAccountRecord,
   BillingRepository,
+  EmailRepository,
   BillingSubscriptionRecord,
   SaveBillingAccountConflict,
   EntitlementGrantRecord,
@@ -65,7 +66,10 @@ import type {
   MembershipRecord,
   MembershipRepository,
   SessionRecord,
-  SetupLinkPurpose,
+  PersonSetupLinkPurpose,
+  PersonSetupLinkRecord,
+  SignupLinkRecord,
+  UserStatus,
   SessionRepository,
   UserRecord,
   UserRepository,
@@ -156,8 +160,9 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
  * 2 (MUT-300): `orgs` gained `firmEnabledAt`, `firmRequestedAt` and `firmRequestedByUserId`; `members` gained `role`.
  * 3 (MUT-255): `expReceipts` gained `filingStatus`, `receivedOn`, `suggested`, `approved`, `approvedAt`,
  *   `approvedByUserId` and `version`, and `expenseId` may be null (a To-review receipt).
+ * 4 (MUT-366): `people` gained `emailVerifiedAt`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 3;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 4;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -258,6 +263,9 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly billingSubs = new Map<string, BillingSubscriptionRecord>();
   private readonly grants = new Map<string, EntitlementGrantRecord>();
   private readonly trialStarts = new Map<string, Date>();
+  /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
+  private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED' | 'UNCERTAIN'; createdAt: Date }>();
+  private readonly emailSuppressions = new Map<string, { reason: string; eventId: string; createdAt: Date }>();
   /** MUT-360: Stripe webhook events by id (processedAt null until handled), also outside the snapshot. */
   private readonly stripeEvents = new Map<string, { type: string; receivedAt: Date; processedAt: Date | null; error: string | null }>();
 
@@ -443,42 +451,10 @@ export class MemoryLedgerStore implements LedgerStore {
 
   readonly users: UserRepository = {
     create: async (input: CreateUserInput) => {
-      for (const u of this.people.values()) {
-        if (u.email === input.email) throw new UniqueViolation('users.email');
-      }
-      if (input.organizationId && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('memberships.organizationId');
-      for (const o of this.orgs.values()) {
-        if (o.slug === input.personal.slug) throw new UniqueViolation('organizations.slug');
-      }
       if (input.setupLink) this.assertSetupDigestFree(input.setupLink.tokenDigest);
-      const user: UserRecord = {
-        id: randomUUID(),
-        email: input.email,
-        displayName: input.displayName,
-        passwordHash: input.passwordHash,
-        locale: input.locale,
-        status: 'ACTIVE',
-        failedSignIns: 0,
-        lockedUntil: null,
-        passwordChangedAt: input.at,
-        lastSignInAt: null,
-        malafatSuggestions: null,
-        createdAt: input.at,
-        updatedAt: input.at,
-      };
-      // Every check above runs before the first write, so a refusal leaves nothing behind (the Prisma transaction's guarantee).
-      const personalOrganization: Organization = { id: randomUUID(), ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL', version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, createdAt: new Date() };
-      const memberships: MembershipRecord[] = [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])].map((organizationId) => ({
-        userId: user.id,
-        organizationId,
-        role: roleForNewMembership(this.orgs.get(organizationId) ?? personalOrganization),
-        createdAt: input.at,
-      }));
-      this.people.set(user.id, user);
-      this.orgs.set(personalOrganization.id, personalOrganization);
-      for (const m of memberships) this.members.set(membershipKey(user.id, m.organizationId), m);
-      if (input.setupLink) this.storeSetupLink(user.id, input.setupLink, input.at);
-      return { user: { ...user }, memberships: memberships.map((m) => ({ ...m })), personalOrganization: { ...personalOrganization } };
+      const created = this.insertPerson({ ...input, status: 'ACTIVE', emailVerifiedAt: null });
+      if (input.setupLink) this.storeSetupLink(created.user.id, input.setupLink, input.at);
+      return created;
     },
     getById: async (id) => clone(this.people.get(id)),
     findByEmail: async (email) => clone([...this.people.values()].find((u) => u.email === email)),
@@ -603,9 +579,53 @@ export class MemoryLedgerStore implements LedgerStore {
     return count;
   }
 
-  private cancelOpenSetupLinks(userId: string, at: Date): void {
+  /**
+   * A user, their personal organization and its membership (plus a firm's), as `users.create` and MUT-366's
+   * `redeemSignup` write them. Every check runs before the first write, so a refusal leaves nothing behind (the
+   * Prisma transaction's guarantee).
+   */
+  private insertPerson(input: Omit<CreateUserInput, 'setupLink'> & { status: UserStatus; emailVerifiedAt: Date | null }) {
+    for (const u of this.people.values()) {
+      if (u.email === input.email) throw new UniqueViolation('users.email');
+    }
+    if (input.organizationId && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('memberships.organizationId');
+    for (const o of this.orgs.values()) {
+      if (o.slug === input.personal.slug) throw new UniqueViolation('organizations.slug');
+    }
+    const user: UserRecord = {
+      id: randomUUID(),
+      email: input.email,
+      displayName: input.displayName,
+      passwordHash: input.passwordHash,
+      locale: input.locale,
+      status: input.status,
+      failedSignIns: 0,
+      lockedUntil: null,
+      passwordChangedAt: input.at,
+      lastSignInAt: null,
+      emailVerifiedAt: input.emailVerifiedAt,
+      malafatSuggestions: null,
+      createdAt: input.at,
+      updatedAt: input.at,
+    };
+    const personalOrganization: Organization = { id: randomUUID(), ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL', version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, createdAt: new Date() };
+    const memberships: MembershipRecord[] = [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])].map((organizationId) => ({
+      userId: user.id,
+      organizationId,
+      role: roleForNewMembership(this.orgs.get(organizationId) ?? personalOrganization),
+      createdAt: input.at,
+    }));
+    this.people.set(user.id, user);
+    this.orgs.set(personalOrganization.id, personalOrganization);
+    for (const m of memberships) this.members.set(membershipKey(user.id, m.organizationId), m);
+    return { user: { ...user }, memberships: memberships.map((m) => ({ ...m })), personalOrganization: { ...personalOrganization } };
+  }
+
+  private cancelOpenSetupLinks(userId: string, at: Date, options: { mailedOnly?: boolean; except?: string } = {}): void {
     for (const link of this.setupLinks.values()) {
-      if (link.userId === userId && link.usedAt === null && link.cancelledAt === null) link.cancelledAt = at;
+      if (link.userId !== userId || link.usedAt !== null || link.cancelledAt !== null || link.id === options.except) continue;
+      if (options.mailedOnly && !link.mailed) continue;
+      link.cancelledAt = at;
     }
   }
 
@@ -615,8 +635,8 @@ export class MemoryLedgerStore implements LedgerStore {
     }
   }
 
-  private storeSetupLink(userId: string, input: { tokenDigest: string; purpose: SetupLinkPurpose; expiresAt: Date }, at: Date): AccountSetupTokenRecord {
-    const record: AccountSetupTokenRecord = { id: randomUUID(), userId, ...input, createdAt: at, usedAt: null, cancelledAt: null };
+  private storeSetupLink(userId: string, input: { tokenDigest: string; purpose: PersonSetupLinkPurpose; expiresAt: Date }, at: Date, mailed = false): PersonSetupLinkRecord {
+    const record: PersonSetupLinkRecord = { id: randomUUID(), userId, email: null, locale: null, ...input, mailed, createdAt: at, usedAt: null, cancelledAt: null };
     this.setupLinks.set(record.id, record);
     return record;
   }
@@ -634,25 +654,70 @@ export class MemoryLedgerStore implements LedgerStore {
         Object.assign(person, { passwordHash: null, passwordChangedAt: input.at, updatedAt: input.at });
         this.revokeSessionsOf(person.id, 'setup_link_lock', input.at);
       }
-      this.cancelOpenSetupLinks(input.userId, input.at);
-      const record = this.storeSetupLink(input.userId, { tokenDigest: input.tokenDigest, purpose: input.purpose, expiresAt: input.expiresAt }, input.at);
+      // MUT-366 (review #2): a mailed (recovery) link replaces only earlier mailed links; an operator link replaces all.
+      this.cancelOpenSetupLinks(input.userId, input.at, input.mailed ? { mailedOnly: true } : {});
+      const record = this.storeSetupLink(input.userId, { tokenDigest: input.tokenDigest, purpose: input.purpose, expiresAt: input.expiresAt }, input.at, input.mailed ?? false);
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       return { ...record };
     },
     findByDigest: async (tokenDigest) => clone([...this.setupLinks.values()].find((l) => l.tokenDigest === tokenDigest)),
     redeem: async (input) => {
       const link = [...this.setupLinks.values()].find((l) => l.tokenDigest === input.tokenDigest);
-      const person = link && this.people.get(link.userId);
+      const person = link?.userId ? this.people.get(link.userId) : undefined;
       const claimable = link && person && link.usedAt === null && link.cancelledAt === null && input.at < link.expiresAt && person.status === 'ACTIVE';
       if (!claimable) return null;
       link.usedAt = input.at;
+      // MUT-366 (review #2): the password is set; any other open link (operator or mailed) is spent with it.
+      this.cancelOpenSetupLinks(person.id, input.at, { except: link.id });
       Object.assign(person, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
+      // MUT-366 (D18): a mailed link reached the person through their mailbox.
+      if (link.mailed && person.emailVerifiedAt === null) person.emailVerifiedAt = input.at;
       this.revokeSessionsOf(person.id, 'password_set', input.at);
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       if (this.recordTermsAcceptance(person.id, input.terms, input.at).created) {
         for (const event of input.termsAudit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       }
       return { ...person };
+    },
+    issueSignup: async (input) => {
+      this.assertSetupDigestFree(input.tokenDigest);
+      for (const link of this.setupLinks.values()) {
+        if (link.purpose === 'SIGNUP' && link.email === input.email && link.usedAt === null && link.cancelledAt === null) link.cancelledAt = input.at;
+      }
+      const record: SignupLinkRecord = { id: randomUUID(), purpose: 'SIGNUP', userId: null, email: input.email, locale: input.locale, tokenDigest: input.tokenDigest, mailed: true, createdAt: input.at, expiresAt: input.expiresAt, usedAt: null, cancelledAt: null };
+      this.setupLinks.set(record.id, record);
+      return { ...record };
+    },
+    redeemSignup: async (input) => {
+      const link = [...this.setupLinks.values()].find((l) => l.tokenDigest === input.tokenDigest);
+      if (!link || link.purpose !== 'SIGNUP' || link.usedAt !== null || link.cancelledAt !== null || input.at >= link.expiresAt) return null;
+      const email = link.email;
+      if ([...this.people.values()].some((u) => u.email === email)) return null;
+      const { user, personalOrganization } = this.insertPerson({
+        email,
+        displayName: input.displayName,
+        passwordHash: input.passwordHash,
+        locale: link.locale,
+        personal: input.personal,
+        at: input.at,
+        status: input.status,
+        emailVerifiedAt: input.at,
+      });
+      link.usedAt = input.at;
+      if (input.trialStartsAt) this.trialStarts.set(user.id, input.trialStartsAt);
+      this.recordTermsAcceptance(user.id, input.terms, input.at);
+      for (const event of input.auditFor({ userId: user.id, personalOrganizationId: personalOrganization.id })) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return { user, personalOrganization };
+    },
+    pruneSignupLinks: async (expiredBefore) => {
+      let count = 0;
+      for (const [id, link] of this.setupLinks) {
+        if (link.purpose === 'SIGNUP' && link.usedAt === null && link.expiresAt < expiredBefore) {
+          this.setupLinks.delete(id);
+          count++;
+        }
+      }
+      return count;
     },
   };
 
@@ -1940,6 +2005,42 @@ export class MemoryLedgerStore implements LedgerStore {
       const row = this.expReceipts.get(id);
       if (!row || row.organizationId !== organizationId || row.status !== 'READY' || row.deletedAt || !row.storageKey) return null;
       return { storageKey: row.storageKey, mimeType: row.mimeType, sizeBytes: row.sizeBytes };
+    },
+  };
+
+  /** MUT-359. Synchronous inside each method, so concurrent claims of one key resolve to exactly one claim. */
+  readonly email: EmailRepository = {
+    isSuppressed: async (email) => this.emailSuppressions.has(email),
+    suppress: async ({ email, reason, eventId, at }) => {
+      if (this.emailSuppressions.has(email)) return { created: false };
+      this.emailSuppressions.set(email, { reason, eventId, createdAt: at });
+      return { created: true };
+    },
+    claimDelivery: async (input) => {
+      const existing = this.emailDeliveries.get(input.keyDigest);
+      if (existing && (existing.status === 'SENT' || (existing.status === 'PENDING' && existing.createdAt >= input.staleBefore))) return { status: 'duplicate' };
+      const counted = [...this.emailDeliveries.entries()]
+        .filter(([key, row]) => key !== input.keyDigest && row.status !== 'FAILED' && row.createdAt >= input.since && row.createdAt <= input.at)
+        .map(([, row]) => row);
+      if (counted.length >= input.limit.total) return { status: 'capped', scope: 'global' };
+      const perRecipient = input.limit.perRecipient;
+      if (perRecipient !== null && counted.filter((row) => row.recipientDigest === input.recipientDigest).length >= perRecipient) return { status: 'capped', scope: 'recipient' };
+      const id = existing?.id ?? randomUUID();
+      this.emailDeliveries.set(input.keyDigest, { id, recipientDigest: input.recipientDigest, status: 'PENDING', createdAt: input.at });
+      return { status: 'claimed', id };
+    },
+    finishDelivery: async (id, outcome) => {
+      for (const row of this.emailDeliveries.values()) if (row.id === id) row.status = 'providerId' in outcome ? 'SENT' : outcome.uncertain ? 'UNCERTAIN' : 'FAILED';
+    },
+    pruneDeliveries: async (before) => {
+      let removed = 0;
+      for (const [key, row] of this.emailDeliveries) {
+        if (row.createdAt < before) {
+          this.emailDeliveries.delete(key);
+          removed++;
+        }
+      }
+      return removed;
     },
   };
 

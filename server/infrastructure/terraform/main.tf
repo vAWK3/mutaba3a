@@ -584,6 +584,27 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
+      # MUT-359: mail (email.tf). MAILER always; the sender, reply-to, cap and Resend secrets only with mailer = "resend".
+      dynamic "env" {
+        for_each = local.mail_env
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+      dynamic "env" {
+        for_each = local.mail_secret_env
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
+      }
+
       # MUT-148 (ADR-091): error reports, once sentry_enabled (sentry.tf).
       dynamic "env" {
         for_each = var.sentry_enabled ? [google_secret_manager_secret.sentry_dsn[0].secret_id] : []
@@ -693,6 +714,18 @@ resource "google_cloud_run_v2_service" "api" {
       ])) == 1
       error_message = "apple_team_id, apple_bundle_id, android_package_name and android_sha256_fingerprints must all be set, or all left empty (MUT-111)."
     }
+
+    precondition {
+      # MUT-359: config.ts refuses these again at boot; here they fail the plan, before a release.
+      condition     = var.mailer != "resend" || (local.domain != null && var.mail_reply_to != null && var.mail_daily_cap != null)
+      error_message = "mailer = \"resend\" needs a domain in config/hosts.json (the sender is no-reply@<domain>), mail_reply_to and mail_daily_cap (MUT-359, DEPLOYMENT.md §6f)."
+    }
+
+    precondition {
+      # MUT-366: the server refuses this again at boot; signup mails a link, so it needs mail on.
+      condition     = !var.self_signup_enabled || var.mailer == "resend"
+      error_message = "self_signup_enabled needs mailer = \"resend\": signup mails a link (MUT-366, DEPLOYMENT.md §6f)."
+    }
   }
 
   depends_on = [
@@ -709,6 +742,9 @@ resource "google_cloud_run_v2_service" "api" {
     google_secret_manager_secret_iam_member.api_reads_stripe_webhook_secret,
     google_secret_manager_secret_version.sentry_dsn,
     google_secret_manager_secret_iam_member.api_reads_sentry_dsn,
+    google_secret_manager_secret_iam_member.api_reads_resend_api_key,
+    google_secret_manager_secret_iam_member.api_reads_resend_webhook_secret,
+    google_secret_manager_secret_iam_member.api_reads_turnstile,
   ]
 }
 

@@ -7,7 +7,7 @@ import { MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
- * MUT-339 (ADR-176): GET /v1/expenses/streak on a person's own personal profile, and the 48-hour capturedAt that
+ * MUT-339 (ADR-177): GET /v1/expenses/streak on a person's own personal profile, and the 48-hour capturedAt that
  * decides which day an entry was logged on. Harness as income-routes.test.ts.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
