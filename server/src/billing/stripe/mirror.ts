@@ -57,7 +57,7 @@ export function mirrorOf(sub: Stripe.Subscription, products: ReadonlyMap<string,
       organizationId,
       status: sub.status,
       currentPeriodEnd: periodEnd,
-      cancelAtPeriodEnd: sub.cancel_at_period_end,
+      cancelAtPeriodEnd: endsByPeriodEnd(sub, periodEnd),
       // billing_subscriptions.priceLookupKey is VarChar(100); Stripe allows 200. Our keys are short; never let a long one
       // turn the event into a database error Stripe retries for days.
       priceLookupKey: tieredItem.price.lookup_key?.slice(0, LOOKUP_KEY_MAX) ?? null,
@@ -76,7 +76,19 @@ function tierOf(product: string | Stripe.Product | Stripe.DeletedProduct, produc
 
 /** What Stripe says about a subscription's state, readable even when its tier isn't (MUT-360 review: never freeze it). */
 export function stateOf(sub: Stripe.Subscription): { status: string; cancelAtPeriodEnd: boolean; currentPeriodEnd: Date | null } {
-  return { status: sub.status, cancelAtPeriodEnd: sub.cancel_at_period_end, currentPeriodEnd: periodEndOf(sub) };
+  const periodEnd = periodEndOf(sub);
+  return { status: sub.status, cancelAtPeriodEnd: endsByPeriodEnd(sub, periodEnd), currentPeriodEnd: periodEnd };
+}
+
+/**
+ * Cancelled to end with this period. Since 2026-02-25.clover the Customer Portal sets `cancel_at` to the period end and
+ * leaves `cancel_at_period_end` false (seen in MUT-362's release-QA), so either counts. A `cancel_at` past this period
+ * renews once more first. One set earlier (only from the dashboard) still reads as the period end, the date we show.
+ */
+function endsByPeriodEnd(sub: Stripe.Subscription, periodEnd: Date | null): boolean {
+  if (sub.cancel_at_period_end) return true;
+  const cancelAt = sub.cancel_at ?? null;
+  return cancelAt !== null && periodEnd !== null && cancelAt * 1000 <= periodEnd.getTime();
 }
 
 /** Since 2025-03-31.basil the period lives on each item; the latest end is when the subscription runs out. */

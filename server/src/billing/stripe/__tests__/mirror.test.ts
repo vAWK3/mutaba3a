@@ -1,6 +1,6 @@
 import type Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
-import { customerIdOf, mirrorOf, subscriptionIdOfInvoice } from '../mirror.js';
+import { customerIdOf, mirrorOf, stateOf, subscriptionIdOfInvoice } from '../mirror.js';
 
 /** MUT-360 §2.2: one Stripe subscription → the fields billing_subscriptions mirrors. Pure. */
 const ORG = '22222222-2222-4222-8222-222222222222';
@@ -78,6 +78,16 @@ describe('mirrorOf (MUT-360)', () => {
 
   it('keeps Stripe’s status and cancel-at-period-end as sent', () => {
     expect(mirrorOf(subscription({ status: 'past_due', cancel_at_period_end: true }), new Map())).toMatchObject({ ok: { status: 'past_due', cancelAtPeriodEnd: true } });
+  });
+
+  it('reads the Customer Portal’s cancel (cancel_at on the period end, cancel_at_period_end false) as ending (MUT-362)', () => {
+    const atPeriodEnd = subscription({ cancel_at: 1796083200 });
+    expect(mirrorOf(atPeriodEnd, new Map())).toMatchObject({ ok: { cancelAtPeriodEnd: true } });
+    expect(stateOf(atPeriodEnd).cancelAtPeriodEnd).toBe(true);
+    expect(mirrorOf(subscription({ cancel_at: 1796083200 - 86_400 }), new Map())).toMatchObject({ ok: { cancelAtPeriodEnd: true } });
+    // A cancel set beyond this period renews once more first.
+    expect(mirrorOf(subscription({ cancel_at: 1796083200 + 86_400 }), new Map())).toMatchObject({ ok: { cancelAtPeriodEnd: false } });
+    expect(mirrorOf(subscription({ cancel_at: null }), new Map())).toMatchObject({ ok: { cancelAtPeriodEnd: false } });
   });
 });
 
