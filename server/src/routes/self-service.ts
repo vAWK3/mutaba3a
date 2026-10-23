@@ -1,0 +1,266 @@
+import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import type { Context } from 'hono';
+import { generateSetupToken, setupLinkOrigin, setupUrl } from '../auth/account-setup.js';
+import type { AppEnv, SessionSettings } from '../auth/middleware.js';
+import { answerNoEarlierThan, recoveryPurposeOf, SELF_SERVICE_POLICY, SYSTEM_CLOCK, type MonotonicClock } from '../auth/self-service.js';
+import { isSamePortalOrigin, requestClientIp, sessionDigest } from '../auth/sessions.js';
+import { createTurnstileVerifier, TURNSTILE_TEST_SECRETS, type TurnstileAction, type TurnstileVerifier } from '../auth/turnstile.js';
+import { normalizeEmail } from '../auth/users.js';
+import type { Mailer, MailTemplateId, SendInput } from '../email/ports.js';
+import { ApiError } from '../errors.js';
+import type { Logger } from '../logger.js';
+import { SlidingWindowRateLimiter, type RateLimiter } from '../rate-limit.js';
+import { StateConflict } from '../repositories/memory.js';
+import type { LedgerStore, UserLocale, UserRecord } from '../repositories/ports.js';
+import { AccountRecoveryRequestSchema, ErrorEnvelopeSchema, SelfServiceAcceptedSchema, SignupRequestSchema } from '../schemas.js';
+import { signInLinkOf } from './account-setup.js';
+
+/**
+ * MUT-366 (ADR-159 §3–§7, ADR-175): the two public routes that let a person in without the operator.
+ *
+ *   POST /v1/signups            mails a SIGNUP link (or "you already have an account"); behind SELF_SIGNUP_ENABLED
+ *   POST /v1/account-recovery   mails a RESET link (or SETUP, for an account that never set a password)
+ *
+ * Both answer 202 {status:"sent"} for every address, no earlier than a fixed floor, so neither the answer nor its
+ * timing says whether an account exists (ADR-037 §4). Refusals that depend only on the request (the switch, the
+ * origin, the client's address, the body, the bot check, the address's budget) answer at once. Every link ends on
+ * the ADR-088 /setup page and redeem; nothing here signs anyone in.
+ */
+export interface SelfServiceOptions {
+  /** SELF_SIGNUP_ENABLED. Off: POST /v1/signups answers 404 (recovery is never behind it). */
+  signupEnabled: boolean;
+  turnstile: TurnstileVerifier;
+  /** Per client address, both routes (D6). */
+  ipLimiter: RateLimiter;
+  /** Per normalised address, both routes, whether or not an account exists (D6). */
+  addressMinuteLimiter: RateLimiter;
+  addressDayLimiter: RateLimiter;
+  floors: { signupMs: number; recoveryMs: number };
+  /** The floor's clock (D8). Defaults to performance.now and setTimeout. */
+  clock?: MonotonicClock;
+}
+
+const HOUR_MS = 3_600_000;
+
+/** The production budgets, and Turnstile's always-pass test secret: index.ts passes the configured verifier. */
+export function defaultSelfServiceOptions(): SelfServiceOptions {
+  return {
+    signupEnabled: false,
+    turnstile: createTurnstileVerifier({ secret: TURNSTILE_TEST_SECRETS.pass }),
+    ipLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.ipPerHour, HOUR_MS),
+    addressMinuteLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerMinute),
+    addressDayLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerDay, 24 * HOUR_MS),
+    floors: { signupMs: SELF_SERVICE_POLICY.signupFloorMs, recoveryMs: SELF_SERVICE_POLICY.recoveryFloorMs },
+  };
+}
+
+export interface SelfServiceRouteDependencies {
+  store: LedgerStore;
+  settings: SessionSettings;
+  mailer: Mailer;
+  logger: Logger;
+  options: SelfServiceOptions;
+}
+
+const SIGNUPS_PATH = '/v1/signups';
+const RECOVERY_PATH = '/v1/account-recovery';
+
+const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
+
+const accepted = { description: 'Accepted. The same answer for every address, whether or not it has an account', content: { 'application/json': { schema: SelfServiceAcceptedSchema } } };
+
+export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHono<AppEnv> {
+  const { store, settings, mailer, logger, options } = deps;
+  const clock = options.clock ?? SYSTEM_CLOCK;
+  const app = new OpenAPIHono<AppEnv>();
+
+  // The switch answers before the body is validated, so a closed signup is a 404 whatever is sent (D10).
+  app.use(SIGNUPS_PATH, async (_c, next) => {
+    if (!options.signupEnabled) throw new ApiError('NOT_FOUND', 'Signup is not open');
+    await next();
+  });
+
+  /** Same origin, then the client address's budget. */
+  async function guard(c: Context<AppEnv>, now: Date): Promise<string> {
+    if (!isSamePortalOrigin(c.req, settings)) throw new ApiError('CROSS_SITE_REQUEST', 'Use the MTB3A portal itself');
+    const ip = requestClientIp((name) => c.req.header(name), settings);
+    refuseIfLimited(c, await options.ipLimiter.check(`self-service:${ip}`, now));
+    return ip;
+  }
+
+  /** The bot check, then the address's budgets: a request without a passing token never spends a person's budget. */
+  async function checkAndBudget(c: Context<AppEnv>, input: { ip: string; email: string; token: string; action: TurnstileAction; now: Date }): Promise<void> {
+    const passed = await options.turnstile.verify(input.token, { ip: input.ip === 'unknown' ? null : input.ip, action: input.action, idempotencyKey: c.get('requestId') });
+    if (!passed) throw new ApiError('CHECK_FAILED', 'The check didn’t pass; try again');
+    const key = `self-service:${input.email}`;
+    refuseIfLimited(c, await options.addressMinuteLimiter.check(key, input.now));
+    refuseIfLimited(c, await options.addressDayLimiter.check(key, input.now));
+  }
+
+  /** A mail outcome never changes the answer; a throw is a bug, logged, and still the same answer. */
+  async function send<T extends MailTemplateId>(input: SendInput<T>): Promise<void> {
+    try {
+      const result = await mailer.send(input);
+      if (result.status !== 'sent') logger.info({ template: input.template, outcome: result.status }, 'self-service mail not sent');
+    } catch (err) {
+      logger.error({ err, template: input.template }, 'self-service mail failed');
+    }
+  }
+
+  async function answer(c: Context<AppEnv>, startedMs: number, floorMs: number) {
+    const overshootMs = await answerNoEarlierThan(startedMs, floorMs, clock);
+    // R4: a branch slower than the floor can be told apart by its timing; say so, so the floor can be raised.
+    if (overshootMs > 0) logger.warn({ path: c.req.path, floorMs, overshootMs }, 'self-service answer ran past its floor');
+    return c.json({ status: 'sent' as const }, 202);
+  }
+
+  const origin = (c: Context<AppEnv>) => setupLinkOrigin(settings.portalOrigin, c.req.url).replace(/\/+$/, '');
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: SIGNUPS_PATH,
+      tags: ['Sessions'],
+      summary: 'Ask for an account: mails a link that finishes creating it (SELF_SIGNUP_ENABLED; same answer for every address)',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: SignupRequestSchema } } } },
+      responses: {
+        202: accepted,
+        403: errorResponse('CROSS_SITE_REQUEST, or CHECK_FAILED (the Turnstile check, action "signup")'),
+        404: errorResponse('NOT_FOUND: signup is not open on this server'),
+        422: errorResponse('Validation failed'),
+        429: errorResponse('RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds'),
+      },
+    }),
+    async (c) => {
+      const startedMs = clock.now();
+      const now = c.get('now')();
+      const ip = await guard(c, now);
+      const body = c.req.valid('json');
+      const email = normalizeEmail(body.email);
+      await checkAndBudget(c, { ip, email, token: body.turnstileToken, action: 'signup', now });
+      // MUT-367 seam: the disposable / no-mail refusal (400 EMAIL_NOT_ACCEPTED) and the domain classification, which
+      // the SIGNUP link stores, go here: before anything is issued, and for every address alike.
+      await signupBranch(c, { email, locale: body.locale, now });
+      return answer(c, startedMs, options.floors.signupMs);
+    },
+  );
+
+  async function signupBranch(c: Context<AppEnv>, input: { email: string; locale: UserLocale; now: Date }): Promise<void> {
+    // D15: a suppressed address gets nothing, not even a token.
+    if (await store.email.isSuppressed(input.email)) return;
+    const holder = await store.users.findByEmail(input.email);
+    if (holder) {
+      // D16: a disabled account is pointed nowhere (recovery can't help it).
+      if (holder.status !== 'ACTIVE') return;
+      await send({
+        to: holder.email,
+        template: 'account-exists',
+        locale: input.locale,
+        vars: { signInLink: signInLinkOf(settings, c.req.url), recoverLink: `${origin(c)}/recover` },
+        idempotencyKey: `account-exists:${holder.id}:${c.get('requestId')}`,
+      });
+      return;
+    }
+    const token = generateSetupToken();
+    const link = await store.accountSetup.issueSignup({
+      email: input.email,
+      locale: input.locale,
+      tokenDigest: sessionDigest(settings.pepper, token),
+      at: input.now,
+      expiresAt: new Date(input.now.getTime() + SELF_SERVICE_POLICY.signupLinkHours * HOUR_MS),
+    });
+    await send({
+      to: input.email,
+      template: 'finish-signup',
+      locale: input.locale,
+      vars: { link: setupUrl(origin(c), token), validHours: SELF_SERVICE_POLICY.signupLinkHours },
+      idempotencyKey: `signup:${link.id}`,
+    });
+  }
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: RECOVERY_PATH,
+      tags: ['Sessions'],
+      summary: 'Forgot your password: mails a link that sets a new one (same answer for every address; nothing changes until it is used)',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: AccountRecoveryRequestSchema } } } },
+      responses: {
+        202: accepted,
+        403: errorResponse('CROSS_SITE_REQUEST, or CHECK_FAILED (the Turnstile check, action "recover")'),
+        422: errorResponse('Validation failed'),
+        429: errorResponse('RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds'),
+      },
+    }),
+    async (c) => {
+      const startedMs = clock.now();
+      const now = c.get('now')();
+      const ip = await guard(c, now);
+      const body = c.req.valid('json');
+      const email = normalizeEmail(body.email);
+      await checkAndBudget(c, { ip, email, token: body.turnstileToken, action: 'recover', now });
+      await recoveryBranch(c, { email, locale: body.locale, now });
+      return answer(c, startedMs, options.floors.recoveryMs);
+    },
+  );
+
+  async function recoveryBranch(c: Context<AppEnv>, input: { email: string; locale: UserLocale | undefined; now: Date }): Promise<void> {
+    if (await store.email.isSuppressed(input.email)) return;
+    const person = await store.users.findByEmail(input.email);
+    const purpose = person ? recoveryPurposeOf(person) : null;
+    if (!person || !purpose) return;
+    const hours = purpose === 'RESET' ? SELF_SERVICE_POLICY.recoveryResetHours : SELF_SERVICE_POLICY.recoverySetupHours;
+    const token = generateSetupToken();
+    const expiresAt = new Date(input.now.getTime() + hours * HOUR_MS);
+    let linkId: string;
+    try {
+      // ADR-088 §3: no lock. The current password and sessions keep working until the link is used.
+      const link = await store.accountSetup.issue({
+        userId: person.id,
+        tokenDigest: sessionDigest(settings.pepper, token),
+        purpose,
+        at: input.now,
+        expiresAt,
+        lock: false,
+        mailed: true,
+        audit: await recoveryAudit(c, person, { purpose, expiresAt }),
+      });
+      linkId = link.id;
+    } catch (err) {
+      // Disabled between the read and the issue: the same as disabled before it.
+      if (err instanceof StateConflict) return;
+      throw err;
+    }
+    await send({
+      to: person.email,
+      template: purpose === 'RESET' ? 'reset-password' : 'finish-setup',
+      locale: input.locale ?? person.locale,
+      vars: { link: setupUrl(origin(c), token), validHours: hours },
+      idempotencyKey: `recovery:${linkId}`,
+    });
+  }
+
+  /** `user.setup_link_issued`, as the operator's links are, but by the system on the person's request. */
+  async function recoveryAudit(c: Context<AppEnv>, person: UserRecord, link: { purpose: 'SETUP' | 'RESET'; expiresAt: Date }) {
+    return (await store.memberships.listByUser(person.id)).map((m) => ({
+      organizationId: m.organizationId,
+      actorType: 'SYSTEM' as const,
+      actorId: null,
+      action: 'user.setup_link_issued',
+      entityType: 'user',
+      entityId: person.id,
+      metadata: { purpose: link.purpose, expiresAt: link.expiresAt.toISOString(), via: 'recovery' },
+      requestId: c.get('requestId'),
+    }));
+  }
+
+  return app;
+}
+
+function refuseIfLimited(c: Context<AppEnv>, decision: { allowed: boolean; retryAfterSeconds: number }): void {
+  if (decision.allowed) return;
+  c.header('Retry-After', String(decision.retryAfterSeconds));
+  throw new ApiError('RATE_LIMITED', 'Too many requests; try again later', { retryAfterSeconds: decision.retryAfterSeconds });
+}

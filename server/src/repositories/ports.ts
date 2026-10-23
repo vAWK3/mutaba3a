@@ -1207,6 +1207,8 @@ export interface UserRecord {
   lockedUntil: Date | null;
   passwordChangedAt: Date;
   lastSignInAt: Date | null;
+  /** MUT-366 (D18): when the person proved they read this address (a signup or a mailed recovery link); null until then. */
+  emailVerifiedAt: Date | null;
   /** MUT-191: the Malafat suggestion preferences; null until the person first changes them (= on, nothing dismissed). */
   malafatSuggestions: MalafatSuggestionsRecord | null;
   createdAt: Date;
@@ -1246,7 +1248,7 @@ export interface CreateUserInput {
    * MUT-235 (review fix): the person's first setup link, written in the same transaction as the user, so a
    * create never leaves an account with neither a password nor a link. UniqueViolation on a duplicate digest.
    */
-  setupLink?: { tokenDigest: string; purpose: SetupLinkPurpose; expiresAt: Date };
+  setupLink?: { tokenDigest: string; purpose: PersonSetupLinkPurpose; expiresAt: Date };
   at: Date;
 }
 
@@ -1478,30 +1480,56 @@ export interface SessionRepository {
 
 // ---- MUT-235: one-time setup links (ADR-088) --------------------------------
 
-/** SETUP: a person's first password. RESET: an operator reset of an existing one. */
-export type SetupLinkPurpose = 'SETUP' | 'RESET';
+/**
+ * SETUP: a person's first password. RESET: a reset of an existing one (by the operator, or MUT-366's recovery).
+ * SIGNUP (MUT-366, ADR-159): a self-service signup, bound to an email address, not a person: the account is created
+ * when the link is redeemed.
+ */
+export type SetupLinkPurpose = 'SETUP' | 'RESET' | 'SIGNUP';
+/** The purposes of a link that belongs to an existing person. */
+export type PersonSetupLinkPurpose = Exclude<SetupLinkPurpose, 'SIGNUP'>;
 
 /** A setup link. Only the HMAC digest of its token is stored; at most one of `usedAt` / `cancelledAt` is ever set. */
-export interface AccountSetupTokenRecord {
+interface SetupLinkFields {
   id: string;
-  userId: string;
   tokenDigest: string;
-  purpose: SetupLinkPurpose;
   createdAt: Date;
   expiresAt: Date;
   usedAt: Date | null;
-  /** Set when a newer link for the same person replaced this one. */
+  /** Set when a newer link for the same person (or, for SIGNUP, the same address) replaced this one. */
   cancelledAt: Date | null;
+  /** MUT-366: mailed to the address (signup, recovery) rather than handed over by the operator; redeeming one verifies the address. */
+  mailed: boolean;
 }
+
+/** A SETUP or RESET link for an existing person. */
+export interface PersonSetupLinkRecord extends SetupLinkFields {
+  purpose: PersonSetupLinkPurpose;
+  userId: string;
+  email: null;
+  locale: null;
+}
+
+/** MUT-366: a SIGNUP link: the normalised address it was mailed to and the signup page's language; no person yet. */
+export interface SignupLinkRecord extends SetupLinkFields {
+  purpose: 'SIGNUP';
+  userId: null;
+  email: string;
+  locale: UserLocale;
+}
+
+export type AccountSetupTokenRecord = PersonSetupLinkRecord | SignupLinkRecord;
 
 export interface IssueSetupLinkInput {
   userId: string;
   tokenDigest: string;
-  purpose: SetupLinkPurpose;
+  purpose: PersonSetupLinkPurpose;
   at: Date;
   expiresAt: Date;
   /** D2: a suspected takeover — clear the password and revoke every session in the same transaction. */
   lock: boolean;
+  /** MUT-366: mailed by recovery (the operator's links are not). Absent = false. */
+  mailed?: boolean;
   /** Written in the same transaction. */
   audit: AuditEventInput[];
 }
@@ -1521,20 +1549,62 @@ export interface RedeemSetupLinkInput {
   termsAudit: AuditEventInput[];
 }
 
+/** MUT-366: a SIGNUP link for an address. */
+export interface IssueSignupLinkInput {
+  /** Normalised. */
+  email: string;
+  locale: UserLocale;
+  tokenDigest: string;
+  at: Date;
+  expiresAt: Date;
+}
+
+/** MUT-366: redeeming a SIGNUP link creates the account it was for. */
+export interface RedeemSignupLinkInput {
+  tokenDigest: string;
+  passwordHash: string;
+  at: Date;
+  displayName: string;
+  /** The personal profile (`personalProfileFor`). */
+  personal: CreateUserInput['personal'];
+  /** ACTIVE today; MUT-367's review sets PENDING_REVIEW for webmail and unverified domains (`signupAccountOutcome`). */
+  status: UserStatus;
+  /** D1: the 14-day trial (ADR-160) starts with the account: the same column `billing.setTrialStart` writes. Null = no trial yet (MUT-367: at approval). */
+  trialStartsAt: Date | null;
+  terms: TermsAcceptanceInput;
+  /** Built from the ids the transaction creates; written in it. */
+  auditFor(created: { userId: string; personalOrganizationId: string }): AuditEventInput[];
+}
+
 export interface AccountSetupRepository {
   /**
    * One transaction under a lock on the user's row: cancels the user's open links,
    * then creates this one, so a person never has two open links. ForeignKeyViolation on an unknown user.
    */
-  issue(input: IssueSetupLinkInput): Promise<AccountSetupTokenRecord>;
+  issue(input: IssueSetupLinkInput): Promise<PersonSetupLinkRecord>;
   findByDigest(tokenDigest: string): Promise<AccountSetupTokenRecord | null>;
   /**
    * One transaction: claims the link only if it is unused, not cancelled, not expired at `at`, and its
    * user is ACTIVE; then sets the password (clearing any lockout), revokes every session ('password_set')
-   * and appends `audit`. Null when the claim loses — nothing is written; the caller reads the link again
-   * to say why. Of two concurrent redeems of one link, exactly one wins.
+   * and appends `audit`; a mailed link also stamps `emailVerifiedAt` (MUT-366). Null when the claim loses
+   * (a SIGNUP link never matches here) — nothing is written; the caller reads the link again to say why.
+   * Of two concurrent redeems of one link, exactly one wins.
    */
   redeem(input: RedeemSetupLinkInput): Promise<UserRecord | null>;
+  /**
+   * MUT-366 (D12): one transaction, serialised per address: cancels the address's open SIGNUP links, then creates
+   * this one. UniqueViolation on a duplicate digest.
+   */
+  issueSignup(input: IssueSignupLinkInput): Promise<SignupLinkRecord>;
+  /**
+   * MUT-366: one transaction, serialised per address: claims the SIGNUP link only if it is unused, not cancelled,
+   * not expired at `at`, and no user holds its address; then creates the user (`emailVerifiedAt = at`, the trial),
+   * the personal profile and its membership, records the terms and writes `auditFor(...)`. Null when the claim
+   * loses, a racing link or operator create included — nothing is written.
+   */
+  redeemSignup(input: RedeemSignupLinkInput): Promise<{ user: UserRecord; personalOrganization: Organization } | null>;
+  /** MUT-366: deletes unredeemed SIGNUP links that expired before `expiredBefore`; returns how many. */
+  pruneSignupLinks(expiredBefore: Date): Promise<number>;
 }
 
 // ---- MUT-358 (ADR-160): billing core ---------------------------------------

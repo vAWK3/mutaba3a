@@ -10,7 +10,7 @@ import { MAX_PROFILE_OWNERS } from '../co-owners.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
 import { ForeignKeyViolation, StateConflict, UniqueViolation } from '../repositories/memory.js';
-import type { AuditEventInput, JsonObject, LedgerStore, Organization, SetupLinkPurpose, UserRecord } from '../repositories/ports.js';
+import type { AuditEventInput, JsonObject, LedgerStore, Organization, PersonSetupLinkPurpose, UserRecord } from '../repositories/ports.js';
 import {
   CreateUserRequestSchema,
   CreateUserResponseSchema,
@@ -120,7 +120,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
   /**
    * MUT-235: a fresh link. The token appears only in `view.url`, returned once; the store gets its digest.
    */
-  function newSetupLink(c: Context<AppEnv>, purpose: SetupLinkPurpose, validHours: number | undefined) {
+  function newSetupLink(c: Context<AppEnv>, purpose: PersonSetupLinkPurpose, validHours: number | undefined) {
     const at = c.get('now')();
     const token = generateSetupToken();
     const expiresAt = new Date(at.getTime() + (validHours ?? SETUP_LINK_POLICY.defaultHours) * 3_600_000);
@@ -138,7 +138,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
    * MUT-235: one transaction cancels the person's open link, issues this one and audits it (and, with `lock`,
    * clears the password and revokes every session).
    */
-  async function issueSetupLink(c: Context<AppEnv>, user: UserRecord, options: { purpose: SetupLinkPurpose; validHours?: number | undefined; lock: boolean }) {
+  async function issueSetupLink(c: Context<AppEnv>, user: UserRecord, options: { purpose: PersonSetupLinkPurpose; validHours?: number | undefined; lock: boolean }) {
     const link = newSetupLink(c, options.purpose, options.validHours);
     const organizationIds = await memberOrganizations(user.id);
     if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action: 'user.setup_link_issued' }, 'account change on a user with no memberships; no organization to audit');
@@ -409,7 +409,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       if (user.status !== 'ACTIVE') throw new ApiError('CONFLICT', 'A disabled user cannot use a setup link; enable them first', { reason: 'USER_DISABLED' });
       // The body is optional: with none, the validator is skipped and nothing is defaulted, hence the explicit fallbacks.
       const body: { validHours?: number | undefined; lock?: boolean | undefined } = c.req.valid('json') ?? {};
-      const purpose: SetupLinkPurpose = user.passwordHash === null ? 'SETUP' : 'RESET';
+      const purpose: PersonSetupLinkPurpose = user.passwordHash === null ? 'SETUP' : 'RESET';
       const lock = body.lock === true;
       let setupLink: Awaited<ReturnType<typeof issueSetupLink>>;
       try {

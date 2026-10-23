@@ -1,6 +1,9 @@
 import { z } from '@hono/zod-openapi';
 import { NEW_PASSWORD_POLICY, SETUP_LINK_POLICY, SETUP_TOKEN_PATTERN } from './auth/account-setup.js';
 import { SCOPES } from './auth/scopes.js';
+import { TURNSTILE_TOKEN_MAX_LENGTH } from './auth/turnstile.js';
+import { normalizeEmail } from './auth/users.js';
+import { isPlainAddress } from './email/ports.js';
 import { ERROR_CODES } from './errors.js';
 import { CONTINGENCY_OUTCOMES, MAX_COMMISSION_RATE_BASIS_POINTS, MIN_COMMISSION_RATE_BASIS_POINTS, UPFRONT_TREATMENTS } from './agreements/contingency.js';
 import { DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT } from './agreements/compose.js';
@@ -514,8 +517,11 @@ export const MembershipSchema = z
   })
   .openapi('Membership');
 
-/** MUT-235: SETUP is a person's first password; RESET an operator reset of an existing one. */
-export const SetupLinkPurposeSchema = z.enum(['SETUP', 'RESET']).openapi('SetupLinkPurpose');
+/**
+ * MUT-235: SETUP is a person's first password; RESET a reset of an existing one. MUT-366: SIGNUP is a self-service
+ * signup; redeeming it creates the account (additive since 1.55.0-mut366, and only once SELF_SIGNUP_ENABLED is on).
+ */
+export const SetupLinkPurposeSchema = z.enum(['SETUP', 'RESET', 'SIGNUP']).openapi('SetupLinkPurpose');
 
 /** MUT-235: returned to the operator once. The token lives only in the URL's fragment; the service keeps its digest. */
 export const SetupLinkSchema = z
@@ -886,11 +892,52 @@ export const SetupLinkRedeemRequestSchema = z
     termsLocale: UserLocaleSchema.optional(),
     /** MUT-354: the client release that showed the setup page. */
     clientRelease: ClientReleaseSchema.optional(),
+    /** MUT-366, SIGNUP links only: the new account's name; the address's local part when omitted. */
+    displayName: z.string().trim().min(1).max(200).optional(),
+    /** MUT-366: required for a SIGNUP link (the personal profile's currency, MUT-120); ignored otherwise. */
+    defaultCurrency: CurrencySchema.optional(),
+    /** MUT-366: required for a SIGNUP link (the personal profile's IANA timezone); ignored otherwise. */
+    timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }).optional(),
   })
   .openapi('SetupLinkRedeemRequest');
 
 /** The portal signs in with this email and the password just set, through POST /v1/sessions. */
 export const SetupLinkRedeemResponseSchema = z.object({ email: z.string() }).openapi('SetupLinkRedeemResponse');
+
+// ---- Self-service signup and recovery (MUT-366, ADR-159) -------------------
+
+/** One plain address, the mailer's own rule (D17): ≤ 254 characters, no display name or list. */
+const SelfServiceEmailSchema = z
+  .string()
+  .max(320)
+  .refine((value) => isPlainAddress(normalizeEmail(value)), { message: 'must be an email address' })
+  .openapi({ description: 'Normalised (trim, NFKC, lower-case) before use.' });
+
+/** The Turnstile widget's token for this form. Empty fails the check (403 CHECK_FAILED); missing is a 422. */
+const TurnstileTokenSchema = z.string().max(TURNSTILE_TOKEN_MAX_LENGTH);
+
+export const SignupRequestSchema = z
+  .object({
+    email: SelfServiceEmailSchema,
+    /** The signup page's language: the mail's, and the account's. */
+    locale: UserLocaleSchema.default('ar').openapi({ description: 'Defaults to ar (ADR-077).' }),
+    /** Rendered with action "signup". */
+    turnstileToken: TurnstileTokenSchema,
+  })
+  .openapi('SignupRequest');
+
+export const AccountRecoveryRequestSchema = z
+  .object({
+    email: SelfServiceEmailSchema,
+    /** The recovery page's language; the account's when omitted. */
+    locale: UserLocaleSchema.optional(),
+    /** Rendered with action "recover". */
+    turnstileToken: TurnstileTokenSchema,
+  })
+  .openapi('AccountRecoveryRequest');
+
+/** The one answer for every address, account or not (ADR-037 §4). */
+export const SelfServiceAcceptedSchema = z.object({ status: z.literal('sent') }).openapi('SelfServiceAccepted');
 
 // ---- Changing your own password (MUT-237) ----------------------------------
 

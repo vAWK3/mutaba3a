@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { AccountSetupTokenRecord, UserRecord } from '../repositories/ports.js';
+import type { PersonSetupLinkRecord, UserRecord } from '../repositories/ports.js';
 
 /**
  * One-time setup links (MUT-235, ADR-088). The operator never knows anyone's
@@ -8,7 +8,7 @@ import type { AccountSetupTokenRecord, UserRecord } from '../repositories/ports.
  * inside the transaction that sets the password.
  */
 
-/** A link lasts 72 hours unless the operator asks otherwise (`--valid-hours`), within these bounds. */
+/** An operator's link lasts 72 hours unless they ask otherwise (`--valid-hours`), within these bounds. Self-service links: SELF_SERVICE_POLICY. */
 export const SETUP_LINK_POLICY = { defaultHours: 72, minHours: 1, maxHours: 720 } as const;
 
 /** NIST SP 800-63B: length only, no composition rules. Shared with changing a password while signed in (MUT-237). */
@@ -30,7 +30,7 @@ export type SetupLinkState = 'valid' | 'expired' | 'used' | 'superseded' | 'inva
  * so a person is told the more useful thing. A link whose person is not ACTIVE
  * reads as `invalid`, the same as an unknown one.
  */
-export function setupLinkState(link: AccountSetupTokenRecord | null, person: Pick<UserRecord, 'status'> | null, now: Date): SetupLinkState {
+export function setupLinkState(link: PersonSetupLinkRecord | null, person: Pick<UserRecord, 'status'> | null, now: Date): SetupLinkState {
   if (!link || !person || person.status !== 'ACTIVE') return 'invalid';
   if (link.usedAt) return 'used';
   if (link.cancelledAt) return 'superseded';

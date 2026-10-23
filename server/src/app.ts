@@ -38,6 +38,7 @@ import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/session
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
 import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
+import { defaultSelfServiceOptions, selfServiceRoutes, type SelfServiceOptions } from './routes/self-service.js';
 import { auditRoutes } from './routes/audit.js';
 import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/profiles.js';
 import { FX_ORGANIZATION_INDEPENDENT_ROUTES, PUBLIC_FX_POLICY, publicFxRateRoutes } from './routes/fx-rates.js';
@@ -127,6 +128,11 @@ export interface AppDependencies {
   emailWebhookIpLimiter?: RateLimiter;
   /** MUT-359 (D11): the memory mailer's outbox, served at GET /admin/v1/dev-outbox. Only ever set for MAILER=memory outside production. */
   devOutbox?: MemoryMailTransport | null;
+  /**
+   * MUT-366 (ADR-159): signup and recovery. Absent = signup closed (404), Turnstile's always-pass test secret, the
+   * production budgets and floors; index.ts passes the configured switch, verifier and floors.
+   */
+  selfService?: SelfServiceOptions;
 }
 
 const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disabled: false };
@@ -191,7 +197,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.54.0-mut359';
+export const API_VERSION = '1.55.0-mut366';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -288,6 +294,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   );
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
   app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger }));
+  // MUT-366: the routes that mail those links. Public, like sign-in; the switch closes signup, never recovery.
+  app.route('/', selfServiceRoutes({ store, settings: sessions, mailer, logger: deps.logger, options: deps.selfService ?? defaultSelfServiceOptions() }));
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', importRoutes(store));
   app.route('/', vatRoutes(store));
