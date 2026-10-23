@@ -390,3 +390,38 @@ describe('loadConfig — mail (MUT-359)', () => {
     expect(() => loadConfig({ ...base, MAIL_FROM_ADDRESS: 'MTB3A <no-reply@mail.example.test>' })).toThrow('MAIL_FROM_ADDRESS');
   });
 });
+
+describe('loadConfig — signup and recovery (MUT-366)', () => {
+  const resend = {
+    MAILER: 'resend',
+    MAIL_FROM_ADDRESS: 'no-reply@mail.example.test',
+    MAIL_REPLY_TO: 'help@example.test',
+    RESEND_API_KEY: 're_test_mut366',
+    RESEND_WEBHOOK_SECRET: 'whsec_bXV0MzY2LXNlY3JldA==',
+    MAIL_DAILY_CAP: '90',
+  };
+  const LIVE_TURNSTILE = '0x4AAAAAAAmut366livesecretforconfigtests';
+
+  it('defaults the floors to ADR-159’s 3000 and 1500 ms, and Turnstile to Cloudflare’s always-pass test secret outside production', () => {
+    const config = loadConfig(base);
+    expect(config).toMatchObject({ SIGNUP_RESPONSE_FLOOR_MS: 3000, RECOVERY_RESPONSE_FLOOR_MS: 1500, TURNSTILE_SECRET: '1x0000000000000000000000000000000AA' });
+    expect(loadConfig({ ...base, SIGNUP_RESPONSE_FLOOR_MS: '4000', RECOVERY_RESPONSE_FLOOR_MS: '2000' })).toMatchObject({ SIGNUP_RESPONSE_FLOOR_MS: 4000, RECOVERY_RESPONSE_FLOOR_MS: 2000 });
+  });
+
+  it('keeps a floor between 0 and 10 seconds', () => {
+    expect(() => loadConfig({ ...base, SIGNUP_RESPONSE_FLOOR_MS: '20000' })).toThrow('SIGNUP_RESPONSE_FLOOR_MS');
+    expect(() => loadConfig({ ...base, RECOVERY_RESPONSE_FLOOR_MS: '-1' })).toThrow('RECOVERY_RESPONSE_FLOOR_MS');
+  });
+
+  it('lets QA choose the always-fail test secret outside production', () => {
+    expect(loadConfig({ ...base, TURNSTILE_SECRET: '2x0000000000000000000000000000000AA' }).TURNSTILE_SECRET).toBe('2x0000000000000000000000000000000AA');
+  });
+
+  it('production needs a real Turnstile secret once mail or signup is on, and never a test one', () => {
+    const production = { ...base, NODE_ENV: 'production' };
+    expect(loadConfig(production).TURNSTILE_SECRET).toBeUndefined();
+    expect(() => loadConfig({ ...production, ...resend })).toThrow('TURNSTILE_SECRET');
+    expect(loadConfig({ ...production, ...resend, TURNSTILE_SECRET: LIVE_TURNSTILE }).TURNSTILE_SECRET).toBe(LIVE_TURNSTILE);
+    expect(() => loadConfig({ ...production, ...resend, TURNSTILE_SECRET: '1x0000000000000000000000000000000AA' })).toThrow('TURNSTILE_SECRET');
+  });
+});

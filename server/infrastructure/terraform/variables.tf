@@ -78,6 +78,12 @@ variable "mailer" {
   }
 }
 
+variable "self_signup_enabled" {
+  description = "MUT-366 (ADR-159): opens POST /v1/signups (SELF_SIGNUP_ENABLED). Needs mailer = \"resend\" and the Turnstile secret's version. Basel turns it on at GA, after billing and account closing are live (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
 variable "mail_reply_to" {
   description = "MUT-359 (D6): where replies to MTB3A mail go (MAIL_REPLY_TO). Required with mailer = \"resend\". Today's only support address is on Malafat's domain; a mailbox on the apex is a follow-up."
   type        = string

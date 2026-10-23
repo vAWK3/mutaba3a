@@ -22,6 +22,9 @@ import { createResendTransport } from './email/transports/resend.js';
 import { createLogTransport } from './email/transports/log.js';
 import { MemoryMailTransport } from './email/transports/memory.js';
 import { NOOP_TRANSPORT } from './email/transports/noop.js';
+import { SELF_SERVICE_POLICY } from './auth/self-service.js';
+import { createTurnstileVerifier, UNCONFIGURED_TURNSTILE } from './auth/turnstile.js';
+import { defaultSelfServiceOptions } from './routes/self-service.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -71,6 +74,21 @@ const mailer = createMailer({
 const MAIL_LOG_RETENTION_MS = 30 * 24 * 3_600_000;
 const MAIL_PRUNE_EVERY_MS = 3_600_000;
 
+// MUT-366 (ADR-159): signup and recovery. Config has refused a production server that could mail a link without a
+// real Turnstile secret; with none here (production, mail off) the check fails closed and recovery mails nothing anyway.
+const selfService = {
+  ...defaultSelfServiceOptions(),
+  // Built here (not taken from the defaults) so the timer below can prune them.
+  ipLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.ipPerHour, 3_600_000),
+  addressMinuteLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerMinute),
+  addressDayLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerDay, 24 * 3_600_000),
+  signupEnabled: config.SELF_SIGNUP_ENABLED,
+  turnstile: config.TURNSTILE_SECRET ? createTurnstileVerifier({ secret: config.TURNSTILE_SECRET, logger }) : UNCONFIGURED_TURNSTILE,
+  floors: { signupMs: config.SIGNUP_RESPONSE_FLOOR_MS, recoveryMs: config.RECOVERY_RESPONSE_FLOOR_MS },
+};
+/** D9: unredeemed SIGNUP links are deleted a week after they expire; checked hourly, like the mail log. */
+const SIGNUP_LINK_RETENTION_MS = SELF_SERVICE_POLICY.pruneAfterExpiryDays * 24 * 3_600_000;
+
 const fxRates = new CachedFxRates({
   source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
   ttlMs: config.FX_RATES_TTL_MINUTES * 60_000,
@@ -116,6 +134,7 @@ const app = createApp({
   emailWebhook: config.RESEND_WEBHOOK_SECRET && config.MAIL_FROM_ADDRESS ? { secret: config.RESEND_WEBHOOK_SECRET, fromDomain: config.MAIL_FROM_ADDRESS.split('@')[1]! } : null,
   emailWebhookIpLimiter,
   devOutbox: config.NODE_ENV !== 'production' ? memoryOutbox : null,
+  selfService,
   portal: config.PORTAL_DIST_DIR ? { distDir: config.PORTAL_DIST_DIR } : null,
   appAssociation:
     config.APPLE_TEAM_ID && config.APPLE_BUNDLE_ID && config.ANDROID_PACKAGE_NAME && config.ANDROID_SHA256_FINGERPRINTS
@@ -138,6 +157,8 @@ if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; atta
 if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; the Stripe webhook, reconcile and billing sessions answer 503');
 if (!config.MUTABA3A_JOB_TOKEN) logger.warn('MUTABA3A_JOB_TOKEN is not set; /jobs/* answers 503');
 if (config.MAILER === 'noop') logger.warn('MAILER is noop; no mail is sent (password notices included)');
+if (!config.SELF_SIGNUP_ENABLED) logger.info('SELF_SIGNUP_ENABLED is off; POST /v1/signups answers 404 (recovery still works)');
+if (!config.TURNSTILE_SECRET) logger.warn('TURNSTILE_SECRET is not set; signup and recovery fail their check (403 CHECK_FAILED)');
 if (!config.RESEND_WEBHOOK_SECRET) logger.warn('RESEND_WEBHOOK_SECRET is not set; the Resend webhook answers 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
 if (!reporter.enabled) logger.warn('SENTRY_DSN is not set; errors are logged but not reported');
@@ -159,10 +180,14 @@ const pruneTimer = setInterval(() => {
   stripeWebhookIpLimiter.prune(now);
   billingSessionLimiter.prune(now);
   emailWebhookIpLimiter.prune(now);
+  selfService.ipLimiter.prune(now);
+  selfService.addressMinuteLimiter.prune(now);
+  selfService.addressDayLimiter.prune(now);
 }, 60_000);
 pruneTimer.unref();
 const mailPruneTimer = setInterval(() => {
   void store.email.pruneDeliveries(new Date(Date.now() - MAIL_LOG_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'mail send log prune failed'));
+  void store.accountSetup.pruneSignupLinks(new Date(Date.now() - SIGNUP_LINK_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'signup link prune failed'));
 }, MAIL_PRUNE_EVERY_MS);
 mailPruneTimer.unref();
 

@@ -720,6 +720,12 @@ resource "google_cloud_run_v2_service" "api" {
       condition     = var.mailer != "resend" || (local.domain != null && var.mail_reply_to != null && var.mail_daily_cap != null)
       error_message = "mailer = \"resend\" needs a domain in config/hosts.json (the sender is no-reply@<domain>), mail_reply_to and mail_daily_cap (MUT-359, DEPLOYMENT.md §6f)."
     }
+
+    precondition {
+      # MUT-366: the server refuses this again at boot; signup mails a link, so it needs mail on.
+      condition     = !var.self_signup_enabled || var.mailer == "resend"
+      error_message = "self_signup_enabled needs mailer = \"resend\": signup mails a link (MUT-366, DEPLOYMENT.md §6f)."
+    }
   }
 
   depends_on = [
@@ -738,6 +744,7 @@ resource "google_cloud_run_v2_service" "api" {
     google_secret_manager_secret_iam_member.api_reads_sentry_dsn,
     google_secret_manager_secret_iam_member.api_reads_resend_api_key,
     google_secret_manager_secret_iam_member.api_reads_resend_webhook_secret,
+    google_secret_manager_secret_iam_member.api_reads_turnstile,
   ]
 }
 

@@ -40,6 +40,9 @@ export function isTurnstileTestSecret(secret: string): boolean {
   return TEST_SECRETS.has(secret);
 }
 
+/** No secret on this server (production with mail off): every check fails closed, and Cloudflare is never asked. */
+export const UNCONFIGURED_TURNSTILE: TurnstileVerifier = { mode: 'live', verify: async () => false };
+
 /** Five seconds, then the check fails closed. */
 export const SITEVERIFY_TIMEOUT_MS = 5000;
 

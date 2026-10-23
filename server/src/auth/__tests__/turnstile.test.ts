@@ -11,7 +11,7 @@ const CONTEXT = { ip: '203.0.113.7', action: 'signup' as const, idempotencyKey: 
 const LIVE_SECRET = '0x4AAAAAAAlivesecretfortests_00000';
 
 function answering(status: number, body: unknown) {
-  return vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+  return vi.fn<typeof fetch>(async () => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
 }
 
 describe('Turnstile test secrets (MUT-366, D7)', () => {
