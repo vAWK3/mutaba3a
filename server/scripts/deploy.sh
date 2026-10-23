@@ -140,10 +140,24 @@ popd >/dev/null
 # ---------------------------------------------------------------------------
 # 1. Build the hosted-portal bundle, copy it into the Docker build context
 # ---------------------------------------------------------------------------
+# MUT-149: a DSN without the upload token would ship crash reports with unreadable stacks, so it stops here
+if [[ -n "${MUTABA3A_SENTRY_DSN:-}" && -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
+  die "MUTABA3A_SENTRY_DSN is set but SENTRY_AUTH_TOKEN is not: export it, or store it once in the Keychain (DEPLOYMENT.md §1.5 step 3)"
+fi
+if [[ -z "${MUTABA3A_SENTRY_DSN:-}" && -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
+  warn "SENTRY_AUTH_TOKEN is set but MUTABA3A_SENTRY_DSN is not: the portal ships without crash reports, no maps uploaded"
+fi
+# The portal ships inside this image, so it versions with the API (ADR-091 am.6's release format)
+MUTABA3A_SENTRY_RELEASE="mutaba3a-portal@$(node -p "require('${SERVER_DIR}/package.json').version")+${SHORT_SHA}"
+MUTABA3A_SENTRY_ENVIRONMENT="${ENVIRONMENT}"
+export MUTABA3A_SENTRY_RELEASE MUTABA3A_SENTRY_ENVIRONMENT
 pushd "${REPO_ROOT}" >/dev/null
 info "building the hosted-portal bundle (npm run build:hosted)"
 npm ci --no-audit --no-fund
 npm run --silent build:hosted
+# TD-084: prove the bundle this release ships (no Sentry in the entry, no maps, no fixtures or tokens, no new origin)
+info "checking the hosted-portal bundle (check-bundles --dist dist-hosted)"
+npx --no-install tsx scripts/check-bundles.ts --dist dist-hosted
 popd >/dev/null
 rm -rf "${SERVER_DIR}/dist-hosted"
 cp -r "${REPO_ROOT}/dist-hosted" "${SERVER_DIR}/dist-hosted"
