@@ -79,8 +79,8 @@ const PATH_TOKEN = /[a-zA-Z]|[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g;
  */
 function pathPoints(d: string): { ends: Point[]; hull: Point[] } {
   // Only SVG's own whitespace (space, tab, LF, FF, CR) and single commas between numbers; a browser stops drawing at anything else.
-  const leftover = d.replace(PATH_TOKEN, ' ').replace(/[\x20\x09\x0A\x0C\x0D]+/g, '');
-  if (leftover.replace(/,/g, '') !== '' || /,[\x20\x09\x0A\x0C\x0D]*(,|[a-zA-Z]|$)|(^|[a-zA-Z])[\x20\x09\x0A\x0C\x0D]*,/.test(d)) {
+  const leftover = d.replace(PATH_TOKEN, ' ').replace(/[ \t\n\f\r]+/g, '');
+  if (leftover.replace(/,/g, '') !== '' || /,[ \t\n\f\r]*(,|[a-zA-Z]|$)|(^|[a-zA-Z])[ \t\n\f\r]*,/.test(d)) {
     throw new Error(`unreadable path data: "${d.slice(0, 40)}"`);
   }
   const tokens = d.match(PATH_TOKEN) ?? [];
