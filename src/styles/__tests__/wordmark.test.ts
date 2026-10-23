@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { type Dirent, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import brandPins from '../../assets/brand/brand.sha256.json';
@@ -20,8 +22,10 @@ const FEATURE_GRAPHIC = 'docs/brand/wordmark/store/feature-graphic-en-1024x500.p
 const COPY_ROOTS = ['docs/brand', 'public', 'src/hosted/public'];
 /** One percent of the frame: the slack the tight-frame check allows at each edge (eng D8). */
 const FRAME_TOLERANCE = 0.01;
-/** PNG colour types without an alpha channel: grey, RGB, palette (palette is checked for tRNS separately). */
-const OPAQUE_PNG_COLOUR_TYPES = [0, 2, 3];
+/** Google Play takes a feature graphic as JPEG or 24-bit PNG with no alpha: 8 bits per channel, colour type 2 (RGB). */
+const PLAY_BIT_DEPTH = 8;
+const PNG_RGB = 2;
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 /**
  * Everything the logotype may contain. Anything else (animation, nested svg,
@@ -64,6 +68,7 @@ function effectiveFill(shape: Element): string | null {
 
 type Point = [number, number];
 const ARG_COUNTS: Record<string, number> = { M: 2, L: 2, T: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, A: 7, Z: 0 };
+const PATH_TOKEN = /[a-zA-Z]|[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g;
 
 /**
  * A path's points in absolute coordinates. `ends` are the points its commands
@@ -73,11 +78,14 @@ const ARG_COUNTS: Record<string, number> = { M: 2, L: 2, T: 2, H: 1, V: 1, C: 6,
  * Anything it can't read throws, so a bad export fails instead of hanging.
  */
 function pathPoints(d: string): { ends: Point[]; hull: Point[] } {
-  const tokens = d.match(/[a-zA-Z]|[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g) ?? [];
+  if (d.replace(PATH_TOKEN, '').replace(/[\s,]/g, '') !== '') throw new Error(`unreadable path data: "${d.slice(0, 40)}"`);
+  const tokens = d.match(PATH_TOKEN) ?? [];
   const ends: Point[] = [];
   const hull: Point[] = [];
   let x = 0, y = 0, startX = 0, startY = 0, command = '', i = 0;
-  let lastControl: Point | null = null;
+  // S reflects only the last C/S control, T only the last Q/T control; any other command clears both (SVG spec).
+  let lastCubic: Point | null = null;
+  let lastQuad: Point | null = null;
   const isCommand = (token: string | undefined) => token !== undefined && /^[a-zA-Z]$/.test(token);
   const next = () => {
     if (i >= tokens.length || isCommand(tokens[i])) throw new Error(`path ends mid-command ${command}: "${d.slice(0, 40)}"`);
@@ -93,37 +101,105 @@ function pathPoints(d: string): { ends: Point[]; hull: Point[] } {
     if (upper === 'Z') {
       if (i < tokens.length && !isCommand(tokens[i])) throw new Error('a number follows Z without a command');
       [x, y] = [startX, startY];
-      lastControl = null;
+      lastCubic = lastQuad = null;
       continue;
     }
     const values = Array.from({ length: ARG_COUNTS[upper] }, next);
+    const reflect = (control: Point | null): Point => (control ? [2 * x - control[0], 2 * y - control[1]] : [x, y]);
     const controls: Point[] = [];
     if (upper === 'C') controls.push(at(values[0], values[1]), at(values[2], values[3]));
+    if (upper === 'S') controls.push(reflect(lastCubic), at(values[0], values[1]));
     if (upper === 'Q') controls.push(at(values[0], values[1]));
-    if (upper === 'S' || upper === 'T') {
-      const reflected: Point = lastControl ? [2 * x - lastControl[0], 2 * y - lastControl[1]] : [x, y];
-      controls.push(reflected);
-      if (upper === 'S') controls.push(at(values[0], values[1]));
-    }
+    if (upper === 'T') controls.push(reflect(lastQuad));
     let end: Point;
     if (upper === 'H') end = [(relative ? x : 0) + values[0], y];
     else if (upper === 'V') end = [x, (relative ? y : 0) + values[0]];
     else end = at(values[values.length - 2], values[values.length - 1]);
     [x, y] = end;
     if (upper === 'M') { [startX, startY] = end; command = relative ? 'l' : 'L'; }
-    lastControl = controls.length > 0 ? controls[controls.length - 1] : null;
+    lastCubic = upper === 'C' || upper === 'S' ? controls[controls.length - 1] : null;
+    lastQuad = upper === 'Q' || upper === 'T' ? controls[0] : null;
     ends.push(end);
     hull.push(...controls, end);
   }
   return { ends, hull };
 }
 
-/** Every file under a repo directory (recursive), as repo-relative paths with `/` separators. */
-function filesUnder(dir: string): string[] {
-  if (!existsSync(repoPath(dir))) return [];
-  return (readdirSync(repoPath(dir), { recursive: true }) as string[])
-    .map((file) => `${dir}/${file.replaceAll('\\', '/')}`)
-    .filter((file) => statSync(repoPath(file)).isFile());
+/** An SVG fixture as a document, for proving the checks fail on what they guard against. */
+function fixture(markup: string): Document {
+  return new JSDOM(markup, { contentType: 'image/svg+xml' }).window.document;
+}
+
+/** Whether an element is allowed where it stands: its name, namespace and, for the C2PA pair, its parent. */
+function allowedHere(node: Element, root: Element): boolean {
+  if (!Object.hasOwn(ALLOWED_ELEMENTS, node.localName)) return false;
+  if (node.localName === 'manifest') return node.namespaceURI === C2PA_NAMESPACE && node.parentElement?.localName === 'metadata';
+  if (node.namespaceURI !== SVG_NAMESPACE) return false;
+  if (node.localName === 'svg') return node === root;
+  if (node.localName === 'metadata') return node.parentElement === root;
+  return true;
+}
+
+/** Elements and attributes outside the allowlist, as `<name>` or `<name attr>`. */
+function offendingNodes(doc: Document): string[] {
+  const root = doc.documentElement;
+  return allElements(doc).flatMap((node) => {
+    if (!allowedHere(node, root)) return [`<${node.localName}>`];
+    const allowed = ALLOWED_ELEMENTS[node.localName];
+    return [...node.attributes].filter((attr) => !allowed.includes(attr.name)).map((attr) => `<${node.localName} ${attr.name}>`);
+  });
+}
+
+/** Anything in `<metadata>` that is not the single C2PA manifest as base64 text (whitespace aside). */
+function metadataProblems(doc: Document): string[] {
+  const problems: string[] = [];
+  for (const metadata of doc.querySelectorAll('metadata')) {
+    const others = [...metadata.childNodes].filter((child) =>
+      !(child.nodeType === child.TEXT_NODE && !(child.textContent ?? '').trim()) &&
+      !(child.nodeType === child.ELEMENT_NODE && (child as Element).namespaceURI === C2PA_NAMESPACE && (child as Element).localName === 'manifest'));
+    const manifests = [...metadata.children].filter((child) => child.namespaceURI === C2PA_NAMESPACE && child.localName === 'manifest');
+    if (others.length > 0) problems.push(`metadata holds ${others.length} node(s) besides the manifest`);
+    if (manifests.length !== 1) problems.push(`metadata holds ${manifests.length} manifests`);
+    for (const manifest of manifests) {
+      if (manifest.childNodes.length !== 1 || manifest.firstChild?.nodeType !== manifest.TEXT_NODE) problems.push('the manifest holds more than text');
+      if (!BASE64.test(manifest.textContent ?? '')) problems.push('the manifest is not base64');
+    }
+  }
+  return problems;
+}
+
+/** Why a PNG is not a Play feature graphic: its size, or anything but 8-bit RGB with no transparency. */
+function pngProblems(bytes: Buffer): string[] {
+  const problems: string[] = [];
+  const size = [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+  if (size.join('x') !== '1024x500') problems.push(`size ${size.join('x')}`);
+  if (bytes[24] !== PLAY_BIT_DEPTH) problems.push(`bit depth ${bytes[24]}, not 8`);
+  if (bytes[25] !== PNG_RGB) problems.push(`colour type ${bytes[25]}, not RGB (2)`);
+  if (bytes.includes(Buffer.from('tRNS'))) problems.push('a tRNS chunk adds transparency');
+  return problems;
+}
+
+/** Every file under a directory (recursive) with `/` separators, and every symlink there (followed by nothing, so reported). */
+function filesUnder(root: string): { files: string[]; links: string[] } {
+  if (!existsSync(root)) return { files: [], links: [] };
+  const entries = readdirSync(root, { recursive: true, withFileTypes: true });
+  const pathOf = (entry: Dirent) => join(entry.parentPath, entry.name).replaceAll('\\', '/');
+  return {
+    files: entries.filter((entry) => entry.isFile()).map(pathOf),
+    links: entries.filter((entry) => entry.isSymbolicLink()).map(pathOf),
+  };
+}
+
+/** A 1024×500 PNG header with the given bit depth and colour type, for the feature-graphic checks. */
+function pngHeader(depth: number, colourType: number): Buffer {
+  const bytes = Buffer.alloc(33);
+  Buffer.from('\x89PNG\r\n\x1a\n', 'latin1').copy(bytes, 0);
+  bytes.write('IHDR', 12, 'latin1');
+  bytes.writeUInt32BE(1024, 16);
+  bytes.writeUInt32BE(500, 20);
+  bytes[24] = depth;
+  bytes[25] = colourType;
+  return bytes;
 }
 
 describe('pathPoints (the frame check reads these)', () => {
@@ -137,9 +213,17 @@ describe('pathPoints (the frame check reads these)', () => {
     expect(hull).toEqual([[0, 0], [100, -50], [200, 50], [10, 20], [-40, 0], [1, 1]]);
   });
 
-  it('reflects the previous control point for S and T', () => {
+  it('reflects the previous control point for S after C or S, and for T after Q or T, absolute and relative', () => {
     expect(pathPoints('M0 0 C0 10 10 10 10 0 S20 -10 20 0').hull).toContainEqual([10, -10]);
     expect(pathPoints('M0 0 Q5 10 10 0 T20 0').hull).toContainEqual([15, -10]);
+    expect(pathPoints('M0 0 c0 10 10 10 10 0 s10 -10 10 0').hull).toEqual([[0, 0], [0, 10], [10, 10], [10, 0], [10, -10], [20, -10], [20, 0]]);
+    expect(pathPoints('M0 0 q5 10 10 0 t10 0 t10 0').hull).toEqual([[0, 0], [5, 10], [10, 0], [15, -10], [20, 0], [25, 10], [30, 0]]);
+  });
+
+  it('uses the current point as the implied control when the previous command was of another kind (SVG spec)', () => {
+    expect(pathPoints('M0 0 C0 10 10 10 10 0 T20 0').hull).toEqual([[0, 0], [0, 10], [10, 10], [10, 0], [10, 0], [20, 0]]);
+    expect(pathPoints('M0 0 Q5 10 10 0 S20 -10 20 0').hull).toEqual([[0, 0], [5, 10], [10, 0], [10, 0], [20, -10], [20, 0]]);
+    expect(pathPoints('M0 0 L10 0 T20 0').hull).toEqual([[0, 0], [10, 0], [10, 0], [20, 0]]);
   });
 
   it('treats coordinates after a move as implicit lines, and reads upper-case exponents', () => {
@@ -153,6 +237,60 @@ describe('pathPoints (the frame check reads these)', () => {
     expect(() => pathPoints('M0 0 L1 1 Z 2 2')).toThrow(/follows Z/);
     expect(() => pathPoints('M0 0 L1')).toThrow(/mid-command/);
     expect(() => pathPoints('M0 0 A5 5 0 0 1 10 0')).toThrow(/arcs/);
+    expect(() => pathPoints('M0 0 L1 1 # ; L5 5')).toThrow(/unreadable/);
+  });
+
+  it('accepts commas and signs between numbers, as SVG allows', () => {
+    expect(pathPoints('M0,0L1-2,3+4').ends).toEqual([[0, 0], [1, -2], [3, 4]]);
+  });
+});
+
+describe('the logotype checks fail on what they guard against', () => {
+  const SVG = 'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"';
+
+  it('rejects elements nobody listed, including names Object.prototype owns and a nested svg', () => {
+    expect(offendingNodes(fixture(`<svg ${SVG}><constructor/></svg>`))).toEqual(['<constructor>']);
+    expect(offendingNodes(fixture(`<svg ${SVG}><toString id="x"/></svg>`))).toEqual(['<toString>']);
+    expect(offendingNodes(fixture(`<svg ${SVG}><svg viewBox="0 0 1 1"/></svg>`))).toEqual(['<svg>']);
+    expect(offendingNodes(fixture(`<svg ${SVG}><path d="M0 0"><set attributeName="fill" to="red"/></path></svg>`))).toEqual(['<set>']);
+  });
+
+  it('rejects an allowlisted name in the wrong namespace or place', () => {
+    expect(offendingNodes(fixture(`<svg ${SVG}><path xmlns="urn:other" d="M0 0"/></svg>`))).toEqual(['<path>']);
+    expect(offendingNodes(fixture(`<svg ${SVG} xmlns:c2pa="${C2PA_NAMESPACE}"><g><metadata/></g></svg>`))).toEqual(['<metadata>']);
+    expect(offendingNodes(fixture(`<svg ${SVG} xmlns:c2pa="${C2PA_NAMESPACE}"><c2pa:manifest>AA==</c2pa:manifest></svg>`))).toEqual(['<manifest>']);
+  });
+
+  it('rejects anything in <metadata> beyond the base64 manifest', () => {
+    const wrap = (inner: string) => fixture(`<svg ${SVG} xmlns:c2pa="${C2PA_NAMESPACE}"><metadata>${inner}</metadata></svg>`);
+    expect(metadataProblems(wrap('<c2pa:manifest>AAAA</c2pa:manifest>'))).toEqual([]);
+    expect(metadataProblems(wrap('loose text<c2pa:manifest>AAAA</c2pa:manifest>'))).not.toEqual([]);
+    expect(metadataProblems(wrap('<c2pa:manifest>AAAA</c2pa:manifest><![CDATA[x]]>'))).not.toEqual([]);
+    expect(metadataProblems(wrap('<c2pa:manifest>not base64!</c2pa:manifest>'))).not.toEqual([]);
+  });
+
+  it('rejects a feature graphic with alpha, a palette, or 16-bit channels', () => {
+    expect(pngProblems(pngHeader(8, 2))).toEqual([]);
+    expect(pngProblems(pngHeader(8, 6))).not.toEqual([]);
+    expect(pngProblems(pngHeader(16, 2))).not.toEqual([]);
+    expect(pngProblems(pngHeader(8, 0))).not.toEqual([]);
+    expect(pngProblems(pngHeader(8, 3))).not.toEqual([]);
+  });
+
+  it('reports a symlink in a scanned folder instead of skipping it', () => {
+    const root = mkdtempSync(join(tmpdir(), 'wordmark-scan-'));
+    try {
+      mkdirSync(join(root, 'real'));
+      writeFileSync(join(root, 'real', 'a.svg'), '<svg/>');
+      symlinkSync(join(root, 'real'), join(root, 'linked'));
+      symlinkSync(join(root, 'missing'), join(root, 'dangling'));
+      // Whether Node walks into the linked folder varies by version; the link itself is always reported, and the copy check fails on any.
+      const { files, links } = filesUnder(root);
+      expect(files).toContain(`${root}/real/a.svg`);
+      expect(links.sort()).toEqual([`${root}/dangling`, `${root}/linked`]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
@@ -164,22 +302,11 @@ describe('wordmark.svg (MUT-401)', () => {
   });
 
   it('holds only allowlisted elements and attributes, so nothing can animate, hide, move, style or link it (eng D4)', () => {
-    const doc = svgDocument(WORDMARK);
-    const offending = allElements(doc).flatMap((node) => {
-      const allowed = ALLOWED_ELEMENTS[node.localName];
-      if (!allowed || (node.localName === 'svg' && node !== doc.documentElement)) return [`<${node.localName}>`];
-      return [...node.attributes].filter((attr) => !allowed.includes(attr.name)).map((attr) => `<${node.localName} ${attr.name}>`);
-    });
-    expect(offending).toEqual([]);
+    expect(offendingNodes(svgDocument(WORDMARK))).toEqual([]);
   });
 
   it('keeps only the C2PA manifest, as base64 text, inside <metadata>', () => {
-    for (const metadata of svgDocument(WORDMARK).querySelectorAll('metadata')) {
-      const children = [...metadata.children];
-      expect(children.map((child) => [child.namespaceURI, child.localName])).toEqual([[C2PA_NAMESPACE, 'manifest']]);
-      expect(children[0].children).toHaveLength(0);
-      expect(BASE64.test(children[0].textContent ?? '')).toBe(true);
-    }
+    expect(metadataProblems(svgDocument(WORDMARK))).toEqual([]);
   });
 
   it('paints every path with one opaque fill, so the mask has no gaps or half-tones', () => {
@@ -218,19 +345,19 @@ describe('wordmark.svg (MUT-401)', () => {
   });
 
   it('lives in one place: no copy of its bytes, and no wordmark or MTB3A SVG, in docs/brand, public or the portal (eng D3)', () => {
-    const own = sha256(WORDMARK);
-    const files = COPY_ROOTS.flatMap(filesUnder);
-    expect(files.filter((file) => sha256(file) === own)).toEqual([]);
+    const own = readFileSync(repoPath(WORDMARK));
+    const scans = COPY_ROOTS.map((dir) => filesUnder(repoPath(dir)));
+    const files = scans.flatMap((scan) => scan.files);
+    expect(scans.flatMap((scan) => scan.links), 'a symlink could hide a copy from this scan').toEqual([]);
+    expect(files.filter((file) => readFileSync(file).equals(own))).toEqual([]);
     expect(files.filter((file) => /(wordmark|mtb3a)[^/]*\.svg$/i.test(file))).toEqual([]);
   });
 });
 
 describe('the Play feature graphic (MUT-401, for MUT-404)', () => {
-  it('is 1024×500 with no alpha channel, as Google Play requires', () => {
-    const bytes = readFileSync(repoPath(FEATURE_GRAPHIC));
+  it('is a 1024×500, 24-bit RGB PNG with no alpha, as Google Play requires', () => {
     expect(pngSize(repoPath(FEATURE_GRAPHIC))).toEqual([1024, 500]);
-    expect(OPAQUE_PNG_COLOUR_TYPES, `PNG colour type ${bytes[25]} carries alpha`).toContain(bytes[25]);
-    expect(bytes.includes(Buffer.from('tRNS')), 'a tRNS chunk adds transparency').toBe(false);
+    expect(pngProblems(readFileSync(repoPath(FEATURE_GRAPHIC)))).toEqual([]);
   });
 });
 
