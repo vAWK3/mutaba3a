@@ -159,8 +159,9 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
  * 2 (MUT-300): `orgs` gained `firmEnabledAt`, `firmRequestedAt` and `firmRequestedByUserId`; `members` gained `role`.
  * 3 (MUT-255): `expReceipts` gained `filingStatus`, `receivedOn`, `suggested`, `approved`, `approvedAt`,
  *   `approvedByUserId` and `version`, and `expenseId` may be null (a To-review receipt).
+ * 4 (MUT-366): `people` gained `emailVerifiedAt`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 3;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 4;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
