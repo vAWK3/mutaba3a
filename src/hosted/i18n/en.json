@@ -13,6 +13,11 @@
   },
   "hosted": {
     "brand": "Mutaba3a",
+    "crash": {
+      "title": "This page stopped working",
+      "body": "Reload to keep working. Anything you hadn't saved on this page may need entering again.",
+      "reload": "Reload"
+    },
     "auth": {
       "title": "Sign in",
       "email": "Email",

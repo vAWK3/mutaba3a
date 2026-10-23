@@ -5,6 +5,7 @@ import { BrandMark } from '../../../components/brand/BrandMark';
 import { BrandLoader } from '../../../components/brand/BrandLoader';
 import { bootDelayMs } from '../../../components/brand/bootDelay';
 import { Wordmark } from '../../components/Brand';
+import { useFocusOnMount } from '../../components/focusOnMount';
 
 /**
  * S1, "the mark becomes the loader" (MUT-207 D4, eng review R1): the boot
@@ -57,24 +58,35 @@ export function BootUnreachable({ onRetry, retrying }: { onRetry: () => void; re
 
 /** Which stop: another tab saved a newer format (D1), or the browser refused a save (storage full). */
 export type LocalStop = 'LOCAL_FORMAT_TOO_NEW' | 'LOCAL_SAVE_FAILED';
+/** A stop that only a reload gets past: the local backend's two, or the portal itself crashed (MUT-149). */
+export type ReloadStop = LocalStop | 'CRASH';
 
-const STOP_KEYS: Record<LocalStop, string> = { LOCAL_FORMAT_TOO_NEW: 'hosted.local.tooNew', LOCAL_SAVE_FAILED: 'hosted.local.saveFailed' };
+const STOP_COPY: Record<ReloadStop, { text: string; reload: string }> = {
+  LOCAL_FORMAT_TOO_NEW: { text: 'hosted.local.tooNew', reload: 'hosted.local.reload' },
+  LOCAL_SAVE_FAILED: { text: 'hosted.local.saveFailed', reload: 'hosted.local.reload' },
+  CRASH: { text: 'hosted.crash', reload: 'hosted.crash.reload' },
+};
 
 /**
  * MUT-286: the local backend stopped, and this page's code must not read or
  * write the device's records again, so the only way on is a reload. At boot
  * AuthGate shows it; mid-use the root layout shows it in place of the route.
+ * MUT-149: also the full-page crash screen, when the frame itself crashed; it
+ * never shows the error's own text. The title takes focus (design D7).
  */
-export function ReloadToContinue({ stop = 'LOCAL_FORMAT_TOO_NEW' }: { stop?: LocalStop }) {
+export function ReloadToContinue({ stop = 'LOCAL_FORMAT_TOO_NEW' }: { stop?: ReloadStop }) {
   const t = useT();
-  const key = STOP_KEYS[stop];
+  const title = useFocusOnMount<HTMLHeadingElement>();
+  const copy = STOP_COPY[stop];
   return (
     <div className="hp-center">
       <Wordmark />
       <div className="hp-card hp-boot-card" role="alert">
-        <h2>{t(`${key}.title`)}</h2>
-        <p>{t(`${key}.body`)}</p>
-        <Button onClick={() => window.location.reload()}>{t('hosted.local.reload')}</Button>
+        <h2 ref={title} tabIndex={-1}>
+          {t(`${copy.text}.title`)}
+        </h2>
+        <p>{t(`${copy.text}.body`)}</p>
+        <Button onClick={() => window.location.reload()}>{t(copy.reload)}</Button>
       </div>
     </div>
   );

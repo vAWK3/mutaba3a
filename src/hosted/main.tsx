@@ -10,6 +10,7 @@ import { PortalProviders } from './HostedApp';
 import { createPortalQueryClient } from './queryClient';
 import { createPortalRouter, type PortalRouter } from './router';
 import { SENTRY_ENABLED, startErrorReporting } from './observability/errorReporting';
+import { LastResortBoundary } from './observability/LastResortBoundary';
 
 /** Entry of the hosted portal build (`vite --mode hosted`, hosted-portal.md §2). */
 
@@ -26,6 +27,8 @@ started.router = router;
 
 createRoot(root).render(
   <StrictMode>
-    <PortalProviders queryClient={queryClient} router={router} />
+    <LastResortBoundary>
+      <PortalProviders queryClient={queryClient} router={router} />
+    </LastResortBoundary>
   </StrictMode>,
 );

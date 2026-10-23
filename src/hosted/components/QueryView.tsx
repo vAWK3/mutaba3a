@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { ApiError } from '../api/client';
 import { AlertIcon } from './Icons';
 import { ME_KEY } from '../session/me';
+import { useFocusOnMount } from './focusOnMount';
 
 /**
  * The four states of every view (hosted-portal.md §7.5): loading, empty, error,
@@ -62,6 +63,28 @@ export function Unreachable({ onRetry }: { onRetry: () => void }) {
       <Button variant="secondary" size="sm" onClick={onRetry}>
         {t('hosted.states.unreachable.retry')}
       </Button>
+    </div>
+  );
+}
+
+/**
+ * A page crashed (MUT-149 design D3–D7): the router shows this in place of the
+ * page, so the shell and its navigation stay usable, and leaving the page
+ * clears it. Unreachable's layout, one Reload, never the error's own text.
+ */
+export function CrashCard() {
+  const t = useT();
+  const title = useFocusOnMount<HTMLHeadingElement>();
+  return (
+    <div className="hp-card hp-unreachable" role="alert">
+      <AlertIcon />
+      <div>
+        <h2 ref={title} tabIndex={-1}>
+          {t('hosted.crash.title')}
+        </h2>
+        <p>{t('hosted.crash.body')}</p>
+      </div>
+      <Button onClick={() => window.location.reload()}>{t('hosted.crash.reload')}</Button>
     </div>
   );
 }
