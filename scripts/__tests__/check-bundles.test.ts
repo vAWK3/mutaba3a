@@ -21,6 +21,12 @@ import {
   unresolvedUrls,
   FILE_SCOPED_ORIGINS,
   originsNeedingReview,
+  SENTRY_MARKER,
+  SENTRY_FIXTURE_MARKER,
+  sentryInEntryGraph,
+  sentryLeaks,
+  sentrySecrets,
+  sourceMaps,
 } from '../bundle-rules';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -63,7 +69,7 @@ describe('hosted bundle rules', () => {
     expect(findForbidden(code, HOSTED_RULES)).not.toEqual([]);
   });
 
-  it.each(['Sign up', 'sign-up', 'Create account', 'Forgot password?', 'Reset password', 'Invite a colleague', 'إنشاء حساب', 'نسيت كلمة المرور', 'إعادة تعيين', 'دعوة', 'اشترك الآن'])(
+  it.each(['Sign up', 'sign-up', 'Create account', 'Forgot password?', 'Reset password', 'Invite a colleague', 'إنشاء حساب', 'نسيت كلمة المرور', 'إعادة تعيين', 'دعوة'])(
     'flags the self-service affordance "%s", case-insensitively',
     (copy) => {
       expect(findForbidden(`label:"${copy}"`, HOSTED_RULES)).not.toEqual([]);
@@ -74,6 +80,10 @@ describe('hosted bundle rules', () => {
     expect(findForbidden('persist(s,{name:"mutaba3a-active-profile"})', HOSTED_RULES).map((f) => f.rule)).toEqual(['app profile store']);
     expect(findForbidden('{to:"/clients/$clientId",params:p}', HOSTED_RULES).map((f) => f.rule)).toEqual(['app saved-flash route']);
     expect(findForbidden('{path:"/clients/$customerId"}', HOSTED_RULES)).toEqual([]);
+  });
+
+  it('allows the billing copy: a firm subscribes from Settings › Billing (MUT-362, ADR-170)', () => {
+    expect(findForbidden('"الاشتراك في متابعة","اشترك الآن"', HOSTED_RULES)).toEqual([]);
   });
 
   it('does not mistake "sign in" for "sign up"', () => {
@@ -329,5 +339,59 @@ describe('PostHog stays out of the local app (ADR-090, MUT-154)', () => {
     it('names each precached file that carries PostHog', () => {
       expect(posthogPrecached(sw, reader(files))).toEqual(['assets/LandingPage-e5.js']);
     });
+  });
+});
+
+describe('Sentry stays in the portal lazy chunk (MUT-149, AC1, AC4, AC8)', () => {
+  const files: Record<string, string> = {
+    'index.html': '<script type="module" crossorigin src="/assets/index-a1.js"></script>',
+    'assets/index-a1.js': 'import"./vendor-react-b2.js";const s=()=>import("./portalSentry-c3.js");',
+    'assets/vendor-react-b2.js': 'export const j=1;',
+    'assets/portalSentry-c3.js': 'const c=globalThis.__SENTRY__;const n="sentry.javascript.browser";const d="https://0123@o1.ingest.de.sentry.io/2";',
+  };
+  const reader = (all: Record<string, string>) => (path: string) => all[path] ?? '';
+
+  it.each(['__SENTRY__', 'sentry.javascript.browser', 'sentry_key=abc', 'https://o1.ingest.de.sentry.io/api/2/envelope/'])('treats %s as a Sentry SDK marker', (marker) => {
+    expect(SENTRY_MARKER.test(`x ${marker} y`)).toBe(true);
+  });
+
+  it("does not mistake posthog-js's own sentry.io links for the SDK", () => {
+    expect(SENTRY_MARKER.test('see https://sentry.io/organizations/ or docs.sentry.io')).toBe(false);
+  });
+
+  it('passes when the SDK lives only in the lazy chunk', () => {
+    expect(sentryInEntryGraph(files['index.html'], reader(files))).toEqual([]);
+  });
+
+  it('fails when the entry graph carries the SDK', () => {
+    const leaky = { ...files, 'assets/vendor-react-b2.js': 'const c=globalThis.__SENTRY__;' };
+    expect(sentryInEntryGraph(leaky['index.html'], reader(leaky))).toEqual(['assets/vendor-react-b2.js']);
+  });
+
+  it('fails on any SDK marker in a local build (web, desktop)', () => {
+    expect(sentryLeaks('const n="sentry.javascript.browser"')).toBe(true);
+    expect(sentryLeaks('const ok=1')).toBe(false);
+  });
+
+  it.each([
+    ['the contract fixture marker', `const f="${'MUT147-SENTRY-FIXTURE-DO-NOT-BUNDLE'}"`],
+    ['an org auth token', 'const t="sntrys_eyJpYXQiOjE3"'],
+    ['a user auth token', 'const t="sntryu_0123abcdef"'],
+  ])('fails on %s in any build', (_name, text) => {
+    expect(sentrySecrets(text).length).toBeGreaterThan(0);
+  });
+
+  it('keeps the fixture marker in step with the contract fixtures file', async () => {
+    const { readFileSync } = await import('node:fs');
+    const fixtures = JSON.parse(readFileSync('docs/observability/sentry-fixtures.json', 'utf8')) as { marker: string };
+    expect(SENTRY_FIXTURE_MARKER).toBe(fixtures.marker);
+  });
+
+  it('finds every source map in a dist', () => {
+    expect(sourceMaps(['index.html', 'assets/a-1.js', 'assets/a-1.js.map', 'assets/b.css.map'])).toEqual(['assets/a-1.js.map', 'assets/b.css.map']);
+  });
+
+  it("reads a DSN's host as its origin, never its public key", () => {
+    expect([...extractOrigins('const d="https://0123456789abcdef0123456789abcdef@o1.ingest.de.sentry.io/2"')]).toEqual(['https://o1.ingest.de.sentry.io']);
   });
 });

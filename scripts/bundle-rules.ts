@@ -38,7 +38,8 @@ export const LOCAL_RULES: Rule[] = [
 /**
  * The portal offers no self-service account door, in either language, and
  * carries no Dexie or service worker. `تسجيل` alone is allowed: `تسجيل الدخول`
- * is "sign in". IndexedDB is allowed since ADR-097, but only in the lazy local
+ * is "sign in". `اشترك` is allowed since MUT-362 (ADR-170): a firm subscribes
+ * from Settings › Billing; the account door itself stays closed. IndexedDB is allowed since ADR-097, but only in the lazy local
  * backend: see `localBackendInEntryGraph`.
  */
 export const HOSTED_RULES: Rule[] = [
@@ -53,7 +54,6 @@ export const HOSTED_RULES: Rule[] = [
   { name: 'ar: forgot', pattern: /نسيت/ },
   { name: 'ar: reset', pattern: /إعادة تعيين/ },
   { name: 'ar: invite', pattern: /دعوة/ },
-  { name: 'ar: subscribe', pattern: /اشترك/ },
   // MUT-91: the portal imports the app's after-save store; nothing of the app's
   // profile store or its Show routes may come along with it.
   { name: 'app profile store', pattern: /mutaba3a-active-profile/ },
@@ -69,10 +69,11 @@ export function findForbidden(text: string, rules: Rule[]): Finding[] {
   return findings;
 }
 
-const ORIGIN = /\bhttps?:\/\/[a-z0-9.-]+(?::\d+)?/gi;
+/** A DSN's public key sits where userinfo goes (`https://<key>@host`, MUT-149): the origin is the host after it. */
+const ORIGIN = /\b(https?:\/\/)(?:[a-z0-9]+@)?([a-z0-9.-]+(?::\d+)?)/gi;
 
 export function extractOrigins(text: string): Set<string> {
-  return new Set([...text.matchAll(ORIGIN)].map((m) => m[0].toLowerCase()));
+  return new Set([...text.matchAll(ORIGIN)].map((m) => `${m[1]}${m[2]}`.toLowerCase()));
 }
 
 export function newOrigins(found: Set<string>, allowlist: string[]): string[] {
@@ -329,4 +330,43 @@ export function precachedUrls(sw: string): string[] {
  */
 export function posthogPrecached(sw: string, read: (path: string) => string): string[] {
   return precachedUrls(sw).filter((path) => POSTHOG_MARKER.test(read(path)));
+}
+
+/**
+ * What only the Sentry browser SDK or our DSN carries (MUT-149): its global
+ * carrier, its SDK name, its auth query key, the EU ingest host. Not bare
+ * `sentry.io`: posthog-js links to it (bundle-origins.json).
+ */
+export const SENTRY_MARKER = /__SENTRY__|sentry\.javascript|\bsentry_key\b|ingest\.de\.sentry\.io/;
+
+/** True when a local build (web, desktop) file carries the SDK: only the portal reports crashes (AC1). */
+export function sentryLeaks(text: string): boolean {
+  return SENTRY_MARKER.test(text);
+}
+
+/**
+ * The statically loaded portal files that carry the SDK. It is a lazy chunk,
+ * loaded only signed in (ADR-097 §10): a hit means every page load, signed out
+ * too, would download it. Empty when clean.
+ */
+export function sentryInEntryGraph(html: string, read: (path: string) => string): string[] {
+  return staticGraph(html, read).filter((path) => SENTRY_MARKER.test(read(path)));
+}
+
+/** The synthetic-PII fixtures' own marker (docs/observability/sentry-fixtures.json): they must never ship (AC8). */
+export const SENTRY_FIXTURE_MARKER = 'MUT147-SENTRY-FIXTURE-DO-NOT-BUNDLE';
+
+const SENTRY_SECRETS: Rule[] = [
+  { name: 'Sentry contract fixtures', pattern: new RegExp(SENTRY_FIXTURE_MARKER) },
+  { name: 'Sentry auth token', pattern: /\bsntry[su]_[A-Za-z0-9]/ },
+];
+
+/** What must never be in any build: the fixtures, or an upload token (only `SENTRY_AUTH_TOKEN` at build time holds one). */
+export function sentrySecrets(text: string): Finding[] {
+  return findForbidden(text, SENTRY_SECRETS);
+}
+
+/** Source maps in a dist (paths relative to it): uploaded and deleted at build time, never shipped (AC4). */
+export function sourceMaps(paths: readonly string[]): string[] {
+  return paths.filter((path) => path.endsWith('.map'));
 }
