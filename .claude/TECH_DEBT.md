@@ -18,6 +18,30 @@
 
 ## Open Debt
 
+### TD-208: A suppressed mail address can't be lifted without SQL
+**Status**: Open
+**Ticket**: MUT-359 (D10)
+**Added**: 2026-10-23
+**Priority**: Low
+**Impact**: a hard bounce or complaint puts the address in `email_suppressions` for good. A person who fixes their mailbox gets no more mail until the operator deletes the row by hand (`npm run db:psql`, DEPLOYMENT.md §6f).
+**Fix**: an `email:unsuppress --email` operator command (admin route + audit), when the first real case appears.
+
+### TD-209: Replies and DMARC reports have no mailbox on the apex
+**Status**: Open
+**Ticket**: MUT-359 eng review (outside voice #8, D23)
+**Added**: 2026-10-23
+**Priority**: Medium (before GA)
+**Impact**: the only support address today is on Malafat's domain, so `mail_reply_to` would send MTB3A replies to Malafat's inbox; a DMARC `rua` off the apex needs that domain to authorize ours, so DMARC ships without reports.
+**Fix**: Cloudflare Email Routing on the apex in the frontdoor stack (`support@`, `dmarc@` → a real inbox), then set `mail_reply_to` and `dmarc_report_address` to them.
+
+### TD-210: Arabic mail is sent from "MTB3A", not "متابعة"
+**Status**: Open
+**Ticket**: MUT-359 (D5 as built)
+**Added**: 2026-10-23
+**Priority**: Low
+**Impact**: MUT-400 names the product متابعة in Arabic, but the From display name is the Latin "MTB3A" in both languages. A non-ASCII display name needs RFC 2047 encoding, and whether Resend encodes it itself (or would double-encode ours) can only be seen on a live send.
+**Fix**: at the live check (DEPLOYMENT.md §6f step 8) send one Arabic mail with `متابعة <no-reply@…>`; if it renders in Gmail and Outlook, make the display name per locale in `createMailer`.
+
 ### TD-190: Receipt files aren't covered by the database backups
 **Status**: Resolved in code (2026-10-20: `soft_delete_policy` of 14 days on `google_storage_bucket.attachments`, tied to `retained_backups` by `local.db_retained_backups`; `tests/attachments_bucket.tftest.hcl`). **Applied 2026-10-20** with the MUT-328 §6b apply (the bucket is a dependency of the targeted plan). Resolved.
 **Ticket**: none (MUT-327, 2026-10-20)

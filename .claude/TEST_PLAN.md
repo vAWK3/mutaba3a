@@ -3524,3 +3524,21 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 - Privacy: `PrivacyPolicyPage.test.tsx` (portal sentence en/ar; phone and PostHog sentences kept).
 - Release-QA: `portal.error-reports.{crash-reported, crash-reported-ar, handled-api-error-not-reported, signed-out-silent, crash-screen}` and `web.legal.privacy-error-reports`, all passing 2026-10-23.
 - Manual: deploy.sh's DSN-without-token stop and the Makefile's Keychain fallback (no shell harness; `make -n release-server` shows the token never printed). The first release's console smoke is in `docs/operations/before-release.md`.
+
+## MUT-359 — transactional mail through Resend (2026-10-23, ADR-174)
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit (server) | `server/src/email/__tests__/templates.test.ts` | every template in en and ar; RTL/LTR html; no image, style, script or foreign link; links in text and in `<bdi dir="ltr">`; no amount, currency or date; escaping; non-http link refused; first-set vs changed wording; Arabic hour agreement |
+| Unit (server) | `svix.test.ts` | Svix's published vector; wrong secret, body, id, timestamp; ±5 min; rotation lists; other versions; missing headers; malformed secret |
+| Adapter (server) | `resend-transport.test.ts` | exact body keys (no tracking, tags or headers), reply_to optional, headers incl. Idempotency-Key; 429/4xx/5xx mapping; timeout; network; 2xx without id |
+| Unit (server) | `mailer.test.ts`, `password-notice.test.ts` | each template × language through the memory outbox; duplicate key; suppression spends no cap; unowned domain and non-plain addresses refused; the 501st mail capped with an error log and a day later allowed; security reserve; per-recipient cap (warn); provider failure logged and retryable; 429 logged apart; noop warns once; caller bug throws; the notice never throws |
+| Store contract | `store-contract-email.ts` (memory + Prisma) | suppression first-wins; claim/duplicate; FAILED and stale PENDING re-claimed; global and recipient caps; FAILED not counted; concurrent claims → one; prune |
+| Route (server) | `routes-email-webhook.test.ts` | signed hard bounce suppresses (normalized) and the mailer then refuses; complaint; transient, other events and other domains ignored; unsigned, mis-signed and replayed → 401, nothing written; redelivery; non-event body; 503 unconfigured; failed-signature rate limit; published as public |
+| Route (server) | `routes-password-notice.test.ts`, `dev-outbox.test.ts` | redeem (first, Arabic), reset link and `POST /v1/me/password` each mail one notice; a failing provider changes neither answer; no mailer = unchanged behaviour; outbox admin-only, filtered, unpublished, absent without memory |
+| Config / scripts | `config.test.ts`, `email-check.test.ts`, `release-guard.test.ts` | defaults and every refusal; DNS and API modes of email:check (stubbed); `guard_mailer_release` paths and deploy.sh wiring |
+| Pins | `no-self-registration.test.ts`, `route-security.test.ts` | the public operations now include `POST /v1/email/resend/webhook` |
+| Terraform | `terraform/tests/email.tftest.hcl`, `frontdoor/tests/frontdoor.tftest.hcl` | noop default mounts nothing; resend mounts secrets, sender from hosts, reply-to, cap, alerts; resend without a domain or cap fails; `log` not offered; DNS records only with a DKIM value, DNS only, rua optional, region moves the MX |
+| Release-QA | none: server-only, no user-visible flow (`server/src/**` is outside every app's watch). MUT-368's `signup.*`/`recover.*` specs will read `GET /admin/v1/dev-outbox` | — |
+| Live (deferred) | DEPLOYMENT.md §6f step 8 | a real mail reaches Gmail and Outlook inboxes in both languages: at Basel's end-of-run go-live |
+
