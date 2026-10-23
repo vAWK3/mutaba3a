@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.53.0-mut149
+  version: 1.54.0-mut340
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -5390,6 +5390,15 @@ components:
         archived:
           type: boolean
       additionalProperties: false
+    IncomeCaptureResponse:
+      allOf:
+        - $ref: "#/components/schemas/IncomeResponse"
+        - type: object
+          properties:
+            receivedCount:
+              type: integer
+              minimum: 0
+              exclusiveMinimum: true
     CreateIncomeRequest:
       type: object
       properties:
@@ -12976,7 +12985,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/IncomeResponse"
+                $ref: "#/components/schemas/IncomeCaptureResponse"
         "401":
           description: Missing, malformed, unknown, revoked, expired or wrong-environment key
           content:

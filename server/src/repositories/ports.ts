@@ -1162,8 +1162,12 @@ export interface PaymentRepository {
   reverse(organizationId: string, paymentId: string, reason: string, at: Date): Promise<{ payment: PaymentRecord; changed: boolean } | null>;
   /** The POSTED payment that names this one as replacesPaymentId, if any. */
   findReplacedBy(organizationId: string, paymentId: string): Promise<PaymentRecord | null>;
-  /** MUT-61: a person's own Received — POSTED, origin CAPTURE, no allocations. Same numbering as create. */
-  capture(input: CaptureReceivedInput, at: Date): Promise<PaymentRecord>;
+  /**
+   * MUT-61: a person's own Received — POSTED, origin CAPTURE, no allocations. Same numbering as create.
+   * MUT-340: `postedCount` is the profile's POSTED payments (every origin) right after this one, counted in the same
+   * transaction, under the (organization, year) counter lock, so two captures never read the same count.
+   */
+  capture(input: CaptureReceivedInput, at: Date): Promise<{ payment: PaymentRecord; postedCount: number }>;
   /**
    * MUT-61: reverse this person's own capture, only while nothing is allocated — one conditional write, so an
    * allocation that lands at the same moment either wins (→ `allocated`) or finds the payment reversed. Never

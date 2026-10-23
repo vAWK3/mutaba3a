@@ -60,7 +60,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const u = await person(store, a.id);
       const { c, x } = await seed(store, a.id);
 
-      const p = await store.payments.capture(capture(a.id, u.id, 5000n, { customerId: c.id, projectId: x.id, captureSource: 'siri' }), at(10));
+      const p = (await store.payments.capture(capture(a.id, u.id, 5000n, { customerId: c.id, projectId: x.id, captureSource: 'siri' }), at(10))).payment;
       expect(p).toMatchObject({ status: 'POSTED', origin: 'CAPTURE', captureSource: 'siri', createdByUserId: u.id, allocatedMinor: 0n, customerId: c.id, projectId: x.id, reference: null, replacesPaymentId: null });
       expect(p.number).toMatch(/^PAY-2026-\d{4}$/);
       expect(await store.payments.listAllocations(a.id, p.id)).toEqual([]);
@@ -79,7 +79,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const store = await makeStore();
       const a = await org(store);
       const u = await person(store, a.id);
-      const p = await store.payments.capture(capture(a.id, u.id, 5000n), at(10));
+      const p = (await store.payments.capture(capture(a.id, u.id, 5000n), at(10))).payment;
 
       const first = await store.payments.undoCapture(a.id, p.id, u.id, at(11));
       expect(first.result).toBe('reversed');
@@ -92,7 +92,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const a = await org(store);
       const u = await person(store, a.id);
       const { c, receivable } = await seed(store, a.id);
-      const p = await store.payments.capture(capture(a.id, u.id, 5000n, { customerId: c.id }), at(10));
+      const p = (await store.payments.capture(capture(a.id, u.id, 5000n, { customerId: c.id }), at(10))).payment;
       await store.payments.allocate(a.id, p.id, [{ receivableId: receivable.id, amountMinor: 2000n }], at(11));
 
       const res = await store.payments.undoCapture(a.id, p.id, u.id, at(12));
@@ -108,7 +108,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const u = await person(store, a.id, 'Nour');
       const other = await person(store, a.id, 'Sami');
       const { c } = await seed(store, a.id);
-      const mine = await store.payments.capture(capture(a.id, u.id, 5000n), at(10));
+      const mine = (await store.payments.capture(capture(a.id, u.id, 5000n), at(10))).payment;
       const { payment: malafat } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, at(11));
 
       expect((await store.payments.undoCapture(a.id, mine.id, other.id, at(12))).result).toBe('not-found');
@@ -122,10 +122,10 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const store = await makeStore();
       const a = await org(store);
       const u = await person(store, a.id);
-      const theirs = await store.payments.capture(capture(a.id, u.id, 5000n), at(10));
+      const theirs = (await store.payments.capture(capture(a.id, u.id, 5000n), at(10))).payment;
       await store.payments.reverse(a.id, theirs.id, 'duplicate', at(11));
       expect((await store.payments.undoCapture(a.id, theirs.id, u.id, at(12))).result).toBe('reversed-elsewhere');
-      const mine = await store.payments.capture(capture(a.id, u.id, 5000n), at(13));
+      const mine = (await store.payments.capture(capture(a.id, u.id, 5000n), at(13))).payment;
       await store.payments.undoCapture(a.id, mine.id, u.id, at(14));
       expect((await store.payments.undoCapture(a.id, mine.id, u.id, at(15))).result).toBe('already-reversed');
     });
@@ -137,7 +137,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const { c, receivable } = await seed(store, a.id, 100_000n);
       let allocatedWon = 0;
       for (let i = 0; i < 20; i += 1) {
-        const p = await store.payments.capture(capture(a.id, u.id, 100n, { customerId: c.id }), at(20 + i));
+        const p = (await store.payments.capture(capture(a.id, u.id, 100n, { customerId: c.id }), at(20 + i))).payment;
         const [alloc, undo] = await Promise.allSettled([
           store.payments.allocate(a.id, p.id, [{ receivableId: receivable.id, amountMinor: 100n }], at(20 + i)),
           store.payments.undoCapture(a.id, p.id, u.id, at(20 + i)),
@@ -159,10 +159,10 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const a = await org(store);
       const u = await person(store, a.id);
       const { c, receivable } = await seed(store, a.id, 10000n);
-      const open = await store.payments.capture(capture(a.id, u.id, 3000n, { customerId: c.id }), at(10));
-      const partial = await store.payments.capture(capture(a.id, u.id, 3000n, { customerId: c.id }), at(11));
-      const full = await store.payments.capture(capture(a.id, u.id, 3000n, { customerId: c.id }), at(12));
-      const undone = await store.payments.capture(capture(a.id, u.id, 3000n, { customerId: c.id }), at(13));
+      const open = (await store.payments.capture(capture(a.id, u.id, 3000n, { customerId: c.id }), at(10))).payment;
+      const partial = (await store.payments.capture(capture(a.id, u.id, 3000n, { customerId: c.id }), at(11))).payment;
+      const full = (await store.payments.capture(capture(a.id, u.id, 3000n, { customerId: c.id }), at(12))).payment;
+      const undone = (await store.payments.capture(capture(a.id, u.id, 3000n, { customerId: c.id }), at(13))).payment;
       await store.payments.allocate(a.id, partial.id, [{ receivableId: receivable.id, amountMinor: 1000n }], at(14));
       await store.payments.allocate(a.id, full.id, [{ receivableId: receivable.id, amountMinor: 3000n }], at(15));
       await store.payments.undoCapture(a.id, undone.id, u.id, at(16));
@@ -180,7 +180,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const a = await org(store);
       const u = await person(store, a.id);
       const { c, x, y, receivable } = await seed(store, a.id);
-      const p = await store.payments.capture(capture(a.id, u.id, 4000n, { customerId: c.id, projectId: x.id }), at(10));
+      const p = (await store.payments.capture(capture(a.id, u.id, 4000n, { customerId: c.id, projectId: x.id }), at(10))).payment;
       expect(ids(await store.payments.list(a.id, { projectId: x.id }, page))).toEqual([p.id]);
 
       await store.payments.allocate(a.id, p.id, [{ receivableId: receivable.id, amountMinor: 4000n }], at(11));
@@ -197,7 +197,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const { c, x } = await seed(store, a.id);
       const onX: string[] = [];
       for (let i = 0; i < 3; i += 1) {
-        onX.push((await store.payments.capture(capture(a.id, u.id, 100n, { customerId: c.id, projectId: x.id }), at(10 + i * 2))).id);
+        onX.push((await store.payments.capture(capture(a.id, u.id, 100n, { customerId: c.id, projectId: x.id }), at(10 + i * 2))).payment.id);
         await store.payments.capture(capture(a.id, u.id, 100n, { customerId: c.id }), at(11 + i * 2));
       }
       const first = await store.payments.list(a.id, { projectId: x.id }, { limit: 2, cursor: null });
@@ -267,7 +267,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const store = await makeStore();
       const a = await org(store);
       const u = await person(store, a.id);
-      const p = await store.payments.capture(capture(a.id, u.id, 500n), at(10));
+      const p = (await store.payments.capture(capture(a.id, u.id, 500n), at(10))).payment;
 
       const result = await store.payments.redateCapture(a.id, p.id, u.id, p.version, '2026-10-02', at(40));
       expect(result).toMatchObject({ kind: 'updated', record: { receivedOn: '2026-10-02', version: p.version + 1, number: p.number, amountMinor: 500n } });
@@ -279,7 +279,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const store = await makeStore();
       const a = await org(store);
       const u = await person(store, a.id);
-      const p = await store.payments.capture(capture(a.id, u.id, 500n), at(10));
+      const p = (await store.payments.capture(capture(a.id, u.id, 500n), at(10))).payment;
       await store.payments.redateCapture(a.id, p.id, u.id, p.version, '2026-10-02', at(40));
 
       expect(await store.payments.redateCapture(a.id, p.id, u.id, p.version, '2026-10-01', at(41))).toMatchObject({ kind: 'stale', record: { receivedOn: '2026-10-02' } });
@@ -292,9 +292,9 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const other = await person(store, a.id, 'Rami');
       const { c, receivable } = await seed(store, a.id);
       const { payment: integration } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 1000n }] }, at(10));
-      const undone = await store.payments.capture(capture(a.id, u.id, 500n), at(11));
+      const undone = (await store.payments.capture(capture(a.id, u.id, 500n), at(11))).payment;
       await store.payments.undoCapture(a.id, undone.id, u.id, at(12));
-      const mine = await store.payments.capture(capture(a.id, u.id, 500n), at(13));
+      const mine = (await store.payments.capture(capture(a.id, u.id, 500n), at(13))).payment;
 
       expect(await store.payments.redateCapture(a.id, integration.id, u.id, integration.version, '2026-10-01', at(40))).toEqual({ kind: 'not_found' });
       expect(await store.payments.redateCapture(a.id, undone.id, u.id, undone.version + 1, '2026-10-01', at(40))).toEqual({ kind: 'not_found' });
@@ -315,6 +315,28 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       expect(result).toMatchObject({ kind: 'updated', record: { receivedOn: '2026-10-09', allocatedMinor: 3000n } });
       expect(await store.payments.listAllocations(a.id, payment.id)).toEqual(allocations);
       expect(await store.receivables.getById(a.id, r.id)).toEqual(settled);
+    });
+
+    it('MUT-340: capture answers the profile’s POSTED count after it; undone ones drop out', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      const first = await store.payments.capture(capture(a.id, u.id, 500n), at(10));
+      const second = await store.payments.capture(capture(a.id, u.id, 500n), at(11));
+      expect([first.postedCount, second.postedCount]).toEqual([1, 2]);
+      await store.payments.undoCapture(a.id, second.payment.id, u.id, at(12));
+      expect((await store.payments.capture(capture(a.id, u.id, 500n), at(13))).postedCount).toBe(2);
+      const other = await org(store, 'Other');
+      expect((await store.payments.capture(capture(other.id, u.id, 500n), at(14))).postedCount).toBe(1);
+    });
+
+    it('MUT-340: two captures at once never read the same count', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      await store.payments.capture(capture(a.id, u.id, 500n), at(10));
+      const counts = (await Promise.all([1, 2, 3, 4].map((i) => store.payments.capture(capture(a.id, u.id, 500n), at(10 + i))))).map((r) => r.postedCount);
+      expect([...counts].sort()).toEqual([2, 3, 4, 5]);
     });
   });
 }

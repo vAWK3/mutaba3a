@@ -3524,3 +3524,10 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 - Privacy: `PrivacyPolicyPage.test.tsx` (portal sentence en/ar; phone and PostHog sentences kept).
 - Release-QA: `portal.error-reports.{crash-reported, crash-reported-ar, handled-api-error-not-reported, signed-out-silent, crash-screen}` and `web.legal.privacy-error-reports`, all passing 2026-10-23.
 - Manual: deploy.sh's DSN-without-token stop and the Makefile's Keychain fallback (no shell harness; `make -n release-server` shows the token never printed). The first release's console smoke is in `docs/operations/before-release.md`.
+
+## MUT-340 — receivedCount on Received captures (2026-10-23, ADR-175)
+- Route: `src/__tests__/income-routes.test.ts`: counts 1, 2, 3; an undone capture drops out; Owed has no count; an Idempotency-Key replay answers the stored count; Malafat's own payments count; the entries feed never carries it.
+- Store contract (memory and Postgres): `src/repositories/__tests__/store-contract-capture.ts`: count after each capture, after an undo, per organization; four parallel captures get four different counts (proved on Postgres on a scratch database).
+- OpenAPI: `npm run openapi:check` with `IncomeCaptureResponse`.
+- Release-QA: the phone's `ios.capture.milestone-*` flows (mutaba3a-flutter) cover it end to end.
+

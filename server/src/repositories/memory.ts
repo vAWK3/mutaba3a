@@ -1489,7 +1489,17 @@ export class MemoryLedgerStore implements LedgerStore {
       return { payment: { ...payment }, changed: true };
     },
     findReplacedBy: async (organizationId, paymentId) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.replacesPaymentId === paymentId && p.status === 'POSTED')),
-    capture: async (input, at) => (await this.payments.create({ ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at)).payment,
+    capture: async (input, at) => {
+      const { payment } = await this.payments.create({ ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
+      // Counted up to this payment in insertion order, as Postgres's counter lock serializes it: captures in flight at
+      // once each see only the ones before them.
+      let postedCount = 0;
+      for (const p of this.pays.values()) {
+        if (p.organizationId === input.organizationId && p.status === 'POSTED') postedCount += 1;
+        if (p.id === payment.id) break;
+      }
+      return { payment, postedCount };
+    },
     undoCapture: async (organizationId, paymentId, userId, at) => {
       const p = this.pays.get(paymentId);
       if (!p || p.organizationId !== organizationId || p.origin !== 'CAPTURE' || p.createdByUserId !== userId) return { result: 'not-found', payment: null };

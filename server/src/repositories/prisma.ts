@@ -1294,18 +1294,20 @@ export class PrismaLedgerStore implements LedgerStore {
       }),
   };
 
-  readonly payments: PaymentRepository = {
-    // The counter upsert can race on first use of a year (two inserts); one loses with P2002 and retries once.
-    create: async (input, at) => {
-      for (let attempt = 0; ; attempt += 1) {
-        try {
-          return await this.prisma.$transaction((tx) => createPaymentTx(tx, input, at));
-        } catch (err) {
-          if (attempt === 0 && isUniqueViolation(err) && String((err as Prisma.PrismaClientKnownRequestError).meta?.target ?? '').includes('year')) continue;
-          throw asLockConflict(err);
-        }
+  /** The counter upsert can race on first use of a year (two inserts); one loses with P2002 and retries once. */
+  private async paymentWrite<T>(write: () => Promise<T>): Promise<T> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await write();
+      } catch (err) {
+        if (attempt === 0 && isUniqueViolation(err) && String((err as Prisma.PrismaClientKnownRequestError).meta?.target ?? '').includes('year')) continue;
+        throw asLockConflict(err);
       }
-    },
+    }
+  }
+
+  readonly payments: PaymentRepository = {
+    create: (input, at) => this.paymentWrite(() => this.prisma.$transaction((tx) => createPaymentTx(tx, input, at))),
     getById: (organizationId, id) => this.prisma.payment.findFirst({ where: { id, organizationId } }),
     list: async (organizationId, filter: PaymentFilter, page) => {
       const rows = await this.prisma.payment.findMany({
@@ -1362,7 +1364,14 @@ export class PrismaLedgerStore implements LedgerStore {
       });
     },
     findReplacedBy: (organizationId, paymentId) => this.prisma.payment.findFirst({ where: { organizationId, replacesPaymentId: paymentId, status: 'POSTED' } }),
-    capture: async (input, at) => (await this.payments.create({ ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at)).payment,
+    capture: (input, at) =>
+      this.paymentWrite(() =>
+        this.prisma.$transaction(async (tx) => {
+          const { payment } = await createPaymentTx(tx, { ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
+          const postedCount = await tx.payment.count({ where: { organizationId: input.organizationId, status: 'POSTED' } });
+          return { payment, postedCount };
+        }),
+      ),
     undoCapture: async (organizationId, paymentId, userId, at) => {
       // One conditional write. allocate() holds FOR UPDATE on this row; whichever commits first wins, and Postgres
       // re-checks this WHERE against the row allocate() left behind, so an allocation is never silently undone.

@@ -1951,6 +1951,15 @@ export const IncomeResponseSchema = z
   })
   .openapi('IncomeResponse');
 
+/**
+ * MUT-340: what POST /v1/income answers. A Received capture adds `receivedCount`, the profile's POSTED payments
+ * right after it, so the phone can mark a milestone (1st, 10th, 50th…). Absent on Owed. A replay with the same
+ * Idempotency-Key answers the stored body, so the count stays the one the capture made. Only this route sends it.
+ */
+export const IncomeCaptureResponseSchema = IncomeResponseSchema.extend({
+  receivedCount: z.number().int().positive().optional(),
+}).openapi('IncomeCaptureResponse');
+
 export const IncomeIdParamSchema = z.object({ incomeId: uuid });
 
 /** MUT-223: date only (amount, client, matter and note edits are out of scope). */

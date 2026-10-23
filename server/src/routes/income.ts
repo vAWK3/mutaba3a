@@ -10,7 +10,7 @@ import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
 import { idempotent } from '../idempotency.js';
 import { CAPTURE_UNDO_REASON, type LedgerStore } from '../repositories/ports.js';
-import { CreateIncomeRequestSchema, IfMatchHeaderSchema, IncomeIdParamSchema, IncomeResponseSchema, UpdateIncomeRequestSchema } from '../schemas.js';
+import { CreateIncomeRequestSchema, IfMatchHeaderSchema, IncomeCaptureResponseSchema, IncomeIdParamSchema, IncomeResponseSchema, UpdateIncomeRequestSchema } from '../schemas.js';
 import { serializeIncomeEntry } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 
@@ -41,7 +41,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       security: SESSION_ONLY,
       middleware: [requireScope('capture:write'), idempotent(store, 'income.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateIncomeRequestSchema) },
-      responses: { 201: { description: 'Captured', content: { 'application/json': { schema: IncomeResponseSchema } } }, ...validationResponse, ...errorResponses },
+      responses: { 201: { description: 'Captured', content: { 'application/json': { schema: IncomeCaptureResponseSchema } } }, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
       const { organization, user, writerOfRecord } = sessionAuth(c);
@@ -59,7 +59,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const metadata = { amount: body.amount, currency: body.currency, customerId: links.customerId, projectId: links.projectId, ...(body.kind === 'received' ? { origin: 'CAPTURE' } : {}), ...(body.captureSource ? { captureSource: body.captureSource } : {}) };
 
       if (body.kind === 'received') {
-        const payment = await store.payments.capture(
+        const { payment, postedCount } = await store.payments.capture(
           {
             organizationId: organization.id,
             customerId: links.customerId,
@@ -76,7 +76,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           now,
         );
         await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'income.received', entityType: 'payment', entityId: payment.id, metadata, requestId: c.get('requestId') });
-        return c.json(serializeIncomeEntry({ kind: 'received', payment }), 201);
+        return c.json({ ...serializeIncomeEntry({ kind: 'received', payment }), receivedCount: postedCount }, 201);
       }
 
       if (!links.customerId) throw new ApiError('INTERNAL', 'resolveIncomeLinks guarantees a customerId for owed');

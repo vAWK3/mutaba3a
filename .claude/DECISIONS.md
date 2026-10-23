@@ -4758,3 +4758,19 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 7. **Server.** "MTB3A Financial API", `1.52.1-mut402` (the next patch after main), and "the MTB3A portal" in the three CROSS_SITE_REQUEST messages.
 
 **Consequences**: Only the active language's name changes with the page language; identifiers, storage keys, the records `kind` and campaign values keep "mutaba3a". The `/app` shell still sets no tab title of its own (TD-207). The 375px English bar was already clipped on main and still is (TD-206). The one-request check runs in Chromium only; a Safari double fetch would cost 9.6 KB per cold visit (R6). The phone (MUT-403), the stores (MUT-404) and Malafat (MAL-1305) follow.
+
+## ADR-175: A Received Capture Answers the Profile's Payment Count; the Phone Owns the Milestone Ladder (MUT-340)
+
+**Status**: Accepted (2026-10-23, MUT-340). Basel's M1–M3, eng review R1–R12. ADR-174 is claimed by MUT-359.
+
+**Context**: MUT-340 celebrates income milestones on the phone. Basel chose the count of payments received (1st, 10th, 50th, 100th, 250th, 500th, 1000th), the same in every currency, played once after the save that crosses it. Nothing on the server exposed a payment count; the `PAY-YYYY-NNNN` number is per year and keeps reversed payments. The phone saves through an outbox, so the count has to come back with the upload, not with Save.
+
+**Decision**:
+1. **Counted on write.** `POST /v1/income` (received) answers `receivedCount`, the organization's POSTED payments of every origin, counted in the capture's transaction after the payment counter upsert. That upsert row-locks `(organization, year)`, so concurrent captures get distinct counts.
+2. **Fixed by idempotency.** A replay with the same Idempotency-Key answers the stored body, so a retried upload never crosses a milestone twice.
+3. **The ladder is the phone's.** The server only reports the count. Which counts are milestones, and whether one was already shown on this install, live in the app.
+4. **POST-only schema.** `IncomeCaptureResponse` extends `IncomeResponse`; no other route advertises the field.
+5. **Nothing materialized.** No milestone table: one indexed count per Received capture.
+
+**Consequences**: Filing an Unsorted income, Malafat's API-key payments and Siri's direct posts count toward the total but carry no count, so they never trigger a celebration. The count uses the `(organizationId, …)` prefix indexes; a personal profile's payments are in the thousands at most.
+

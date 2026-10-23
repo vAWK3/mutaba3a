@@ -25,7 +25,7 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
     const conversion = (organizationId: string, s: number) =>
       store.conversions.create({ organizationId, occurredOn: '2026-10-08', amountMinor: 10_000n, currency: 'USD', toAmountMinor: 36_500n, toCurrency: 'ILS', notes: null, createdByUserId: user.id }, at(s));
     const capture = (organizationId: string, s: number) =>
-      store.payments.capture({ organizationId, customerId: null, projectId: null, currency: 'ILS', amountMinor: 25_000n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: user.id, captureSource: 'app' }, at(s));
+      store.payments.capture({ organizationId, customerId: null, projectId: null, currency: 'ILS', amountMinor: 25_000n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: user.id, captureSource: 'app' }, at(s)).then((r) => r.payment);
     const owed = (s: number) =>
       store.receivables.createAdjustment(
         { organizationId: b.id, customerId: client.id, projectId: null, currency: 'ILS', netMinor: 50_000n, vatMinor: 0n, grossMinor: 50_000n, vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, title: 'Logo', dueDate: '2026-10-31', postingDate: '2026-10-08', postedAt: at(s), createdByUserId: user.id, requestId: null },
@@ -170,7 +170,7 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       const conversion = (organizationId: string, occurredOn: string, s: number) =>
         store.conversions.create({ organizationId, occurredOn, amountMinor: 10_000n, currency: 'USD', toAmountMinor: 36_500n, toCurrency: 'ILS', notes: null, createdByUserId: w.user.id }, at(s));
       const capture = (organizationId: string, receivedOn: string, s: number) =>
-        store.payments.capture({ organizationId, customerId: null, projectId: null, currency: 'ILS', amountMinor: 25_000n, receivedOn, method: 'CASH', notes: null, requestId: null, createdByUserId: w.user.id, captureSource: 'app' }, at(s));
+        store.payments.capture({ organizationId, customerId: null, projectId: null, currency: 'ILS', amountMinor: 25_000n, receivedOn, method: 'CASH', notes: null, requestId: null, createdByUserId: w.user.id, captureSource: 'app' }, at(s)).then((r) => r.payment);
       const owed = (postingDate: string, s: number) =>
         store.receivables.createAdjustment(
           { organizationId: w.b.id, customerId: w.client.id, projectId: null, currency: 'ILS', netMinor: 50_000n, vatMinor: 0n, grossMinor: 50_000n, vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, title: 'Logo', dueDate: '2026-10-31', postingDate, postedAt: at(s), createdByUserId: w.user.id, requestId: null },

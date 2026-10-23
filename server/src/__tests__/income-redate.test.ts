@@ -360,7 +360,7 @@ describe('what may not be touched (AC5)', () => {
 
   it("a Malafat-fed profile's capture → 404 via /v1/income, 403 READ_ONLY_PROFILE via /v1/payments (D2)", async () => {
     const s = await setup();
-    const capture = await s.h.store.payments.capture({ organizationId: s.m.id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: s.u.id, captureSource: 'app' }, s.h.clock.now);
+    const capture = (await s.h.store.payments.capture({ organizationId: s.m.id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: s.u.id, captureSource: 'app' }, s.h.clock.now)).payment;
 
     expect((await s.h.app.request(`/v1/income/${capture.id}`, patch({ occurredOn: '2026-10-01' }, s.u.as(s.m.id), 1))).status).toBe(404);
     const viaPayments = await s.h.app.request(`/v1/payments/${capture.id}`, patch({ receivedOn: '2026-10-01' }, s.u.as(s.m.id), 1));
@@ -416,7 +416,7 @@ describe('who may call (AC6)', () => {
     const received = await receivedEntry(s);
     expect((await s.h.app.request(`/v1/payments/${received.id}`, patch({ receivedOn: '2026-10-02' }, device(s.u.personal), 1))).status).toBe(200);
 
-    const capture = await s.h.store.payments.capture({ organizationId: s.m.id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: s.u.id, captureSource: 'app' }, s.h.clock.now);
+    const capture = (await s.h.store.payments.capture({ organizationId: s.m.id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: s.u.id, captureSource: 'app' }, s.h.clock.now)).payment;
     for (const [path, body] of [[`/v1/income/${capture.id}`, { occurredOn: '2026-10-01' }], [`/v1/payments/${capture.id}`, { receivedOn: '2026-10-01' }]] as const) {
       const res = await s.h.app.request(path, patch(body, s.mAuth, 1));
       expect(res.status).toBe(403);

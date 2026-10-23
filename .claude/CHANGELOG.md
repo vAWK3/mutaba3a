@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-23 — A Received capture answers the profile's payment count (MUT-340, ADR-175)
+
+**Why:** MUT-340 celebrates income milestones on the phone (the 1st, 10th, 50th, 100th, 250th, 500th and 1000th payment received, Basel's M1). Nothing exposed a payment count, and the phone saves through an outbox, so the count has to come back with the upload. Plan and eng review R1–R12: mutaba3a-flutter `.claude/designs/mut-340-income-milestones.md` (Jira comment 12455).
+
+### Added
+- **`POST /v1/income` with `kind: 'received'` answers `receivedCount`**: the profile's POSTED payments, every origin, right after this one. Owed answers none.
+- `IncomeCaptureResponseSchema` (`IncomeCaptureResponse`), POST-only; the feed, PATCH and file-as-income keep `IncomeResponse`.
+
+### Changed
+- **`payments.capture` returns `{ payment, postedCount }`**, counted inside its transaction after the `(organization, year)` counter upsert, which already row-locks, so two captures in flight never answer the same count. The memory store counts up to its own row. `payments.create`'s year-race retry is now `paymentWrite`, shared by both.
+- **API `1.54.0-mut340`**.
+
+### Technical
+- `income-routes.test.ts`: 1, 2, 3; an undo drops out; Owed has none; an Idempotency-Key replay answers the stored count; Malafat's payments count; the feed never carries it.
+- `store-contract-capture.ts` (memory and Postgres): counts after capture and undo, per organization; four parallel captures get 2–5.
+
 ## [Unreleased] - 2026-10-23 — The hosted portal reports crashes to Sentry, signed in only (MUT-149, ADR-091 am.11)
 
 **Why:** MUT-329's pilot release needs "Sentry receives a test event from the portal"; until now a portal crash was a white screen nobody heard about.
