@@ -90,11 +90,11 @@ export async function customerOnClock(person: LivePerson): Promise<{ customerId:
   return { customerId: customer.id, clockId: clock.id, now };
 }
 
-/** A paid monthly ILS subscription on that customer (test card), mirrored into the API by the webhook. */
-export async function subscribeByApi(customerId: string): Promise<string> {
+/** A paid subscription on that customer (test card, monthly ILS unless named), mirrored into the API by the webhook. */
+export async function subscribeByApi(customerId: string, lookupKey = 'freelancer_list_monthly_ils'): Promise<string> {
   await stripeApi('POST', 'payment_methods/pm_card_visa/attach', { customer: customerId }).catch(() => undefined);
   const methods = await stripeApi('GET', 'payment_methods', { customer: customerId, type: 'card' });
-  const prices = await stripeApi('GET', 'prices', { 'lookup_keys[]': 'freelancer_list_monthly_ils' });
+  const prices = await stripeApi('GET', 'prices', { 'lookup_keys[]': lookupKey });
   const sub = await stripeApi('POST', 'subscriptions', {
     customer: customerId,
     'items[0][price]': prices.data[0].id,
@@ -110,12 +110,16 @@ export async function advanceClock(clockId: string, toUnix: number): Promise<voi
 }
 
 /**
- * Fills Stripe's hosted Checkout with the always-approved test card and pays. Stripe's own fields go by their ids
- * (the page isn't ours); our custom field goes by the bilingual label we gave it. `taxNumber` fills that field;
- * `taxId` Stripe's tax ID.
+ * Fills Stripe's hosted Checkout with the always-approved test card, up to its Subscribe button. Stripe's own fields
+ * go by their ids (the page isn't ours); our custom field goes by the bilingual label we gave it. `taxNumber` fills
+ * that field; `taxId` Stripe's tax ID.
  */
-export async function payOnStripeCheckout(page: Page, opts: { name: string; country: string; taxNumber?: string; taxId?: { type: string; value: string } }): Promise<void> {
+export async function fillStripeCheckout(page: Page, opts: { name: string; country: string; taxNumber?: string; taxId?: { type: string; value: string } }): Promise<void> {
   await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
+  // Where Stripe offers another method too (Amazon Pay in USD), the card form opens only once Card is picked: the
+  // whole row is the click area.
+  const card = page.locator('[data-testid="card-accordion-item"]');
+  if (await card.waitFor({ timeout: 5_000 }).then(() => true, () => false)) await card.click();
   await page.locator('#cardNumber').fill('4242 4242 4242 4242');
   await page.locator('#cardExpiry').fill('12 / 34');
   await page.locator('#cardCvc').fill('123');
@@ -134,5 +138,23 @@ export async function payOnStripeCheckout(page: Page, opts: { name: string; coun
     await page.locator('#taxIdType').selectOption({ value: opts.taxId.type }).catch(() => undefined);
     await page.locator('#taxId').fill(opts.taxId.value);
   }
-  await page.locator('button[type="submit"]').click();
+}
+
+/**
+ * Pays the Checkout the page is on through Stripe's API, then follows its success URL back to the portal. Stripe's
+ * page runs an hCaptcha on Subscribe that never passes under automation, and QA doesn't work around bot checks
+ * (TD-201), so the subscription is made on the customer this Checkout was opened for, with the price it sells.
+ * Checks the session first: our person's own customer (D3), subscription mode, the lookup key.
+ */
+export async function payCheckoutByApi(page: Page, person: LivePerson, lookupKey: string): Promise<void> {
+  const sessionId = /\/(cs_test_[A-Za-z0-9]+)/.exec(page.url())?.[1];
+  expect(sessionId, 'a Checkout Session in the page URL').toBeTruthy();
+  const session = await stripeApi('GET', `checkout/sessions/${sessionId}`, { 'expand[]': 'line_items' });
+  expect(session.mode).toBe('subscription');
+  expect(session.line_items.data[0].price.lookup_key).toBe(lookupKey);
+  const customer = await stripeApi('GET', `customers/${session.customer}`);
+  expect(customer.metadata.mutaba3a_user_id).toBe(person.userId);
+  await subscribeByApi(session.customer, lookupKey);
+  await stripeApi('POST', `checkout/sessions/${sessionId}/expire`);
+  await page.goto(session.success_url);
 }

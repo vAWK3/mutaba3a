@@ -1,5 +1,5 @@
 import { test, expect } from '../../support/qa';
-import { advanceClock, customerOnClock, payOnStripeCheckout, provisionPerson, signIn, stripeApi, subscribeByApi } from '../../support/livePortal';
+import { advanceClock, customerOnClock, fillStripeCheckout, payCheckoutByApi, provisionPerson, signIn, stripeApi, subscribeByApi } from '../../support/livePortal';
 
 /**
  * MUT-362 (eng review D8 B): Settings › Billing on a real dev API and Stripe's real sandbox pages, started by
@@ -39,8 +39,13 @@ test('Subscribe in shekels from Israel as a business, pay with a test card, and 
     await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
     await expect(page.getByText(/39\.00/).first()).toBeVisible();
   });
-  await step('Pay with the test card, an Israeli address and the business tax number', async () => {
-    await payOnStripeCheckout(page, { name: 'Rana Saleh', country: 'IL', taxNumber: '516000000' });
+  await step('Fill in the test card, an Israeli address and the business tax number', async () => {
+    await fillStripeCheckout(page, { name: 'Rana Saleh', country: 'IL', taxNumber: '516000000' });
+    await expect(page.getByRole('textbox', { name: 'Business tax number · الرقم الضريبي' })).toHaveValue('516000000');
+    await expect(page.getByText(/Prices exclude VAT; VAT is added where the law requires it\./)).toBeVisible();
+  });
+  await step('Pay (through Stripe’s API: its page blocks automated payment, TD-201)', async () => {
+    await payCheckoutByApi(page, person, 'freelancer_list_monthly_ils');
   });
   await step('Come back to the portal: confirming, then subscribed', async () => {
     await page.waitForURL(/checkout=success/, { timeout: 90_000 });
@@ -64,9 +69,13 @@ test('Subscribe in dollars from the Emirates as a business with a tax ID', { tag
     await drawer.getByRole('radio', { name: 'Yearly · 2 months free' }).click();
     await expect(drawer.getByText('$100.00')).toBeVisible();
   });
-  await step('Pay on Stripe’s page with the test card and a UAE TRN', async () => {
+  await step('Fill in Stripe’s page with the test card and a UAE TRN', async () => {
     await page.getByRole('button', { name: 'Continue to payment' }).click();
-    await payOnStripeCheckout(page, { name: 'Rana Saleh', country: 'AE', taxId: { type: 'ae_trn', value: '123456789012345' } });
+    await fillStripeCheckout(page, { name: 'Rana Saleh', country: 'AE', taxId: { type: 'ae_trn', value: '123456789012345' } });
+    await expect(page.getByText(/100\.00/).first()).toBeVisible();
+  });
+  await step('Pay (through Stripe’s API: its page blocks automated payment, TD-201)', async () => {
+    await payCheckoutByApi(page, person, 'freelancer_list_yearly_usd');
   });
   await step('Come back subscribed', async () => {
     await page.waitForURL(/checkout=success/, { timeout: 90_000 });
