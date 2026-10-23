@@ -176,7 +176,7 @@ export function authenticate(options: AuthenticateOptions): MiddlewareHandler<Ap
       const identity = await authenticateSession(c, cookie, options);
       if (access && !access.principals.has('session')) throw await keyOnlyRefusal(c, identity, access, options.store);
       if (!SAFE_METHODS.has(c.req.method) && !isSamePortalOrigin(c.req, options.sessions)) {
-        throw new ApiError('CROSS_SITE_REQUEST', 'This request must come from the Mutaba3a portal itself');
+        throw new ApiError('CROSS_SITE_REQUEST', 'This request must come from the MTB3A portal itself');
       }
       await finishSessionAuth(c, identity, endpoint, options);
       return next();

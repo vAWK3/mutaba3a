@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: Mutaba3a Financial API
-  version: 1.52.0-mut362
+  title: MTB3A Financial API
+  version: 1.52.1-mut402
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 

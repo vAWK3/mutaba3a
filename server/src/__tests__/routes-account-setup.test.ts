@@ -184,7 +184,7 @@ describe('POST /v1/account-setup (MUT-235)', () => {
     for (const headers of [{}, { origin: 'https://evil.example' }, { 'sec-fetch-site': 'cross-site' }]) {
       const res = await redeem(h, p.token, NEW_PASSWORD, headers);
       expect(res.status).toBe(403);
-      expect((await read(res)).error.code).toBe('CROSS_SITE_REQUEST');
+      expect((await read(res)).error).toMatchObject({ code: 'CROSS_SITE_REQUEST', message: 'Set your password from the MTB3A portal itself' });
       expect((await check(h, p.token, headers)).status).toBe(403);
     }
   });
