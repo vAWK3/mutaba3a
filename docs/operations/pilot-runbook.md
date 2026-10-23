@@ -25,6 +25,7 @@ This runbook doesn't repeat those; it links to them.
 - [8. The restore drill](#8-the-restore-drill)
 - [9. Walk log](#9-walk-log)
 - [10. Drill results](#10-drill-results)
+- [11. Retire a currency](#11-retire-a-currency-mut-388-adr-166)
 
 ---
 
@@ -340,7 +341,7 @@ COPY=mutaba3a-pg-drill-$(date -u +%Y%m%dt%H%M%S)-p
 AT=2026-11-03T09:14:00.000Z                                  # just before the mistake, within the last 7 days
 gcloud sql instances clone "$INSTANCE" "$COPY" --point-in-time="$AT" --project=$GCP_PROJECT_ID
 gcloud sql instances patch "$COPY" --no-deletion-protection --no-backup --no-enable-point-in-time-recovery \
-  --update-labels=purpose=restore-drill --project=$GCP_PROJECT_ID --quiet
+  --project=$GCP_PROJECT_ID --quiet
 PW=$(openssl rand -hex 24)
 gcloud sql users set-password mutaba3a_api --instance="$COPY" --password="$PW" --project=$GCP_PROJECT_ID --quiet   # the copy only
 cloud-sql-proxy "$GCP_PROJECT_ID:me-west1:$COPY" --port 5452 --quiet &
@@ -743,8 +744,9 @@ scripts/restore-drill.sh --project $GCP_PROJECT_ID --receipt-id <a receipt you k
    Restore it per §4.4, and check that the window the drill printed is `1209600` (14 days). Anything
    shorter means DEPLOYMENT.md §6c isn't applied.
 
-Run the drill again after any change to backups or the database tier, and before the pilot opens
-beyond 10 users.
+Run the drill again **every 60 days**, after any change to backups or the database tier, and before the
+pilot opens beyond 10 users. `make release server` reminds you: it reads the newest `Drill date (UTC)` in
+§10 and lists the drill as an open operator step when there's none, or when it's more than 60 days old.
 
 ## 9. Walk log
 
@@ -780,13 +782,23 @@ AC2: each step walked once on staging or a scratch database. There's no staging 
 | §7.3 `purge-user` (dry run, then for real) | ✅ | dev | 2 profiles and every row gone; nothing else touched; bucket lines printed |
 | §8 restore drill | ⚠ dry run + shellcheck | needs production | **Basel runs it**, results in §10 |
 
+**2026-10-23, first production run (Basel).** It stopped at its first paid step, before anything was created:
+`gcloud sql instances create` (Cloud SDK 557) has no `--labels` flag; only alpha and beta do, and `patch
+--update-labels` is the same. The tests' fake `gcloud` couldn't catch it. The labels are gone from the drill and §4.1.
+The cleanup's delete of the never-created instance then got `PERMISSION_DENIED`, Cloud SQL's answer for a missing
+instance. Teardown now checks the instance exists first. Every other flag the drill uses was checked against the
+installed `gcloud … --help`.
+
 ## 10. Drill results
 
 Filled in by Basel after running §8 against production backups (AC1).
 
+Each drill adds its own block, newest first; keep the old ones. `make release server` reads the newest
+`Drill date (UTC)` here (`YYYY-MM-DD`) to tell when the next drill is due (every 60 days).
+
 | | |
 |---|---|
-| Date (UTC) | |
+| Drill date (UTC) | |
 | Operator | |
 | Backup restored (id, window start) | |
 | Point in time restored | |
@@ -814,7 +826,7 @@ Problems found and tickets opened:
 
 -
 
-## 10. Retire a currency (MUT-388, ADR-166)
+## 11. Retire a currency (MUT-388, ADR-166)
 
 The database doesn't refuse a currency the API no longer supports: a row stored while it was supported reads back
 with a blank amount. So a server release that drops a currency (MUT-388 dropped AED, SAR, QAR, BHD and OMR) runs this

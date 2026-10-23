@@ -214,6 +214,50 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
     expect(r.out).toContain('+ gcloud sql instances delete mutaba3a-pg-drill-20261020t180000-b --project=demo-project --quiet');
   });
 
+  it('uses no flag that only gcloud alpha/beta has (the first production run stopped on --labels)', () => {
+    const r = drill('--project', 'demo-project', '--dry-run');
+    expect(r.status, r.err).toBe(0);
+    expect(r.out).not.toMatch(/--(update-)?labels/);
+  });
+
+  describe('teardown of a named instance, against a fake gcloud', () => {
+    function teardownWhere(listed: string) {
+      const fakeBin = mkdtempSync(join(tmpdir(), 'restore-drill-teardown-'));
+      const log = join(fakeBin, 'calls.log');
+      writeFileSync(
+        join(fakeBin, 'gcloud'),
+        [
+          '#!/bin/bash',
+          `echo "gcloud $*" >> "${log}"`,
+          'case "$*" in',
+          `  "sql instances list"*) printf "%s" "${listed}" ;;`,
+          '  "sql instances delete"*) exit 0 ;;',
+          '  *) exit 99 ;;',
+          'esac',
+        ].join('\n') + '\n',
+      );
+      chmodSync(join(fakeBin, 'gcloud'), 0o755);
+      const name = 'mutaba3a-pg-drill-20261023t082326-b';
+      const r = drillWith({ PATH: `${fakeBin}:/usr/bin:/bin` }, 'teardown', '--project', 'demo-project', '--name', name);
+      const calls = existsSync(log) ? readFileSync(log, 'utf8') : '';
+      rmSync(fakeBin, { recursive: true, force: true });
+      return { ...r, calls };
+    }
+
+    it('skips an instance that was never created, instead of a misleading delete error', () => {
+      const r = teardownWhere('');
+      expect(r.status, r.err).toBe(0);
+      expect(r.out + r.err).toContain('never created');
+      expect(r.calls).not.toContain('sql instances delete');
+    });
+
+    it('deletes an instance that exists', () => {
+      const r = teardownWhere('mutaba3a-pg-drill-20261023t082326-b');
+      expect(r.status, r.err).toBe(0);
+      expect(r.calls).toContain('sql instances delete mutaba3a-pg-drill-20261023t082326-b --project=demo-project --quiet');
+    });
+  });
+
   it('refuses a drill scratch name as the source instance', () => {
     const r = drill('--project', 'demo-project', '--instance', 'mutaba3a-pg-drill-20261020t180000-b', '--dry-run');
     expect(r.status).not.toBe(0);

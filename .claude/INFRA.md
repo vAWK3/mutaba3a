@@ -132,7 +132,7 @@ terraform apply -var image_tag ────▶  Cloud Run service  mutaba3a-api 
 - `server/Dockerfile` — the one image.
 - `server/scripts/deploy.sh` — the only rollout path; runs on the operator's machine.
 - `server/scripts/cmek-cutover.sh` — the one-time move to `mutaba3a-pg2` under our key (MUT-381): rehearse, cutover, verify. The only instance it changes is `mutaba3a-pg2`.
-- `docs/operations/pilot-runbook.md` — the pilot operator runbook (MUT-327): onboarding, resets, restores, incidents, support, offboarding. `server/scripts/restore-drill.sh` restores backups into scratch instances (**drill not yet run against production**; results go in the runbook's §10), `server/scripts/profile-rows.sh` exports, restores or purges one profile.
+- `docs/operations/pilot-runbook.md` — the pilot operator runbook (MUT-327): onboarding, resets, restores, incidents, support, offboarding. `server/scripts/restore-drill.sh` restores backups into scratch instances (**drill not yet run against production**; results go in the runbook's §10, one block per drill, every 60 days: `make release server` lists the drill as an open step when §10's newest `Drill date (UTC)` is missing or older), `server/scripts/profile-rows.sh` exports, restores or purges one profile.
 - `.github/workflows/server-ci.yml` — verification only; never pushes or deploys.
 
 ### Operator-held (not in code, by design)
