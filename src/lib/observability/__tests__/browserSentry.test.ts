@@ -15,7 +15,6 @@ describe('browserSentryOptions (ADR-091, MUT-149 D4)', () => {
       dsn: base.dsn,
       release: base.release,
       environment: base.environment,
-      sendDefaultPii: SENTRY_RULES.sdk.sendDefaultPii,
       sampleRate: SENTRY_RULES.sdk.sampleRate,
       tracesSampleRate: SENTRY_RULES.sdk.tracesSampleRate,
       replaysSessionSampleRate: 0,
@@ -23,7 +22,22 @@ describe('browserSentryOptions (ADR-091, MUT-149 D4)', () => {
       profileSessionSampleRate: 0,
       defaultIntegrations: false,
     });
-    expect(options.sendDefaultPii).toBe(false);
+  });
+
+  it('collects no personal data: SDK 11 spells the contract\'s sendDefaultPii: false out per category', () => {
+    expect(SENTRY_RULES.sdk.sendDefaultPii).toBe(false);
+    expect(browserSentryOptions('portal', base).dataCollection).toEqual({
+      userInfo: false,
+      cookies: false,
+      httpHeaders: { request: { allow: ['User-Agent'] }, response: false },
+      httpBodies: [],
+      urlQueryParams: false,
+      graphQL: { document: false, variables: false },
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      stackFrameVariables: false,
+    });
   });
 
   it('tags every event with its surface', () => {

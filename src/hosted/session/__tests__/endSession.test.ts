@@ -8,6 +8,8 @@ import { useLostAccess } from '../lostAccess';
 
 const { endPortalUsage } = vi.hoisted(() => ({ endPortalUsage: vi.fn() }));
 vi.mock('../../analytics/portalAnalytics', () => ({ endPortalUsage }));
+const { setReporterUser } = vi.hoisted(() => ({ setReporterUser: vi.fn() }));
+vi.mock('../../observability/errorReporting', () => ({ setReporterUser }));
 
 /** E1–E3: ending a session drops every cached figure; MUT-91 adds the after-save store to that set. */
 describe('endSession', () => {
@@ -42,5 +44,11 @@ describe('endSession', () => {
     expect(endPortalUsage).not.toHaveBeenCalled();
     endSession(new QueryClient(), { navigate: vi.fn() } as unknown as AnyRouter, { reason: 'signed_out' });
     expect(endPortalUsage).toHaveBeenCalledOnce();
+  });
+
+  it.each(['expired', 'signed_out'] as const)('MUT-149: crash reports stop naming the person once the session ends (%s)', (reason) => {
+    setReporterUser.mockClear();
+    endSession(new QueryClient(), { navigate: vi.fn() } as unknown as AnyRouter, { reason });
+    expect(setReporterUser).toHaveBeenCalledWith(null);
   });
 });

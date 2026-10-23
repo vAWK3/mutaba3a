@@ -30,6 +30,29 @@ function scrubBreadcrumb<T extends object>(crumb: T, surface: BrowserSurface): T
   return clean ?? null;
 }
 
+/**
+ * SDK 11 replaced `sendDefaultPii` with per-category switches: the contract's
+ * `sendDefaultPii: false` and `includeLocalVariables: false`, spelled out. The
+ * one header kept is User-Agent, for the browser and OS context the contract
+ * allows (`safeContextKeys`).
+ */
+function dataCollection(): NonNullable<BrowserOptions['dataCollection']> {
+  const { sdk } = SENTRY_RULES;
+  const pii = sdk.sendDefaultPii;
+  return {
+    userInfo: pii,
+    cookies: pii,
+    httpHeaders: pii ? true : { request: { allow: ['User-Agent'] }, response: false },
+    httpBodies: [],
+    urlQueryParams: pii,
+    graphQL: { document: false, variables: false },
+    genAI: { inputs: false, outputs: false },
+    databaseQueryData: false,
+    queues: false,
+    stackFrameVariables: sdk.includeLocalVariables,
+  };
+}
+
 function definedTags(tags: Record<string, string | undefined>): Record<string, string> {
   return Object.fromEntries(Object.entries(tags).filter((entry): entry is [string, string] => entry[1] !== undefined));
 }
@@ -40,7 +63,7 @@ export function browserSentryOptions(surface: BrowserSurface, input: BrowserSent
     dsn: input.dsn,
     release: input.release,
     environment: input.environment,
-    sendDefaultPii: sdk.sendDefaultPii,
+    dataCollection: dataCollection(),
     sampleRate: sdk.sampleRate,
     tracesSampleRate: sdk.tracesSampleRate,
     replaysSessionSampleRate: sdk.replaysSessionSampleRate,
