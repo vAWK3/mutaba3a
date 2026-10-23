@@ -48,8 +48,9 @@ function hold(entry: Held) {
   held.push(entry);
 }
 
+/** No error object means a cross-origin script's "Script error.": nothing in it to act on. */
 function onError(event: ErrorEvent) {
-  if (!reporter) hold({ source: 'global', error: event.error ?? event.message });
+  if (!reporter && event.error != null) hold({ source: 'global', error: event.error });
 }
 
 function onRejection(event: PromiseRejectionEvent) {

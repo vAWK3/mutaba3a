@@ -63,7 +63,8 @@ export IMAGE_TAG PROXY_PORT AUTO_APPROVE
 export MUTABA3A_POSTHOG_KEY
 # MUT-149: and the portal's Sentry DSN. The upload token is not exported here: release-server passes it to deploy.sh only
 export MUTABA3A_SENTRY_DSN
-# Where release-server finds the source-map upload token when SENTRY_AUTH_TOKEN isn't set (release-kit Keychain rule)
+# Where release-server finds the source-map upload token when SENTRY_AUTH_TOKEN isn't set (release-kit Keychain rule).
+# Looked up only when the portal has a DSN: with no DSN the build needs no token.
 SENTRY_TOKEN_KEYCHAIN_SERVICE := release-kit
 SENTRY_TOKEN_KEYCHAIN_ACCOUNT := barmajiyat/SENTRY_AUTH_TOKEN
 
@@ -348,7 +349,10 @@ release-server: preflight-server
 	  printf '$(C_CYAN)▶ pushing %s so %s is reachable by everyone else$(C_OFF)\n' '$(RELEASE_BRANCH)' "$$sha"; \
 	  git push origin $(RELEASE_BRANCH); \
 	fi; \
-	token="$${SENTRY_AUTH_TOKEN:-$$(security find-generic-password -s '$(SENTRY_TOKEN_KEYCHAIN_SERVICE)' -a '$(SENTRY_TOKEN_KEYCHAIN_ACCOUNT)' -w 2>/dev/null || true)}"; \
+	token="$${SENTRY_AUTH_TOKEN:-}"; \
+	if [ -n "$${MUTABA3A_SENTRY_DSN:-}" ] && [ -z "$$token" ]; then \
+	  token=$$(security find-generic-password -s '$(SENTRY_TOKEN_KEYCHAIN_SERVICE)' -a '$(SENTRY_TOKEN_KEYCHAIN_ACCOUNT)' -w 2>/dev/null || true); \
+	fi; \
 	(cd server && SENTRY_AUTH_TOKEN="$$token" ./scripts/deploy.sh) && \
 	scripts/tag-release.sh api "$$version" --push && \
 	$(CI_REMINDER) server

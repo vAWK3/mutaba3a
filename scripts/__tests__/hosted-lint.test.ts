@@ -98,7 +98,7 @@ describe('portal lint guards', () => {
       expect(await rulesFor(`${line}\nexport const x = 1;\n`, SHARED)).toContain(RULE);
     }, 30_000);
 
-    it.each([['src/hosted/pages/__probe__.tsx'], ['src/hosted/observability/errorReporting.ts'], ['src/pages/landing/__probe__.tsx'], ['src/components/__probe__.tsx']])(
+    it.each([['src/hosted/pages/__probe__.tsx'], ['src/hosted/observability/errorReporting.ts'], ['src/hosted/analytics/__probe__.ts'], ['src/pages/landing/__probe__.tsx'], ['src/components/__probe__.tsx']])(
       'loads the SDK only from the portal lazy chunk, not %s',
       async (path) => {
         expect(await rulesFor("import * as Sentry from '@sentry/browser';\nexport const x = Sentry;\n", path)).toContain(RULE);

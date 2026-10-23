@@ -233,6 +233,14 @@ export default defineConfig([
     },
   },
   {
+    // The block above skips the portal's analytics module; the Sentry ban still holds there (MUT-149).
+    files: ['src/hosted/analytics/**/*.{ts,tsx}'],
+    ignores: ['src/hosted/analytics/**/__tests__/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', { paths: [SENTRY_SDK_PATH] }],
+    },
+  },
+  {
     // The portal's lazy crash-reporting chunk (MUT-149): the one file that loads
     // the Sentry SDK. It keeps the PostHog half of the block above.
     files: ['src/hosted/observability/portalSentry.ts'],

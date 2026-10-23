@@ -170,6 +170,15 @@ describe('the crash-reporting gate (MUT-149 D1, ADR-097 §10)', () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
+  it('ignores a window error with no error object (a cross-origin "Script error.")', async () => {
+    setMode('remote');
+    const chunk = fakeChunk();
+    startErrorReporting({ enabled: true, currentRouteId, load: chunk.load });
+    window.dispatchEvent(new ErrorEvent('error', { message: 'Script error.', cancelable: true }));
+    await flush();
+    expect(chunk.reporter.reportGlobal).not.toHaveBeenCalled();
+  });
+
   it('starts once, however often it is called', async () => {
     setMode('remote');
     const chunk = fakeChunk();
