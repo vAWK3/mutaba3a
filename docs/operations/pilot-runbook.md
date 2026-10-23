@@ -332,7 +332,7 @@ COPY=mutaba3a-pg-drill-$(date -u +%Y%m%dt%H%M%S)-p
 AT=2026-11-03T09:14:00.000Z                                  # just before the mistake, within the last 7 days
 gcloud sql instances clone "$INSTANCE" "$COPY" --point-in-time="$AT" --project=$GCP_PROJECT_ID
 gcloud sql instances patch "$COPY" --no-deletion-protection --no-backup --no-enable-point-in-time-recovery \
-  --update-labels=purpose=restore-drill --project=$GCP_PROJECT_ID --quiet
+  --project=$GCP_PROJECT_ID --quiet
 PW=$(openssl rand -hex 24)
 gcloud sql users set-password mutaba3a_api --instance="$COPY" --password="$PW" --project=$GCP_PROJECT_ID --quiet   # the copy only
 cloud-sql-proxy "$GCP_PROJECT_ID:me-west1:$COPY" --port 5452 --quiet &
@@ -772,6 +772,13 @@ AC2: each step walked once on staging or a scratch database. There's no staging 
 | §7.2 `disable:user` | ✅ | local API | Sign-in 401 |
 | §7.3 `purge-user` (dry run, then for real) | ✅ | dev | 2 profiles and every row gone; nothing else touched; bucket lines printed |
 | §8 restore drill | ⚠ dry run + shellcheck | needs production | **Basel runs it**, results in §10 |
+
+**2026-10-23, first production run (Basel).** It stopped at its first paid step, before anything was created:
+`gcloud sql instances create` (Cloud SDK 557) has no `--labels` flag; only alpha and beta do, and `patch
+--update-labels` is the same. The tests' fake `gcloud` couldn't catch it. The labels are gone from the drill and §4.1.
+The cleanup's delete of the never-created instance then got `PERMISSION_DENIED`, Cloud SQL's answer for a missing
+instance. Teardown now checks the instance exists first. Every other flag the drill uses was checked against the
+installed `gcloud … --help`.
 
 ## 10. Drill results
 

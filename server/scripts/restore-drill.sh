@@ -128,7 +128,15 @@ utc_minutes_ago() {
 # ---------------------------------------------------------------------------
 # Teardown
 # ---------------------------------------------------------------------------
+# A create that failed leaves nothing, and Cloud SQL answers a delete of a missing instance with PERMISSION_DENIED.
+# When the list can't be read, try the delete anyway.
 delete_instance() {
+  local listed
+  if run_capture listed "$1" gcloud sql instances list --project="${PROJECT}" --filter="name=$1" --format='value(name)' \
+    && [[ -z "${listed}" ]]; then
+    info "$1 was never created; nothing to delete"
+    return 0
+  fi
   mutate "$1" gcloud sql instances delete "$1" --project="${PROJECT}" --quiet \
     || warn "could not delete $1: run  scripts/restore-drill.sh teardown --project ${PROJECT} --name $1"
 }
@@ -228,7 +236,7 @@ restore_backup() {
   timed "Create scratch instance (backup)" mutate "${SCRATCH_B}" gcloud sql instances create "${SCRATCH_B}" --project="${PROJECT}" \
     --region="${REGION}" --database-version="${DB_VERSION}" --tier="${TIER}" --edition="${EDITION}" \
     --availability-type=zonal --storage-size="${DISK_GB}GB" --ssl-mode=ENCRYPTED_ONLY \
-    --no-backup --no-deletion-protection --labels=purpose=restore-drill,source="${SOURCE}" \
+    --no-backup --no-deletion-protection \
     ${SCRATCH_KEY[@]+"${SCRATCH_KEY[@]}"} --quiet
   timed "Restore last night's backup" mutate "${SCRATCH_B}" gcloud sql backups restore "${BACKUP_ID}" \
     --restore-instance="${SCRATCH_B}" --backup-instance="${SOURCE}" --project="${PROJECT}" --quiet
@@ -243,8 +251,7 @@ restore_pitr() {
     --point-in-time="${PITR_AT}" --project="${PROJECT}" --quiet
   # The clone copies the source's settings: drop what would keep it around or make it back itself up.
   mutate "${SCRATCH_P}" gcloud sql instances patch "${SCRATCH_P}" --project="${PROJECT}" \
-    --no-deletion-protection --no-backup --no-enable-point-in-time-recovery \
-    --update-labels=purpose=restore-drill,source="${SOURCE}" --quiet
+    --no-deletion-protection --no-backup --no-enable-point-in-time-recovery --quiet
 }
 
 # open_copy <scratch> <port> <label>: throwaway password on the copy, a proxy, then the read-only checks.

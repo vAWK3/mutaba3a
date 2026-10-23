@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-23 — The restore drill runs on standard gcloud (MUT-327)
+
+**Why:** the first production run stopped at `gcloud sql instances create`: `--labels` exists only in gcloud alpha and
+beta (Cloud SDK 557), and so does `patch --update-labels`. The tests' fake gcloud accepts any flag. Nothing was created.
+
+### Fixed
+- `server/scripts/restore-drill.sh` and runbook §4.1 drop `--labels` / `--update-labels`. The labels were only tags;
+  the `mutaba3a-pg-drill-*` name is what the drill and teardown match on.
+- Teardown, and the drill's own cleanup, list the instance first and skip one that was never created, instead of
+  a delete that Cloud SQL answers with PERMISSION_DENIED. If the list fails, the delete is tried as before.
+
+### Technical
+- 3 tests in `server/src/scripts/__tests__/restore-drill.test.ts`: no alpha/beta-only flag in the dry run; teardown
+  skips a missing instance and deletes an existing one (fake gcloud). Every other flag was checked by hand against
+  the installed `gcloud … --help`. Runbook §9 records the run.
+
 ## [Unreleased] - 2026-10-23 — `make release server` reminds you when the restore drill is due (MUT-327)
 
 **Why:** a backup is only proven by restoring it. Basel chose to re-run the restore drill against production every
