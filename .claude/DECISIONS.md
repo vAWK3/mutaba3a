@@ -4677,7 +4677,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 ---
 
-## ADR-170: The MTB3A Logotype Is One Outlined SVG, Shipped Once From src/assets/brand and Shown as a Mask Over the Ink (MUT-401)
+## ADR-171: The MTB3A Logotype Is One Outlined SVG, Shipped Once From src/assets/brand and Shown as a Mask Over the Ink (MUT-401)
 
 **Status**: Accepted (2026-10-23, MUT-401; eng review D1–D9, Basel's answers). Epic MUT-400 renames the service MTB3A in English; Arabic stays متابعة.
 
@@ -4690,4 +4690,6 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 4. **Pins (D5, D9).** `src/assets/brand/brand.sha256.json` pins the mark, the nine web icons and the logotype, so "the icon and the mark are unchanged" is tested.
 5. **Lockup tokens wait for MUT-402 (D1).** The numbers (H = 0.40 M, gap 0.60 H, clear space 1 H, H ≥ 12 px, W = 5.104 H, Arabic 1.25 H, 0.16 H markDot separator) live in `docs/brand/wordmark/README.md` until the CSS that reads them lands.
 
-**Consequences**: The logotype can't drift from the ink token or from the theme. MUT-402 owns the mask rendering and its accessibility rules. The export's `tokens/` and `favicon.svg` are older than the repo's and are not imported. The Thmanyah licence question for the outlines is closed: Thmanyah confirmed commercial use (Basel, 2026-10-22).
+**Consequences**: The logotype can't drift from the ink token or from the theme. MUT-402 owns the mask rendering and its accessibility rules. The export's `tokens/` and `favicon.svg` are older than the repo's and are not imported, and its pre-rename `Feature Graphic.dc.html` is left out. The Play feature graphic is kept as 24-bit RGB (Google Play refuses alpha). Licence: Basel reports that Thmanyah confirmed commercial use of the outlined logotype (2026-10-22). The written record is still to be attached, so the guardrail stays open on MUT-402.
+
+**Hardening (MUT-401 review, 2026-10-23)**: the SVG checks are allowlists (elements svg/title/desc/metadata/g/path, a short attribute list per element, metadata holding only the C2PA base64), so kinds nobody listed also fail. The frame check bounds the ink by end and control points. The path parser throws on anything it can't read instead of hanging the suite. The one-copy check matches the logotype's bytes under `docs/brand/`, `public/` and `src/hosted/public/`. The pinned SVGs keep LF through `.gitattributes`.

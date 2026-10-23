@@ -2,3 +2,7 @@
 # Flutter app, so a CRLF checkout must never change their bytes (ADR-090, ADR-091).
 docs/analytics/*.json text eol=lf
 docs/observability/*.json text eol=lf
+# The brand SVGs are sha256-pinned too (src/assets/brand/brand.sha256.json, MUT-401), and the
+# logotype's C2PA hash covers its bytes, so they keep LF on every checkout.
+src/assets/brand/*.svg text eol=lf
+public/*.svg text eol=lf

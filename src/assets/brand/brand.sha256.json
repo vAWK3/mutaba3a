@@ -1,5 +1,5 @@
 {
-  "$comment": "Delivered brand files, pinned by sha256 (MUT-401 D5, D9): the mark, the nine web icons and the MTB3A logotype as Claude Design exported them. wordmark.test.ts checks every file matches its pin. A changed hash means a file was re-exported or overwritten: re-pin only in the commit that deliberately replaces it. The logotype is never hand-edited; a bad export is re-exported from Claude Design (D4).",
+  "$comment": "Brand files pinned by sha256 as they ship today (MUT-401 eng D5, D9): the mark, the nine web icons and the MTB3A logotype. wordmark.test.ts checks every file matches its pin. A changed hash means a file was replaced or overwritten: re-pin only in the commit that deliberately replaces it. Only the logotype follows the never-edit rule (a bad export is re-exported from Claude Design, eng D4). public/favicon.svg is not a Claude Design export: MUT-104 fixed it by hand because the delivered and re-exported tiles fell back to black, so never replace it with a fresh export.",
   "files": {
     "public/apple-touch-icon.png": "1c48f5624f79a7b5b27c4b940317928cc44a6a2996643d1fcdb53201e5f24e5d",
     "public/favicon-16.png": "0497868d342c793cb45f1774b3520997bb1363bd0e12f1fdb63c582760df6301",
