@@ -38,7 +38,7 @@ run "noop_by_default_sends_nothing_and_mounts_no_resend_secret" {
   }
 
   assert {
-    condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if contains(["RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "MAIL_FROM_ADDRESS", "MAIL_REPLY_TO", "MAIL_DAILY_CAP"], e.name)]) == 0
+    condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if contains(["RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "MAIL_FROM_ADDRESS", "MAIL_REPLY_TO", "MAIL_DAILY_CAP", "TURNSTILE_SECRET"], e.name)]) == 0
     error_message = "With mailer noop Cloud Run gets no Resend env: the secrets may still be empty, and an empty secret stops the revision starting."
   }
 
@@ -55,6 +55,15 @@ run "noop_by_default_sends_nothing_and_mounts_no_resend_secret" {
   assert {
     condition     = length(google_monitoring_alert_policy.email) == 0
     error_message = "With mail off there is nothing to watch."
+  }
+
+  assert {
+    condition = (
+      one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "SELF_SIGNUP_ENABLED"]) == "false"
+      && google_secret_manager_secret.turnstile.secret_id == "mutaba3a-api-turnstile-secret"
+      && google_secret_manager_secret_iam_member.api_reads_turnstile.role == "roles/secretmanager.secretAccessor"
+    )
+    error_message = "MUT-366: signup is off by default and always set; the Turnstile secret and its grant exist empty so the operator can add a version first."
   }
 }
 
@@ -85,6 +94,11 @@ run "resend_mounts_the_secrets_and_sends_from_the_domain" {
       && one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value_source[0].secret_key_ref[0].secret if e.name == "RESEND_WEBHOOK_SECRET"]) == "mutaba3a-api-resend-webhook-secret"
     )
     error_message = "The sending key and the webhook secret come from Secret Manager."
+  }
+
+  assert {
+    condition     = one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value_source[0].secret_key_ref[0].secret if e.name == "TURNSTILE_SECRET"]) == "mutaba3a-api-turnstile-secret"
+    error_message = "MUT-366: with mail on, recovery mails links, so the Turnstile secret is mounted (the server refuses to start without it)."
   }
 
   assert {
@@ -125,4 +139,31 @@ run "log_is_not_offered" {
   }
 
   expect_failures = [var.mailer]
+}
+
+run "signup_on_with_mail_opens_signup" {
+  command = plan
+
+  variables {
+    hosts_file          = "../../../config/fixtures/hosts.placeholder.json"
+    mailer              = "resend"
+    mail_reply_to       = "help@example.com"
+    mail_daily_cap      = 90
+    self_signup_enabled = true
+  }
+
+  assert {
+    condition     = one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "SELF_SIGNUP_ENABLED"]) == "true"
+    error_message = "MUT-366: self_signup_enabled reaches the server as SELF_SIGNUP_ENABLED=true."
+  }
+}
+
+run "signup_without_mail_fails_the_plan" {
+  command = plan
+
+  variables {
+    self_signup_enabled = true
+  }
+
+  expect_failures = [google_cloud_run_v2_service.api]
 }

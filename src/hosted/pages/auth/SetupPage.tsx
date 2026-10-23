@@ -142,7 +142,8 @@ type Phase = 'idle' | 'saving' | 'signingIn';
 interface SetupFormProps {
   token: string;
   email: string;
-  purpose: 'SETUP' | 'RESET';
+  /** MUT-366: SIGNUP shows the setup copy until MUT-368 gives it its own (no SIGNUP link exists while signup is off). */
+  purpose: 'SETUP' | 'RESET' | 'SIGNUP';
   /** MUT-324: the terms version the check named; replaced by the current one if it changes while the page is open. */
   termsVersion: string;
   onOutcome: (outcome: Outcome) => void;

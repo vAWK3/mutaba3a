@@ -2230,3 +2230,12 @@ the cap's reserve), and in `RECIPIENT_CAP_EXEMPT` only if it is credential-gated
 `sendPasswordNotice(mailer, logger, person, { first, signInLink, requestId })` is the template for a post-commit
 notice. Tests: `server/src/email/__tests__/`.
 
+### selfServiceRoutes / SELF_SERVICE_POLICY / createTurnstileVerifier — `server/src/routes/self-service.ts`, `server/src/auth/{self-service,turnstile}.ts` (MUT-366, ADR-175)
+`selfServiceRoutes({ store, settings, mailer, logger, options })` mounts `POST /v1/signups` and
+`POST /v1/account-recovery`; `defaultSelfServiceOptions()` gives the production budgets with signup off.
+`SELF_SERVICE_POLICY` holds the link lives, budgets and floors; `signupLinkState`, `recoveryPurposeOf`,
+`signupAccountOutcome` (MUT-367's seam), `defaultDisplayName` and `answerNoEarlierThan` are the pure rules.
+`createTurnstileVerifier({ secret, fetch?, timeoutMs?, logger? })` → `verify(token, { ip, action, idempotencyKey })`;
+`UNCONFIGURED_TURNSTILE` refuses everything. Reuse the verifier for any other public form (MUT-197's landing form).
+Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src/__tests__/routes-self-service.test.ts`.
+

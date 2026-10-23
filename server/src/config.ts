@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { ARGON2_MINIMUMS } from './auth/users.js';
 import { isUnownedDomain } from './email/ports.js';
+import { isTurnstileTestSecret, TURNSTILE_TEST_SECRETS } from './auth/turnstile.js';
+import { SELF_SERVICE_POLICY } from './auth/self-service.js';
 
 /** Rates must not travel in cleartext; a local stub (tests, QA against a local server) may use plain http. */
 function isHttpsOrLocalHttp(value: string): boolean {
@@ -114,8 +116,17 @@ const envSchema = z.object({
    * development and tests only (refused in production, D14); `resend` needs every RESEND_/MAIL_ value below.
    */
   MAILER: z.enum(['resend', 'log', 'memory', 'noop']).default('noop'),
-  /** MUT-366 gates the signup routes on this; read here only so the server refuses to start with no mailer while it is on. */
+  /** MUT-366: POST /v1/signups answers 404 until this is "true"; the server refuses to start with it on and no mailer. Recovery is never behind it. */
   SELF_SIGNUP_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-366 (D7): Cloudflare Turnstile's secret (Secret Manager). Outside production, unset = Cloudflare's published
+   * always-pass test secret (2x… always fails, for QA), answered without a network call. Production needs a real
+   * one once mail or signup is on, and refuses a test one.
+   */
+  TURNSTILE_SECRET: z.string().min(1).max(200).optional(),
+  /** MUT-366 (ADR-159 §5): signup and recovery answer no earlier than this many ms after the request began. */
+  SIGNUP_RESPONSE_FLOOR_MS: z.coerce.number().int().min(0).max(10_000).default(SELF_SERVICE_POLICY.signupFloorMs),
+  RECOVERY_RESPONSE_FLOOR_MS: z.coerce.number().int().min(0).max(10_000).default(SELF_SERVICE_POLICY.recoveryFloorMs),
   /** no-reply@<apex>, written by Terraform from config/hosts.json. One plain address; the display name is the product's. */
   MAIL_FROM_ADDRESS: z.string().email().max(254).optional(),
   /** Where replies go (D6). */
@@ -203,7 +214,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       throw new ConfigError(`Invalid configuration:\n  ${recommended}: must be >= ${min} (${target} < ${floor})`);
     }
   }
-  return { ...config, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV, ...mailConfig(config) };
+  return { ...config, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV, ...mailConfig(config), TURNSTILE_SECRET: turnstileSecret(config) };
+}
+
+/**
+ * MUT-366 (D7, review #6): a server that really mails links (MAILER=resend, any environment) or opens signup in
+ * production must name its secret, and production never takes a test secret, which would let every bot through.
+ * Development and tests fall back to the always-pass test secret.
+ */
+function turnstileSecret(config: z.infer<typeof envSchema>): string | undefined {
+  const secret = config.TURNSTILE_SECRET;
+  const production = config.NODE_ENV === 'production';
+  if (production && secret && isTurnstileTestSecret(secret)) {
+    throw new ConfigError('Invalid configuration:\n  TURNSTILE_SECRET: a Cloudflare test secret would let every request through in production');
+  }
+  const mailsLinks = config.MAILER === 'resend' || (production && (config.MAILER !== 'noop' || config.SELF_SIGNUP_ENABLED));
+  if (!secret && mailsLinks) {
+    throw new ConfigError('Invalid configuration:\n  TURNSTILE_SECRET: signup and recovery mail links, so a server that sends mail needs the Turnstile secret');
+  }
+  return secret ?? (production ? undefined : TURNSTILE_TEST_SECRETS.pass);
 }
 
 /** MUT-359: the mail refusals (ticket, D7, D14, D18, D20) and the caps' defaults. */

@@ -7,12 +7,17 @@
 #
 # The DNS records Resend gives (DKIM, the return path, DMARC) live in the frontdoor stack, beside the zone (D1).
 # Go-live order: server/DEPLOYMENT.md §6f and docs/operations/before-release.md.
+#
+# MUT-366: mail on also mounts TURNSTILE_SECRET (recovery mails links), and `self_signup_enabled` opens
+# POST /v1/signups; it needs mailer = "resend".
 
 locals {
   mailer_resend                = var.mailer == "resend"
   secret_resend_api_key        = "mutaba3a-api-resend-api-key${local.suffix}"
   secret_resend_webhook_secret = "mutaba3a-api-resend-webhook-secret${local.suffix}"
-  mail_from_address            = local.domain == null ? null : "no-reply@${local.domain}"
+  # MUT-366: Cloudflare Turnstile's secret, which signup and recovery verify with once a link can be mailed.
+  secret_turnstile  = "mutaba3a-api-turnstile-secret${local.suffix}"
+  mail_from_address = local.domain == null ? null : "no-reply@${local.domain}"
 
   # Plain env for Cloud Run. MAILER is always set, so the server's default never decides it.
   mail_env = merge(
@@ -23,10 +28,15 @@ locals {
       MAIL_DAILY_CAP    = tostring(var.mail_daily_cap)
     } : {},
     var.operator_alert_email == null ? {} : { OPERATOR_ALERT_EMAIL = var.operator_alert_email },
+    # MUT-366: always set, so the server's default never decides whether strangers can sign up.
+    { SELF_SIGNUP_ENABLED = tostring(var.self_signup_enabled) },
   )
+  # MUT-366: with mail on, recovery mails links, so the server needs the Turnstile secret (it refuses to start
+  # without one); signup needs mail on (main.tf precondition), so this covers it too.
   mail_secret_env = local.mailer_resend ? {
     RESEND_API_KEY        = google_secret_manager_secret.resend_api_key.secret_id
     RESEND_WEBHOOK_SECRET = google_secret_manager_secret.resend_webhook_secret.secret_id
+    TURNSTILE_SECRET      = google_secret_manager_secret.turnstile.secret_id
   } : {}
 }
 
@@ -62,6 +72,30 @@ resource "google_secret_manager_secret" "resend_webhook_secret" {
   }
 
   depends_on = [google_project_service.apis]
+}
+
+# MUT-366: created empty like the Resend secrets; the operator adds the widget's secret key before mail goes on.
+resource "google_secret_manager_secret" "turnstile" {
+  project   = var.project_id
+  secret_id = local.secret_turnstile
+  labels    = local.labels
+
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret_iam_member" "api_reads_turnstile" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.turnstile.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api.email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "api_reads_resend_api_key" {

@@ -1,6 +1,8 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { setupLinkOrigin, setupLinkState, type SetupLinkState } from '../auth/account-setup.js';
+import { defaultDisplayName, signupAccountOutcome, signupLinkState } from '../auth/self-service.js';
+import { personalProfileFor } from '../personal-profile.js';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { isSamePortalOrigin, requestClientIp, sessionDigest, type SignInThrottle } from '../auth/sessions.js';
 import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
@@ -10,7 +12,7 @@ import type { Mailer } from '../email/ports.js';
 import { sendPasswordNotice } from '../email/password-notice.js';
 import type { Logger } from '../logger.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { AccountSetupTokenRecord, AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
+import type { AuditEventInput, LedgerStore, PersonSetupLinkRecord, SignupLinkRecord, UserRecord } from '../repositories/ports.js';
 import {
   ErrorEnvelopeSchema,
   SetupLinkCheckRequestSchema,
@@ -18,12 +20,12 @@ import {
   SetupLinkRedeemRequestSchema,
   SetupLinkRedeemResponseSchema,
 } from '../schemas.js';
-import { staleTerms, termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
+import { staleTerms, termsAcceptanceOf, termsAcceptedAudit, termsAcceptedEvent } from '../terms-acceptance.js';
 
 /**
- * The two public routes a setup link reaches (MUT-235, ADR-088). They are the
- * only public account routes besides sign-in: no signup, invite or "forgot
- * password" exists (no-self-registration.test.ts pins the list).
+ * The two public routes a setup link reaches (MUT-235, ADR-088). MUT-366: a
+ * SIGNUP link (mailed by POST /v1/signups) is redeemed here too, and creates
+ * the account it was for; recovery's links are ordinary SETUP/RESET links.
  *
  * The token travels in the request body, never the URL. Both routes are
  * same-origin only (the portal is the one browser caller) and share the
@@ -64,9 +66,19 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     return now;
   }
 
-  async function lookUp(token: string): Promise<{ link: AccountSetupTokenRecord | null; person: UserRecord | null }> {
+  type Found =
+    | { kind: 'person'; link: PersonSetupLinkRecord | null; person: UserRecord | null }
+    | { kind: 'signup'; link: SignupLinkRecord; holder: UserRecord | null };
+
+  async function lookUp(token: string): Promise<Found> {
     const link = await store.accountSetup.findByDigest(sessionDigest(settings.pepper, token));
-    return { link, person: link ? await store.users.getById(link.userId) : null };
+    // MUT-366: a SIGNUP link names an address; whoever holds it (nobody, until the link is used) decides its state.
+    if (link?.purpose === 'SIGNUP') return { kind: 'signup', link, holder: await store.users.findByEmail(link.email) };
+    return { kind: 'person', link, person: link ? await store.users.getById(link.userId) : null };
+  }
+
+  function stateOf(found: Found, now: Date): SetupLinkState {
+    return found.kind === 'signup' ? signupLinkState(found.link, found.holder, now) : setupLinkState(found.link, found.person, now);
   }
 
   app.openapi(
@@ -86,9 +98,14 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     }),
     async (c) => {
       const now = await guard(c);
-      const { link, person } = await lookUp(c.req.valid('json').token);
-      const state = setupLinkState(link, person, now);
-      if (state === 'valid' && link && person) {
+      const found = await lookUp(c.req.valid('json').token);
+      const state = stateOf(found, now);
+      if (state === 'valid' && found.kind === 'signup') {
+        const { link } = found;
+        return c.json({ state, email: link.email, locale: link.locale, purpose: link.purpose, expiresAt: link.expiresAt.toISOString(), termsVersion: terms.version }, 200);
+      }
+      if (state === 'valid' && found.kind === 'person' && found.link && found.person) {
+        const { link, person } = found;
         return c.json(
           { state, email: person.email, locale: person.locale, purpose: link.purpose, expiresAt: link.expiresAt.toISOString(), termsVersion: terms.version },
           200,
@@ -117,42 +134,84 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     }),
     async (c) => {
       const now = await guard(c);
-      const { token, password, acceptedTermsVersion, termsLocale, clientRelease } = c.req.valid('json');
-      const tokenDigest = sessionDigest(settings.pepper, token);
-      const { link, person } = await lookUp(token);
-      const state = setupLinkState(link, person, now);
-      if (state !== 'valid' || !link || !person) throw unusable(refusalOf(state));
+      const body = c.req.valid('json');
+      const found = await lookUp(body.token);
+      const state = stateOf(found, now);
+      if (state !== 'valid') throw unusable(refusalOf(state));
       // MUT-324 C4: after the link state (a dead link says why it is dead), before the slow hash.
-      if (acceptedTermsVersion !== terms.version) throw staleTerms(terms);
-      // Hash before claiming, so the slow part never runs inside the transaction.
-      const passwordHash = await passwordHasher.hash(password);
-      const audit = await passwordSetAudit(c, person, link);
-      // The setup page is the portal: a cookie surface.
-      const acceptance = termsAcceptanceOf(terms, termsLocale ?? person.locale, 'cookie', clientRelease);
-      const termsAudit = await termsAcceptedAudit(store, person, acceptance, c.get('requestId'));
-      // A fresh instant after the slow hash: the expiry check and passwordChangedAt must not predate a sign-in that ran meanwhile.
-      const at = c.get('now')();
-      const redeemed = await store.accountSetup.redeem({ tokenDigest, passwordHash, at, audit, terms: acceptance, termsAudit });
-      if (!redeemed) {
-        // Lost a race (another tab, a newer link, a disable, expiry during hashing): say what the link is now.
-        const again = await lookUp(token);
-        const after = setupLinkState(again.link, again.person, at);
-        throw unusable(after === 'valid' ? 'used' : after);
-      }
-      // The database lockout is cleared by the redeem; the in-process sign-in throttle is cleared here, so the sign-in that follows works.
-      throttle.clear(normalizeEmail(redeemed.email));
-      // MUT-359 (A5): after the commit, and never able to change this answer. "Set" when the person had no password.
-      await sendPasswordNotice(mailer, logger, { id: person.id, email: redeemed.email, locale: person.locale }, {
-        first: person.passwordHash === null,
-        signInLink: signInLinkOf(settings, c.req.url),
-        requestId: c.get('requestId'),
-      });
-      return c.json({ email: redeemed.email }, 200);
+      if (body.acceptedTermsVersion !== terms.version) throw staleTerms(terms);
+      if (found.kind === 'signup') return c.json(await redeemSignup(c, found.link, body), 200);
+      if (!found.link || !found.person) throw unusable('invalid');
+      return c.json(await redeemPersonLink(c, found.link, found.person, body), 200);
     },
   );
 
+  type RedeemBody = { token: string; password: string; termsLocale?: 'en' | 'ar' | undefined; clientRelease?: string | undefined; displayName?: string | undefined; defaultCurrency?: string | undefined; timezone?: string | undefined };
+
+  async function redeemPersonLink(c: Context<AppEnv>, link: PersonSetupLinkRecord, person: UserRecord, body: RedeemBody): Promise<{ email: string }> {
+    const tokenDigest = sessionDigest(settings.pepper, body.token);
+    // Hash before claiming, so the slow part never runs inside the transaction.
+    const passwordHash = await passwordHasher.hash(body.password);
+    const audit = await passwordSetAudit(c, person, link);
+    // The setup page is the portal: a cookie surface.
+    const acceptance = termsAcceptanceOf(terms, body.termsLocale ?? person.locale, 'cookie', body.clientRelease);
+    const termsAudit = await termsAcceptedAudit(store, person, acceptance, c.get('requestId'));
+    // A fresh instant after the slow hash: the expiry check and passwordChangedAt must not predate a sign-in that ran meanwhile.
+    const at = c.get('now')();
+    const redeemed = await store.accountSetup.redeem({ tokenDigest, passwordHash, at, audit, terms: acceptance, termsAudit });
+    if (!redeemed) throw unusable(await stateAfterLosing(body.token, at));
+    // The database lockout is cleared by the redeem; the in-process sign-in throttle is cleared here, so the sign-in that follows works.
+    throttle.clear(normalizeEmail(redeemed.email));
+    // MUT-359 (A5): after the commit, and never able to change this answer. "Set" when the person had no password.
+    await sendPasswordNotice(mailer, logger, { id: person.id, email: redeemed.email, locale: person.locale }, {
+      first: person.passwordHash === null,
+      signInLink: signInLinkOf(settings, c.req.url),
+      requestId: c.get('requestId'),
+    });
+    return { email: redeemed.email };
+  }
+
+  /**
+   * MUT-366: a SIGNUP link creates the account it was for: the user, their personal profile (in the page's currency
+   * and timezone), the trial and the terms, in one transaction. No session (ADR-088 §5) and no password notice (D11).
+   */
+  async function redeemSignup(c: Context<AppEnv>, link: SignupLinkRecord, body: RedeemBody): Promise<{ email: string }> {
+    const { defaultCurrency, timezone } = body;
+    if (!defaultCurrency || !timezone) {
+      throw new ApiError('VALIDATION_FAILED', 'A new account needs its currency and timezone', { fields: [...(defaultCurrency ? [] : ['defaultCurrency']), ...(timezone ? [] : ['timezone'])] });
+    }
+    const passwordHash = await passwordHasher.hash(body.password);
+    const acceptance = termsAcceptanceOf(terms, body.termsLocale ?? link.locale, 'cookie', body.clientRelease);
+    const requestId = c.get('requestId');
+    const at = c.get('now')();
+    const outcome = signupAccountOutcome(link, at);
+    const created = await store.accountSetup.redeemSignup({
+      tokenDigest: link.tokenDigest,
+      passwordHash,
+      at,
+      displayName: body.displayName ?? defaultDisplayName(link.email),
+      personal: personalProfileFor(link.locale, { defaultCurrency, timezone }),
+      status: outcome.status,
+      trialStartsAt: outcome.trialStartsAt,
+      terms: acceptance,
+      auditFor: ({ userId, personalOrganizationId }) => [
+        { organizationId: personalOrganizationId, actorType: 'USER', actorId: userId, action: 'organization.created', entityType: 'organization', entityId: personalOrganizationId, metadata: { personal: true, ownerUserId: userId }, requestId },
+        { organizationId: personalOrganizationId, actorType: 'USER', actorId: userId, action: 'user.signed_up', entityType: 'user', entityId: userId, metadata: { linkId: link.id, locale: link.locale, status: outcome.status }, requestId },
+        termsAcceptedEvent(personalOrganizationId, userId, acceptance, requestId),
+      ],
+    });
+    if (!created) throw unusable(await stateAfterLosing(body.token, at));
+    return { email: created.user.email };
+  }
+
+  /** Lost a race (another tab, a newer link, a disable, the account made meanwhile, expiry during hashing): say what the link is now. */
+  async function stateAfterLosing(token: string, at: Date): Promise<SetupLinkRefusal> {
+    const after = stateOf(await lookUp(token), at);
+    return after === 'valid' ? 'used' : after;
+  }
+
   /** Names the link that set the password, so an investigation can tie it to the `user.setup_link_issued` that made it. */
-  async function passwordSetAudit(c: Context<AppEnv>, person: UserRecord, link: AccountSetupTokenRecord): Promise<AuditEventInput[]> {
+  async function passwordSetAudit(c: Context<AppEnv>, person: UserRecord, link: PersonSetupLinkRecord): Promise<AuditEventInput[]> {
     return (await store.memberships.listByUser(person.id)).map((m) => ({
       organizationId: m.organizationId,
       actorType: 'USER',

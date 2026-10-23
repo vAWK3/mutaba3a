@@ -34,8 +34,12 @@ log_level           = "info"
 
 # Transactional mail (MUT-359, server/DEPLOYMENT.md §6f). Off until the domain is verified in Resend, both secrets
 # hold a version and `npm --prefix server run email:check -- --api` passes. The cap stays below the Barmajiyat
-# Resend plan's daily limit, which Malafat shares.
+# Resend plan's daily limit, which Malafat shares. MUT-366: mail on also mounts the Turnstile secret
+# (mutaba3a-api-turnstile-secret must hold a version first), and recovery goes live with it.
 # mailer               = "resend"
 # mail_reply_to        = "support@example.com"
 # mail_daily_cap       = 90
 # operator_alert_email = "you@example.com"
+
+# Self-service signup (MUT-366, ADR-159). GA only: after billing (MUT-361/362) and account closing (MUT-333).
+# self_signup_enabled = true

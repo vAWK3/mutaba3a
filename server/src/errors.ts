@@ -30,6 +30,8 @@ export const ERROR_CODES = {
   PRINCIPAL_NOT_ACCEPTED: 403,
   READ_ONLY_PROFILE: 403,
   CROSS_SITE_REQUEST: 403,
+  /** MUT-366: the Turnstile check on signup or recovery was missing, failed, or Cloudflare couldn't be asked (fails closed). */
+  CHECK_FAILED: 403,
   /** MUT-237: the typed current password is wrong, or the account is locked. Not 401 — the session is still valid; a
    * 401 here would trip the portal's generic "session expired" handler and sign the person out mid-form. */
   CURRENT_PASSWORD_WRONG: 403,

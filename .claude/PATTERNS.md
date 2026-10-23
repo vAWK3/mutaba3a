@@ -2678,3 +2678,23 @@ A side effect after the commit (a notice mail) is awaited with a bounded timeout
 by the request id so a retry can't double it. First instance: `sendPasswordNotice` in the setup-link redeem and
 `POST /v1/me/password`.
 
+## Patterns added by MUT-366 (2026-10-23, ADR-175)
+
+### Pattern: A public route that must not reveal an account answers on a floor
+Every branch (account, no account, suppressed) returns the same status and body, and waits until a fixed time after
+the request began, measured on a monotonic clock (never the injectable `now`). Do the branch's work, side effects
+included, before the floor; log when it overshoots. Refuse early only for what depends on the request alone (switch,
+origin, client budget, body, bot check, the address's budget). First instance: `routes/self-service.ts` with
+`answerNoEarlierThan`.
+
+### Pattern: A bot check verified by the server, failing closed, with offline test secrets
+The server calls the provider itself with a timeout, and anything but an explicit pass is a refusal. The provider's
+published test secrets are recognised and answered locally, so tests and QA never reach it, and production config
+refuses them. First instance: `server/src/auth/turnstile.ts`.
+
+### Pattern: A link bound to an address, serialised by an advisory lock
+When a row must not exist until a link is redeemed (no user yet), lock on the natural key with
+`pg_advisory_xact_lock(<namespace>, hashtext(key))` in both the issue and the redeem, and re-check "nobody holds it"
+inside the redeem's transaction; also catch the unique violation a writer that doesn't take the lock can cause.
+First instance: `accountSetup.issueSignup` / `redeemSignup`.
+

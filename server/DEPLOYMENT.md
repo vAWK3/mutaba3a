@@ -1281,6 +1281,22 @@ The API mails people through a `Mailer` port (`server/src/email/`). Today it sen
 
 **Rotate the sending key:** add a new version as in step 4, then `./scripts/deploy.sh`. Revoke the old key in Resend once the new revision serves.
 
+#### Signup and recovery (MUT-366, ADR-159)
+
+`POST /v1/account-recovery` mails a 1-hour reset link (a 24-hour setup link to an operator-created account that never set a password); it is live whenever mail is. `POST /v1/signups` mails a 24-hour SIGNUP link whose redeem creates the account and starts its 14-day trial; it answers 404 until `self_signup_enabled = true`. Both answer `202 {status:"sent"}` for every address, no earlier than `SIGNUP_RESPONSE_FLOOR_MS` (3000) / `RECOVERY_RESPONSE_FLOOR_MS` (1500), after a Cloudflare Turnstile check the server verifies itself (fails closed, 403 `CHECK_FAILED`). Budgets, in process: 10 an hour per client address, and 1 a minute and 5 a day per email address, across both routes.
+
+| Piece | Where | State until you turn it on |
+|---|---|---|
+| Secret `mutaba3a-api-turnstile-secret` | `infrastructure/terraform/email.tf` | Exists, empty. Mounted as `TURNSTILE_SECRET` with `mailer = "resend"`; the server refuses to start in production with mail on and no secret, or with a Cloudflare test secret |
+| `SELF_SIGNUP_ENABLED` | var `self_signup_enabled` (needs `mailer = "resend"`) | `false`: signup is 404, recovery works |
+| Turnstile widget | Cloudflare dashboard (Barmajiyat account), site key in the portal build (MUT-368) | Not created; outside production the portal uses the test site key `1x00000000000000000000AA` |
+
+Before the release that sets `mailer = "resend"`: in Cloudflare › Turnstile, add a widget for the portal host (`npm run hosts -- get portalOrigin`), mode **Managed**, and add its **secret key** without a shell-history entry:
+```bash
+read -rs KEY && printf '%s' "$KEY" | gcloud secrets versions add mutaba3a-api-turnstile-secret --data-file=- --project=$GCP_PROJECT_ID; unset KEY
+```
+At GA (after billing and account closing are live), set `self_signup_enabled = true` and release. Unredeemed signup links are deleted a week after they expire (hourly, in process).
+
 **A suppressed address** (hard bounce or complaint) gets no more mail. There's no command to lift it yet (TD). If a person fixes their mailbox, delete their row from `email_suppressions` by hand (`npm run db:psql`).
 
 ## 7. Production record

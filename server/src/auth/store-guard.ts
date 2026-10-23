@@ -84,7 +84,8 @@ export const STORE_ACCESS: StoreAccess = {
   memberships: { grant: 'operator', revoke: 'operator', grantOwner: 'operator', removeOwner: 'sessionOnly', find: 'read', listByUser: 'read', listByOrganization: 'read', listOwnersOf: 'read' },
   sessions: { create: { write: 'identity' }, findByDigest: 'read', touch: 'control', revoke: { write: 'identity' }, revokeAllForUser: 'operator' },
   // MUT-235: issued by /admin, redeemed by the two public setup routes; both run with no guard, so every principal is refused here.
-  accountSetup: { issue: 'operator', findByDigest: 'operator', redeem: 'operator' },
+  // MUT-366: the self-service routes are public, so they run with no guard (like redeem); no credential may call these.
+  accountSetup: { issue: 'operator', findByDigest: 'operator', redeem: 'operator', issueSignup: 'operator', redeemSignup: 'operator', pruneSignupLinks: 'operator' },
   integrations: {
     findByOrganizationAndProvider: 'read',
     findByProviderAndTenant: 'read',

@@ -50,10 +50,23 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(3);
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     expect([...after.maps.expReceipts.values()]).toEqual(
       [...before.maps.expReceipts.values()].map((r) => ({ ...r, filingStatus: 'FILED', receivedOn: '2026-10-02', suggested: null, approved: null, approvedAt: null, approvedByUserId: null, version: 1 })),
     );
+  });
+
+  it('3 → 4 (MUT-366): people arrive with no verified address', async () => {
+    const store = new MemoryLedgerStore();
+    await store.users.create({ email: 'rana@studio.ps', displayName: 'Rana', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-rana', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const { maps } = store.snapshot();
+    const people = new Map([...maps.people].map(([id, p]) => [id, Object.fromEntries(Object.entries(p).filter(([field]) => field !== 'emailVerifiedAt'))]));
+    const before: StoredSnapshot = { formatVersion: 3, stateVersion: 2, savedAt: AT, maps: { ...maps, people } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(4);
+    expect([...after.maps.people.values()]).toEqual([...before.maps.people.values()].map((p) => ({ ...p, emailVerifiedAt: null })));
   });
 
   it("leaves the snapshot it was given untouched", async () => {

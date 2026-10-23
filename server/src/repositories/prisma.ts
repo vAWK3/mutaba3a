@@ -22,6 +22,10 @@ import type {
   TermsAcceptanceRecord,
   AccountSetupRepository,
   AccountSetupTokenRecord,
+  CreateUserInput,
+  PersonSetupLinkRecord,
+  SignupLinkRecord,
+  UserStatus,
   AttachmentFilter,
   AuditEventInput,
   ExpenseCategoryInput,
@@ -288,29 +292,12 @@ export class PrismaLedgerStore implements LedgerStore {
     create: (input) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
-          const user = await tx.user.create({
-            data: {
-              email: input.email,
-              displayName: input.displayName,
-              passwordHash: input.passwordHash,
-              locale: input.locale,
-              passwordChangedAt: input.at,
-              createdAt: input.at,
-              updatedAt: input.at,
-            },
-          });
-          const personalOrganization = await tx.organization.create({ data: { ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL' } });
-          const memberships = [];
-          const firm = input.organizationId ? await tx.organization.findUnique({ where: { id: input.organizationId }, select: { firmEnabledAt: true } }) : null;
-          for (const organizationId of [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])]) {
-            const role = roleForNewMembership(organizationId === personalOrganization.id ? personalOrganization : (firm ?? { firmEnabledAt: null }));
-            memberships.push(toMembership(await tx.membership.create({ data: { userId: user.id, organizationId, role, createdAt: input.at } })));
-          }
+          const created = await insertPerson(tx, { ...input, status: 'ACTIVE', emailVerifiedAt: null, trialStartedAt: null });
           // MUT-235 review fix: the first setup link commits with the user, or neither does.
           if (input.setupLink) {
-            await tx.accountSetupToken.create({ data: { userId: user.id, ...input.setupLink, createdAt: input.at } });
+            await tx.accountSetupToken.create({ data: { userId: created.user.id, ...input.setupLink, createdAt: input.at } });
           }
-          return { user: toUser(user), memberships, personalOrganization };
+          return created;
         }),
       ),
     getById: async (id) => mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser),
@@ -460,12 +447,14 @@ export class PrismaLedgerStore implements LedgerStore {
             await tx.user.update({ where: { id: input.userId }, data: { passwordHash: null, passwordChangedAt: input.at, updatedAt: input.at } });
             await tx.session.updateMany({ where: { userId: input.userId, revokedAt: null }, data: { revokedAt: input.at, revokedReason: 'setup_link_lock' } });
           }
-          await tx.accountSetupToken.updateMany({ where: { userId: input.userId, usedAt: null, cancelledAt: null }, data: { cancelledAt: input.at } });
+          // MUT-366 (review #2): a mailed (recovery) link replaces only earlier mailed links, so a stranger asking for a
+          // reset can't kill the operator's open link; an operator link replaces all.
+          await tx.accountSetupToken.updateMany({ where: { userId: input.userId, usedAt: null, cancelledAt: null, ...(input.mailed ? { mailed: true } : {}) }, data: { cancelledAt: input.at } });
           const row = await tx.accountSetupToken.create({
-            data: { userId: input.userId, tokenDigest: input.tokenDigest, purpose: input.purpose, createdAt: input.at, expiresAt: input.expiresAt },
+            data: { userId: input.userId, tokenDigest: input.tokenDigest, purpose: input.purpose, mailed: input.mailed ?? false, createdAt: input.at, expiresAt: input.expiresAt },
           });
           if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
-          return toSetupLink(row);
+          return toPersonSetupLink(row);
         }),
       ),
     findByDigest: async (tokenDigest) => mapNullable(await this.prisma.accountSetupToken.findUnique({ where: { tokenDigest } }), toSetupLink),
@@ -473,26 +462,90 @@ export class PrismaLedgerStore implements LedgerStore {
       translate(() =>
         this.prisma.$transaction(async (tx) => {
           const link = await tx.accountSetupToken.findUnique({ where: { tokenDigest: input.tokenDigest } });
-          if (!link) return null;
-          const [person] = await tx.$queryRaw<Array<{ status: string }>>`SELECT status FROM users WHERE id = ${link.userId}::uuid FOR NO KEY UPDATE`;
+          // MUT-366: a SIGNUP link has no person; it is redeemed through redeemSignup.
+          if (!link?.userId) return null;
+          const userId = link.userId;
+          const [person] = await tx.$queryRaw<Array<{ status: string; emailVerifiedAt: Date | null }>>`SELECT status, "emailVerifiedAt" FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
           if (person?.status !== 'ACTIVE') return null;
           const { count } = await tx.accountSetupToken.updateMany({
             where: { id: link.id, usedAt: null, cancelledAt: null, expiresAt: { gt: input.at } },
             data: { usedAt: input.at },
           });
           if (count === 0) return null;
+          // MUT-366 (review #2): the password is set; any other open link (operator or mailed) is spent with it.
+          await tx.accountSetupToken.updateMany({ where: { userId, usedAt: null, cancelledAt: null, id: { not: link.id } }, data: { cancelledAt: input.at } });
           const user = await tx.user.update({
-            where: { id: link.userId },
-            data: { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at },
+            where: { id: userId },
+            data: {
+              passwordHash: input.passwordHash,
+              passwordChangedAt: input.at,
+              failedSignIns: 0,
+              lockedUntil: null,
+              updatedAt: input.at,
+              // MUT-366 (D18): a mailed link reached the person through their mailbox.
+              ...(link.mailed && person.emailVerifiedAt === null ? { emailVerifiedAt: input.at } : {}),
+            },
           });
-          await tx.session.updateMany({ where: { userId: link.userId, revokedAt: null }, data: { revokedAt: input.at, revokedReason: 'password_set' } });
+          await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: input.at, revokedReason: 'password_set' } });
           if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
           // MUT-324: an operator reset after acceptance must still set the password, so an existing acceptance is kept.
-          const accepted = await insertTermsAcceptance(tx, link.userId, input.terms, input.at);
+          const accepted = await insertTermsAcceptance(tx, userId, input.terms, input.at);
           if (accepted && input.termsAudit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.termsAudit, input.at) });
           return toUser(user);
         }),
       ),
+    // MUT-366 (D12): issue and redeem of SIGNUP links serialise per address on a transaction-scoped advisory lock;
+    // there is no user row to lock yet.
+    issueSignup: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          await lockSignupAddress(tx, input.email);
+          await tx.accountSetupToken.updateMany({ where: { purpose: 'SIGNUP', email: input.email, usedAt: null, cancelledAt: null }, data: { cancelledAt: input.at } });
+          const row = await tx.accountSetupToken.create({
+            data: { email: input.email, locale: input.locale, tokenDigest: input.tokenDigest, purpose: 'SIGNUP', mailed: true, createdAt: input.at, expiresAt: input.expiresAt },
+          });
+          return toSignupLink(row);
+        }),
+      ),
+    redeemSignup: async (input) => {
+      try {
+        return await translate(() =>
+          this.prisma.$transaction(async (tx) => {
+            const link = await tx.accountSetupToken.findUnique({ where: { tokenDigest: input.tokenDigest } });
+            if (!link || link.purpose !== 'SIGNUP' || !link.email) return null;
+            const signup = toSignupLink(link);
+            await lockSignupAddress(tx, signup.email);
+            if (await tx.user.findUnique({ where: { email: signup.email }, select: { id: true } })) return null;
+            const { count } = await tx.accountSetupToken.updateMany({
+              where: { id: link.id, usedAt: null, cancelledAt: null, expiresAt: { gt: input.at } },
+              data: { usedAt: input.at },
+            });
+            if (count === 0) return null;
+            const { user, personalOrganization } = await insertPerson(tx, {
+              email: signup.email,
+              displayName: input.displayName,
+              passwordHash: input.passwordHash,
+              locale: signup.locale,
+              personal: input.personal,
+              at: input.at,
+              status: input.status,
+              emailVerifiedAt: input.at,
+              trialStartedAt: input.trialStartsAt,
+            });
+            await insertTermsAcceptance(tx, user.id, input.terms, input.at);
+            const audit = input.auditFor({ userId: user.id, personalOrganizationId: personalOrganization.id });
+            if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, input.at) });
+            return { user, personalOrganization };
+          }),
+        );
+      } catch (err) {
+        // The operator created this address's account between our check and our insert: the link lost.
+        if (err instanceof UniqueViolation && err.constraint.includes('email')) return null;
+        throw err;
+      }
+    },
+    pruneSignupLinks: async (expiredBefore) =>
+      (await this.prisma.accountSetupToken.deleteMany({ where: { purpose: 'SIGNUP', usedAt: null, expiresAt: { lt: expiredBefore } } })).count,
   };
 
   readonly memberships: MembershipRepository = {
@@ -2488,6 +2541,44 @@ function toApiKey(row: PrismaApiKey): ApiKeyRecord {
 }
 
 /** MUT-324: the (userId, version) unique key; true when this call wrote the row, false when it already existed. */
+/**
+ * A user, their personal organization and its membership (plus a firm's), as `users.create` and MUT-366's
+ * `redeemSignup` write them, inside the caller's transaction.
+ */
+async function insertPerson(
+  tx: Prisma.TransactionClient,
+  input: Omit<CreateUserInput, 'setupLink'> & { status: UserStatus; emailVerifiedAt: Date | null; trialStartedAt: Date | null },
+) {
+  const user = await tx.user.create({
+    data: {
+      email: input.email,
+      displayName: input.displayName,
+      passwordHash: input.passwordHash,
+      locale: input.locale,
+      status: input.status,
+      passwordChangedAt: input.at,
+      emailVerifiedAt: input.emailVerifiedAt,
+      trialStartedAt: input.trialStartedAt,
+      createdAt: input.at,
+      updatedAt: input.at,
+    },
+  });
+  const personalOrganization = await tx.organization.create({ data: { ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL' } });
+  const memberships = [];
+  const firm = input.organizationId ? await tx.organization.findUnique({ where: { id: input.organizationId }, select: { firmEnabledAt: true } }) : null;
+  for (const organizationId of [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])]) {
+    const role = roleForNewMembership(organizationId === personalOrganization.id ? personalOrganization : (firm ?? { firmEnabledAt: null }));
+    memberships.push(toMembership(await tx.membership.create({ data: { userId: user.id, organizationId, role, createdAt: input.at } })));
+  }
+  return { user: toUser(user), memberships, personalOrganization };
+}
+
+/** MUT-366 (D12): one SIGNUP issue or redeem per address at a time. The first key namespaces the lock to this use. */
+const SIGNUP_ADDRESS_LOCK = 366;
+async function lockSignupAddress(tx: Prisma.TransactionClient, email: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SIGNUP_ADDRESS_LOCK}::int, hashtext(${email}))`;
+}
+
 async function insertTermsAcceptance(tx: Prisma.TransactionClient, userId: string, terms: TermsAcceptanceInput, at: Date): Promise<boolean> {
   const { version, locale, textSha256, surface, clientRelease } = terms;
   const { count } = await tx.termsAcceptance.createMany({ data: [{ userId, version, locale, textSha256, surface, clientRelease, acceptedAt: at }], skipDuplicates: true });
@@ -2518,6 +2609,7 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     lockedUntil: row.lockedUntil,
     passwordChangedAt: row.passwordChangedAt,
     lastSignInAt: row.lastSignInAt,
+    emailVerifiedAt: row.emailVerifiedAt,
     malafatSuggestions: row.malafatSuggestions === null ? null : resolveMalafatSuggestions(row.malafatSuggestions),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -2525,16 +2617,22 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
 }
 
 function toSetupLink(row: Prisma.AccountSetupTokenGetPayload<object>): AccountSetupTokenRecord {
-  return {
-    id: row.id,
-    userId: row.userId,
-    tokenDigest: row.tokenDigest,
-    purpose: row.purpose,
-    createdAt: row.createdAt,
-    expiresAt: row.expiresAt,
-    usedAt: row.usedAt,
-    cancelledAt: row.cancelledAt,
-  };
+  return row.purpose === 'SIGNUP' ? toSignupLink(row) : toPersonSetupLink(row);
+}
+
+function setupLinkFields(row: Prisma.AccountSetupTokenGetPayload<object>) {
+  return { id: row.id, tokenDigest: row.tokenDigest, mailed: row.mailed, createdAt: row.createdAt, expiresAt: row.expiresAt, usedAt: row.usedAt, cancelledAt: row.cancelledAt };
+}
+
+/** The table's CHECKs guarantee the shape; a row that breaks it is a bug, not a state to handle. */
+function toPersonSetupLink(row: Prisma.AccountSetupTokenGetPayload<object>): PersonSetupLinkRecord {
+  if (row.purpose === 'SIGNUP' || row.userId === null) throw new Error(`account_setup_tokens ${row.id} is not a person's link`);
+  return { ...setupLinkFields(row), purpose: row.purpose, userId: row.userId, email: null, locale: null };
+}
+
+function toSignupLink(row: Prisma.AccountSetupTokenGetPayload<object>): SignupLinkRecord {
+  if (row.purpose !== 'SIGNUP' || row.email === null || row.locale === null) throw new Error(`account_setup_tokens ${row.id} is not a signup link`);
+  return { ...setupLinkFields(row), purpose: 'SIGNUP', userId: null, email: row.email, locale: row.locale as UserLocale };
 }
 
 function toSession(row: Prisma.SessionGetPayload<object>): SessionRecord {
