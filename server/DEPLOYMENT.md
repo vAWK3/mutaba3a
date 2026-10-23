@@ -144,7 +144,12 @@ state, and `deploy.sh` never touches it. The rules are in
      2FA. Hand it to each command below. Never `export SENTRY_AUTH_TOKEN` with it: that name
      belongs to the upload token, and build tooling reads it.
    - **Upload token**, `SENTRY_AUTH_TOKEN`: an org auth token (`sntrys_…`) with
-     release and upload scopes only, for MUT-149..151 builds.
+     release and upload scopes only, for MUT-149..151 builds. Store it once in the
+     Keychain, where `make release server` reads it when the shell has none (MUT-149):
+
+     ```bash
+     security add-generic-password -U -s release-kit -a barmajiyat/SENTRY_AUTH_TOKEN -w
+     ```
 
    Store neither in the repo, a tfvars file or the Flutter `.env`.
 4. **Apply the projects, keys, alerts and spike protection:**
@@ -201,7 +206,12 @@ state, and `deploy.sh` never touches it. The rules are in
    ```
 
    The api DSN needs no copying: step 8 reads it from this stack's state. The
-   other three wait for MUT-149..151. Then `unset SENTRY_ADMIN_TOKEN`.
+   portal's (`mutaba3a-web`) goes in `deploy.env` as `MUTABA3A_SENTRY_DSN=…` (MUT-149); with
+   it set, `make release server` stops unless the upload token is there too (step 3). Before
+   that release, `terraform -chdir=server/infrastructure/sentry plan` must show no
+   `allowed_domains` change on `mutaba3a-web` (it must already list `https://app.mtb3a.com`);
+   if it does, apply it first, or Sentry refuses every portal report. Landing waits for
+   MUT-150. Then `unset SENTRY_ADMIN_TOKEN`.
 7. **Clean up the two hand-made projects.** Sentry gave each an automatic key with no rate
    limit and a default alert rule; Terraform can't remove either (it only sets `default_key
    = false` at creation). In `mutaba3a-web` and `mutaba3a-flutter`:

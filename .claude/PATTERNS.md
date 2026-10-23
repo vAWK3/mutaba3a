@@ -2460,11 +2460,17 @@ A Vite `define` is read through one tiny module (`src/lib/appVersion.ts` for `__
 - **Bundle check.** `check-bundles.ts` proves the SDK isn't statically reachable from the web
   entry (`posthogInEntryGraph`) and is absent from desktop.
 - **Reuse it.** Follow the same three steps for any SDK the free app must never ship (ADR-024).
+- **When it must also wait for sign-in** (MUT-149, Sentry in the portal): a small gate in the entry
+  imports no SDK, follows `subscribeMode`, and `import()`s the chunk only in `remote` mode. It holds
+  the few errors that happen before the chunk arrives and drops them on sign-out. A boolean define
+  (`__SENTRY_ENABLED__`) guards the `import()`, so a build without the key emits no chunk at all;
+  only the chunk reads the key itself, so the key's text never lands in the entry.
 
 ### Pattern: Release-QA answers third-party traffic locally
 - **The fixture.** `qa/support/qa.ts` gives every spec an `analytics` fixture
   (`qa/support/posthog.ts`) that answers PostHog requests and records what would have been sent.
-  QA builds carry a dummy `phc_` key.
+  QA builds carry a dummy `phc_` key. MUT-149 adds `crashReports` (`qa/support/sentry.ts`), the same
+  for every Sentry host, with a dummy DSN on the org's ingest host in the portal's QA build.
 - **Bot filter.** Specs that read events call `actAsPerson(page)`, because posthog-js drops events
   from automated browsers.
 

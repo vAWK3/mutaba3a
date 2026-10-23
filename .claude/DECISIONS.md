@@ -3708,6 +3708,19 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **User.** The account's internal id. The store answers therefore say crash data is **linked to identity** (App Store) and add **User IDs** (Play).
 - **Excluded.** The Share Extension, widgets and Siri intents send nothing (follow-up MUT-395).
 
+**Amendment 11 (the portal, MUT-149, 2026-10-23)**: the hosted portal reports to `mutaba3a-web`. Design and Basel's answers: `.claude/designs/mut-149-portal-sentry.md` (eng D1–D6, design D3–D8).
+- **Signed in only.** `src/hosted/observability/errorReporting.ts` is in the entry and imports no SDK. It loads `portalSentry.ts`, a lazy chunk and the one portal file that imports `@sentry/browser`, only in `remote` mode (ADR-097 §10). Until the chunk arrives it holds up to 10 window errors, rejections and boundary reports, then replays them (eng R1); signing out stops the SDK and drops them. A build without `MUTABA3A_SENTRY_DSN` compiles the chunk out.
+- **SDK 11.** `@sentry/browser` 11.8.0 has no `sendDefaultPii`. The contract's `sendDefaultPii: false` and `includeLocalVariables: false` are spelled out as `dataCollection`: no user info, cookies, bodies or query params; User-Agent is the only header kept. Integrations: global handlers, fetch and history breadcrumbs, linked errors, dedupe, HTTP context. No tracing, replay or feedback.
+- **Shared options.** `src/lib/observability/browserSentry.ts` builds the init options from the contract and runs every event and breadcrumb through MUT-148's `scrubEvent`. MUT-150 reuses it. Lint lets it import only `sentry-rules` and `sentry-scrub` from the server, and lets only `portalSentry.ts` load the SDK.
+- **ApiErrors.** Every `ApiError` that reaches the window is dropped: the UI owns it, and the server reports its own 5xx. One that reaches a boundary or the router's `onCatch` is a crash, reported with `request_id`.
+- **User.** The internal user id only, no org (D5; AC3 amended on Jira). The org is one lookup away from the user id or the `request_id`.
+- **Tags.** `surface`; `locale` and `route` (the route id template, never the path) read at send time; `app_build`.
+- **Config.** The DSN comes from `deploy.env` (`MUTABA3A_SENTRY_DSN`; no `VITE_` variables). The build refuses a DSN on any host but `SENTRY_INGEST_ORIGIN` (`server/src/observability/sentry-ingest.ts`), the one origin `PORTAL_CSP` adds, so they cannot drift. Release `mutaba3a-portal@<server version>+<sha>`: the portal ships inside the API image.
+- **Source maps.** Hidden maps, uploaded by `@sentry/vite-plugin` and then deleted, only when `SENTRY_AUTH_TOKEN` is set (the shell, else Keychain `release-kit` / `barmajiyat/SENTRY_AUTH_TOKEN`, D6). deploy.sh stops on a DSN without the token, `check-bundles --dist dist-hosted` fails on any `.map`, and the server answers 404 for `*.map`.
+- **Crash screens.** A page crash shows the inline `CrashCard` and the shell stays; a frame crash shows `ReloadToContinue` with the `CRASH` stop; a crash above every provider shows a static Arabic-then-English screen. None shows the error's own text.
+- **Known gap.** Ad blockers that block `*.ingest.sentry.io` lose those reports. A tunnel through our server was weighed and rejected at pilot volume.
+- **Bundle rule.** The `HOSTED_RULES` ban on `اشترك` is retired (Basel, 2026-10-23): MUT-362's billing copy (ADR-170) says «الاشتراك», which made `test:bundles` fail on main, and deploy.sh now runs the hosted check.
+
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
 **Status**: Accepted (2026-10-17, MUT-157; auto-decided on the recommended option at Basel's request, C1)

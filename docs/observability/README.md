@@ -37,7 +37,7 @@ Only production builds may send.
 | File | What it holds | Who reads it at runtime |
 |---|---|---|
 | `sentry-rules.json` | deny lists, allowed tags and user keys, safe and always-dropped context keys, ignored errors, required SDK options, org settings | the portal and landing may import it; the server and phone **embed** its lists in code, and a test asserts they are equal |
-| `sentry-fixtures.json` | "dirty event in, clean event out" cases, one or more per surface | **tests only**: never import it into an app. It carries the marker `MUT147-SENTRY-FIXTURE-DO-NOT-BUNDLE`. MUT-149/150 add a `check-bundles` rule that fails on it (and on `sntrys_`/`sntryu_`); it doesn't exist yet. `check-bundles` doesn't run on any ship path until TD-084 is fixed, so those tickets need TD-084 too |
+| `sentry-fixtures.json` | "dirty event in, clean event out" cases, one or more per surface | **tests only**: never import it into an app. It carries the marker `MUT147-SENTRY-FIXTURE-DO-NOT-BUNDLE`. `check-bundles` fails on it in every dist, and on `sntrys_`/`sntryu_` (MUT-149); `deploy.sh` runs it on `dist-hosted`, and the landing's Netlify path still skips it (TD-084) |
 
 `scripts/__tests__/sentry-rules.test.ts` checks the contract itself:
 
@@ -269,7 +269,7 @@ and refuses an org outside the EU region before writing anything (D5).
 | Surface | DSN | Upload token |
 |---|---|---|
 | api | Secret Manager → Cloud Run env `SENTRY_DSN`. MUT-148 reads it from this module's state with `terraform_remote_state`, so deploys need no Sentry token | none needed (source ships in the image) |
-| portal | `VITE_SENTRY_DSN` in the **hosted** build env (`server/scripts/deploy.sh` step 1) | `SENTRY_AUTH_TOKEN` in the operator shell for `make release server` (`deploy.env` holds no secrets, and `release.env` is the desktop signing file; MUT-149 decides whether deploy.sh reads a git-ignored file) |
+| portal | `MUTABA3A_SENTRY_DSN` in the git-ignored `deploy.env`, exported by the Makefile into `npm run build:hosted` (`server/scripts/deploy.sh` step 1); the build refuses a DSN off the org's ingest host (MUT-149) | `SENTRY_AUTH_TOKEN` from the operator shell, else Keychain `release-kit` / `barmajiyat/SENTRY_AUTH_TOKEN`, passed by `make release server` to deploy.sh only; a DSN without it stops the release |
 | landing | `VITE_SENTRY_DSN` in Netlify's **production context only** | `SENTRY_AUTH_TOKEN` in Netlify's build env, **scoped to the Production deploy context and marked "Contains secret values"**, so deploy-preview and branch builds (which run PR code) can never read it |
 | capture-app | `MUTABA3A_SENTRY_DSN`, passed by the fastlane release lanes with their own `--dart-define` from the login Keychain (service `release-kit`, account `barmajiyat/MUTABA3A_SENTRY_DSN`; never the shared `.env`, which `make run` reads too). The lanes check it against the app's EU pattern before building. The SDK starts only under `kReleaseMode` | `SENTRY_AUTH_TOKEN` from the Keychain (`barmajiyat/SENTRY_AUTH_TOKEN`) or the fastlane shell env; `sentry_dart_plugin` uploads the dSYMs, Dart debug files and R8 mapping per build |
 
@@ -277,9 +277,10 @@ DSNs come from `terraform output -json dsn` in `server/infrastructure/sentry`.
 
 **Landmines.**
 
-- **Never `VITE_` a token.** Vite inlines every `VITE_`-prefixed variable into the browser
-  bundle. Only DSNs may be `VITE_`. MUT-149/150 add a `check-bundles` rule failing on any `sntrys_` or `sntryu_` string,
-  run on the ship paths once TD-084 is fixed.
+- **Never put a token in a build variable.** The portal's DSN is a `MUTABA3A_*` define; a
+  token must never become one. `check-bundles` fails on any `sntrys_` or `sntryu_` string and
+  on the fixtures' marker (MUT-149), and `deploy.sh` runs it on `dist-hosted`. The landing's
+  Netlify path still skips it (TD-084).
 - **The Flutter `.env` is compiled into the app.** fastlane and the Makefile pass it with
   `--dart-define-from-file`, so every value in it ships inside the binary. A
   `SENTRY_AUTH_TOKEN` placed there ships to every phone. Keep it in the Keychain; the lanes
@@ -338,6 +339,8 @@ didn't send yet: `noTracking.body` says "Our servers send error reports when som
 the `errorReports` sentence is EN "Our servers send a report when a request fails on our side." AR «ترسل خوادمنا
 تقريرًا عندما يفشل طلب بسبب خلل من جهتنا.» MUT-149 replaces both with the full wording below, and each later
 surface adds itself to `noTracking.body`'s list.
+
+**Published with MUT-149 (2026-10-23)**, with `noTracking.body` naming "Our servers, the hosted portal, and the iPhone and Android apps" (MUT-151's phone sentences kept).
 
 **`errorReports` sentence.**
 

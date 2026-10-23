@@ -944,7 +944,7 @@
 **Effort**: Small
 
 ### TD-084: The bundle checks never run on the paths that ship
-**Status**: Open
+**Status**: Partly resolved (2026-10-23, MUT-149): `check-bundles --dist <dir>` exists, and `server/scripts/deploy.sh` runs it on `dist-hosted` right after building the portal it ships. Still open: Netlify's `npm run build:web` (the desktop path is retired until v2).
 **Added**: 2026-10-12 (MUT-102 review, adversarial finding; the origin checks had the same gap since MUT-43)
 **Priority**: Medium
 **Impact**:

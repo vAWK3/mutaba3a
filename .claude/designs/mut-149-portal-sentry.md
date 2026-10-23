@@ -1,7 +1,9 @@
 # MUT-149 — Hosted portal reports front-end crashes to Sentry
 
-Status: PLAN (eng-ticket, 2026-10-23). Not built. Moves to `.claude/designs/mut-149-portal-sentry.md` at /eng-build
-(an untracked file in the main checkout blocks `deploy.sh`).
+Status: BUILT (eng-build, 2026-10-23) on `feature/mut-149-portal-sentry`. Planned 2026-10-23 (eng-ticket, eng and design reviews below).
+Build notes: SDK 11 dropped `sendDefaultPii`, so the contract's rule became `dataCollection` (ADR-091 am.11); the ingest host is
+`o4512029835526144.ingest.de.sentry.io` (Basel); the `ar: subscribe` bundle ban was retired so deploy.sh's new check can pass
+(Basel, 2026-10-23); TD-084 is only partly resolved (Netlify still skips the check).
 
 Tracker: Jira · barmajiyat.atlassian.net · MUT via atlassian-barmajiyat · Backlog = default board status · finished → In Review (landed + pushed → Done)
 
