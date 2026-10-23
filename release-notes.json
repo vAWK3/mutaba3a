@@ -1,4 +1,14 @@
 {
+  "0.1.20": {
+    "en": [
+      "In English, Mutaba3a is now called MTB3A. In Arabic it stays متابعة, and the website header shows the new logotype.",
+      "Backups, exports and the import template now download as mtb3a-… files. Files saved under the old name still import as before."
+    ],
+    "ar": [
+      "أصبح اسم التطبيق بالإنجليزية MTB3A، ويبقى اسمه بالعربية «متابعة»، ويظهر الشعار الجديد في أعلى الموقع.",
+      "تُنزَّل النسخ الاحتياطية وملفات التصدير وقالب الاستيراد الآن بأسماء تبدأ بـ mtb3a-، وما زالت الملفات المحفوظة بالاسم القديم تُستورَد كما كانت."
+    ]
+  },
   "0.1.19": {
     "en": [
       "Sentry"
