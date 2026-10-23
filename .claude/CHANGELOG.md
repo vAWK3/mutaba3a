@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-23 — The MTB3A logotype and its kit (MUT-401, ADR-170)
+
+**Why:** epic MUT-400 renames the service MTB3A in English (متابعة stays in Arabic). MUT-401 brings in the logotype Basel drew in Claude Design, with the lockup and running-text rules, so MUT-402 (web), MUT-404 (stores) build on one file. Plan and eng review D1–D9: `.claude/designs/mut-401-mtb3a-wordmark.md` (Jira comment 12417). Nothing renders it yet.
+
+### Added
+- `src/assets/brand/wordmark.svg`: the MTB3A logotype as delivered (outlined Thmanyah Serif Display Bold, viewBox 3695 × 724, one fill). The only copy (D3); MUT-402 shows it as a mask over `var(--ink)` (D7).
+- `src/assets/brand/brand.sha256.json`: sha256 pins for the mark, the nine web icons and the logotype (D5, D9).
+- `src/styles/__tests__/wordmark.test.ts`: outlines only, CSP-safe attributes (D4), one opaque fill, tight frame (D8), one copy, pins.
+- `docs/brand/wordmark/README.md`: the kit (lockup numbers, order, clear space, minimum size, running-text rule, origin and licence note, what MUT-402 must add); `store/feature-graphic-en-1024x500.png`; `claude-design/` with the two Claude Design pages (reference only).
+
+### Changed
+- `docs/brand/README.md`: asset map rows for the logotype, the pins and the kit; the Typography section links the running-text rule.
+
 ## [Unreleased] - 2026-10-22 — Log Owed income and expenses with a future date (MUT-392, ADR-169, API 1.51.0)
 
 **Why:** Basel wants to log money that hasn't moved yet: Owed income dated next month, a bill due in three days. Income

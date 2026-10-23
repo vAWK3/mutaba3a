@@ -159,6 +159,15 @@ Every money rule runs on both stores (memory and `test:db`).
 
 ## Current Test Coverage
 
+### MTB3A logotype (MUT-401, added 2026-10-23)
+| File | Type | Covers |
+|------|------|--------|
+| `src/styles/__tests__/wordmark.test.ts` › pathPoints | Unit (node) | Absolute and relative M/L/H/V/Z, curve end points only, implicit lines after a move |
+| `src/styles/__tests__/wordmark.test.ts` › wordmark.svg | Unit (node, jsdom) | One file with a viewBox and no dark variant (D7); no text, font, style, script, image, gradient, mask or `<use>`; no `style`/`class`/`on*`/`font*`/external `href` attributes (D4); every shape has one opaque fill, no stroke or opacity; path points touch all four viewBox edges within 1% and never leave it (D8); no `wordmark*.svg` under `docs/brand/` (D3) |
+| `src/styles/__tests__/wordmark.test.ts` › pins | Unit (node) | `brand.sha256.json` lists exactly the mark, nine web icons and the logotype, and each matches (D5, D9) |
+
+Checked by mutation on 2026-10-23: a copy with a padded viewBox and a `style` attribute failed the viewBox, attribute, frame and pin tests. No release-QA spec: nothing renders the file until MUT-402, whose spec covers the landing header and portal.
+
 ### Landing header and motion (MUT-77, added 2026-10-14)
 | File | Type | Covers |
 |------|------|--------|
