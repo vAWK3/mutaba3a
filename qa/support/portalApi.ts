@@ -22,6 +22,19 @@ export const uid = (kind: number, n: number) => `${kind.toString(16)}${String(n)
 export const todayInJerusalem = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
+/** A calendar date `days` after `iso` (negative goes back). */
+export const daysAfter = (iso: string, days: number) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/** MUT-392: how far ahead the server takes an Owed or expense date (agreements/compose.ts DAYS_IN_FUTURE_LIMIT). */
+export const DAYS_IN_FUTURE_LIMIT = 3660;
+
+/** MUT-392: the latest Owed or expense date the server takes, today + DAYS_IN_FUTURE_LIMIT. */
+export const ceilingOf = (iso: string) => daysAfter(iso, DAYS_IN_FUTURE_LIMIT);
+
 type Json = Record<string, unknown>;
 type Currency = 'ILS' | 'USD' | 'EUR' | 'JOD';
 

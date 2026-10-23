@@ -15,6 +15,24 @@ describe('buckets', () => {
     expect(b.overdue + b.dueToday + b.notYetDue).toBe(b.outstanding);
   });
 
+  it('leaves out an Owed dated after today until its day, then buckets it by its due date (MUT-392 D2)', () => {
+    const future = rec({ origin: 'ADJUSTMENT', postingDate: '2026-11-11', dueDate: '2026-12-15' });
+    const dated = rec({ id: 'd', dueDate: '2026-10-19' });
+    expect(bucketize([future, dated], '2026-10-20')).toEqual({ outstanding: 1000n, overdue: 1000n, dueToday: 0n, notYetDue: 0n });
+    expect(bucketize([future, dated], '2026-11-11')).toEqual({ outstanding: 2000n, overdue: 1000n, dueToday: 0n, notYetDue: 1000n });
+    expect(bucketize([future], '2026-12-16')).toEqual({ outstanding: 1000n, overdue: 1000n, dueToday: 0n, notYetDue: 0n });
+  });
+
+  it('counts a future Owed on its own day, and never holds back an installment Malafat posted ahead (MUT-392 review)', () => {
+    const today = '2026-10-20';
+    const owedToday = rec({ id: 'o', origin: 'ADJUSTMENT', agreementId: null, postingDate: today, dueDate: '2026-11-15' });
+    // An IMMEDIATE installment on an agreement dated ahead posts with that future postingDate (agreements/compose.ts postingDateFor).
+    const installmentAhead = rec({ id: 'i', origin: 'INSTALLMENT', postingDate: '2026-12-01', dueDate: '2026-12-31' });
+    const chargeAhead = rec({ id: 'c', origin: 'RETAINER_CHARGE', postingDate: '2026-11-01', dueDate: '2026-11-30' });
+    expect(bucketize([owedToday, installmentAhead, chargeAhead], today)).toEqual({ outstanding: 3000n, overdue: 0n, dueToday: 0n, notYetDue: 3000n });
+    expect(projectFigures({ agreements: [], installments: [], receivables: [installmentAhead], today }).postedMinor).toBe(1000n);
+  });
+
   it('counts unallocated funds on POSTED payments only and the last POSTED received-on date', () => {
     const payments = [pay({ amountMinor: 500n, allocatedMinor: 200n }), pay({ id: 'q', amountMinor: 300n, allocatedMinor: 300n, receivedOn: '2026-10-09' }), pay({ id: 'r', status: 'REVERSED', amountMinor: 900n, receivedOn: '2026-12-01' })];
     expect(unallocatedOf(payments)).toEqual({ amount: 300n, count: 1 });
@@ -62,6 +80,27 @@ describe('projectFigures', () => {
     });
     expect(f).toMatchObject({ kind: 'FIXED', agreedMinor: 3000n, monthlyMinor: null, postedMinor: 1000n, paidMinor: 400n, creditedMinor: 100n, pending: { count: 1, amountMinor: 1000n }, status: 'OVERDUE' });
     expect(f.buckets.outstanding).toBe(500n);
+  });
+
+  it('leaves a future-dated Owed with no money on it out of posted and the buckets until its day (MUT-392 D2)', () => {
+    const future = rec({ id: 'f', origin: 'ADJUSTMENT', agreementId: null, postingDate: '2026-11-11', dueDate: '2026-12-15' });
+    const before = projectFigures({ agreements: [], installments: [], receivables: [rec({}), future], today: '2026-10-20' });
+    expect(before).toMatchObject({ postedMinor: 1000n, paidMinor: 0n, creditedMinor: 0n });
+    expect(before.buckets.outstanding).toBe(1000n);
+    const on = projectFigures({ agreements: [], installments: [], receivables: [rec({}), future], today: '2026-11-11' });
+    expect(on).toMatchObject({ postedMinor: 2000n, paidMinor: 0n });
+    expect(on.buckets.outstanding).toBe(2000n);
+  });
+
+  it('counts a future-dated Owed at once when a payment or credit has landed on it (MUT-392 D2: counts once money moves)', () => {
+    const today = '2026-10-20';
+    const paid = rec({ id: 'p', origin: 'ADJUSTMENT', agreementId: null, postingDate: '2026-11-11', dueDate: '2026-12-15', paidMinor: 200n });
+    const credited = rec({ id: 'c', origin: 'ADJUSTMENT', agreementId: null, postingDate: '2026-11-11', dueDate: '2026-12-15', creditedMinor: 100n });
+    const figures = projectFigures({ agreements: [], installments: [], receivables: [paid, credited], today });
+    expect(figures).toMatchObject({ postedMinor: 2000n, paidMinor: 200n, creditedMinor: 100n });
+    expect(figures.buckets).toEqual({ outstanding: 1700n, overdue: 0n, dueToday: 0n, notYetDue: 1700n });
+    const settled = rec({ id: 's', origin: 'ADJUSTMENT', agreementId: null, postingDate: '2026-11-11', status: 'SETTLED', paidMinor: 1000n });
+    expect(projectFigures({ agreements: [], installments: [], receivables: [settled], today })).toMatchObject({ postedMinor: 1000n, paidMinor: 1000n });
   });
 
   it('retainer: monthly from the caller (terms in force), no agreed total; no agreements → NONE', () => {

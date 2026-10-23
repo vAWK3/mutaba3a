@@ -44,7 +44,11 @@ describe('inbox capture dates (MUT-66)', () => {
    * check. If someone "fixes" this by reflex, this test says why not.
    */
   it('accepts a future date at capture — the profile’s timezone decides that, at filing time', () => {
-    expect(inboxDate('2099-01-01', now)).toBe('2099-01-01');
+    expect(inboxDate('2027-06-01', now)).toBe('2027-06-01');
+  });
+
+  it('MUT-392 review: refuses a date more than ten years after UTC tomorrow, naming the future bound', () => {
+    expect(reasonOf(() => inboxDate('2099-01-01', now))).toBe('VALIDATION_FAILED:DATE_INVALID');
   });
 
   it('MUT-227: refuses a date more than ten years before UTC yesterday, naming the past bound', () => {

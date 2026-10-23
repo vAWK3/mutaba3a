@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { FIRM, OFFICE_A, customer, malafatFirm, office } from '../../support/portal';
-import { FakeApi, allocation, apiError, customerSummary, payment, project, receivable, todayInJerusalem } from '../../support/portalApi';
+import { FakeApi, allocation, apiError, ceilingOf, customerSummary, daysAfter, payment, project, receivable, todayInJerusalem } from '../../support/portalApi';
 
 /**
  * Income on an owned hosted profile (MUT-133): Add income (Received or Owed)
@@ -116,9 +116,26 @@ test('Add income dated more than ten years back is refused at the date field, no
   });
 });
 
-test('Add income switched from Owed to Received after opening More details still saves (MUT-408)', { tag: '@portal.income.switch-kind' }, async ({ page, step }) => {
+test('Add income, Owed, dated 30 days ahead saves with that date; a Received dated tomorrow is refused', { tag: '@portal.income.add-owed-future' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 2 });
   const drawer = page.getByRole('dialog', { name: 'New income' });
+  const ahead = daysAfter(todayInJerusalem(), 30);
+
+  await step('Open Payments and choose + Add income: Received is chosen', async () => {
+    await api.open(page, `/p/${OFFICE_A}/payments`);
+    await page.locator('[data-income-add]').click();
+    await expect(drawer.getByRole('radio', { name: 'Received' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  await step('Type 1,200 and set the date to tomorrow under More details, then save: refused, nothing sent', async () => {
+    await drawer.getByLabel('Amount').fill('1,200');
+    await drawer.getByRole('button', { name: /More details/ }).click();
+    await expect(drawer.getByLabel('Date', { exact: true })).toHaveAttribute('max', todayInJerusalem());
+    await drawer.getByLabel('Date', { exact: true }).fill(dayAfter(todayInJerusalem()));
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer.getByText("The date can't be later than today")).toBeVisible();
+    expect(api.calls('POST', /^\/v1\/income$/)).toHaveLength(0);
+  });
 
   await step('Open Receivables and choose + Add income: Owed is chosen', async () => {
     await api.open(page, `/p/${OFFICE_A}/receivables`);
@@ -126,28 +143,15 @@ test('Add income switched from Owed to Received after opening More details still
     await expect(drawer.getByRole('radio', { name: 'Owed' })).toHaveAttribute('aria-checked', 'true');
   });
 
-  await step('Type 500, pick Client 1, and open More details', async () => {
-    await drawer.getByLabel('Amount').fill('500');
+  await step('Type 750, pick Client 1, set the date 30 days ahead under More details and save', async () => {
+    await drawer.getByLabel('Amount').fill('750');
     await pickClient(page, 'Client', 'Client 1');
     await drawer.getByRole('button', { name: /More details/ }).click();
-    await expect(drawer.getByLabel('Due date (optional)')).toBeVisible();
-  });
-
-  await step('Switch Kind to Received and choose Bank transfer', async () => {
-    await drawer.getByRole('radio', { name: 'Received' }).click();
-    await expect(drawer.getByLabel('Due date (optional)')).toHaveCount(0);
-    await drawer.getByRole('radio', { name: 'Bank transfer' }).click();
-  });
-
-  await step('Save income', async () => {
+    await expect(drawer.getByLabel('Date', { exact: true })).toHaveAttribute('max', ceilingOf(todayInJerusalem()));
+    await drawer.getByLabel('Date', { exact: true }).fill(ahead);
     await drawer.getByRole('button', { name: 'Save income' }).click();
     await expect(drawer).toHaveCount(0);
-    await expect(page.getByTestId('toast-live')).toHaveText(/Saved · .*500\.00.* received from .*Client 1/);
-  });
-
-  await step('The server got Received with its method and none of the Owed-only fields', async () => {
-    const post = api.last('POST', /^\/v1\/income$/);
-    expect(post?.body).toEqual({ kind: 'received', amount: '500.00', currency: 'ILS', occurredOn: todayInJerusalem(), customerId: C1, method: 'BANK' });
+    expect(api.last('POST', /^\/v1\/income$/)?.body).toMatchObject({ kind: 'owed', amount: '750.00', currency: 'ILS', occurredOn: ahead, customerId: C1 });
   });
 });
 
@@ -302,11 +306,7 @@ test('Add income from a client’s page starts as Owed with that client filled i
 
 const owedEntry = () => receivable(31, { customerId: C1, gross: '500.00', dueDate: '2026-11-15', postingDate: '2026-10-08' });
 const receivedEntry = () => payment(41, { customerId: C1, amount: '300.00', receivedOn: '2026-10-08', mine: true });
-const dayAfter = (iso: string) => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-};
+const dayAfter = (iso: string) => daysAfter(iso, 1);
 
 test('An Owed entry’s date is changed from Receivables; the Date column shows it and its due date stays', { tag: '@portal.income.redate-owed' }, async ({ page, step }) => {
   const owed = owedEntry();
@@ -406,21 +406,48 @@ test('A settled entry lists its payment; changing that payment’s date shows on
   });
 });
 
-test('The date stops at the profile’s today, and a later date is refused at the field without a request', { tag: '@portal.income.redate-no-future' }, async ({ page, step }) => {
+test('A payment’s date stops at the profile’s today, and a later date is refused at the field without a request', { tag: '@portal.income.redate-no-future' }, async ({ page, step }) => {
+  const received = receivedEntry();
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, payments: [received] });
+  const drawer = page.getByRole('dialog', { name: 'Change the received date' });
+
+  await step('Open a Received payment', async () => {
+    await api.open(page, `/p/${OFFICE_A}/payments?payment=${received.id}`);
+    await expect(drawer.getByLabel('Received on')).toHaveAttribute('max', todayInJerusalem());
+  });
+
+  await step('Type tomorrow and save', async () => {
+    await drawer.getByLabel('Received on').fill(dayAfter(todayInJerusalem()));
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer.getByText(/The date can.t be later than today/)).toBeVisible();
+    expect(api.calls('PATCH', /^\/v1\/payments\//)).toHaveLength(0);
+  });
+});
+
+test('An Owed entry moves past its due date and the due date moves with it; ten years ahead is the limit', { tag: '@portal.income.redate-owed-future' }, async ({ page, step }) => {
   const owed = owedEntry();
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, receivables: [owed] });
   const drawer = page.getByRole('dialog', { name: 'Change the date' });
 
-  await step('Open the Owed entry', async () => {
+  await step('Open the Owed entry (due Nov 15, 2026)', async () => {
     await api.open(page, `/p/${OFFICE_A}/receivables?income=${owed.id}`);
-    await expect(drawer.getByLabel('Date')).toHaveAttribute('max', todayInJerusalem());
+    await expect(drawer.getByText('Due Nov 15, 2026 — stays as it is')).toBeVisible();
+    await expect(drawer.getByLabel('Date')).toHaveAttribute('max', ceilingOf(todayInJerusalem()));
   });
 
-  await step('Type tomorrow and save', async () => {
-    await drawer.getByLabel('Date').fill(dayAfter(todayInJerusalem()));
+  await step('Type a day more than ten years ahead and save', async () => {
+    await drawer.getByLabel('Date').fill(dayAfter(ceilingOf(todayInJerusalem())));
     await drawer.getByRole('button', { name: 'Save' }).click();
-    await expect(drawer.getByText(/The date can.t be later than today/)).toBeVisible();
+    await expect(drawer.getByText(/The date can.t be more than ten years ahead/)).toBeVisible();
     expect(api.calls('PATCH', /^\/v1\/income\//)).toHaveLength(0);
+  });
+
+  await step('Type 2026-12-01 and save', async () => {
+    await drawer.getByLabel('Date').fill('2026-12-01');
+    await expect(drawer.getByText('Due Jan 15, 2027 — moves with the new date')).toBeVisible();
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+    expect(api.last('PATCH', /^\/v1\/income\//)?.body).toEqual({ occurredOn: '2026-12-01' });
   });
 });
 
@@ -626,5 +653,40 @@ test('Picking a matter with no client fills the client, and each matter names it
   await step('Change Client to Client 1: Client 2\'s matter empties', async () => {
     await pickClient(page, 'Client', 'Client 1');
     await expect(drawer.getByLabel('Matter (optional)')).toHaveValue('');
+  });
+});
+
+test('Add income switched from Owed to Received after opening More details still saves (MUT-408)', { tag: '@portal.income.switch-kind' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 2 });
+  const drawer = page.getByRole('dialog', { name: 'New income' });
+
+  await step('Open Receivables and choose + Add income: Owed is chosen', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.locator('[data-income-add]').click();
+    await expect(drawer.getByRole('radio', { name: 'Owed' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  await step('Type 500, pick Client 1, and open More details', async () => {
+    await drawer.getByLabel('Amount').fill('500');
+    await pickClient(page, 'Client', 'Client 1');
+    await drawer.getByRole('button', { name: /More details/ }).click();
+    await expect(drawer.getByLabel('Due date (optional)')).toBeVisible();
+  });
+
+  await step('Switch Kind to Received and choose Bank transfer', async () => {
+    await drawer.getByRole('radio', { name: 'Received' }).click();
+    await expect(drawer.getByLabel('Due date (optional)')).toHaveCount(0);
+    await drawer.getByRole('radio', { name: 'Bank transfer' }).click();
+  });
+
+  await step('Save income', async () => {
+    await drawer.getByRole('button', { name: 'Save income' }).click();
+    await expect(drawer).toHaveCount(0);
+    await expect(page.getByTestId('toast-live')).toHaveText(/Saved · .*500\.00.* received from .*Client 1/);
+  });
+
+  await step('The server got Received with its method and none of the Owed-only fields', async () => {
+    const post = api.last('POST', /^\/v1\/income$/);
+    expect(post?.body).toEqual({ kind: 'received', amount: '500.00', currency: 'ILS', occurredOn: todayInJerusalem(), customerId: C1, method: 'BANK' });
   });
 });

@@ -56,8 +56,15 @@ describe('incomeFormSchema', () => {
     expect(issues({ ...base, kind: 'received', customerId: '' }, 'linked-required')).toEqual({ customerId: 'hosted.income.errors.clientRequired' });
   });
 
-  it('refuses a date after today in the profile\'s zone', () => {
-    expect(issues({ ...base, occurredOn: '2026-10-15' })).toEqual({ occurredOn: 'hosted.income.errors.dateFuture' });
+  it('refuses a Received dated after today in the profile\'s zone', () => {
+    expect(issues({ ...base, kind: 'received', occurredOn: '2026-10-15' })).toEqual({ occurredOn: 'hosted.income.errors.dateFuture' });
+  });
+
+  it('lets an Owed be dated up to ten years ahead, and refuses the day after (MUT-392)', () => {
+    // 2026-10-14 + 3660 days = 2036-10-21.
+    expect(issues({ ...base, occurredOn: '2026-11-13' })).toEqual({});
+    expect(issues({ ...base, occurredOn: '2036-10-21' })).toEqual({});
+    expect(issues({ ...base, occurredOn: '2036-10-22' })).toEqual({ occurredOn: 'hosted.income.errors.dateTooFar' });
   });
 
   it('reports the amount problem as an i18n key', () => {

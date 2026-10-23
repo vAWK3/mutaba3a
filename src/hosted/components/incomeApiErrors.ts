@@ -32,11 +32,14 @@ function fieldOf(error: ApiError): string | undefined {
 }
 
 /**
- * MUT-227: a DATE_INVALID from a range check says which end it crossed. Past is the ten-year floor; anything else
- * (future, or an older server with no bound) keeps the "later than today" sentence.
+ * MUT-227: a DATE_INVALID from a range check says which end it crossed. Past is the ten-year floor. Future is "later
+ * than today", except for an Owed, which may be dated ahead and is refused only past the ten-year ceiling (MUT-392).
+ * An older server with no bound keeps the "later than today" sentence.
  */
-function dateKey(error: ApiError): string {
-  return apiErrorBound(error) === 'past' ? 'hosted.income.errors.dateTooOld' : 'hosted.income.errors.dateFuture';
+function dateKey(error: ApiError, aheadAllowed = false): string {
+  const bound = apiErrorBound(error);
+  if (bound === 'past') return 'hosted.income.errors.dateTooOld';
+  return bound === 'future' && aheadAllowed ? 'hosted.income.errors.dateTooFar' : 'hosted.income.errors.dateFuture';
 }
 
 function readOnlyToast(error: ApiError): string {
@@ -58,7 +61,7 @@ const CUSTOMER_REASONS: Record<string, string> = {
   PROJECT_CUSTOMER_MISMATCH: 'hosted.income.errors.matterMismatch',
 };
 
-export function mapIncomeError(error: unknown): MappedError {
+export function mapIncomeError(error: unknown, kind: 'received' | 'owed'): MappedError {
   const early = nonValidation(error);
   if (early) return early;
   const apiError = error as ApiError;
@@ -66,7 +69,8 @@ export function mapIncomeError(error: unknown): MappedError {
   if (apiError.code === 'VALIDATION_FAILED') {
     if (reason === 'AMOUNT_INVALID') return { fields: [{ field: 'amount', key: 'hosted.income.errors.amountInvalid' }] };
     if (reason === 'DATE_INVALID') {
-      return { fields: [{ field: fieldOf(apiError) === 'dueDate' ? 'dueDate' : 'occurredOn', key: dateKey(apiError) }] };
+      const field = fieldOf(apiError) === 'dueDate' ? 'dueDate' : 'occurredOn';
+      return { fields: [{ field, key: dateKey(apiError, field === 'occurredOn' && kind === 'owed') }] };
     }
     if (reason && CUSTOMER_REASONS[reason]) return { fields: [{ field: 'customerId', key: CUSTOMER_REASONS[reason] }] };
     if (reason === 'PROJECT_NOT_FOUND') return { fields: [{ field: 'projectId', key: 'hosted.income.errors.matterNotFound' }] };
@@ -108,11 +112,11 @@ export function mapSettleError(error: unknown): MappedError {
  * MUT-224: the re-date drawers' errors. A refused date is inline under the date; a stale version (409) or a row that
  * went away (404) re-reads, so the drawer refills or says it's gone; anything else is a toast.
  */
-export function mapRedateError(error: unknown): MappedError {
+export function mapRedateError(error: unknown, kind: 'owed' | 'payment'): MappedError {
   const early = nonValidation(error);
   if (early) return early;
   const apiError = error as ApiError;
-  if (apiError.code === 'VALIDATION_FAILED' && apiErrorReason(apiError) === 'DATE_INVALID') return { fields: [{ field: 'date', key: dateKey(apiError) }] };
+  if (apiError.code === 'VALIDATION_FAILED' && apiErrorReason(apiError) === 'DATE_INVALID') return { fields: [{ field: 'date', key: dateKey(apiError, kind === 'owed') }] };
   if (apiError.code === 'CONFLICT') return { fields: [], toast: 'hosted.redate.conflict', reread: true };
   // The re-read then shows "no longer available" (the record went, or the drawer can no longer change it).
   if (apiError.code === 'NOT_FOUND') return { fields: [], toast: 'hosted.redate.gone', reread: true };

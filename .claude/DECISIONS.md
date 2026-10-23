@@ -2059,6 +2059,8 @@ ticket's scope: sync replay and the payment-request flow).
 
 **Addendum (2026-10-12, MUT-65).** The same rule — a payment date is never later than today; backdating is accepted — is now also enforced server-side, on `server/`'s `POST /v1/income` (`occurredOn`) and `POST /v1/receivables/{id}/settle` (`paidAt`): `income/compose.ts`'s `assertNotFuture`. This is the same rule applied to a second surface, not a new decision. It is a genuinely new check, not a reuse of an existing one: `server/`'s own `POST /v1/payments` (Malafat's apiKey-only route) applies `assertNotAbsurdDate` to `receivedOn`, which only rejects a date more than ten years ahead (a typo-sized sanity ceiling) — it does not reject a merely-future date. The design brief for MUT-65 assumed otherwise and cited it as the reused check; verified against the actual code during implementation and corrected here rather than silently shipping a check that doesn't do what the brief said it does. `payments.ts`'s own `receivedOn` validation is unchanged by this correction.
 
+**Override (2026-10-22, MUT-392, ADR-169).** For income `occurredOn` the rule above now applies to Received only: an Owed may be dated up to ten years ahead (`incomeMoneyDate`). Why: an Owed is work logged before its day, not money that moved. Settle's `paidAt`, payments and conversions keep this addendum unchanged.
+
 ---
 
 ## ADR-039: Payment Records Own an Entry's Payment State; an Edit Never Rewrites It
@@ -4643,3 +4645,32 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The phone (MUT-391) reads the window with `order=occurredOn&occurredFrom=<cutoff>` and the backdated card with `loggedSince&occurredBefore`, dedupes by id and versions its cache key; the server deploys first.
 - Future-dated Owed income is MUT-392.
 - API 1.49.0-mut390.
+
+## ADR-169: An Owed May Be Dated Up to Ten Years Ahead and Counts From Its Own Date; Expenses Get the Ten-Year Ceiling (MUT-392)
+
+**Status**: Accepted (2026-10-22, MUT-392; decisions D1–D4 from the eng review, Basel's answers). Amends ADR-038's MUT-65 addendum (income `occurredOn` was past-only) and MUT-223's "an Owed re-date keeps its due date".
+
+**Context**: Basel wants to log money that hasn't moved yet: Owed income dated next month, an expense he'll pay in three days. The server refused any future income date (`pastMoneyDate`), expenses had a floor but no ceiling at all, and the phone's pickers stopped at today. Split out of MUT-390 (its D6).
+
+**Decision**:
+1. **The rule by kind.** Owed income may be dated up to ten years after the organization's today (`DAYS_IN_FUTURE_LIMIT`, the ceiling payments and agreements already use) and not more than ten years before it. Received money, settle's `paidAt`, payments and conversions stay past-only: the money has moved. One check, `incomeMoneyDate(raw, kind, today, field)` in `income/compose.ts`, serves `POST /v1/income`, `PATCH /v1/income/{id}` (via `redateTo`, which now takes the kind) and file-as-income.
+2. **PATCH checks the shape first, the bounds once the kind is known (D4 of the plan).** A malformed date is 422 before any read; an unknown id with a well-formed future date is 404.
+3. **A future Owed counts from its own date, or once money moves (D2; review D1, D2).** `countsOn(r, today) = r.origin !== 'ADJUSTMENT' || r.postingDate <= today || r.paidMinor > 0n || r.creditedMinor > 0n` in `summaries/compute.ts`: until its date, and while no payment or credit has landed on it, an Owed is in no bucket (owed now, overdue, due today, not yet due), not in a matter's posted, paid or credited totals, and adds no customer row or currency block to the organization and customer summaries. On its day it joins them and goes overdue by its due date. Computed on read, so no job runs. Only an Owed: an IMMEDIATE installment on an agreement Malafat dated ahead posts with that future postingDate (`postingDateFor`) and keeps counting at once, as it always has (review amendment; the first cut applied the rule to every origin). Once a payment or credit lands on it, it counts at once, whatever its date, so a payment never drops out of a paid total. GET /v1/receivables keeps its status logic: a future Owed reads by its due date as before (a not-yet-counted status is a follow-up).
+4. **A re-date that passes the due date moves it (D3).** When the new date is after the stored due date, the due date becomes EOM_15 of the new date (`dueDateAfterRedate`), in the same versioned write (`redateAdjustment(..., postingDate, dueDate?)`); the audit row adds `dueFrom`/`dueTo`. Every other re-date keeps its due date, as MUT-223 decided.
+5. **Expenses get the ceiling (D4).** `expenseOccurredOn` adds `assertNotAbsurdDate`: create, PATCH when the date changes, inbox filing (which now calls the same function) and receipts approval refuse more than ten years ahead with 422 bound future.
+5a. **Nothing is refused once money moves; guards on the edges (review D2, D4).** An Owed may be settled before its date, and moved ahead after a settle or part-payment: it then counts from the first payment or credit (decision 3). An explicit `dueDate` on create and file-as-income may not be before `occurredOn` nor past the ten-year ceiling. Inbox capture gets the ten-year ceiling leniently, from UTC's tomorrow, mirroring MUT-227's floor.
+6. **Clients follow.** The portal's date `max` and form checks go by kind (Received today, Owed and expenses today + 3660), and say "more than ten years ahead" for the ceiling; its re-date note says where the due date moves. The phone's pickers use one rule, `allowsFutureDate` (expense, or Owed on a profile); a kind switch puts a future date back on today, and Save is blocked for any leftover.
+
+**Alternatives considered**:
+- **Count a future Owed at once (D2 B).** Rejected: owed now would include work not yet done.
+- **Keep the due date on every re-date (D3 B), or refuse a re-date past it (D3 C).** Rejected: an entry due before its own date reads overdue on its first day; refusing blocks a normal edit.
+- **Leave expenses without a ceiling (D4 B).** Rejected: a typo year (2062) saved silently, invisible in every month view.
+
+**Consequences**:
+- Every existing total is unchanged: before this no Owed could have a future posting date, and other origins are untouched by `countsOn`.
+- **Rejected (review D2): refuse moving a paid Owed ahead (409) and settling a future Owed (422).** Counting once money moves keeps every payment in the paid totals without blocking an edit.
+- The Unsorted inbox accepts a future date at capture up to the lenient ten-year ceiling; filing applies the destination's rule.
+- The archive guard still counts a future Owed as outstanding: it is work still to be paid.
+- The D3 due-date move also fires when an overdue Owed moves to a later past date; clients show `dueDate` from the PATCH response.
+- Release the API before the phone: an older API refuses a future Owed with 422, which the phone shows and keeps in its outbox.
+- API 1.51.0-mut392.

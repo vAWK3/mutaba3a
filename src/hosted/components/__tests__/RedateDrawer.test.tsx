@@ -101,12 +101,12 @@ afterEach(() => {
 });
 
 describe('RedateDrawer — an Owed entry (?income=)', () => {
-  it('shows the entry read-only, its date editable up to the profile’s today, and says the due date stays', async () => {
+  it('shows the entry read-only, its date editable up to ten years after the profile’s today, and says the due date stays', async () => {
     stub();
     renderDrawer('owed');
     const input = await dateInput();
     expect(input.value).toBe('2026-10-08');
-    expect(input.max).toBe('2026-10-14');
+    expect(input.max).toBe('2036-10-21'); // MUT-392: an Owed may move ahead, up to today + 3660 days
     expect(input.min).toBe('2016-10-06'); // MUT-227: the server's ten-year floor, today − 3660 days
     expect(screen.getByText(/Due Nov 15, 2026 — stays as it is/)).toBeInTheDocument();
     await waitFor(() => expect(document.querySelector('.hp-settle-context')?.textContent).toContain(CUSTOMERS[0].name));
@@ -123,6 +123,38 @@ describe('RedateDrawer — an Owed entry (?income=)', () => {
     expect(sent!.url.pathname).toBe(`/v1/income/${R}`);
     expect(sent!.headers.get('If-Match')).toBe('3');
     expect(sent!.body).toEqual({ occurredOn: '2026-09-30' });
+  });
+
+  it('moves an Owed into the future, and says the due date moves once the new date passes it (MUT-392 D3)', async () => {
+    const api = stub({ patch: () => json({ id: R, kind: 'owed', occurredOn: '2026-12-01', version: 4 }) });
+    const { user, onClose } = renderDrawer('owed');
+    await setDate(user, '2026-11-10');
+    expect(screen.getByText(/Due Nov 15, 2026 — stays as it is/)).toBeInTheDocument();
+    await setDate(user, '2026-12-01');
+    expect(screen.getByText(/Due Jan 15, 2027 — moves with the new date/)).toBeInTheDocument();
+    await user.click(save());
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(api.patches()[0]!.body).toEqual({ occurredOn: '2026-12-01' });
+  });
+
+  it('moves a part-paid Owed into the future too: nothing is refused once money moves (MUT-392 D2)', async () => {
+    const api = stub({ getOwed: () => json(owed({ paid: '100.00', status: 'PARTIALLY_PAID' })), patch: () => json({ id: R, kind: 'owed', occurredOn: '2026-11-10', version: 4 }) });
+    const { user, onClose } = renderDrawer('owed');
+    expect((await dateInput()).max).not.toBe('2026-10-14');
+    await setDate(user, '2026-11-10');
+    await user.click(save());
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(api.patches()[0]!.body).toEqual({ occurredOn: '2026-11-10' });
+  });
+
+  it('refuses an Owed more than ten years ahead before asking the server (MUT-392)', async () => {
+    const api = stub();
+    const { user, onClose } = renderDrawer('owed');
+    await setDate(user, '2036-10-22');
+    await user.click(save());
+    expect(await screen.findByText(/The date can.t be more than ten years ahead/)).toBeInTheDocument();
+    expect(api.patches()).toHaveLength(0);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('closes without a request when the date did not change', async () => {
@@ -275,6 +307,17 @@ describe('RedateDrawer — an Owed entry (?income=)', () => {
 });
 
 describe('RedateDrawer — a payment (?payment=)', () => {
+  it('caps a payment date at the profile’s today and refuses a later one before asking the server (MUT-392: the money has moved)', async () => {
+    const api = stub();
+    const { user, onClose } = renderDrawer('payment');
+    expect((await dateInput()).max).toBe('2026-10-14');
+    await setDate(user, '2026-10-15');
+    await user.click(save());
+    expect(await screen.findByText(/The date can.t be later than today/)).toBeInTheDocument();
+    expect(api.patches()).toHaveLength(0);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('saves the new received date with If-Match through PATCH /v1/payments', async () => {
     const api = stub({ patch: () => json(mine({ receivedOn: '2026-10-02', version: 3 })) });
     const { user, onClose } = renderDrawer('payment');

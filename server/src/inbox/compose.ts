@@ -1,4 +1,4 @@
-import { assertIsoDate, assertNotTooOld, parseAmount, validationError } from '../agreements/compose.js';
+import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld, parseAmount, validationError } from '../agreements/compose.js';
 import { addDays, todayIn, type IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { isSupportedCurrency, type Currency } from '../money.js';
@@ -20,7 +20,7 @@ export function parseInboxAmount(text: string, currency: Currency): bigint {
 }
 
 /**
- * The capture date: a valid date, refused only when more than ten years old (MUT-227, below) and never for being in the future.
+ * The capture date: a valid date, refused only when more than ten years old (MUT-227) or ahead (MUT-392), both leniently (below).
  *
  * Deliberately NOT rejected for being in the future, unlike `POST /v1/income`:
  * "later than today" is only answerable in some organization's timezone, and
@@ -32,10 +32,15 @@ export function parseInboxAmount(text: string, currency: Currency): bigint {
  * year is refused while the person is still looking at it. Measured from UTC's
  * yesterday, which is at or before every timezone's today: capture can never
  * refuse a date that filing (exact, in the profile's timezone) would accept.
+ *
+ * MUT-392 review: the ten-year ceiling the same way, from UTC's tomorrow (at or
+ * after every timezone's today), so a typo year ahead is refused here too
+ * instead of sitting in the inbox that no destination will file.
  */
 export function inboxDate(value: string, now: Date): IsoDate {
   const date = assertIsoDate(value, 'occurredOn');
   assertNotTooOld(date, addDays(todayIn('UTC', now), -1), 'occurredOn');
+  assertNotAbsurdDate(date, addDays(todayIn('UTC', now), 1), 'occurredOn');
   return date;
 }
 

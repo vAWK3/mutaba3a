@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.50.0-mut389
+  version: 1.51.0-mut392
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -40,9 +40,9 @@ info:
 
     Capture on a Malafat-fed profile (MUT-61): a session may POST /v1/income kind received — never owed (403 READ_ONLY_PROFILE) — for a client this integration has linked (customer.externalReference set; else 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED), with an optional matter of that client whose currency it must match (422 CURRENCY_MISMATCH). The payment is POSTED, unallocated and origin `capture`; GET /v1/payments?customerId=…&origin=capture&allocationState=unallocated lists what still needs allocating, through the usual allocation preview and POST /v1/payments/{id}/allocations. The person may undo it (DELETE /v1/income/{id}) until any of it is allocated (409 ALREADY_ALLOCATED); once the integration reverses it, their undo answers 409 REVERSED_BY_MALAFAT (the reversal reason "capture_undo" is reserved for the person: 422 REASON_RESERVED). GET /v1/me publishes each profile's rules as `income`.
 
-    Changing a date (MUT-223): on a profile the person owns (their personal profile or one they created), PATCH /v1/income/{id} { occurredOn } moves their own Owed entry (its dueDate stays) or Received entry, and PATCH /v1/payments/{id} { receivedOn } moves their own captured payment, a settle payment included (allocations untouched). Date only, If-Match on `version` (stale → 409 VERSION_MISMATCH), not later than the organization's today. Anything else answers 404 — on a Malafat-fed profile PATCH /v1/income too, while PATCH /v1/payments answers 403 READ_ONLY_PROFILE there, before any lookup, as settle does. GET /v1/audit never lists these edits.
+    Changing a date (MUT-223): on a profile the person owns (their personal profile or one they created), PATCH /v1/income/{id} { occurredOn } moves their own Owed entry or Received entry, and PATCH /v1/payments/{id} { receivedOn } moves their own captured payment, a settle payment included (allocations untouched). Date only, If-Match on `version` (stale → 409 VERSION_MISMATCH). Received entries and payments go no later than the organization's today; an Owed entry may go up to ten years after it (MUT-392), keeping its dueDate unless the new date passes it (then EOM_15 of the new date). Nothing is refused once money is applied: an Owed dated ahead may be settled, or moved ahead after a settle, and counts from its first payment or credit. Anything else answers 404 — on a Malafat-fed profile PATCH /v1/income too, while PATCH /v1/payments answers 403 READ_ONLY_PROFILE there, before any lookup, as settle does. GET /v1/audit never lists these edits.
 
-    Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables; statuses are Mutaba3a's. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.
+    Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date, or from its first payment or credit if that comes first, and adds no customer row or currency block until then (MUT-392); statuses are Mutaba3a's. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.
 tags:
   - name: Operations
     description: Liveness and readiness
@@ -5125,7 +5125,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past."
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future."
         amount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -5166,7 +5166,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past. Checked only when it differs from the stored date."
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. Checked only when it differs from the stored date."
         amount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -5403,7 +5403,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past."
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today. Received: not later than today. Owed: not more than ten years (3660 days) after it. 422 DATE_INVALID with details.bound past or future."
         customerId:
           type: string
           format: uuid
@@ -5437,7 +5437,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past."
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today. Received: not later than today. Owed: not more than ten years (3660 days) after it. 422 DATE_INVALID with details.bound past or future."
       required:
         - occurredOn
       additionalProperties: false
@@ -6017,7 +6017,7 @@ components:
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
-          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today: 422 DATE_INVALID with details.bound past."
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future."
         amount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -9739,7 +9739,7 @@ paths:
       tags:
         - Inbox
       summary: File an unsorted entry as income on a profile
-      description: "Received or Owed is chosen here, not at capture: the distinction only means something once a client is (or deliberately is not) in the picture. MUT-65's rules apply unchanged — Owed requires a client, and a Malafat-fed profile refuses the write with READ_ONLY_PROFILE, leaving the entry in place. 409 ENTRY_KIND_MISMATCH for an entry captured as an expense."
+      description: "Received or Owed is chosen here, not at capture: the distinction only means something once a client is (or deliberately is not) in the picture. The date rules are POST /v1/income's for the chosen kind: an Owed may be up to ten years ahead, a Received not later than today (MUT-392). MUT-65's rules apply unchanged — Owed requires a client, and a Malafat-fed profile refuses the write with READ_ONLY_PROFILE, leaving the entry in place. 409 ENTRY_KIND_MISMATCH for an entry captured as an expense."
       security:
         - session: []
         - deviceSession: []
@@ -10532,7 +10532,7 @@ paths:
       tags:
         - Projects
       summary: Archive a project
-      description: Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding and 409 PROPOSAL_OPEN while a fee proposal is open (withdraw it first). Nothing is ever deleted.
+      description: "Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding (an Owed dated ahead counts here although the summaries leave it out until its day: it is work still to be paid, MUT-392) and 409 PROPOSAL_OPEN while a fee proposal is open (withdraw it first). Nothing is ever deleted."
       security:
         - apiKey: []
       parameters:
@@ -10877,7 +10877,7 @@ paths:
       tags:
         - Receivables
       summary: Settle a receivable directly, with one payment and one allocation
-      description: "For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404."
+      description: "For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves)."
       security:
         - session: []
         - deviceSession: []
@@ -11441,7 +11441,7 @@ paths:
       tags:
         - Summaries
       summary: Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer
-      description: outstanding = overdue + dueToday + notYetDue over OPEN receivables; unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer's row. Due items are posted before the figures are read. ?currency= narrows to one block.
+      description: outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer's row. Due items are posted before the figures are read. ?currency= narrows to one block.
       security:
         - apiKey: []
         - session: []
@@ -12758,7 +12758,7 @@ paths:
       tags:
         - Income
       summary: Capture money received or owed, directly — no agreement, no allocation dance
-      description: What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn. occurredOn may not be later than today and not more than ten years before it (MUT-227).
+      description: What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future.
       security:
         - session: []
         - deviceSession: []
@@ -12862,7 +12862,7 @@ paths:
       tags:
         - Income
       summary: Change the date of an income entry you captured (optimistic, If-Match)
-      description: "Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate; a Received entry moves its payment's receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. occurredOn may not be later than the organization's today, nor more than ten years before it (MUT-227)."
+      description: "Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate, unless the new date is after it: then dueDate becomes EOM_15 of the new date (MUT-392); a Received entry moves its payment's receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. An Owed entry may move ahead even with money applied to it (MUT-392 D2): it then counts from its first payment or credit, nothing is refused. occurredOn is not more than ten years before the organization's today (MUT-227); for a Received entry not later than today, for an Owed one not more than ten years after it (MUT-392). A malformed date is 422 before the entry is looked up; the bounds are checked once its kind is known."
       security:
         - session: []
         - deviceSession: []

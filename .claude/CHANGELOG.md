@@ -28,6 +28,58 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — Log Owed income and expenses with a future date (MUT-392, ADR-169, API 1.51.0)
+
+**Why:** Basel wants to log money that hasn't moved yet: Owed income dated next month, a bill due in three days. Income
+was past-only on the server and expenses had no upper bound at all. Plan, eng review and decisions D1–D4:
+`~/.gstack/projects/vAWK3-mutaba3a/MUT-392-plan.md` (Jira comment 12410). The phone half is mutaba3a-flutter
+`feature/mut-392-future-dates`. Release the API first.
+
+### Added
+- Server: `incomeMoneyDate(raw, kind, today, field)` — an Owed may be dated up to ten years ahead; Received keeps
+  `pastMoneyDate`. Used by `POST /v1/income`, `PATCH /v1/income/{id}` (`redateTo` takes the kind) and file-as-income.
+- Server: `countsOn(r, today)` in `summaries/compute.ts` — a future-dated Owed is in no bucket and no matter total until
+  its date (D2).
+- Server: `dueDateAfterRedate` — an Owed re-dated past its due date gets EOM_15 of the new date in the same versioned
+  write; `redateAdjustment(..., dueDate?)` on both stores; audit `dueFrom`/`dueTo` (D3).
+- Portal: `moneyDateCeiling`, `owedDefaultDueDate` (`format/dates.ts`); `hosted.income.errors.dateTooFar`,
+  `hosted.expenses.errors.dateTooFar`, `hosted.redate.dueMoves` (en + ar); `ExpenseFormFields` `dateMax`.
+- Release-QA: `portal.income.add-owed-future`, `portal.income.redate-owed-future`, `portal.expenses.date-too-far`.
+
+### Changed
+- Server: expenses get the ten-year ceiling (`expenseOccurredOn`), at create, PATCH, inbox filing and receipts
+  approval (D4). PATCH /v1/income checks the date's shape first and its bounds once the kind is known (an unknown id
+  with a future date is 404).
+- OpenAPI 1.51.0-mut392: income dates say Received is past-only and Owed up to ten years ahead; expense dates say both
+  bounds; summaries say a receivable counts from its posting date.
+- Portal: income capture and re-date set the date `max` by kind and say "more than ten years ahead" past the ceiling;
+  the re-date note says where the due date moves; the expense drawer's date max is the ceiling.
+- `portal.income.redate-no-future` now covers a payment (past-only).
+
+### Fixed
+- Portal: the hosted expense form is `noValidate`, so the browser's own check on the new date max can't block Save
+  without a message (found by `portal.expenses.date-too-far`).
+
+### Review fixes (`/qa-reconcile` MUT-392)
+- Server: `countsOn` holds back only an Owed (origin ADJUSTMENT). An IMMEDIATE installment on an agreement Malafat dated
+  ahead posts with that future postingDate and still counts at once, as before (CRITICAL: the first cut hid it).
+- Server: **a future Owed counts once money moves** (review D2, CRITICAL: a payment would have left the paid totals).
+  `countsOn` also counts an Owed with any payment or credit on it, whatever its date. Nothing is refused: an Owed may
+  be settled before its date, and moved ahead after a settle or part-payment. GET /v1/receivables keeps its statuses
+  (no PENDING for a future Owed; a not-yet-counted status is a follow-up).
+- Server: an explicit Owed `dueDate` on POST /v1/income and file-as-income may not be before `occurredOn` nor more than
+  ten years ahead (422 DATE_INVALID, `field: dueDate`, `bound: future` for the ceiling).
+- Server: the organization and customer summaries leave a future Owed out entirely, so a client whose only entry is
+  one gets no row of zeros and no false Settled status.
+- Server: inbox capture (POST and PATCH /v1/inbox) refuses more than ten years ahead, leniently from UTC's tomorrow
+  (422 DATE_INVALID bound future), so a typo year no longer sits in the inbox that nothing will file.
+- Kept on purpose: the archive guard still counts a future Owed as outstanding (work still to be paid; route text
+  says so). The D3 due-date move also applies when an overdue Owed is re-dated to a later **past** date: phone and
+  portal must show `dueDate` from the PATCH response, never a cached one.
+- Portal: a part-paid or settled Owed may still be re-dated ahead (up to the ten-year ceiling), and Record payment is
+  offered on a future Owed; `mapIncomeError` / `mapRedateError` take `kind` explicitly.
+- QA support: `daysAfter`, `ceilingOf` and `DAYS_IN_FUTURE_LIMIT` live once in `qa/support/portalApi.ts`.
+
 ## [Unreleased] - 2026-10-22 — Portal Add income saves after a kind switch with More details open (MUT-408)
 
 **Why:** in the portal's Add income drawer, Owed → open More details → switch to Received → Save did nothing: no request,

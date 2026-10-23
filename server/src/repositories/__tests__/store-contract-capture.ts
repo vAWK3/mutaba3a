@@ -223,6 +223,18 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       expect(await store.receivables.getById(a.id, r.id)).toMatchObject({ postingDate: '2026-09-28', version: r.version + 1 });
     });
 
+    it('redateAdjustment with a dueDate moves both in the same write (MUT-392 D3)', async () => {
+      const store = await makeStore();
+      const a = await org(store);
+      const u = await person(store, a.id);
+      const { c } = await seed(store, a.id);
+      const r = await store.receivables.createAdjustment(owed(a.id, c.id, u.id), at(20));
+
+      const result = await store.receivables.redateAdjustment(a.id, r.id, u.id, r.version, '2026-12-01', '2027-01-15');
+      expect(result).toMatchObject({ kind: 'updated', record: { postingDate: '2026-12-01', dueDate: '2027-01-15', version: r.version + 1 } });
+      expect(await store.receivables.getById(a.id, r.id)).toMatchObject({ postingDate: '2026-12-01', dueDate: '2027-01-15', version: r.version + 1 });
+    });
+
     it('redateAdjustment with a stale version returns the current row and changes nothing', async () => {
       const store = await makeStore();
       const a = await org(store);

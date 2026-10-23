@@ -3419,6 +3419,26 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | `server/src/repositories/__tests__/store-prisma-entries-fanout.test.ts` (changed) | Unit (fake Prisma) | +1 | at most 4 queries in flight under both orders |
 | review fixes (/qa-reconcile, 2026-10-22) | Unit + route + contract | +7 | the default order's malformed-cursor error is byte-identical to `pagination.ts`; a cursor instant past ±8.64e15 is 422; each store refuses the other order's cursor; `loggedSince` older than 31 days is 422 (31 accepted); offsets read as the instant they name; `loggedSince` alone filters and pages; the day filters apply to every kind by its own money date (memory + Postgres) |
 
+## MUT-392 — future-dated Owed income and expenses (2026-10-22, ADR-169)
+
+| File | Kind | Tests | What it proves |
+|---|---|---|---|
+| `server/src/income/__tests__/compose.test.ts` (changed) | Unit | +9 | `incomeMoneyDate` per kind at today, +1, the ceiling and one past it, the floor; `redateTo` by kind in the org's day; `dueDateAfterRedate` keeps or moves |
+| `server/src/__tests__/income-routes.test.ts` (changed) | Route | +1 (split) | Received tomorrow 422 bound future; Owed +30 saves with EOM_15 due date; Owed ceiling day 201, day after 422 |
+| `server/src/__tests__/income-redate.test.ts` (changed) | Route | +5 | Owed moves ahead and keeps a due date still after it; past the due date it moves (audit `dueFrom`/`dueTo`); no due change recorded otherwise; past the ceiling 422; unknown id with a future date 404, malformed 422 |
+| `server/src/__tests__/inbox-filing.test.ts` (changed) | Route | +2 | filing a future entry as Owed works; as Received 422 bound future; an expense past the ceiling 422 like a direct create |
+| `server/src/__tests__/routes-expenses.test.ts` (changed) | Route | +1 | create and PATCH refuse past the ceiling, accept the ceiling day |
+| `server/src/repositories/__tests__/store-contract-capture.ts` (changed; memory + Postgres) | Contract | +1 | `redateAdjustment` with a dueDate moves both in one write |
+| `server/src/summaries/__tests__/compute.test.ts` (changed) | Unit | +3 | a future Owed is out of buckets and project totals until its day, then by its due date; `countsOn` boundary |
+| `src/hosted/components/__tests__/{incomeForm,incomeApiErrors,expenseApiErrors}.test.ts`, `format/__tests__/format.test.tsx` (changed) | Unit | +6 | the form rule by kind; future bound → "too far ahead" for Owed and expenses, "later than today" for Received/payments; ceiling and EOM_15 helpers |
+| `src/hosted/components/__tests__/{RedateDrawer,IncomeCaptureDrawer,ExpenseDrawer}.test.tsx` (changed) | Component | +7 | date `max` per kind; due note moves; ceiling refused before a request; Received tomorrow refused; an expense date past the max reaches the server (noValidate) |
+| `qa/specs/portal/{income,expenses}.spec.ts` | Release-QA | +3, 1 changed | `add-owed-future`, `redate-owed-future`, `redate-no-future` (payment), `date-too-far`; 30/30 income + expenses pass |
+| `server/src/summaries/__tests__/compute.test.ts` (review) | Unit | 1 replaced, +1 | an Owed counts on its own day; an INSTALLMENT and a RETAINER_CHARGE posted ahead still count (bucketize and projectFigures); a future Owed with a payment, a credit or settled counts at once in posted, paid, credited and the buckets (D2) |
+| `server/src/__tests__/income-redate.test.ts` (review) | Route | +6 | a settled Owed moves past today and keeps its payment; a part-paid Owed moved ahead still counts what is left; a future Owed is never PENDING, settles before its day and counts from that payment (D2); dueDate before occurredOn / past the ceiling 422; summaries: no row or block until its day, then it joins; audit test asserts its row |
+| `server/src/__tests__/inbox-{routes,filing}.test.ts`, `inbox/__tests__/compose.test.ts` (review) | Route + unit | +3 | capture refuses past the lenient ceiling (UTC tomorrow + 3660), accepts the ceiling day; file-as-Owed refuses a dueDate before the entry date |
+| `src/hosted/data/__tests__/incomeAffordances.test.ts`, `components/__tests__/{RedateDrawer,incomeApiErrors}.test.*` (review) | Unit + component | +1 | a part-paid Owed moves ahead in the re-date drawer (no cap at today, D2); `kind` required in the error mappers |
+
+
 ## MUT-387 — The Malafat OAuth client identity moves to mtb3a.com (2026-10-22, ADR-155 amendment)
 
 | File | Kind | Tests | What it proves |

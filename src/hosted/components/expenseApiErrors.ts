@@ -18,6 +18,8 @@ export interface ExpenseErrorLabels {
   dateInvalid: string;
   /** MUT-227: the server's ten-year floor (details.bound past). */
   dateTooOld: string;
+  /** MUT-392: the server's ten-year ceiling (details.bound future). */
+  dateTooFar: string;
   conflict: string;
   network: string;
 }
@@ -54,7 +56,7 @@ export function applyExpenseApiError(
         setError('amount', { type: 'manual', message: labels.amountInvalid });
         return;
       case 'DATE_INVALID':
-        setError('occurredAt', { type: 'manual', message: apiErrorBound(error) === 'past' ? labels.dateTooOld : labels.dateInvalid });
+        setError('occurredAt', { type: 'manual', message: dateMessage(apiErrorBound(error), labels) });
         return;
       default:
         showToast(labels.network);
@@ -68,4 +70,9 @@ export function applyExpenseApiError(
   }
 
   showToast(labels.network);
+}
+
+function dateMessage(bound: ReturnType<typeof apiErrorBound>, labels: ExpenseErrorLabels): string {
+  if (bound === 'past') return labels.dateTooOld;
+  return bound === 'future' ? labels.dateTooFar : labels.dateInvalid;
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../errors.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
-import { assertNotFuture, dueDateForOwed, incomeCaptureRulesFor, isOwnCapture, isOwnProfile, owedVatFields, pastMoneyDate, redateTo, resolveIncomeLinks } from '../compose.js';
+import { assertNotFuture, dueDateAfterRedate, dueDateForOwed, incomeCaptureRulesFor, incomeMoneyDate, isOwnCapture, isOwnProfile, owedVatFields, pastMoneyDate, redateTo, resolveIncomeLinks } from '../compose.js';
 
 const PERSONAL = incomeCaptureRulesFor(null);
 const MALAFAT = incomeCaptureRulesFor('MALAFAT');
@@ -180,18 +180,18 @@ describe('isOwnCapture (MUT-223)', () => {
 });
 
 describe('redateTo (MUT-223)', () => {
-  const organization = { timezone: 'Asia/Jerusalem' } as Parameters<typeof redateTo>[1];
+  const organization = { timezone: 'Asia/Jerusalem' } as Parameters<typeof redateTo>[2];
   const lateUtc = new Date('2026-10-12T21:30:00Z'); // already the 13th in Jerusalem
 
   it("accepts the organization's today and any earlier date", () => {
-    expect(redateTo('2026-10-13', organization, lateUtc, 'occurredOn')).toBe('2026-10-13');
-    expect(redateTo('2025-12-31', organization, lateUtc, 'occurredOn')).toBe('2025-12-31');
+    expect(redateTo('2026-10-13', 'received', organization, lateUtc, 'occurredOn')).toBe('2026-10-13');
+    expect(redateTo('2025-12-31', 'received', organization, lateUtc, 'occurredOn')).toBe('2025-12-31');
   });
 
-  it("refuses the day after the organization's today, and an impossible date, naming the field", () => {
+  it("refuses a Received moved to the day after the organization's today, and an impossible date, naming the field", () => {
     for (const raw of ['2026-10-14', '2026-02-30']) {
       try {
-        redateTo(raw, organization, lateUtc, 'receivedOn');
+        redateTo(raw, 'received', organization, lateUtc, 'receivedOn');
         expect.unreachable();
       } catch (err) {
         expect(err).toBeInstanceOf(ApiError);
@@ -202,13 +202,68 @@ describe('redateTo (MUT-223)', () => {
 
   it('refuses a date more than ten years before the organization\'s today (MUT-227)', () => {
     // Jerusalem's today is 2026-10-13, so the floor is 2016-10-05.
-    expect(redateTo('2016-10-05', organization, lateUtc, 'occurredOn')).toBe('2016-10-05');
+    expect(redateTo('2016-10-05', 'owed', organization, lateUtc, 'occurredOn')).toBe('2016-10-05');
     try {
-      redateTo('2016-10-04', organization, lateUtc, 'occurredOn');
+      redateTo('2016-10-04', 'owed', organization, lateUtc, 'occurredOn');
       expect.unreachable();
     } catch (err) {
       expect((err as ApiError).details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' });
     }
+  });
+
+  it("moves an Owed into the future, judged in the organization's day (MUT-392)", () => {
+    // Jerusalem's today is 2026-10-13 although UTC's is the 12th: the ceiling is 3660 days after the 13th.
+    expect(redateTo('2026-10-14', 'owed', organization, lateUtc, 'occurredOn')).toBe('2026-10-14');
+    expect(redateTo('2036-10-20', 'owed', organization, lateUtc, 'occurredOn')).toBe('2036-10-20');
+    try {
+      redateTo('2036-10-21', 'owed', organization, lateUtc, 'occurredOn');
+      expect.unreachable();
+    } catch (err) {
+      expect((err as ApiError).details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' });
+    }
+  });
+});
+
+describe('incomeMoneyDate (MUT-392)', () => {
+  const today = '2026-10-12';
+  const reasonOf = (raw: string, kind: 'received' | 'owed') => {
+    try {
+      incomeMoneyDate(raw, kind, today, 'occurredOn');
+    } catch (err) {
+      return (err as ApiError).details;
+    }
+    return null;
+  };
+
+  it('lets an Owed be dated anywhere from the floor to ten years ahead, both inclusive', () => {
+    for (const raw of ['2016-10-04', today, '2026-10-13', '2026-11-11', '2036-10-19']) expect(incomeMoneyDate(raw, 'owed', today, 'occurredOn')).toBe(raw);
+  });
+
+  it.each([
+    ['an Owed one day past the ceiling', '2036-10-20', 'owed', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' }],
+    ['an Owed the day before the floor', '2016-10-03', 'owed', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' }],
+    ['an impossible Owed date', '2026-02-30', 'owed', { reason: 'DATE_INVALID', field: 'occurredOn' }],
+    ['a Received dated tomorrow', '2026-10-13', 'received', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' }],
+    ['a Received the day before the floor', '2016-10-03', 'received', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' }],
+  ] as const)('refuses %s', (_label, raw, kind, details) => {
+    expect(reasonOf(raw, kind)).toEqual(details);
+  });
+
+  it('keeps a Received dated today', () => {
+    expect(incomeMoneyDate(today, 'received', today, 'occurredOn')).toBe(today);
+  });
+});
+
+describe('dueDateAfterRedate (MUT-392 D3)', () => {
+  it('keeps a due date that is on or after the new date', () => {
+    expect(dueDateAfterRedate('2026-11-15', '2026-11-11')).toBeUndefined();
+    expect(dueDateAfterRedate('2026-11-15', '2026-11-15')).toBeUndefined();
+    expect(dueDateAfterRedate('2026-11-15', '2026-09-01')).toBeUndefined();
+  });
+
+  it('moves a due date the new date has passed to EOM_15 of the new date', () => {
+    expect(dueDateAfterRedate('2026-11-15', '2026-11-16')).toBe('2026-12-15');
+    expect(dueDateAfterRedate('2026-11-15', '2026-12-31')).toBe('2027-01-15');
   });
 });
 

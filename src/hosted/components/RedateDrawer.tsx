@@ -9,7 +9,7 @@ import { canRedateOwed, canRedatePayment } from '../data/incomeAffordances';
 import { usePayment, usePaymentsForEntry, useReceivable, useRedateOwed, useRedatePayment } from '../data/incomeQueries';
 import { useCustomerDirectory, useProjectDirectory } from '../data/queries';
 import { formatDecimal } from '../format/DecimalAmount';
-import { formatDay, moneyDateFloor, todayInZone } from '../format/dates';
+import { formatDay, moneyDateCeiling, moneyDateFloor, owedDefaultDueDate, todayInZone } from '../format/dates';
 import { profileKey } from '../session/me';
 import { Drawer } from './Drawer';
 import { mapRedateError } from './incomeApiErrors';
@@ -116,6 +116,8 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
   const projects = useProjectDirectory(profile.id);
   const today = todayInZone(profile.timezone);
   const floor = moneyDateFloor(today);
+  // MUT-392: an Owed may move ahead, up to the ten-year ceiling; a payment's money has moved, so it stops at today.
+  const max = kind === 'owed' ? moneyDateCeiling(today) : today;
   const loadedDate = dateOf(kind, record);
 
   const [date, setDate] = useState(loadedDate);
@@ -156,7 +158,7 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
     event.preventDefault();
     if (saving) return;
     if (!date) return setDateError(t('hosted.redate.dateRequired'));
-    if (date > today) return setDateError(t('hosted.income.errors.dateFuture'));
+    if (date > max) return setDateError(t(kind === 'owed' ? 'hosted.income.errors.dateTooFar' : 'hosted.income.errors.dateFuture'));
     // An entry already older than the floor may be opened and closed again; only a new date must clear it.
     if (date === loadedDate) return onClose();
     if (date < floor) return setDateError(t('hosted.income.errors.dateTooOld'));
@@ -167,7 +169,7 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
       if (mounted.current) onClose();
     } catch (error) {
       if (!mounted.current) return;
-      const mapped = mapRedateError(error);
+      const mapped = mapRedateError(error, kind);
       if (mapped.fields[0]) setDateError(t(mapped.fields[0].key));
       if (mapped.toast) showToast(t(mapped.toast));
       if (mapped.reread) setRefillOnReread(true);
@@ -206,7 +208,7 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
             type="date"
             className="input"
             min={floor}
-            max={today}
+            max={max}
             value={date}
             aria-invalid={Boolean(dateError)}
             onChange={(event) => {
@@ -216,13 +218,25 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
           />
           {dateError && <p className="form-error">{dateError}</p>}
         </div>
-        {receivable && <p className="hp-settle-note">{t('hosted.redate.dueStays', { date: formatDay(receivable.dueDate, language) })}</p>}
+        {receivable && <DueNote dueDate={receivable.dueDate} date={date} />}
         {receivable && PAID_STATUSES.has(receivable.status) && (
           <EntryPayments profile={profile} receivable={receivable} onOpenPayment={onOpenPayment} onSeePayments={onSeePayments} />
         )}
       </form>
     </Drawer>
   );
+}
+
+/**
+ * The due date after this re-date, as the server will store it: kept, unless the new date passes it (MUT-392 D3),
+ * then the 15th of the month after the new date.
+ */
+function DueNote({ dueDate, date }: { dueDate: string; date: string }) {
+  const { t, language } = useLanguage();
+  // ISO calendar dates order lexically; an empty or partly typed date keeps the stored one.
+  const moves = /^\d{4}-\d{2}-\d{2}$/.test(date) && date > dueDate;
+  const shown = moves ? owedDefaultDueDate(date) : dueDate;
+  return <p className="hp-settle-note">{t(moves ? 'hosted.redate.dueMoves' : 'hosted.redate.dueStays', { date: formatDay(shown, language) })}</p>;
 }
 
 /** Eng review R4: the payments applied to a settled or part-paid entry, each opening its own re-date drawer. */

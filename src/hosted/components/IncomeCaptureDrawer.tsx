@@ -12,7 +12,7 @@ import { canAddClient, incomeAffordancesFor, type IncomeKind } from '../data/inc
 import { useCreateIncome } from '../data/incomeQueries';
 import { useCustomerDirectory } from '../data/queries';
 import { formatDecimal } from '../format/DecimalAmount';
-import { formatDay, todayInZone } from '../format/dates';
+import { formatDay, moneyDateCeiling, todayInZone } from '../format/dates';
 import { ClientPicker } from './ClientPicker';
 import { Drawer } from './Drawer';
 import { ProjectPicker } from './ProjectPicker';
@@ -144,7 +144,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
       onSaved?.();
       onClose();
     } catch (error) {
-      const mapped = mapIncomeError(error);
+      const mapped = mapIncomeError(error, values.kind);
       setErrorParams(Object.fromEntries(mapped.fields.map(({ field, params }) => [field, params])));
       for (const { field, key } of mapped.fields) setError(field as keyof IncomeFormValues, { type: 'server', message: key });
       if (mapped.toast) showToast(t(mapped.toast));
@@ -292,7 +292,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
                   <Controller
                     name="occurredOn"
                     control={control}
-                    render={({ field }) => <input id="hosted-income-date" type="date" className="input" max={today} {...field} />}
+                    render={({ field }) => <input id="hosted-income-date" type="date" className="input" max={kind === 'owed' ? moneyDateCeiling(today) : today} {...field} />}
                   />
                   {fieldError('occurredOn')}
                 </div>

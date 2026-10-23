@@ -3,6 +3,7 @@ import { amountInputCurrency, parseAmountInput } from '../../lib/utils';
 import type { CreateIncomeRequest, Currency, PaymentMethod } from '../api/client';
 import type { IncomeKind } from '../data/incomeAffordances';
 import { HOSTED_CURRENCIES, minorToDecimal } from '../format/currencies';
+import { moneyDateCeiling } from '../format/dates';
 
 /** Moved to format/currencies.ts (MUT-268: expense groups use it too); re-exported for this module's callers. */
 export { minorToDecimal };
@@ -99,8 +100,10 @@ export function incomeFormSchema({ today, customerRule }: IncomeFormContext) {
       // Params (a mismatched currency) are recomputed where the error renders; a zod issue carries only the key.
       if (amount) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['amount'], message: amount.key });
       if (!values.occurredOn) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['occurredOn'], message: 'hosted.income.errors.dateRequired' });
-      // ISO calendar dates order lexically.
-      else if (values.occurredOn > today) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['occurredOn'], message: 'hosted.income.errors.dateFuture' });
+      // ISO calendar dates order lexically. Received money has moved, so it is past-only; an Owed may be up to ten
+      // years ahead (MUT-392), as the server allows.
+      else if (values.kind === 'received' && values.occurredOn > today) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['occurredOn'], message: 'hosted.income.errors.dateFuture' });
+      else if (values.kind === 'owed' && values.occurredOn > moneyDateCeiling(today)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['occurredOn'], message: 'hosted.income.errors.dateTooFar' });
       const needsClient = values.kind === 'owed' || customerRule === 'linked-required';
       if (needsClient && !values.customerId) {
         ctx.addIssue({

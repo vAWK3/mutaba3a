@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { I18nProvider } from '../../../lib/i18n/core';
 import { DecimalAmount, formatDecimal, isZeroDecimal } from '../DecimalAmount';
-import { formatDay, formatInstant, formatSize, MONEY_DATE_FLOOR_DAYS, moneyDateFloor, todayInZone, todayLocalISO } from '../dates';
+import { formatDay, formatInstant, formatSize, MONEY_DATE_FLOOR_DAYS, moneyDateCeiling, moneyDateFloor, owedDefaultDueDate, todayInZone, todayLocalISO } from '../dates';
 
 describe('formatDecimal', () => {
   it.each([
@@ -69,6 +69,19 @@ describe('dates', () => {
     expect(moneyDateFloor('2026-03-01')).toBe('2016-02-22');
     expect(moneyDateFloor('2024-02-29')).toBe('2014-02-21');
     expect(moneyDateFloor('2036-01-01')).toBe('2025-12-24');
+  });
+
+  // MUT-392: the latest date the server takes for an Owed or an expense.
+  it('puts the money-date ceiling 3660 calendar days after the profile today', () => {
+    expect(moneyDateCeiling('2026-10-14')).toBe('2036-10-21');
+    expect(moneyDateCeiling('2024-02-29')).toBe('2034-03-08');
+  });
+
+  // MUT-392 (D3): the server's EOM_15 default, which a re-date past the due date moves to.
+  it('puts an Owed default due date on the 15th of the following month', () => {
+    expect(owedDefaultDueDate('2026-01-31')).toBe('2026-02-15');
+    expect(owedDefaultDueDate('2026-12-01')).toBe('2027-01-15');
+    expect(owedDefaultDueDate('2026-11-15')).toBe('2026-12-15');
   });
 
   it('shows a dash for a missing or unreadable instant', () => {

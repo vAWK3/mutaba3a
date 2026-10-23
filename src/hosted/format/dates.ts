@@ -61,8 +61,26 @@ export const MONEY_DATE_FLOOR_DAYS = 3660;
 
 /** The earliest money date the server accepts, given the profile's today (YYYY-MM-DD). */
 export function moneyDateFloor(today: string): string {
-  const [y, m, d] = today.split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d! - MONEY_DATE_FLOOR_DAYS)).toISOString().slice(0, 10);
+  return shiftDays(today, -MONEY_DATE_FLOOR_DAYS);
+}
+
+/** MUT-392: the server refuses an Owed or expense date more than this many days after the profile's today (ADR-169). */
+export const MONEY_DATE_CEILING_DAYS = 3660;
+
+/** The latest date the server accepts for an Owed or an expense, given the profile's today (YYYY-MM-DD). */
+export function moneyDateCeiling(today: string): string {
+  return shiftDays(today, MONEY_DATE_CEILING_DAYS);
+}
+
+/** MUT-392 (D3): the server's default Owed due date, EOM_15 — the 15th of the month after `occurredOn`. */
+export function owedDefaultDueDate(occurredOn: string): string {
+  const [y, m] = occurredOn.split('-').map(Number);
+  return new Date(Date.UTC(y!, m!, 15)).toISOString().slice(0, 10);
+}
+
+function shiftDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! + days)).toISOString().slice(0, 10);
 }
 
 export function todayInZone(timeZone: string, now: Date = new Date()): string {

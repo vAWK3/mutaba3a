@@ -857,14 +857,18 @@ export const IsoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD
 
 /** MUT-227: the money-date rules, said once for every request field that carries them. */
 const PAST_MONEY_DATE = `Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (${DAYS_IN_PAST_LIMIT} days) before it: 422 DATE_INVALID with details.bound future or past.`;
-const FLOORED_MONEY_DATE = `Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today: 422 DATE_INVALID with details.bound past.`;
+/** MUT-392: an expense may be dated ahead, within ten years either way. */
+const BOUNDED_MONEY_DATE = `Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today nor ten years (${DAYS_IN_FUTURE_LIMIT} days) after it: 422 DATE_INVALID with details.bound past or future.`;
+/** MUT-392 (ADR-169): Received money has moved, an Owed may be logged before its day. */
+const INCOME_MONEY_DATE = `Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today. Received: not later than today. Owed: not more than ten years (${DAYS_IN_FUTURE_LIMIT} days) after it. 422 DATE_INVALID with details.bound past or future.`;
 const PastMoneyDateSchema = IsoDateSchema.openapi({ description: PAST_MONEY_DATE });
-const FlooredMoneyDateSchema = IsoDateSchema.openapi({ description: FLOORED_MONEY_DATE });
+const ExpenseMoneyDateSchema = IsoDateSchema.openapi({ description: BOUNDED_MONEY_DATE });
+const IncomeMoneyDateSchema = IsoDateSchema.openapi({ description: INCOME_MONEY_DATE });
 /** MUT-227: a PATCH re-checks the date only when it changes, so a row stored before the floor stays editable. */
 const UNCHANGED_NOT_CHECKED = ' Checked only when it differs from the stored date.';
-const FlooredMoneyDatePatchSchema = IsoDateSchema.openapi({ description: FLOORED_MONEY_DATE + UNCHANGED_NOT_CHECKED });
+const ExpenseMoneyDatePatchSchema = IsoDateSchema.openapi({ description: BOUNDED_MONEY_DATE + UNCHANGED_NOT_CHECKED });
 const PastMoneyDatePatchSchema = IsoDateSchema.openapi({ description: PAST_MONEY_DATE + UNCHANGED_NOT_CHECKED });
-const BoundedMoneyDateSchema = IsoDateSchema.openapi({ description: `Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (${DAYS_IN_PAST_LIMIT} days) before the organization's today nor ten years (${DAYS_IN_FUTURE_LIMIT} days) after it: 422 DATE_INVALID with details.bound past or future. The first replacement of a reversed payment (replacesPaymentId, none posted yet) may keep that payment's receivedOn, or a later one, below the floor.` });
+const BoundedMoneyDateSchema = IsoDateSchema.openapi({ description: `${BOUNDED_MONEY_DATE} The first replacement of a reversed payment (replacesPaymentId, none posted yet) may keep that payment's receivedOn, or a later one, below the floor.` });
 export const IsoMonthSchema = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM').openapi({ description: 'Calendar month, YYYY-MM' });
 /** Canonical decimal amount in the project currency, e.g. "10000.00". Validated against the currency exponent server-side. */
 export const AmountSchema = z.string().regex(/^-?\d+(\.\d+)?$/, 'canonical decimal').openapi({ description: 'Canonical decimal string; exactly the currency\'s fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID' });
@@ -1831,7 +1835,7 @@ export const CreateIncomeRequestSchema = z
     kind: IncomeKindSchema,
     amount: AmountSchema,
     currency: CurrencySchema,
-    occurredOn: PastMoneyDateSchema,
+    occurredOn: IncomeMoneyDateSchema,
     /** Required for `owed`; optional for `received` ("money can stand alone"). */
     customerId: uuid.optional(),
     /** With no customerId, it is taken from the project. */
@@ -1871,7 +1875,7 @@ export const IncomeResponseSchema = z
 export const IncomeIdParamSchema = z.object({ incomeId: uuid });
 
 /** MUT-223: date only (amount, client, matter and note edits are out of scope). */
-export const UpdateIncomeRequestSchema = z.object({ occurredOn: PastMoneyDateSchema }).strict().openapi('UpdateIncomeRequest');
+export const UpdateIncomeRequestSchema = z.object({ occurredOn: IncomeMoneyDateSchema }).strict().openapi('UpdateIncomeRequest');
 
 /** MUT-223: date only; allocations are never touched. */
 export const UpdatePaymentRequestSchema = z.object({ receivedOn: PastMoneyDateSchema }).strict().openapi('UpdatePaymentRequest');
@@ -2212,7 +2216,7 @@ export const ExpensePageSchema = z.object({ items: z.array(ExpenseSchema), nextC
 
 export const CreateExpenseRequestSchema = z
   .object({
-    occurredOn: FlooredMoneyDateSchema,
+    occurredOn: ExpenseMoneyDateSchema,
     amount: AmountSchema.openapi({ description: 'Greater than zero, in the currency\'s fractional digits' }),
     currency: CurrencySchema,
     title: expenseText.optional(),
@@ -2230,7 +2234,7 @@ export const CreateExpenseRequestSchema = z
 /** MUT-272: `currency` only together with `amount` (ADR-096); the amount is never converted, only re-read in the new currency's digits. Null clears an optional field. */
 export const UpdateExpenseRequestSchema = z
   .object({
-    occurredOn: FlooredMoneyDatePatchSchema.optional(),
+    occurredOn: ExpenseMoneyDatePatchSchema.optional(),
     amount: AmountSchema.optional(),
     /** MUT-272: only together with `amount` (422 AMOUNT_REQUIRED alone), which is then read in this currency's digits. */
     currency: CurrencySchema.optional().openapi({ description: 'Only together with amount (422 AMOUNT_REQUIRED alone), which is then read in this currency\'s digits.' }),
