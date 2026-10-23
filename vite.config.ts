@@ -163,6 +163,10 @@ function hostedSentry(env: NodeJS.ProcessEnv): { define: Record<string, string>;
         telemetry: false,
         release: { name: release, inject: false },
         sourcemaps: { filesToDeleteAfterUpload: [SENTRY_HOSTED_MAPS] },
+        // A failed upload (revoked token, wrong scope) fails the build: the plugin only logs it otherwise
+        errorHandler: (error) => {
+          throw error;
+        },
       }),
     ],
   };

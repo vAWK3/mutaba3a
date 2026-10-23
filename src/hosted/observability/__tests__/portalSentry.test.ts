@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/browser';
 import type { Envelope, ErrorEvent } from '@sentry/browser';
 import { ApiError } from '../../api/client';
 import { startPortalSentry, type PortalReporter } from '../portalSentry';
+import { MODE_KEY, setMode } from '../../session/mode';
 
 /**
  * The live wiring (MUT-149 T3): the real SDK, a recording transport, and the
@@ -42,6 +43,7 @@ afterEach(async () => {
   routeId = '/authed/p/$profileId/clients/$customerId';
   document.documentElement.lang = 'en';
   window.history.replaceState(null, '', '/');
+  localStorage.removeItem(MODE_KEY);
   await Sentry.flush(100);
 });
 
@@ -116,6 +118,13 @@ describe('portalSentry (MUT-149 D2, D4, D5)', () => {
     const [event] = await delivered();
     expect(JSON.stringify(event)).not.toContain('st_synthetic_setup_token');
     expect(event.request?.url).toBe('http://localhost:3000/setup');
+  });
+
+  it("sends nothing the SDK itself catches once this browser is signed out, as by another tab's sign-out", async () => {
+    start();
+    setMode('local');
+    Sentry.captureException(new Error('after another tab signed out'));
+    expect(await delivered()).toEqual([]);
   });
 
   it('sends nothing after it stops', async () => {

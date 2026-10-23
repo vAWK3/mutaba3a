@@ -3,6 +3,7 @@ import type { ErrorEvent, EventHint } from '@sentry/browser';
 import { browserSentryOptions } from '../../lib/observability/browserSentry';
 import { APP_VERSION } from '../../lib/appVersion';
 import { ApiError } from '../api/client';
+import { currentMode } from '../session/mode';
 
 declare const __SENTRY_DSN__: string | undefined;
 declare const __SENTRY_RELEASE__: string | undefined;
@@ -63,6 +64,14 @@ export function dropHandled(_event: ErrorEvent, hint: EventHint): boolean {
   return error instanceof ApiError && !crashed.has(error);
 }
 
+/**
+ * Signed out, nothing leaves (ADR-097 §10), even what the SDK's own window
+ * handlers catch: another tab's sign-out may not have reached the gate (a
+ * crash screen replaced the router that listens), and close() is async.
+ * The mode is read live from storage at send time.
+ */
+const dropEvent = (event: ErrorEvent, hint: EventHint) => currentMode() !== 'remote' || dropHandled(event, hint);
+
 /** Navigation and fetch breadcrumbs only: no console (contract), no DOM clicks (their text can be a client's name). */
 const integrations = () => [
   Sentry.globalHandlersIntegration(),
@@ -78,7 +87,7 @@ export function startPortalSentry(hooks: PortalSentryHooks, config: PortalSentry
       dsn: config.dsn,
       release: config.release,
       environment: config.environment,
-      dropEvent: dropHandled,
+      dropEvent,
       tags: () => ({ locale: document.documentElement.lang || undefined, route: hooks.currentRouteId(), app_build: APP_VERSION }),
     }),
     integrations: integrations(),
