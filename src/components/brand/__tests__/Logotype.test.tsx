@@ -168,3 +168,45 @@ describe('Logotype.css', () => {
     }
   });
 });
+
+describe('the retired lockup CSS (design D8, OV-4)', () => {
+  const sheet = (file: string) => postcss.parse(readFileSync(repoPath(file), 'utf8'));
+  const RETIRED_PROPS = ['gap', 'font-family', 'font-size', 'font-weight', 'letter-spacing'];
+
+  it.each([
+    ['src/pages/landing/LandingPage.css', '.landing-wordmark'],
+    ['src/hosted/hosted.css', '.hp-wordmark'],
+    ['src/hosted/hosted.css', '.hp-side-wordmark'],
+  ])('%s %s sets no gap or type that would fight the tokens', (file, selector) => {
+    const set: string[] = [];
+    sheet(file).walkRules((rule) => {
+      if (!rule.selectors.includes(selector)) return;
+      rule.walkDecls((decl) => {
+        if (RETIRED_PROPS.includes(decl.prop)) set.push(decl.prop);
+      });
+    });
+    expect(set).toEqual([]);
+  });
+
+  it('the old full/short name spans and the portal’s RTL heading font are gone', () => {
+    const selectors: string[] = [];
+    for (const file of ['src/pages/landing/LandingPage.css', 'src/hosted/hosted.css']) {
+      sheet(file).walkRules((rule) => {
+        selectors.push(...rule.selectors);
+      });
+    }
+    expect(selectors.filter((selector) => /landing-wordmark-(full|short)|\[dir="rtl"\] \.hp-wordmark\b/.test(selector))).toEqual([]);
+  });
+
+  it('a phone shows the mark and the active name only: the other name and the dot hide at 480px and below', () => {
+    const hidden: string[] = [];
+    sheet('src/pages/landing/LandingPage.css').walkAtRules('media', (at) => {
+      if (!/max-width:\s*480px/.test(at.params)) return;
+      at.walkRules((rule) => {
+        const hides = rule.some((node) => node.type === 'decl' && node.prop === 'display' && node.value === 'none');
+        if (rule.selectors.includes('.landing-wordmark .wordmark-other') && hides) hidden.push(rule.selector);
+      });
+    });
+    expect(hidden).toEqual(['.landing-wordmark .wordmark-other']);
+  });
+});

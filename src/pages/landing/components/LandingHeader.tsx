@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useT, useLanguage } from '../../../lib/i18n';
 import { Wordmark } from '../../../components/brand/Wordmark';
+import { BrandName } from '../../../components/brand/Logotype';
 import { useInView } from '../../../hooks/useInView';
 import { hostedPortalUrl } from '../../../lib/goHosted';
 
-/** The mark's size in the bar, about the cap height of the name beside it. */
-const BAR_MARK_SIZE = 24;
+/** The mark's size in the bar: the Arabic name beside it stays at today's 16px (design D3). */
+const BAR_MARK_SIZE = 32;
 
 interface LandingHeaderProps {
   /**
@@ -63,9 +64,12 @@ export function LandingHeader({ showCta, homeHref = '#top' }: LandingHeaderProps
             <Wordmark
               name={
                 <>
-                  {/* Both names on wide screens; a phone has room for the active language's only (MUT-77, 375 AC) */}
-                  <span className="landing-wordmark-full">{t('landing.header.wordmark')}</span>
-                  <span className="landing-wordmark-short">{t('landing.header.wordmarkShort')}</span>
+                  {/* The active language's name first, so dir orders the lockup. A phone has room for that name
+                      only: CSS hides the .wordmark-other pieces at 480px and below (MUT-77 375 AC, MUT-402 D12).
+                      The spaces keep the link's name two words for screen readers; flex layout drops them visually */}
+                  <BrandName language={language} />{' '}
+                  <span className="wordmark-separator wordmark-other" aria-hidden="true" />{' '}
+                  <BrandName language={language === 'en' ? 'ar' : 'en'} className="wordmark-other" />
                 </>
               }
               markSize={BAR_MARK_SIZE}
