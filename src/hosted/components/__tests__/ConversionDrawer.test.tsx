@@ -232,7 +232,7 @@ describe('ConversionDrawer (hosted) edit mode (MUT-194)', () => {
     fetchMock.mockImplementation(async () => fail(404, 'NOT_FOUND'));
     const { onClose } = renderDrawer({ mode: 'edit', conversionId: ID });
     expect(await screen.findByText('This conversion no longer exists')).toBeInTheDocument();
-    expect(screen.queryByText("Can't reach Mutaba3a right now")).not.toBeInTheDocument();
+    expect(screen.queryByText("Can't reach MTB3A right now")).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
@@ -252,7 +252,7 @@ describe('ConversionDrawer (hosted) edit mode (MUT-194)', () => {
     fetchMock.mockImplementation(async () => fail(500, 'INTERNAL'));
     renderDrawer({ mode: 'edit', conversionId: ID });
     // Any other load error keeps the portal's existing error state (QueryView's Unreachable card), with a retry.
-    expect(await screen.findByText("Can't reach Mutaba3a right now")).toBeInTheDocument();
+    expect(await screen.findByText("Can't reach MTB3A right now")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();

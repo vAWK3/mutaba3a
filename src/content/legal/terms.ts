@@ -6,6 +6,10 @@ import type { LegalLanguage } from './language';
  * edited: a new text is a new version, and the server's CURRENT_TERMS names
  * it (`scripts/__tests__/legal-terms.test.ts` keeps the two in step).
  * Loaded on demand, so the landing bundle carries none of them.
+ *
+ * Authoring note (MUT-402 D4): the released texts still say "Mutaba3a" and stay
+ * frozen. The next version names the product MTB3A in English and متابعة in
+ * Arabic (MUT-400); it is a real revision, not a rename-only re-accept.
  */
 export interface TermsText {
   version: string;

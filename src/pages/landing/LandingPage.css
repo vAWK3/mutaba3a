@@ -131,19 +131,11 @@
 .landing-wordmark {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-heading);
-  font-size: var(--text-body);
-  font-weight: var(--weight-bold);
   white-space: nowrap;
 }
 
 .landing-wordmark .wordmark-mark {
   flex: none;
-}
-
-.landing-wordmark-short {
-  display: none;
 }
 
 /* Phones: 44px tap targets in the bar (Apple HIG) */
@@ -174,14 +166,10 @@ html:has(.landing-header) {
   }
 }
 
-/* A phone has room for the mark and one name beside the switch and the button */
+/* A phone has room for the mark and the active language's name beside the switch and the button (MUT-402 D12) */
 @media (max-width: 480px) {
-  .landing-wordmark-full {
+  .landing-wordmark .wordmark-other {
     display: none;
-  }
-
-  .landing-wordmark-short {
-    display: inline;
   }
 }
 

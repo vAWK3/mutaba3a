@@ -2,7 +2,8 @@ import { getRepositories } from '../db';
 import type { BackupData } from '../db/backup';
 
 /**
- * Download a full backup as `mutaba3a-backup-v{schema}-{date}.json`. The
+ * Download a full backup as `mtb3a-backup-v{schema}-{date}.json` (MUT-402 D6; imports go by
+ * content, so files still named `mutaba3a-…` restore as before). The
  * rows come from `getRepositories().base.dataset.serializeBackup()`; this half
  * is browser-only, so it lives outside the data layer (MUT-47).
  */
@@ -13,7 +14,7 @@ export function downloadBackup(data: BackupData): void {
 
   const a = document.createElement('a');
   a.href = url;
-  a.download = `mutaba3a-backup-v${data.version}-${new Date().toISOString().split('T')[0]}.json`;
+  a.download = `mtb3a-backup-v${data.version}-${new Date().toISOString().split('T')[0]}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

@@ -52,5 +52,5 @@ features:
       - Open a valid setup link and press Save and sign in while the connection drops
       - Press Save and sign in again
     expect:
-      - The first try says Mutaba3a couldn't be reached and keeps the typed password
+      - The first try says MTB3A couldn't be reached and keeps the typed password
       - The second try lands on the first profile's Overview, signed in with the typed password

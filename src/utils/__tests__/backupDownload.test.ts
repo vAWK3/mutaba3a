@@ -34,6 +34,20 @@ describe('backUpNow', () => {
     expect((await settingsRepo.get()).lastBackupAt).toBe('2026-10-13T09:12:00.000Z');
   });
 
+  it('names the file mtb3a-backup-v<schema>-<date>.json (MUT-402 D6)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T09:12:00.000Z'));
+    const names: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      names.push(this.download);
+    });
+
+    await backUpNow();
+
+    expect(names).toHaveLength(1);
+    expect(names[0]).toMatch(/^mtb3a-backup-v\d+-2026-10-13\.json$/);
+  });
+
   it('records nothing when the backup could not be produced', async () => {
     URL.createObjectURL = vi.fn(() => {
       throw new Error('blocked');

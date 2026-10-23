@@ -175,7 +175,7 @@ describe('portal expenses: after save, the hard paths (review)', () => {
     await screen.findByText('Office supplies');
     await recordExpense(user);
     expect(await screen.findByText('Expense saved', {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.getByText("Can't reach Mutaba3a right now")).toBeInTheDocument();
+    expect(screen.getByText("Can't reach MTB3A right now")).toBeInTheDocument();
   });
 
   it('an edit whose refetch fails is not claimed by the stale rows: the notice still confirms it (D4)', async () => {
@@ -234,7 +234,7 @@ describe('portal expenses: an anchored list', () => {
     });
     expect(await screen.findByText('Office supplies')).toBeInTheDocument();
     expect(locationOf(router)).not.toContain('anchor');
-    expect(screen.queryByText("Can't reach Mutaba3a right now")).not.toBeInTheDocument();
+    expect(screen.queryByText("Can't reach MTB3A right now")).not.toBeInTheDocument();
     expect(api.count('GET /v1/me')).toBe(1); // not mistaken for a removed profile
   });
 

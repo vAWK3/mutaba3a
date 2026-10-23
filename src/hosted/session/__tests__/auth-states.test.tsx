@@ -41,7 +41,7 @@ describe('S1 checking session', () => {
     stubApi({ 'GET /v1/me': never });
     renderPortal('/');
     expect(await screen.findByRole('presentation')).toHaveClass('boot-splash-mark');
-    expect(screen.queryByText('Mutaba3a')).toBeNull();
+    expect(screen.queryByRole('img', { name: 'MTB3A' })).toBeNull();
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.queryByLabelText('Email')).toBeNull();
     expect(screen.queryByRole('navigation')).toBeNull();
@@ -63,7 +63,7 @@ describe('S2 boot unreachable', () => {
     });
     const { user } = renderPortal('/');
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent("Can't reach Mutaba3a right now");
+    expect(alert).toHaveTextContent("Can't reach MTB3A right now");
     expect(screen.queryByLabelText('Email')).toBeNull();
     await user.click(within(alert).getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
@@ -229,7 +229,7 @@ describe('S8 cannot reach (sign-in)', () => {
   ])('keeps the values on %s', async (_label, failure) => {
     const { user } = await onSignIn({ 'POST /v1/sessions': failure });
     await submit(user);
-    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't reach Mutaba3a. Check your connection and try again.");
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't reach MTB3A. Check your connection and try again.");
     expect(screen.getByLabelText('Email')).toHaveValue('nour@firm.ps');
     expect(screen.getByLabelText('Password')).toHaveValue('correct horse');
   });
@@ -301,7 +301,7 @@ describe('S12 profile unavailable', () => {
   it('keeps an ordinary not-found when the profile is still listed', async () => {
     signedIn({ 'GET /v1/receivables': () => fail(404, 'NOT_FOUND') });
     renderPortal(`/p/${ORG_A}/receivables`);
-    expect(await screen.findByRole('alert')).toHaveTextContent("Can't reach Mutaba3a right now");
+    expect(await screen.findByRole('alert')).toHaveTextContent("Can't reach MTB3A right now");
     expect(screen.queryByText("This profile isn't available")).toBeNull();
   });
 });

@@ -61,7 +61,7 @@ describe('Your data, signed in (MUT-325)', () => {
     const blob = new Blob(['zip']);
     finish({ blob, missingReceipts: 0 });
     await screen.findByText('Records downloaded.');
-    expect(saveBlobAs).toHaveBeenCalledWith(blob, expect.stringMatching(/^mutaba3a-export-\d{4}-\d{2}-\d{2}\.zip$/));
+    expect(saveBlobAs).toHaveBeenCalledWith(blob, expect.stringMatching(/^mtb3a-export-\d{4}-\d{2}-\d{2}\.zip$/));
   });
 
   it('can be cancelled: the export is aborted and nothing is saved', async () => {

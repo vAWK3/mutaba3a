@@ -22,6 +22,9 @@ import { UserMenu } from './UserMenu';
  * are the same (MUT-287, epic MUT-284 decision 4).
  */
 
+/** The sidebar's lockup: the Arabic name beside it at 16px (design D3). */
+const SIDEBAR_MARK_SIZE = 32;
+
 const SECTIONS = [
   { path: '', key: 'overview', exact: true },
   { path: '/clients', key: 'clients', exact: false },
@@ -45,7 +48,7 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
   return (
     <div className="hp-shell">
       <aside className="hp-side">
-        <Wordmark className="hp-side-wordmark" />
+        <Wordmark className="hp-side-wordmark" markSize={SIDEBAR_MARK_SIZE} />
         {me.profiles.length > 0 && <ProfileSwitcher active={profile} />}
         {profile && (
           <nav className="hp-nav" aria-label={t('hosted.shell.sections')}>

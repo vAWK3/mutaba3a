@@ -70,7 +70,7 @@ describe('CheckingSession (MUT-207 D4)', () => {
     expect(mark).toHaveAttribute('width', '80');
     expect(mark).toHaveClass('boot-splash-mark');
     expect(screen.queryByRole('status')).toBeNull();
-    expect(screen.queryByText('Mutaba3a')).toBeNull();
+    expect(screen.queryByRole('img', { name: 'MTB3A' })).toBeNull();
 
     advance(LOADER_DELAY_MS);
 
@@ -187,7 +187,7 @@ describe('the session check gives up at 15 s (MUT-207 DR6)', () => {
     // TanStack Query hands the error to React through a setTimeout(0), which the fake clock holds.
     await flush(1);
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent("Can't reach Mutaba3a right now");
+    expect(alert).toHaveTextContent("Can't reach MTB3A right now");
     expect(screen.queryByRole('status')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));

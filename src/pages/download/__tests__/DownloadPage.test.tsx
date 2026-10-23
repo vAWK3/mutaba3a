@@ -50,7 +50,7 @@ describe('DownloadPage', () => {
   });
 
   it.each([
-    ['en', 'Mutaba3a — Download'],
+    ['en', 'MTB3A — Download'],
     ['ar', 'متابعة — تحميل'],
   ] as const)('names the tab in the active language (%s, MUT-77)', (language, title) => {
     renderPage(language);

@@ -276,7 +276,11 @@ describe('POST /v1/billing/checkout-session (MUT-362)', () => {
     const u = await person(h);
     await h.store.billing.createGrant({ id: randomUUID(), userId: u.userId, organizationId: null, tier: 'FREELANCER', reason: 'pre-billing', expiresAt: null, grantedBy: 'admin', at: NOW, audit: [] });
     const res = await u.post(CHECKOUT, checkoutBody());
-    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'COVERED_BY_GRANT' } });
+    expect((await read(res)).error).toMatchObject({
+      code: 'CONFLICT',
+      message: 'Your account is covered by MTB3A; there is nothing to pay',
+      details: { reason: 'COVERED_BY_GRANT' },
+    });
   });
 
   it('a person outside the consumer countries is 422 COUNTRY_NEEDS_BUSINESS; a business there gets Checkout (AC2)', async () => {

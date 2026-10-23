@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { openFreshApp, logIncome, openNewIncomeDrawer, localDateFromToday, switchToArabic, enableOptionalArea } from '../../support/app';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
-import { ar, chooseLanguageScript, LANGUAGE_KEYS } from '../../support/i18n';
+import { ar, chooseLanguageScript, en, LANGUAGE_KEYS } from '../../support/i18n';
 import {
   CANVAS,
   CANVAS_HEX,
@@ -594,4 +594,92 @@ test('Income at 375px in Arabic is the same width on any date', { tag: '@web.bra
     expect(new Set(widths).size, `widths ${widths.join(', ')}`).toBe(1);
     expect(widths[0]).toBeLessThanOrEqual(KNOWN_OVERFLOW['Income@375'].maxContentWidth);
   });
+});
+
+/** MUT-402: the landing bar's lockup, its two names and the computed colours jsdom can't show. */
+const brandLink = (page: Page) => page.getByRole('banner').locator('.landing-header-brand');
+const barLogotype = (page: Page) => page.getByRole('banner').locator('.logotype');
+const barArabicName = (page: Page) => page.getByRole('banner').locator('.brand-name-ar');
+
+async function openLandingIn(page: Page, language: 'en' | 'ar') {
+  await page.route('https://api.github.com/**', (route) => route.fulfill({ json: LANDING_RELEASE }));
+  await page.addInitScript(chooseLanguageScript, [LANGUAGE_KEYS, language] as [typeof LANGUAGE_KEYS, 'en' | 'ar']);
+  await page.goto('/');
+  await expect(page.locator('#hero-title')).toBeVisible();
+}
+
+test('the landing header and the public pages name the product MTB3A in English and متابعة in Arabic', { tag: '@web.brand.mtb3a-name' }, async ({ browser, step }) => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+
+  await step('Open the landing page in English: the mark, the MTB3A logotype, the dot and متابعة, in that order', async () => {
+    await openLandingIn(page, 'en');
+    await expect(brandLink(page)).toHaveAccessibleName('MTB3A متابعة');
+    const [logo, name] = [(await barLogotype(page).boundingBox())!, (await barArabicName(page).boundingBox())!];
+    expect(logo.x).toBeLessThan(name.x);
+    // The bar's 32px mark gives a 12.8px logotype, 5.104 times as wide (design D3)
+    expect(logo.height).toBeCloseTo(12.8, 0);
+    expect(logo.width).toBeCloseTo(12.8 * 5.104, 0);
+    await expect(page).toHaveTitle(en.landing.meta.title);
+    expect(await page.locator('body').innerText()).not.toContain('Mutaba3a');
+    await attachScreenshot(page, 'mtb3a-landing-en-1280');
+  });
+
+  await step('The logotype is painted in the link’s own colour, with the pinned mask', async () => {
+    const paint = await barLogotype(page).evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { background: style.backgroundColor, mask: style.maskImage || style.getPropertyValue('-webkit-mask-image'), link: getComputedStyle(el.closest('a')!).color };
+    });
+    expect(paint.mask).toMatch(/wordmark[^/]*\.svg/);
+    expect(paint.background).toBe(paint.link);
+  });
+
+  await step('Switch to Arabic: متابعة comes first, at the start edge, and the tab title follows', async () => {
+    await page.locator('.landing-lang-toggle').click();
+    await expect(brandLink(page)).toHaveAccessibleName('متابعة MTB3A');
+    const [logo, name] = [(await barLogotype(page).boundingBox())!, (await barArabicName(page).boundingBox())!];
+    expect(name.x).toBeGreaterThan(logo.x);
+    await expect(page).toHaveTitle(ar.landing.meta.title);
+    // For comparison with the Wordmark Kit preview (design D13): the Arabic name should sit level with the logotype
+    await attachScreenshot(page, 'mtb3a-landing-ar-1280');
+  });
+
+  for (const width of [320, 360]) {
+    for (const language of ['en', 'ar'] as const) {
+      await step(`At ${width}px in ${language === 'en' ? 'English' : 'Arabic'}: the mark and the active name only, nothing wrapped or overflowing`, async () => {
+        const phone = await browser.newPage({ viewport: { width, height: 740 } });
+        await openLandingIn(phone, language);
+        const active = language === 'en' ? barLogotype(phone) : barArabicName(phone);
+        await expect(active).toBeVisible();
+        await expect(phone.getByRole('banner').locator('.wordmark-other')).toHaveCount(2);
+        for (const other of await phone.getByRole('banner').locator('.wordmark-other').all()) await expect(other).toBeHidden();
+        const bar = (await phone.getByRole('banner').locator('.landing-header-bar').boundingBox())!;
+        expect(bar.height).toBeLessThan(80);
+        await expectNoHorizontalOverflow(phone, `landing ${language} @${width}`);
+        await attachScreenshot(phone, `mtb3a-landing-${language}-${width}`);
+        await phone.close();
+      });
+    }
+  }
+
+  await step('In forced colours (high contrast) the logotype, the dot and متابعة share one colour, and the mark has a ring', async () => {
+    await page.emulateMedia({ forcedColors: 'active' });
+    await page.locator('.landing-lang-toggle').click();
+    await expect(brandLink(page)).toHaveAccessibleName('MTB3A متابعة');
+    const colours = await page.getByRole('banner').evaluate((banner) => {
+      const read = (selector: string) => getComputedStyle(banner.querySelector(selector)!);
+      return { logotype: read('.logotype').backgroundColor, dot: read('.wordmark-separator').backgroundColor, name: read('.brand-name-ar').color, ring: read('.wordmark-mark').outlineStyle };
+    });
+    expect(colours.logotype).toBe(colours.name);
+    expect(colours.dot).toBe(colours.name);
+    expect(colours.ring).toBe('solid');
+    await attachScreenshot(page, 'mtb3a-landing-en-forced-colors');
+    await page.emulateMedia({ forcedColors: 'none' });
+  });
+
+  // common.pageTitle names the tab on the public sub-pages (/download, /privacy, /terms); the /app shell sets no title of its own
+  await step('Open the download page in English: the tab says "MTB3A — Download"', async () => {
+    await page.goto('/download');
+    await expect(page).toHaveTitle(`MTB3A — ${en.download.title}`);
+  });
+  await page.close();
 });

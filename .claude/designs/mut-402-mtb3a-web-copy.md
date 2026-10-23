@@ -685,6 +685,17 @@ None is silent with no test and no handling, apart from the accepted R6 case. **
 - Parallelization: 1 lane, sequential.
 - Lake Score: 3/5 (D1 and D2 picked the 10/10 option; D3 picked the 10/10 option; D4 and D5 took 8/10 options).
 
+## Build notes (2026-10-23, /eng-build, branch feature/mut-402-mtb3a-web-copy)
+
+Where the build differs from the text above, and why:
+- **Forced colours (D11, D14):** the plan's `currentColor` with `forced-color-adjust: none` failed its own QA check. Opted out of forcing, `currentColor` is the unforced ink in Chromium, so MTB3A came out plum beside a LinkText-blue متابعة. The logotype and the dot now name the system colour their live text gets: `LinkText` (`VisitedText`) inside a link, `CanvasText` elsewhere. The approved outcome (one colour across the lockup) holds and is tested in both QA specs.
+- **The default M (D7, OV-3):** `var(--wordmark-mark, 30px)` would trip the literal guard through `--wordmark-h`, so the fallback is derived from tokens: `--m-wordmark-min-height / --m-wordmark-logotype-to-mark` (= 30px).
+- **The link's accessible name:** the lockup's items are inline spans, so the name read "MTB3Aمتابعة". Plain spaces between them fix it; flex layout drops whitespace-only text, so nothing shifts.
+- **Grammar:** English says "an MTB3A" (read letter by letter), in 7 places.
+- **QA tab-title step:** the /app shell sets no tab title (TD-207), so `web.brand.mtb3a-name` checks `common.pageTitle` on /download instead of the app's Home.
+- **Portal title:** `PortalTitle` sets `document.title` with its own effect, because the portal may not import the app's hooks (hosted-portal.md §8, lint).
+- **Found, older than this:** the 375px English landing bar clips the lockup when the header button shows (TD-206; 110px in 90px on main, 105px here).
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |

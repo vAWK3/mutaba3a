@@ -2,6 +2,12 @@ import { useTIn } from '../../lib/i18n';
 import { legalLanguageOf } from '../../content/legal/language';
 import { LegalPage } from './LegalPage';
 
+/*
+ * Authoring note (MUT-402 D4): the current policy text (landing.privacyPolicy.*) still says
+ * "Mutaba3a" and is exempt from the brand-name guard (src/lib/i18n/__tests__/brandName.test.ts)
+ * until its next real revision, which names the product MTB3A in English and متابعة in Arabic.
+ */
+
 const SECTION_KEYS = [
   'scope',
   'mobile',

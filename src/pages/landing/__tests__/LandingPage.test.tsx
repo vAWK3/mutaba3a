@@ -337,7 +337,7 @@ describe('LandingPage header button (MUT-77)', () => {
 describe('LandingPage title (MUT-77)', () => {
   it('follows the active language', () => {
     renderLanding('en');
-    expect(document.title).toBe('Mutaba3a — Log it before you forget it');
+    expect(document.title).toBe('MTB3A — Log it before you forget it');
 
     fireEvent.click(screen.getByRole('button', { name: /Switch language/ }));
     expect(document.title).toBe('متابعة — سجّله من هاتفك، تابعه من كل مكان');
@@ -351,7 +351,7 @@ describe('LandingPage Malafat (MUT-174)', () => {
     renderLanding('en');
     const band = part('malafat');
     expect(within(band).getByRole('heading', { level: 2 })).toHaveTextContent(
-      'Run a law firm or accounting office on Malafat? Mutaba3a connects to it.',
+      'Run a law firm or accounting office on Malafat? MTB3A connects to it.',
     );
     expect(within(band).getAllByRole('link')).toHaveLength(1);
     expect(link()).toHaveTextContent('See Malafat');

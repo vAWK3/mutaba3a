@@ -16,7 +16,7 @@ async function openFirstRun(page: Page, path = '/'): Promise<Locator> {
     }
   }, LANGUAGE_KEYS);
   await page.goto(`/app${path}`);
-  return page.getByRole('dialog', { name: 'Welcome to Mutaba3a' });
+  return page.getByRole('dialog', { name: 'Welcome to MTB3A' });
 }
 
 /** The sidebar's business switcher, named by the business it shows. */
@@ -138,7 +138,7 @@ test('with Projects on, Get Started counts three steps, and Skip for now sticks'
     await page.reload();
     await expect(page.getByText('Nothing to track yet')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Get Started' })).toHaveCount(0);
-    await expect(page.getByRole('dialog', { name: 'Welcome to Mutaba3a' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Welcome to MTB3A' })).toHaveCount(0);
   });
 });
 
@@ -231,7 +231,7 @@ test('the landing page sample opens with no dialogs and leaves cleanly', { tag: 
 
   await step('The sample business is open, with money owed, and no welcome', async () => {
     await expect(page).toHaveURL(/\/app\/$/);
-    await expect(page.getByRole('dialog', { name: 'Welcome to Mutaba3a' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Welcome to MTB3A' })).toHaveCount(0);
     await expect(businessSwitcher(page, /شركة التقنية المتقدمة/)).toBeVisible();
     await expect(page.getByRole('region', { name: 'Owed now' })).not.toContainText('Nothing owed');
   });
@@ -257,7 +257,7 @@ test('the landing page sample opens with no dialogs and leaves cleanly', { tag: 
   });
 
   await step('The app is back at its first run', async () => {
-    await expect(page.getByRole('dialog', { name: 'Welcome to Mutaba3a' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Welcome to MTB3A' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Get Started' })).toBeVisible();
   });
 });

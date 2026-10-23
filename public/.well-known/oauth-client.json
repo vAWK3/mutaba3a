@@ -1,6 +1,6 @@
 {
   "client_id": "https://mtb3a.com/.well-known/oauth-client.json",
-  "client_name": "Mutaba3a",
+  "client_name": "MTB3A",
   "client_uri": "https://mtb3a.com",
   "logo_uri": "https://mtb3a.com/icons/icon-192.png",
   "redirect_uris": [

@@ -247,7 +247,7 @@ describe('RecordPaymentDrawer (MUT-133)', () => {
   it('shows the unreachable state, not a form, when the receivable cannot load', async () => {
     stub({ get: () => fail(500, 'INTERNAL') });
     renderDrawer();
-    expect(await screen.findByText("Can't reach Mutaba3a right now")).toBeInTheDocument();
+    expect(await screen.findByText("Can't reach MTB3A right now")).toBeInTheDocument();
     expect(screen.queryByLabelText('Amount (ILS)')).toBeNull();
   });
 

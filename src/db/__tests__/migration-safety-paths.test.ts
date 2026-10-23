@@ -405,7 +405,7 @@ describe('backup files', () => {
     await downloadBackup();
 
     const anchor = click.mock.contexts[0] as HTMLAnchorElement;
-    expect(anchor.download).toMatch(/^mutaba3a-backup-\d{4}-\d{2}-\d{2}\.json$/);
+    expect(anchor.download).toMatch(/^mtb3a-backup-\d{4}-\d{2}-\d{2}\.json$/);
     expect(anchor.href).toBe('blob:backup');
     expect(anchor.isConnected).toBe(false);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:backup');

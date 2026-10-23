@@ -4,7 +4,7 @@ import { liveDocumentProblems, waitForLiveDocument, type LiveResponse } from '..
 
 /** MUT-387: after `make release web`, the served OAuth client document is the one we published. */
 const CLIENT_ID = 'https://id.example/.well-known/oauth-client.json';
-const PUBLISHED = JSON.stringify({ client_id: CLIENT_ID, client_name: 'Mutaba3a', redirect_uris: ['http://127.0.0.1:14100/callback'] }, null, 2);
+const PUBLISHED = JSON.stringify({ client_id: CLIENT_ID, client_name: 'MTB3A', redirect_uris: ['http://127.0.0.1:14100/callback'] }, null, 2);
 const ok = (over: Partial<LiveResponse> = {}): LiveResponse => ({
   status: 200,
   location: null,

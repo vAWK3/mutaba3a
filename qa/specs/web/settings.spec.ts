@@ -86,7 +86,7 @@ test('Your data exports one business', { tag: '@web.settings.export' }, async ({
     // CSV is the format the dialog picks first
     const download = page.waitForEvent('download');
     await dialog.getByRole('button', { name: 'Export Default Profile' }).click();
-    expect((await download).suggestedFilename()).toMatch(/^mutaba3a-Default-Profile-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect((await download).suggestedFilename()).toMatch(/^mtb3a-Default-Profile-\d{4}-\d{2}-\d{2}\.csv$/);
   });
 });
 
@@ -95,13 +95,13 @@ test('Settings offers Malafat, says so once after a second business, and the swi
   const main = page.getByRole('main');
   const note = main.getByRole('group', { name: 'A suggestion for your new business' });
   const clientsCard = main.getByRole('group', { name: 'A suggestion for law firms and accounting offices' });
-  const rowText = 'For law firms and accounting offices: Malafat manages your clients, documents and fee agreements, and connects to a Mutaba3a hosted account.';
+  const rowText = 'For law firms and accounting offices: Malafat manages your clients, documents and fee agreements, and connects to an MTB3A hosted account.';
 
-  await step('The Mutaba3a + Malafat row has one link to Malafat, tagged for Settings', async () => {
+  await step('The MTB3A + Malafat row has one link to Malafat, tagged for Settings', async () => {
     await openFreshApp(page, '/income');
     await logIncome(page, { title: 'Retainer', amount: '500', client: 'Nour Legal' });
     await page.goto('/app/settings');
-    await expect(main.getByText('Mutaba3a + Malafat')).toBeVisible();
+    await expect(main.getByText('MTB3A + Malafat')).toBeVisible();
     await expect(main.getByText(rowText)).toBeVisible();
     const link = main.getByRole('link', { name: /See Malafat/ });
     await expect(link).toHaveCount(1);

@@ -151,7 +151,7 @@ describe('the shell signed out', () => {
     await user.click(await screen.findByRole('button', { name: /Switch profile/ }));
     const menu = screen.getByRole('menu', { name: 'Switch profile' });
     expect(within(menu).queryByText('Hosted')).toBeNull();
-    expect(within(menu).queryByText(/stay in the Mutaba3a app on your device/)).toBeNull();
+    expect(within(menu).queryByText(/stay in the MTB3A app on your device/)).toBeNull();
   });
 
   it('shows no Malafat suggestion even on an owned business profile (AC5)', async () => {
@@ -218,8 +218,8 @@ describe('the shell signed out', () => {
     const { router, user } = renderPortal('/');
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent("This browser won't let Mutaba3a save here");
-    expect(alert).not.toHaveTextContent("Can't reach Mutaba3a");
+    expect(alert).toHaveTextContent("This browser won't let MTB3A save here");
+    expect(alert).not.toHaveTextContent("Can't reach MTB3A");
     await user.click(within(alert).getByRole('button', { name: 'Sign in' }));
     await waitFor(() => expect(locationOf(router)).toBe('/sign-in'));
   });
@@ -368,7 +368,7 @@ describe('Your data (D2)', () => {
 
     await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
     const link = click.mock.instances[0] as unknown as HTMLAnchorElement;
-    expect(link.download).toMatch(/^mutaba3a-records-\d{4}-\d{2}-\d{2}\.zip$/);
+    expect(link.download).toMatch(/^mtb3a-records-\d{4}-\d{2}-\d{2}\.zip$/);
     expect(backend.exportRecords).toHaveBeenCalledTimes(1);
   });
 
@@ -391,7 +391,7 @@ describe('Your data (D2)', () => {
     chooseFile();
     const confirm = await screen.findByRole('alertdialog');
 
-    expect(confirm).toHaveTextContent(/downloaded from your Mutaba3a account on .*20.*It's an export/);
+    expect(confirm).toHaveTextContent(/downloaded from your MTB3A account on .*20.*It's an export/);
   });
 
   it('restores only after a confirm that names the record count, then starts again from / on the restored profile', async () => {
@@ -461,8 +461,8 @@ describe('Your data (D2)', () => {
   });
 
   it.each([
-    ['not-a-records-file', "This isn't a Mutaba3a records file."],
-    ['too-new', 'This file was saved by a newer version of Mutaba3a. Reload and try again.'],
+    ['not-a-records-file', "This isn't an MTB3A records file."],
+    ['too-new', 'This file was saved by a newer version of MTB3A. Reload and try again.'],
   ] as const)('refuses a %s file with its own message, changing nothing', async (reason, message) => {
     backend.readRecordsFile.mockRejectedValue(new LocalRecordsFileRefused(reason));
     await openYourData();

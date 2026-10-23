@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-23 — The landing page, portal, web app and server say MTB3A in English (MUT-402, ADR-173)
+
+**Why:** the service is renamed MTB3A in English and stays متابعة in Arabic (MUT-400). MUT-401 delivered the outlined logotype; this ships it and the copy on the web.
+
+### Added
+- `src/components/brand/Logotype.tsx` (`Logotype`, `BrandName`) and `Logotype.css`: the masked logotype in `currentColor`, the separator, forced-colours and print rules; `PortalTitle` (`src/hosted/components/Brand.tsx`) names the portal's tab per language.
+- The `wordmark` token block (`mutaba3a.tokens.json`, `--m-wordmark-*`) with drift tests; a theme-invariant print ink and a 3px separator floor.
+- `src/lib/i18n/__tests__/brandName.test.ts`: fails on an English "Mutaba3a" or Latin in Arabic copy (the privacy policy exempt).
+- `hosted.html` preloads the logotype with `crossorigin` (the portal has no service worker).
+- Release-QA: `web.brand.mtb3a-name`, `portal.shell.mtb3a-name` (both passing on preview builds 2026-10-23).
+
+### Changed
+- Every English string says MTB3A ("an MTB3A"); `common.pageTitle` is "MTB3A — {page}"; `hosted.html` opens on متابعة; `client_name` is MTB3A; the Arabic `header.wordmark*` keys retire.
+- The landing bar's mark is 32px, the portal pages' 40px and the sidebar's 32px (the Arabic name keeps 16/20px); `Wordmark` defaults to 30 and hands M to the CSS in px.
+- Downloads are named `mtb3a-…` (exports, records, backups, the CSV template); old files still import.
+- API 1.52.1-mut402: "MTB3A Financial API"; the CROSS_SITE_REQUEST messages say "the MTB3A portal".
+- `docs/brand/wordmark/README.md`: how the web renders the logotype; `docs/operations/before-release.md`: the Thmanyah licence step.
+
+### Removed
+- The old lockup gap and type rules (`.landing-wordmark`, `.hp-wordmark`, `.hp-side-wordmark`) and the `.landing-wordmark-full/-short` spans.
+
+### Technical
+- TD-206 (375px English bar clipped, older than this) and TD-207 (the /app shell sets no tab title) opened.
+
 ## [Unreleased] - 2026-10-22 — Settings › Billing: subscribe, manage and cancel without the operator (MUT-362, ADR-170)
 
 **Why:** the GA gate is "anyone can pay and leave with no help". After MUT-358/360 the server could mirror a subscription, but nobody could start one, change a card or cancel without Basel.

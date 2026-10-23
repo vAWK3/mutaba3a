@@ -203,7 +203,7 @@ describe('POST /v1/sessions — sign in', () => {
     const p = await person(h, f.org.id);
     const { res } = await signIn(h, p.email, p.password, headers);
     expect(res.status).toBe(403);
-    expect((await read(res)).error.code).toBe('CROSS_SITE_REQUEST');
+    expect((await read(res)).error).toMatchObject({ code: 'CROSS_SITE_REQUEST', message: 'Sign in from the MTB3A portal itself' });
   });
 
   it('accepts Sec-Fetch-Site: same-origin without an Origin header', async () => {
@@ -351,7 +351,7 @@ describe('DELETE /v1/sessions/current — sign out', () => {
     const { token } = await signIn(h, p.email, p.password);
     const res = await h.app.request('/v1/sessions/current', { method: 'DELETE', headers: withSession(token, { origin: 'https://evil.example' }) });
     expect(res.status).toBe(403);
-    expect((await read(res)).error.code).toBe('CROSS_SITE_REQUEST');
+    expect((await read(res)).error).toMatchObject({ code: 'CROSS_SITE_REQUEST', message: 'This request must come from the MTB3A portal itself' });
     expect((await h.app.request('/v1/me', { headers: withSession(token) })).status).toBe(200);
   });
 });

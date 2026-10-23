@@ -76,7 +76,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
     }),
     async (c) => {
       if (!isSamePortalOrigin(c.req, settings)) {
-        throw new ApiError('CROSS_SITE_REQUEST', 'Sign in from the Mutaba3a portal itself');
+        throw new ApiError('CROSS_SITE_REQUEST', 'Sign in from the MTB3A portal itself');
       }
       const now = c.get('now')();
       const ip = await ipLimiter.check(`sign-in:${requestClientIp((name) => c.req.header(name), settings)}`, now);
