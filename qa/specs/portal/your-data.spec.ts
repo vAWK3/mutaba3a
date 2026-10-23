@@ -84,7 +84,7 @@ test('Signed in, download my records from Your data, with progress, as one expor
 
   await step('The download is one export zip with both profiles and the receipt file, and a toast says so', async () => {
     const download = await downloading;
-    expect(download.suggestedFilename()).toMatch(/^mutaba3a-export-\d{4}-\d{2}-\d{2}\.zip$/);
+    expect(download.suggestedFilename()).toMatch(/^mtb3a-export-\d{4}-\d{2}-\d{2}\.zip$/);
     const zip = await JSZip.loadAsync(await (await import('node:fs/promises')).readFile((await download.path())!));
     const records = JSON.parse(await zip.file('records.json')!.async('string')) as { kind: string; origin: string; maps: { orgs: { $map: Array<[string, unknown]> } } };
     expect(records.kind).toBe(RECORDS_FILE_KIND);

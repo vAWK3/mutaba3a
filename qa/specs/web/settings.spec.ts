@@ -86,7 +86,7 @@ test('Your data exports one business', { tag: '@web.settings.export' }, async ({
     // CSV is the format the dialog picks first
     const download = page.waitForEvent('download');
     await dialog.getByRole('button', { name: 'Export Default Profile' }).click();
-    expect((await download).suggestedFilename()).toMatch(/^mutaba3a-Default-Profile-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect((await download).suggestedFilename()).toMatch(/^mtb3a-Default-Profile-\d{4}-\d{2}-\d{2}\.csv$/);
   });
 });
 

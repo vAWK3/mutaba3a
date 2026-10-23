@@ -300,7 +300,7 @@ test('Download my records, clear the site\'s data, restore the file, and every r
     const downloading = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download my records' }).click();
     const download = await downloading;
-    expect(download.suggestedFilename()).toMatch(/^mutaba3a-records-\d{4}-\d{2}-\d{2}\.zip$/);
+    expect(download.suggestedFilename()).toMatch(/^mtb3a-records-\d{4}-\d{2}-\d{2}\.zip$/);
     file = await download.path();
     const zip = await JSZip.loadAsync(fs.readFileSync(file));
     expect(JSON.parse(await zip.file('records.json')!.async('string')).kind).toBe('mutaba3a-local-records');
