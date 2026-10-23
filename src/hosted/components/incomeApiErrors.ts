@@ -102,7 +102,6 @@ export function mapSettleError(error: unknown): MappedError {
     }
     if (reason === 'DATE_INVALID') return { fields: [{ field: 'paidAt', key: dateKey(apiError) }] };
     if (reason === 'RECEIVABLE_NOT_OPEN') return { fields: [], toast: 'hosted.settle.errors.gone', reread: true };
-    if (reason === 'RECEIVABLE_NOT_YET_DATED') return { fields: [], toast: 'hosted.settle.errors.notYetDated', reread: true };
   }
   if (apiError.code === 'NOT_FOUND') return { fields: [], toast: 'hosted.settle.errors.gone', reread: true };
   if (apiError.code === 'CONFLICT') return { fields: [], toast: 'hosted.settle.errors.changed', reread: true };
@@ -118,8 +117,6 @@ export function mapRedateError(error: unknown, kind: 'owed' | 'payment'): Mapped
   if (early) return early;
   const apiError = error as ApiError;
   if (apiError.code === 'VALIDATION_FAILED' && apiErrorReason(apiError) === 'DATE_INVALID') return { fields: [{ field: 'date', key: dateKey(apiError, kind === 'owed') }] };
-  // MUT-392 review: money applied to the Owed (here, a payment that landed since the drawer read it) pins it to today.
-  if (apiError.code === 'CONFLICT' && apiErrorReason(apiError) === 'MONEY_APPLIED') return { fields: [{ field: 'date', key: 'hosted.redate.moneyApplied' }], reread: true };
   if (apiError.code === 'CONFLICT') return { fields: [], toast: 'hosted.redate.conflict', reread: true };
   // The re-read then shows "no longer available" (the record went, or the drawer can no longer change it).
   if (apiError.code === 'NOT_FOUND') return { fields: [], toast: 'hosted.redate.gone', reread: true };

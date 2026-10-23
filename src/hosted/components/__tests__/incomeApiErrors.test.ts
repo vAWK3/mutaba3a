@@ -62,7 +62,6 @@ describe('mapSettleError (MUT-133)', () => {
 
   it('toasts and re-reads when the entry is gone, closed or changed', () => {
     expect(mapSettleError(v('RECEIVABLE_NOT_OPEN'))).toEqual({ fields: [], toast: 'hosted.settle.errors.gone', reread: true });
-    expect(mapSettleError(v('RECEIVABLE_NOT_YET_DATED', { postingDate: '2026-11-11' }))).toEqual({ fields: [], toast: 'hosted.settle.errors.notYetDated', reread: true });
     expect(mapSettleError(new ApiError(404, 'NOT_FOUND', 'x'))).toEqual({ fields: [], toast: 'hosted.settle.errors.gone', reread: true });
     expect(mapSettleError(new ApiError(409, 'CONFLICT', 'x', { reason: 'VERSION_MISMATCH' }))).toEqual({ fields: [], toast: 'hosted.settle.errors.changed', reread: true });
   });
@@ -101,8 +100,6 @@ describe('income error maps: the remaining routes (MUT-24 §C)', () => {
   it('re-date: network, a stale version, a row that went away, and anything unowned', () => {
     expect(mapRedateError(new ApiError(0, 'NETWORK', 'x'), 'payment').toast).toBe('hosted.income.errors.network');
     expect(mapRedateError(new ApiError(409, 'CONFLICT', 'x'), 'payment')).toEqual({ fields: [], toast: 'hosted.redate.conflict', reread: true });
-    // MUT-392 review: money applied to an Owed pins it to today; said under the date, with a re-read.
-    expect(mapRedateError(new ApiError(409, 'CONFLICT', 'x', { reason: 'MONEY_APPLIED' }), 'owed')).toEqual({ fields: [{ field: 'date', key: 'hosted.redate.moneyApplied' }], reread: true });
     expect(mapRedateError(new ApiError(404, 'NOT_FOUND', 'x'), 'payment')).toEqual({ fields: [], toast: 'hosted.redate.gone', reread: true });
     expect(mapRedateError(v('AMOUNT_INVALID'), 'payment')).toEqual({ fields: [], toast: 'hosted.income.errors.saveFailed' });
   });

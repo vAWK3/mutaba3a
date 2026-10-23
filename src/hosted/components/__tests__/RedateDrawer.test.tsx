@@ -137,6 +137,16 @@ describe('RedateDrawer — an Owed entry (?income=)', () => {
     expect(api.patches()[0]!.body).toEqual({ occurredOn: '2026-12-01' });
   });
 
+  it('moves a part-paid Owed into the future too: nothing is refused once money moves (MUT-392 D2)', async () => {
+    const api = stub({ getOwed: () => json(owed({ paid: '100.00', status: 'PARTIALLY_PAID' })), patch: () => json({ id: R, kind: 'owed', occurredOn: '2026-11-10', version: 4 }) });
+    const { user, onClose } = renderDrawer('owed');
+    expect((await dateInput()).max).not.toBe('2026-10-14');
+    await setDate(user, '2026-11-10');
+    await user.click(save());
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(api.patches()[0]!.body).toEqual({ occurredOn: '2026-11-10' });
+  });
+
   it('refuses an Owed more than ten years ahead before asking the server (MUT-392)', async () => {
     const api = stub();
     const { user, onClose } = renderDrawer('owed');
