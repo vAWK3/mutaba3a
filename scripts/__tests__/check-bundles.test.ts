@@ -63,7 +63,7 @@ describe('hosted bundle rules', () => {
     expect(findForbidden(code, HOSTED_RULES)).not.toEqual([]);
   });
 
-  it.each(['Sign up', 'sign-up', 'Create account', 'Forgot password?', 'Reset password', 'Invite a colleague', 'إنشاء حساب', 'نسيت كلمة المرور', 'إعادة تعيين', 'دعوة', 'اشترك الآن'])(
+  it.each(['Sign up', 'sign-up', 'Create account', 'Forgot password?', 'Reset password', 'Invite a colleague', 'إنشاء حساب', 'نسيت كلمة المرور', 'إعادة تعيين', 'دعوة'])(
     'flags the self-service affordance "%s", case-insensitively',
     (copy) => {
       expect(findForbidden(`label:"${copy}"`, HOSTED_RULES)).not.toEqual([]);
@@ -74,6 +74,10 @@ describe('hosted bundle rules', () => {
     expect(findForbidden('persist(s,{name:"mutaba3a-active-profile"})', HOSTED_RULES).map((f) => f.rule)).toEqual(['app profile store']);
     expect(findForbidden('{to:"/clients/$clientId",params:p}', HOSTED_RULES).map((f) => f.rule)).toEqual(['app saved-flash route']);
     expect(findForbidden('{path:"/clients/$customerId"}', HOSTED_RULES)).toEqual([]);
+  });
+
+  it('allows the billing copy: a firm subscribes from Settings › Billing (MUT-362, ADR-170)', () => {
+    expect(findForbidden('"الاشتراك في متابعة","اشترك الآن"', HOSTED_RULES)).toEqual([]);
   });
 
   it('does not mistake "sign in" for "sign up"', () => {

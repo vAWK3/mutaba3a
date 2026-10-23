@@ -38,7 +38,8 @@ export const LOCAL_RULES: Rule[] = [
 /**
  * The portal offers no self-service account door, in either language, and
  * carries no Dexie or service worker. `تسجيل` alone is allowed: `تسجيل الدخول`
- * is "sign in". IndexedDB is allowed since ADR-097, but only in the lazy local
+ * is "sign in". `اشترك` is allowed since MUT-362 (ADR-170): a firm subscribes
+ * from Settings › Billing; the account door itself stays closed. IndexedDB is allowed since ADR-097, but only in the lazy local
  * backend: see `localBackendInEntryGraph`.
  */
 export const HOSTED_RULES: Rule[] = [
@@ -53,7 +54,6 @@ export const HOSTED_RULES: Rule[] = [
   { name: 'ar: forgot', pattern: /نسيت/ },
   { name: 'ar: reset', pattern: /إعادة تعيين/ },
   { name: 'ar: invite', pattern: /دعوة/ },
-  { name: 'ar: subscribe', pattern: /اشترك/ },
   // MUT-91: the portal imports the app's after-save store; nothing of the app's
   // profile store or its Show routes may come along with it.
   { name: 'app profile store', pattern: /mutaba3a-active-profile/ },
