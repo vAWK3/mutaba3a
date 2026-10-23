@@ -149,6 +149,7 @@ const DARK: ThemeState = THEME_STATES['OS dark'];
 const STATES = Object.entries(THEME_STATES) as [string, ThemeState][];
 
 const kebab = (key: string) => key.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`);
+const camel = (key: string) => key.replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
 const squash = (value: string) => value.replace(/\s+/g, ' ').trim();
 
 function channelsClose(actual: string, expected: string): boolean {
@@ -322,6 +323,29 @@ describe('drift', () => {
     expect(Object.fromEntries(css.map((name) => [name, tokens.px(name)]))).toEqual(
       Object.fromEntries(tokensJson.space.map((px) => [`--m-space-${px}`, px])),
     );
+  });
+
+  it('the wordmark lockup tokens equal the JSON both ways (MUT-402 D2)', () => {
+    const tokens = new Tokens(brand, LIGHT);
+    const { printInk, ...ratios } = tokensJson.wordmark;
+    const PX = new Set(['minHeight', 'separatorMin']);
+    const expected = Object.fromEntries(Object.entries(ratios).map(([key, value]) => [`--m-wordmark-${kebab(key)}`, value]));
+    const css = tokens.names().filter((name) => name.startsWith('--m-wordmark-') && name !== '--m-wordmark-print-ink');
+    const actual = Object.fromEntries(
+      css.map((name) => [name, PX.has(camel(name.slice('--m-wordmark-'.length))) ? tokens.px(name) : Number(tokens.resolve(name))]),
+    );
+    expect(actual).toEqual(expected);
+    expect(squash(tokens.raw('--m-wordmark-print-ink'))).toBe(printInk.oklch);
+  });
+
+  it('the print ink is the light ink in every theme, so a dark-theme printout stays dark on paper (MUT-402 D5)', () => {
+    expect(tokensJson.wordmark.printInk).toEqual(tokensJson.color.ink);
+    for (const state of [LIGHT, DARK]) expect(squash(new Tokens(brand, state).raw('--m-wordmark-print-ink'))).toBe(tokensJson.color.ink.oklch);
+  });
+
+  it('the logotype aspect equals the wordmark.svg viewBox (MUT-402 D2)', () => {
+    const [, , width, height] = /viewBox="([\d.\s]+)"/.exec(readFileSync(repoPath('src/assets/brand/wordmark.svg'), 'utf8'))![1].split(/\s+/).map(Number);
+    expect(tokensJson.wordmark.aspect).toBeCloseTo(width / height, 3);
   });
 
   it('the font roles name the JSON faces first', () => {

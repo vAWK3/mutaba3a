@@ -1,0 +1,96 @@
+/*
+ * The MTB3A lockup (MUT-402; kit: docs/brand/wordmark/README.md).
+ *
+ * M is the mark size, set only by Wordmark's markSize prop as --wordmark-mark (in px). H, the
+ * logotype height, is 0.40 M. It is declared on the lockup and on each name, never on :root:
+ * var() resolves where the property is declared, so a :root H would freeze every surface at the
+ * default (OV-8). Without a Wordmark around it, M defaults to the kit's minimum (H = 12px, M = 30px).
+ * Everything paints in currentColor, so the two names and the dot share one colour in every
+ * theme, link state and forced-colours palette (design D6, D11, D14).
+ */
+.wordmark,
+.logotype,
+.brand-name-ar,
+.wordmark-separator {
+  --wordmark-h: calc(var(--wordmark-mark, calc(var(--m-wordmark-min-height) / var(--m-wordmark-logotype-to-mark))) * var(--m-wordmark-logotype-to-mark));
+}
+
+/* 0.60 H between every item: mark to name, and each name to the dot (the kit's spacing, OV-9) */
+.wordmark {
+  gap: calc(var(--wordmark-h) * var(--m-wordmark-gap));
+}
+
+/* The outlined logotype, one stencil (MUT-401 D7). The box always has its full size, so the late
+   mask on a cold load shifts nothing, and an unloaded mask paints nothing (design D4, D9). */
+.logotype {
+  display: inline-block;
+  flex: none;
+  height: var(--wordmark-h);
+  width: calc(var(--wordmark-h) * var(--m-wordmark-aspect));
+  background-color: currentColor;
+  -webkit-mask-image: url("../../assets/brand/wordmark.svg");
+  mask-image: url("../../assets/brand/wordmark.svg");
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
+/* متابعة sets its own type, so nothing the lockup inherits can change it: Bold, untracked
+   (negative tracking breaks Arabic joining), at 1.25 H (design D8) */
+.brand-name-ar {
+  font-family: var(--font-heading-ar);
+  font-size: calc(var(--wordmark-h) * var(--m-wordmark-arabic-size));
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+/* The bilingual separator: a round markDot, 0.16 H with a 3px floor (design D10) */
+.wordmark-separator {
+  flex: none;
+  width: max(calc(var(--wordmark-h) * var(--m-wordmark-separator)), var(--m-wordmark-separator-min));
+  height: max(calc(var(--wordmark-h) * var(--m-wordmark-separator)), var(--m-wordmark-separator-min));
+  border-radius: var(--radius-pill);
+  background-color: var(--mark-dot);
+}
+
+@media (forced-colors: active) {
+  .logotype {
+    background-color: currentColor;
+    forced-color-adjust: none;
+  }
+
+  .wordmark-separator {
+    background-color: currentColor;
+    forced-color-adjust: none;
+  }
+
+  /* Images keep their colours, so the mark's light petals fade on a dark high-contrast canvas.
+     A ring on its square box (never border-radius: the mark is not a disc, eng re-run R2). */
+  .wordmark .wordmark-mark {
+    outline: 1px solid CanvasText;
+    outline-offset: 2px;
+  }
+}
+
+/* Paper, not the screen theme: the whole lockup prints in the light ink (design D5, R4) */
+@media print {
+  .wordmark {
+    color: var(--m-wordmark-print-ink);
+  }
+
+  .logotype {
+    background-color: currentColor;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .wordmark-separator {
+    background-color: currentColor;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

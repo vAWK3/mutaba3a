@@ -200,6 +200,20 @@
       "blur": 6
     }
   },
+  "wordmark": {
+    "logotypeToMark": 0.4,
+    "gap": 0.6,
+    "clearSpace": 1,
+    "minHeight": 12,
+    "aspect": 5.104,
+    "arabicSize": 1.25,
+    "separator": 0.16,
+    "separatorMin": 3,
+    "printInk": {
+      "oklch": "oklch(0.33 0.05 300)",
+      "hex": "#392F4B"
+    }
+  },
   "colorDark": {
     "canvas": {
       "oklch": "oklch(0.24 0.035 300)",
