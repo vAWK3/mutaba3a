@@ -187,6 +187,23 @@ export function describeLedgerStoreSignupContract(name: string, makeStore: () =>
       expect((await redeem(h.tokenDigest))?.emailVerifiedAt).toBeNull();
     });
 
+    it('a mailed link cancels only earlier mailed links; the operator’s open link stays, and redeeming either closes the other', async () => {
+      const store = await makeStore();
+      const { user } = await operatorCreate(store, email());
+      const base = { userId: user.id, purpose: 'RESET' as const, at: at(1), expiresAt: at(9), lock: false, audit: [] };
+      const operator = await store.accountSetup.issue({ ...base, tokenDigest: digest() });
+      const firstMailed = await store.accountSetup.issue({ ...base, tokenDigest: digest(), mailed: true });
+      const secondMailed = await store.accountSetup.issue({ ...base, tokenDigest: digest(), mailed: true, at: at(2) });
+      expect((await store.accountSetup.findByDigest(operator.tokenDigest))?.cancelledAt).toBeNull();
+      expect((await store.accountSetup.findByDigest(firstMailed.tokenDigest))?.cancelledAt?.toISOString()).toBe(at(2).toISOString());
+      expect(await store.accountSetup.redeem({ tokenDigest: secondMailed.tokenDigest, passwordHash: HASH, at: at(3), audit: [], terms: TERMS, termsAudit: [] })).not.toBeNull();
+      expect((await store.accountSetup.findByDigest(operator.tokenDigest))?.cancelledAt?.toISOString()).toBe(at(3).toISOString());
+      // An operator link still replaces every open link, mailed ones included.
+      const mailed = await store.accountSetup.issue({ ...base, tokenDigest: digest(), mailed: true, at: at(4) });
+      await store.accountSetup.issue({ ...base, tokenDigest: digest(), at: at(5) });
+      expect((await store.accountSetup.findByDigest(mailed.tokenDigest))?.cancelledAt?.toISOString()).toBe(at(5).toISOString());
+    });
+
     it('prune deletes only unredeemed SIGNUP links that expired before the cutoff', async () => {
       const store = await makeStore();
       const stale = await store.accountSetup.issueSignup(issueInput(email(), { expiresAt: at(3) }));

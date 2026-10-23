@@ -218,19 +218,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 }
 
 /**
- * MUT-366 (D7): production verifies with Cloudflare once a link can be mailed (any real mailer, or signup on), and
- * a test secret there would let every bot through. Elsewhere the always-pass test secret stands in.
+ * MUT-366 (D7, review #6): a server that really mails links (MAILER=resend, any environment) or opens signup in
+ * production must name its secret, and production never takes a test secret, which would let every bot through.
+ * Development and tests fall back to the always-pass test secret.
  */
 function turnstileSecret(config: z.infer<typeof envSchema>): string | undefined {
   const secret = config.TURNSTILE_SECRET;
-  if (config.NODE_ENV !== 'production') return secret ?? TURNSTILE_TEST_SECRETS.pass;
-  if (secret && isTurnstileTestSecret(secret)) {
+  const production = config.NODE_ENV === 'production';
+  if (production && secret && isTurnstileTestSecret(secret)) {
     throw new ConfigError('Invalid configuration:\n  TURNSTILE_SECRET: a Cloudflare test secret would let every request through in production');
   }
-  if (!secret && (config.MAILER !== 'noop' || config.SELF_SIGNUP_ENABLED)) {
-    throw new ConfigError('Invalid configuration:\n  TURNSTILE_SECRET: signup and recovery mail links, so production needs the Turnstile secret once MAILER is on');
+  const mailsLinks = config.MAILER === 'resend' || (production && (config.MAILER !== 'noop' || config.SELF_SIGNUP_ENABLED));
+  if (!secret && mailsLinks) {
+    throw new ConfigError('Invalid configuration:\n  TURNSTILE_SECRET: signup and recovery mail links, so a server that sends mail needs the Turnstile secret');
   }
-  return secret;
+  return secret ?? (production ? undefined : TURNSTILE_TEST_SECRETS.pass);
 }
 
 /** MUT-359: the mail refusals (ticket, D7, D14, D18, D20) and the caps' defaults. */

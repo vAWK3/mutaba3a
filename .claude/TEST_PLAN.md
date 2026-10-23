@@ -3554,5 +3554,7 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Config | `config.test.ts` | floor defaults and bounds; test secret default outside production; production refuses a test secret and a missing one with mail on |
 | Pins | `no-self-registration.test.ts`, `route-security.test.ts`, `store-guard.test.ts`, `routes-m*.test.ts` | the two public operations as reviewed exceptions; signup 404 while off; the new store methods operator-only; API 1.55.0-mut366 |
 | Terraform | `terraform/tests/email.tftest.hcl` | Turnstile secret and grant exist empty; `SELF_SIGNUP_ENABLED=false` by default; mounted with resend; signup on needs resend |
+| Code review fixes | `routes-self-service.test.ts` "code review fixes", `store-contract-signup.ts`, `turnstile.test.ts`, `config.test.ts` | #1 the Turnstile key is never the client's `X-Request-Id`; #2 recovery leaves the operator link valid, redeeming one supersedes the other (store: mailed cancels mailed only, operator cancels all); #3 a 600 ms provider doesn't hold the answer past the floor; #4 a store failure on either branch answers 202 after the floor; #5 no or empty action fails; #6 staging with resend needs a secret |
+| Local snapshot | `src/hosted/local/__tests__/{format-fingerprint,migrations}.test.ts` | `people.emailVerifiedAt` in the fingerprint (fixture verifies an address through a mailed link); 3 → 4 adds it as null |
 | Release-QA | none: server-only. MUT-368's `signup.*`/`recover.*` portal specs drive these routes through `GET /admin/v1/dev-outbox` | — |
 

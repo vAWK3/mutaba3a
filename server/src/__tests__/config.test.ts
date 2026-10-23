@@ -339,6 +339,8 @@ describe('loadConfig — mail (MUT-359)', () => {
     RESEND_API_KEY: 're_test_mut359',
     RESEND_WEBHOOK_SECRET: 'whsec_bXV0MzU5LXNlY3JldA==',
     MAIL_DAILY_CAP: '90',
+    // MUT-366 (review #6): a server that really sends mail names its Turnstile secret (here, Cloudflare's test one).
+    TURNSTILE_SECRET: '1x0000000000000000000000000000000AA',
   };
 
   it('defaults to no mailer, signup off, a 500 cap with a 10 % security reserve and 10 per recipient', () => {
@@ -423,5 +425,10 @@ describe('loadConfig — signup and recovery (MUT-366)', () => {
     expect(() => loadConfig({ ...production, ...resend })).toThrow('TURNSTILE_SECRET');
     expect(loadConfig({ ...production, ...resend, TURNSTILE_SECRET: LIVE_TURNSTILE }).TURNSTILE_SECRET).toBe(LIVE_TURNSTILE);
     expect(() => loadConfig({ ...production, ...resend, TURNSTILE_SECRET: '1x0000000000000000000000000000000AA' })).toThrow('TURNSTILE_SECRET');
+  });
+
+  it('any server that really sends mail needs an explicit Turnstile secret, staging included (review #6)', () => {
+    expect(() => loadConfig({ ...base, NODE_ENV: 'staging', ...resend })).toThrow('TURNSTILE_SECRET');
+    expect(loadConfig({ ...base, NODE_ENV: 'staging', ...resend, TURNSTILE_SECRET: LIVE_TURNSTILE }).TURNSTILE_SECRET).toBe(LIVE_TURNSTILE);
   });
 });

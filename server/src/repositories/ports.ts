@@ -1578,15 +1578,16 @@ export interface RedeemSignupLinkInput {
 
 export interface AccountSetupRepository {
   /**
-   * One transaction under a lock on the user's row: cancels the user's open links,
-   * then creates this one, so a person never has two open links. ForeignKeyViolation on an unknown user.
+   * One transaction under a lock on the user's row: cancels the user's open links, then creates this one. MUT-366:
+   * a `mailed` link cancels only earlier mailed links, so a person holds at most one open operator link and one open
+   * mailed link, and a stranger's recovery request never kills the operator's. ForeignKeyViolation on an unknown user.
    */
   issue(input: IssueSetupLinkInput): Promise<PersonSetupLinkRecord>;
   findByDigest(tokenDigest: string): Promise<AccountSetupTokenRecord | null>;
   /**
    * One transaction: claims the link only if it is unused, not cancelled, not expired at `at`, and its
-   * user is ACTIVE; then sets the password (clearing any lockout), revokes every session ('password_set')
-   * and appends `audit`; a mailed link also stamps `emailVerifiedAt` (MUT-366). Null when the claim loses
+   * user is ACTIVE; then sets the password (clearing any lockout), cancels the person's other open links (MUT-366),
+   * revokes every session ('password_set') and appends `audit`; a mailed link also stamps `emailVerifiedAt`. Null when the claim loses
    * (a SIGNUP link never matches here) — nothing is written; the caller reads the link again to say why.
    * Of two concurrent redeems of one link, exactly one wins.
    */

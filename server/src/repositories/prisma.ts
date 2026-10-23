@@ -447,7 +447,9 @@ export class PrismaLedgerStore implements LedgerStore {
             await tx.user.update({ where: { id: input.userId }, data: { passwordHash: null, passwordChangedAt: input.at, updatedAt: input.at } });
             await tx.session.updateMany({ where: { userId: input.userId, revokedAt: null }, data: { revokedAt: input.at, revokedReason: 'setup_link_lock' } });
           }
-          await tx.accountSetupToken.updateMany({ where: { userId: input.userId, usedAt: null, cancelledAt: null }, data: { cancelledAt: input.at } });
+          // MUT-366 (review #2): a mailed (recovery) link replaces only earlier mailed links, so a stranger asking for a
+          // reset can't kill the operator's open link; an operator link replaces all.
+          await tx.accountSetupToken.updateMany({ where: { userId: input.userId, usedAt: null, cancelledAt: null, ...(input.mailed ? { mailed: true } : {}) }, data: { cancelledAt: input.at } });
           const row = await tx.accountSetupToken.create({
             data: { userId: input.userId, tokenDigest: input.tokenDigest, purpose: input.purpose, mailed: input.mailed ?? false, createdAt: input.at, expiresAt: input.expiresAt },
           });
@@ -470,6 +472,8 @@ export class PrismaLedgerStore implements LedgerStore {
             data: { usedAt: input.at },
           });
           if (count === 0) return null;
+          // MUT-366 (review #2): the password is set; any other open link (operator or mailed) is spent with it.
+          await tx.accountSetupToken.updateMany({ where: { userId, usedAt: null, cancelledAt: null, id: { not: link.id } }, data: { cancelledAt: input.at } });
           const user = await tx.user.update({
             where: { id: userId },
             data: {

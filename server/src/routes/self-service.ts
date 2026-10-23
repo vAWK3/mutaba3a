@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { generateSetupToken, setupLinkOrigin, setupUrl } from '../auth/account-setup.js';
@@ -41,6 +42,11 @@ export interface SelfServiceOptions {
 }
 
 const HOUR_MS = 3_600_000;
+
+/** A branch's mail, still sending: wrapped, because an async function would otherwise wait for it. */
+interface PendingMail {
+  sending: Promise<void>;
+}
 
 /** The production budgets, and Turnstile's always-pass test secret: index.ts passes the configured verifier. */
 export function defaultSelfServiceOptions(): SelfServiceOptions {
@@ -90,7 +96,9 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
 
   /** The bot check, then the address's budgets: a request without a passing token never spends a person's budget. */
   async function checkAndBudget(c: Context<AppEnv>, input: { ip: string; email: string; token: string; action: TurnstileAction; now: Date }): Promise<void> {
-    const passed = await options.turnstile.verify(input.token, { ip: input.ip === 'unknown' ? null : input.ip, action: input.action, idempotencyKey: c.get('requestId') });
+    // Review #1: the key is ours. The request id comes from the client's X-Request-Id, and Cloudflare answers a repeated
+    // (token, key) pair with the first verdict, so a client-chosen key would let one solved token pass again and again.
+    const passed = await options.turnstile.verify(input.token, { ip: input.ip === 'unknown' ? null : input.ip, action: input.action, idempotencyKey: randomUUID() });
     if (!passed) throw new ApiError('CHECK_FAILED', 'The check didn’t pass; try again');
     const key = `self-service:${input.email}`;
     refuseIfLimited(c, await options.addressMinuteLimiter.check(key, input.now));
@@ -107,7 +115,20 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
     }
   }
 
-  async function answer(c: Context<AppEnv>, startedMs: number, floorMs: number) {
+  /**
+   * Runs one branch so that nothing it does can change the answer (review #3, #4). Its store work is awaited, and a
+   * failure is logged, never thrown: only one branch reaches each store call, so an early 500 would name the branch.
+   * Its mail is given until the floor and then left to finish in the background: a slow provider (up to Resend's 5 s
+   * timeout) would otherwise hold only the branches that mail past the floor.
+   */
+  async function runBranch(c: Context<AppEnv>, startedMs: number, floorMs: number, branch: () => Promise<PendingMail | null>) {
+    let mail: Promise<void> | null = null;
+    try {
+      mail = (await branch())?.sending ?? null;
+    } catch (err) {
+      logger.error({ err, path: c.req.path, requestId: c.get('requestId') }, 'self-service branch failed; answered as usual');
+    }
+    if (mail) await Promise.race([mail, clock.sleep(Math.max(0, startedMs + floorMs - clock.now()))]);
     const overshootMs = await answerNoEarlierThan(startedMs, floorMs, clock);
     // R4: a branch slower than the floor can be told apart by its timing; say so, so the floor can be raised.
     if (overshootMs > 0) logger.warn({ path: c.req.path, floorMs, overshootMs }, 'self-service answer ran past its floor');
@@ -141,26 +162,25 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
       await checkAndBudget(c, { ip, email, token: body.turnstileToken, action: 'signup', now });
       // MUT-367 seam: the disposable / no-mail refusal (400 EMAIL_NOT_ACCEPTED) and the domain classification, which
       // the SIGNUP link stores, go here: before anything is issued, and for every address alike.
-      await signupBranch(c, { email, locale: body.locale, now });
-      return answer(c, startedMs, options.floors.signupMs);
+      return runBranch(c, startedMs, options.floors.signupMs, () => signupBranch(c, { email, locale: body.locale, now }));
     },
   );
 
-  async function signupBranch(c: Context<AppEnv>, input: { email: string; locale: UserLocale; now: Date }): Promise<void> {
+  /** The branch's store work; resolves to its mail, still sending, or null when it mails nothing. */
+  async function signupBranch(c: Context<AppEnv>, input: { email: string; locale: UserLocale; now: Date }): Promise<PendingMail | null> {
     // D15: a suppressed address gets nothing, not even a token.
-    if (await store.email.isSuppressed(input.email)) return;
+    if (await store.email.isSuppressed(input.email)) return null;
     const holder = await store.users.findByEmail(input.email);
     if (holder) {
       // D16: a disabled account is pointed nowhere (recovery can't help it).
-      if (holder.status !== 'ACTIVE') return;
-      await send({
+      if (holder.status !== 'ACTIVE') return null;
+      return { sending: send({
         to: holder.email,
         template: 'account-exists',
         locale: input.locale,
         vars: { signInLink: signInLinkOf(settings, c.req.url), recoverLink: `${origin(c)}/recover` },
         idempotencyKey: `account-exists:${holder.id}:${c.get('requestId')}`,
-      });
-      return;
+      }) };
     }
     const token = generateSetupToken();
     const link = await store.accountSetup.issueSignup({
@@ -170,13 +190,15 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
       at: input.now,
       expiresAt: new Date(input.now.getTime() + SELF_SERVICE_POLICY.signupLinkHours * HOUR_MS),
     });
-    await send({
-      to: input.email,
-      template: 'finish-signup',
-      locale: input.locale,
-      vars: { link: setupUrl(origin(c), token), validHours: SELF_SERVICE_POLICY.signupLinkHours },
-      idempotencyKey: `signup:${link.id}`,
-    });
+    return {
+      sending: send({
+        to: input.email,
+        template: 'finish-signup',
+        locale: input.locale,
+        vars: { link: setupUrl(origin(c), token), validHours: SELF_SERVICE_POLICY.signupLinkHours },
+        idempotencyKey: `signup:${link.id}`,
+      }),
+    };
   }
 
   app.openapi(
@@ -201,22 +223,21 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
       const body = c.req.valid('json');
       const email = normalizeEmail(body.email);
       await checkAndBudget(c, { ip, email, token: body.turnstileToken, action: 'recover', now });
-      await recoveryBranch(c, { email, locale: body.locale, now });
-      return answer(c, startedMs, options.floors.recoveryMs);
+      return runBranch(c, startedMs, options.floors.recoveryMs, () => recoveryBranch(c, { email, locale: body.locale, now }));
     },
   );
 
-  async function recoveryBranch(c: Context<AppEnv>, input: { email: string; locale: UserLocale | undefined; now: Date }): Promise<void> {
-    if (await store.email.isSuppressed(input.email)) return;
+  async function recoveryBranch(c: Context<AppEnv>, input: { email: string; locale: UserLocale | undefined; now: Date }): Promise<PendingMail | null> {
+    if (await store.email.isSuppressed(input.email)) return null;
     const person = await store.users.findByEmail(input.email);
     const purpose = person ? recoveryPurposeOf(person) : null;
-    if (!person || !purpose) return;
+    if (!person || !purpose) return null;
     const hours = purpose === 'RESET' ? SELF_SERVICE_POLICY.recoveryResetHours : SELF_SERVICE_POLICY.recoverySetupHours;
     const token = generateSetupToken();
     const expiresAt = new Date(input.now.getTime() + hours * HOUR_MS);
     let linkId: string;
     try {
-      // ADR-088 §3: no lock. The current password and sessions keep working until the link is used.
+      // ADR-088 §3: no lock. The current password, sessions and any operator link keep working until the link is used.
       const link = await store.accountSetup.issue({
         userId: person.id,
         tokenDigest: sessionDigest(settings.pepper, token),
@@ -230,16 +251,18 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
       linkId = link.id;
     } catch (err) {
       // Disabled between the read and the issue: the same as disabled before it.
-      if (err instanceof StateConflict) return;
+      if (err instanceof StateConflict) return null;
       throw err;
     }
-    await send({
-      to: person.email,
-      template: purpose === 'RESET' ? 'reset-password' : 'finish-setup',
-      locale: input.locale ?? person.locale,
-      vars: { link: setupUrl(origin(c), token), validHours: hours },
-      idempotencyKey: `recovery:${linkId}`,
-    });
+    return {
+      sending: send({
+        to: person.email,
+        template: purpose === 'RESET' ? 'reset-password' : 'finish-setup',
+        locale: input.locale ?? person.locale,
+        vars: { link: setupUrl(origin(c), token), validHours: hours },
+        idempotencyKey: `recovery:${linkId}`,
+      }),
+    };
   }
 
   /** `user.setup_link_issued`, as the operator's links are, but by the system on the person's request. */

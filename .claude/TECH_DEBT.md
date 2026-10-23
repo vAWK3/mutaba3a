@@ -43,12 +43,10 @@
 **Fix**: MUT-368 gives SIGNUP its own copy and sends the browser's currency and timezone (and an optional name) with the redeem.
 
 ### TD-212: Turnstile accepts a token whose widget named no action
-**Status**: Open
+**Status**: Resolved (2026-10-23, MUT-366 code review #5, before merge)
 **Ticket**: MUT-366 (D7)
 **Added**: 2026-10-23
-**Priority**: Low
-**Impact**: `createTurnstileVerifier` refuses a token minted for the other form, but accepts one whose action is empty, so a widget rendered without `action` still passes.
-**Fix**: once MUT-368 renders both widgets with `action: "signup"` / `"recover"`, require the action to match exactly.
+**Resolution**: `createTurnstileVerifier` now requires Cloudflare's `action` to equal the form's (`signup` / `recover`). MUT-368 must render both widgets with that action, or every check fails closed.
 
 ### TD-210: Arabic mail is sent from "MTB3A", not "متابعة"
 **Status**: Open

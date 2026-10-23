@@ -30,6 +30,7 @@ const generous = () => new SlidingWindowRateLimiter(1000);
 
 interface HarnessOptions {
   signupEnabled?: boolean;
+  turnstile?: TurnstileVerifier;
   transport?: MailTransport;
   ipLimiter?: RateLimiter;
   addressMinuteLimiter?: RateLimiter;
@@ -55,7 +56,7 @@ function harness(options: HarnessOptions = {}) {
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: false, trustedProxyHops: 1, deviceIdleDays: 30, deviceAbsoluteDays: 180, portalOrigin: PORTAL },
     selfService: {
       signupEnabled: options.signupEnabled ?? true,
-      turnstile: OK_ONLY,
+      turnstile: options.turnstile ?? OK_ONLY,
       ipLimiter: options.ipLimiter ?? generous(),
       addressMinuteLimiter: options.addressMinuteLimiter ?? generous(),
       addressDayLimiter: options.addressDayLimiter ?? generous(),
@@ -377,5 +378,68 @@ describe('POST /v1/account-recovery (MUT-366)', () => {
     const p = await provision(h);
     expect((await recover(h, p.email)).status).toBe(202);
     expect(lastMail(h, p.email).mail?.template).toBe('reset-password');
+  });
+});
+
+describe('code review fixes (MUT-366)', () => {
+  it('#1: the Turnstile idempotency key is the server’s own, never the client’s X-Request-Id', async () => {
+    const keys: string[] = [];
+    const recording: TurnstileVerifier = {
+      mode: 'live',
+      verify: async (token, context) => {
+        keys.push(context.idempotencyKey);
+        return token === 'ok';
+      },
+    };
+    const h = harness({ turnstile: recording });
+    const fixed = { ...SAME_ORIGIN, 'x-request-id': '11111111-1111-4111-8111-111111111111' };
+    await signup(h, address(), {}, fixed);
+    await recover(h, address(), {}, fixed);
+    expect(keys).toHaveLength(2);
+    expect(keys).not.toContain(fixed['x-request-id']);
+    expect(new Set(keys).size).toBe(2);
+  });
+
+  it('#2: a recovery request leaves the operator’s open link working; redeeming either closes the other', async () => {
+    const h = harness();
+    const p = await provision(h);
+    const issued = (await (await h.app.request(`/admin/v1/users/${p.id}/setup-link`, json({}, ADMIN))).json()) as Loose;
+    const operatorToken = setupTokenOf(issued.setupLink.url);
+    await recover(h, p.email);
+    const mailedToken = lastMail(h, p.email).token!;
+    expect(((await (await check(h, operatorToken)).json()) as Loose).state).toBe('valid');
+    expect(((await (await check(h, mailedToken)).json()) as Loose).state).toBe('valid');
+    expect((await redeem(h, mailedToken)).status).toBe(200);
+    expect(((await (await check(h, operatorToken)).json()) as Loose).state).toBe('superseded');
+  });
+
+  it('#3: a slow mail provider never holds the answer past the floor', async () => {
+    const slow: MailTransport = { kind: 'resend', deliver: () => new Promise((resolve) => setTimeout(() => resolve({ id: 'late' }), 600)) };
+    const h = harness({ transport: slow });
+    const p = await provision(h);
+    for (const request of [() => recover(h, p.email), () => signup(h, address())]) {
+      const a = await timed(request);
+      expect(a.res.status).toBe(202);
+      expect(a.elapsed).toBeLessThan(400);
+    }
+  });
+
+  it('#4: a store failure on one branch still answers the same 202 after the floor', async () => {
+    const h = harness();
+    const p = await provision(h);
+    const accountSetup = h.store.accountSetup as unknown as Record<string, unknown>;
+    accountSetup.issue = async () => {
+      throw new Error('database went away');
+    };
+    accountSetup.issueSignup = async () => {
+      throw new Error('database went away');
+    };
+    const r = await timed(() => recover(h, p.email));
+    expect(r.res.status).toBe(202);
+    expect(r.body).toEqual({ status: 'sent' });
+    expect(r.elapsed).toBeGreaterThanOrEqual(FLOORS.recoveryMs - 2);
+    const s = await timed(() => signup(h, address()));
+    expect(s.res.status).toBe(202);
+    expect(s.elapsed).toBeGreaterThanOrEqual(FLOORS.signupMs - 2);
   });
 });

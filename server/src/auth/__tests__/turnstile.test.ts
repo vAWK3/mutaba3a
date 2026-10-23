@@ -65,9 +65,10 @@ describe('Turnstile siteverify (MUT-366)', () => {
     expect(await createTurnstileVerifier({ secret: LIVE_SECRET, fetch, logger }).verify('t', CONTEXT)).toBe(false);
   });
 
-  it('fails closed on a token minted for another form', async () => {
-    const fetch = answering(200, { success: true, action: 'recover' });
-    expect(await createTurnstileVerifier({ secret: LIVE_SECRET, fetch, logger }).verify('t', CONTEXT)).toBe(false);
+  it('fails closed on a token minted for another form, or by a widget that named no action (review #5)', async () => {
+    for (const body of [{ success: true, action: 'recover' }, { success: true, action: '' }, { success: true }]) {
+      expect(await createTurnstileVerifier({ secret: LIVE_SECRET, fetch: answering(200, body), logger }).verify('t', CONTEXT)).toBe(false);
+    }
   });
 
   it('fails closed on a non-200 answer, a body that is not JSON, a network error and a timeout', async () => {

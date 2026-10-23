@@ -70,9 +70,8 @@ export function createTurnstileVerifier(options: { secret: string; fetch?: typeo
           return false;
         }
         const body = (await res.json()) as { success?: unknown; action?: unknown; 'error-codes'?: unknown };
-        if (body.success !== true) return false;
-        // A token minted for the other form is not this form's check. An empty action means the widget named none.
-        return typeof body.action !== 'string' || body.action === '' || body.action === context.action;
+        // A token minted for the other form, or by a widget that named no action, is not this form's check.
+        return body.success === true && body.action === context.action;
       } catch (err) {
         options.logger?.warn({ err }, 'turnstile siteverify failed');
         return false;

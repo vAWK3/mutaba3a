@@ -620,9 +620,11 @@ export class MemoryLedgerStore implements LedgerStore {
     return { user: { ...user }, memberships: memberships.map((m) => ({ ...m })), personalOrganization: { ...personalOrganization } };
   }
 
-  private cancelOpenSetupLinks(userId: string, at: Date): void {
+  private cancelOpenSetupLinks(userId: string, at: Date, options: { mailedOnly?: boolean; except?: string } = {}): void {
     for (const link of this.setupLinks.values()) {
-      if (link.userId === userId && link.usedAt === null && link.cancelledAt === null) link.cancelledAt = at;
+      if (link.userId !== userId || link.usedAt !== null || link.cancelledAt !== null || link.id === options.except) continue;
+      if (options.mailedOnly && !link.mailed) continue;
+      link.cancelledAt = at;
     }
   }
 
@@ -651,7 +653,8 @@ export class MemoryLedgerStore implements LedgerStore {
         Object.assign(person, { passwordHash: null, passwordChangedAt: input.at, updatedAt: input.at });
         this.revokeSessionsOf(person.id, 'setup_link_lock', input.at);
       }
-      this.cancelOpenSetupLinks(input.userId, input.at);
+      // MUT-366 (review #2): a mailed (recovery) link replaces only earlier mailed links; an operator link replaces all.
+      this.cancelOpenSetupLinks(input.userId, input.at, input.mailed ? { mailedOnly: true } : {});
       const record = this.storeSetupLink(input.userId, { tokenDigest: input.tokenDigest, purpose: input.purpose, expiresAt: input.expiresAt }, input.at, input.mailed ?? false);
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       return { ...record };
@@ -663,6 +666,8 @@ export class MemoryLedgerStore implements LedgerStore {
       const claimable = link && person && link.usedAt === null && link.cancelledAt === null && input.at < link.expiresAt && person.status === 'ACTIVE';
       if (!claimable) return null;
       link.usedAt = input.at;
+      // MUT-366 (review #2): the password is set; any other open link (operator or mailed) is spent with it.
+      this.cancelOpenSetupLinks(person.id, input.at, { except: link.id });
       Object.assign(person, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
       // MUT-366 (D18): a mailed link reached the person through their mailbox.
       if (link.mailed && person.emailVerifiedAt === null) person.emailVerifiedAt = input.at;

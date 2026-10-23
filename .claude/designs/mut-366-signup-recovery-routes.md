@@ -165,6 +165,19 @@ Test plan (every AC to a named test; written first):
 
 Failure modes: Turnstile down → 403 CHECK_FAILED (fails closed; recovery unavailable while Cloudflare is down, accepted); mail provider down → 202, logged (person retries after 60 s); DB error mid-redeem → transaction rolls back, 500, link still usable; two tabs redeem → one account, other 410. 0 critical gaps.
 
+## 11. Code review (qa-reconcile, independent reviewer) — fixed before merge
+
+| # | Finding | Fix | Decision |
+|---|---|---|---|
+| CR1 | HIGH: the Turnstile idempotency key was the client's `X-Request-Id`; Cloudflare repeats a verdict for a repeated (token, key), so one solved token could pass again and again | `randomUUID()` per check | — |
+| CR2 | MEDIUM: recovery cancelled the operator's open link (incl. a `--lock` link), against "nothing changes until used" | a mailed link cancels only earlier mailed links; any redeem cancels the person's other open links | **D19** — pending Basel |
+| CR3 | MEDIUM: the mail send could hold the account branch past the floor (Resend timeout 5 s) | the branch's mail is raced against the floor and finishes in the background | **D20** — pending Basel (a send may finish after the answer; Cloud Run may throttle it, TD-017's one instance) |
+| CR4 | LOW–MEDIUM: a store failure in one branch answered an early 500 | each branch's failure is logged at error and answered with the same 202 | **D21** — pending Basel (a failed request looks sent; the person retries after a minute) |
+| CR5 | LOW: Turnstile passed a token with no action | the action must match; TD-212 resolved | MUT-368 must render with `action` |
+| CR6 | LOW: staging with `MAILER=resend` fell back to the always-pass secret | any `MAILER=resend` server must name `TURNSTILE_SECRET` | — |
+
+Also found by the gates: the portal's local snapshot (MemoryLedgerStore) persists `people`, so `emailVerifiedAt` moved it to format 4 with a 3 → 4 migration (null).
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |

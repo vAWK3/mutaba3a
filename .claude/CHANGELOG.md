@@ -45,8 +45,11 @@
 - `SlidingWindowRateLimiter` takes a window length (default 60 s).
 - `no-self-registration.test.ts` and `route-security.test.ts` list the two new public operations as reviewed exceptions, and pin signup's 404 while off.
 - The portal's setup page accepts the `SIGNUP` purpose (setup copy until MUT-368).
+- A mailed (recovery) link cancels only earlier mailed links; redeeming any link cancels the person's other open links (code review #2).
+- The portal's local snapshot format is 4: `people` gain `emailVerifiedAt` (3 → 4 migration, null).
+- Code review: Turnstile's idempotency key is server-generated and its action must match; mail is raced against the floor; a branch's store failure still answers 202; `MAILER=resend` needs `TURNSTILE_SECRET` in every environment.
 
-**Files:** `server/src/auth/{self-service,turnstile,account-setup,store-guard}.ts`, `server/src/routes/{self-service,account-setup,admin-users}.ts`, `server/src/{app,config,errors,schemas,index,rate-limit,terms-acceptance}.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/records-file/export.ts`, `server/prisma/**`, `server/infrastructure/terraform/**`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/pages/auth/SetupPage.tsx`, docs.
+**Files:** `src/hosted/local/{migrations/index.ts,__tests__/**}`, `server/src/auth/{self-service,turnstile,account-setup,store-guard}.ts`, `server/src/routes/{self-service,account-setup,admin-users}.ts`, `server/src/{app,config,errors,schemas,index,rate-limit,terms-acceptance}.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/records-file/export.ts`, `server/prisma/**`, `server/infrastructure/terraform/**`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/pages/auth/SetupPage.tsx`, docs.
 
 ## [Unreleased] - 2026-10-23 — The server can send transactional mail through Resend (MUT-359, ADR-174)
 
