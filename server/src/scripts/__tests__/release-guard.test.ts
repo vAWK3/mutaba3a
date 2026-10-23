@@ -398,3 +398,76 @@ describe('deploy.sh wires error reporting (MUT-148)', () => {
   });
 });
 
+
+/** MUT-359 (D22): guard_mailer_release keeps a checkout without mailer = "resend" from switching mail off. */
+type MailerOpts = { mailer?: string; consoleFails?: boolean; env?: string; skip?: string };
+
+function mailerGuard(o: MailerOpts) {
+  const bin = join(dir, 'bin');
+  const log = join(dir, 'calls.log');
+  spawnSync('mkdir', ['-p', bin]);
+  writeFileSync(join(bin, 'terraform'), [
+    '#!/bin/bash',
+    `echo "terraform $*" >> "${log}"`,
+    `case "$1" in console) cat >/dev/null; ${o.consoleFails ? 'echo "Error: boom" >&2; exit 1' : `printf '"%s"\\n' '${o.mailer ?? 'noop'}'`} ;; esac`,
+    'exit 0',
+  ].join('\n') + '\n');
+  const env = o.env ?? 'PORT;DATABASE_URL;MAILER';
+  writeFileSync(join(bin, 'gcloud'), [
+    '#!/bin/bash',
+    `echo "gcloud $*" >> "${log}"`,
+    'case "$*" in',
+    `  *"run services describe"*"env[].name"*) ${env === 'missing' ? 'echo "ERROR: Cannot find service [mutaba3a-api]" >&2; exit 1' : env === 'error' ? 'echo "ERROR: PERMISSION_DENIED" >&2; exit 1' : `echo '${env}'`} ;;`,
+    '  *) echo "unexpected gcloud call: $*" >&2; exit 98 ;;',
+    'esac',
+  ].join('\n') + '\n');
+  chmodSync(join(bin, 'terraform'), 0o755);
+  chmodSync(join(bin, 'gcloud'), 0o755);
+  const cmd = `die() { echo "$*" >&2; exit 1; }; warn() { echo "$*" >&2; }; source "${LIB}" && guard_mailer_release "" mutaba3a-api me-west1 demo-project -input=false -var-file=production.tfvars -var image_tag=abc && echo PASSED`;
+  const e: NodeJS.ProcessEnv = { ...process.env, SKIP_MAILER_GUARD: o.skip, PATH: `${bin}:${process.env.PATH}` };
+  for (const [k, v] of Object.entries(e)) if (v === undefined) delete e[k];
+  const r = spawnSync('bash', ['-euo', 'pipefail', '-c', cmd], { cwd: dir, encoding: 'utf-8', env: e });
+  return { status: r.status, out: r.stdout, err: r.stderr, calls: existsSync(log) ? readFileSync(log, 'utf-8') : '' };
+}
+
+describe('guard_mailer_release (MUT-359, deploy.sh steps 0, 3 and 4)', { timeout: 30_000 }, () => {
+  it('lets mailer = "resend" through without asking the service', () => {
+    const r = mailerGuard({ mailer: 'resend', env: 'PORT;RESEND_API_KEY' });
+    expect(r.status).toBe(0);
+    expect(r.calls).not.toMatch(/gcloud/);
+  });
+
+  it('lets noop through while production sends nothing, and on a first deploy', () => {
+    expect(mailerGuard({ mailer: 'noop' }).out).toMatch(/PASSED/);
+    expect(mailerGuard({ mailer: 'noop', env: 'missing' }).status).toBe(0);
+  });
+
+  it('refuses noop (or unset) while the service mounts RESEND_API_KEY', () => {
+    const r = mailerGuard({ mailer: 'noop', env: 'PORT;MAILER;RESEND_API_KEY;RESEND_WEBHOOK_SECRET' });
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/mailer is noop \(or unset\), but mutaba3a-api mounts RESEND_API_KEY/);
+  });
+
+  it('refuses rather than guess when it cannot read the service or the variable', () => {
+    expect(mailerGuard({ mailer: 'noop', env: 'error' }).err).toMatch(/could not read mutaba3a-api's env/);
+    expect(mailerGuard({ consoleFails: true }).err).toMatch(/could not evaluate mailer/);
+    expect(mailerGuard({ mailer: 'maybe' }).err).toMatch(/gave 'maybe' for mailer/);
+  });
+
+  it('SKIP_MAILER_GUARD=1 skips the check', () => {
+    const r = mailerGuard({ mailer: 'noop', env: 'PORT;RESEND_API_KEY', skip: '1' });
+    expect(r.status).toBe(0);
+    expect(r.err).toMatch(/mail release guard skipped \(SKIP_MAILER_GUARD=1\)/);
+    expect(r.calls).not.toMatch(/gcloud/);
+  });
+});
+
+describe('deploy.sh wires the mail guard (MUT-359)', () => {
+  const deploy = readFileSync(DEPLOY, 'utf-8');
+  it('runs guard_mailer_release before bootstrap, and guard_release() runs it too', () => {
+    expect(deploy.indexOf('guard_mailer_release "')).toBeGreaterThan(-1);
+    expect(deploy.indexOf('guard_mailer_release "')).toBeLessThan(deploy.indexOf('ensure_bootstrap "'));
+    const wrapper = /guard_release\(\)\s*\{[\s\S]*?\n\}/.exec(deploy)?.[0] ?? '';
+    expect(wrapper).toMatch(/guard_mailer_release/);
+  });
+});

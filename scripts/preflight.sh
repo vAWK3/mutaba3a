@@ -402,6 +402,38 @@ if [[ "$MODE" == "server" ]]; then
   else
     ok "on ${DIM}(SKIP_STRIPE_GUARD=1 skips it, only to switch Stripe off on purpose)${NC}"
   fi
+
+  # MUT-359 (D21, D22): when this checkout sends mail, its domain must publish Resend's records (DNS only, no key).
+  # The Resend API check (tracking off, eu-west-1, verified) runs too when RESEND_CHECK_API_KEY is in the
+  # environment or the Keychain (release-kit / barmajiyat/RESEND_CHECK_API_KEY); without it, a warning says so.
+  head_ "Mail"
+  MAILER_SETTING="noop"
+  if [[ -f "$TFVARS" ]] && grep -Eq '^[[:space:]]*mailer[[:space:]]*=[[:space:]]*"resend"' "$TFVARS"; then MAILER_SETTING="resend"; fi
+  if [[ "$MAILER_SETTING" != "resend" ]]; then
+    ok "mailer is noop in $TFVARS: no mail is sent ${DIM}(the mail release guard refuses this if production already sends)${NC}"
+  elif [[ "${SKIP_EMAIL_CHECK:-0}" == "1" ]]; then
+    warn "mail domain not checked ${DIM}(SKIP_EMAIL_CHECK=1)${NC}"
+  else
+    CHECK_KEY="${RESEND_CHECK_API_KEY:-$(security find-generic-password -s release-kit -a barmajiyat/RESEND_CHECK_API_KEY -w 2>/dev/null || true)}"
+    if [[ -n "$CHECK_KEY" ]]; then
+      EMAIL_ARGS=(-- --api)
+    else
+      EMAIL_ARGS=()
+      warn "Resend API check skipped: no RESEND_CHECK_API_KEY ${DIM}(tracking and region are checked by npm --prefix server run email:check -- --api)${NC}"
+    fi
+    if EMAIL_OUT="$(RESEND_CHECK_API_KEY="$CHECK_KEY" npm --prefix server run --silent email:check "${EMAIL_ARGS[@]+"${EMAIL_ARGS[@]}"}" 2>&1)"; then
+      ok "${EMAIL_OUT#\[email\] }"
+    else
+      bad "mail domain: ${EMAIL_OUT//\[email\] /}"
+      hint "server/DEPLOYMENT.md §6f: Resend's DNS records live in server/infrastructure/frontdoor (resend_dkim_value)"
+    fi
+    unset CHECK_KEY
+  fi
+  if [[ "${SKIP_MAILER_GUARD:-0}" == "1" ]]; then
+    warn "mail release guard skipped (SKIP_MAILER_GUARD=1): this release may switch mail off"
+  else
+    ok "mail release guard on ${DIM}(SKIP_MAILER_GUARD=1 skips it, only to switch mail off on purpose)${NC}"
+  fi
 fi
 
 # ---------------------------------------------------------------------------
