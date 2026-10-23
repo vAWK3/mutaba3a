@@ -3473,3 +3473,13 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal component | `components/__tests__/BillingDrawer.test.tsx` | menu → URL, status first with focus, both prices, open soon, covered by grant, load error + retry, Arabic; Subscribe step (no default country, ILS, saving label, POST body, redirect), contact us vs business, Palestine + back, session failure keeps choices; return confirming → subscribed, cancelled; Manage billing, ending, unpaid, deleted customer |
 | Release-QA | `portal.billing.open-soon` (stubbed); `portal-live.billing.subscribe`, `subscribe-usd`, `business-only`, `manage`, `manage-ended`, `rtl-375` (Stripe sandbox, D8 B) | all seven pass 2026-10-23 (the six live ones in one recorded run at ad1d5d97); Checkout pays through the API behind Stripe's hCaptcha (TD-201) |
 | Mirror (server) | `server/src/billing/stripe/__tests__/mirror.test.ts` | a Customer Portal cancel (`cancel_at` on or before the period end) reads as ending; past the period it renews; none is not ending |
+
+### MUT-362 — the /qa-reconcile review fixes (2026-10-23)
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit (server) | `checkout.test.ts` | `currentSubscription` (live first, stale live rows never shown); stale rows don't refuse, unpaid always does; `trial_end` carried at ≥ 48 h only; `adaptive_pricing` off |
+| Adapter (server) | `checkout-gateway.test.ts` | Stripe's own subscriptions; expiring open Checkouts; sellable prices only (tier, VAT-exclusive, interval count 1); failure cache and one call in flight; idempotency key follows email and name; tax IDs + invoice tax number; writing it |
+| Route (server) | `billing-routes.test.ts` | live subscription over a later cancelled one (proven red on the old route); `coveredProfileIds` for a creator and a co-owner; Stripe's live subscription refuses; a second Checkout expires the first; trial carried; Malafat refusal before Stripe; stale row; permanent errors → NEEDS_HELP at error level; non-customer `resource_missing`; best-effort audit; cross-site 403 on both POSTs; portal shares the limit; the IL/JO tax number clears D9 |
+| Sync (server) | `sync.test.ts` | the Checkout tax number is copied to the customer's invoices; a failed copy is an error |
+| Portal | `billingView.test.ts`, `billingQueries.test.ts`, `BillingDrawer.test.tsx`, `Button.test.tsx` | pending panel; paid-entitlement manage; `isConfirmed`; `firstChargeOf`; return paths and the Stripe-only redirect; focus and one live region per phase; slow hides Subscribe and stops at 30 s (fake timers); portal return stops at 30 s; DR6 note under Manage billing; failures under their button; refusal copy and refresh; co-owner note; step Back replaces history; busy button keeps label and focus |

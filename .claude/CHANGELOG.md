@@ -39,6 +39,14 @@
 - Portal: the account menu's Billing drawer (`BillingDrawer`, `billingView`, `billingQueries`, `countries`), Arabic first; `RadioCards` extracted from `ProfileTypeCards`.
 - Release-QA: `portal-live` app on the Stripe sandbox (six flows, all passing 2026-10-23; Checkout pays through the API behind Stripe's hCaptcha, TD-201), `portal.billing.open-soon`.
 
+### Fixed (the /qa-reconcile review, 2026-10-23)
+- No double charge: Checkout asks Stripe for the customer's subscriptions first and expires its other open Checkouts; a stale mirror row no longer blocks paying.
+- Billing shows the live subscription, never a cancelled one over it; `incomplete` is "payment pending"; a paid entitlement always offers Manage billing; a slow payment hides Subscribe.
+- Only Freelancer-tagged, VAT-exclusive monthly/yearly prices are sold, in their own currency; price lookups cache a failure for a minute.
+- Subscribing during the trial keeps the rest of it (D2); a Checkout business tax number prints on invoices and clears the D9 flag (D3); covered profiles come from the server (D4).
+- Permanent Stripe refusals are "needs a hand" (logged as errors), not "try again"; the drawer names each refusal, refreshes its view and leaves only for Stripe; focus and announcements follow each phase; DR4/DR6 placement; 44 px select.
+- `Button` gains `keepLabelWhileLoading`.
+
 ### Fixed (found by the live release-QA)
 - The Stripe mirror reads a Customer Portal cancel (`cancel_at` on the period end, `cancel_at_period_end` false) as ending; Billing kept saying "renews" after a cancel (`billing/stripe/mirror.ts`).
 - Back from the Customer Portal, Billing refetches until the webhook's change lands (`?portal=returned`).

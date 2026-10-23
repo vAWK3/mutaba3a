@@ -1000,3 +1000,16 @@ Unresolved design decisions: none.
 - **VERDICT:** DESIGN CLEARED. Eng review logged `issues_open` with all 9 findings answered (D1–D9); eng review required by the dashboard rule, its decisions are complete.
 
 NO UNRESOLVED DECISIONS
+
+## /qa-reconcile review (2026-10-23)
+
+Eight reviewers (testing, maintainability, security, performance, API contract, design, simplification, red team) plus an adversarial pass found two money bugs (a second Checkout could be paid; a cancelled row could hide the live one and strand a payer) and a set of smaller ones. Basel's answers:
+
+| # | Question | Answer |
+|---|---|---|
+| R-D1 | Apply the review's fix set before review? | **All fixes**, design polish and test gaps included |
+| R-D2 | A person who subscribes during the trial: first charge when? | **Keep the trial**: `trial_end` = their trial end when ≥ 48 h away; the step says when |
+| R-D3 | The IL/JO business tax number typed on Checkout | **Onto the customer + invoices** (the webhook copies it); D9 counts it |
+| R-D4 | A co-owner opening Billing | **Follow the server**: `coveredProfileIds` (profiles they created); a note for shared profiles |
+
+Recorded in ADR-170's amendment; what stays open is TD-203 (an early `cancel_at` date), TD-204 (interval from the lookup key) and TD-205 (`client_reference_id` trust).

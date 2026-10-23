@@ -101,6 +101,30 @@
 **Impact**: `npm run typecheck` only checks `tsconfig.app.json`/`tsconfig.hosted.json`/`tsconfig.hosted-local.json`. `tsconfig.node.json` (the only config with `types: ["node"]`, which `scripts/` would need) includes only `vite.config.ts`. `npm run build`'s `tsc -b` builds every referenced project, but `tsconfig.node.json`'s narrow include means it still never typechecks `scripts/`. `vitest` transpiles via esbuild without type-checking. A type error in any `scripts/*.ts` file (including this ticket's `icon-set.ts`/`generate-icons.ts`/`validate-icon-set.ts`) would only surface as a runtime failure the next time someone runs that script, not in CI.
 **Fix**: add `"scripts"` (or `"scripts/**/*.ts"`, excluding `__tests__`) to `tsconfig.node.json`'s `include`, confirm it builds clean, then add `tsconfig.node.json` to `npm run typecheck`'s chain.
 
+### TD-203: A cancel set before the period end shows the period end as the end date
+**Status**: Open
+**Ticket**: MUT-362 review
+**Added**: 2026-10-23
+**Priority**: Low
+**Impact**: the mirror reads `cancel_at` on or before the period end as "ending" (the Customer Portal sets it to the period end), but keeps `currentPeriodEnd` as the date Billing shows. A `cancel_at` set earlier (only from the Stripe dashboard) ends access sooner than the drawer says; the entitlement is right once Stripe ends the subscription.
+**Fix**: mirror an `endsAt` (the earlier of `cancel_at` and the period end) and show it.
+
+### TD-204: The subscription's interval is read from its lookup key's name
+**Status**: Open
+**Ticket**: MUT-362 review
+**Added**: 2026-10-23
+**Priority**: Low
+**Impact**: `subscriptionView` (routes/billing.ts) finds `_monthly_` / `_yearly_` in `priceLookupKey`; a price without that infix shows no interval ("Billed monthly" is left out). Display only.
+**Fix**: mirror the price's `recurring.interval` beside `priceLookupKey`.
+
+### TD-205: The sync trusts `client_reference_id` on any Checkout but a Payment Link's
+**Status**: Open
+**Ticket**: MUT-362 review (MUT-360's code)
+**Added**: 2026-10-23
+**Priority**: Low while only the server makes Checkouts
+**Impact**: a client-made Checkout (a Pricing Table, if one is ever turned on) could carry any user id and link an unlinked person's customer to someone else's.
+**Fix**: link by the hint only when the session's subscription metadata `mutaba3a_user_id` (which the server sets) agrees, or when the customer's metadata does.
+
 ### TD-201: Billing release-QA can't pay on Stripe's Checkout page, and the sandbox is set up by hand
 **Status**: Open (mitigated 2026-10-23)
 **Ticket**: MUT-362 (eng review D8 B)
