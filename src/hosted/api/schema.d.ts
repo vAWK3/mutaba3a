@@ -5595,7 +5595,7 @@ export interface paths {
         put?: never;
         /**
          * Settle a receivable directly, with one payment and one allocation
-         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (its postingDate, MUT-392) is 422 RECEIVABLE_NOT_YET_DATED with details.postingDate: move its date to today first.
+         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves).
          */
         post: {
             parameters: {
@@ -8298,7 +8298,7 @@ export interface paths {
         head?: never;
         /**
          * Change the date of an income entry you captured (optimistic, If-Match)
-         * @description Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate, unless the new date is after it: then dueDate becomes EOM_15 of the new date (MUT-392); a Received entry moves its payment's receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. An Owed entry with money applied (paid, credited or settled) may not move after today: 409 MONEY_APPLIED (MUT-392 review). occurredOn is not more than ten years before the organization's today (MUT-227); for a Received entry not later than today, for an Owed one not more than ten years after it (MUT-392). A malformed date is 422 before the entry is looked up; the bounds are checked once its kind is known.
+         * @description Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate, unless the new date is after it: then dueDate becomes EOM_15 of the new date (MUT-392); a Received entry moves its payment's receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. An Owed entry may move ahead even with money applied to it (MUT-392 D2): it then counts from its first payment or credit, nothing is refused. occurredOn is not more than ten years before the organization's today (MUT-227); for a Received entry not later than today, for an Owed one not more than ten years after it (MUT-392). A malformed date is 422 before the entry is looked up; the bounds are checked once its kind is known.
          */
         patch: {
             parameters: {

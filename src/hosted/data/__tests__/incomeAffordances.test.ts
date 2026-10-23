@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { HostedProfile, Payment, Receivable } from '../../api/client';
 import { profile } from '../../__tests__/harness';
 import { payment, receivable } from '../../pages/__tests__/fixtures';
-import { canAddClient, canRedateOwed, canRedatePayment, incomeAffordancesFor, isSettleable, owedMayMoveAhead, redateAffordancesFor } from '../incomeAffordances';
+import { canAddClient, canRedateOwed, canRedatePayment, incomeAffordancesFor, isSettleable, redateAffordancesFor } from '../incomeAffordances';
 
 const PERSONAL_RULES = { received: true, owed: true, customer: 'optional' } as const;
 const MALAFAT_RULES = { received: true, owed: false, customer: 'linked-required' } as const;
@@ -50,11 +50,7 @@ describe('isSettleable', () => {
   const adjustment = (status: string, outstanding = '100.00'): Receivable => ({ ...receivable('r1', 'c1', 'p1', outstanding, status), origin: 'ADJUSTMENT' });
 
   it('accepts an open entry captured through /v1/income', () => {
-    for (const status of ['DUE', 'OVERDUE', 'PARTIALLY_PAID']) expect(isSettleable(adjustment(status))).toBe(true);
-  });
-
-  it('refuses an Owed dated ahead (PENDING until its day): the server answers 422 RECEIVABLE_NOT_YET_DATED (MUT-392)', () => {
-    expect(isSettleable(adjustment('PENDING'))).toBe(false);
+    for (const status of ['PENDING', 'DUE', 'OVERDUE', 'PARTIALLY_PAID']) expect(isSettleable(adjustment(status))).toBe(true);
   });
 
   it('refuses a paid or void entry, and anything Malafat posted (the server would answer 404)', () => {
@@ -85,20 +81,6 @@ describe('canRedateOwed (MUT-224)', () => {
     expect(canRedateOwed(personal({ access: { ...PERSONAL_ACCESS, capture: 'read' } }), owed(), VIEWER)).toBe(false);
     expect(canRedateOwed(personal({ owned: false }), owed(), VIEWER)).toBe(false);
     expect(canRedateOwed(personal({ owned: false, writerOfRecord: 'MALAFAT', income: { ...MALAFAT_RULES } }), owed(), VIEWER)).toBe(false);
-  });
-});
-
-describe('owedMayMoveAhead (MUT-392 review)', () => {
-  const owed = (over: Partial<Receivable> = {}): Receivable => ({ ...receivable('r1', 'c1', 'p1', '100.00', 'DUE'), origin: 'ADJUSTMENT', paid: '0.00', credited: '0.00', ...over });
-
-  it('lets an Owed with no money applied move ahead', () => {
-    expect(owedMayMoveAhead(owed())).toBe(true);
-  });
-
-  it('pins an Owed with money paid or credited to today, as the server does (409 MONEY_APPLIED)', () => {
-    expect(owedMayMoveAhead(owed({ paid: '10.00', status: 'PARTIALLY_PAID' }))).toBe(false);
-    expect(owedMayMoveAhead(owed({ credited: '5.00' }))).toBe(false);
-    expect(owedMayMoveAhead(owed({ paid: '100.00', status: 'PAID' }))).toBe(false);
   });
 });
 

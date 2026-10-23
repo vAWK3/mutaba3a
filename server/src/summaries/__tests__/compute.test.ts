@@ -82,14 +82,25 @@ describe('projectFigures', () => {
     expect(f.buckets.outstanding).toBe(500n);
   });
 
-  it('leaves a future-dated Owed out of posted, paid, credited and the buckets until its day (MUT-392 D2)', () => {
-    const future = rec({ id: 'f', origin: 'ADJUSTMENT', agreementId: null, postingDate: '2026-11-11', dueDate: '2026-12-15', paidMinor: 200n });
+  it('leaves a future-dated Owed with no money on it out of posted and the buckets until its day (MUT-392 D2)', () => {
+    const future = rec({ id: 'f', origin: 'ADJUSTMENT', agreementId: null, postingDate: '2026-11-11', dueDate: '2026-12-15' });
     const before = projectFigures({ agreements: [], installments: [], receivables: [rec({}), future], today: '2026-10-20' });
     expect(before).toMatchObject({ postedMinor: 1000n, paidMinor: 0n, creditedMinor: 0n });
     expect(before.buckets.outstanding).toBe(1000n);
     const on = projectFigures({ agreements: [], installments: [], receivables: [rec({}), future], today: '2026-11-11' });
-    expect(on).toMatchObject({ postedMinor: 2000n, paidMinor: 200n });
-    expect(on.buckets.outstanding).toBe(1800n);
+    expect(on).toMatchObject({ postedMinor: 2000n, paidMinor: 0n });
+    expect(on.buckets.outstanding).toBe(2000n);
+  });
+
+  it('counts a future-dated Owed at once when a payment or credit has landed on it (MUT-392 D2: counts once money moves)', () => {
+    const today = '2026-10-20';
+    const paid = rec({ id: 'p', origin: 'ADJUSTMENT', agreementId: null, postingDate: '2026-11-11', dueDate: '2026-12-15', paidMinor: 200n });
+    const credited = rec({ id: 'c', origin: 'ADJUSTMENT', agreementId: null, postingDate: '2026-11-11', dueDate: '2026-12-15', creditedMinor: 100n });
+    const figures = projectFigures({ agreements: [], installments: [], receivables: [paid, credited], today });
+    expect(figures).toMatchObject({ postedMinor: 2000n, paidMinor: 200n, creditedMinor: 100n });
+    expect(figures.buckets).toEqual({ outstanding: 1700n, overdue: 0n, dueToday: 0n, notYetDue: 1700n });
+    const settled = rec({ id: 's', origin: 'ADJUSTMENT', agreementId: null, postingDate: '2026-11-11', status: 'SETTLED', paidMinor: 1000n });
+    expect(projectFigures({ agreements: [], installments: [], receivables: [settled], today })).toMatchObject({ postedMinor: 1000n, paidMinor: 1000n });
   });
 
   it('retainer: monthly from the caller (terms in force), no agreed total; no agreements → NONE', () => {

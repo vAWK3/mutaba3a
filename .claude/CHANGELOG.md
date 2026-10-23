@@ -63,11 +63,10 @@ was past-only on the server and expenses had no upper bound at all. Plan, eng re
 ### Review fixes (`/qa-reconcile` MUT-392)
 - Server: `countsOn` holds back only an Owed (origin ADJUSTMENT). An IMMEDIATE installment on an agreement Malafat dated
   ahead posts with that future postingDate and still counts at once, as before (CRITICAL: the first cut hid it).
-- Server: PATCH /v1/income refuses to move an Owed with money applied (paid, credited or settled) after today:
-  **409 CONFLICT `details.reason: MONEY_APPLIED`** (CRITICAL: its payment would have left the paid totals). Within the
-  past it still moves.
-- Server: settling an Owed dated after today is **422 VALIDATION_FAILED `details.reason: RECEIVABLE_NOT_YET_DATED`**
-  with `details.postingDate`; GET /v1/receivables reads it **status `PENDING`** until its day.
+- Server: **a future Owed counts once money moves** (review D2, CRITICAL: a payment would have left the paid totals).
+  `countsOn` also counts an Owed with any payment or credit on it, whatever its date. Nothing is refused: an Owed may
+  be settled before its date, and moved ahead after a settle or part-payment. GET /v1/receivables keeps its statuses
+  (no PENDING for a future Owed; a not-yet-counted status is a follow-up).
 - Server: an explicit Owed `dueDate` on POST /v1/income and file-as-income may not be before `occurredOn` nor more than
   ten years ahead (422 DATE_INVALID, `field: dueDate`, `bound: future` for the ceiling).
 - Server: the organization and customer summaries leave a future Owed out entirely, so a client whose only entry is
@@ -77,9 +76,8 @@ was past-only on the server and expenses had no upper bound at all. Plan, eng re
 - Kept on purpose: the archive guard still counts a future Owed as outstanding (work still to be paid; route text
   says so). The D3 due-date move also applies when an overdue Owed is re-dated to a later **past** date: phone and
   portal must show `dueDate` from the PATCH response, never a cached one.
-- Portal: the re-date drawer caps an Owed with money on it at today and says why (`hosted.redate.moneyApplied`), also
-  for a 409 MONEY_APPLIED; a PENDING Owed offers no Record payment (`hosted.settle.errors.notYetDated` for the 422);
-  `mapIncomeError` / `mapRedateError` take `kind` explicitly.
+- Portal: a part-paid or settled Owed may still be re-dated ahead (up to the ten-year ceiling), and Record payment is
+  offered on a future Owed; `mapIncomeError` / `mapRedateError` take `kind` explicitly.
 - QA support: `daysAfter`, `ceilingOf` and `DAYS_IN_FUTURE_LIMIT` live once in `qa/support/portalApi.ts`.
 
 ## [Unreleased] - 2026-10-22 — Portal Add income saves after a kind switch with More details open (MUT-408)

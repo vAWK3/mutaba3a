@@ -1,5 +1,4 @@
 import type { HostedProfile, Payment, Receivable, Schemas } from '../api/client';
-import { isZeroDecimal } from '../format/DecimalAmount';
 
 /**
  * What income writes the portal offers on a profile (MUT-133, D-gate). One
@@ -27,8 +26,6 @@ export interface IncomeAffordances {
 }
 
 const CLOSED_STATUSES: ReadonlySet<Receivable['status']> = new Set(['PAID', 'VOID']);
-/** MUT-392: an Owed dated ahead reads PENDING until its day, and the server refuses to settle it before then. */
-const UNSETTLEABLE_STATUSES: ReadonlySet<Receivable['status']> = new Set([...CLOSED_STATUSES, 'PENDING']);
 
 export function incomeAffordancesFor(profile: HostedProfile): IncomeAffordances {
   const rules = profile.income;
@@ -54,19 +51,10 @@ export function canAddClient(profile: HostedProfile): boolean {
 
 /**
  * A row the settle route accepts: captured through POST /v1/income (origin
- * ADJUSTMENT; anything Malafat posted answers 404), still open and not dated
- * ahead (PENDING, MUT-392).
+ * ADJUSTMENT; anything Malafat posted answers 404) and still open.
  */
 export function isSettleable(receivable: Receivable): boolean {
-  return receivable.origin === 'ADJUSTMENT' && !UNSETTLEABLE_STATUSES.has(receivable.status);
-}
-
-/**
- * MUT-392 review: whether an Owed entry may be re-dated after today. Once money is applied to it (paid or credited),
- * the server pins it to today or earlier (409 MONEY_APPLIED), so the date picker stops at today.
- */
-export function owedMayMoveAhead(receivable: Pick<Receivable, 'paid' | 'credited'>): boolean {
-  return isZeroDecimal(receivable.paid) && isZeroDecimal(receivable.credited);
+  return receivable.origin === 'ADJUSTMENT' && !CLOSED_STATUSES.has(receivable.status);
 }
 
 /**

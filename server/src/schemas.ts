@@ -1083,8 +1083,6 @@ export const CONFLICT_REASONS = [
   'OUTCOME_ALREADY_RECORDED',
   'OUTCOME_NOT_RECORDED',
   'OUTCOME_HAS_PAYMENTS',
-  // MUT-392 review: an Owed with money applied may not be dated after today.
-  'MONEY_APPLIED',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -1173,8 +1171,6 @@ export const VALIDATION_REASONS = [
   // MUT-194 (ADR-075) / MUT-272 (ADR-096): a currency travels with its amount; a conversion's legs differ
   'AMOUNT_REQUIRED',
   'SAME_CURRENCY',
-  // MUT-392 review: settling an Owed dated after today.
-  'RECEIVABLE_NOT_YET_DATED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----

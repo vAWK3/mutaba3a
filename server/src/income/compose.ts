@@ -1,9 +1,8 @@
 import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld, todayFor, validationError, type DateBound } from '../agreements/compose.js';
 import type { ProfileWriter } from '../auth/writability.js';
 import { compareIsoDates, dueDateFor, type IsoDate } from '../dates.js';
-import { ApiError } from '../errors.js';
 import { ownsProfile } from '../personal-profile.js';
-import type { LedgerStore, MembershipRole, Organization, PaymentRecord, ReceivableRecord } from '../repositories/ports.js';
+import type { LedgerStore, MembershipRole, Organization, PaymentRecord } from '../repositories/ports.js';
 import type { VatTreatment } from '../vat.js';
 
 /**
@@ -110,18 +109,6 @@ export function owedDueDate(raw: string | undefined, occurredOn: IsoDate, today:
   if (compareIsoDates(dueDate, occurredOn) < 0) throw validationError('DATE_INVALID', 'dueDate may not be before occurredOn', { field: 'dueDate' });
   assertNotAbsurdDate(dueDate, today, 'dueDate');
   return dueDate;
-}
-
-/**
- * MUT-392 review: money already applied to an Owed (paid, credited or settled) pins it to today or earlier. Dated
- * ahead, the entry and the payment applied to it would drop out of every paid total until the new date. Decided on
- * the read the versioned write is conditional on, and a settle bumps the version, so a settle in between is a 409.
- */
-export function assertOwedMayMoveTo(r: Pick<ReceivableRecord, 'paidMinor' | 'creditedMinor' | 'status'>, occurredOn: IsoDate, today: IsoDate): void {
-  if (compareIsoDates(occurredOn, today) <= 0) return;
-  if (r.paidMinor > 0n || r.creditedMinor > 0n || r.status !== 'OPEN') {
-    throw new ApiError('CONFLICT', 'Money has been applied to this entry, so it cannot be dated after today', { reason: 'MONEY_APPLIED' });
-  }
 }
 
 export interface OwedVatFields {

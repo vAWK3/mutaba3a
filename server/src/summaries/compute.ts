@@ -34,13 +34,16 @@ export function emptyBuckets(): Buckets {
 }
 
 /**
- * MUT-392 (ADR-169, eng review D2): an Owed (origin ADJUSTMENT) counts from its own date. Until that day it is work not
- * yet done: not owed, not overdue, not posted. Computed on read, so it joins every figure on its own date with no job.
- * Every other origin counts as it always has, whatever its postingDate: an IMMEDIATE installment on an agreement Malafat
- * dated ahead posts with that future postingDate (agreements/compose.ts postingDateFor) and has always counted at once.
+ * MUT-392 (ADR-169, eng review D2; review D1, D2): an Owed (origin ADJUSTMENT) dated ahead counts from its own date, or
+ * from the moment a payment or credit lands on it, whichever comes first. Until then it is work not yet done: not owed,
+ * not overdue, not posted. Once money has moved it counts at once, so a payment is never missing from a paid total, and
+ * nothing is refused: an Owed may be settled before its date or moved ahead after a settle. Computed on read, so it
+ * joins every figure on its own date with no job. Every other origin counts as it always has, whatever its postingDate:
+ * an IMMEDIATE installment on an agreement Malafat dated ahead posts with that future postingDate (agreements/compose.ts
+ * postingDateFor) and has always counted at once.
  */
-export function countsOn(r: Pick<ReceivableRecord, 'origin' | 'postingDate'>, today: IsoDate): boolean {
-  return r.origin !== 'ADJUSTMENT' || r.postingDate <= today;
+export function countsOn(r: Pick<ReceivableRecord, 'origin' | 'postingDate' | 'paidMinor' | 'creditedMinor'>, today: IsoDate): boolean {
+  return r.origin !== 'ADJUSTMENT' || r.postingDate <= today || r.paidMinor > 0n || r.creditedMinor > 0n;
 }
 
 /** Day buckets over OPEN receivables (settled ones carry nothing) that count today (`countsOn`). */

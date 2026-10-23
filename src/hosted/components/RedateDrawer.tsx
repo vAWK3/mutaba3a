@@ -5,7 +5,7 @@ import { BrandLoader } from '../../components/brand/BrandLoader';
 import { useLanguage } from '../../lib/i18n/core';
 import { isolate, isolateAmount } from '../../lib/utils';
 import { ApiError, type HostedProfile, type Payment, type Receivable } from '../api/client';
-import { canRedateOwed, canRedatePayment, owedMayMoveAhead } from '../data/incomeAffordances';
+import { canRedateOwed, canRedatePayment } from '../data/incomeAffordances';
 import { usePayment, usePaymentsForEntry, useReceivable, useRedateOwed, useRedatePayment } from '../data/incomeQueries';
 import { useCustomerDirectory, useProjectDirectory } from '../data/queries';
 import { formatDecimal } from '../format/DecimalAmount';
@@ -116,10 +116,8 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
   const projects = useProjectDirectory(profile.id);
   const today = todayInZone(profile.timezone);
   const floor = moneyDateFloor(today);
-  // MUT-392: an Owed may move ahead, up to the ten-year ceiling; a payment's money has moved, so it stops at today,
-  // and so does an Owed with money applied to it (the review: the server answers 409 MONEY_APPLIED).
-  const pinned = kind === 'owed' && !owedMayMoveAhead(record as Receivable);
-  const max = kind === 'owed' && !pinned ? moneyDateCeiling(today) : today;
+  // MUT-392: an Owed may move ahead, up to the ten-year ceiling; a payment's money has moved, so it stops at today.
+  const max = kind === 'owed' ? moneyDateCeiling(today) : today;
   const loadedDate = dateOf(kind, record);
 
   const [date, setDate] = useState(loadedDate);
@@ -160,7 +158,7 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
     event.preventDefault();
     if (saving) return;
     if (!date) return setDateError(t('hosted.redate.dateRequired'));
-    if (date > max) return setDateError(t(pinned ? 'hosted.redate.moneyApplied' : kind === 'owed' ? 'hosted.income.errors.dateTooFar' : 'hosted.income.errors.dateFuture'));
+    if (date > max) return setDateError(t(kind === 'owed' ? 'hosted.income.errors.dateTooFar' : 'hosted.income.errors.dateFuture'));
     // An entry already older than the floor may be opened and closed again; only a new date must clear it.
     if (date === loadedDate) return onClose();
     if (date < floor) return setDateError(t('hosted.income.errors.dateTooOld'));
