@@ -3,3 +3,8 @@
 project_id            = "malafat-production"
 cloudflare_account_id = "<Cloudflare account id: decide which account on purpose, its Workers free tier is shared>"
 netlify_site_id       = "<Netlify site id of the landing>"
+
+# Resend's DNS records for the sending domain (MUT-359, server/DEPLOYMENT.md §6f). Copy the DKIM value Resend shows
+# once the domain is added there (region eu-west-1). Leave commented out until then.
+# resend_dkim_value    = "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC..."
+# dmarc_report_address = "dmarc@example.com"

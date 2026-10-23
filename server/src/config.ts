@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ARGON2_MINIMUMS } from './auth/users.js';
+import { isUnownedDomain } from './email/ports.js';
 
 /** Rates must not travel in cleartext; a local stub (tests, QA against a local server) may use plain http. */
 function isHttpsOrLocalHttp(value: string): boolean {
@@ -108,6 +109,29 @@ const envSchema = z.object({
   SENTRY_DSN: z.string().regex(SENTRY_EU_DSN, 'must be an https DSN on the EU region, https://<key>@<org>.ingest.de.sentry.io/<project>').optional(),
   /** The environment events are filed under. Unset = NODE_ENV. */
   SENTRY_ENVIRONMENT: z.string().min(1).max(64).optional(),
+  /**
+   * MUT-359 (ADR-159 §5): which transport sends mail. `noop` (default) sends nothing; `log` and `memory` are for
+   * development and tests only (refused in production, D14); `resend` needs every RESEND_/MAIL_ value below.
+   */
+  MAILER: z.enum(['resend', 'log', 'memory', 'noop']).default('noop'),
+  /** MUT-366 gates the signup routes on this; read here only so the server refuses to start with no mailer while it is on. */
+  SELF_SIGNUP_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /** no-reply@<apex>, written by Terraform from config/hosts.json. One plain address; the display name is the product's. */
+  MAIL_FROM_ADDRESS: z.string().email().max(254).optional(),
+  /** Where replies go (D6). */
+  MAIL_REPLY_TO: z.string().email().max(254).optional(),
+  /** Mutaba3a's sending key, restricted to its domain (Secret Manager). */
+  RESEND_API_KEY: z.string().regex(/^re_[A-Za-z0-9_]+$/, 'must be a Resend API key (re_…)').optional(),
+  /** The Resend webhook's signing secret (Secret Manager). Alone, it turns the bounce webhook on (D20). */
+  RESEND_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9+/=]+$/, 'must be a Resend/Svix signing secret (whsec_…)').optional(),
+  /** Sends in any rolling 24 h. Required with resend, set below the shared Resend plan's limit (D18); 500 elsewhere. */
+  MAIL_DAILY_CAP: z.coerce.number().int().min(1).optional(),
+  /** The part of the daily cap only recovery mail (reset, finish setup) may use. Default: 10 % of the cap, rounded up. */
+  MAIL_SECURITY_RESERVE: z.coerce.number().int().min(0).optional(),
+  /** Sends to one address in any rolling 24 h (D17). */
+  MAIL_RECIPIENT_DAILY_CAP: z.coerce.number().int().min(1).default(10),
+  /** MUT-367's review digest goes here. */
+  OPERATOR_ALERT_EMAIL: z.string().email().max(254).optional(),
 });
 
 const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
@@ -116,8 +140,16 @@ const MIN_BUILD_PLATFORMS = [
   { min: 'ANDROID_MIN_BUILD', recommended: 'ANDROID_RECOMMENDED_BUILD' },
 ] as const;
 
-/** `loadConfig` fills SENTRY_ENVIRONMENT in from NODE_ENV, so it is always set. */
-export type Config = Omit<z.infer<typeof envSchema>, 'SENTRY_ENVIRONMENT'> & { SENTRY_ENVIRONMENT: string };
+/** `loadConfig` fills SENTRY_ENVIRONMENT in from NODE_ENV and the mail caps from their defaults, so they are always set. */
+export type Config = Omit<z.infer<typeof envSchema>, 'SENTRY_ENVIRONMENT' | 'MAIL_DAILY_CAP' | 'MAIL_SECURITY_RESERVE'> & {
+  SENTRY_ENVIRONMENT: string;
+  MAIL_DAILY_CAP: number;
+  MAIL_SECURITY_RESERVE: number;
+};
+
+/** MUT-359: the cap outside `resend`, where nothing real is sent. */
+export const DEFAULT_MAIL_DAILY_CAP = 500;
+const RESEND_REQUIRED = ['MAIL_FROM_ADDRESS', 'MAIL_REPLY_TO', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET', 'MAIL_DAILY_CAP'] as const;
 
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -171,5 +203,29 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       throw new ConfigError(`Invalid configuration:\n  ${recommended}: must be >= ${min} (${target} < ${floor})`);
     }
   }
-  return { ...config, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV };
+  return { ...config, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV, ...mailConfig(config) };
+}
+
+/** MUT-359: the mail refusals (ticket, D7, D14, D18, D20) and the caps' defaults. */
+function mailConfig(config: z.infer<typeof envSchema>): { MAIL_DAILY_CAP: number; MAIL_SECURITY_RESERVE: number } {
+  const refuse = (name: string, why: string): never => {
+    throw new ConfigError(`Invalid configuration:\n  ${name}: ${why}`);
+  };
+  if (config.MAILER === 'noop' && config.SELF_SIGNUP_ENABLED) refuse('SELF_SIGNUP_ENABLED', 'signup mails a link, so it needs a MAILER other than noop');
+  if (config.NODE_ENV === 'production' && (config.MAILER === 'log' || config.MAILER === 'memory')) {
+    refuse('MAILER', `${config.MAILER} is for development and tests only: in production it would ${config.MAILER === 'log' ? 'write setup links into the logs' : 'keep mail in memory and send nothing'}`);
+  }
+  if (config.MAILER === 'resend') {
+    for (const name of RESEND_REQUIRED) if (config[name] === undefined) refuse(name, 'MAILER=resend needs it');
+  }
+  if (config.RESEND_WEBHOOK_SECRET && !config.MAIL_FROM_ADDRESS) refuse('MAIL_FROM_ADDRESS', 'the Resend webhook keeps only events sent from this address\'s domain, so it needs it');
+  for (const name of ['MAIL_FROM_ADDRESS', 'MAIL_REPLY_TO'] as const) {
+    const address = config[name];
+    if (address && isUnownedDomain(address)) refuse(name, `${address.split('@')[1]} is not a domain we own; mail there reaches whoever registers it`);
+  }
+  const daily = config.MAIL_DAILY_CAP ?? DEFAULT_MAIL_DAILY_CAP;
+  // 10 % rounded up, but never the whole cap: a cap of 1 leaves no reserve rather than refusing to start.
+  const reserve = config.MAIL_SECURITY_RESERVE ?? Math.min(Math.ceil(daily / 10), daily - 1);
+  if (reserve >= daily) refuse('MAIL_SECURITY_RESERVE', `must be below MAIL_DAILY_CAP (${reserve} >= ${daily})`);
+  return { MAIL_DAILY_CAP: daily, MAIL_SECURITY_RESERVE: reserve };
 }

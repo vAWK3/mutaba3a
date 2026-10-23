@@ -99,6 +99,12 @@ describe('STORE_ACCESS', () => {
       'billing.saveAccount',
       'billing.saveSubscription',
       'billing.setTrialStart',
+      // MUT-359: the mail send log and suppression list, reached only by the mailer and the Resend webhook (unguarded store).
+      'email.claimDelivery',
+      'email.finishDelivery',
+      'email.isSuppressed',
+      'email.pruneDeliveries',
+      'email.suppress',
       // MUT-255: the receipt-scanning success measure, across every profile (counts only).
       'expenseReceipts.editRates',
       'memberships.grant',

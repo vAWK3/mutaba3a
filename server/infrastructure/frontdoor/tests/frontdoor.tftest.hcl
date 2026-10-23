@@ -137,3 +137,73 @@ run "a_domain_without_its_accounts_is_flagged" {
 
   expect_failures = [check.domain_is_configured]
 }
+
+# MUT-359 (D1): Resend's records live beside the zone, and only once the operator has Resend's DKIM value.
+run "a_domain_without_a_dkim_value_has_no_email_records" {
+  command = plan
+
+  variables {
+    hosts_file = "../../../config/fixtures/hosts.placeholder.json"
+  }
+
+  assert {
+    condition     = length(cloudflare_dns_record.email) == 0
+    error_message = "No email records until resend_dkim_value is set."
+  }
+}
+
+run "the_dkim_value_publishes_resends_records_dns_only" {
+  command = plan
+
+  variables {
+    hosts_file        = "../../../config/fixtures/hosts.placeholder.json"
+    resend_dkim_value = "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC"
+  }
+
+  assert {
+    condition = (
+      cloudflare_dns_record.email["dkim"].name == "resend._domainkey.placeholder.example" && cloudflare_dns_record.email["dkim"].type == "TXT"
+      && cloudflare_dns_record.email["dkim"].content == "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC"
+      && cloudflare_dns_record.email["return_path_mx"].name == "send.placeholder.example" && cloudflare_dns_record.email["return_path_mx"].type == "MX"
+      && cloudflare_dns_record.email["return_path_mx"].content == "feedback-smtp.eu-west-1.amazonses.com" && cloudflare_dns_record.email["return_path_mx"].priority == 10
+      && cloudflare_dns_record.email["return_path_spf"].content == "v=spf1 include:amazonses.com ~all"
+      && cloudflare_dns_record.email["dmarc"].name == "_dmarc.placeholder.example" && cloudflare_dns_record.email["dmarc"].content == "v=DMARC1; p=none"
+    )
+    error_message = "DKIM, the return-path MX and SPF on send., and DMARC p=none, under the apex from config/hosts.json."
+  }
+
+  assert {
+    condition     = alltrue([for r in cloudflare_dns_record.email : !r.proxied])
+    error_message = "Mail records are DNS only."
+  }
+}
+
+run "a_report_address_adds_rua_and_the_region_moves_the_mx" {
+  command = plan
+
+  variables {
+    hosts_file            = "../../../config/fixtures/hosts.placeholder.json"
+    resend_dkim_value     = "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC"
+    dmarc_report_address  = "dmarc@placeholder.example"
+    resend_sending_region = "us-east-1"
+  }
+
+  assert {
+    condition = (
+      cloudflare_dns_record.email["dmarc"].content == "v=DMARC1; p=none; rua=mailto:dmarc@placeholder.example"
+      && cloudflare_dns_record.email["return_path_mx"].content == "feedback-smtp.us-east-1.amazonses.com"
+    )
+    error_message = "rua is added only with an address; the MX follows the sending region."
+  }
+}
+
+run "a_malformed_dkim_value_is_refused" {
+  command = plan
+
+  variables {
+    hosts_file        = "../../../config/fixtures/hosts.placeholder.json"
+    resend_dkim_value = "v=DKIM1; k=rsa; p=abc"
+  }
+
+  expect_failures = [var.resend_dkim_value]
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig } from '../config.js';
+import { UNOWNED_DOMAINS } from '../email/ports.js';
 
 const base = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
@@ -327,5 +328,65 @@ describe('loadConfig — Sentry (MUT-148, ADR-091)', () => {
   it('reports under NODE_ENV unless SENTRY_ENVIRONMENT names another environment', () => {
     expect(loadConfig({ ...base, NODE_ENV: 'production' }).SENTRY_ENVIRONMENT).toBe('production');
     expect(loadConfig({ ...base, NODE_ENV: 'production', SENTRY_ENVIRONMENT: 'operator' }).SENTRY_ENVIRONMENT).toBe('operator');
+  });
+});
+
+describe('loadConfig — mail (MUT-359)', () => {
+  const resend = {
+    MAILER: 'resend',
+    MAIL_FROM_ADDRESS: 'no-reply@mail.example.test',
+    MAIL_REPLY_TO: 'help@example.test',
+    RESEND_API_KEY: 're_test_mut359',
+    RESEND_WEBHOOK_SECRET: 'whsec_bXV0MzU5LXNlY3JldA==',
+    MAIL_DAILY_CAP: '90',
+  };
+
+  it('defaults to no mailer, signup off, a 500 cap with a 10 % security reserve and 10 per recipient', () => {
+    const config = loadConfig(base);
+    expect(config).toMatchObject({ MAILER: 'noop', SELF_SIGNUP_ENABLED: false, MAIL_DAILY_CAP: 500, MAIL_SECURITY_RESERVE: 50, MAIL_RECIPIENT_DAILY_CAP: 10 });
+    expect(config.RESEND_API_KEY).toBeUndefined();
+  });
+
+  it('starts with every Resend value set, and rounds the reserve up', () => {
+    expect(loadConfig({ ...base, ...resend })).toMatchObject({ MAILER: 'resend', MAIL_DAILY_CAP: 90, MAIL_SECURITY_RESERVE: 9 });
+    expect(loadConfig({ ...base, ...resend, MAIL_DAILY_CAP: '95' }).MAIL_SECURITY_RESERVE).toBe(10);
+    expect(loadConfig({ ...base, ...resend, MAIL_SECURITY_RESERVE: '0' }).MAIL_SECURITY_RESERVE).toBe(0);
+    // Terraform accepts a cap of 1: it boots with no reserve rather than refusing.
+    expect(loadConfig({ ...base, ...resend, MAIL_DAILY_CAP: '1' })).toMatchObject({ MAIL_DAILY_CAP: 1, MAIL_SECURITY_RESERVE: 0 });
+  });
+
+  it.each(['MAIL_FROM_ADDRESS', 'MAIL_REPLY_TO', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET', 'MAIL_DAILY_CAP'])('refuses MAILER=resend without %s', (name) => {
+    const env: Record<string, string> = { ...base, ...resend };
+    delete env[name];
+    expect(() => loadConfig(env)).toThrow(name);
+  });
+
+  it('refuses noop while self-signup is on', () => {
+    expect(() => loadConfig({ ...base, SELF_SIGNUP_ENABLED: 'true' })).toThrow('SELF_SIGNUP_ENABLED');
+    expect(loadConfig({ ...base, SELF_SIGNUP_ENABLED: 'true', MAILER: 'memory' }).SELF_SIGNUP_ENABLED).toBe(true);
+    expect(loadConfig({ ...base, SELF_SIGNUP_ENABLED: 'false' }).SELF_SIGNUP_ENABLED).toBe(false);
+  });
+
+  it.each(['log', 'memory'])('refuses MAILER=%s in production, where links would land in logs or nowhere', (mailer) => {
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', MAILER: mailer })).toThrow('MAILER');
+    expect(loadConfig({ ...base, NODE_ENV: 'development', MAILER: mailer }).MAILER).toBe(mailer);
+  });
+
+  it('refuses an unowned domain as the sender or the reply-to', () => {
+    expect(() => loadConfig({ ...base, ...resend, MAIL_FROM_ADDRESS: `no-reply@${UNOWNED_DOMAINS[0]}` })).toThrow('MAIL_FROM_ADDRESS');
+    expect(() => loadConfig({ ...base, ...resend, MAIL_REPLY_TO: `help@${UNOWNED_DOMAINS[0]}` })).toThrow('MAIL_REPLY_TO');
+  });
+
+  it('allows the webhook secret alone, but only with the sender address it filters events by', () => {
+    expect(() => loadConfig({ ...base, RESEND_WEBHOOK_SECRET: resend.RESEND_WEBHOOK_SECRET })).toThrow('MAIL_FROM_ADDRESS');
+    expect(loadConfig({ ...base, RESEND_WEBHOOK_SECRET: resend.RESEND_WEBHOOK_SECRET, MAIL_FROM_ADDRESS: resend.MAIL_FROM_ADDRESS }).MAILER).toBe('noop');
+  });
+
+  it('refuses malformed keys, secrets and caps', () => {
+    expect(() => loadConfig({ ...base, ...resend, RESEND_API_KEY: 'sk_live_x' })).toThrow('RESEND_API_KEY');
+    expect(() => loadConfig({ ...base, ...resend, RESEND_WEBHOOK_SECRET: 'secret' })).toThrow('RESEND_WEBHOOK_SECRET');
+    expect(() => loadConfig({ ...base, ...resend, MAIL_DAILY_CAP: '0' })).toThrow('MAIL_DAILY_CAP');
+    expect(() => loadConfig({ ...base, ...resend, MAIL_SECURITY_RESERVE: '90' })).toThrow('MAIL_SECURITY_RESERVE');
+    expect(() => loadConfig({ ...base, MAIL_FROM_ADDRESS: 'MTB3A <no-reply@mail.example.test>' })).toThrow('MAIL_FROM_ADDRESS');
   });
 });

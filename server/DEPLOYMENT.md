@@ -1236,6 +1236,53 @@ The filters are unproven against live entries until each first fires: note the d
 
 **Rotate a Stripe secret:** add the new value as in step 2 or 3, then `./scripts/deploy.sh`. Revoke the old key in Stripe only after the new revision serves.
 
+### 6f. Transactional mail through Resend (MUT-359, ADR-159 §5)
+
+The API mails people through a `Mailer` port (`server/src/email/`). Today it sends one mail, "your password was set / changed", after a setup-link redeem and after `POST /v1/me/password`. MUT-366 adds the signup and recovery links, MUT-367 the review mails, MUT-306 invites, MUT-419 trial mails. Resend is the provider, on Barmajiyat's existing account (Malafat sends from it too). Mutaba3a has its own domain on the apex, sends from `no-reply@<apex>` in `eu-west-1`, and has open and click tracking **off**.
+
+| Piece | Where | State until you turn it on |
+|---|---|---|
+| `MAILER` | `infrastructure/terraform` var `mailer` (`noop` / `resend`) | `noop`: nothing is sent, and the password notice resolves to `disabled` |
+| Secrets `mutaba3a-api-resend-api-key`, `mutaba3a-api-resend-webhook-secret` | `infrastructure/terraform/email.tf` | Exist, empty. Terraform never writes their values. Mounted only with `mailer = "resend"` |
+| Sender, reply-to, cap | `MAIL_FROM_ADDRESS = no-reply@<domain>` (from `config/hosts.json`), vars `mail_reply_to` and `mail_daily_cap` | Not set |
+| DNS: DKIM, the `send.` return path (MX + SPF), DMARC `p=none` | `infrastructure/frontdoor/email.tf`, var `resend_dkim_value` | Not created |
+| Bounce webhook `POST /v1/email/resend/webhook` | The API | Answers 503 `MAILER_NOT_CONFIGURED` until `RESEND_WEBHOOK_SECRET` is set. It keeps only events sent from our domain (the account is shared) |
+| Alerts "Mail cap reached" and "Mail provider failing" | `email.tf`, on the §6b channels | Don't exist. Created with `mailer = "resend"` |
+| `guard_mailer_release` | `scripts/lib/release-guard.sh` | Refuses a release that would switch mail off while the service mounts `RESEND_API_KEY` (`SKIP_MAILER_GUARD=1` to mean it) |
+
+**Limits.** `MAIL_DAILY_CAP` mails in any 24 h, every template counted, including sends that timed out (Resend may still have taken them). 10 % of it (`MAIL_SECURITY_RESERVE`) is kept for recovery mail (reset and finish-setup links), so a flood of signups or password changes can't block resets. `MAIL_RECIPIENT_DAILY_CAP` (10) per address; the password notice is outside it, so requests others make for an address can never silence a takeover notice. Past a cap the API logs `mail cap reached; nothing sent` at error with the limit it met (`cap`, `daily`, `reserve`) and the alert fires. The send log (`email_deliveries`) holds digests only and is pruned after 30 days.
+
+**Cost:** the Barmajiyat Resend plan. The free plan allows 100 mails a day for **both** products together. Pro ($20/month) allows 50,000 a month.
+
+#### Go live (Basel, at the end of the run)
+
+1. **Privacy first.** MUT-369's privacy-policy paragraph is live: Resend is a processor and keeps records in the US. Mail carries links, never money records.
+2. **Resend:** on the Barmajiyat account, add the domain from `config/hosts.json` (`npm run hosts -- get domain`). Pick region **eu-west-1**, and turn **open tracking and click tracking off** (Domains › the domain › Configuration).
+3. **DNS:** copy the DKIM value Resend shows (`p=MIGf…`) into `infrastructure/frontdoor/production.tfvars` as `resend_dkim_value`, plus `dmarc_report_address` if you want DMARC reports. An address off the apex needs that domain's authorization record. Then:
+   ```bash
+   cd infrastructure/frontdoor && terraform plan -var-file=production.tfvars
+   ```
+   Expect **`Plan: 4 to add, 0 to change, 0 to destroy`**, all `cloudflare_dns_record.email[...]`. Apply. Wait for Resend to show the domain verified, then run `npm --prefix server run email:check`. It must print `[email] ok`.
+4. **Keys:**
+   * Create a **sending-only** key restricted to the domain (or the key Basel chose) and add it without a shell-history entry:
+     ```bash
+     read -rs KEY && printf '%s' "$KEY" | gcloud secrets versions add mutaba3a-api-resend-api-key --data-file=- --project=$GCP_PROJECT_ID; unset KEY
+     ```
+   * Separately, put a **full-access** key in the Keychain for the API check only (service `release-kit`, account `barmajiyat/RESEND_CHECK_API_KEY`). It never goes to the server. Run `npm --prefix server run email:check -- --api` with `RESEND_CHECK_API_KEY` exported. It fails while tracking is on, a record is unverified or the region isn't eu-west-1.
+5. **Plan size:** confirm the Barmajiyat Resend plan covers both products. Set `mail_daily_cap` below its daily limit, leaving room for Malafat.
+6. **Unowned domain:** check production for users at `@mutaba3a.app` (Basel's MUT-359 comment 12412) and move them to `@<apex>`. The API refuses to mail that domain in any case.
+7. **One release turns it on.**
+   * In Resend, create the webhook `https://<portal host>/v1/email/resend/webhook` for `email.bounced` and `email.complained`. Add its signing secret (`whsec_…`) as above to `mutaba3a-api-resend-webhook-secret`. Don't create the webhook earlier: until the release, the endpoint answers 503, and Svix may disable an endpoint that keeps failing.
+   * In `infrastructure/terraform/production.tfvars`, in every checkout you release from, set `mailer = "resend"`, `mail_reply_to`, `mail_daily_cap` and, optionally, `operator_alert_email`.
+   * Run `make release server`. The plan adds `MAILER=resend`, the two secret env vars, `MAIL_FROM_ADDRESS`, `MAIL_REPLY_TO` and `MAIL_DAILY_CAP`, and the two alert policies.
+8. **Live check (MUT-359 AC):** change your own password on the portal in Arabic, then in English. The notice must reach a Gmail and an Outlook inbox, not spam, with the From `MTB3A <no-reply@<apex>>`. Delete the MUT-359 line from `docs/operations/before-release.md` and record the date in §7.
+
+**Turn it off:** set `mailer = "noop"` in every checkout you release from, then either apply from `infrastructure/terraform` (a plain apply isn't guarded) or release with `SKIP_MAILER_GUARD=1`. Once the service no longer mounts `RESEND_API_KEY`, later releases pass the guard. The secrets stay.
+
+**Rotate the sending key:** add a new version as in step 4, then `./scripts/deploy.sh`. Revoke the old key in Resend once the new revision serves.
+
+**A suppressed address** (hard bounce or complaint) gets no more mail. There's no command to lift it yet (TD). If a person fixes their mailbox, delete their row from `email_suppressions` by hand (`npm run db:psql`).
+
 ## 7. Production record
 
 Project `malafat-production`, region `me-west1`. Read from Cloud Run, Artifact

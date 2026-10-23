@@ -21,6 +21,12 @@ import type { LedgerStore } from './repositories/ports.js';
 import type { AttachmentStorage } from './attachments/storage.js';
 import { adminAuth, adminRoutes, jobAuth } from './routes/admin.js';
 import { adminBillingRoutes } from './routes/admin-billing.js';
+import { EMAIL_WEBHOOK_POLICY, emailWebhookRoutes } from './routes/email-webhook.js';
+import { devOutboxRoutes } from './routes/dev-outbox.js';
+import { createMailer } from './email/mailer.js';
+import type { Mailer } from './email/ports.js';
+import type { MemoryMailTransport } from './email/transports/memory.js';
+import { NOOP_TRANSPORT } from './email/transports/noop.js';
 import { STRIPE_WEBHOOK_POLICY, stripeBillingRoutes } from './routes/stripe-billing.js';
 import type { StripeGateway } from './billing/stripe/gateway.js';
 import type { CheckoutGateway } from './billing/stripe/checkout-gateway.js';
@@ -110,6 +116,17 @@ export interface AppDependencies {
   receiptsLibrary?: boolean;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
+  /** MUT-359: the mailer (password notices; MUT-366's links). Absent = no mailer: every send answers `disabled`. */
+  mailer?: Mailer;
+  /**
+   * MUT-359 (D20): the Resend webhook's signing secret and the domain our mail is sent from (events from any other
+   * domain are ignored). Null or absent = POST /v1/email/resend/webhook answers 503 MAILER_NOT_CONFIGURED.
+   */
+  emailWebhook?: { secret: string; fromDomain: string } | null;
+  /** Per-IP budget for failed Resend webhook signatures. Defaults to EMAIL_WEBHOOK_POLICY. */
+  emailWebhookIpLimiter?: RateLimiter;
+  /** MUT-359 (D11): the memory mailer's outbox, served at GET /admin/v1/dev-outbox. Only ever set for MAILER=memory outside production. */
+  devOutbox?: MemoryMailTransport | null;
 }
 
 const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disabled: false };
@@ -174,7 +191,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.53.0-mut149';
+export const API_VERSION = '1.54.0-mut359';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -202,6 +219,10 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   });
 
   const passwordHasher = deps.passwordHasher ?? createArgon2Hasher(ARGON2_MINIMUMS);
+  // MUT-359: no mailer configured = the noop transport, so a password change still answers as before and sends nothing.
+  const mailer =
+    deps.mailer ??
+    createMailer({ transport: NOOP_TRANSPORT, store: deps.store, logger: deps.logger, now, fromAddress: 'no-reply@example.invalid', replyTo: null, limits: { daily: 1, securityReserve: 0, perRecipient: 1 } });
   const terms = deps.terms ?? CURRENT_TERMS;
   // Every route reaches the ledger through the guard authenticate() sets (ADR-037 decision 7); authenticate itself reads the base store.
   const store = requestScopedStore(deps.store);
@@ -250,6 +271,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       throttle: signInThrottle,
       ipLimiter: signInIpLimiter,
       terms,
+      mailer,
+      logger: deps.logger,
     }),
   );
   app.route(
@@ -264,7 +287,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     }),
   );
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
-  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms }));
+  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger }));
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', importRoutes(store));
   app.route('/', vatRoutes(store));
@@ -332,6 +355,19 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}),
     }),
   );
+  // MUT-359: Resend's bounce webhook, on the unguarded store like the Stripe sync.
+  app.route(
+    '/',
+    emailWebhookRoutes({
+      webhook: deps.emailWebhook ?? null,
+      store: deps.store,
+      ipLimiter: deps.emailWebhookIpLimiter ?? new SlidingWindowRateLimiter(EMAIL_WEBHOOK_POLICY.ipPerMinute),
+      trustedProxyHops: sessions.trustedProxyHops,
+      ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}),
+      logger: deps.logger,
+    }),
+  );
+  if (deps.devOutbox) app.route('/', devOutboxRoutes(deps.devOutbox));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
@@ -399,6 +435,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Users (MUT-37) are operator-provisioned through /admin/v1/users*: no signup, invite or self-service password reset exists in any environment. A user reaches organizations through memberships.',
         '',
+        'Email (MUT-359): when the deployment configures a mailer, setting a password through a setup link and POST /v1/me/password each send the person a "your password was set/changed" notice in their language; the response never depends on it. POST /v1/email/resend/webhook is Resend\'s Svix-signed bounce and complaint webhook: it suppresses addresses that hard-bounce or complain, so they get no more mail.',
+        '',
         'Writability (MUT-39): a session may read a hosted profile\'s ledger but not write it. A session calling an operation that writes customers, projects, agreements, payments or attachments gets 403 READ_ONLY_PROFILE with details { domain, writerOfRecord } (writerOfRecord is MALAFAT when the profile\'s Malafat integration is connected, otherwise null); other operations it may not use answer 403 PRINCIPAL_NOT_ACCEPTED.',
         '',
         'Expenses (MUT-42) are a hosted profile\'s own record, written by the signed-in person: /v1/expenses*, /v1/expense-categories* and /v1/summaries/expenses accept sessions only, never an API key, and nothing about them appears in any operation an API key can call (audit and operations included). Each expense keeps its original amount and currency; summaries are per currency. Receipts use the attachments bucket and signed-URL lifetime. The expenses:read / expenses:write scopes are session-only and cannot be issued to a key.',
@@ -433,6 +471,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Receipts', description: 'The receipts library (MUT-255/389): receipts that wait To review before their expense (sessions only). Mounted only where the deployment turns RECEIPTS_LIBRARY on; elsewhere every /v1/receipts path answers 404' },
       { name: 'Income', description: 'Received or Owed, captured directly by the signed-in person on a personal profile (sessions only)' },
       { name: 'Your data', description: 'Download my records: a profile as the records file the signed-out portal restores, and its receipt files (sessions only)' },
+      { name: 'Email', description: 'Resend\'s bounce and complaint webhook (MUT-359)' },
       { name: 'Admin', description: 'Operator provisioning: organizations, API keys, users and memberships' },
     ],
   });

@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-23 — The server can send transactional mail through Resend (MUT-359, ADR-174)
+
+**Why:** signup and forgot-password (ADR-159), firm invites (MUT-306), passkey notices (MUT-414) and trial mails (MUT-419) all need email; the server had none.
+
+### Added
+- `server/src/email/`: the `Mailer` port, en/ar templates (nine, RTL Arabic, inline styles, no images, no amounts), transports `resend` (fetch, no tracking options, Idempotency-Key), `log`, `memory`, `noop`; `createMailer` (address check, unowned-domain refusal, suppression, the global cap with a 10 % reserve for recovery mail, the per-recipient cap with the password notice exempt, serialized claims, idempotency; a down send log is an outcome, never a throw); Svix signature check; `sendPasswordNotice`.
+- "Your password is set / was changed" after every setup-link redeem and `POST /v1/me/password`; the answer never depends on it.
+- `POST /v1/email/resend/webhook` (Svix-signed; hard bounces and complaints sent from our own domain suppress the address). New codes `INVALID_WEBHOOK_SIGNATURE` (401), `MAILER_NOT_CONFIGURED` (503). API 1.54.0-mut359.
+- `GET /admin/v1/dev-outbox` for `MAILER=memory` outside production (not published).
+- Migration `20261023120000_mut359_email`: `email_deliveries` (digests only) and `email_suppressions`.
+- Config: `MAILER`, `SELF_SIGNUP_ENABLED`, `MAIL_FROM_ADDRESS`, `MAIL_REPLY_TO`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `MAIL_DAILY_CAP`, `MAIL_SECURITY_RESERVE`, `MAIL_RECIPIENT_DAILY_CAP`, `OPERATOR_ALERT_EMAIL`, with the refusals in ADR-174.
+- `npm --prefix server run email:check` (DNS; `--api` for verification, region and tracking).
+- Terraform: `infrastructure/terraform/email.tf` (secrets, mail env, two log-match alerts; `mailer` defaults to noop) and `infrastructure/frontdoor/email.tf` (DKIM, `send.` MX + SPF, DMARC `p=none`, off until `resend_dkim_value`). Prepared, not applied.
+- `guard_mailer_release` in `server/scripts/lib/release-guard.sh`, and a Mail section in `scripts/preflight.sh`.
+- Docs: `server/DEPLOYMENT.md` §6f, `docs/operations/before-release.md`, `server/.env.example`.
+
+### Changed
+- The public-surface pins (`no-self-registration.test.ts`, `route-security.test.ts`) list the Resend webhook.
+
+**Files:** `server/src/email/**`, `server/src/routes/{email-webhook,dev-outbox,account-setup,sessions}.ts`, `server/src/{app,config,errors,schemas,index}.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/auth/store-guard.ts`, `server/prisma/**`, `server/src/scripts/email-check.ts`, `server/scripts/{deploy.sh,lib/release-guard.sh}`, `scripts/preflight.sh`, `server/infrastructure/{terraform,frontdoor}/**`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, docs.
+
 ## [Unreleased] - 2026-10-23 — The hosted portal reports crashes to Sentry, signed in only (MUT-149, ADR-091 am.11)
 
 **Why:** MUT-329's pilot release needs "Sentry receives a test event from the portal"; until now a portal crash was a white screen nobody heard about.

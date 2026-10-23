@@ -57,11 +57,12 @@ source "${SERVER_DIR}/scripts/lib/tf-bootstrap.sh"
 source "${SERVER_DIR}/scripts/lib/release-guard.sh"
 # shellcheck source=lib/db-checks.sh
 source "${SERVER_DIR}/scripts/lib/db-checks.sh"
-# MUT-381 / MUT-360: both release guards with this release's own terraform arguments; run inside TF_DIR.
+# MUT-381 / MUT-360 / MUT-148 / MUT-359: the release guards with this release's own terraform arguments; run inside TF_DIR.
 guard_release() {
   (cd "${TF_DIR}" && guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
     && guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
-    && guard_sentry_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}")
+    && guard_sentry_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
+    && guard_mailer_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}")
 }
 # MUT-148 (ADR-091): pre-roll and post-roll run here, not in Cloud Run, so they get the API's DSN from Secret
 # Manager. Re-read before each step: the release that turns sentry_enabled on creates the secret in step 4.
@@ -130,6 +131,9 @@ guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJEC
 # smoke checks against /health (D4). On by default; SKIP_SENTRY_GUARD=1 skips the check (lib/release-guard.sh).
 guard_sentry_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
 EXPECT_ERROR_REPORTING="off"; [[ "${SENTRY_ENABLED}" == "true" ]] && EXPECT_ERROR_REPORTING="on"
+# MUT-359 (D22): never switch mail off as a side effect of a release (a checkout whose production.tfvars lacks
+# mailer = "resend"). On by default; SKIP_MAILER_GUARD=1 skips it (lib/release-guard.sh).
+guard_mailer_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
 # First run only: the registry must exist before `docker push`, the database
 # before the migration. Skipped once they are in state (lib/tf-bootstrap.sh).
 ensure_bootstrap "${TF_ARGS[@]}" "${APPROVE[@]}"

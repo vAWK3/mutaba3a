@@ -1307,3 +1307,51 @@ model StripeEvent {
 
   @@map("stripe_events")
 }
+
+/// MUT-359 (ADR-159 §5): where a send stands. FAILED rows don't count toward the caps; UNCERTAIN ones (a timeout the
+/// provider may still have accepted) do. Both may be claimed again.
+enum EmailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  UNCERTAIN
+}
+
+/// MUT-359: why an address gets no more mail. Only Resend's permanent bounces and complaints (D10).
+enum EmailSuppressionReason {
+  HARD_BOUNCE
+  COMPLAINT
+}
+
+/// MUT-359 (D2, D16): the send log behind the mail caps and idempotency. Digests only: never an address or a body.
+/// Pruned after 30 days by the API's hourly timer.
+model EmailDelivery {
+  id              String              @id @db.Uuid
+  /// sha256 hex of the caller's idempotency key; also Resend's Idempotency-Key.
+  keyDigest       String              @unique @db.VarChar(64)
+  /// sha256 hex of the normalized recipient, for the per-recipient cap.
+  recipientDigest String              @db.VarChar(64)
+  template        String              @db.VarChar(40)
+  locale          String              @db.VarChar(5)
+  status          EmailDeliveryStatus
+  providerId      String?             @db.VarChar(100)
+  error           String?             @db.VarChar(200)
+  createdAt       DateTime
+  finishedAt      DateTime?
+
+  @@index([createdAt])
+  @@index([recipientDigest, createdAt])
+  @@map("email_deliveries")
+}
+
+/// MUT-359 (D10): addresses the Resend webhook reported as a hard bounce or a complaint. The first event wins.
+model EmailSuppression {
+  /// normalizeEmail()'d.
+  email     String                 @id
+  reason    EmailSuppressionReason
+  /// The svix-id of the webhook delivery that suppressed it.
+  eventId   String                 @db.VarChar(100)
+  createdAt DateTime
+
+  @@map("email_suppressions")
+}

@@ -31,3 +31,11 @@ log_level           = "info"
 # apple_bundle_id             = "com.barmajiyat.mutaba3a"
 # android_package_name        = "com.barmajiyat.mutaba3a"
 # android_sha256_fingerprints = "AA:BB:...,CC:DD:..."
+
+# Transactional mail (MUT-359, server/DEPLOYMENT.md §6f). Off until the domain is verified in Resend, both secrets
+# hold a version and `npm --prefix server run email:check -- --api` passes. The cap stays below the Barmajiyat
+# Resend plan's daily limit, which Malafat shares.
+# mailer               = "resend"
+# mail_reply_to        = "support@example.com"
+# mail_daily_cap       = 90
+# operator_alert_email = "you@example.com"

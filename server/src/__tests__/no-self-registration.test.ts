@@ -52,7 +52,8 @@ describe('no self-registration route exists (MUT-37)', () => {
    */
   // MUT-287 (MUT-285 D3, ADR-097 §7): GET /v1/public/fx-rates is public market data for the signed-out portal, read-only and rate-limited; it creates no account.
   // MUT-360 (ADR-165): the Stripe webhook is public too; its credential is Stripe-Signature, and it creates no user account.
-  it('the public operations are exactly sign-in, the setup-link pair, the public FX snapshot and the Stripe webhook', async () => {
+  // MUT-359 (D19): so is Resend's bounce webhook; its credential is the Svix signature, and it only suppresses addresses.
+  it('the public operations are exactly sign-in, the setup-link pair, the public FX snapshot and the Stripe and Resend webhooks', async () => {
     const doc = (await (await inventory().request('/openapi.json')).json()) as {
       paths: Record<string, Record<string, { security?: unknown[] }>>;
     };
@@ -62,6 +63,6 @@ describe('no self-registration route exists (MUT-37)', () => {
       .filter((op) => Array.isArray(op.security) && op.security.length === 0)
       .map((op) => op.key)
       .sort();
-    expect(publicOperations).toEqual(['GET /v1/public/fx-rates', 'POST /v1/account-setup', 'POST /v1/account-setup/check', 'POST /v1/billing/stripe/webhook', 'POST /v1/device-sessions', 'POST /v1/sessions']);
+    expect(publicOperations).toEqual(['GET /v1/public/fx-rates', 'POST /v1/account-setup', 'POST /v1/account-setup/check', 'POST /v1/billing/stripe/webhook', 'POST /v1/device-sessions', 'POST /v1/email/resend/webhook', 'POST /v1/sessions']);
   });
 });
