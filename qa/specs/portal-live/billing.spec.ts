@@ -50,7 +50,7 @@ test('Subscribe in shekels from Israel as a business, pay with a test card, and 
   await step('Come back to the portal: confirming, then subscribed', async () => {
     await page.waitForURL(/checkout=success/, { timeout: 90_000 });
     const back = page.getByRole('dialog', { name: 'Billing' });
-    await expect(back.getByText("You're subscribed. Thank you.")).toBeVisible({ timeout: 45_000 });
+    await expect(back.locator('.hp-banner', { hasText: "You're subscribed. Thank you." })).toBeVisible({ timeout: 45_000 });
     await expect(back.getByRole('button', { name: 'Manage billing' })).toBeVisible();
   });
 });
@@ -79,7 +79,7 @@ test('Subscribe in dollars from the Emirates as a business with a tax ID', { tag
   });
   await step('Come back subscribed', async () => {
     await page.waitForURL(/checkout=success/, { timeout: 90_000 });
-    await expect(page.getByRole('dialog', { name: 'Billing' }).getByText("You're subscribed. Thank you.")).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByRole('dialog', { name: 'Billing' }).locator('.hp-banner', { hasText: "You're subscribed. Thank you." })).toBeVisible({ timeout: 45_000 });
   });
 });
 
