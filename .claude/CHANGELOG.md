@@ -37,7 +37,11 @@
 - `billing/checkout.ts` (the decision and the Checkout params), `billing/stripe/checkout-gateway.ts` (the write door), `billing/billing-countries.json` (no consumer country yet), `billing.summaryOf`.
 - `billing:status` `countryCheck` (D9).
 - Portal: the account menu's Billing drawer (`BillingDrawer`, `billingView`, `billingQueries`, `countries`), Arabic first; `RadioCards` extracted from `ProfileTypeCards`.
-- Release-QA: `portal-live` app on the Stripe sandbox (six flows), `portal.billing.open-soon`.
+- Release-QA: `portal-live` app on the Stripe sandbox (six flows, all passing 2026-10-23; Checkout pays through the API behind Stripe's hCaptcha, TD-201), `portal.billing.open-soon`.
+
+### Fixed (found by the live release-QA)
+- The Stripe mirror reads a Customer Portal cancel (`cancel_at` on the period end, `cancel_at_period_end` false) as ending; Billing kept saying "renews" after a cancel (`billing/stripe/mirror.ts`).
+- Back from the Customer Portal, Billing refetches until the webhook's change lands (`?portal=returned`).
 
 ### Changed
 - The restricted Stripe key gains Write on Customers, Checkout Sessions and Customer portal (DEPLOYMENT.md §6e, pilot-runbook §1.7 steps 3a–3b, before-release.md).

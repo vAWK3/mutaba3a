@@ -101,13 +101,13 @@
 **Impact**: `npm run typecheck` only checks `tsconfig.app.json`/`tsconfig.hosted.json`/`tsconfig.hosted-local.json`. `tsconfig.node.json` (the only config with `types: ["node"]`, which `scripts/` would need) includes only `vite.config.ts`. `npm run build`'s `tsc -b` builds every referenced project, but `tsconfig.node.json`'s narrow include means it still never typechecks `scripts/`. `vitest` transpiles via esbuild without type-checking. A type error in any `scripts/*.ts` file (including this ticket's `icon-set.ts`/`generate-icons.ts`/`validate-icon-set.ts`) would only surface as a runtime failure the next time someone runs that script, not in CI.
 **Fix**: add `"scripts"` (or `"scripts/**/*.ts"`, excluding `__tests__`) to `tsconfig.node.json`'s `include`, confirm it builds clean, then add `tsconfig.node.json` to `npm run typecheck`'s chain.
 
-### TD-201: Billing release-QA depends on Stripe's hosted pages and a sandbox set up by hand
-**Status**: Open
+### TD-201: Billing release-QA can't pay on Stripe's Checkout page, and the sandbox is set up by hand
+**Status**: Open (mitigated 2026-10-23)
 **Ticket**: MUT-362 (eng review D8 B)
 **Added**: 2026-10-22
 **Priority**: Low
-**Impact**: the `portal-live` specs fill Stripe's real Checkout and Customer Portal. Stripe says its hosted pages resist automation, so a bot check or a changed field id fails a run with no product bug. The app also needs the sandbox key in the Keychain (`release-kit` / `barmajiyat/MUTABA3A_STRIPE_SANDBOX_KEY`) (the Stripe CLI gets it too, through STRIPE_API_KEY) and the sandbox's default Customer Portal configuration saved once in the dashboard.
-**Fix**: if the hosted-page steps turn flaky, stop the specs at the redirect and finish the subscription through the API (as `manage` already does), keeping one recorded hosted-page run per release by hand.
+**Impact**: Stripe's Checkout runs an hCaptcha on Subscribe that never passes under automation (seen 2026-10-23: the session stays open and unpaid behind "Processing"). QA doesn't work around bot checks, so `portal-live.billing.subscribe` and `subscribe-usd` fill the real page and check what we put on it (price, our bilingual tax-number field, the Arabic + English note), then pay on that Checkout's own customer and price through Stripe's API and follow its success URL. What a recording does not show is Stripe's own Subscribe click and `checkout.session.completed`; the subscription events the sync reads still arrive through `stripe listen`. The Customer Portal steps run for real. Field ids and steps are Stripe's (Card vs Amazon Pay in USD, the cancel-reason dialog) and can change without a product bug. The app needs the sandbox key in the Keychain (`release-kit` / `barmajiyat/MUTABA3A_STRIPE_SANDBOX_KEY`; the Stripe CLI gets it through STRIPE_API_KEY) and the sandbox's default Customer Portal configuration saved once in the dashboard.
+**Fix**: before GA, one paid Checkout by hand in the sandbox per release (a person clicking Subscribe), or Stripe's test-mode guidance if it ever offers an automation path. Nothing to change in code.
 
 ### TD-202: A person's own Checkout never runs live while no country is open to consumers
 **Status**: Open
