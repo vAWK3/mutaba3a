@@ -74,7 +74,8 @@ features:
       - In Stripe's portal, cancel the plan and return to Mutaba3a
     expect:
       - The drawer shows Active and the renewal date before, and Stripe's Customer Portal opens on Manage billing (AC3)
-      - Back in the portal (?portal=returned) the drawer refetches until the webhook lands, then says "Your plan ends on <date>"; access stays until then
+      - Back in the portal (?portal=returned) the drawer refetches until the webhook lands, then says "Your plan ends on <date>" with the Ending chip
+      - Access stays until then; /v1/me still reports the profile ACTIVE, paid by Stripe (AC3)
   - id: manage-ended
     title: After the cancelled period ends the account is read-only and Subscribe comes back
     tier: secondary
@@ -83,7 +84,7 @@ features:
       - Advance the test clock past the period end
       - Open Billing
     expect:
-      - The drawer says "Your plan has ended", read-only, with Subscribe (AC3: READ_ONLY after the period)
+      - 'The drawer says "Your plan has ended", read-only, with Subscribe (AC3: READ_ONLY after the period)'
   - id: rtl-375
     title: Billing in Arabic on a 375 px phone
     tier: secondary

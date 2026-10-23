@@ -135,7 +135,13 @@ test('Manage billing opens Stripe’s Customer Portal; cancelling keeps the plan
   await step('Return to Mutaba3a: the plan ends at the period end', async () => {
     await page.getByRole('link', { name: /return to/i }).first().click();
     await page.waitForURL(/billing=true/, { timeout: 60_000 });
-    await expect(page.getByRole('dialog', { name: 'Billing' }).getByRole('heading', { name: /^Your plan ends on/ })).toBeVisible({ timeout: 45_000 });
+    const back = page.getByRole('dialog', { name: 'Billing' });
+    await expect(back.getByRole('heading', { name: /^Your plan ends on/ })).toBeVisible({ timeout: 45_000 });
+    await expect(back.getByText('Ending')).toBeVisible();
+  });
+  await step('Access stays until then: the profile is still Active, paid by Stripe', async () => {
+    const me = await (await page.request.get('/v1/me')).json();
+    expect(me.profiles.find((p: { id: string }) => p.id === person.personalId)?.billing).toMatchObject({ state: 'ACTIVE', source: 'STRIPE' });
   });
 });
 
