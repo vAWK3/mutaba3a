@@ -87,7 +87,7 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/profiles',
       tags: ['Profiles'],
       summary: 'Create a standalone profile you own',
-      description: `Hosted entirely on Mutaba3a: never a Malafat organization, never keyed or shared. Fully writable by its owner, like the personal profile. Up to ${MAX_OWNED_PROFILES} owned profiles per person, the personal one included (409 CONFLICT, details.reason PROFILE_LIMIT). The type picks the expense categories.`,
+      description: `Hosted entirely on MTB3A: never a Malafat organization, never keyed or shared. Fully writable by its owner, like the personal profile. Up to ${MAX_OWNED_PROFILES} owned profiles per person, the personal one included (409 CONFLICT, details.reason PROFILE_LIMIT). The type picks the expense categories.`,
       security: SESSION_ONLY,
       middleware: [identityIdempotent(store, 'profiles.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateProfileRequestSchema) },

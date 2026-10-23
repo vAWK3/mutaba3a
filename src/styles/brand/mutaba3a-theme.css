@@ -54,7 +54,8 @@
 
   /* The MTB3A lockup (MUT-401 kit, MUT-402 D2). Ratios are of the mark size M (logotype-to-mark) or
      of the logotype height H (the rest). The 3px separator floor is a kit exception (design D10); the
-     print ink is the light ink in every theme, so a dark-theme printout stays readable (D5). */
+     print ink is the light ink in every theme, so a dark-theme printout stays readable (D5). Clear space
+     is kit guidance for artwork; no rule renders it. */
   --m-wordmark-logotype-to-mark: 0.4; --m-wordmark-gap: 0.6; --m-wordmark-clear-space: 1;
   --m-wordmark-min-height: 12px; --m-wordmark-aspect: 5.104; --m-wordmark-arabic-size: 1.25;
   --m-wordmark-separator: 0.16; --m-wordmark-separator-min: 3px;

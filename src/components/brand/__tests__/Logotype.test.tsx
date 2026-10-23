@@ -156,7 +156,8 @@ describe('Logotype.css', () => {
   });
 
   it('prints the whole lockup in the light ink, so a dark-theme printout stays readable (design D5, R4)', () => {
-    expect(decls('.wordmark', PRINT).color).toBe('var(--m-wordmark-print-ink)');
+    // Doubled class: outranks .hp-wordmark { color } whatever the stylesheet order (review F1)
+    expect(decls('.wordmark.wordmark', PRINT).color).toBe('var(--m-wordmark-print-ink)');
     for (const selector of ['.logotype', '.wordmark-separator']) {
       expect(decls(selector, PRINT), selector).toMatchObject({
         'background-color': 'currentColor',

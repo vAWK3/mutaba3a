@@ -55,5 +55,7 @@ describe('receipts archive (MUT-14)', () => {
     const { saveAs } = await import('file-saver');
     await expect(exportAllProfilesReceiptsAsZip()).resolves.toBe(1);
     expect(saveAs).toHaveBeenCalledTimes(1);
+    // The name people see in Downloads (MUT-402 D6)
+    expect(vi.mocked(saveAs).mock.calls[0][1]).toBe('mtb3a-receipts.zip');
   });
 });

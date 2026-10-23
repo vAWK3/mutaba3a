@@ -5,8 +5,9 @@
  * logotype height, is 0.40 M. It is declared on the lockup and on each name, never on :root:
  * var() resolves where the property is declared, so a :root H would freeze every surface at the
  * default (OV-8). Without a Wordmark around it, M defaults to the kit's minimum (H = 12px, M = 30px).
- * Everything paints in currentColor, so the two names and the dot share one colour in every
- * theme, link state and forced-colours palette (design D6, D11, D14).
+ * The logotype paints in currentColor, so it matches the live Arabic name beside it in every theme
+ * and link state (design D6); the dot is markDot. Forced colours name the system colour the live
+ * text gets, and print sets the light ink on the whole lockup (D11, D14, D5).
  */
 .wordmark,
 .logotype,
@@ -86,9 +87,10 @@
   }
 }
 
-/* Paper, not the screen theme: the whole lockup prints in the light ink (design D5, R4) */
+/* Paper, not the screen theme: the whole lockup prints in the light ink (design D5, R4). The doubled
+   class outranks a surface's own .hp-wordmark / .landing-wordmark colour whatever the stylesheet order. */
 @media print {
-  .wordmark {
+  .wordmark.wordmark {
     color: var(--m-wordmark-print-ink);
   }
 

@@ -608,7 +608,7 @@ async function openLandingIn(page: Page, language: 'en' | 'ar') {
   await expect(page.locator('#hero-title')).toBeVisible();
 }
 
-test('the landing header and the app name the product MTB3A in English and متابعة in Arabic', { tag: '@web.brand.mtb3a-name' }, async ({ browser, step }) => {
+test('the landing header and the public pages name the product MTB3A in English and متابعة in Arabic', { tag: '@web.brand.mtb3a-name' }, async ({ browser, step }) => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 
   await step('Open the landing page in English: the mark, the MTB3A logotype, the dot and متابعة, in that order', async () => {

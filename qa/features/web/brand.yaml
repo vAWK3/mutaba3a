@@ -171,7 +171,7 @@ features:
       - The splash's background is the canvas the token file names for that scheme
       - The mark is loaded (the dark file under OS dark), 80 px, and centred in the window (±1 px)
   - id: mtb3a-name
-    title: The landing header and the app name the product MTB3A in English and متابعة in Arabic, as the MUT-401 logotype (MUT-402)
+    title: The landing header and the public pages name the product MTB3A in English and متابعة in Arabic, as the MUT-401 logotype (MUT-402)
     tier: secondary
     legacy: [MUT-402]
     paths:

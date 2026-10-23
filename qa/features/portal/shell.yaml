@@ -111,6 +111,8 @@ features:
     legacy: [MUT-402]
     paths:
       - src/hosted/components/Brand.tsx
+      - src/hosted/HostedApp.tsx
+      - src/hosted/shell/HostedShell.tsx
       - src/hosted/hosted.css
       - hosted.html
       - src/components/brand/Logotype.tsx

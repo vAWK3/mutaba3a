@@ -295,6 +295,10 @@ test('sign-in and the sidebar name the product MTB3A in English and متابعة
     await page.waitForLoadState('networkidle');
     // The preload is used, not fetched a second time (eng re-run R3); Chromium only (R6)
     expect(wordmarkFetches).toHaveLength(1);
+    const initiators = await page.evaluate(() =>
+      performance.getEntriesByType('resource').filter((entry) => /\/wordmark[^/]*\.svg$/.test(new URL(entry.name).pathname)).map((entry) => (entry as PerformanceResourceTiming).initiatorType),
+    );
+    expect(initiators).toEqual(['link']);
     await attachScreenshot(page, 'mtb3a-signin-en');
   });
 

@@ -219,7 +219,7 @@ const CONFLICT_MESSAGES: Record<Exclude<Refusal, 'VALIDATION_FAILED' | 'COUNTRY_
   CONTACT_US: 'This subscription needs a hand from us; please contact us',
   NOTHING_TO_COVER: 'You do not own a profile a subscription would cover',
   COVERED_BY_MALAFAT: 'Your profiles are covered by your firm’s Malafat plan',
-  COVERED_BY_GRANT: 'Your account is covered by Mutaba3a; there is nothing to pay',
+  COVERED_BY_GRANT: 'Your account is covered by MTB3A; there is nothing to pay',
   NO_BILLING_ACCOUNT: 'There is no billing account to manage yet',
   BILLING_ACCOUNT_NEEDS_HELP: 'We could not open billing for your account; please contact us',
 };
