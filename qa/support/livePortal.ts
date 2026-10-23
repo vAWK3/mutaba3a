@@ -30,7 +30,6 @@ function sandboxKey(): string {
   return cachedKey;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Json = any;
 
 export async function stripeApi(method: 'GET' | 'POST', endpoint: string, params: Record<string, string> = {}): Promise<Json> {
