@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider } from '../../../lib/theme';
 import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
-import { Wordmark } from '../Brand';
+import { LanguageSwitch, PortalTitle, Wordmark } from '../Brand';
 
 /**
  * The portal's Wordmark (MUT-104, R6): it heads sign-in, the boot screens and
@@ -50,5 +50,20 @@ describe('Wordmark (MUT-104, MUT-402)', () => {
     const img = container.querySelector('.hp-wordmark img');
     expect(img).toHaveAttribute('alt', '');
     expect(img?.getAttribute('src')).toMatch(/\/mark-dark\.svg/);
+  });
+});
+
+describe('PortalTitle (MUT-402 D3)', () => {
+  it('names the tab MTB3A in English and متابعة in Arabic, following the switch', () => {
+    localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
+    render(
+      <HostedLanguageProvider>
+        <PortalTitle />
+        <LanguageSwitch />
+      </HostedLanguageProvider>,
+    );
+    expect(document.title).toBe('MTB3A');
+    fireEvent.click(screen.getByRole('button', { name: 'عربي' }));
+    expect(document.title).toBe('متابعة');
   });
 });

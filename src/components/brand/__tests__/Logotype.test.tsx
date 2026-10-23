@@ -169,6 +169,20 @@ describe('Logotype.css', () => {
   });
 });
 
+describe('the portal preload (design D4, eng re-run R3)', () => {
+  it('hosted.html preloads, once and in CORS mode, the very file Logotype.css masks with', () => {
+    const html = readFileSync(repoPath('hosted.html'), 'utf8');
+    const preloads = [...html.matchAll(/<link\b[^>]*\brel="preload"[^>]*>/g)].map((match) => match[0]);
+    expect(preloads).toHaveLength(1);
+    const [link] = preloads;
+    for (const attribute of [/\bas="image"/, /\btype="image\/svg\+xml"/, /\scrossorigin[\s/>]/]) expect(link).toMatch(attribute);
+    const href = /\bhref="([^"]+)"/.exec(link)![1];
+    // Vite rewrites every <link href> (no rel filter) and the CSS url() to one hashed asset, so equal sources mean equal URLs
+    const masked = /url\(["']?([^"')]+)["']?\)/.exec(decls('.logotype')['mask-image'])![1];
+    expect(resolve(repoPath(''), href)).toBe(resolve(dirname(CSS_FILE), masked));
+  });
+});
+
 describe('the retired lockup CSS (design D8, OV-4)', () => {
   const sheet = (file: string) => postcss.parse(readFileSync(repoPath(file), 'utf8'));
   const RETIRED_PROPS = ['gap', 'font-family', 'font-size', 'font-weight', 'letter-spacing'];

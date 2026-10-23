@@ -89,7 +89,7 @@ describe('Overview', () => {
     await screen.findByText('₪12,000.00');
     healthy = false;
     await act(() => queryClient.refetchQueries({ queryKey: ['p'] }));
-    expect(await screen.findByRole('alert')).toHaveTextContent("Can't reach Mutaba3a right now");
+    expect(await screen.findByRole('alert')).toHaveTextContent("Can't reach MTB3A right now");
     expect(document.body.textContent).not.toContain('12,000');
   });
 });
@@ -310,7 +310,7 @@ describe('Profile switcher', () => {
     expect(first).toHaveAttribute('aria-checked', 'true');
     expect(first).toHaveTextContent('Haddad & PartnersHostedIncome recorded by Malafat');
     expect(second).toHaveTextContent('Nour — personalHostedExpenses only');
-    expect(menu).toHaveTextContent('Your local profiles stay in the Mutaba3a app on your device.');
+    expect(menu).toHaveTextContent('Your local profiles stay in the MTB3A app on your device.');
   });
 
   it('keeps the section, sends the new profile header, and never shows the old figures', async () => {

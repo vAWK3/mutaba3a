@@ -17,7 +17,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
     <meta name="referrer" content="same-origin" />
-    <title>Mutaba3a</title>
+    <!--
+      The MTB3A logotype is a CSS mask, fetched only once the page renders, and the portal has no
+      service worker, so a cold sign-in would paint it late. The preload starts it with the CSS
+      (MUT-402 design D4). Vite rewrites this href to the same hashed /assets/ file the CSS masks
+      with. crossorigin matches the CORS-mode fetch browsers use for mask images; without it the
+      file downloads twice.
+    -->
+    <link rel="preload" as="image" type="image/svg+xml" crossorigin href="./src/assets/brand/wordmark.svg" />
+    <!-- The portal opens in Arabic until a person chooses (ADR-077); PortalTitle takes over once the bundle runs -->
+    <title>متابعة</title>
   </head>
   <body>
     <!--

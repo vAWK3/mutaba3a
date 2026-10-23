@@ -1,4 +1,5 @@
-import { useLanguage } from '../../lib/i18n/core';
+import { useEffect } from 'react';
+import { useLanguage, useT } from '../../lib/i18n/core';
 import type { Language } from '../../lib/i18n/types';
 import { Wordmark as BrandWordmark } from '../../components/brand/Wordmark';
 import { BrandName } from '../../components/brand/Logotype';
@@ -20,6 +21,19 @@ export function Wordmark({ className = '', markSize = PAGE_MARK_SIZE }: { classN
       markClassName="hp-wordmark-mark"
     />
   );
+}
+
+/**
+ * The tab title: the product name as the active language writes it (MUT-402 D3). hosted.html's
+ * static متابعة shows only until the bundle runs; per-page portal titles are out of scope. The
+ * portal never imports the app's hooks (hosted-portal.md §8), so this is its own effect.
+ */
+export function PortalTitle() {
+  const title = useT()('hosted.brand');
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+  return null;
 }
 
 const LANGUAGES: { value: Language; label: string }[] = [
