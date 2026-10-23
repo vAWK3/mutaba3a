@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@dawod/thmanyah-font-web/index.css">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="./image-slot.js"></script>
+<style>body{margin:0;background:#E6E2ED;font-family:'Thmanyah Sans',sans-serif;color:#392F4B}a{color:#795DBA}a:hover{color:#533C87}</style>
+</helmet>
+<div style="display:flex;flex-direction:column;gap:96px;padding:80px;width:max-content">
+
+<section style="display:flex;flex-direction:column;gap:24px">
+  <div style="display:flex;align-items:baseline;gap:16px"><span style="font-size:28px;font-weight:700">wordmark.svg</span><span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#675D7C">outlined from Thmanyah Serif Display Bold · +30 tracking · viewBox 3695×724 · one fill</span></div>
+  <div style="display:flex;gap:24px;flex-wrap:wrap">
+    <div style="width:720px;height:300px;background:#FCF6ED;border-radius:24px;display:flex;align-items:center;justify-content:center">
+      <img src="wordmark/wordmark.svg" alt="MTB3A" style="height:96px;outline:1px dashed #F499A7"></img>
+    </div>
+    <div style="width:720px;height:300px;background:#211B2C;border-radius:24px;display:flex;align-items:center;justify-content:center">
+      <div role="img" aria-label="MTB3A" style="height:96px;width:490px;background-color:#F3EEFA;-webkit-mask:url(wordmark/wordmark.svg) center/contain no-repeat;mask:url(wordmark/wordmark.svg) center/contain no-repeat"></div>
+    </div>
+  </div>
+  <div style="font-size:15px;color:#675D7C;max-width:1464px">Left: the file as an image; the dashed line is its frame (cap height to baseline, first to last ink). Right: the same file as a CSS mask over the dark-theme ink, which is how MUT-402 renders it.</div>
+</section>
+
+
+<section style="display:flex;flex-direction:column;gap:32px">
+  <div style="display:flex;align-items:baseline;gap:16px"><span style="font-size:28px;font-weight:700">Lockups</span><span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#675D7C">built in code from mark.svg and wordmark.svg · order follows dir · shown at mark 96px</span></div>
+  
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span style="font-size:20px;font-weight:700">Mark + MTB3A</span>
+      <div style="display:flex;gap:24px">
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="ltr" style="width:600px;height:240px;border-radius:24px;background:#FCF6ED;display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="#BCABF1"></path><circle cx="76" cy="24" r="22" fill="#795DBA"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="#F499A7"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="#F5AB77"></path></svg><div role="img" aria-label="MTB3A" style="flex-shrink:0;height:38.4px;width:196px;background-color:#392F4B;-webkit-mask:url(wordmark/wordmark.svg) center/contain no-repeat;mask:url(wordmark/wordmark.svg) center/contain no-repeat"></div></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">LTR · light</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="rtl" style="width:600px;height:240px;border-radius:24px;background:#FCF6ED;display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="#BCABF1"></path><circle cx="76" cy="24" r="22" fill="#795DBA"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="#F499A7"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="#F5AB77"></path></svg><div role="img" aria-label="MTB3A" style="flex-shrink:0;height:38.4px;width:196px;background-color:#392F4B;-webkit-mask:url(wordmark/wordmark.svg) center/contain no-repeat;mask:url(wordmark/wordmark.svg) center/contain no-repeat"></div></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">RTL · light</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="ltr" style="width:600px;height:240px;border-radius:24px;background:oklch(0.3 0.05 300);display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="oklch(0.78 0.1 295)"></path><circle cx="76" cy="24" r="22" fill="oklch(0.92 0.07 95)"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="oklch(0.78 0.11 10)"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="oklch(0.82 0.11 60)"></path></svg><div role="img" aria-label="MTB3A" style="flex-shrink:0;height:38.4px;width:196px;background-color:#F3EEFA;-webkit-mask:url(wordmark/wordmark.svg) center/contain no-repeat;mask:url(wordmark/wordmark.svg) center/contain no-repeat"></div></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">LTR · dark</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="rtl" style="width:600px;height:240px;border-radius:24px;background:oklch(0.3 0.05 300);display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="oklch(0.78 0.1 295)"></path><circle cx="76" cy="24" r="22" fill="oklch(0.92 0.07 95)"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="oklch(0.78 0.11 10)"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="oklch(0.82 0.11 60)"></path></svg><div role="img" aria-label="MTB3A" style="flex-shrink:0;height:38.4px;width:196px;background-color:#F3EEFA;-webkit-mask:url(wordmark/wordmark.svg) center/contain no-repeat;mask:url(wordmark/wordmark.svg) center/contain no-repeat"></div></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">RTL · dark</span>
+      </div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span style="font-size:20px;font-weight:700">Mark + متابعة</span>
+      <div style="display:flex;gap:24px">
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="ltr" style="width:600px;height:240px;border-radius:24px;background:#FCF6ED;display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="#BCABF1"></path><circle cx="76" cy="24" r="22" fill="#795DBA"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="#F499A7"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="#F5AB77"></path></svg><span lang="ar" style="flex-shrink:0;font-family:'Thmanyah Serif Display',serif;font-weight:700;font-size:48px;line-height:1;color:#392F4B">متابعة</span></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">LTR · light</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="rtl" style="width:600px;height:240px;border-radius:24px;background:#FCF6ED;display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="#BCABF1"></path><circle cx="76" cy="24" r="22" fill="#795DBA"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="#F499A7"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="#F5AB77"></path></svg><span lang="ar" style="flex-shrink:0;font-family:'Thmanyah Serif Display',serif;font-weight:700;font-size:48px;line-height:1;color:#392F4B">متابعة</span></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">RTL · light</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="ltr" style="width:600px;height:240px;border-radius:24px;background:oklch(0.3 0.05 300);display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="oklch(0.78 0.1 295)"></path><circle cx="76" cy="24" r="22" fill="oklch(0.92 0.07 95)"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="oklch(0.78 0.11 10)"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="oklch(0.82 0.11 60)"></path></svg><span lang="ar" style="flex-shrink:0;font-family:'Thmanyah Serif Display',serif;font-weight:700;font-size:48px;line-height:1;color:#F3EEFA">متابعة</span></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">LTR · dark</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="rtl" style="width:600px;height:240px;border-radius:24px;background:oklch(0.3 0.05 300);display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="oklch(0.78 0.1 295)"></path><circle cx="76" cy="24" r="22" fill="oklch(0.92 0.07 95)"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="oklch(0.78 0.11 10)"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="oklch(0.82 0.11 60)"></path></svg><span lang="ar" style="flex-shrink:0;font-family:'Thmanyah Serif Display',serif;font-weight:700;font-size:48px;line-height:1;color:#F3EEFA">متابعة</span></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">RTL · dark</span>
+      </div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <span style="font-size:20px;font-weight:700">Bilingual</span>
+      <div style="display:flex;gap:24px">
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="ltr" style="width:600px;height:240px;border-radius:24px;background:#FCF6ED;display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="#BCABF1"></path><circle cx="76" cy="24" r="22" fill="#795DBA"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="#F499A7"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="#F5AB77"></path></svg><div role="img" aria-label="MTB3A" style="flex-shrink:0;height:38.4px;width:196px;background-color:#392F4B;-webkit-mask:url(wordmark/wordmark.svg) center/contain no-repeat;mask:url(wordmark/wordmark.svg) center/contain no-repeat"></div><span style="flex-shrink:0;width:6px;height:6px;border-radius:50%;background:#795DBA"></span><span lang="ar" style="flex-shrink:0;font-family:'Thmanyah Serif Display',serif;font-weight:700;font-size:48px;line-height:1;color:#392F4B">متابعة</span></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">LTR · light</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="rtl" style="width:600px;height:240px;border-radius:24px;background:#FCF6ED;display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="#BCABF1"></path><circle cx="76" cy="24" r="22" fill="#795DBA"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="#F499A7"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="#F5AB77"></path></svg><span lang="ar" style="flex-shrink:0;font-family:'Thmanyah Serif Display',serif;font-weight:700;font-size:48px;line-height:1;color:#392F4B">متابعة</span><span style="flex-shrink:0;width:6px;height:6px;border-radius:50%;background:#795DBA"></span><div role="img" aria-label="MTB3A" style="flex-shrink:0;height:38.4px;width:196px;background-color:#392F4B;-webkit-mask:url(wordmark/wordmark.svg) center/contain no-repeat;mask:url(wordmark/wordmark.svg) center/contain no-repeat"></div></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">RTL · light</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="ltr" style="width:600px;height:240px;border-radius:24px;background:oklch(0.3 0.05 300);display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="oklch(0.78 0.1 295)"></path><circle cx="76" cy="24" r="22" fill="oklch(0.92 0.07 95)"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="oklch(0.78 0.11 10)"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="oklch(0.82 0.11 60)"></path></svg><div role="img" aria-label="MTB3A" style="flex-shrink:0;height:38.4px;width:196px;background-color:#F3EEFA;-webkit-mask:url(wordmark/wordmark.svg) center/contain no-repeat;mask:url(wordmark/wordmark.svg) center/contain no-repeat"></div><span style="flex-shrink:0;width:6px;height:6px;border-radius:50%;background:oklch(0.92 0.07 95)"></span><span lang="ar" style="flex-shrink:0;font-family:'Thmanyah Serif Display',serif;font-weight:700;font-size:48px;line-height:1;color:#F3EEFA">متابعة</span></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">LTR · dark</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+        <div dir="rtl" style="width:600px;height:240px;border-radius:24px;background:oklch(0.3 0.05 300);display:flex;align-items:center;justify-content:center;gap:23px"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="oklch(0.78 0.1 295)"></path><circle cx="76" cy="24" r="22" fill="oklch(0.92 0.07 95)"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="oklch(0.78 0.11 10)"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="oklch(0.82 0.11 60)"></path></svg><span lang="ar" style="flex-shrink:0;font-family:'Thmanyah Serif Display',serif;font-weight:700;font-size:48px;line-height:1;color:#F3EEFA">متابعة</span><span style="flex-shrink:0;width:6px;height:6px;border-radius:50%;background:oklch(0.92 0.07 95)"></span><div role="img" aria-label="MTB3A" style="flex-shrink:0;height:38.4px;width:196px;background-color:#F3EEFA;-webkit-mask:url(wordmark/wordmark.svg) center/contain no-repeat;mask:url(wordmark/wordmark.svg) center/contain no-repeat"></div></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#675D7C">RTL · dark</span>
+      </div>
+      </div>
+    </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:32px">
+  <div style="display:flex;align-items:baseline;gap:16px"><span style="font-size:28px;font-weight:700">Lockup numbers</span><span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#675D7C">M = mark size · H = logotype height (the wordmark.svg viewBox height)</span></div>
+  <div style="display:flex;gap:64px;align-items:flex-start;flex-wrap:wrap">
+    <div style="position:relative;flex-shrink:0;padding:38.4px;background:#FCF6ED;border-radius:24px;outline:2px dashed #F499A7;outline-offset:-2px">
+      <div dir="ltr" style="display:flex;align-items:center;gap:23px;outline:1px solid #BCABF1"><svg width="96" height="96" viewBox="0 0 100 100" style="flex-shrink:0"><path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="#BCABF1"></path><circle cx="76" cy="24" r="22" fill="#795DBA"></circle><path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="#F499A7"></path><path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="#F5AB77"></path></svg><div role="img" aria-label="MTB3A" style="flex-shrink:0;height:38.4px;width:196px;background-color:#392F4B;-webkit-mask:url(wordmark/wordmark.svg) center/contain no-repeat;mask:url(wordmark/wordmark.svg) center/contain no-repeat"></div></div>
+      <span style="position:absolute;left:12px;top:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#C2185B">clear space = 1 H</span>
+      <span style="position:absolute;left:134.4px;bottom:16.4px;width:23px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#533C87">0.6 H</span>
+    </div>
+    <div style="display:flex;flex-direction:column;max-width:900px;min-width:0;flex:1">
+      <div style="display:grid;grid-template-columns:260px 200px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid #D8D1E3;align-items:baseline"><span style="font-weight:700;font-size:18px">Logotype height</span><span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#533C87">H = 0.40 M</span><span style="font-size:16px;color:#675D7C;line-height:1.5;text-wrap:pretty">Mark 96 → logotype 38.4px tall, 196px wide. The logotype is centred on the mark vertically.</span></div>
+      <div style="display:grid;grid-template-columns:260px 200px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid #D8D1E3;align-items:baseline"><span style="font-weight:700;font-size:18px">Gap, mark to name</span><span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#533C87">0.60 H  (0.24 M)</span><span style="font-size:16px;color:#675D7C;line-height:1.5;text-wrap:pretty">The same gap for MTB3A and متابعة. In the bilingual lockup, the dot between the names also sits 0.60 H from each side.</span></div>
+      <div style="display:grid;grid-template-columns:260px 200px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid #D8D1E3;align-items:baseline"><span style="font-weight:700;font-size:18px">Arabic name</span><span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#533C87">font-size 1.25 H</span><span style="font-size:16px;color:#675D7C;line-height:1.5;text-wrap:pretty">Live text, Thmanyah Serif Display Bold, line-height 1, so متابعة looks the same size as MTB3A.</span></div>
+      <div style="display:grid;grid-template-columns:260px 200px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid #D8D1E3;align-items:baseline"><span style="font-weight:700;font-size:18px">Bilingual separator</span><span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#533C87">0.16 H dot, markDot</span><span style="font-size:16px;color:#675D7C;line-height:1.5;text-wrap:pretty">Between the two names. The dot scales with H (6px at the 38.4px H shown) and uses the theme-aware markDot token, never a fixed hex. The order follows dir: LTR puts MTB3A first, RTL puts متابعة first. The mark always comes first in reading order.</span></div>
+      <div style="display:grid;grid-template-columns:260px 200px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid #D8D1E3;align-items:baseline"><span style="font-weight:700;font-size:18px">Clear space</span><span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#533C87">1 H on all sides</span><span style="font-size:16px;color:#675D7C;line-height:1.5;text-wrap:pretty">Nothing else (text, edges, other logos) inside this zone.</span></div>
+      <div style="display:grid;grid-template-columns:260px 200px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid #D8D1E3;align-items:baseline"><span style="font-weight:700;font-size:18px">Minimum size</span><span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#533C87">H ≥ 12px  (M ≥ 30px)</span><span style="font-size:16px;color:#675D7C;line-height:1.5;text-wrap:pretty">Below this, use the mark on its own. On its own, the logotype must also be at least 12px tall.</span></div>
+      <div style="display:grid;grid-template-columns:260px 200px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid #D8D1E3;align-items:baseline"><span style="font-weight:700;font-size:18px">Aspect ratio</span><span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#533C87">W = 5.104 H</span><span style="font-size:16px;color:#675D7C;line-height:1.5;text-wrap:pretty">From viewBox 3695 × 724. Size the mask box by height only.</span></div>
+    </div>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:24px">
+  <div style="display:flex;align-items:baseline;gap:16px"><span style="font-size:28px;font-weight:700">Running text</span><span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#675D7C">"MTB3A" inside a sentence</span></div>
+  <div style="display:flex;gap:24px;flex-wrap:wrap">
+    <div style="width:720px;padding:40px;background:#FCF6ED;border-radius:24px;box-sizing:border-box;display:flex;flex-direction:column;gap:20px">
+      <p dir="ltr" style="margin:0;font-family:'Thmanyah Sans',sans-serif;font-weight:400;font-size:20px;line-height:1.6;color:#392F4B">Track income and expenses with MTB3A, then export a monthly summary in one tap.</p>
+      <p dir="rtl" lang="ar" style="margin:0;font-family:'Thmanyah Sans',sans-serif;font-weight:400;font-size:20px;line-height:1.7;color:#392F4B">تابع دخلك ومصروفاتك مع متابعة، وصدّر ملخّص الشهر بلمسة واحدة.</p>
+      <p dir="ltr" style="margin:0;font-family:'Thmanyah Sans',sans-serif;font-weight:700;font-size:20px;line-height:1.6;color:#392F4B">Welcome to MTB3A.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;max-width:720px;min-width:0;flex:1">
+      <div style="display:grid;grid-template-columns:260px 200px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid #D8D1E3;align-items:baseline"><span style="font-weight:700;font-size:18px">Font</span><span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#533C87">Thmanyah Sans</span><span style="font-size:16px;color:#675D7C;line-height:1.5;text-wrap:pretty">Whatever face the sentence is in; in the product that is always Thmanyah Sans. Never the logotype, never Plex Mono.</span></div>
+      <div style="display:grid;grid-template-columns:260px 200px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid #D8D1E3;align-items:baseline"><span style="font-weight:700;font-size:18px">Weight</span><span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#533C87">same as the sentence</span><span style="font-size:16px;color:#675D7C;line-height:1.5;text-wrap:pretty">No bold or colour to make it stand out. In a bold heading, it is bold.</span></div>
+      <div style="display:grid;grid-template-columns:260px 200px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid #D8D1E3;align-items:baseline"><span style="font-weight:700;font-size:18px">Letter-spacing</span><span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#533C87">0</span><span style="font-size:16px;color:#675D7C;line-height:1.5;text-wrap:pretty">Plain capitals typed as M-T-B-3-A, with no wrapper element, so i18n strings stay plain text. Arabic sentences always write متابعة, never MTB3A.</span></div>
+      <div style="display:grid;grid-template-columns:260px 200px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid #D8D1E3;align-items:baseline"><span style="font-weight:700;font-size:18px">Case</span><span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#533C87">always all caps</span><span style="font-size:16px;color:#675D7C;line-height:1.5;text-wrap:pretty">Never "Mtb3a" or "mtb3a". The digit is a 3, never a letter.</span></div>
+    </div>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:24px">
+  <div style="display:flex;align-items:baseline;gap:16px"><span style="font-size:28px;font-weight:700">Play feature graphic</span><span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#675D7C">feature-graphic-en-1024x500.png</span></div>
+  <div id="fg-en" dir="ltr" style="position:relative;width:1024px;flex-shrink:0;height:500px;overflow:hidden;background:#FCF6ED;display:flex;align-items:center;padding:0 88px;box-sizing:border-box">
+    <svg width="560" height="560" viewBox="0 0 100 100" style="position:absolute;right:-60px;top:-30px">
+      <path d="M2 46 A44 44 0 0 1 46 2 L46 46 Z" fill="#BCABF1"></path>
+      <circle cx="76" cy="24" r="22" fill="#795DBA"></circle>
+      <path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="#F499A7"></path>
+      <path d="M54 54 H98 A44 44 0 0 1 54 98 Z" fill="#F5AB77"></path>
+    </svg>
+    <div style="position:relative;display:flex;flex-direction:column;gap:28px;max-width:440px">
+      <img src="wordmark/wordmark.svg" alt="MTB3A" style="height:78px;width:398px"></img>
+      <span style="font-size:30px;line-height:1.4;color:#675D7C;text-wrap:pretty">Income and expenses — in one calm place.</span>
+      <div style="display:flex;gap:10px">
+        <span style="height:40px;padding:0 18px;border-radius:999px;background:#BAEBD4;color:#00624B;font-size:18px;font-weight:500;display:flex;align-items:center">Income</span>
+        <span style="height:40px;padding:0 18px;border-radius:999px;background:#FED4B9;color:#883C00;font-size:18px;font-weight:500;display:flex;align-items:center">Expenses</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:24px">
+  <div style="display:flex;align-items:baseline;gap:16px"><span style="font-size:28px;font-weight:700">Screenshot header style</span><span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#675D7C">store frame 1290×2796 · logo 64px cap height · headline 112px · 160px top margin</span></div>
+  <div style="display:flex;gap:80px;align-items:flex-start">
+
+    <div id="shot-ar" dir="rtl" style="position:relative;width:1290px;height:2796px;flex-shrink:0;overflow:hidden;background:#FCF6ED;display:flex;flex-direction:column;align-items:center;padding-top:160px;box-sizing:border-box">
+      <svg width="900" height="900" viewBox="0 0 100 100" style="position:absolute;left:-300px;top:900px;opacity:.9">
+        <circle cx="50" cy="50" r="48" fill="#E0D7FF"></circle>
+      </svg>
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:56px;text-align:center">
+        <span style="font-family:'Thmanyah Serif Display',serif;font-weight:700;font-size:88px;line-height:1;color:#795DBA">متابعة</span>
+        <span style="font-family:'Thmanyah Serif Display',serif;font-weight:700;font-size:112px;line-height:1.2;color:#392F4B;max-width:1000px;text-wrap:balance">سجّل مصروفك في ثانيتين</span>
+        <span style="font-size:48px;line-height:1.45;color:#675D7C;max-width:960px;text-wrap:pretty">المبلغ، العملة، والتصنيف — بلمسة واحدة.</span>
+      </div>
+      <div style="position:absolute;left:120px;right:120px;top:1000px;height:2100px">
+        <image-slot id="shot-ar-screen" shape="rounded" radius="88" placeholder="App screenshot (Arabic)"></image-slot>
+      </div>
+    </div>
+
+    <div id="shot-en" dir="ltr" style="position:relative;width:1290px;height:2796px;flex-shrink:0;overflow:hidden;background:#FCF6ED;display:flex;flex-direction:column;align-items:center;padding-top:160px;box-sizing:border-box">
+      <svg width="900" height="900" viewBox="0 0 100 100" style="position:absolute;right:-300px;top:900px;opacity:.9">
+        <circle cx="50" cy="50" r="48" fill="#E0D7FF"></circle>
+      </svg>
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:56px;text-align:center">
+        <div role="img" aria-label="MTB3A" style="height:64px;width:327px;background-color:#795DBA;-webkit-mask:url(wordmark/wordmark.svg) center/contain no-repeat;mask:url(wordmark/wordmark.svg) center/contain no-repeat"></div>
+        <span style="font-family:'Thmanyah Serif Display',serif;font-weight:700;font-size:112px;line-height:1.15;color:#392F4B;max-width:1000px;text-wrap:balance">Log an expense in two seconds</span>
+        <span style="font-size:48px;line-height:1.45;color:#675D7C;max-width:960px;text-wrap:pretty">Amount, currency and category — in one tap.</span>
+      </div>
+      <div style="position:absolute;left:120px;right:120px;top:1000px;height:2100px">
+        <image-slot id="shot-en-screen" shape="rounded" radius="88" placeholder="App screenshot (English)"></image-slot>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</div>
+</x-dc>
+</body>
+</html>

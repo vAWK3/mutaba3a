@@ -1,0 +1,17 @@
+{
+  "$comment": "Delivered brand files, pinned by sha256 (MUT-401 D5, D9): the mark, the nine web icons and the MTB3A logotype as Claude Design exported them. wordmark.test.ts checks every file matches its pin. A changed hash means a file was re-exported or overwritten: re-pin only in the commit that deliberately replaces it. The logotype is never hand-edited; a bad export is re-exported from Claude Design (D4).",
+  "files": {
+    "public/apple-touch-icon.png": "1c48f5624f79a7b5b27c4b940317928cc44a6a2996643d1fcdb53201e5f24e5d",
+    "public/favicon-16.png": "0497868d342c793cb45f1774b3520997bb1363bd0e12f1fdb63c582760df6301",
+    "public/favicon-32.png": "43def12856361fca4ab788253e595e87370611253cb448ae0d886bf5f0bc9978",
+    "public/favicon-48.png": "13ab73f86be9c6a5dad5de04dc387544c13eb9106f2f40629c455a3388147692",
+    "public/favicon.svg": "464cb93165be92e6a8b60548473b0d7cb266cc465af972e0a30e794522c049b7",
+    "public/icons/icon-1024.png": "dc6f70f120667cc46366b1d130865148f22672b71cd00cffcc5bab861270dc7d",
+    "public/icons/icon-192.png": "42f867a8ac4d899e228c4e8fd0b6faf48a41436051154c023a9f1745950cf291",
+    "public/icons/icon-512.png": "c585b0dcda8712f4cd8ddcbf66bc0f7402269c240dc03dafdc7da83c236897fd",
+    "public/icons/maskable-512.png": "33ab867f8f3ef4528229dde265fc82fc1815679bd1e8ee7212a0623ffcc5091d",
+    "src/assets/brand/mark-dark.svg": "636b573c24d9d10485f63e9a29ed4b6889ae2f9066089c92d6e577541e7e55fe",
+    "src/assets/brand/mark.svg": "56622fe428e3bde491520e7ebe09f7682837533e90a84b287919d764206cf110",
+    "src/assets/brand/wordmark.svg": "672ec660ebf788309d7eafad45a2b9e3d9dc73437fe2dc342c1f21ae031905ef"
+  }
+}
