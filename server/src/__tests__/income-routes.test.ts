@@ -850,3 +850,53 @@ describe('MUT-61 review D5: capture_undo is reserved', () => {
     expect((await h.app.request(`/v1/payments/${captured.id}/reverse`, json({ reason: 'Recorded twice' }, { ...mAuth, ...idem() }))).status).toBe(200);
   });
 });
+
+describe('POST /v1/income answers receivedCount on a Received capture — MUT-340', () => {
+  it('counts the profile’s POSTED payments right after each capture: 1, 2, 3', async () => {
+    const { create } = await setup();
+    const counts: number[] = [];
+    for (let i = 0; i < 3; i += 1) counts.push((await read(await create(BASE_RECEIVED))).receivedCount);
+    expect(counts).toEqual([1, 2, 3]);
+  });
+
+  it('an undone (REVERSED) capture no longer counts', async () => {
+    const { create, del } = await setup();
+    const first = await read(await create(BASE_RECEIVED));
+    expect((await del(first.id)).status).toBe(204);
+    expect((await read(await create(BASE_RECEIVED))).receivedCount).toBe(1);
+  });
+
+  it('Owed answers no receivedCount', async () => {
+    const { h, p, u, create } = await setup();
+    const c = await customer(h, u, p.id);
+    const body = await read(await create({ ...BASE_OWED, customerId: c.id }));
+    expect(body).not.toHaveProperty('receivedCount');
+  });
+
+  it('a replay with the same Idempotency-Key answers the stored count, not a fresh one', async () => {
+    const { h, p, u, create } = await setup();
+    const headers = { ...u.as(p.id), ...idem() };
+    const first = await read(await h.app.request('/v1/income', json(BASE_RECEIVED, headers)));
+    await create(BASE_RECEIVED);
+    const replay = await h.app.request('/v1/income', json(BASE_RECEIVED, headers));
+    expect(replay.headers.get('idempotent-replayed')).toBe('true');
+    expect((await read(replay)).receivedCount).toBe(first.receivedCount);
+  });
+
+  it('counts every origin: a payment Malafat recorded on the profile counts too', async () => {
+    const { h, m, mAuth, create } = await setup();
+    const c = await malafatClient(h, mAuth);
+    const preview = await read(await h.app.request('/v1/allocations/preview', json({ customerId: c.id, currency: 'ILS', amount: '10.00' }, mAuth)));
+    const recorded = await h.app.request('/v1/payments', json({ customerId: c.id, currency: 'ILS', amount: '10.00', receivedOn: '2026-10-08', method: 'BANK', allocations: [], previewToken: preview.previewToken }, { ...mAuth, ...idem() }));
+    expect(recorded.status).toBe(201);
+    expect((await read(await create({ ...BASE_RECEIVED, customerId: c.id }, m.id))).receivedCount).toBe(2);
+  });
+
+  it('only POST sends it: the entries feed and PATCH answer the plain IncomeResponse', async () => {
+    const { h, p, u, create } = await setup();
+    const created = await read(await create(BASE_RECEIVED));
+    const feed = await read(await h.app.request('/v1/entries', { headers: u.as(p.id) }));
+    expect(JSON.stringify(feed)).not.toContain('receivedCount');
+    void created;
+  });
+});

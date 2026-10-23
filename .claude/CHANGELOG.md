@@ -28,6 +28,34 @@
 
 ---
 
+## [Unreleased] - 2026-10-23 — A personal profile's logging streak, and entries logged on the day the phone saved them (MUT-339, ADR-177)
+
+**Why:** MUT-339 shows personal users a streak from 3 days of logging in a row (Basel's S1–S3), and an entry saved offline must count on the day it was logged, not the day it uploaded (S4). Plan and eng review R1–R12: mutaba3a-flutter `.claude/designs/mut-339-logging-streaks.md` (Jira comment 12456).
+
+### Added
+- **`GET /v1/expenses/streak`** (session-only, `expenses:read`): `{ today, current, startedOn, lastLoggedOn, aliveUntil, previous }` for a personal profile the caller owns; 409 CONFLICT `NOT_PERSONAL` elsewhere. Alive through yesterday; `previous` is a run of 3+ days that ended within 7.
+- **`capturedAt`** on `POST /v1/expenses` and `POST /v1/income`: kept as the row's `createdAt`, clamped to [now − 48 h, now] (`loggedAtOf`).
+- `entries.loggedDays(organizationId, since, timezone)`: distinct logged days in the zone over the feed's live rows (expenses not deleted, payments not undone, Owed not deleted), one bounded query on the existing `(organizationId, createdAt)` indexes. `expenses/streak.ts` works the run out (`computeStreak`, `zonedMidnightUtc`).
+- **API `1.56.0-mut339`**.
+
+### Technical
+- `streak.test.ts` (runs, gaps, previous window, DST midnight, the 48 h clamp); `streak-routes.test.ts` (any entry counts, deleted and undone don't, the offline 23:50 case, backdating clamped, 409 on business and firm, no API key); `store-contract-entries.ts` loggedDays on memory and Postgres (zone shift, live rows, conversions out, the bound). `route-security`, `writability-routes` and `routes-expenses` inventories take the new read.
+
+## [Unreleased] - 2026-10-23 — A Received capture answers the profile's payment count (MUT-340, ADR-176)
+
+**Why:** MUT-340 celebrates income milestones on the phone (the 1st, 10th, 50th, 100th, 250th, 500th and 1000th payment received, Basel's M1). Nothing exposed a payment count, and the phone saves through an outbox, so the count has to come back with the upload. Plan and eng review R1–R12: mutaba3a-flutter `.claude/designs/mut-340-income-milestones.md` (Jira comment 12455).
+
+### Added
+- **`POST /v1/income` with `kind: 'received'` answers `receivedCount`**: the profile's POSTED payments, every origin, right after this one. Owed answers none.
+- `IncomeCaptureResponseSchema` (`IncomeCaptureResponse`), POST-only; the feed, PATCH and file-as-income keep `IncomeResponse`.
+
+### Changed
+- **`payments.capture` returns `{ payment, postedCount }`**, counted inside its transaction after the `(organization, year)` counter upsert, which already row-locks, so two captures in flight never answer the same count. The memory store counts up to its own row. `payments.create`'s year-race retry is now `paymentWrite`, shared by both.
+- **API `1.54.0-mut340` (released in `1.56.0-mut339` with MUT-339)**.
+
+### Technical
+- `income-routes.test.ts`: 1, 2, 3; an undo drops out; Owed has none; an Idempotency-Key replay answers the stored count; Malafat's payments count; the feed never carries it.
+- `store-contract-capture.ts` (memory and Postgres): counts after capture and undo, per organization; four parallel captures get 2–5.
 ## [Unreleased] - 2026-10-23 — Anyone can ask for an account or a new password by email; signup stays shut until GA (MUT-366, ADR-175)
 
 **Why:** ADR-159 opens signup and forgot-password for GA; until now only the operator could create an account or reset a password.
