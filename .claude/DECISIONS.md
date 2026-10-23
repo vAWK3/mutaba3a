@@ -4674,3 +4674,22 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The D3 due-date move also fires when an overdue Owed moves to a later past date; clients show `dueDate` from the PATCH response.
 - Release the API before the phone: an older API refuses a future Owed with 422, which the phone shows and keeps in its outbox.
 - API 1.51.0-mut392.
+
+---
+
+## ADR-171: The MTB3A Logotype Is One Outlined SVG, Shipped Once From src/assets/brand and Shown as a Mask Over the Ink (MUT-401)
+
+**Status**: Accepted (2026-10-23, MUT-401; eng review D1–D9, Basel's answers). Epic MUT-400 renames the service MTB3A in English; Arabic stays متابعة.
+
+**Context**: Claude Design drew the Latin logotype by outlining Thmanyah Serif Display Bold. The mark ships as two theme files (`mark.svg`, `mark-dark.svg`) because it is multi-colour. The logotype is one colour, the portal sends a strict CSP on every response including images, and the kit's numbers only mean something if the file's frame is the letters.
+
+**Decision**:
+1. **One file, coloured by CSS (D7).** `src/assets/brand/wordmark.svg` is a stencil with one opaque fill of no meaning. MUT-402 shows it with `mask-image` over `var(--ink)`, with `role="img"` + `aria-label`, a forced-colors rule and a print rule. There is no dark file.
+2. **One copy (D3).** The SVG lives only in `src/assets/brand/`; `docs/brand/wordmark/` keeps the kit README, the store artwork and the Claude Design pages. A test fails on any `wordmark*.svg` under `docs/brand/`. This narrows MUT-401's "files under docs/brand/wordmark/".
+3. **Bytes as delivered, guarded (D4, D8).** No hand edits. `wordmark.test.ts` checks outlines only; no `style`, `class`, event, font or external-link attribute; one opaque fill; no stroke or opacity; a viewBox tight to the ink (within 1% on every edge). A file that fails is re-exported from Claude Design.
+4. **Pins (D5, D9).** `src/assets/brand/brand.sha256.json` pins the mark, the nine web icons and the logotype, so "the icon and the mark are unchanged" is tested.
+5. **Lockup tokens wait for MUT-402 (D1).** The numbers (H = 0.40 M, gap 0.60 H, clear space 1 H, H ≥ 12 px, W = 5.104 H, Arabic 1.25 H, 0.16 H markDot separator) live in `docs/brand/wordmark/README.md` until the CSS that reads them lands.
+
+**Consequences**: The logotype can't drift from the ink token or from the theme. MUT-402 owns the mask rendering and its accessibility rules. The export's `tokens/` and `favicon.svg` are older than the repo's and are not imported, and its pre-rename `Feature Graphic.dc.html` is left out. The Play feature graphic is kept as 24-bit RGB (Google Play refuses alpha). Licence: Basel reports that Thmanyah confirmed commercial use of the outlined logotype (2026-10-22). The written record is still to be attached, so the guardrail stays open on MUT-402.
+
+**Hardening (MUT-401 review, 2026-10-23)**: the SVG checks are allowlists (elements svg/title/desc/metadata/g/path, a short attribute list per element, metadata holding only the C2PA base64), so kinds nobody listed also fail. The frame check bounds the ink by end and control points. The path parser throws on anything it can't read instead of hanging the suite. The one-copy check matches the logotype's bytes under `docs/brand/`, `public/` and `src/hosted/public/`. The pinned SVGs keep LF through `.gitattributes`.
