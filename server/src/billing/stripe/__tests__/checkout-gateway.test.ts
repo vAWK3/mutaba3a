@@ -64,8 +64,8 @@ describe('CheckoutGateway sessions (MUT-362 §2.2)', () => {
       mode: 'subscription',
       line_items: [{ price: 'price_ils_m', quantity: 1 }],
       client_reference_id: PERSON.userId,
-      success_url: 'https://app.mtb3a.com/?billing=true&checkout=success',
-      cancel_url: 'https://app.mtb3a.com/?billing=true&checkout=cancelled',
+      success_url: 'https://portal.example/?billing=true&checkout=success',
+      cancel_url: 'https://portal.example/?billing=true&checkout=cancelled',
     });
     expect(result).toEqual({ url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
     expect(seen.map(route)).toEqual(['POST /v1/checkout/sessions']);
@@ -76,10 +76,10 @@ describe('CheckoutGateway sessions (MUT-362 §2.2)', () => {
 
   it('opens a Customer Portal session for the customer with the return URL', async () => {
     const { seen, gateway } = gatewayWith(() => ({ status: 200, body: { id: 'bps_1', object: 'billing_portal.session', url: 'https://billing.stripe.com/p/session/test_1' } }));
-    expect(await gateway.createPortalSession({ customer: 'cus_MINE', returnUrl: 'https://app.mtb3a.com/?billing=true' })).toEqual({ url: 'https://billing.stripe.com/p/session/test_1' });
+    expect(await gateway.createPortalSession({ customer: 'cus_MINE', returnUrl: 'https://portal.example/?billing=true' })).toEqual({ url: 'https://billing.stripe.com/p/session/test_1' });
     expect(seen.map(route)).toEqual(['POST /v1/billing_portal/sessions']);
     expect(seen[0]!.form.get('customer')).toBe('cus_MINE');
-    expect(seen[0]!.form.get('return_url')).toBe('https://app.mtb3a.com/?billing=true');
+    expect(seen[0]!.form.get('return_url')).toBe('https://portal.example/?billing=true');
     expect(seen[0]!.form.get('locale')).toBe('auto');
   });
 
@@ -90,7 +90,7 @@ describe('CheckoutGateway sessions (MUT-362 §2.2)', () => {
 
   it('a deleted customer surfaces as resource_missing, not transient (eng review D7)', async () => {
     const { gateway } = gatewayWith(() => ({ status: 404, body: { error: { type: 'invalid_request_error', code: 'resource_missing', param: 'customer', message: 'No such customer' } } }));
-    expect(await gateway.createPortalSession({ customer: 'cus_GONE', returnUrl: 'https://app.mtb3a.com/' }).catch((e: unknown) => e)).toMatchObject({
+    expect(await gateway.createPortalSession({ customer: 'cus_GONE', returnUrl: 'https://portal.example/' }).catch((e: unknown) => e)).toMatchObject({
       code: 'resource_missing',
       transient: false,
     });
@@ -98,7 +98,7 @@ describe('CheckoutGateway sessions (MUT-362 §2.2)', () => {
 
   it('retries a retryable failure once under the checkout budget (a person is waiting)', async () => {
     const { seen, gateway } = gatewayWith(() => ({ status: 503, body: { error: { type: 'api_error', message: 'boom' } }, headers: { 'stripe-should-retry': 'true' } }));
-    await expect(gateway.createPortalSession({ customer: 'cus_MINE', returnUrl: 'https://app.mtb3a.com/' })).rejects.toBeInstanceOf(StripeGatewayError);
+    await expect(gateway.createPortalSession({ customer: 'cus_MINE', returnUrl: 'https://portal.example/' })).rejects.toBeInstanceOf(StripeGatewayError);
     expect(seen).toHaveLength(2);
     // The SDK keeps one idempotency key across its retry, so a retried POST can't open two sessions.
     expect(seen[0]!.headers.get('idempotency-key')).toBe(seen[1]!.headers.get('idempotency-key'));

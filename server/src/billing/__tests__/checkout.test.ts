@@ -39,7 +39,7 @@ const input = (over: Partial<CheckoutInput> = {}): CheckoutInput => ({
   interval: 'month',
   country: 'IL',
   buyer: 'person',
-  returnUrl: `https://app.mtb3a.com/p/${PROFILE}`,
+  returnUrl: `https://portal.example/p/${PROFILE}`,
   now: NOW,
   ...over,
 });
@@ -113,8 +113,8 @@ describe('planCheckout parameters (MUT-362 §2.3)', () => {
       billing_address_collection: 'required',
       locale: 'auto',
       tax_id_collection: { enabled: true, required: 'never' },
-      success_url: `https://app.mtb3a.com/p/${PROFILE}?billing=true&checkout=success`,
-      cancel_url: `https://app.mtb3a.com/p/${PROFILE}?billing=true&checkout=cancelled`,
+      success_url: `https://portal.example/p/${PROFILE}?billing=true&checkout=success`,
+      cancel_url: `https://portal.example/p/${PROFILE}?billing=true&checkout=cancelled`,
       expires_at: Math.floor(NOW.getTime() / 1000) + CHECKOUT_SESSION_TTL_SECONDS,
       custom_text: { submit: { message: CHECKOUT_SUBMIT_MESSAGE } },
     });
