@@ -1,0 +1,66 @@
+app: portal
+area: error-reports
+title: Portal crash reports and crash screens
+tier: secondary
+# MUT-149, ADR-091 am.11: crashes go to Sentry, signed in only, scrubbed by the shared
+# contract; a crash shows a translated screen. The QA build carries a dummy DSN on the org's
+# ingest host (qa.config.mjs) and qa/support/sentry.ts answers Sentry locally, so nothing leaves.
+paths:
+  - src/hosted/observability/**
+  - src/lib/observability/**
+  - src/hosted/components/focusOnMount.ts
+features:
+  - id: crash-reported
+    title: A crash on a signed-in page is reported once, with the internal user id only and path-only URLs
+    steps:
+      - Sign in in English and open Clients
+      - Something on the page throws an error nobody catches
+    expect:
+      - One error report is sent, tagged surface portal and locale en
+      - It names the user by internal id only; the email address appears nowhere in what was sent
+      - Its page URL has no query or fragment
+  - id: crash-reported-ar
+    title: The same crash in Arabic is reported the same way, tagged Arabic
+    steps:
+      - Sign in in Arabic and open Clients
+      - Something on the page throws an error nobody catches
+    expect:
+      - One error report is sent, tagged locale ar, with the internal user id only
+  - id: handled-api-error-not-reported
+    title: A save the server refuses shows the error in the form and sends no report
+    paths:
+      - src/hosted/components/IncomeCaptureDrawer.tsx
+    steps:
+      - Sign in and open Payments, then + Add income
+      - Save an income the server refuses (422)
+    expect:
+      - The drawer shows the server's reason and stays open
+      - No error report is sent
+  - id: signed-out-silent
+    title: Signed out, a crash sends nothing and the reporting code never loads
+    paths:
+      - src/hosted/session/mode.ts
+    steps:
+      - Open the portal signed out (this device's records) and go to Payments
+      - Something on the page throws an error nobody catches
+    expect:
+      - Not a single request goes to Sentry
+      - The crash-reporting module is never downloaded
+  - id: crash-screen
+    title: A page that crashes shows a translated card in its place; the navigation stays and leaving the page clears it
+    paths:
+      - src/hosted/components/QueryView.tsx
+      - src/hosted/pages/auth/BootScreens.tsx
+      - src/hosted/router.tsx
+      - src/hosted/HostedApp.tsx
+      - src/hosted/i18n/en.json
+      - src/hosted/i18n/ar.json
+    steps:
+      - Sign in in Arabic; the server sends Clients a broken answer, and the page crashes
+      - Press Tab
+      - Go to Payments
+    expect:
+      - «توقفت هذه الصفحة عن العمل» shows in place of the page, with one «إعادة التحميل» button, and the navigation is still there; the error's own text is not shown
+      - Focus starts on the card's title, and Tab reaches the Reload button
+      - The crash is reported once
+      - Payments opens normally
