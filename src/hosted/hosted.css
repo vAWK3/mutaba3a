@@ -752,6 +752,10 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-billing-chip-lavender { background: var(--accent-subtle); color: var(--on-accent-subtle); }
 .hp-billing-action { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
 .hp-billing .btn { min-block-size: 44px; }
+.hp-billing .select { min-block-size: 44px; }
+/* The column's gap sets the rhythm; a banner's own margin would add to it. */
+.hp-billing .hp-banner, .hp-billing-footer .hp-banner { margin: 0; }
+.hp-billing-footer { display: flex; flex-direction: column; gap: var(--space-2); inline-size: 100%; }
 .hp-billing-fine { color: var(--text-secondary); font-size: var(--text-label); }
 .hp-billing-plan { display: flex; flex-direction: column; gap: var(--space-1); border-block-start: 1px solid var(--border); padding-block-start: var(--space-3); }
 .hp-billing-plan-line { display: flex; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }

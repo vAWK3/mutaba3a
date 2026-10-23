@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@tanstack/react-router';
 import { Button } from '../../components/ui/Button';
@@ -13,6 +13,8 @@ import {
   billingViewOf,
   checkoutRouteOf,
   currencyOfCountry,
+  firstChargeOf,
+  isConfirmed,
   profilesListOf,
   yearlySavingOf,
   type BillingPanel,
@@ -34,7 +36,7 @@ import { RadioCards } from './RadioCards';
  * Settings › Billing (MUT-362, plan §2.7–§2.8): the account menu's drawer, Arabic first. The status view reads in one
  * order (DR1): a chip, where you stand, the one action, then the price and the rules. Subscribe is a second step in
  * the same drawer (DR2, `?step=subscribe`); Stripe's English pages come only after our own explanation (AC4, DR6).
- * Coming back from Checkout, it polls until the webhook lands (eng review D4).
+ * Coming back from Checkout or the Customer Portal, it polls until the webhook lands (eng review D4).
  */
 
 export interface BillingDrawerProps {
@@ -48,9 +50,7 @@ export interface BillingDrawerProps {
 
 type Tone = 'mint' | 'butter' | 'rose' | 'lavender';
 type Phase = 'confirming' | 'done' | 'slow' | null;
-type Failure = 'needsHelp' | 'alreadySubscribed' | 'sessionFailed' | null;
-
-const LIVE = new Set(['active', 'trialing', 'past_due']);
+type Failure = 'needsHelp' | 'alreadySubscribed' | 'tooMany' | 'changed' | 'sessionFailed' | null;
 
 /** One drawer frame for every state: switching loading → content, or status → Subscribe, swaps its body, never the frame. */
 export function BillingDrawer({ step, checkout, portalReturned = false, onStep, onClose }: BillingDrawerProps) {
@@ -96,34 +96,41 @@ export function BillingDrawer({ step, checkout, portalReturned = false, onStep, 
   );
 }
 
-/** Eng review D4: after Checkout, refetch every 2 s for up to 30 s until the webhook has mirrored the subscription. */
-function useCheckoutReturn(checkout: BillingDrawerProps['checkout'], billing: BillingOverview | undefined): Phase {
+/**
+ * Refetch billing and /v1/me every 2 s while `active`, for up to 30 s, then `giveUp` (a stable callback). A slow read
+ * (a cold price cache waits on Stripe) finishes rather than being cancelled by the next tick (review).
+ */
+function usePollBilling(active: boolean, giveUp: () => void): void {
   const queryClient = useQueryClient();
-  const [phase, setPhase] = useState<Phase>(checkout === 'success' ? 'confirming' : null);
-  // Render-time adjustment, not an effect (react-hooks v7): the poll ends as soon as the subscription is there.
-  if (phase === 'confirming' && billing?.subscription && LIVE.has(billing.subscription.status)) setPhase('done');
   useEffect(() => {
-    if (phase !== 'confirming') return;
+    if (!active) return;
     const started = Date.now();
     const timer = setInterval(() => {
       if (Date.now() - started >= CONFIRM_POLL_LIMIT_MS) {
-        setPhase('slow');
+        giveUp();
         return;
       }
-      void queryClient.invalidateQueries({ queryKey: billingQuery.queryKey });
-      void queryClient.invalidateQueries({ queryKey: ME_KEY });
+      void queryClient.invalidateQueries({ queryKey: billingQuery.queryKey }, { cancelRefetch: false });
+      void queryClient.invalidateQueries({ queryKey: ME_KEY }, { cancelRefetch: false });
     }, CONFIRM_POLL_MS);
     return () => clearInterval(timer);
-  }, [phase, queryClient]);
+  }, [active, giveUp, queryClient]);
+}
+
+/** Eng review D4: after Checkout, poll until the webhook has mirrored a paid subscription. */
+function useCheckoutReturn(checkout: BillingDrawerProps['checkout'], billing: BillingOverview | undefined): Phase {
+  const [phase, setPhase] = useState<Phase>(checkout === 'success' ? 'confirming' : null);
+  // Render-time adjustment, not an effect (react-hooks v7): the poll ends as soon as the subscription is paid.
+  if (phase === 'confirming' && billing && isConfirmed(billing.subscription)) setPhase('done');
+  usePollBilling(phase === 'confirming', useCallback(() => setPhase('slow'), []));
   return phase;
 }
 
 /**
- * Back from the Customer Portal the webhook can land after the first read (seen in release-QA: ~0.7 s late), so
- * refetch quietly every 2 s for up to 30 s, stopping at the first change from what the drawer showed on return.
+ * Back from the Customer Portal the webhook can land after the first read (seen in release-QA: ~0.7 s late), so poll
+ * quietly, stopping at the first change from what the drawer showed on return.
  */
 function usePortalReturn(returned: boolean, billing: BillingOverview | undefined): void {
-  const queryClient = useQueryClient();
   const [polling, setPolling] = useState(returned);
   const [shownOnReturn, setShownOnReturn] = useState<string | null>(null);
   const shown = billing ? JSON.stringify(billing.subscription) : null;
@@ -132,19 +139,7 @@ function usePortalReturn(returned: boolean, billing: BillingOverview | undefined
     if (shownOnReturn === null) setShownOnReturn(shown);
     else if (shown !== shownOnReturn) setPolling(false);
   }
-  useEffect(() => {
-    if (!polling) return;
-    const started = Date.now();
-    const timer = setInterval(() => {
-      if (Date.now() - started >= CONFIRM_POLL_LIMIT_MS) {
-        setPolling(false);
-        return;
-      }
-      void queryClient.invalidateQueries({ queryKey: billingQuery.queryKey });
-      void queryClient.invalidateQueries({ queryKey: ME_KEY });
-    }, CONFIRM_POLL_MS);
-    return () => clearInterval(timer);
-  }, [polling, queryClient]);
+  usePollBilling(polling, useCallback(() => setPolling(false), []));
 }
 
 function StatusView({ billing, phase, cancelled, onSubscribe }: { billing: BillingOverview; phase: Phase; cancelled: boolean; onSubscribe: () => void }) {
@@ -154,28 +149,42 @@ function StatusView({ billing, phase, cancelled, onSubscribe }: { billing: Billi
   const { pathname } = useLocation();
   const headline = useRef<HTMLHeadingElement>(null);
   const portal = useOpenBillingPortal();
-  const profiles: BillingProfile[] = me.profiles.map((p) => ({
-    id: p.id,
-    name: p.name,
-    owned: p.owned,
-    billing: p.billing,
-  }));
+  // Review D4: a payment covers the profiles the person created (the server's list), not every profile they co-own.
+  const covered = new Set(billing.coveredProfileIds);
+  const profiles: BillingProfile[] = me.profiles.map((p) => ({ id: p.id, name: p.name, owned: covered.has(p.id), billing: p.billing }));
+  const coOwnsOthers = me.profiles.some((p) => p.owned && !covered.has(p.id));
   const view = billingViewOf(billing, profiles, new Date());
   const list = profilesListOf(profiles);
   const failure = failureOf(portal.error);
+  // While a payment is being confirmed, or is slow to show, nothing invites a second one (review).
+  const settled = phase !== 'confirming' && phase !== 'slow';
+  const announcement =
+    phase === 'confirming'
+      ? t('hosted.billing.states.confirming')
+      : phase === 'done'
+        ? t('hosted.billing.states.subscribed')
+        : phase === 'slow'
+          ? t('hosted.billing.states.slow')
+          : cancelled
+            ? t('hosted.billing.states.cancelled')
+            : '';
 
-  // DR10: switching back from the Subscribe step, or returning from Stripe, puts focus on where the person stands.
-  useEffect(() => headline.current?.focus(), []);
+  // DR10: switching back from the Subscribe step, returning from Stripe, or the payment confirming puts focus on
+  // where the person stands; each phase renders a new headline, so it moves with the phase.
+  useEffect(() => headline.current?.focus(), [phase]);
 
   return (
     <div className="hp-billing">
-      {phase === 'done' && <Banner tone="ok" text={t('hosted.billing.states.subscribed')} />}
-      {phase === 'slow' && <Banner tone="info" text={t('hosted.billing.states.slow')} />}
-      {cancelled && phase === null && <Banner tone="info" text={t('hosted.billing.states.cancelled')} />}
-      {failure && <FailureBanner failure={failure} />}
+      {/* One live region, always mounted, so each phase is announced (a region inserted already filled often isn't). */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </p>
+      {phase === 'done' && <Banner tone="ok" text={t('hosted.billing.states.subscribed')} live={false} />}
+      {phase === 'slow' && <Banner tone="info" text={t('hosted.billing.states.slow')} live={false} />}
+      {cancelled && phase === null && <Banner tone="info" text={t('hosted.billing.states.cancelled')} live={false} />}
 
       {phase === 'confirming' ? (
-        <div className="hp-billing-status" aria-live="polite">
+        <div className="hp-billing-status">
           <Chip tone="butter" label={t('hosted.billing.chip.confirming')} />
           <h3 ref={headline} tabIndex={-1} className="hp-billing-headline">
             {t('hosted.billing.states.confirming')}
@@ -186,12 +195,13 @@ function StatusView({ billing, phase, cancelled, onSubscribe }: { billing: Billi
         <PanelStatus panel={view.panel} language={language} headlineRef={headline} />
       )}
 
-      {phase !== 'confirming' && (
-        <Action view={view} busy={portal.isPending} onSubscribe={onSubscribe} onPortal={() => portal.mutate(billingReturnPath(pathname))} />
+      {settled && (
+        <Action view={view} busy={portal.isPending} failure={failure} onSubscribe={onSubscribe} onPortal={() => portal.mutate(billingReturnPath(pathname))} />
       )}
 
       {view.action === 'subscribe' && !view.openSoon && phase === null && <PlanLines catalog={billing.catalog} language={language} />}
       {list.length > 0 && <ProfilesList profiles={list} />}
+      {coOwnsOthers && <p className="hp-billing-fine">{t('hosted.billing.coOwnedNote')}</p>}
     </div>
   );
 }
@@ -250,7 +260,15 @@ function panelCopy(
         chip: k('chip.active'),
         tone: 'mint',
         headline: k('headline.active', { date: day(panel.renewsAt) }),
-        context: k('manageNote'),
+        // DR6: the Stripe note sits under Manage billing; the context is the plan's own line.
+        context: panel.interval === 'month' ? k('context.activeMonth') : panel.interval === 'year' ? k('context.activeYear') : null,
+      };
+    case 'pending':
+      return {
+        chip: k('chip.pending'),
+        tone: 'butter',
+        headline: k('headline.pending'),
+        context: k('context.pending'),
       };
     case 'ending':
       return {
@@ -325,7 +343,7 @@ function panelCopy(
   }
 }
 
-function Action({ view, busy, onSubscribe, onPortal }: { view: BillingView; busy: boolean; onSubscribe: () => void; onPortal: () => void }) {
+function Action({ view, busy, failure, onSubscribe, onPortal }: { view: BillingView; busy: boolean; failure: Failure; onSubscribe: () => void; onPortal: () => void }) {
   const t = useT();
   switch (view.action) {
     case 'subscribe':
@@ -340,10 +358,12 @@ function Action({ view, busy, onSubscribe, onPortal }: { view: BillingView; busy
     case 'payInPortal':
       return (
         <div className="hp-billing-action">
-          <Button variant={view.action === 'manage' ? 'secondary' : 'primary'} onClick={onPortal} isLoading={busy} aria-busy={busy}>
+          <Button variant={view.action === 'manage' ? 'secondary' : 'primary'} onClick={onPortal} isLoading={busy} keepLabelWhileLoading aria-busy={busy}>
             {t(`hosted.billing.action.${view.action}`)}
           </Button>
-          {view.action === 'manage' && view.panel.kind !== 'active' && <p className="hp-billing-fine">{t('hosted.billing.manageNote')}</p>}
+          {/* DR4: a failure shows under the button that failed. DR6: Stripe's page is in English, said before it opens. */}
+          {failure && <FailureBanner failure={failure} />}
+          <p className="hp-billing-fine">{t('hosted.billing.manageNote')}</p>
         </div>
       );
     case 'contactUs':
@@ -461,16 +481,22 @@ type SubscribeForm = ReturnType<typeof useSubscribeForm>;
 
 function SubscribeFooter({ form }: { form: SubscribeForm }) {
   const t = useT();
+  const failure = failureOf(form.checkout.error);
   return (
-    <Button
-      className="hp-billing-continue"
-      onClick={form.submit}
-      disabled={!form.canContinue}
-      isLoading={form.checkout.isPending}
-      aria-busy={form.checkout.isPending}
-    >
-      {t('hosted.billing.subscribe.continue')}
-    </Button>
+    <div className="hp-billing-footer">
+      {/* DR4: a failed Continue says so right above the pinned button, never off-screen in the scrolled body. */}
+      {failure && <FailureBanner failure={failure} />}
+      <Button
+        className="hp-billing-continue"
+        onClick={form.submit}
+        disabled={!form.canContinue}
+        isLoading={form.checkout.isPending}
+        keepLabelWhileLoading
+        aria-busy={form.checkout.isPending}
+      >
+        {t('hosted.billing.subscribe.continue')}
+      </Button>
+    </div>
   );
 }
 
@@ -479,9 +505,9 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
   const tp = useTp();
   const { language } = useLanguage();
   const ids = useId();
-  const heading = useRef<HTMLHeadingElement>(null);
+  const body = useRef<HTMLDivElement>(null);
   const { country, buyer, interval, route, currency, pair } = form;
-  const failure = failureOf(form.checkout.error);
+  const firstCharge = firstChargeOf(billing, new Date());
   const saving = pair ? yearlySavingOf(pair) : null;
   const yearlyNote =
     !saving || !currency
@@ -492,17 +518,19 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
             amount: formatMinor(saving.amount, currency, language),
           });
 
-  // DR10: entering the step puts focus on its heading.
-  useEffect(() => heading.current?.focus(), []);
+  // DR10: entering the step puts focus on its heading: the drawer's own title, which already reads the step's name.
+  useEffect(() => {
+    const titleHeading = body.current?.closest('[role="dialog"]')?.querySelector<HTMLElement>('.drawer-title');
+    if (!titleHeading) return;
+    titleHeading.tabIndex = -1;
+    titleHeading.focus();
+  }, []);
 
   return (
-    <div className="hp-billing">
+    <div className="hp-billing" ref={body} aria-label={title}>
       <button type="button" className="hp-billing-back" onClick={onBack}>
         {t('hosted.billing.subscribe.back')}
       </button>
-      <h3 ref={heading} tabIndex={-1} className="sr-only">
-        {title}
-      </h3>
 
       <Select
         label={t('hosted.billing.subscribe.country')}
@@ -584,18 +612,26 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
           </div>
         )
       )}
-      {failure && <FailureBanner failure={failure} />}
+      {firstCharge && <p className="hp-billing-fine">{t('hosted.billing.subscribe.firstCharge', { date: formatInstant(firstCharge, language, browserTimezone()) })}</p>}
       <p className="hp-billing-fine">{t('hosted.billing.subscribe.headsUp')}</p>
       {billing.catalog.ILS === null && billing.catalog.USD === null && <Banner tone="info" text={t('hosted.billing.openSoon')} />}
     </div>
   );
 }
 
+/**
+ * What a failed Stripe hand-off tells the person (review): help from us, already subscribed, too many tries, or that
+ * their billing changed (a refusal the drawer's view didn't predict; billingQueries refreshes it). Only a Stripe or
+ * network failure says "try again".
+ */
 function failureOf(error: Error | null): Failure {
   if (!error) return null;
-  const reason = error instanceof ApiError ? apiErrorReason(error) : undefined;
+  if (!(error instanceof ApiError)) return 'sessionFailed';
+  const reason = apiErrorReason(error);
   if (reason === 'BILLING_ACCOUNT_NEEDS_HELP' || reason === 'CONTACT_US') return 'needsHelp';
   if (reason === 'ALREADY_SUBSCRIBED') return 'alreadySubscribed';
+  if (error.code === 'RATE_LIMITED') return 'tooMany';
+  if (error.code === 'CONFLICT' || error.code === 'VALIDATION_FAILED' || error.code === 'BILLING_NOT_CONFIGURED') return 'changed';
   return 'sessionFailed';
 }
 
@@ -620,9 +656,10 @@ function ContactUs() {
   );
 }
 
-function Banner({ tone, text }: { tone: 'ok' | 'info' | 'error'; text: string }) {
+/** `live={false}` for a banner the drawer's own live region already announces. */
+function Banner({ tone, text, live = true }: { tone: 'ok' | 'info' | 'error'; text: string; live?: boolean }) {
   return (
-    <div className={`hp-banner hp-banner-${tone}`} role={tone === 'error' ? 'alert' : 'status'}>
+    <div className={`hp-banner hp-banner-${tone}`} role={!live ? undefined : tone === 'error' ? 'alert' : 'status'}>
       <AlertIcon />
       <span>{text}</span>
     </div>

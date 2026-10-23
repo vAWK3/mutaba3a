@@ -10,6 +10,7 @@ export type BillingAction = 'subscribe' | 'manage' | 'payInPortal' | 'contactUs'
 
 export type BillingPanel =
   | { kind: 'active'; renewsAt: string; interval: 'month' | 'year' | null }
+  | { kind: 'pending' }
   | { kind: 'ending'; endsAt: string }
   | { kind: 'grace' }
   | { kind: 'unpaid' }
@@ -34,6 +35,7 @@ export interface BillingView {
 export interface BillingProfile {
   id: string;
   name: string;
+  /** A payment of this person's would cover it: GET /v1/billing `coveredProfileIds` (review D4), not /v1/me `owned`. */
   owned: boolean;
   billing: BillingEntitlement | null | undefined;
 }
@@ -44,6 +46,21 @@ type Subscription = NonNullable<BillingOverview['subscription']>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTHS_A_YEAR = 12;
+/** Stripe's minimum for a carried-over trial (server/src/billing/checkout.ts TRIAL_CARRY_MIN_MS): sooner is charged at once. */
+const TRIAL_CARRY_MIN_MS = 48 * 60 * 60 * 1000;
+/** Paid statuses: the return-from-Checkout poll ends on one. `incomplete` is still waiting on the first payment. */
+const CONFIRMED_STATUSES: ReadonlySet<string> = new Set(['active', 'trialing', 'past_due']);
+
+export function isConfirmed(subscription: BillingOverview['subscription']): boolean {
+  return subscription !== null && CONFIRMED_STATUSES.has(subscription.status);
+}
+
+/** Review D2: subscribing during the trial keeps the rest of it, so the first charge falls on its end (the server's rule). */
+export function firstChargeOf(billing: BillingOverview, now: Date): string | null {
+  const endsAt = billing.trial?.endsAt;
+  if (!endsAt || new Date(endsAt).getTime() - now.getTime() < TRIAL_CARRY_MIN_MS) return null;
+  return endsAt;
+}
 
 export function billingViewOf(billing: BillingOverview, profiles: readonly BillingProfile[], now: Date): BillingView {
   const fromSubscription = billing.subscription ? subscriptionPanel(billing.subscription) : null;
@@ -55,9 +72,10 @@ export function billingViewOf(billing: BillingOverview, profiles: readonly Billi
 /** The subscription decides while it exists; a cancelled or abandoned one hands over to the profiles. */
 function subscriptionPanel(sub: Subscription): { panel: BillingPanel; action: BillingAction | null } | null {
   switch (sub.status) {
+    case 'incomplete':
+      return { panel: { kind: 'pending' }, action: 'manage' };
     case 'active':
     case 'trialing':
-    case 'incomplete':
       return sub.cancelAtPeriodEnd
         ? { panel: { kind: 'ending', endsAt: sub.currentPeriodEnd }, action: 'manage' }
         : { panel: { kind: 'active', renewsAt: sub.currentPeriodEnd, interval: sub.interval }, action: 'manage' };
@@ -90,6 +108,9 @@ function profilePanel(profiles: readonly BillingProfile[], billing: BillingOverv
       return { panel: { kind: 'trial', endsAt, daysLeft: daysLeft(endsAt, now) }, action: 'subscribe' };
     }
     case 'STRIPE':
+      // Paid but no subscription row to show (review): still the Customer Portal, never a second Subscribe.
+      if (e.state === 'ACTIVE') return { panel: { kind: 'active', renewsAt: e.until ?? now.toISOString(), interval: null }, action: 'manage' };
+      if (e.state === 'GRACE') return { panel: { kind: 'grace' }, action: 'manage' };
       return { panel: { kind: e.state === 'READ_ONLY' ? 'lapsed' : 'none' }, action: 'subscribe' };
     default:
       return { panel: { kind: 'none' }, action: 'subscribe' };

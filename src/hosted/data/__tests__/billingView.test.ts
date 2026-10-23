@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BillingEntitlement, BillingOverview } from '../../api/client';
-import { billingViewOf, checkoutRouteOf, currencyOfCountry, daysLeft, profilesListOf, yearlySavingOf, type BillingProfile } from '../billingView';
+import { billingViewOf, checkoutRouteOf, currencyOfCountry, daysLeft, firstChargeOf, isConfirmed, profilesListOf, yearlySavingOf, type BillingProfile } from '../billingView';
 
 /**
  * MUT-362 (plan §2.7, design review DR1–DR12): which panel the Billing drawer shows, its one action, and the small
@@ -18,6 +18,7 @@ const overview = (over: Partial<BillingOverview> = {}): BillingOverview => ({
   trial: null,
   catalog: { ILS: { month: 3900, year: 39000 }, USD: { month: 1000, year: 10000 } },
   countries: { consumer: ['IL', 'GB'], customTaxId: ['IL', 'JO'] },
+  coveredProfileIds: [],
   ...over,
 });
 const sub = (over: Partial<NonNullable<BillingOverview['subscription']>> = {}): NonNullable<BillingOverview['subscription']> => ({
@@ -62,6 +63,19 @@ describe('billingViewOf: a subscription decides first', () => {
     expect(billingViewOf(overview({ subscription: sub({ status: 'paused' }), canManage: true }), [profile(ent('READ_ONLY', 'STRIPE'))], NOW)).toMatchObject({ panel: { kind: 'needsHelp' }, action: 'contactUs' });
   });
 
+  it('incomplete (first payment pending, SCA) is its own pending panel, never “Active” (review)', () => {
+    expect(billingViewOf(overview({ subscription: sub({ status: 'incomplete' }), canManage: true }), [profile(ent('READ_ONLY', 'TRIAL'))], NOW)).toMatchObject({
+      panel: { kind: 'pending' },
+      action: 'manage',
+    });
+  });
+
+  it('only a paid status ends the return-from-Checkout poll', () => {
+    expect(['active', 'trialing', 'past_due'].every((s) => isConfirmed(sub({ status: s })))).toBe(true);
+    expect(['incomplete', 'unpaid', 'canceled'].some((s) => isConfirmed(sub({ status: s })))).toBe(false);
+    expect(isConfirmed(null)).toBe(false);
+  });
+
   it('a cancelled subscription falls through to the profiles: lapsed, Subscribe again', () => {
     expect(billingViewOf(overview({ subscription: sub({ status: 'canceled' }), canManage: true }), [profile(ent('READ_ONLY', 'STRIPE'))], NOW)).toMatchObject({ panel: { kind: 'lapsed' }, action: 'subscribe' });
   });
@@ -89,6 +103,14 @@ describe('billingViewOf: otherwise the owned profiles decide', () => {
 
   it('a person who owns no profile sees whose plan covers them', () => {
     expect(billingViewOf(overview(), [profile(ent('ACTIVE', 'STRIPE'), false)], NOW)).toMatchObject({ panel: { kind: 'ownedByOthers' }, action: null });
+  });
+
+  it('a profile paid through Stripe with no subscription row shown still offers Manage billing, never Subscribe (review)', () => {
+    expect(billingViewOf(overview({ canManage: true }), [profile(ent('ACTIVE', 'STRIPE', iso(12)))], NOW)).toMatchObject({
+      panel: { kind: 'active', renewsAt: iso(12), interval: null },
+      action: 'manage',
+    });
+    expect(billingViewOf(overview({ canManage: true }), [profile(ent('GRACE', 'STRIPE', iso(2)))], NOW)).toMatchObject({ panel: { kind: 'grace' }, action: 'manage' });
   });
 
   it('nothing at all → Subscribe', () => {
@@ -139,6 +161,13 @@ describe('the Subscribe step’s rules', () => {
     expect(yearlySavingOf({ month: 3900, year: 39000 })).toEqual({ kind: 'monthsFree', months: 2 });
     expect(yearlySavingOf({ month: 3900, year: 42000 })).toEqual({ kind: 'save', amount: 4800 });
     expect(yearlySavingOf({ month: 3900, year: 46800 })).toBeNull();
+  });
+
+  it('firstChargeOf: subscribing in the trial is charged on its end, when that is 48 h or more away (review D2)', () => {
+    expect(firstChargeOf(overview({ trial: { startedAt: iso(-4), endsAt: iso(10), lockAt: iso(26) } }), NOW)).toBe(iso(10));
+    expect(firstChargeOf(overview({ trial: { startedAt: iso(-13), endsAt: iso(1), lockAt: iso(17) } }), NOW)).toBeNull();
+    expect(firstChargeOf(overview({ trial: { startedAt: iso(-20), endsAt: iso(-6), lockAt: iso(10) } }), NOW)).toBeNull();
+    expect(firstChargeOf(overview(), NOW)).toBeNull();
   });
 
   it('days left round up, never below zero', () => {

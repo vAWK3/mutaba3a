@@ -20,13 +20,20 @@ const overview = (over: Partial<BillingOverview> = {}): BillingOverview => ({
   trial: { startedAt: iso(-5), endsAt: iso(9), lockAt: iso(25) },
   catalog: { ILS: { month: 3900, year: 39000 }, USD: { month: 1000, year: 10000 } },
   countries: { consumer: ['IL', 'GB'], customTaxId: ['IL', 'JO'] },
+  coveredProfileIds: [ORG_B],
   ...over,
 });
+const SHARED = '33333333-3333-4333-8333-333333333333';
 const personal = (billing: BillingEntitlement) => profile({ id: ORG_B, name: 'Personal', isPersonalDefault: true, owned: true, type: 'PERSONAL', writerOfRecord: null, billing });
 
-function portal(path: string, opts: { billing?: Handler; entitlement?: BillingEntitlement; locale?: 'en' | 'ar'; routes?: Record<string, Handler> } = {}) {
+function portal(
+  path: string,
+  opts: { billing?: Handler; entitlement?: BillingEntitlement; locale?: 'en' | 'ar'; routes?: Record<string, Handler>; coOwned?: boolean } = {},
+) {
+  const shared = profile({ id: SHARED, name: 'Shared Studio', isPersonalDefault: false, owned: true, type: 'BUSINESS', writerOfRecord: null, billing: ent('ACTIVE', 'TRIAL', iso(9)) });
+  const profiles = [personal(opts.entitlement ?? ent('ACTIVE', 'TRIAL', iso(9))), ...(opts.coOwned ? [shared] : [])];
   const api = stubApi({
-    'GET /v1/me': () => ok(me([personal(opts.entitlement ?? ent('ACTIVE', 'TRIAL', iso(9)))], opts.locale ?? 'en')),
+    'GET /v1/me': () => ok(me(profiles, opts.locale ?? 'en')),
     'GET /v1/billing': opts.billing ?? (() => ok(overview())),
     ...emptyProfileRoutes(),
     ...opts.routes,
@@ -80,6 +87,14 @@ describe('Billing drawer: the status view (DR1)', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Couldn’t load your billing'.replace('’', "'"));
     await user.click(within(dialog).getByRole('button', { name: 'Try again' }));
     expect(await within(dialog).findByRole('button', { name: 'Subscribe' })).toBeInTheDocument();
+  });
+
+  it('a co-owner is told shared profiles are covered by their creator’s plan (review D4)', async () => {
+    portal(`/p/${ORG_B}?billing=true`, { coOwned: true });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByText("Shared profiles you co-own are covered by their creator's plan.")).toBeInTheDocument();
+    // The shared profile isn't in the person's list: their payment wouldn't cover it.
+    expect(within(dialog).queryByText('Shared Studio')).not.toBeInTheDocument();
   });
 
   it('opens in Arabic first', async () => {
@@ -151,9 +166,39 @@ describe('Billing drawer: back from Stripe (eng review D4)', () => {
     const active = overview({ subscription: { tier: 'FREELANCER', status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: iso(30), cancelAtPeriodEnd: false }, canManage: true });
     portal(`/p/${ORG_B}?billing=true&checkout=success`, { billing: () => ok(++calls === 1 ? overview() : active) });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
-    expect(await within(dialog).findByText('Confirming your payment…')).toBeInTheDocument();
-    expect(await within(dialog).findByText("You're subscribed. Thank you.", {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(await within(dialog).findByRole('heading', { name: 'Confirming your payment…' })).toBeInTheDocument();
+    expect((await within(dialog).findAllByText("You're subscribed. Thank you.", {}, { timeout: 4000 })).length).toBeGreaterThan(0);
     expect(within(dialog).getByRole('button', { name: 'Manage billing' })).toBeInTheDocument();
+  });
+
+  it('moves focus to the new headline when the payment confirms, and announces it in one live region (review a11y)', async () => {
+    let calls = 0;
+    const active = overview({ subscription: { tier: 'FREELANCER', status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: iso(30), cancelAtPeriodEnd: false }, canManage: true });
+    portal(`/p/${ORG_B}?billing=true&checkout=success`, { billing: () => ok(++calls === 1 ? overview() : active) });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByRole('heading', { name: 'Confirming your payment…' })).toHaveFocus();
+    const headline = await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ }, { timeout: 4000 });
+    expect(headline).toHaveFocus();
+    expect(within(dialog).getAllByRole('status').map((n) => n.textContent)).toEqual(["You're subscribed. Thank you."]);
+  });
+
+  it('a payment slow to show stops polling at 30 s and offers no second Subscribe (review)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let calls = 0;
+    portal(`/p/${ORG_B}?billing=true&checkout=success`, {
+      billing: () => {
+        calls++;
+        return ok(overview());
+      },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    await within(dialog).findByRole('heading', { name: 'Confirming your payment…' });
+    await vi.advanceTimersByTimeAsync(32_000);
+    expect((await within(dialog).findAllByText(/Your payment went through/)).length).toBeGreaterThan(0);
+    expect(within(dialog).queryByRole('button', { name: 'Subscribe' })).not.toBeInTheDocument();
+    const settled = calls;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(calls).toBe(settled);
   });
 
   it('cancelled on Stripe’s page: nothing was charged', async () => {
@@ -190,6 +235,41 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
     expect(await within(dialog).findByRole('heading', { name: /^Your plan ends on/ }, { timeout: 4000 })).toBeInTheDocument();
   });
 
+  it('back from the Customer Portal with nothing changed, it stops polling after 30 s', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let calls = 0;
+    portal(`/p/${ORG_B}?billing=true&portal=returned`, {
+      billing: () => {
+        calls++;
+        return ok(subscribed());
+      },
+      entitlement: ent('ACTIVE', 'STRIPE', iso(30)),
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ });
+    await vi.advanceTimersByTimeAsync(32_000);
+    const settled = calls;
+    expect(settled).toBeGreaterThan(1);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(calls).toBe(settled);
+  });
+
+  it('Active says how it’s billed, with the Stripe note under Manage billing (DR6)', async () => {
+    portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(subscribed()), entitlement: ent('ACTIVE', 'STRIPE', iso(30)) });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByText('Billed monthly.')).toBeInTheDocument();
+    const manage = within(dialog).getByRole('button', { name: 'Manage billing' });
+    expect(manage.nextElementSibling).toHaveTextContent("Change your card, see invoices or cancel, on Stripe's page (in English).");
+  });
+
+  it('a first payment still pending (incomplete) is its own state, with Manage billing (review)', async () => {
+    portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(subscribed({ status: 'incomplete' })), entitlement: ent('READ_ONLY', 'TRIAL') });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByRole('heading', { name: "Your first payment hasn't gone through yet" })).toBeInTheDocument();
+    expect(within(dialog).getByText('Payment pending')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Manage billing' })).toBeInTheDocument();
+  });
+
   it('opened without the return marker, it reads once and does not poll', async () => {
     let calls = 0;
     portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(++calls === 1 ? subscribed() : subscribed({ cancelAtPeriodEnd: true })), entitlement: ent('ACTIVE', 'STRIPE', iso(30)) });
@@ -212,6 +292,19 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
     expect(within(dialog).getByText('Payment failed')).toBeInTheDocument();
   });
 
+  it('a failed Manage billing says so under the button that failed (DR4)', async () => {
+    const { user } = portal(`/p/${ORG_B}?billing=true`, {
+      billing: () => ok(subscribed()),
+      entitlement: ent('ACTIVE', 'STRIPE', iso(30)),
+      routes: { 'POST /v1/billing/portal-session': () => fail(502, 'STRIPE_UNAVAILABLE') },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    const manage = await within(dialog).findByRole('button', { name: 'Manage billing' });
+    await user.click(manage);
+    const alert = await within(dialog).findByRole('alert');
+    expect(manage.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('a deleted Stripe customer asks the person to write to us', async () => {
     const { user } = portal(`/p/${ORG_B}?billing=true`, {
       billing: () => ok(subscribed()),
@@ -222,5 +315,66 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
     await user.click(await within(dialog).findByRole('button', { name: 'Manage billing' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent("We couldn't open billing for your account");
     expect(within(dialog).getByRole('link', { name: 'Contact us' })).toBeInTheDocument();
+  });
+});
+
+describe('Billing drawer: refusals and redirects (MUT-362 review)', () => {
+  async function continueToPayment(user: Awaited<ReturnType<typeof portal>>['user']) {
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    await user.selectOptions(await within(step).findByRole('combobox', { name: 'Billing address country' }), 'IL');
+    await user.click(within(step).getByRole('button', { name: 'Continue to payment' }));
+    return step;
+  }
+
+  it('a second tab already subscribed is told so, right above Continue, and never sent to Stripe', async () => {
+    const { user } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, { routes: { 'POST /v1/billing/checkout-session': () => fail(409, 'CONFLICT', { reason: 'ALREADY_SUBSCRIBED' }) } });
+    const step = await continueToPayment(user);
+    const alert = await within(step).findByRole('alert');
+    expect(alert).toHaveTextContent('You already have a subscription');
+    expect(alert.closest('.drawer-footer')).not.toBeNull();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('a refusal the drawer didn’t predict says billing changed and reads it again; too many tries says wait', async () => {
+    let billingReads = 0;
+    let answer = fail(409, 'CONFLICT', { reason: 'COVERED_BY_GRANT' });
+    const { user } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, {
+      billing: () => {
+        billingReads++;
+        return ok(overview());
+      },
+      routes: { 'POST /v1/billing/checkout-session': () => answer },
+    });
+    const step = await continueToPayment(user);
+    expect(await within(step).findByRole('alert')).toHaveTextContent('Your billing changed since you opened this');
+    await vi.waitFor(() => expect(billingReads).toBeGreaterThan(1));
+    answer = fail(429, 'RATE_LIMITED');
+    await user.click(within(step).getByRole('button', { name: 'Continue to payment' }));
+    expect(await within(step).findByText(/Too many tries in a minute/)).toBeInTheDocument();
+  });
+
+  it('never leaves for a page that isn’t Stripe’s', async () => {
+    const { user } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, { routes: { 'POST /v1/billing/checkout-session': () => ok({ url: 'https://evil.example/pay' }) } });
+    const step = await continueToPayment(user);
+    expect(await within(step).findByRole('alert')).toHaveTextContent("We couldn't reach the payment page");
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('during the trial the step says when the first charge falls (review D2)', async () => {
+    portal(`/p/${ORG_B}?billing=true&step=subscribe`);
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    expect(await within(step).findByText(/^Your free trial continues: the first charge is on /)).toBeInTheDocument();
+  });
+
+  it('the step’s Back replaces its history entry: browser Back afterwards never reopens the step', async () => {
+    const { user, router } = portal(`/p/${ORG_B}?billing=true`);
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    await user.click(await within(dialog).findByRole('button', { name: 'Subscribe' }));
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    expect(within(step).getByRole('heading', { name: 'Subscribe to Freelancer' })).toHaveFocus();
+    await user.click(within(step).getByRole('button', { name: /Back to Billing/ }));
+    await screen.findByRole('dialog', { name: 'Billing' });
+    router.history.back();
+    await vi.waitFor(() => expect(locationOf(router)).not.toContain('step=subscribe'));
   });
 });

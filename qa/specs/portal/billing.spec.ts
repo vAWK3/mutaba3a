@@ -25,6 +25,7 @@ test('Before Stripe or the GA prices are set, Billing says subscriptions open so
         trial: { startedAt: new Date(Date.now() - 5 * DAY).toISOString(), endsAt: trialEnds, lockAt: new Date(Date.now() + 25 * DAY).toISOString() },
         catalog: { ILS: null, USD: null },
         countries: { consumer: [], customTaxId: ['IL', 'JO'] },
+        coveredProfileIds: [OFFICE_A],
       }),
     }),
   );

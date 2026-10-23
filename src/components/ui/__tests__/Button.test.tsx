@@ -70,6 +70,22 @@ describe('Button', () => {
       const content = screen.getByText('Loading');
       expect(content).toHaveClass('btn-content-hidden');
     });
+
+    it('keepLabelWhileLoading keeps the label, its name and its focus: aria-disabled, clicks ignored (MUT-362 DR4)', () => {
+      const onClick = vi.fn();
+      render(
+        <Button isLoading keepLabelWhileLoading onClick={onClick}>
+          Continue to payment
+        </Button>,
+      );
+      const button = screen.getByRole('button', { name: 'Continue to payment' });
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toHaveClass('btn-loading', 'btn-loading-labelled');
+      expect(screen.getByText('Continue to payment')).not.toHaveClass('btn-content-hidden');
+      fireEvent.click(button);
+      expect(onClick).not.toHaveBeenCalled();
+    });
   });
 
   describe('disabled state', () => {
