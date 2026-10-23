@@ -2698,3 +2698,22 @@ When a row must not exist until a link is redeemed (no user yet), lock on the na
 inside the redeem's transaction; also catch the unique violation a writer that doesn't take the lock can cause.
 First instance: `accountSetup.issueSignup` / `redeemSignup`.
 
+## Patterns added by MUT-367 (2026-10-23, ADR-177)
+
+### Pattern: An outside lookup behind a port, with a fixture adapter that production config refuses
+- **The port and its adapters:** a check that would reach the internet (DNS, RDAP) sits behind a port.
+  - The real adapter runs every lookup under one total budget and cancels the rest.
+  - The real adapter maps only definite "no record" answers to absence; any other error is `unknown`, never a refusal.
+  - A fixture adapter answers from a fixed table of reserved `.example` domains.
+- **Selection:** config chooses the adapter (`EMAIL_DOMAIN_CHECKER`), defaults to the fixture outside production, and refuses it in production.
+- **Tests and QA** inject or default to the fixture, so nothing in CI asks the network.
+- **First instance:** `server/src/email/domains/`.
+
+### Pattern: A hard delete that relies on RESTRICT foreign keys to prove the account is empty
+- Delete inside one transaction, under a row lock.
+- First remove the rows that are known parts of the shell.
+- Check explicitly for anything that would *cascade* away silently (grants) or has no foreign key (billing account).
+- Let RESTRICT foreign keys refuse anything else. Map that error, and the explicit check, to `not_empty`, and roll back.
+- The memory store mirrors it by scanning its maps.
+- **First instance:** `signupReviews.decline`.
+

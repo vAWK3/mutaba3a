@@ -1299,6 +1299,33 @@ At GA (after billing and account closing are live), set `self_signup_enabled = t
 
 **A suppressed address** (hard bounce or complaint) gets no more mail. There's no command to lift it yet (TD). If a person fixes their mailbox, delete their row from `email_suppressions` by hand (`npm run db:psql`).
 
+#### Business email and the signup review queue (MUT-367, ADR-177)
+
+**The screen.** Every signup address is screened before any link is mailed:
+- Disposable addresses and domains that take no mail are refused (400 `EMAIL_NOT_ACCEPTED`).
+- Webmail and relay addresses wait for you.
+- Any other domain is checked by DNS and RDAP, in 2 s, cached 24 h:
+  - it signs up at once with an MX, a resolving apex or www, and a registration at least 90 days old;
+  - otherwise it waits, with the reasons recorded.
+- A waiting account is `PENDING_REVIEW`. It has no trial yet, can't sign in (the portal shows the waiting screen), and can recover its password.
+
+| Piece | Where | Production |
+|---|---|---|
+| `EMAIL_DOMAIN_CHECKER` | config (no Terraform variable) | `dns`, the default; the server refuses `fixture` in production. It needs outbound DNS and HTTPS to `data.iana.org` and the registries' RDAP servers (the same egress the FX rates use) |
+| `OPERATOR_ALERT_EMAIL` | var `operator_alert_email` (`infrastructure/terraform/email.tf`) | The digest's recipient. Unset = no digest (boot warns). At most one mail per UTC hour, only when new signups wait |
+| Lists | `server/src/email/domains/{disposable,free-webmail,relay}.txt` | Shipped in the image. Refresh the disposable list: `npm --prefix server run email-domains:update -- --commit <sha>` (CC0, pinned commit), review, commit, release |
+
+**Deciding** (MUTABA3A_ADMIN_TOKEN in the environment, `--url` = the API):
+```bash
+npm --prefix server run signups:review                               # who waits, since when, and why (webmail, rdap-age-12d …)
+npm --prefix server run signups:review -- --approve rana@gmail.com   # opens it, starts the 14-day trial, mails "your account is ready"
+npm --prefix server run signups:review -- --decline rana@gmail.com   # deletes the empty account, mails "we couldn't open it" with MAIL_REPLY_TO
+```
+- A decline keeps the review row with no person and logs `user.signup_declined`; the address may sign up again.
+- A decline is refused (409 `NOT_EMPTY`) if the account holds anything else, such as a grant.
+- `enable:user` / `disable:user` refuse a waiting account; decide it instead.
+- Moving a webmail provider to instant signup is a recorded decision plus an edit to `free-webmail.txt`, not code.
+
 ## 7. Production record
 
 Project `malafat-production`, region `me-west1`. Read from Cloud Run, Artifact
