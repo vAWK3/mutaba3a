@@ -179,6 +179,26 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
     await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('https://billing.stripe.com/p/session/test_1'));
   });
 
+  it('back from the Customer Portal, it picks up a cancel the webhook mirrors after the first read', async () => {
+    let calls = 0;
+    portal(`/p/${ORG_B}?billing=true&portal=returned`, {
+      billing: () => ok(++calls === 1 ? subscribed() : subscribed({ cancelAtPeriodEnd: true })),
+      entitlement: ent('ACTIVE', 'STRIPE', iso(30)),
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ })).toBeInTheDocument();
+    expect(await within(dialog).findByRole('heading', { name: /^Your plan ends on/ }, { timeout: 4000 })).toBeInTheDocument();
+  });
+
+  it('opened without the return marker, it reads once and does not poll', async () => {
+    let calls = 0;
+    portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(++calls === 1 ? subscribed() : subscribed({ cancelAtPeriodEnd: true })), entitlement: ent('ACTIVE', 'STRIPE', iso(30)) });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ })).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 2_500));
+    expect(calls).toBe(1);
+  });
+
   it('a cancelled plan says when it ends; an unpaid one sends the person to pay the open invoice', async () => {
     portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(subscribed({ cancelAtPeriodEnd: true })), entitlement: ent('ACTIVE', 'STRIPE', iso(30)) });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });

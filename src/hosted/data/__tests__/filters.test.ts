@@ -106,6 +106,8 @@ describe('shell overlay keys (MUT-183 R1)', () => {
   it('parses and carries the Billing drawer, its Subscribe step and Stripe’s return (MUT-362)', () => {
     expect(parseProfileDrawer({ billing: 'true', step: 'subscribe', checkout: 'success' })).toEqual({ billing: true, step: 'subscribe', checkout: 'success' });
     expect(parseProfileDrawer({ billing: 'true', step: 'pay', checkout: 'maybe' })).toEqual({ billing: true });
+    expect(parseProfileDrawer({ billing: 'true', portal: 'returned' })).toEqual({ billing: true, portal: 'returned' });
+    expect(parseProfileDrawer({ billing: 'true', portal: 'yes' })).toEqual({ billing: true });
     const search = { status: 'OPEN', billing: 'true', checkout: 'cancelled' };
     expect(omitShellOverlay(search)).toEqual({ status: 'OPEN' });
     expect(pickShellOverlay(search)).toEqual({ billing: 'true', checkout: 'cancelled' });

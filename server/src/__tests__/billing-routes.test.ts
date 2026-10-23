@@ -300,7 +300,7 @@ describe('POST /v1/billing/portal-session (MUT-362)', () => {
     const res = await u.post(PORTAL, { returnPath: `/p/${u.personalId}` });
     expect(res.status).toBe(200);
     expect(await read(res)).toEqual({ url: 'https://billing.stripe.com/p/session/test_1' });
-    expect(h.checkout.portalSessions).toEqual([{ customer, returnUrl: `http://localhost/p/${u.personalId}?billing=true` }]);
+    expect(h.checkout.portalSessions).toEqual([{ customer, returnUrl: `http://localhost/p/${u.personalId}?billing=true&portal=returned` }]);
     expect((await billingAudit(h, u.personalId)).map((e) => e.action)).toEqual(['billing.portal_opened']);
   });
 

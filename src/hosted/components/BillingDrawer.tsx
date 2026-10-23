@@ -40,6 +40,8 @@ import { RadioCards } from './RadioCards';
 export interface BillingDrawerProps {
   step: 'subscribe' | undefined;
   checkout: 'success' | 'cancelled' | undefined;
+  /** Back from the Customer Portal (`?portal=returned`). */
+  portalReturned?: boolean;
   onStep: (step: 'subscribe' | undefined) => void;
   onClose: () => void;
 }
@@ -51,10 +53,11 @@ type Failure = 'needsHelp' | 'alreadySubscribed' | 'sessionFailed' | null;
 const LIVE = new Set(['active', 'trialing', 'past_due']);
 
 /** One drawer frame for every state: switching loading → content, or status → Subscribe, swaps its body, never the frame. */
-export function BillingDrawer({ step, checkout, onStep, onClose }: BillingDrawerProps) {
+export function BillingDrawer({ step, checkout, portalReturned = false, onStep, onClose }: BillingDrawerProps) {
   const t = useT();
   const billing = useQuery(billingQuery);
   const phase = useCheckoutReturn(checkout, billing.data);
+  usePortalReturn(portalReturned, billing.data);
   const subscribe = useSubscribeForm(billing.data);
   const subscribing = step === 'subscribe' && billing.data !== undefined;
   const title = step === 'subscribe' ? t('hosted.billing.subscribe.title') : t('hosted.billing.title');
@@ -113,6 +116,35 @@ function useCheckoutReturn(checkout: BillingDrawerProps['checkout'], billing: Bi
     return () => clearInterval(timer);
   }, [phase, queryClient]);
   return phase;
+}
+
+/**
+ * Back from the Customer Portal the webhook can land after the first read (seen in release-QA: ~0.7 s late), so
+ * refetch quietly every 2 s for up to 30 s, stopping at the first change from what the drawer showed on return.
+ */
+function usePortalReturn(returned: boolean, billing: BillingOverview | undefined): void {
+  const queryClient = useQueryClient();
+  const [polling, setPolling] = useState(returned);
+  const [shownOnReturn, setShownOnReturn] = useState<string | null>(null);
+  const shown = billing ? JSON.stringify(billing.subscription) : null;
+  // Render-time adjustment, not an effect (react-hooks v7).
+  if (polling && shown !== null) {
+    if (shownOnReturn === null) setShownOnReturn(shown);
+    else if (shown !== shownOnReturn) setPolling(false);
+  }
+  useEffect(() => {
+    if (!polling) return;
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - started >= CONFIRM_POLL_LIMIT_MS) {
+        setPolling(false);
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: billingQuery.queryKey });
+      void queryClient.invalidateQueries({ queryKey: ME_KEY });
+    }, CONFIRM_POLL_MS);
+    return () => clearInterval(timer);
+  }, [polling, queryClient]);
 }
 
 function StatusView({ billing, phase, cancelled, onSubscribe }: { billing: BillingOverview; phase: Phase; cancelled: boolean; onSubscribe: () => void }) {

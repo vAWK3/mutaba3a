@@ -8,7 +8,7 @@ import { api, type BillingRedirect, type CheckoutSessionRequest } from '../api/c
 
 export const BILLING_KEY = ['billing'] as const;
 const BILLING_STALE_MS = 30_000;
-/** The return-from-Checkout poll (eng review D4): every 2 s, for up to 30 s. */
+/** The return-from-Stripe poll (eng review D4; the Customer Portal's return too): every 2 s, for up to 30 s. */
 export const CONFIRM_POLL_MS = 2_000;
 export const CONFIRM_POLL_LIMIT_MS = 30_000;
 

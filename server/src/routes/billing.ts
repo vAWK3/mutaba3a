@@ -163,7 +163,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const summary = await store.billing.summaryOf(user.id);
       if (!summary.account) throw refusalError('NO_BILLING_ACCOUNT');
       const customer = summary.account.stripeCustomerId;
-      const { url } = await viaStripe(() => checkout.createPortalSession({ customer, returnUrl: `${returnUrl}?billing=true` }), user, customer, options.logger);
+      const { url } = await viaStripe(() => checkout.createPortalSession({ customer, returnUrl: `${returnUrl}?billing=true&portal=returned` }), user, customer, options.logger);
       const profiles = await ownedProfilesOf(store, user.id);
       await auditOn(store, profiles, user, 'billing.portal_opened', {}, c.get('requestId'));
       return c.json({ url }, 200);

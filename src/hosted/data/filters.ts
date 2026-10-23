@@ -274,8 +274,10 @@ export interface ProfileDrawerSearch {
   step?: 'subscribe';
   /** MUT-362: how the person came back from Stripe Checkout (its success_url / cancel_url). */
   checkout?: 'success' | 'cancelled';
+  /** MUT-362: back from Stripe's Customer Portal (its return_url), where a change may not be mirrored yet. */
+  portal?: 'returned';
 }
-export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'step', 'checkout'] as const;
+export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'step', 'checkout', 'portal'] as const;
 
 const flag = (value: unknown): true | undefined => (value === true || value === 'true' || value === 1 || value === '1' ? true : undefined);
 
@@ -289,6 +291,7 @@ export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
     billing: flag(raw.billing),
     step: raw.step === 'subscribe' ? 'subscribe' : undefined,
     checkout: raw.checkout === 'success' || raw.checkout === 'cancelled' ? raw.checkout : undefined,
+    portal: raw.portal === 'returned' ? 'returned' : undefined,
   });
 
 /** A page's search without the shell's keys, so no list ever sees them. */

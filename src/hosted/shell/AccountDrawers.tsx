@@ -40,7 +40,7 @@ export function AccountDrawers() {
   if (drawers.state.changePassword && !local) return <ChangePasswordDrawer onClose={drawers.close} />;
   if (drawers.state.yourData) return local ? <YourDataDrawer onClose={drawers.close} /> : <HostedYourDataDrawer onClose={drawers.close} />;
   if (drawers.state.billing && !local) {
-    return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} onStep={(step) => drawers.openBilling(step)} onClose={drawers.close} />;
+    return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal === 'returned'} onStep={(step) => drawers.openBilling(step)} onClose={drawers.close} />;
   }
   return null;
 }
