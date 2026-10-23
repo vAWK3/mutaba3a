@@ -52,18 +52,25 @@
 - **D1. The logotype is a component; the lockup composes it.**
   - New `src/components/brand/Logotype.tsx`: a `<span role="img" aria-label="MTB3A" lang="en">` (`lang` so a screen reader on an Arabic page reads it with the English voice, design review D13) painted by `Logotype.css` with `mask-image` and `-webkit-mask-image` (`url(../../assets/brand/wordmark.svg)`, so Vite bundles it to `/assets/`) over `background-color: currentColor` (design review D6: `--ink` does not exist, so `var(--ink)` would paint nothing; `currentColor` follows `--text`, the link's colour, the dark theme and forced colours, so MTB3A always matches the live Arabic name beside it). It is sized by height. **The box is pinned (design review D9):** `display: inline-block` (aspect-ratio does nothing on an inline span), `flex: none` (the header brand link has `min-width: 0`, so a shrinking item would squash it), `height: H` and `width: calc(H * var(--m-wordmark-aspect))` written out (W = 5.104 H), and `mask-size: 100% 100%`, `mask-repeat: no-repeat`, `mask-position: center`, each with its `-webkit-` twin.
   - The CSS also carries `@media (forced-colors: active) { background-color: currentColor; forced-color-adjust: none }` and `@media print { print-color-adjust: exact }`. **Forced colours follow the text (design review D11):** `currentColor` inherits the forced `LinkText` inside the header link and `CanvasText` elsewhere, so MTB3A is the same colour as the live متابعة beside it; a fixed `CanvasText` would split the two names into different colours.
-  - **Print (design review D5).** `@media print` paints the logotype with the light-theme ink whatever the theme, with `print-color-adjust: exact`, so a dark-theme printout still shows MTB3A on white paper. There is no theme-independent ink primitive today (`--m-ink` is redefined for dark at `mutaba3a-theme.css:74` and `:107`), so the `wordmark` token block adds `printInk` (`#392F4B`, the light `--m-ink`), mirrored as `--m-wordmark-print-ink` and never redefined for dark. The drift test covers it, and a test pins it to the light `ink` hex. No page-wide print reset.
-  - **Loading state (design review D4).** The logotype box always has its full height and width before the mask arrives, so nothing shifts. An unloaded mask paints nothing: never a solid ink rectangle (check in Safari and Chrome with the request blocked). `hosted.html` carries `<link rel="preload" as="image" type="image/svg+xml" crossorigin href="./src/assets/brand/wordmark.svg">`, so the hashed file arrives with the CSS. `crossorigin` is required: browsers fetch mask images in CORS mode, and a preload without it is fetched twice. A build test checks that the built `hosted.html` preloads the same hashed `/assets/wordmark-*.svg` the CSS masks with. The web app needs no preload: its PWA precaches the file.
+  - **Print (design review D5, widened by eng re-run R4).** `@media print { .wordmark { color: var(--m-wordmark-print-ink) } }` sets the light-theme ink on the whole lockup whatever the theme. The logotype keeps `background-color: currentColor` and the dot paints `currentColor`, both with `print-color-adjust: exact`, so MTB3A, the dot and متابعة all print in one dark ink on white paper. There is no theme-independent ink primitive today (`--m-ink` is redefined for dark at `mutaba3a-theme.css:74` and `:107`), so the `wordmark` token block adds `printInk` (`#392F4B`, the light `--m-ink`), mirrored as `--m-wordmark-print-ink` and never redefined for dark. The drift test covers it, and a test pins it to the light `ink` hex. No page-wide print reset.
+  - **Loading state (design review D4).** The logotype box always has its full height and width before the mask arrives, so nothing shifts. An unloaded mask paints nothing: never a solid ink rectangle (check in Safari and Chrome with the request blocked). `hosted.html` carries `<link rel="preload" as="image" type="image/svg+xml" crossorigin href="./src/assets/brand/wordmark.svg">`, so the hashed file arrives with the CSS. `crossorigin` is required: browsers fetch mask images in CORS mode, and a preload without it is fetched twice. A source test checks that the preload and the CSS mask name the same file; Vite rewrites both to one hashed `/assets/wordmark-*.svg` (`<link href>` is rewritten whatever its `rel`, `node_modules/vite/dist/node/chunks/config.js:23289`, and the 9,620-byte file is above the 4 KB inline limit). The portal QA spec checks that a cold load fetches it once (eng re-run R3). The web app gets no preload (eng re-run R5, accepted in writing): `index.html` serves both the landing and `/app`, so a preload there would cost every app page. A first-time landing visitor has no service worker yet, so MTB3A paints a moment late into its reserved box (nothing shifts); repeat visits come from the PWA precache.
   - `BrandName` (exported from `Logotype.tsx`, eng D2) picks the name for a language: `Logotype` in English, live "متابعة" in Thmanyah Serif Display Bold at 1.25 H in Arabic.
-  - **The mark in high contrast (design review D15, Basel chose to fix it here).** Images are not recoloured in forced colours, so the mark's light petals nearly vanish on a black high-contrast canvas (true before this ticket). In `Logotype.css`'s forced-colors block, `.wordmark .wordmark-mark` gets `outline: 1px solid CanvasText`, `outline-offset: 1px` and `border-radius: 50%` (the outline follows the radius, so it is a ring around the round mark), with `forced-color-adjust: none`. It applies only to marks inside a lockup; standalone marks (boot splash, loader) are out of scope. Normal rendering is unchanged.
+  - **The mark in high contrast (design review D15, Basel chose to fix it here).** Images are not recoloured in forced colours, so the mark's light petals nearly vanish on a black high-contrast canvas (true before this ticket). In `Logotype.css`'s forced-colors block, `.wordmark .wordmark-mark` gets `outline: 1px solid CanvasText` and `outline-offset: 2px` on the image box (no `forced-color-adjust` on the `<img>`: images are never recoloured, so it would do nothing; OV-13). **No border-radius (eng re-run R2):** the mark is a 2×2 arrangement, not a disc; its rose petal reaches the box's bottom-left corner (2, 98), and rounding an `<img>` clips its content. It applies only to marks inside a lockup; standalone marks (boot splash, loader) are out of scope. Normal rendering is unchanged.
   - **Optical alignment (design review D13).** Flex centring centres متابعة by its line box, not its letters. The QA run screenshots the lockup in both languages and compares it with the Wordmark Kit preview (`docs/brand/wordmark/claude-design/Wordmark Kit.dc.html`). If the Arabic name sits high, the fix is one token in the `wordmark` block (`arabicOffset`, ×H, applied as a `translate` on `BrandName ar`), never per-surface margins.
   - `Wordmark` keeps its shape (mark + `name`) and takes `gap` from the lockup tokens.
   - The landing header's full lockup is `BrandName en`, a markDot separator, `BrandName ar`, in a flex row. `dir` orders it (LTR puts MTB3A first, RTL puts متابعة first), and the mark always comes first. The phone lockup is `BrandName` for the active language. **Phone widths (design review D12):** the switch to the single name stays at `max-width: 480px`, as today; at 320 px the English row is about 239 of 288 px and the Arabic about 258, so nothing wraps. The portal phone shell (`hosted.css:443`, 760 px and below) keeps showing no lockup, as today; sign-in and the boot screens still show theirs at every width.
+  - **Implementation notes from the eng re-run (outside voice; necessary to build the approved decisions, no new behaviour):**
+    - **OV-4, the 480 px switch:** the retired `.landing-wordmark-full`/`-short` rules are replaced by one rule: the lockup marks the other language's `BrandName` and the dot with `wordmark-other`, and `@media (max-width: 480px) { .landing-wordmark .wordmark-other { display: none } }` hides them. Test 13 checks that rule exists; jsdom ignores media queries, so the 320/360 px QA run (D12) proves it renders.
+    - **OV-8, where H lives:** H (`--wordmark-h`) is declared on `.wordmark` and on the logotype/`BrandName` element, never on `:root` or a theme selector, because `var()` resolves where the property is declared; on `:root` every surface would get the 30 px fallback. Test 12 checks no `:root` rule declares it.
+    - **OV-9, spacing:** the lockup's three name items (MTB3A, dot, متابعة) sit in the `Wordmark` flex row with the 0.60 H gap, which is what the kit asks for (`docs/brand/wordmark/README.md:39`, "0.60 H from each"). No separate dot-spacing token.
+    - **OV-10, the literal guard:** `brand.test.ts:1069` ("adds no literal outside src/styles") scans `Logotype.css` outside print rules. The 3 px separator floor becomes a `wordmark` token (`separatorMin`), the dot's radius uses `--radius-pill`, and the system colours (`CanvasText`, `currentColor`) are keywords, not literals; nothing is allowlisted.
+    - **OV-11, `hosted.html` `lang`:** it stays `lang="en" dir="ltr"` with the Arabic static title, matching `index.html:2`; the runtime language provider sets `lang`/`dir` once the bundle runs.
+    - **OV-12, the preload on phones:** a signed-in reload at 760 px or below never shows a lockup, so Chrome may log "preloaded but not used". Accepted: 9.6 KB, immutable-cached, and sign-in (the cold path) shows the lockup at every width.
   - The portal's `Wordmark` passes `BrandName` for the active language instead of `t('hosted.brand')`.
 - **D2. Lockup tokens land here (MUT-401 eng D1).**
-  - `mutaba3a.tokens.json` gets a `wordmark` block: `logotypeToMark` 0.40, `gap` 0.60 (×H), `clearSpace` 1 (×H), `minHeight` 12 (px), `aspect` 5.104, `arabicSize` 1.25 (×H), `separator` 0.16 (×H), `printInk` `#392F4B` (design review D5).
+  - `mutaba3a.tokens.json` gets a `wordmark` block: `logotypeToMark` 0.40, `gap` 0.60 (×H), `clearSpace` 1 (×H), `minHeight` 12 (px), `aspect` 5.104, `arabicSize` 1.25 (×H), `separator` 0.16 (×H), `separatorMin` 3 (px, design review D10, OV-10), `printInk` `#392F4B` (design review D5).
   - `mutaba3a-theme.css` mirrors them as `--m-wordmark-*`, and `brand.test.ts` › drift checks both ways.
-  - `Logotype.css` reads them. `Wordmark` sets one custom property, `--wordmark-mark` (M), through React's `style` prop, written as `` `${markSize}px` `` (a bare number would leave the calc unitless and the logotype at zero height). **M has one source, the `markSize` prop (design review D7):** CSS never sets `--wordmark-mark`, the portal `Wordmark` in `Brand.tsx` takes a `markSize` prop (sign-in, setup, terms-update and boot pass 40, the sidebar 32), and `Logotype.css` reads `var(--wordmark-mark, 30px)` so a `BrandName` outside a `Wordmark` still has a height, and H follows as `calc(var(--wordmark-mark) * var(--m-wordmark-logotype-to-mark))`. React applies it through the CSSOM, which the portal CSP allows; it is never static `style=` markup. There is no clamp: every mark that carries a name is at least 30 px, so H is at least 12 px (eng review D3). The landing header goes from 24 to 32 px, portal sign-in and boot from 28 to 40 px, the sidebar from 28 to 32 px and the `Wordmark` default from 28 to 30 px (design review D3, table below). A test pins every Wordmark mark size at ≥ 30 px.
+  - `Logotype.css` reads them. `Wordmark` sets one custom property, `--wordmark-mark` (M), through React's `style` prop, written as `` `${markSize}px` `` (a bare number would leave the calc unitless and the logotype at zero height). **M has one source, the `markSize` prop (design review D7):** CSS never sets `--wordmark-mark`, the portal `Wordmark` in `Brand.tsx` takes a `markSize` prop that defaults to 40 (sign-in, setup, terms-update and the boot screens use the default; the sidebar passes 32), and `Logotype.css` reads `var(--wordmark-mark, 30px)` so a `BrandName` outside a `Wordmark` still has a height, and H follows as `calc(var(--wordmark-mark) * var(--m-wordmark-logotype-to-mark))`. React applies it through the CSSOM, which the portal CSP allows; it is never static `style=` markup. There is no clamp: every mark that carries a name is at least 30 px, so H is at least 12 px (eng review D3). The landing header goes from 24 to 32 px, portal sign-in and boot from 28 to 40 px, the sidebar from 28 to 32 px and the `Wordmark` default from 28 to 30 px (design review D3, table below). A test pins every Wordmark mark size at ≥ 30 px.
   - **Mark size per surface (design review D3).** The sizes are pinned so the Arabic name keeps today's size. Every one is at least 30, so eng D3 holds.
 
     | Surface | M | H (logotype) | Arabic name | Today |
@@ -99,7 +106,7 @@
 - **D6. Download file names** (needs Basel): rename the `mutaba3a-` prefixes to `mtb3a-`, lower case like the domain: `mtb3a-records-<date>.zip`, `mtb3a-export-<date>.zip`, `mtb3a-backup-…`, `mtb3a-<name>-<date>.csv`, `mtb3a-import-template.csv`. They're what a person sees in Downloads. Imports never read the name, so old files still import. The records file's `kind` stays.
 - **D7. Server.**
   - `API_TITLE` becomes "MTB3A Financial API". `openapi.yaml` and `schema.d.ts` are regenerated (`openapi:check`).
-  - `API_VERSION` gets a patch bump to `1.51.1-mut402`: 1.52.0 is already claimed by MUT-362's branch and MUT-56's plan. The title is the only contract change.
+  - `API_VERSION` gets a patch bump to the next patch after `main`'s version at build time. **Corrected in the eng re-run (outside voice OV-1):** MUT-362 is merged and `server/src/app.ts:173` already reads `1.52.0-mut362`, so today that is `1.52.1-mut402`; `1.51.1` would go backwards. The title is the only contract change. (MUT-56's plan also still names `1.52.0-mut56` and needs the same re-check.)
   - Malafat's vendored copy needs no change: its contract test reads `info.version`/`description`, never the title, and MAL-1305 leaves it alone.
   - The three CROSS_SITE messages say "the MTB3A portal". The portal shows its own copy by error code, so these reach API clients only.
 - **D8. `client_name` becomes "MTB3A".** Malafat's consent screen reads it at run time (CIMD, MUT-387). `oauth-client-live.test.ts` takes the new value. The release-time live check compares against the committed file, so the web release publishes both together.
@@ -112,7 +119,8 @@
 | add | `src/components/brand/Logotype.tsx` (exports `Logotype` and `BrandName`, eng D2), `Logotype.css`, `__tests__/Logotype.test.tsx` |
 | edit | `src/components/brand/Wordmark.tsx` (gap token, `--wordmark-mark`, `DEFAULT_MARK_SIZE` 28 → 30; the name slot is unchanged), `__tests__/Wordmark.test.tsx` |
 | edit | `src/pages/landing/components/LandingHeader.tsx` (`BAR_MARK_SIZE` 24 → 32, design review D3; lockup), `src/pages/landing/LandingPage.css` |
-| edit | `src/hosted/components/Brand.tsx` (a `markSize` prop; callers pass 40 or 32, design review D7), `src/hosted/hosted.css` (never sets `--wordmark-mark`) |
+| edit | `src/hosted/components/Brand.tsx` (a `markSize` prop defaulting to 40, so `SignInPage.tsx:140`, `SetupPage.tsx:88`, `TermsUpdatePage.tsx:70` and `BootScreens.tsx:46,73,91` need no change; `HostedShell.tsx:48` passes 32; design review D7), `src/hosted/hosted.css` (never sets `--wordmark-mark`), `src/hosted/components/__tests__/Brand.test.tsx` |
+| edit | `src/pages/landing/__tests__/LandingHeader.test.tsx` (`:48`, `:49` and `:83` assert the retired `.landing-wordmark-full`/`-short` spans; rewritten to test 4), `src/components/brand/__tests__/Wordmark.test.tsx:23` (`markSize: 24` is under the 30 px floor) |
 | edit | `src/styles/brand/mutaba3a.tokens.json`, `src/styles/brand/mutaba3a-theme.css`, `src/styles/__tests__/brand.test.ts` (drift) |
 | edit | the six English translation files above; `ar/landing.json` (retire `header.wordmark*`) |
 | edit | `hosted.html` (title); the portal root (the component under the language provider) calls `useDocumentTitle(t('hosted.brand'))` |
@@ -128,7 +136,7 @@
 ## Tests (written first)
 
 1. **Logotype** (component): renders `role="img"` named "MTB3A", carries the class the mask CSS targets, and has no text node.
-2. **Logotype.css** (node, postcss): the mask URL resolves to `src/assets/brand/wordmark.svg`; both `mask-image` and `-webkit-mask-image` are set; `background-color` is `currentColor`, and no declaration in the file reads an undefined custom property (every `var(--…)` it uses is defined in `theme.css` or `mutaba3a-theme.css`); a forced-colors rule keeps `background-color: currentColor` with `forced-color-adjust: none` and never names `CanvasText` (design review D11); a print rule sets `print-color-adjust: exact` and paints `var(--m-wordmark-print-ink)`, which equals the light-theme ink hex; height and width read `--m-wordmark-*`; the rule sets `display: inline-block`, `flex: none`, and `mask-size: 100% 100%`, `mask-repeat: no-repeat`, `mask-position: center` with their `-webkit-` twins (design review D9).
+2. **Logotype.css** (node, postcss): the mask URL resolves to `src/assets/brand/wordmark.svg`; both `mask-image` and `-webkit-mask-image` are set; `background-color` is `currentColor`, and no declaration in the file reads an undefined custom property (every `var(--…)` it uses is defined in `theme.css` or `mutaba3a-theme.css`; the one exemption is `--wordmark-mark`, which is set only from the `markSize` prop and must always be read with its `30px` fallback, OV-3); the forced-colors rules for the logotype and separator selectors keep `currentColor` with `forced-color-adjust: none` and never name `CanvasText` (design review D11; the mark ring's `outline` is the only `CanvasText` in the file, OV-2); a print rule sets `.wordmark { color: var(--m-wordmark-print-ink) }` (which equals the light-theme ink hex) and `print-color-adjust: exact` on the logotype and the dot (eng re-run R4); height and width read `--m-wordmark-*`; the rule sets `display: inline-block`, `flex: none`, and `mask-size: 100% 100%`, `mask-repeat: no-repeat`, `mask-position: center` with their `-webkit-` twins (design review D9).
 3. **BrandName:** English renders the Logotype with `lang="en"`; Arabic renders the text متابعة with `lang="ar"` and no logotype (design review D8, D13).
 4. **Landing header:**
    - the link's accessible name is "MTB3A متابعة" in English and "متابعة MTB3A" in Arabic (DOM order follows `dir`);
@@ -137,14 +145,14 @@
 5. **Portal Brand:** English shows the Logotype, Arabic the text; switching the language sets `document.title` to MTB3A and back to متابعة.
 6. **Drift** (`brand.test.ts`): `--m-wordmark-*` equal the JSON block, both ways.
 7. **Guard** (D5): fails on an injected English "Mutaba3a" leaf; passes the privacy keys; fails on Latin in Arabic.
-8. **Server:** `GET /openapi.json` title is "MTB3A Financial API" and version is `1.51.1-mut402`; the three CROSS_SITE messages say MTB3A; `openapi:check` is clean.
+8. **Server:** `GET /openapi.json` title is "MTB3A Financial API" and version is the next patch after `main`'s at build time (`1.52.1-mut402` today, OV-1); the three CROSS_SITE messages say MTB3A; `openapi:check` is clean.
 9. **D6:** each download helper's file name starts `mtb3a-`, and the import accepts a file still named `mutaba3a-…`.
 10. **`cimd-document.test.ts`:** `client_name` is "MTB3A".
-11. **Portal preload** (build, design review D4): the built `hosted.html` has one `rel="preload" as="image" crossorigin` link, and its href equals the hashed URL in the built CSS's `mask-image`.
-12. **Size source** (`Wordmark.test.tsx`, design review D7): the inline `--wordmark-mark` equals `${markSize}px` and the mark `<img>` width/height equal the same `markSize`; `hosted.css` and `LandingPage.css` contain no `--wordmark-mark:` declaration; the portal callers pass 40 (sign-in, setup, terms-update, boot) and 32 (sidebar).
+11. **Portal preload** (vitest source contract, design review D4, eng re-run R3): `hosted.html` has exactly one `<link rel="preload" as="image" type="image/svg+xml" crossorigin>`; its href resolves to `src/assets/brand/wordmark.svg`, and `Logotype.css`'s mask `url()` resolves to the same file. Runs in `test:run`; no build needed.
+12. **Size source** (`Wordmark.test.tsx`, design review D7): the inline `--wordmark-mark` equals `${markSize}px` and the mark `<img>` width/height equal the same `markSize`; `hosted.css` and `LandingPage.css` contain no `--wordmark-mark:` declaration; the portal `Wordmark` renders a 40 px mark by default and `HostedShell`'s sidebar passes 32.
 13. **Retired CSS** (node, postcss, design review D8): `.landing-wordmark`, `.hp-wordmark` and `.hp-side-wordmark` declare no `gap`, `font-size`, `font-weight` or `letter-spacing`; `.landing-wordmark-full`, `.landing-wordmark-short` and `[dir="rtl"] .hp-wordmark` no longer exist; the Arabic `BrandName` rule sets `letter-spacing: 0`, `line-height: 1` and the bold weight, and the component renders `lang="ar"`.
-14. **Separator** (node, postcss, design review D10): the dot's size is `max(calc(var(--m-wordmark-separator) * H), 3px)`, it is round and filled with `var(--mark-dot)`, and a forced-colors rule paints it `currentColor` with `forced-color-adjust: none` (D14).
-15. **Mark ring** (node, postcss, design review D15): inside `@media (forced-colors: active)`, `.wordmark .wordmark-mark` has `outline: 1px solid CanvasText`, `border-radius: 50%` and `forced-color-adjust: none`; no rule outside that block outlines the mark.
+14. **Separator** (node, postcss, design review D10): the dot's size is `max(calc(var(--m-wordmark-separator) * H), var(--m-wordmark-separator-min))`, it is round and filled with `var(--mark-dot)`, and a forced-colors rule paints it `currentColor` with `forced-color-adjust: none` (D14).
+15. **Mark ring** (node, postcss, design review D15): inside `@media (forced-colors: active)`, `.wordmark .wordmark-mark` has `outline: 1px solid CanvasText` and `outline-offset: 2px`, and sets no `border-radius` or `forced-color-adjust` (eng re-run R2, OV-13); no rule outside that block outlines the mark.
 
 Run: the touched suites, then the full gate on Node 22. Lint, typecheck, `test:run` and build, plus `npm --prefix server run typecheck`, `lint`, `openapi:check` and `test`.
 
@@ -153,7 +161,7 @@ Run: the touched suites, then the full gate on Node 22. Lint, typecheck, `test:r
 | Feature | Steps | Expect |
 |---|---|---|
 | `web.brand.mtb3a-name` (secondary) | Open the landing page in English, then Arabic; open the app's Home in English | The header link shows the mark, the MTB3A logotype and متابعة, in that reading order for the page's direction. The tab title reads "MTB3A — …" in English and متابعة in Arabic. At 320 and 360 px, in both languages, the header shows the mark and one name with nothing wrapped or overflowing (design review D12). No visible "Mutaba3a" in English outside the privacy page. A screenshot of the lockup in each language sits level with the Wordmark Kit preview (design review D13). In forced-colors emulation (Chrome) the logotype is visible and the same colour as متابعة on the landing link and the portal sign-in (design review D11). The mark shows a thin ring there (D15). |
-| `portal.shell.mtb3a-name` (secondary) | Open sign-in in English, then Arabic; sign in at desktop width (above 760 px) and look at the sidebar | Sign-in and the sidebar show the mark with the MTB3A logotype in English and with متابعة in Arabic. The tab title follows. |
+| `portal.shell.mtb3a-name` (secondary) | Open sign-in in English, then Arabic; sign in at desktop width (above 760 px) and look at the sidebar | Sign-in and the sidebar show the mark with the MTB3A logotype in English and with متابعة in Arabic. The tab title follows. A cold sign-in load requests `wordmark-*.svg` exactly once (the preload is used, not fetched twice; eng re-run R3). This check runs in Chromium only; Safari is not covered (R6). |
 
 `paths` cover the new brand files, the header and portal Brand, the translations and `hosted.html`. Both specs run once until they pass (`release-qa run --attach --only …`) on a preview build (memory `qa-run-on-preview-builds`).
 
@@ -216,9 +224,166 @@ Follow the kit literally: below a 30 px mark, show the mark without the name. Th
 State: approved
 Actual answer: A) Marks to 30 px (recommended), Basel, D3 answer 2026-10-23
 Accepted scope: landing header BAR_MARK_SIZE 24 → 30 and Wordmark DEFAULT_MARK_SIZE 28 → 30, so H = 12 px and every lockup keeps the kit's ratio; no clamp; a test pins every Wordmark mark size at ≥ 30 px; the brand layout QA (375/1280, en/ar, MUT-231 header) must pass
-History: none
+History: superseded in part by design review D3 (Basel, 2026-10-23): the sizes are now landing 32, portal sign-in/setup/terms-update/boot 40, sidebar 32, default 30. All are still at least 30 px, so this record's floor and its "≥ 30 px" test stand.
 
 Approval readiness: PASS. Checked R1 (Basel, D3 answer 2026-10-23). Scope answers D1 (rename the download names) and D2 (smaller arrangement) are recorded in the scope record.
+
+### Eng re-run (2026-10-23, after design review D3–D15)
+
+Scope record (reused): structure B, smaller arrangement (eng D2), still holds. The design review adds no files or classes, only tests inside the planned test files, so the complexity selector is not re-asked.
+
+### R2: The high-contrast ring's shape (design review D15)
+Finding: E1, P1, confidence 9/10. The `src/assets/brand/mark.svg` path `<path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z" fill="#F499A7">` puts the rose petal's tip at (2, 98), which is 67.9 units from the mark's centre, outside the 50-unit circle. The mark is a 2×2 arrangement of shapes, not a round mark. `border-radius: 50%` on an `<img>` clips the image itself, so D15 as written cuts off the petal tip in high contrast. Reviewer: Claude (plan-eng-review re-run).
+Plan baseline: design review D15 (Basel, 2026-10-23): in forced colours, `.wordmark .wordmark-mark` gets `outline: 1px solid CanvasText`, `outline-offset: 1px`, `border-radius: 50%`, `forced-color-adjust: none`.
+Runtime evidence: static read of `mark.svg`. CSS: border-radius clips replaced-element content. Not checked in a browser.
+Comparison grid:
+| Choice | Current (D15) | A | B | C |
+|---|---|---|---|---|
+| R2 ring shape | round: `border-radius: 50%` on the img, which clips the petal tip | square ring: outline on the img box, no border-radius, `outline-offset: 2px`; nothing clipped | keep D15 as written: round ring, petal tip clipped in high contrast only | no ring: a cream `#FCF6ED` backing square behind the mark in forced colours, so the mark shows as designed |
+| D15 scope (lockup marks only, forced colours only, normal rendering unchanged) | approved | unchanged | unchanged | unchanged |
+| Test 15 | asserts `border-radius: 50%` | asserts the outline and no `border-radius` | unchanged | asserts the backing colour, no outline |
+Question D1:
+D1 (eng re-run) — What shape should the high-contrast ring around the mark take?
+Project/branch/task: main, MUT-402; the design review's D15 ring around lockup marks in Windows high contrast.
+ELI10: In high contrast the mark's light petals nearly vanish, so D15 draws a thin ring around it. D15 makes the ring round by rounding the image's corners. But the mark isn't round: the pink petal's tip reaches the bottom-left corner of its square, and rounding the image cuts that tip off. Only high-contrast users would see it.
+Stakes if we pick wrong: high-contrast users see a mark with a clipped petal, or a bright square on a dark screen.
+Recommendation: A because a square ring on the image box keeps every petal whole and is the smallest change to the approved D15
+Completeness: A=10/10, B=6/10, C=8/10
+Header: Ring shape
+Options:
+A) Square ring (recommended)
+In forced colours, outline the image box: `outline: 1px solid CanvasText`, `outline-offset: 2px`, no border-radius, so nothing is clipped. The rest of D15 is unchanged (lockup marks only, forced colours only). Test 15 asserts the outline and the absence of border-radius. (human: ~10min / CC: ~2min)
+B) Keep the round ring
+Keep D15 as written. The ring is round, but the pink petal's tip is clipped for high-contrast users. No change to the plan or test 15.
+C) Cream backing square
+No ring: in forced colours the mark gets a cream `#FCF6ED` background, so it shows exactly as designed on its own paper. It shows as a bright square on dark high-contrast themes. Test 15 asserts the backing colour instead. (human: ~10min / CC: ~2min)
+
+State: approved
+Actual answer: A) Square ring (recommended), Basel, eng re-run D1 answer 2026-10-23
+Accepted scope: in forced colours, `.wordmark .wordmark-mark` gets `outline: 1px solid CanvasText`, `outline-offset: 2px`, no border-radius, `forced-color-adjust: none`; lockup marks only, normal rendering unchanged; test 15 asserts the outline and no border-radius
+History: D15 (design review) had `border-radius: 50%`, `outline-offset: 1px`; reopened because the mark's rose petal reaches (2, 98) and would be clipped
+
+### R3: How the portal preload is proven (test 11, design review D4)
+Finding: E2, P2, confidence 9/10. Test 11 reads the built `hosted.html`, but nothing in the gate builds the portal: `package.json:11` `"build": "tsc -b && vite build"` builds the web config only, and the portal needs `package.json:14` `"build:hosted": "tsc -b && vite build --mode hosted"`. `test:run` also runs before any build. As written, test 11 fails on a clean checkout or has to be skipped. Reviewer: Claude (plan-eng-review re-run).
+Plan baseline: design review D4 (Basel, 2026-10-23): preload with `crossorigin` in `hosted.html`, plus "a build test checks that the built `hosted.html` preloads the same hashed URL the CSS masks with". The behaviour is approved; only how it is proven is open.
+Runtime evidence: Vite 7.3.6 rewrites every `<link href>` in HTML with no `rel` filter (`node_modules/vite/dist/node/chunks/config.js:23289` `link: { srcAttributes: ["href"], srcsetAttributes: ["imagesrcset"] }`). The CSS `url()` and the HTML href resolve to the same source file, so they get the same hashed name. `wordmark.svg` is 9,620 bytes, above Vite's default 4,096-byte inline limit (`hostedConfig()` sets none), so it is emitted rather than inlined. The double fetch without `crossorigin` is browser behaviour and is not checked here.
+Comparison grid:
+| Choice | Current | A | B | C |
+|---|---|---|---|---|
+| R3 preload proof | vitest reads `dist-hosted/hosted.html` (no build in the gate) | source contract test in `test:run` plus a release-qa network check (one `wordmark-*.svg` request on a cold portal load) | a post-build script run after `build:hosted`, added to the gate and CI | keep test 11 as written |
+| D4 behaviour (preload, `crossorigin`, reserved box) | approved | unchanged | unchanged | unchanged |
+Question D2:
+D2 (eng re-run) — How should the plan prove the portal preloads the logotype correctly?
+Project/branch/task: main, MUT-402; test 11 from design review D4.
+ELI10: The design review added a preload so the portal's logotype doesn't arrive late. Its test reads the built portal page, but the repo's checks never build the portal (`npm run build` builds only the web app), so the test can't run as written. We can check the source files plus one real-browser check, add a build step, or keep the test and let it break.
+Stakes if we pick wrong: a test that fails on every clean checkout, or a preload that quietly double-downloads the file with nothing noticing.
+Recommendation: A because the source test runs in the normal suite and the browser check catches the one thing source can't: a mismatched preload fetched twice
+Completeness: A=9/10, B=8/10, C=4/10
+Header: Preload proof
+Options:
+A) Source test + QA check (recommended)
+Test 11 becomes a vitest source contract: `hosted.html` has exactly one `<link rel="preload" as="image" type="image/svg+xml" crossorigin>`, its href resolves to `src/assets/brand/wordmark.svg`, and `Logotype.css`'s mask `url()` resolves to the same file (Vite rewrites both to one hashed asset, `config.js:23289`). The portal release-qa spec asserts a cold sign-in load requests `wordmark-*.svg` exactly once. (human: ~45min / CC: ~10min)
+B) Post-build script
+A script checks `dist-hosted/hosted.html` after `npm run build:hosted`, and the gate and CI gain that build step. It proves the real output, but it adds a portal build to every gate run and still can't see a double fetch. (human: ~1.5h / CC: ~20min)
+C) Keep test 11
+Leave the test reading `dist-hosted`. It fails on a clean checkout, or gets skipped and proves nothing.
+
+State: approved
+Actual answer: A) Source test + QA check (recommended), Basel, eng re-run D2 answer 2026-10-23
+Accepted scope: test 11 becomes a vitest source contract (one preload link with `as="image"`, `type="image/svg+xml"`, `crossorigin`; its href and `Logotype.css`'s mask `url()` resolve to the same `src/assets/brand/wordmark.svg`); the `portal.shell.mtb3a-name` spec asserts a cold sign-in load requests `wordmark-*.svg` exactly once; no portal build is added to the gate
+History: design review D4 specified a test reading the built `hosted.html`
+
+### Outside voice (eng re-run): factual corrections and carried-forward implementation
+OV-1 (API version), OV-2 and OV-3 (test 2 scope), OV-4 (480 px rule), OV-8 (where H lives), OV-9 (spacing matches the kit), OV-10 (literal guard), OV-11 (`hosted.html` lang), OV-12 (unused preload on phones, accepted) and OV-13 (no `forced-color-adjust` on the img) change no approved behaviour. They are recorded in D1, D2, D7 and the Tests list without a question. OV-5, OV-6 and OV-7 are new choices: R4–R6.
+
+### R4: Printing the lockup in the dark theme (outside voice OV-5)
+Finding: OV-5, P2, confidence 8/10. Design D5 paints only the logotype with `--m-wordmark-print-ink` and adds no page-wide reset. In a dark-theme printout the live متابعة beside it keeps the dark `--text` (#F4EEE4, `mutaba3a-theme.css:74`) and nearly vanishes on white paper, so the two names print in different colours. Reviewer: Claude Plan subagent (outside voice), checked by the parent against `mutaba3a-theme.css:74`.
+Plan baseline: design review D5 (Basel, 2026-10-23): light ink for the logotype in print, no page-wide print reset.
+Runtime evidence: static read; not printed.
+Comparison grid:
+| Choice | Current (D5) | A | B |
+|---|---|---|---|
+| R4 print colour | logotype in light ink; Arabic name and dot follow the theme (light on paper in dark) | the whole lockup: `@media print { .wordmark { color: var(--m-wordmark-print-ink) } }`; the logotype keeps `currentColor` with `print-color-adjust: exact`, so MTB3A, the dot and متابعة all print in the light ink | keep D5 as approved |
+| No page-wide print reset (D5) | approved | unchanged | unchanged |
+| `printInk` token (D5) | approved | unchanged | unchanged |
+Question D3:
+D3 (eng re-run) — In a dark-theme printout, should the whole lockup print in the light ink, not just MTB3A?
+Project/branch/task: main, MUT-402; design review D5's print rule.
+ELI10: D5 makes MTB3A print in dark ink even when the page is in the dark theme. But متابعة and the dot next to it still use the dark theme's near-white text, so on white paper they almost disappear while MTB3A prints fine. Setting the print ink on the whole lockup prints both names and the dot the same.
+Stakes if we pick wrong: a printed dark-theme page shows MTB3A next to an invisible Arabic name.
+Recommendation: A because one colour rule on the lockup keeps both names printing together and is simpler than D5's logotype-only background rule
+Completeness: A=10/10, B=6/10
+Header: Print colour
+Options:
+A) Whole lockup (recommended)
+In print, `.wordmark` gets `color: var(--m-wordmark-print-ink)`; the logotype keeps `background-color: currentColor` with `print-color-adjust: exact`, so MTB3A, the dot and متابعة all print in the light-theme ink. Still no page-wide reset. Test 2's print assertion moves to the `.wordmark` rule. (human: ~15min / CC: ~3min)
+B) Keep D5
+Only MTB3A prints in the light ink. In a dark-theme printout متابعة and the dot stay near-white on paper.
+
+State: approved
+Actual answer: A) Whole lockup (recommended), Basel, eng re-run D3 answer 2026-10-23
+Accepted scope: `@media print { .wordmark { color: var(--m-wordmark-print-ink) } }`; the logotype keeps `background-color: currentColor` with `print-color-adjust: exact`; the dot paints `currentColor` in print with `print-color-adjust: exact`; so MTB3A, the dot and متابعة print in the light-theme ink; no page-wide reset; test 2's print assertion targets the `.wordmark` rule
+History: design review D5 painted only the logotype in print ink
+
+### R5: The landing page's first visit (outside voice OV-6)
+Finding: OV-6, P3, confidence 8/10. D1 says the web app needs no preload because its PWA precaches the file. A first-time landing visitor has no service worker yet, so on that visit the mask is fetched only when React renders the header, and MTB3A paints a moment after the bar. Reviewer: Claude Plan subagent (outside voice), checked by the parent: `index.html` serves both the landing and `/app` (one SPA entry; the social-meta plugin transforms that one file, `vite.config.ts:169-172`), and only the landing header renders a lockup.
+Plan baseline: design review D4 (Basel): reserved box everywhere; preload on the portal only; the web app's precache noted.
+Runtime evidence: static read; first-visit timing not measured.
+Comparison grid:
+| Choice | Current | A | B | C |
+|---|---|---|---|---|
+| R5 landing first visit | unstated: late paint on first visit, no preload | accept it in writing: box reserved (D4), so nothing shifts; repeat visits come from the precache | `<link rel="preload" … crossorigin>` in `index.html` too | React 19 `preload()` (react-dom) called when the landing header module loads |
+| Portal preload (D4, R3) | approved | unchanged | unchanged | unchanged |
+Question D4:
+D4 (eng re-run) — Should the landing page also preload the logotype for first-time visitors?
+Project/branch/task: main, MUT-402; the landing header lockup on a visitor's first load.
+ELI10: On someone's very first visit to the landing page, the browser hasn't cached the logotype file yet, so MTB3A appears a moment after the rest of the header. Its space is already reserved, so nothing jumps. A preload would fix it, but the landing and the web app share one HTML file, so every app page would also download it and the browser would warn that it went unused.
+Stakes if we pick wrong: a brief late paint of the brand for new visitors, or a wasted download and console warning on every app page.
+Recommendation: A because the box is already reserved, repeat visits hit the cache, and a shared-file preload costs every app page for a first-visit-only gain
+Completeness: A=8/10, B=7/10, C=7/10
+Header: Landing preload
+Options:
+A) Accept, in writing (recommended)
+The plan states that first-time landing visitors see MTB3A paint a moment late into its reserved box (no shift), and repeat visits come from the PWA precache. No new code. (human: ~5min / CC: ~1min)
+B) Preload in index.html
+Add the same `crossorigin` preload to `index.html` plus a source test like test 11. First visits paint on time, but every `/app` page also downloads the file once and Chrome logs "preloaded but not used". (human: ~30min / CC: ~5min)
+C) React preload() in landing
+Call `preload()` from react-dom when the landing header's module loads, so only the landing asks for it. It starts the fetch only slightly before render, so the gain is small, and it adds a runtime call to test. (human: ~30min / CC: ~5min)
+
+State: approved
+Actual answer: A) Accept, in writing (recommended), Basel, eng re-run D4 answer 2026-10-23
+Accepted scope: the plan states that first-time landing visitors see MTB3A paint a moment late into its reserved box (no shift) and repeat visits come from the PWA precache; no preload in `index.html`; no new code
+History: none
+
+### R6: Which engines the one-request check covers (outside voice OV-7)
+Finding: OV-7, P3, confidence 6/10 (medium: Safari's CORS mode for `-webkit-mask-image` was not checked). R3's QA check that a cold sign-in fetches `wordmark-*.svg` once runs only in Chromium: `qa/playwright.config.ts:18` uses `devices['Desktop Chrome']` for every app, and only Chromium is installed. If Safari fetched the mask without CORS, the `crossorigin` preload would make it download twice there. Reviewer: Claude Plan subagent (outside voice), checked by the parent against the QA config.
+Plan baseline: R3 (Basel, eng re-run D2): source contract test plus a one-request QA check.
+Runtime evidence: QA config read; Safari behaviour unknown.
+Comparison grid:
+| Choice | Current | A | B |
+|---|---|---|---|
+| R6 engine coverage | unstated (Chromium, implicitly) | state "Chromium only" in the plan; a Safari double fetch would cost 9.6 KB once per cold visit, then the immutable cache | add a WebKit Playwright project for this one portal check (installs WebKit, a new QA project) |
+| R3 source test + Chromium check | approved | unchanged | unchanged |
+Question D5:
+D5 (eng re-run) — Should the "fetched once" check also run in Safari's engine?
+Project/branch/task: main, MUT-402; R3's QA network check on portal sign-in.
+ELI10: The check that the portal downloads the logotype only once runs in Chrome's engine, because release QA only runs Chrome. Safari might handle the preload differently and download the file twice. That would cost 9.6 KB once per new visitor before the cache takes over, and nothing would break visibly.
+Stakes if we pick wrong: a silent extra 9.6 KB download in Safari, or new QA infrastructure for one check.
+Recommendation: A because the worst case is one small cached download, and adding a WebKit project to release QA is a bigger change than this ticket
+Completeness: A=8/10, B=9/10
+Header: Engine coverage
+Options:
+A) Chromium only, stated (recommended)
+The plan states the one-request check is Chromium-only and that a Safari double fetch, if it exists, costs 9.6 KB once per cold visit. No new QA project. (human: ~5min / CC: ~1min)
+B) Add a WebKit project
+Add a WebKit Playwright project to `qa/playwright.config.ts` and run the one-request check there too. Covers Safari, but installs WebKit and adds a second engine to release QA for one check. (human: ~2h / CC: ~20min)
+
+State: approved
+Actual answer: A) Chromium only, stated (recommended), Basel, eng re-run D5 answer 2026-10-23
+Accepted scope: the plan states the one-request check is Chromium-only and that a Safari double fetch, if it exists, costs 9.6 KB once per cold visit; no WebKit project
+History: none
+
+Approval readiness (eng re-run): PASS. Checked R2 (D1), R3 (D2), R4 (D3), R5 (D4), R6 (D5), all Basel's answers of 2026-10-23. The OV-1–4 and OV-8–13 corrections cite the approved decisions they implement (D1, D2, D7, D10, D12, R2).
 
 ## Review body
 
@@ -284,7 +449,7 @@ Sequential implementation: one module tree, and the server change is small.
   - Verify: `npx vitest run src/components/brand src/styles/__tests__/brand.test.ts`
 - [ ] **T2 (P1, human: ~2h / CC: ~15min)** — copy — the English translations, the Arabic `header.wordmark*` retirement, `hosted.html` title, portal `useDocumentTitle`, the guard test (D3–D5)
   - Verify: `npx vitest run src/lib/i18n`
-- [ ] **T3 (P1, human: ~1h / CC: ~10min)** — server — title, `1.51.1-mut402`, three messages, OpenAPI regen (D7)
+- [ ] **T3 (P1, human: ~1h / CC: ~10min)** — server — title, next patch after `main`'s `API_VERSION` (`1.52.1-mut402` today, OV-1), three messages, OpenAPI regen (D7)
   - Verify: `npm --prefix server run typecheck && npm --prefix server run lint && npm --prefix server run openapi:check && npm --prefix server test`
 - [ ] **T4 (P2, human: ~1h / CC: ~10min)** — downloads — `mtb3a-` prefixes plus the old-name import test (D6, eng D1)
 - [ ] **T5 (P1, human: ~3h / CC: ~30min)** — release-qa — the two new features and specs, plus the five rewritten specs, run until they pass on a preview build
@@ -346,7 +511,7 @@ Not 10: no mockup was rendered (P1, P4), and the Arabic optical offset is known 
 |---|---|---|
 | D3 | H1: one 30 px size shrinks the Arabic name | Pin per surface: landing 32, portal sign-in/setup/terms-update/boot 40, sidebar 32, default 30 |
 | D4 | M4: the portal has no PWA, so the mask loads late | Reserve the box, never paint an ink rectangle, preload with `crossorigin` in `hosted.html` |
-| D5 | M3: dark-theme print loses the logotype | `printInk` token, light ink in `@media print` |
+| D5 | M3: dark-theme print loses the logotype | `printInk` token, light ink in `@media print` on the whole lockup (eng re-run R4) |
 | D6 | C1: `var(--ink)` does not exist | `currentColor`; README and ADR-171 corrected |
 | D7 | H2: two sources for M, unitless value | `markSize` prop only, written in px, `var(--wordmark-mark, 30px)` fallback |
 | D8 | H3: old lockup CSS fights the tokens | Delete list; `BrandName ar` sets its own type and `lang="ar"` |
@@ -356,7 +521,7 @@ Not 10: no mockup was rendered (P1, P4), and the Arabic optical offset is known 
 | D12 | M5: phone widths unspecified | 480 px pinned; QA at 320/360; portal phone shell stays brandless |
 | D13 | M6: Arabic sits by line box; no `lang="en"` | Screenshot against the kit, `arabicOffset` token only if needed; `lang="en"` on the logotype |
 | D14 | New from D11: the dot alone stays `CanvasText` | The dot uses `currentColor` too |
-| D15 | M2 note: the mark fades in high contrast | Fixed here: a 1 px `CanvasText` ring on lockup marks in forced colours |
+| D15 | M2 note: the mark fades in high contrast | Fixed here: a 1 px `CanvasText` ring on lockup marks in forced colours (square, per eng re-run R2) |
 
 ### Interaction states
 
@@ -396,14 +561,14 @@ None. The one candidate, the mark in high contrast, Basel chose to build here (D
 
 ### Implementation tasks (design review)
 
-- [ ] **T7 (P1, human: ~2h / CC: ~15min)** — brand — `Logotype.css`: `currentColor`, the pinned box, the forced-colours block (logotype, dot, mark ring), print ink, the separator floor, the `lang` attributes (D6, D8–D11, D13–D15)
+- [ ] **T7 (P1, human: ~2h / CC: ~15min)** — brand — `Logotype.css`: `currentColor`, the pinned box, the forced-colours block (logotype, dot, square mark ring per R2), whole-lockup print ink (R4), the separator floor as a token, the `lang` attributes, H declared on `.wordmark` and the logotype only, the literal guard green (D6, D8–D11, D13–D15; eng re-run R2, R4, OV-2/3/8/10/13)
   - Files: `src/components/brand/Logotype.tsx`, `Logotype.css`, `__tests__/Logotype.test.tsx`
   - Verify: `npx vitest run src/components/brand` (tests 2, 3, 13–15)
-- [ ] **T8 (P1, human: ~1h / CC: ~10min)** — brand — one size source: `markSize` in px, the portal `Brand.tsx` prop, sizes 32/40/32/30, the retired CSS (D3, D7, D8)
+- [ ] **T8 (P1, human: ~1h / CC: ~10min)** — brand — one size source: `markSize` in px, the portal `Brand.tsx` prop (default 40, sidebar 32), sizes 32/40/32/30, the retired CSS and its replacement 480 px `.wordmark-other` rule; update `LandingHeader.test.tsx`, `Brand.test.tsx`, `Wordmark.test.tsx` (D3, D7, D8, D12; OV-4)
   - Files: `Wordmark.tsx`, `LandingHeader.tsx`, `LandingPage.css`, `src/hosted/components/Brand.tsx`, `hosted.css`, tests
   - Verify: tests 12 and 13
-- [ ] **T9 (P1, human: ~45min / CC: ~10min)** — portal — the `hosted.html` preload and its build test; the corrected performance note (D4)
-  - Verify: test 11 after `npm run build`
+- [ ] **T9 (P1, human: ~45min / CC: ~10min)** — portal — the `hosted.html` preload and its source contract test; the one-request QA check; the corrected performance note (D4, eng re-run R3)
+  - Verify: test 11 in `npx vitest run src/components/brand`; the `portal.shell.mtb3a-name` spec on a preview build
 - [ ] **T10 (P2, human: ~1h / CC: ~10min)** — tokens and docs — `printInk` (and `arabicOffset` only if D13 needs it) in the token block and drift test; README lines 26 and 65; ADR-171 amendment; the separator exception (D5, D6, D10, D13)
   - Verify: `npx vitest run src/styles/__tests__/brand.test.ts`
 - [ ] **T11 (P1, human: ~1h / CC: ~15min)** — release-qa — 320/360 px runs in both languages, the desktop-width sidebar step, forced-colours emulation, the screenshot against the kit (D11–D13, D15)
@@ -441,17 +606,96 @@ Plan is design-complete. Run /design-review after implementation for visual QA.
 
 None.
 
+## Eng review re-run (2026-10-23, after design review D3–D15)
+
+Prior learning applied: no-ink-token-use-currentcolor (confidence 10/10, from 2026-10-23).
+
+**Scope:** the design review's additions (D3–D15). The structure answer (B, smaller arrangement) is reused; the design review added no files or classes.
+
+**Reality rows (design delta):**
+- REALITY: premise-table pass, unverified=1 (Safari mask CORS mode, R6). Receipt: `qa/playwright.config.ts:18`.
+- REALITY: already-done pass. No `Logotype*` file exists; `main` moved by 2 doc commits since `53d5b78e`. Receipt: `src/components/brand/Wordmark.tsx:21`.
+- REALITY: surface-check finding. `npm run build` does not build the portal. Receipt: `package.json:11` vs `:14`. Resolved by R3.
+- REALITY: binding-decisions finding. `API_VERSION` on `main` is `1.52.0-mut362`, so the plan's `1.51.1` is stale. Receipt: `server/src/app.ts:173`. Corrected by OV-1.
+- REALITY: numbers pass. 9,620 bytes measured (`ls -la`); the 239/288 px phone widths are [estimated] and proven by the D12 QA run. Receipt: `src/assets/brand/wordmark.svg`.
+- REALITY: deferred-asks pass. No new ticket asks.
+- REALITY: pr-count pass. One branch.
+
+**Section 1, Architecture**
+- [P1] (confidence 9/10) `src/assets/brand/mark.svg`: `<path d="M2 98 A44 44 0 0 1 46 54 A44 44 0 0 1 2 98 Z">` puts the petal tip at (2, 98), outside a 50-unit circle, so D15's `border-radius: 50%` would clip it. Approved fix: R2, a square ring.
+- Dispositions: E1 accepted (D1).
+
+**Section 2, Code quality.** No new issues. Factual corrections:
+- the portal `Wordmark` defaults to 40, and only `HostedShell.tsx:48` passes 32;
+- the existing tests that pin the retired classes are `LandingHeader.test.tsx:48,49,83`, `Brand.test.tsx:33,41` and `Wordmark.test.tsx:23`.
+
+**Section 3, Tests**
+- [P2] (confidence 9/10) `package.json:11` `"build": "tsc -b && vite build"` builds only the web app, so test 11 as written could not run. Approved fix: R3.
+- Dispositions: E2 accepted (D2).
+
+```
+CODE PATHS (design delta)                              USER FLOWS
+[+] Logotype.css                                       [+] Landing header
+  ├── [PLANNED ★★★] mask, box, currentColor  (t2)        ├── [PLANNED →E2E] en/ar order, 320/360 px (QA)
+  ├── [PLANNED ★★ ] forced colours: logotype, dot, ring  ├── [PLANNED →E2E] forced-colours colour match (QA)
+  │                 (t2, t14, t15) + QA emulation         └── [PLANNED →E2E] screenshot vs kit (QA, D13)
+  ├── [PLANNED ★★ ] print ink on .wordmark (t2, R4)    [+] Portal sign-in
+  └── [PLANNED ★★ ] retired CSS + 480 px rule (t13)       ├── [PLANNED →E2E] one wordmark request, Chromium (R3/R6)
+[+] Wordmark / Brand.tsx                                  └── [PLANNED →E2E] sidebar at desktop width
+  ├── [PLANNED ★★★] markSize → px, defaults 30/40 (t12)
+  └── [GAP→fixed ] old class tests rewritten (Files)
+[+] hosted.html preload
+  └── [PLANNED ★★ ] source contract (t11, R3)
+COVERAGE: every delta path has a planned test; forced colours, print and engine CORS are browser-only (QA or manual)
+```
+
+Tests made obsolete: `LandingHeader.test.tsx:48,49,83` (rewritten to test 4) and `Wordmark.test.tsx:23` (24 px is under the floor).
+
+**Section 4, Performance.** No issues. One 9.6 KB immutable asset. The preload is used on the portal's cold path, and the unused-preload warning on phones is accepted (OV-12).
+
+**Outside voice:** Claude Plan subagent (codex not installed). It completed in 2.5 minutes, within the 5-minute timer, with 13 findings (1 critical, 4 high, 5 medium, 3 low). OV-1–4 and OV-8–13 were recorded as corrections. OV-5, OV-6 and OV-7 were decided as R4, R5 and R6.
+
+**Failure modes (delta):**
+- **Mask blocked:** the box is reserved and empty, and the accessible name stays (tested).
+- **Preload and CSS name different files:** caught by test 11.
+- **Safari double fetch:** silent, about 9.6 KB once per cold visit, accepted (R6).
+- **H declared on `:root`:** every lockup renders at 30 px; caught by test 12 (OV-8).
+
+None is silent with no test and no handling, apart from the accepted R6 case. **0 critical gaps.**
+
+**Parallelization:** sequential implementation, no parallelization opportunity. The CSS, components and tests share `src/components/brand`.
+
+**NOT in scope (re-run):** a WebKit QA project (R6); a landing preload (R5).
+
+**Unresolved decisions:** none.
+
+**Completion summary (re-run):**
+- Step 0: scope accepted as-is (structure B reused).
+- Reality rows: 7/7 tier 1 rows emitted, 1 unverified premise (Safari CORS).
+- Architecture review: 1 issue found.
+- Code quality review: 0 issues found.
+- Test review: diagram produced, 1 gap identified.
+- Performance review: 0 issues found.
+- NOT in scope: written.
+- What already exists: unchanged from the design review.
+- TODOS.md updates: 0 items proposed.
+- Failure modes: 0 critical gaps flagged.
+- Unresolved decisions: 0 in this review.
+- Outside voice: in-host Claude Plan subagent, completed (codex not installed), 13 findings.
+- Parallelization: 1 lane, sequential.
+- Lake Score: 3/5 (D1 and D2 picked the 10/10 option; D3 picked the 10/10 option; D4 and D5 took 8/10 options).
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
 | CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
-| Outside Review | design: in-host Claude subagent (codex not installed); eng: codex unavailable → in-host Plan subagent | Independent 2nd opinion | 8 design / 55 plan | design: completed, issues found; eng: unavailable (timed out) | design: 1 critical, 4 high, 6 medium |
-| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 59 | ISSUES OPEN | 1 issue, 0 critical gaps |
+| Outside Review | codex not installed → in-host Claude Plan subagent | Independent 2nd opinion | 56 | completed in host (no external provider) | 13 findings, 1 critical (all dispositioned) |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 60 | ISSUES OPEN | 2 issues, 0 critical gaps |
 | Design Review | `/plan-design-review` | UI/UX gaps | 14 | CLEAR | score: 4/10 → 9/10, 13 decisions |
 | DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
 
-- **OUTSIDE COVERAGE:** design phase: codex not installed; the in-host Claude subagent completed and found 11 issues, all raised and decided (D3–D13). Plan-review phase: codex unavailable, and the in-host Plan subagent timed out, so the eng review has no outside coverage.
-- **VERDICT:** DESIGN CLEARED. ENG: ISSUES OPEN (its 1 finding was resolved by R1), ready to implement. The design review added sizing, state and a11y specs to the lockup, so the eng review predates them. Eng review required.
+- **OUTSIDE COVERAGE:** codex, plan-review phase: unavailable (not installed). The native Claude Plan subagent completed with 13 findings. That is in-host coverage, not external. Design phase: the in-host Claude subagent completed earlier today (11 findings).
+- **VERDICT:** DESIGN CLEARED. ENG: ISSUES OPEN (2 findings, both resolved by R2 and R3; the outside voice's 13 are resolved or decided), ready to implement. Eng review required.
 
 NO UNRESOLVED DECISIONS
