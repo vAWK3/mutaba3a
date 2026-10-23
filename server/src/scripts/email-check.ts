@@ -128,7 +128,7 @@ export async function emailCheckMain(io: EmailCheckIo): Promise<number> {
     const key = io.env.RESEND_CHECK_API_KEY;
     const resend = io.resend ?? (key ? createResendDomainsApi(key) : null);
     if (!resend) {
-      problems.push('--api needs RESEND_CHECK_API_KEY, a full-access Resend key from the Keychain (Keychain service release-kit, account barmajiyat/RESEND_CHECK_API_KEY); the sending key cannot read domains');
+      problems.push('--api needs RESEND_CHECK_API_KEY, a full-access Resend key (Keychain service release-kit, account barmajiyat/RESEND_CHECK_API_KEY); the sending key cannot read domains');
     } else {
       try {
         problems.push(...(await checkEmailApi(domain, resend)));
