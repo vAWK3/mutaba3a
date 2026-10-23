@@ -110,8 +110,9 @@ export async function advanceClock(clockId: string, toUnix: number): Promise<voi
 }
 
 /**
- * Fills Stripe's hosted Checkout with the always-approved test card and pays. Field ids are Stripe's own (the page
- * isn't ours, so no translated labels to prefer). `taxNumber` fills our custom field; `taxId` Stripe's tax ID.
+ * Fills Stripe's hosted Checkout with the always-approved test card and pays. Stripe's own fields go by their ids
+ * (the page isn't ours); our custom field goes by the bilingual label we gave it. `taxNumber` fills that field;
+ * `taxId` Stripe's tax ID.
  */
 export async function payOnStripeCheckout(page: Page, opts: { name: string; country: string; taxNumber?: string; taxId?: { type: string; value: string } }): Promise<void> {
   await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
@@ -126,7 +127,7 @@ export async function payOnStripeCheckout(page: Page, opts: { name: string; coun
   if (await city.isVisible().catch(() => false)) await city.fill('Haifa');
   const postal = page.locator('#billingPostalCode');
   if (await postal.isVisible().catch(() => false)) await postal.fill('3100001');
-  if (opts.taxNumber) await page.locator('#business_tax_number').fill(opts.taxNumber);
+  if (opts.taxNumber) await page.getByRole('textbox', { name: /^Business tax number/ }).fill(opts.taxNumber);
   if (opts.taxId) {
     const business = page.getByRole('checkbox', { name: /business/i });
     if (await business.isVisible().catch(() => false)) await business.check();

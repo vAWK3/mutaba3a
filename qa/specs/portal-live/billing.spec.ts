@@ -113,7 +113,15 @@ test('Manage billing opens Stripe’s Customer Portal; cancelling keeps the plan
   });
   await step('Cancel the plan in the portal', async () => {
     await page.getByRole('link', { name: /cancel/i }).or(page.getByRole('button', { name: /cancel (plan|subscription)/i })).first().click();
-    await page.getByRole('button', { name: /cancel (plan|subscription)/i }).last().click();
+    // The portal asks why first when its configuration collects cancellation reasons; the reason is optional.
+    const why = page.getByRole('alertdialog', { name: /cancel your subscription/i });
+    if (await why.waitFor({ timeout: 15_000 }).then(() => true, () => false)) {
+      await why.getByRole('button', { name: 'Continue to cancellation' }).click();
+      await expect(why).toBeHidden({ timeout: 30_000 });
+    }
+    // Then Review your changes, unless the reason step already confirmed it.
+    const confirm = page.getByRole('button', { name: /^cancel (plan|subscription)$/i });
+    if (await confirm.waitFor({ timeout: 5_000 }).then(() => true, () => false)) await confirm.click();
   });
   await step('Return to Mutaba3a: the plan ends at the period end', async () => {
     await page.getByRole('link', { name: /return to/i }).first().click();

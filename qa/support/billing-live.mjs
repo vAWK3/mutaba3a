@@ -8,7 +8,8 @@
  *   2. a QA database on the test Postgres (`mutaba3a-test-pg`), migrated;
  *   3. the sandbox catalog: the Freelancer product (metadata tier=freelancer) and the four GA test prices by lookup
  *      key; the Customer Portal's default configuration must already exist (pilot-runbook §1.7 step 3a);
- *   4. `stripe listen` forwarding to the API (the Stripe CLI's own sandbox login), for the webhook secret;
+ *   4. `stripe listen` forwarding to the API, for the webhook secret; the CLI gets the same sandbox key through
+ *      STRIPE_API_KEY (never argv), so its own `stripe login`, which expires, is not needed;
  *   5. the API on 127.0.0.1:8790 and the portal (`vite --mode hosted`) on 127.0.0.1:5176, proxying /v1 to it.
  *
  * It writes qa/.state/portal-live.json (origins and the QA admin token, no Stripe key) for the specs, and stops
@@ -103,9 +104,16 @@ function ensureDatabase() {
   execFileSync('npx', ['prisma', 'migrate', 'deploy'], { cwd: path.join(ROOT, 'server'), env: { ...process.env, DATABASE_URL }, stdio: 'inherit' });
 }
 
-function webhookSecret() {
-  const secret = execFileSync('stripe', ['listen', '--print-secret'], { encoding: 'utf8' }).trim();
-  if (!/^whsec_/.test(secret)) throw new Error('`stripe listen --print-secret` gave no signing secret: log the Stripe CLI in to the Mutaba3a sandbox (stripe login).');
+/** A shell that exports APPLE_TEAM_ID for fastlane would half-set the API's app association, which it refuses. */
+const APP_ASSOCIATION_VARS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'];
+const withoutAppAssociation = (env) => Object.fromEntries(Object.entries(env).filter(([name]) => !APP_ASSOCIATION_VARS.includes(name)));
+
+/** The Stripe CLI's environment: the sandbox key in STRIPE_API_KEY, which the CLI prefers to its saved login. */
+const stripeCliEnv = (key) => ({ ...process.env, STRIPE_API_KEY: key });
+
+function webhookSecret(key) {
+  const secret = execFileSync('stripe', ['listen', '--print-secret'], { encoding: 'utf8', env: stripeCliEnv(key) }).trim();
+  if (!/^whsec_/.test(secret)) throw new Error('`stripe listen --print-secret` gave no signing secret for the sandbox key.');
   return secret;
 }
 
@@ -113,7 +121,7 @@ async function main() {
   const key = sandboxKey();
   ensureDatabase();
   await ensureCatalog(key);
-  const whsec = webhookSecret();
+  const whsec = webhookSecret(key);
 
   const children = [];
   const run = (cmd, args, options) => {
@@ -136,11 +144,11 @@ async function main() {
   process.on('SIGINT', () => stop());
   process.on('SIGTERM', () => stop());
 
-  run('stripe', ['listen', '--forward-to', `${API_ORIGIN}/v1/billing/stripe/webhook`, '--events', EVENTS.join(',')]);
+  run('stripe', ['listen', '--forward-to', `${API_ORIGIN}/v1/billing/stripe/webhook`, '--events', EVENTS.join(',')], { env: stripeCliEnv(key) });
   run('npm', ['--prefix', 'server', 'run', 'dev'], {
     cwd: ROOT,
     env: {
-      ...process.env,
+      ...withoutAppAssociation(process.env),
       NODE_ENV: 'development',
       PORT: String(API_PORT),
       DATABASE_URL,

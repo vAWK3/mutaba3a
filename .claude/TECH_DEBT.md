@@ -106,7 +106,7 @@
 **Ticket**: MUT-362 (eng review D8 B)
 **Added**: 2026-10-22
 **Priority**: Low
-**Impact**: the `portal-live` specs fill Stripe's real Checkout and Customer Portal. Stripe says its hosted pages resist automation, so a bot check or a changed field id fails a run with no product bug. The app also needs the sandbox key in the Keychain (`release-kit` / `barmajiyat/MUTABA3A_STRIPE_SANDBOX_KEY`), the Stripe CLI logged in to the Mutaba3a sandbox, and the sandbox's default Customer Portal configuration saved once in the dashboard.
+**Impact**: the `portal-live` specs fill Stripe's real Checkout and Customer Portal. Stripe says its hosted pages resist automation, so a bot check or a changed field id fails a run with no product bug. The app also needs the sandbox key in the Keychain (`release-kit` / `barmajiyat/MUTABA3A_STRIPE_SANDBOX_KEY`) (the Stripe CLI gets it too, through STRIPE_API_KEY) and the sandbox's default Customer Portal configuration saved once in the dashboard.
 **Fix**: if the hosted-page steps turn flaky, stop the specs at the redirect and finish the subscription through the API (as `manage` already does), keeping one recorded hosted-page run per release by hand.
 
 ### TD-202: A person's own Checkout never runs live while no country is open to consumers
