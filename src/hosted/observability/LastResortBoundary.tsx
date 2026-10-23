@@ -11,20 +11,17 @@ import { reportBoundaryError } from './errorReporting';
  * straight from the portal's dictionaries, styled by the boot-splash CSS only.
  */
 
-const LANGUAGES = [
-  { lang: 'ar', dir: 'rtl', copy: ar.hosted.crash },
-  { lang: 'en', dir: 'ltr', copy: en.hosted.crash },
-] as const;
-
 function StaticCrash() {
   return (
     <div className="boot-splash" role="alert">
-      {LANGUAGES.map(({ lang, dir, copy }) => (
-        <div key={lang} lang={lang} dir={dir}>
-          <h2>{copy.title}</h2>
-          <p>{copy.body}</p>
-        </div>
-      ))}
+      <div lang="ar" dir="rtl">
+        <h2>{ar.hosted.crash.title}</h2>
+        <p>{ar.hosted.crash.body}</p>
+      </div>
+      <div lang="en" dir="ltr">
+        <h2>{en.hosted.crash.title}</h2>
+        <p>{en.hosted.crash.body}</p>
+      </div>
       <button type="button" onClick={() => window.location.reload()}>
         {`${ar.hosted.crash.reload} · ${en.hosted.crash.reload}`}
       </button>

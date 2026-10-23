@@ -46,9 +46,9 @@ describe('browserSentryOptions (ADR-091, MUT-149 D4)', () => {
 
   it('scrubs every event on send: a URL keeps its path only, a user keeps only its id', () => {
     const { beforeSend } = browserSentryOptions('portal', base);
-    const event = crash({ request: { url: 'https://app.mtb3a.com/setup#token=secret' }, user: { id: 'u1', email: 'a@b.c' } });
+    const event = crash({ request: { url: 'https://portal.example.test/setup#token=secret' }, user: { id: 'u1', email: 'a@b.c' } });
     const sent = beforeSend!(event, {} as EventHint) as ErrorEvent;
-    expect(sent.request?.url).toBe('https://app.mtb3a.com/setup');
+    expect(sent.request?.url).toBe('https://portal.example.test/setup');
     expect(sent.user).toEqual({ id: 'u1' });
   });
 
