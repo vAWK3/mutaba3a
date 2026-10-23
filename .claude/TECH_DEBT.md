@@ -109,6 +109,22 @@
 **Impact**: the mirror reads `cancel_at` on or before the period end as "ending" (the Customer Portal sets it to the period end), but keeps `currentPeriodEnd` as the date Billing shows. A `cancel_at` set earlier (only from the Stripe dashboard) ends access sooner than the drawer says; the entitlement is right once Stripe ends the subscription.
 **Fix**: mirror an `endsAt` (the earlier of `cancel_at` and the period end) and show it.
 
+### TD-206: At 375px in English the landing bar clips the brand lockup when its button shows
+**Status**: Open (found by MUT-402, older than it)
+**Ticket**: MUT-402 build (qa `web.landing.375`)
+**Added**: 2026-10-23
+**Priority**: Medium (the front door's name, phone English only)
+**Impact**: with the header button shown, the brand link gets 90px. Main's "Mutaba3a" lockup needed 110px; MUT-402's mark plus MTB3A needs 105px (32px mark, design D3). `web.landing.375` fails on main and on the branch alike. 320/360px pass, because the button stays hidden there until the hero's button scrolls away.
+**Fix**: decide the phone bar's budget. Either the bar's button hides its label below about 400px (it already does at 360px), or the lockup drops to the mark plus the active name at a smaller M on phones (M ≥ 30 keeps the 12px floor; it still needs 98px). A design call, not a CSS tweak.
+
+### TD-207: The /app shell sets no tab title, so English users of the app see متابعة
+**Status**: Open (older than MUT-402)
+**Ticket**: MUT-402 build
+**Added**: 2026-10-23
+**Priority**: Low
+**Impact**: `common.pageTitle` ("MTB3A — {page}") names only the public sub-pages (/download, /privacy, /terms). The app under /app keeps `index.html`'s static متابعة in every language, so its tab never says MTB3A.
+**Fix**: one `useDocumentTitle(t('common.pageTitle', …))` per app route, or a shell-level title from the active nav item.
+
 ### TD-204: The subscription's interval is read from its lookup key's name
 **Status**: Open
 **Ticket**: MUT-362 review

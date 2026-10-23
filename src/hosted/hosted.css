@@ -13,17 +13,12 @@
 
 /* ---------- Brand, language (waits use BrandLoader, MUT-206) ---------- */
 
+/* The lockup's gap and the names' type come from the MTB3A tokens (components/brand/Logotype.css, MUT-402) */
 .hp-wordmark {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-heading);
-  font-size: var(--text-headline);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-tight);
   color: var(--text);
 }
-[dir="rtl"] .hp-wordmark { font-family: var(--font-heading-ar); }
 .hp-wordmark-mark { flex: none; }
 
 .hp-lang {
@@ -213,7 +208,7 @@
   background: var(--surface);
   border-inline-end: 1px solid var(--border);
 }
-.hp-side-wordmark { font-size: var(--text-headline); padding: var(--space-1) var(--space-2) var(--space-2-5); }
+.hp-side-wordmark { padding: var(--space-1) var(--space-2) var(--space-2-5); }
 .hp-spacer { flex: 1; }
 .hp-page { min-width: 0; padding: var(--space-6) var(--space-8) var(--space-12); }
 

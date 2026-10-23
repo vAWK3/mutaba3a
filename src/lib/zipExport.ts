@@ -57,7 +57,7 @@ export async function exportAllProfilesReceiptsAsZip(): Promise<number> {
     throw new Error('No receipts to export');
   }
   const blob = await zip.generateAsync({ type: 'blob' });
-  saveAs(blob, 'mutaba3a_receipts.zip');
+  saveAs(blob, 'mtb3a-receipts.zip');
   return count;
 }
 

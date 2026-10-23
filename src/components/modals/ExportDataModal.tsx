@@ -67,7 +67,7 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
           projects,
           transactions,
         });
-        downloadTextFile(`mutaba3a-${safeName}-${dateStr}.csv`, csvContent);
+        downloadTextFile(`mtb3a-${safeName}-${dateStr}.csv`, csvContent);
       } else {
         // Export as JSON (legacy format)
         const exportData = {
@@ -85,7 +85,7 @@ export function ExportDataModal({ onClose }: ExportDataModalProps) {
 
         const json = JSON.stringify(exportData, null, 2);
         downloadTextFile(
-          `mutaba3a-${safeName}-${dateStr}.json`,
+          `mtb3a-${safeName}-${dateStr}.json`,
           json,
           'application/json;charset=utf-8'
         );

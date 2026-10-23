@@ -215,6 +215,12 @@ describe('planCheckout parameters (MUT-362 §2.3)', () => {
     expect(CHECKOUT_SUBMIT_MESSAGE.length).toBeLessThanOrEqual(1200);
     expect(CHECKOUT_SUBMIT_MESSAGE).toMatch(/[؀-ۿ]/);
   });
+
+  it('names the product MTB3A in English and متابعة in Arabic on Stripe’s page (MUT-402)', () => {
+    expect(CHECKOUT_SUBMIT_MESSAGE).toContain('Manage billing in MTB3A');
+    expect(CHECKOUT_SUBMIT_MESSAGE).toContain('في متابعة');
+    expect(CHECKOUT_SUBMIT_MESSAGE).not.toMatch(/Mutaba3a/);
+  });
 });
 
 describe('consumerCountryCheck (MUT-362 eng review D9: the operator’s flag)', () => {

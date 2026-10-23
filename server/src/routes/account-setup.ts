@@ -47,7 +47,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
 
   async function guard(c: Context<AppEnv>): Promise<Date> {
     if (!isSamePortalOrigin(c.req, settings)) {
-      throw new ApiError('CROSS_SITE_REQUEST', 'Set your password from the Mutaba3a portal itself');
+      throw new ApiError('CROSS_SITE_REQUEST', 'Set your password from the MTB3A portal itself');
     }
     const now = c.get('now')();
     const ip = await ipLimiter.check(`account-setup:${requestClientIp((name) => c.req.header(name), settings)}`, now);

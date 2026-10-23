@@ -41,7 +41,7 @@ export const CHECKOUT_SESSION_TTL_SECONDS = 60 * 60;
 /** Shown above Stripe's Pay button. Arabic first: Stripe's page has no Arabic (spike §2.4). At most 1200 characters. */
 export const CHECKOUT_SUBMIT_MESSAGE = [
   'الأسعار لا تشمل ضريبة القيمة المضافة، وتُضاف حيث يفرضها القانون. يتجدد الاشتراك تلقائيًا، ويمكنك إلغاؤه متى شئت من «إدارة الدفع» في متابعة. إن توقف الدفع تبقى سجلاتك متاحة للقراءة والتنزيل.',
-  'Prices exclude VAT; VAT is added where the law requires it. Your plan renews automatically; cancel any time from Manage billing in Mutaba3a. If payment stops, your records stay readable and downloadable.',
+  'Prices exclude VAT; VAT is added where the law requires it. Your plan renews automatically; cancel any time from Manage billing in MTB3A. If payment stops, your records stay readable and downloadable.',
 ].join('\n\n');
 
 const TAX_NUMBER_FIELD_LABEL = 'Business tax number · الرقم الضريبي';

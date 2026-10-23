@@ -75,7 +75,7 @@ describe('Billing drawer: the status view (DR1)', () => {
   it('a no-expiry grant is covered, with no price and nothing to press (eng review D5)', async () => {
     portal(`/p/${ORG_B}?billing=true`, { entitlement: ent('ACTIVE', 'OPERATOR') });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
-    expect(await within(dialog).findByRole('heading', { name: 'Your account is covered by Mutaba3a' })).toBeInTheDocument();
+    expect(await within(dialog).findByRole('heading', { name: 'Your account is covered by MTB3A' })).toBeInTheDocument();
     expect(within(dialog).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Close']);
     expect(within(dialog).queryByText(/₪/)).not.toBeInTheDocument();
   });

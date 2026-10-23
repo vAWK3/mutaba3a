@@ -2,11 +2,9 @@
   "landing": {
     "skipToContent": "Skip to main content",
     "meta": {
-      "title": "Mutaba3a — Log it before you forget it"
+      "title": "MTB3A — Log it before you forget it"
     },
     "header": {
-      "wordmark": "Mutaba3a · متابعة",
-      "wordmarkShort": "Mutaba3a",
       "signIn": "Sign in"
     },
     "langToggle": {
@@ -52,10 +50,10 @@
     },
     "privacy": {
       "title": "Your records, on every device you sign in on.",
-      "body": "A Mutaba3a account keeps everything behind your sign-in — the same numbers on your phone and in the portal, backed up every day and restorable to any point in the last week."
+      "body": "An MTB3A account keeps everything behind your sign-in — the same numbers on your phone and in the portal, backed up every day and restorable to any point in the last week."
     },
     "getIt": {
-      "title": "Get Mutaba3a",
+      "title": "Get MTB3A",
       "lead": "One account for your whole business — the portal in your browser, and the app on your phone.",
       "requestCta": "Request an account",
       "requestHint": "Tell us about your work and we'll reply within 2 working days with an offer.",
@@ -84,8 +82,8 @@
       }
     },
     "malafat": {
-      "title": "Run a law firm or accounting office on Malafat? Mutaba3a connects to it.",
-      "body": "Malafat keeps each firm's fee proposals and agreements, and what every client owes and has paid. Link your firm's Malafat to your account, and a payment you log in the Mutaba3a phone app reaches Malafat under its client, unallocated, for the firm to apply to what's owed.",
+      "title": "Run a law firm or accounting office on Malafat? MTB3A connects to it.",
+      "body": "Malafat keeps each firm's fee proposals and agreements, and what every client owes and has paid. Link your firm's Malafat to your account, and a payment you log in the MTB3A phone app reaches Malafat under its client, unallocated, for the firm to apply to what's owed.",
       "link": "See Malafat"
     },
     "faq": {
@@ -93,7 +91,7 @@
       "q1": "Is there a free plan?",
       "a1": "No — accounts are set up for your organization, with pricing based on what you need. Request an account and we'll reply with an offer.",
       "q2": "Where is my data stored?",
-      "a2": "On Mutaba3a's servers, behind your sign-in — not only on one device. We back up every day and can restore your records to any point in the last 7 days.",
+      "a2": "On MTB3A's servers, behind your sign-in — not only on one device. We back up every day and can restore your records to any point in the last 7 days.",
       "q3": "How do I back up, or move to another device?",
       "a3": "Nothing to do — your account is the backup. Sign in on a new device and everything you've logged is already there.",
       "q4": "Can I track more than one business?",
@@ -110,7 +108,7 @@
       "JOD": "Jordanian dinars"
     },
     "footer": {
-      "copyright": "Mutaba3a",
+      "copyright": "MTB3A",
       "privacy": "Privacy",
       "terms": "Terms",
       "buyMeACoffee": "Buy Me a Coffee",

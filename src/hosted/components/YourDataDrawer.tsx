@@ -30,7 +30,7 @@ function problemFor(error: unknown): Problem {
 }
 
 function recordsFileName(today: Date): string {
-  return `mutaba3a-records-${today.toISOString().slice(0, 10)}.zip`;
+  return `mtb3a-records-${today.toISOString().slice(0, 10)}.zip`;
 }
 
 export function YourDataDrawer({ onClose }: { onClose: () => void }) {

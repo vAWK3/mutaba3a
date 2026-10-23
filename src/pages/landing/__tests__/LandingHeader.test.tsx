@@ -38,15 +38,34 @@ afterEach(() => {
 });
 
 describe('LandingHeader', () => {
-  it('names the product with the mark + name lockup, linking back to the top', () => {
+  it('names the product with the mark + MTB3A + متابعة lockup, linking back to the top', () => {
     renderHeader();
     const banner = screen.getByRole('banner');
     const home = banner.querySelector<HTMLAnchorElement>('.landing-header-brand')!;
     expect(home).toHaveAttribute('href', '#top');
     expect(home.querySelector('img')).toHaveAttribute('alt', '');
-    // Both names on wide screens, the active language's alone on a phone; CSS picks one (qa landing.spec @375)
-    expect(home.querySelector('.landing-wordmark-full')).toHaveTextContent('Mutaba3a · متابعة');
-    expect(home.querySelector('.landing-wordmark-short')).toHaveTextContent('Mutaba3a');
+    expect(home.querySelector('img')).toHaveAttribute('width', '32');
+    expect(home).toHaveAccessibleName('MTB3A متابعة');
+  });
+
+  it.each([
+    ['en', 'MTB3A متابعة'],
+    ['ar', 'متابعة MTB3A'],
+  ] as const)('puts the %s name first, so dir orders the lockup in the reading direction (MUT-402 D1)', (language, name) => {
+    renderHeader({ language });
+    expect(document.querySelector('.landing-header-brand')).toHaveAccessibleName(name);
+  });
+
+  it('marks the other language’s name and the dot for the phone rule, and hides the dot from screen readers (D12, OV-4)', () => {
+    renderHeader({ language: 'ar' });
+    const lockup = document.querySelector('.landing-wordmark')!;
+    const other = [...lockup.querySelectorAll('.wordmark-other')];
+    expect(other).toHaveLength(2);
+    expect(other[0]).toHaveClass('wordmark-separator');
+    expect(other[0]).toHaveAttribute('aria-hidden', 'true');
+    expect(other[1]).toHaveAttribute('role', 'img');
+    expect(other[1]).toHaveAccessibleName('MTB3A');
+    expect(lockup.querySelector('.brand-name-ar:not(.wordmark-other)')).toHaveTextContent('متابعة');
   });
 
   it.each([
@@ -80,7 +99,6 @@ describe('LandingHeader', () => {
 
   it('labels its button in Arabic too', () => {
     renderHeader({ language: 'ar' });
-    expect(document.querySelector('.landing-wordmark-short')).toHaveTextContent('متابعة');
     expect(headerCta()).toHaveTextContent('اطلب حسابًا');
   });
 

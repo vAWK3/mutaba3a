@@ -82,12 +82,18 @@ Tests: `src/components/brand/__tests__/BrandMark.test.tsx`, `SidebarNav.brand.te
 **Location**: `src/components/brand/Wordmark.tsx`
 **Purpose**: The Brand v2 lockup: `BrandMark` beside the product name. It was moved from the portal for MUT-77. Props:
 - `name` (ReactNode: each surface passes its own copy key, or spans for a responsive name);
-- `markSize` (default 28);
+- `markSize` (default 30, never under 30: it also sizes the logotype, H = 0.40 M; set as `--wordmark-mark` in px, the only source of M, MUT-402);
 - `className` and `markClassName` (added to `wordmark` / `wordmark-mark`).
 
-Used by the portal's `Wordmark` (`src/hosted/components/Brand.tsx`, same API as before) and the landing header. `SidebarNav` keeps its own inline lockup, because it collapses to the mark.
+Used by the portal's `Wordmark` (`src/hosted/components/Brand.tsx`: `BrandName` for the active language, `markSize` default 40, the sidebar passes 32) and the landing header (32). `SidebarNav` keeps its own inline lockup, because it collapses to the mark.
 
 Tests: `src/components/brand/__tests__/Wordmark.test.tsx`, `src/hosted/components/__tests__/Brand.test.tsx`.
+
+### Logotype / BrandName
+**Location**: `src/components/brand/Logotype.tsx`, `Logotype.css` (MUT-402, ADR-173)
+**Purpose**: The product's name as a language writes it. `Logotype` is the MUT-401 MTB3A logotype: a `<span role="img" aria-label="MTB3A" lang="en">` masked in `currentColor` (forced colours: the system colour its live text gets), sized by H from the surrounding `Wordmark`. `BrandName({ language, className })` renders `Logotype` in English and live متابعة (`lang="ar"`, `.brand-name-ar`) in Arabic. Put it in a `Wordmark`'s `name`; the bilingual lockup adds a `<span className="wordmark-separator" aria-hidden="true" />` between two of them. Never hand-write "MTB3A" or "متابعة" as a brand lockup.
+
+Tests: `src/components/brand/__tests__/Logotype.test.tsx` (component and stylesheet contracts), `src/pages/landing/__tests__/LandingHeader.test.tsx`; QA `web.brand.mtb3a-name`, `portal.shell.mtb3a-name`.
 
 ### BrandLoader
 **Location**: `src/components/brand/BrandLoader.tsx` (+ `BrandLoader.css`, path data in `bloomLoaderData.ts`)

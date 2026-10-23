@@ -23,7 +23,7 @@ import { useToast } from './Toast';
 type Notice = { kind: 'cancelled' | 'failed' | 'tooNew' } | { kind: 'missing'; count: number };
 
 function exportFileName(today: Date): string {
-  return `mutaba3a-export-${today.toISOString().slice(0, 10)}.zip`;
+  return `mtb3a-export-${today.toISOString().slice(0, 10)}.zip`;
 }
 
 function isAbort(error: unknown): boolean {

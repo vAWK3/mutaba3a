@@ -292,7 +292,7 @@ describe('ExportDataModal', () => {
     });
 
     // Verify download filename pattern
-    expect(capturedDownloadName).toMatch(/^mutaba3a-Test-Business-EN-\d{4}-\d{2}-\d{2}\.json$/);
+    expect(capturedDownloadName).toMatch(/^mtb3a-Test-Business-EN-\d{4}-\d{2}-\d{2}\.json$/);
   });
 
   it('should export profile transactions in CSV even when not linked to documents', async () => {
@@ -320,7 +320,9 @@ describe('ExportDataModal', () => {
       expect(downloadSpy).toHaveBeenCalled();
     });
 
-    const [, csvContent] = downloadSpy.mock.calls[0];
+    const [fileName, csvContent] = downloadSpy.mock.calls[0];
+    // The name people see in Downloads says the product in lower case, like the domain (MUT-402 D6)
+    expect(fileName).toMatch(/^mtb3a-Test-Business-EN-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(typeof csvContent).toBe('string');
     expect(csvContent).toContain('income');
     expect(csvContent).toContain('Test Transaction');

@@ -95,7 +95,7 @@ describe('Owners section (MUT-373)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Remove Lina Saleh' }));
     const confirm = within(dialog).getByRole('group', { name: 'Remove Lina Saleh?' });
     await user.click(within(confirm).getByRole('button', { name: 'Remove Lina Saleh' }));
-    expect(await within(dialog).findByText(/Can't reach Mutaba3a/)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/Can't reach MTB3A/)).toBeInTheDocument();
     expect(within(dialog).getByRole('group', { name: 'Remove Lina Saleh?' })).toBeInTheDocument();
     await user.click(within(within(dialog).getByRole('group', { name: 'Remove Lina Saleh?' })).getByRole('button', { name: 'Remove Lina Saleh' }));
     await waitFor(() => expect(deletes(api.calls)).toHaveLength(2));
@@ -207,7 +207,7 @@ describe('Owners section (MUT-373)', () => {
   });
 
   it.each([
-    ['the network fails', () => Promise.reject(new TypeError('network down')), /Can't reach Mutaba3a/],
+    ['the network fails', () => Promise.reject(new TypeError('network down')), /Can't reach MTB3A/],
     ['the creator tries to leave', () => fail(409, 'CONFLICT', { reason: 'CREATOR_CANNOT_LEAVE' }), /you can't leave it/],
   ] as const)('keeps the leave confirm open with a banner, Save still hidden, when %s', async (_label, answer, banner) => {
     const { user, router } = portal([coOwned, builtIn], { [`DELETE /v1/profiles/${STUDIO}/owners/${ME}`]: answer as Handler }, `/p/${STUDIO}?editProfile=${STUDIO}`);

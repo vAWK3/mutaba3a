@@ -172,7 +172,7 @@ test(
     await step('Open the portal while the session check is slow', async () => {
       await page.goto('/');
       await expect(page.locator('.boot-splash').first()).toBeVisible();
-      await expect(page.getByText('Mutaba3a', { exact: true })).toHaveCount(0);
+      await expect(page.getByRole('img', { name: 'MTB3A' })).toHaveCount(0);
     });
 
     await step('The mark blooms in place and says it is checking the session', async () => {

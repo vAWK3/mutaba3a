@@ -180,7 +180,7 @@ describe('saving', () => {
       [REDEEM]: () => (++attempt === 1 ? Promise.reject(new TypeError('Failed to fetch')) : unusable('used')()),
     });
     await save(user, password);
-    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't reach Mutaba3a");
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't reach MTB3A");
     expect(screen.getByLabelText('New password')).toHaveValue(PASSWORD);
     await user.click(screen.getByRole('button', { name: 'Save and sign in' }));
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
@@ -304,7 +304,7 @@ describe('the terms (MUT-324)', () => {
       [REDEEM]: () => fail(409, 'TERMS_VERSION_STALE'),
     });
     await save(user, password);
-    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't reach Mutaba3a");
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't reach MTB3A");
     expect(screen.getByRole('checkbox', { name: /terms of service/ })).not.toBeChecked();
     expect(redeems(api)).toHaveLength(1);
   });
@@ -375,7 +375,7 @@ describe('when the check does not get through', () => {
     let attempt = 0;
     stubApi(routes({ [CHECK]: () => (++attempt === 1 ? Promise.reject(new TypeError('Failed to fetch')) : valid()()) }));
     const { user } = renderPortal(`/setup#${TOKEN}`);
-    expect(await screen.findByText("Couldn't reach Mutaba3a. Check your connection and try again.")).toBeInTheDocument();
+    expect(await screen.findByText("Couldn't reach MTB3A. Check your connection and try again.")).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByLabelText('New password')).toBeInTheDocument();
   });

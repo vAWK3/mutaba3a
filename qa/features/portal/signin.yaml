@@ -69,7 +69,7 @@ features:
       - Hold /v1/me for 4 s, then answer 401, and open the portal in English
       - Again with reduced motion on
     expect:
-      - The mark shows at once and no "Mutaba3a" text appears
+      - The mark shows at once and no MTB3A logotype appears
       - The mark blooms in place, with no fade, and a status says "Checking your session"
       - From 3 s the status says "Still connecting…"
       - Sign-in shows once /v1/me answers

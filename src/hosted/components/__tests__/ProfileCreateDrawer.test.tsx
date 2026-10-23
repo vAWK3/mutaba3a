@@ -175,7 +175,7 @@ describe('New profile drawer (MUT-183)', () => {
     await screen.findByRole('dialog', { name: 'New profile' });
     await fill(user, 'Offline Studio');
     await user.click(screen.getByRole('button', { name: 'Create profile' }));
-    expect(await screen.findByText("Can't reach Mutaba3a. Nothing was saved. Try again.")).toBeInTheDocument();
+    expect(await screen.findByText("Can't reach MTB3A. Nothing was saved. Try again.")).toBeInTheDocument();
     expect(screen.getByLabelText('Name')).toHaveValue('Offline Studio');
     await user.click(screen.getByRole('button', { name: 'Create profile' }));
     await waitFor(() => expect(posts(api.calls)).toHaveLength(2));

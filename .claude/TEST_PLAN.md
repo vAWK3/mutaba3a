@@ -159,6 +159,21 @@ Every money rule runs on both stores (memory and `test:db`).
 
 ## Current Test Coverage
 
+### MTB3A name (MUT-402, added 2026-10-23)
+| File | Type | Covers |
+|------|------|--------|
+| `src/components/brand/__tests__/Logotype.test.tsx` | Unit (jsdom + postcss) | Logotype is one image named MTB3A (`lang="en"`); BrandName per language; the mask names the pinned file; `currentColor`; the pinned box; H never on `:root`; no undefined custom property; 0.60 H gap; the Arabic name's own type; the separator's 3px floor; forced colours per context (CanvasText / LinkText / VisitedText) and the square mark ring; whole-lockup print ink; the `hosted.html` preload names the same file in CORS mode; the retired lockup CSS and the 480px `.wordmark-other` rule |
+| `src/components/brand/__tests__/Wordmark.test.tsx` | Unit | `--wordmark-mark` is the markSize in px, default 30; no lockup in source under 30px; no stylesheet sets `--wordmark-mark` |
+| `src/styles/__tests__/brand.test.ts` › drift | Unit (node) | `--m-wordmark-*` equal the JSON both ways; the print ink is the light ink in both themes; the aspect equals the SVG viewBox |
+| `src/lib/i18n/__tests__/brandName.test.ts` | Unit (node) | No English leaf says Mutaba3a, no Arabic leaf has Latin (privacy exempt); both HTML titles are متابعة; `client_name` is MTB3A; the guard catches its fixtures |
+| `src/pages/landing/__tests__/LandingHeader.test.tsx`, `src/hosted/components/__tests__/Brand.test.tsx` | Unit | The link's name follows `dir`; the phone pieces are marked; the portal's 40/32px marks; `PortalTitle` follows the switch |
+| Server route tests (`routes-m*`, `routes-sessions`, `routes-account-setup`) | Unit | `1.52.1-mut402`, "MTB3A Financial API", the three CROSS_SITE_REQUEST messages |
+| `backupDownload`, `ImportExportModals`, `ImportDataPage`, `migration-safety-paths`, `HostedYourDataDrawer`, `local-mode` | Unit | Downloads are `mtb3a-…`; old `mutaba3a-…` files still restore (`dataFiles`, `YourDataSection`, `recordsArchive`) |
+| `qa/specs/web/brand.spec.ts` › `@web.brand.mtb3a-name` | E2E (Chromium) | The landing lockup in both directions at 1280, 360 and 320px, painted in the link's colour; forced colours one colour with a ring; the download page's title |
+| `qa/specs/portal/shell.spec.ts` › `@portal.shell.mtb3a-name` | E2E (Chromium) | Sign-in at 40px, one logotype fetch on a cold load, forced colours, Arabic text and tab title, the 32px sidebar |
+
+Baseline on main (2026-10-23, preview builds): `web.landing.375`, `web.brand.contrast-landing` (`.hosted-notice` links), the `/hosted` landing specs and `portal.signin.boot-slow-session` fail on main too; this branch fixes `web.landing.title`.
+
 ### MTB3A logotype (MUT-401, added 2026-10-23)
 | File | Type | Covers |
 |------|------|--------|

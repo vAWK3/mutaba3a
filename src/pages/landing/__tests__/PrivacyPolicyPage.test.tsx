@@ -165,7 +165,7 @@ describe('PrivacyPolicyPage', () => {
   });
 
   it.each([
-    ['en', 'Mutaba3a — Privacy Policy'],
+    ['en', 'MTB3A — Privacy Policy'],
     ['ar', 'متابعة — سياسة الخصوصية'],
   ] as const)('names the tab in the active language (%s, MUT-77)', (language, title) => {
     renderPage(language);

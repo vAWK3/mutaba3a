@@ -23,7 +23,7 @@ Not taken from the export: its `tokens/` and `icons/web/favicon.svg` predate the
 - **Origin:** outlined from Thmanyah Serif Display Bold (the face of the live Arabic name), glyphs M, T, B, 3 and A at 1000 units per em, font kerning on, +30 units (0.03 em) tracking. The letter shapes are otherwise untouched.
 - **Licence:** Basel reports that Thmanyah confirmed commercial use of the outlined logotype (2026-10-22). The written record is still to be attached, so the licence guardrail (plan D7) stays open on MUT-402, the ticket that ships the file. The fonts themselves stay unmodified and self-hosted as before.
 - **Frame:** `viewBox="0 0 3695 724"`, tight to the ink. M, T, B and A sit on y 12–712, so the cap height is 700 units. Only the 3 overshoots, 12 units above and below (y 0–724), so the frame's height comes from the 3 alone. Every ratio below uses the viewBox height, **H** = 724 units; a re-export that changes the 3 changes H.
-- **Fill:** one opaque fill on each of the 5 paths. The colour has no meaning: MUT-402 shows the file as a CSS mask over `var(--ink)`, so it follows the theme and any ink change. There is no dark file.
+- **Fill:** one opaque fill on each of the 5 paths. The colour has no meaning: MUT-402 shows the file as a CSS mask painted in `currentColor` (there is no `--ink` token; design review D6), so it follows the text colour, the theme and any ink change. There is no dark file.
 - **Bytes as delivered:** the C2PA manifest stays, and nobody edits the file. A file that fails `wordmark.test.ts` is re-exported from Claude Design with plain `fill` attributes (eng D4). The file is pinned in `src/assets/brand/brand.sha256.json`; a deliberate replacement updates the pin in the same commit.
 
 ## Lockups
@@ -36,13 +36,13 @@ M is the mark size (its width and height). H is the logotype height (the viewBox
 | Aspect ratio | **W = 5.104 H** | From the 3695 × 724 viewBox. Size the mask box by height only. |
 | Gap, mark to name | **0.60 H** (0.24 M) | The same for MTB3A and متابعة. |
 | Arabic name | **font-size 1.25 H** | Live text, Thmanyah Serif Display Bold, line-height 1, so متابعة reads the same size as MTB3A. |
-| Bilingual separator | **0.16 H dot** in **markDot** | Between the two names, 0.60 H from each. It scales with H (6 px at H = 38.4 px) and uses the theme-aware `markDot` token, never a fixed hex. |
+| Bilingual separator | **0.16 H dot** in **markDot**, at least **3 px** | Between the two names, 0.60 H from each. It scales with H (6 px at H = 38.4 px) and uses the theme-aware `markDot` token, never a fixed hex. **Kit exception (MUT-402 design D10):** never under 3 px, since 0.16 H is about 2 px at the web's 12.8 px logotype. |
 | Clear space | **1 H** on all sides | Nothing else (text, edges, other logos) inside it. |
 | Minimum size | **H ≥ 12 px** (M ≥ 30 px) | Below this, use the mark alone. The logotype alone must also be at least 12 px tall. |
 
 **Order.** Lockups are built in code from `mark.svg` and `wordmark.svg`, with no baked lockup files. The order follows `dir`. The mark always comes first in reading order. In the bilingual lockup, LTR puts MTB3A first and RTL puts متابعة first.
 
-These numbers become tokens in MUT-402, with the CSS that first reads them (eng review D1): a `wordmark` block in `mutaba3a.tokens.json`, `--m-wordmark-*` primitives, and a drift case.
+These numbers are tokens (MUT-402): the `wordmark` block in `src/styles/brand/mutaba3a.tokens.json`, mirrored as `--m-wordmark-*` in `mutaba3a-theme.css`, with drift cases in `brand.test.ts`. The CSS that reads them is `src/components/brand/Logotype.css`. The web's sizes: landing bar M = 32, portal sign-in, setup, terms-update and boot M = 40, portal sidebar M = 32, `Wordmark` default M = 30.
 
 ## Running text
 
@@ -60,13 +60,16 @@ Examples: "Track income and expenses with MTB3A, then export a monthly summary i
 
 The drawing's own tracking (+0.03 em) applies only if a heading-sized live string of the name survives MUT-402. In that case MUT-402 turns it into a token.
 
-## What MUT-402 must add when it renders the logotype
+## How the web renders it (MUT-402)
 
-- `mask-image` and `-webkit-mask-image` over `background-color: var(--ink)`, sized by height.
-- `role="img"` with `aria-label="MTB3A"` on the masked element.
-- `@media (forced-colors: active)`: paint it `CanvasText` with `forced-color-adjust: none`, or it vanishes in Windows high-contrast mode.
-- A print rule, so the logotype isn't dropped along with background graphics.
-- The lockup tokens above.
+`src/components/brand/Logotype.tsx` and `Logotype.css`:
+
+- **Logotype:** a `<span role="img" aria-label="MTB3A" lang="en">` with `mask-image` and `-webkit-mask-image` (100% 100%, no repeat, centred) over `background-color: currentColor`. Its box is `inline-block`, unshrinkable and sized by H, so a late mask shifts nothing.
+- **BrandName:** the logotype in English, live متابعة (`lang="ar"`, Serif Display Bold at 1.25 H, untracked) in Arabic.
+- **Size:** M reaches the CSS only from `Wordmark`'s `markSize`, as `--wordmark-mark` in px. H is declared on the lockup and each name, never on `:root`.
+- **Forced colours:** the mask opts out of forcing and names the system colour its live text gets: `LinkText` (`VisitedText`) inside a link, `CanvasText` elsewhere. `currentColor` would be the unforced ink there. The mark gets a 1 px square `CanvasText` ring; it is not a disc, so it is never rounded.
+- **Print:** the whole lockup prints in the light ink (`--m-wordmark-print-ink`) whatever the theme.
+- **Portal preload:** `hosted.html` preloads the file with `crossorigin`, because the portal has no service worker.
 
 ## Store artwork (MUT-404)
 

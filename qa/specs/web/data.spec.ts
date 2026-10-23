@@ -181,7 +181,7 @@ test(
       const download = await downloadFrom(page, () =>
         dialog.getByRole('button', { name: 'Export Default Profile' }).click(),
       );
-      expect(download.suggestedFilename()).toMatch(/^mutaba3a-Default-Profile-\d{4}-\d{2}-\d{2}\.json$/);
+      expect(download.suggestedFilename()).toMatch(/^mtb3a-Default-Profile-\d{4}-\d{2}-\d{2}\.json$/);
       exported = { name: download.suggestedFilename(), mimeType: 'application/json', buffer: await readDownload(download) };
       await dialog.getByRole('button', { name: 'Close', exact: true }).first().click();
       await expect(dialog).toBeHidden();
@@ -224,7 +224,7 @@ test(
       await page.goto('/app/settings');
       await expect(main.getByText(/^Not backed up yet/)).toBeVisible();
       const { download } = await backUpNow(page);
-      expect(download.suggestedFilename()).toMatch(/^mutaba3a-backup-v\d+-\d{4}-\d{2}-\d{2}\.json$/);
+      expect(download.suggestedFilename()).toMatch(/^mtb3a-backup-v\d+-\d{4}-\d{2}-\d{2}\.json$/);
       await expect(main.getByText(/^Last backed up: /)).toBeVisible();
     });
 
@@ -249,7 +249,7 @@ test(
     });
 
     await step('No business is left, so the welcome comes back; Skip for now', async () => {
-      const welcome = page.getByRole('dialog', { name: 'Welcome to Mutaba3a' });
+      const welcome = page.getByRole('dialog', { name: 'Welcome to MTB3A' });
       await expect(welcome).toBeVisible();
       await welcome.getByRole('button', { name: 'Skip for now' }).click();
       await expect(welcome).toBeHidden();
@@ -415,7 +415,7 @@ test(
       const wizard = page.getByRole('dialog', { name: 'Data Migration' });
       await expect(wizard).toContainText('We found 1 record that needs to be assigned to a business profile.');
       const download = await downloadFrom(page, () => wizard.getByRole('button', { name: 'Download backup' }).click());
-      expect(download.suggestedFilename()).toMatch(/^mutaba3a-backup-v\d+-\d{4}-\d{2}-\d{2}\.json$/);
+      expect(download.suggestedFilename()).toMatch(/^mtb3a-backup-v\d+-\d{4}-\d{2}-\d{2}\.json$/);
       await expect(wizard.getByText(/Backup downloaded/)).toBeVisible();
       await wizard.getByRole('button', { name: 'Continue' }).click();
     });
@@ -445,7 +445,7 @@ test(
       const receipts = page.getByTestId('settings-export-receipts');
       await expect(receipts).toContainText('1 uploaded receipt file,');
       const download = await downloadFrom(page, () => receipts.getByRole('button', { name: 'Download ZIP' }).click());
-      expect(download.suggestedFilename()).toBe('mutaba3a_receipts.zip');
+      expect(download.suggestedFilename()).toBe('mtb3a-receipts.zip');
       await expect(page.getByText('1 receipt exported')).toBeVisible();
       const zip = await JSZip.loadAsync(await readDownload(download));
       expect(Object.keys(zip.files)).toContain('Default Profile/2025-03/printer-ink.pdf');

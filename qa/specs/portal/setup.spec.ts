@@ -162,7 +162,7 @@ test('A save whose answer was lost but went through signs in on the retry, not "
   await step('Save while the connection drops after the server set the password', async () => {
     api.once('POST', REDEEM, 'abort');
     await typeAndSave(page, PASSWORD);
-    await expect(page.getByRole('alert')).toContainText("Couldn't reach Mutaba3a");
+    await expect(page.getByRole('alert')).toContainText("Couldn't reach MTB3A");
     await expect(page.getByLabel('New password')).toHaveValue(PASSWORD);
     api.markSetupLink('used');
   });

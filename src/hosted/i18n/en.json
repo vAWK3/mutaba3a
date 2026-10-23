@@ -12,7 +12,7 @@
     "loadingSlow": "Still loading…"
   },
   "hosted": {
-    "brand": "Mutaba3a",
+    "brand": "MTB3A",
     "crash": {
       "title": "This page stopped working",
       "body": "Reload to keep working. Anything you hadn't saved on this page may need entering again.",
@@ -34,7 +34,7 @@
         "one": "Too many attempts from this network. Try again in {count} minute.",
         "other": "Too many attempts from this network. Try again in {count} minutes."
       },
-      "unreachable": "Couldn't reach Mutaba3a. Check your connection and try again.",
+      "unreachable": "Couldn't reach MTB3A. Check your connection and try again.",
       "expired": "You've been signed out. Sign in again to continue.",
       "signedOut": "You've signed out.",
       "help": "Can't sign in? Ask the person who set up your account for a new password.",
@@ -45,7 +45,7 @@
       "checking": "Checking your session",
       "connectingSlow": "Still connecting…",
       "boot": {
-        "title": "Can't reach Mutaba3a right now",
+        "title": "Can't reach MTB3A right now",
         "body": "Figures aren't stored on this device, so nothing is shown until the connection is back.",
         "retry": "Try again"
       },
@@ -81,7 +81,7 @@
         "reset": "Choose a new password"
       },
       "lead": {
-        "setup": "You'll use it to sign in to Mutaba3a on the web and in the phone app.",
+        "setup": "You'll use it to sign in to MTB3A on the web and in the phone app.",
         "reset": "Saving it signs this account out everywhere else. You'll use it on the web and in the phone app."
       },
       "account": "Account",
@@ -158,7 +158,7 @@
         "hosted": "Hosted",
         "sourceMalafat": "Income recorded by Malafat",
         "sourceExpensesOnly": "Expenses only",
-        "localFooter": "Your local profiles stay in the Mutaba3a app on your device. They aren't shown here and never leave it.",
+        "localFooter": "Your local profiles stay in the MTB3A app on your device. They aren't shown here and never leave it.",
         "newProfile": "+ New profile",
         "manage": "Manage profiles"
       },
@@ -167,7 +167,7 @@
     },
     "states": {
       "unreachable": {
-        "title": "Can't reach Mutaba3a right now",
+        "title": "Can't reach MTB3A right now",
         "body": "Figures aren't stored on this device, so nothing is shown until the connection is back.",
         "retry": "Try again"
       },
@@ -631,7 +631,7 @@
         "typeRequired": "Choose Personal or Business",
         "currencyInvalid": "Choose a currency",
         "timezoneInvalid": "Choose a valid time zone",
-        "network": "Can't reach Mutaba3a. Nothing was saved. Try again.",
+        "network": "Can't reach MTB3A. Nothing was saved. Try again.",
         "generic": "Something went wrong. Nothing was saved.",
         "changedByOwner": "Another owner or device changed this profile. Reload to see the latest, then save again.",
         "coOwned": "A profile you share with other owners stays Business."
@@ -679,16 +679,16 @@
     },
     "usage": {
       "title": "Share anonymous usage?",
-      "body": "Help us see which parts of Mutaba3a people use. We never send amounts, names or anything you type, and it isn't linked to your account. You can turn it off any time.",
+      "body": "Help us see which parts of MTB3A people use. We never send amounts, names or anything you type, and it isn't linked to your account. You can turn it off any time.",
       "turnOn": "Share anonymous usage",
       "decline": "Not now",
       "toggle": "Share anonymous usage"
     },
     "malafat": {
       "label": "A suggestion for law firms and accounting offices",
-      "businessCreated": "Is this business a law firm or an accounting office? Malafat manages its clients, documents and fee agreements, and connects to your Mutaba3a account.",
-      "clientThreshold": "Lots of clients to keep track of? If you run a law firm or an accounting office, Malafat manages clients, documents and fee agreements, and connects to your Mutaba3a account.",
-      "secondBusiness": "Running more than one office? If one of them is a law firm or an accounting office, Malafat manages clients, documents and fee agreements, and connects to your Mutaba3a account.",
+      "businessCreated": "Is this business a law firm or an accounting office? Malafat manages its clients, documents and fee agreements, and connects to your MTB3A account.",
+      "clientThreshold": "Lots of clients to keep track of? If you run a law firm or an accounting office, Malafat manages clients, documents and fee agreements, and connects to your MTB3A account.",
+      "secondBusiness": "Running more than one office? If one of them is a law firm or an accounting office, Malafat manages clients, documents and fee agreements, and connects to your MTB3A account.",
       "cta": "See Malafat",
       "dismiss": "Don't show this again",
       "menuLink": "Malafat, for law firms and accounting offices",
@@ -780,7 +780,7 @@
           "dateTooFar": "That date is too far ahead",
           "limit": "This profile already has 200 groups, the most allowed. Delete one to add another.",
           "conflict": "This group changed elsewhere. It has been reloaded; check it and save again.",
-          "network": "Couldn't reach Mutaba3a. Try again.",
+          "network": "Couldn't reach MTB3A. Try again.",
           "notFound": "This group was deleted.",
           "startRequired": "Pick the day it starts",
           "invalid": "Check the name and dates, then try again."
@@ -896,7 +896,7 @@
       "yourData": "Your data",
       "tooNew": {
         "title": "Reload to continue",
-        "body": "Another tab saved the records on this device with a newer version of Mutaba3a. Reload to keep working."
+        "body": "Another tab saved the records on this device with a newer version of MTB3A. Reload to keep working."
       },
       "data": {
         "title": "Your data",
@@ -913,25 +913,25 @@
         },
         "replace": "Replace",
         "restored": "Records restored.",
-        "notAFile": "This isn't a Mutaba3a records file.",
-        "tooNew": "This file was saved by a newer version of Mutaba3a. Reload and try again.",
+        "notAFile": "This isn't an MTB3A records file.",
+        "tooNew": "This file was saved by a newer version of MTB3A. Reload and try again.",
         "failed": "Couldn't restore the file. Nothing was changed.",
-        "fromAccount": "This file was downloaded from your Mutaba3a account on {date}. It's an export: restoring it here doesn't change the account."
+        "fromAccount": "This file was downloaded from your MTB3A account on {date}. It's an export: restoring it here doesn't change the account."
       },
       "reload": "Reload",
       "saveFailed": {
         "title": "Couldn't save on this device",
-        "body": "This browser stopped saving Mutaba3a's records here, perhaps because it's out of space. Reload to continue. Everything you saw saved before this is safe."
+        "body": "This browser stopped saving MTB3A's records here, perhaps because it's out of space. Reload to continue. Everything you saw saved before this is safe."
       },
       "unavailable": {
-        "title": "This browser won't let Mutaba3a save here",
+        "title": "This browser won't let MTB3A save here",
         "body": "Private browsing or a storage setting is blocking it. Turn on storage for this site, or sign in to keep your records in your account.",
         "retry": "Try again"
       }
     },
     "yourData": {
       "title": "Your data",
-      "body": "Download a copy of your records: clients, matters, income, payments, expenses, groups, conversions and receipt files. You can open it in Mutaba3a without an account: signed out, choose Your data › Restore from file.",
+      "body": "Download a copy of your records: clients, matters, income, payments, expenses, groups, conversions and receipt files. You can open it in MTB3A without an account: signed out, choose Your data › Restore from file.",
       "notBackup": "It's an export, not a backup: it can't be restored into your account. Profiles that Malafat fills come with their income as your own records, without Malafat's documents.",
       "profiles": "Profiles to include",
       "download": "Download my records",
@@ -946,7 +946,7 @@
       },
       "cancelled": "Download cancelled. Nothing was saved.",
       "failed": "Couldn't download your records. Nothing was saved. Try again.",
-      "tooNew": "Mutaba3a has been updated. Reload the page, then download again.",
+      "tooNew": "MTB3A has been updated. Reload the page, then download again.",
       "reload": "Reload"
     },
     "billing": {
@@ -977,8 +977,8 @@
         "unpaid": "Your last payment didn't go through",
         "needsHelp": "Your subscription needs a hand from us",
         "lapsed": "Your plan has ended",
-        "coveredByGrant": "Your account is covered by Mutaba3a",
-        "coveredUntil": "Your account is covered by Mutaba3a until {date}",
+        "coveredByGrant": "Your account is covered by MTB3A",
+        "coveredUntil": "Your account is covered by MTB3A until {date}",
         "coveredByMalafat": "Covered by your firm's Malafat plan",
         "ownedByOthers": "Your profiles are covered by their owners",
         "none": "Subscribe to keep adding records",
@@ -996,7 +996,7 @@
         "lapsed": "Your records stay readable and downloadable. Subscribe to add new ones.",
         "coveredByGrant": "There's nothing to pay. We'll write to you before that changes.",
         "coveredUntil": "After that, subscribe to keep adding records.",
-        "coveredByMalafat": "Mutaba3a never asks you to pay for it twice.",
+        "coveredByMalafat": "MTB3A never asks you to pay for it twice.",
         "ownedByOthers": "Each profile's billing is handled by the person who created it.",
         "none": "Your records stay readable and downloadable.",
         "pending": "If your bank asked you to approve it, finish it in Manage billing. You're not subscribed until it does.",
@@ -1061,7 +1061,7 @@
         "tooMany": "Too many tries in a minute. Wait a moment, then try again.",
         "changed": "Your billing changed since you opened this. Go back to see where you stand."
       },
-      "mailSubject": "Mutaba3a billing",
+      "mailSubject": "MTB3A billing",
       "coOwnedNote": "Shared profiles you co-own are covered by their creator's plan."
     }
   }

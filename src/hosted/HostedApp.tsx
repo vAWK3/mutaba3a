@@ -1,6 +1,7 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { ThemeProvider } from '../lib/theme';
+import { PortalTitle } from './components/Brand';
 import { ToastProvider } from './components/Toast';
 import { HostedLanguageProvider } from './i18n/HostedLanguageProvider';
 import type { PortalRouter } from './router';
@@ -18,6 +19,7 @@ export function PortalProviders({ queryClient, router }: { queryClient: QueryCli
   return (
     <QueryClientProvider client={queryClient}>
       <HostedLanguageProvider>
+        <PortalTitle />
         <ThemeProvider>
           <ToastProvider>
             {/* MUT-149: a crash outside the router's own boundaries, shown translated and reported */}

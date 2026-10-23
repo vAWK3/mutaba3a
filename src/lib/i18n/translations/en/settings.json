@@ -18,9 +18,9 @@
         "signIn": "Sign in"
       },
       "malafat": {
-        "title": "Mutaba3a + Malafat",
-        "text": "For law firms and accounting offices: Malafat manages your clients, documents and fee agreements, and connects to a Mutaba3a hosted account.",
-        "businessAdded": "Is your new business a law firm or an accounting office? Malafat manages its clients, documents and fee agreements, and connects to a Mutaba3a hosted account.",
+        "title": "MTB3A + Malafat",
+        "text": "For law firms and accounting offices: Malafat manages your clients, documents and fee agreements, and connects to an MTB3A hosted account.",
+        "businessAdded": "Is your new business a law firm or an accounting office? Malafat manages its clients, documents and fee agreements, and connects to an MTB3A hosted account.",
         "noteLabel": "A suggestion for your new business",
         "cta": "See Malafat",
         "dismiss": "Don't show this again",
@@ -113,7 +113,7 @@
     },
     "about": {
       "title": "About",
-      "name": "Mutaba3a",
+      "name": "MTB3A",
       "description": "A local-first financial tracking tool for freelancers and small businesses. Your data is stored locally in your browser using IndexedDB.",
       "support": "Support this project",
       "supportDesc": "If you find this tool useful, consider supporting its development",
@@ -246,7 +246,7 @@
       "exportBusiness": "Export a business",
       "exportBusinessDesc": "One business as CSV for spreadsheets, or as JSON to move it to another device.",
       "exportBusinessBtn": "Export…",
-      "unknownFile": "This file isn't a Mutaba3a backup, a business export or a CSV file.",
+      "unknownFile": "This file isn't an MTB3A backup, a business export or a CSV file.",
       "deleteZoneLabel": "Danger zone"
     },
     "restore": {
