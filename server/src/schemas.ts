@@ -493,6 +493,9 @@ const ClientReleaseSchema = z
   .regex(CLIENT_RELEASE_PATTERN, 'must be printable ASCII with no spaces')
   .openapi({ description: 'The client release that showed the terms, e.g. the portal’s `web-v<x>` tag (MUT-354). Stored as sent.', example: 'web-v0.1.16' });
 
+/** MUT-367: PENDING_REVIEW = a self-service signup waiting for the operator; it can't sign in. Additive since 1.56.0-mut367. */
+export const UserStatusSchema = z.enum(['ACTIVE', 'DISABLED', 'PENDING_REVIEW']).openapi('UserStatus');
+
 /** Never includes the password hash. */
 export const UserSummarySchema = z
   .object({
@@ -501,7 +504,7 @@ export const UserSummarySchema = z
     email: z.string(),
     displayName: z.string(),
     locale: UserLocaleSchema,
-    status: z.enum(['ACTIVE', 'DISABLED']),
+    status: UserStatusSchema,
     passwordChangedAt: z.string().datetime(),
     lastSignInAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),
@@ -721,7 +724,7 @@ export const TermsReportSchema = z
       z.object({
         id: z.string().uuid(),
         email: z.string(),
-        status: z.enum(['ACTIVE', 'DISABLED']),
+        status: UserStatusSchema,
         latestVersion: TermsVersionSchema.nullable(),
         /** MUT-354: the client release that showed the latest accepted version; null when none was recorded. */
         clientRelease: z.string().nullable(),
@@ -751,6 +754,11 @@ export const MeSchema = z
       locale: UserLocaleSchema,
       /** MUT-191: on, nothing dismissed, until the person changes it. */
       malafatSuggestions: MalafatSuggestionsSchema,
+      /**
+       * MUT-367 (D16): the account's status, for billing to read. Behind a session it is always ACTIVE: a
+       * PENDING_REVIEW or DISABLED account can't sign in. Additive since 1.56.0-mut367.
+       */
+      status: UserStatusSchema,
     }),
     /** Firm profiles in membership order (oldest first), then profiles the caller created (oldest first), then their own personal profile last (MUT-120, MUT-182). */
     profiles: z.array(HostedProfileSchema),
@@ -902,7 +910,17 @@ export const SetupLinkRedeemRequestSchema = z
   .openapi('SetupLinkRedeemRequest');
 
 /** The portal signs in with this email and the password just set, through POST /v1/sessions. */
-export const SetupLinkRedeemResponseSchema = z.object({ email: z.string() }).openapi('SetupLinkRedeemResponse');
+export const SetupLinkRedeemResponseSchema = z
+  .object({
+    email: z.string(),
+    /**
+     * MUT-367 (D22): ACTIVE, or PENDING_REVIEW when a self-service signup (or a recovery of one) waits for the operator:
+     * signing in then answers 403 ACCOUNT_UNDER_REVIEW, so the portal shows the waiting screen straight away.
+     * Additive since 1.56.0-mut367.
+     */
+    status: z.enum(['ACTIVE', 'PENDING_REVIEW']),
+  })
+  .openapi('SetupLinkRedeemResponse');
 
 // ---- Self-service signup and recovery (MUT-366, ADR-159) -------------------
 
@@ -938,6 +956,47 @@ export const AccountRecoveryRequestSchema = z
 
 /** The one answer for every address, account or not (ADR-037 §4). */
 export const SelfServiceAcceptedSchema = z.object({ status: z.literal('sent') }).openapi('SelfServiceAccepted');
+
+// ---- The operator's signup review queue (MUT-367, ADR-159 §7a) -------------
+
+export const EmailDomainClassSchema = z.enum(['BUSINESS', 'BUSINESS_UNVERIFIED', 'WEBMAIL']).openapi('EmailDomainClass');
+
+export const SignupReviewSchema = z
+  .object({
+    id: z.string().uuid(),
+    /** Null once declined: the account was deleted. */
+    userId: z.string().uuid().nullable(),
+    /** The person, while their account exists; null after a decline (nothing of the address is kept). */
+    email: z.string().nullable(),
+    displayName: z.string().nullable(),
+    locale: UserLocaleSchema.nullable(),
+    /** The address's domain (punycode). */
+    domain: z.string(),
+    classification: EmailDomainClassSchema,
+    /** Why it waits, e.g. ["webmail"], ["relay"], ["rdap-age-12d"], ["no-mx", "rdap-not-found"], ["timeout"]. */
+    reasons: z.array(z.string()),
+    createdAt: z.string().datetime(),
+    notifiedAt: z.string().datetime().nullable(),
+    decidedAt: z.string().datetime().nullable(),
+    decision: z.enum(['APPROVED', 'DECLINED']).nullable(),
+  })
+  .openapi('SignupReview');
+
+export const SignupReviewListQuerySchema = z.object({
+  state: z.enum(['pending', 'decided']).default('pending'),
+  limit: z.coerce.number().int().optional(),
+  cursor: z.string().optional(),
+});
+
+export const SignupReviewListSchema = z.object({ data: z.array(SignupReviewSchema), nextCursor: z.string().nullable() }).openapi('SignupReviewList');
+
+export const SignupReviewDecisionSchema = z
+  .object({
+    review: SignupReviewSchema,
+    /** What became of the person's mail (account ready / declined): sent, or why not. The decision stands either way. */
+    mail: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']),
+  })
+  .openapi('SignupReviewDecision');
 
 // ---- Changing your own password (MUT-237) ----------------------------------
 

@@ -1102,6 +1102,12 @@ export interface CaptureReceivedInput {
 export const CAPTURE_UNDO_REASON = 'capture_undo';
 
 /**
+ * MUT-367 (D9): the statuses a person's own setup link (SETUP, RESET) works for: a PENDING_REVIEW person owns the
+ * mailbox and may recover; a DISABLED one may not.
+ */
+export const SETUP_LINK_STATUSES: ReadonlySet<UserStatus> = new Set<UserStatus>(['ACTIVE', 'PENDING_REVIEW']);
+
+/**
  * MUT-61: what `payments.undoCapture` did. `not-found` covers every payment that
  * is not this person's own capture in this organization, so a caller cannot
  * probe for other people's payments. `already-reversed` is only this person's own earlier undo; a capture the
@@ -1186,7 +1192,11 @@ export interface ExternalReferenceRepository {
 
 // ---- MUT-37: operator-provisioned users and memberships (ADR-037) -----------
 
-export type UserStatus = 'ACTIVE' | 'DISABLED';
+/** MUT-367: PENDING_REVIEW = a self-service signup waiting for the operator (ADR-159 §7a); it can't sign in. */
+export type UserStatus = 'ACTIVE' | 'DISABLED' | 'PENDING_REVIEW';
+
+/** MUT-367: what the signup screen made of an address's domain (server/src/email/domains). */
+export type EmailDomainClass = 'BUSINESS' | 'BUSINESS_UNVERIFIED' | 'WEBMAIL';
 export type UserLocale = 'en' | 'ar';
 
 /**
@@ -1516,6 +1526,10 @@ export interface SignupLinkRecord extends SetupLinkFields {
   userId: null;
   email: string;
   locale: UserLocale;
+  /** MUT-367: the signup screen's verdict on the address's domain; null on a link issued before MUT-367 (D19). */
+  domainClass: EmailDomainClass | null;
+  /** MUT-367: why, e.g. ["webmail"] or ["rdap-age-12d"]; [] for BUSINESS. */
+  domainReasons: string[];
 }
 
 export type AccountSetupTokenRecord = PersonSetupLinkRecord | SignupLinkRecord;
@@ -1554,6 +1568,9 @@ export interface IssueSignupLinkInput {
   /** Normalised. */
   email: string;
   locale: UserLocale;
+  /** MUT-367: the signup screen's verdict, stored on the link and read back at redeem. */
+  domainClass: EmailDomainClass;
+  domainReasons: string[];
   tokenDigest: string;
   at: Date;
   expiresAt: Date;
@@ -1567,8 +1584,10 @@ export interface RedeemSignupLinkInput {
   displayName: string;
   /** The personal profile (`personalProfileFor`). */
   personal: CreateUserInput['personal'];
-  /** ACTIVE today; MUT-367's review sets PENDING_REVIEW for webmail and unverified domains (`signupAccountOutcome`). */
+  /** `signupAccountOutcome`: ACTIVE for a BUSINESS domain, PENDING_REVIEW otherwise (MUT-367). */
   status: UserStatus;
+  /** MUT-367: written in the same transaction when `status` is PENDING_REVIEW; null otherwise. */
+  review: { domain: string; classification: EmailDomainClass; reasons: string[] } | null;
   /** D1: the 14-day trial (ADR-160) starts with the account: the same column `billing.setTrialStart` writes. Null = no trial yet (MUT-367: at approval). */
   trialStartsAt: Date | null;
   terms: TermsAcceptanceInput;
@@ -1606,6 +1625,68 @@ export interface AccountSetupRepository {
   redeemSignup(input: RedeemSignupLinkInput): Promise<{ user: UserRecord; personalOrganization: Organization } | null>;
   /** MUT-366: deletes unredeemed SIGNUP links that expired before `expiredBefore`; returns how many. */
   pruneSignupLinks(expiredBefore: Date): Promise<number>;
+}
+
+// ---- MUT-367 (ADR-159 §7a, ADR-177): the operator's signup review queue ------
+
+export type SignupReviewDecisionRecord = 'APPROVED' | 'DECLINED';
+
+export interface SignupReviewRecord {
+  id: string;
+  /** Null only after a decline (the account was deleted). */
+  userId: string | null;
+  /** The address's domain (punycode), never the address. */
+  domain: string;
+  classification: EmailDomainClass;
+  reasons: string[];
+  createdAt: Date;
+  /** When an operator digest first counted it (D13). */
+  notifiedAt: Date | null;
+  decidedAt: Date | null;
+  decision: SignupReviewDecisionRecord | null;
+  decidedBy: string | null;
+}
+
+/** A review with the person it is about, while they exist. */
+export interface SignupReviewRow extends SignupReviewRecord {
+  person: { email: string; displayName: string; locale: UserLocale } | null;
+}
+
+export type SignupReviewState = 'pending' | 'decided';
+
+export type ApproveSignupResult =
+  | { kind: 'approved'; review: SignupReviewRecord; user: UserRecord; trialStartedAt: Date }
+  | { kind: 'not_found' }
+  | { kind: 'already_decided'; review: SignupReviewRecord };
+
+export type DeclineSignupResult =
+  | { kind: 'declined'; review: SignupReviewRecord; person: { email: string; locale: UserLocale } }
+  | { kind: 'not_found' }
+  | { kind: 'already_decided'; review: SignupReviewRecord }
+  /** The account holds something besides its empty personal profile; nothing was deleted. */
+  | { kind: 'not_empty' };
+
+export interface SignupReviewRepository {
+  /** Oldest first, keyset over (createdAt, id). `pending` = undecided; `decided` = approved or declined. */
+  list(input: { state: SignupReviewState; limit: number; cursor: PageCursor | null }): Promise<Page<SignupReviewRow>>;
+  findByUser(userId: string): Promise<SignupReviewRecord | null>;
+  /** Every undecided review, and the ids of those no digest has counted yet (D13). */
+  digestFacts(): Promise<{ pending: number; unannounced: string[] }>;
+  /** Stamps `notifiedAt` on those ids that still have none; returns how many. */
+  markNotified(ids: readonly string[], at: Date): Promise<number>;
+  /**
+   * One transaction, under a lock on the user's row (D28): the user goes PENDING_REVIEW → ACTIVE, their trial starts
+   * at `at` (the column `billing.setTrialStart` writes; D1), the review is APPROVED, and `auditFor(personal profile)`
+   * is written. Only an undecided review of a PENDING_REVIEW user is approved.
+   */
+  approve(input: { userId: string; at: Date; decidedBy: string; auditFor(personalOrganizationId: string): AuditEventInput[] }): Promise<ApproveSignupResult>;
+  /**
+   * One transaction, under the same lock (D12, D28): hard-deletes the user, every setup link of theirs, the SIGNUP
+   * links for their address, their sessions, memberships, terms acceptances, their personal profile and its audit
+   * rows, and marks the review DECLINED (its userId goes null). `not_empty` when anything else holds the account
+   * (another membership or profile, a grant, a billing account, any record): nothing is deleted.
+   */
+  decline(input: { userId: string; at: Date; decidedBy: string }): Promise<DeclineSignupResult>;
 }
 
 // ---- MUT-358 (ADR-160): billing core ---------------------------------------
@@ -1891,6 +1972,8 @@ export interface LedgerStore {
   billing: BillingRepository;
   /** MUT-359: the mail send log and suppression list; the mailer and the Resend webhook use the unguarded store. */
   email: EmailRepository;
+  /** MUT-367: the operator's signup review queue; operator-only below the routes (the SIGNUP redeem writes rows itself). */
+  signupReviews: SignupReviewRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------

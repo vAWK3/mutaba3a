@@ -141,8 +141,14 @@ const envSchema = z.object({
   MAIL_SECURITY_RESERVE: z.coerce.number().int().min(0).optional(),
   /** Sends to one address in any rolling 24 h (D17). */
   MAIL_RECIPIENT_DAILY_CAP: z.coerce.number().int().min(1).default(10),
-  /** MUT-367's review digest goes here. */
+  /** MUT-367's review digest goes here (at most one an hour while signups wait). Unset = no digest. */
   OPERATOR_ALERT_EMAIL: z.string().email().max(254).optional(),
+  /**
+   * MUT-367 (ADR-159 §7a, D3): how the signup screen checks a domain. `dns` asks DNS and RDAP; `fixture` answers from
+   * a fixed table of `.example` domains (tests, QA, development) and is refused in production. Unset = `dns` in
+   * production, `fixture` elsewhere.
+   */
+  EMAIL_DOMAIN_CHECKER: z.enum(['dns', 'fixture']).optional(),
 });
 
 const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
@@ -152,8 +158,9 @@ const MIN_BUILD_PLATFORMS = [
 ] as const;
 
 /** `loadConfig` fills SENTRY_ENVIRONMENT in from NODE_ENV and the mail caps from their defaults, so they are always set. */
-export type Config = Omit<z.infer<typeof envSchema>, 'SENTRY_ENVIRONMENT' | 'MAIL_DAILY_CAP' | 'MAIL_SECURITY_RESERVE'> & {
+export type Config = Omit<z.infer<typeof envSchema>, 'SENTRY_ENVIRONMENT' | 'MAIL_DAILY_CAP' | 'MAIL_SECURITY_RESERVE' | 'EMAIL_DOMAIN_CHECKER'> & {
   SENTRY_ENVIRONMENT: string;
+  EMAIL_DOMAIN_CHECKER: 'dns' | 'fixture';
   MAIL_DAILY_CAP: number;
   MAIL_SECURITY_RESERVE: number;
 };
@@ -214,7 +221,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       throw new ConfigError(`Invalid configuration:\n  ${recommended}: must be >= ${min} (${target} < ${floor})`);
     }
   }
-  return { ...config, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV, ...mailConfig(config), TURNSTILE_SECRET: turnstileSecret(config) };
+  return { ...config, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV, ...mailConfig(config), TURNSTILE_SECRET: turnstileSecret(config), EMAIL_DOMAIN_CHECKER: domainChecker(config) };
+}
+
+/** MUT-367 (D3): the fixture would let anyone choose their own verdict, so production always asks DNS and RDAP. */
+function domainChecker(config: z.infer<typeof envSchema>): 'dns' | 'fixture' {
+  const production = config.NODE_ENV === 'production';
+  if (production && config.EMAIL_DOMAIN_CHECKER === 'fixture') {
+    throw new ConfigError('Invalid configuration:\n  EMAIL_DOMAIN_CHECKER: the fixture checker is for tests and QA; production checks real domains (dns)');
+  }
+  return config.EMAIL_DOMAIN_CHECKER ?? (production ? 'dns' : 'fixture');
 }
 
 /**

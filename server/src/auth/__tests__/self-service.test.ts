@@ -19,6 +19,8 @@ function signupLink(overrides: Partial<SignupLinkRecord> = {}): SignupLinkRecord
     usedAt: null,
     cancelledAt: null,
     mailed: true,
+    domainClass: 'BUSINESS',
+    domainReasons: [],
     ...overrides,
   };
 }
@@ -67,6 +69,10 @@ describe('recoveryPurposeOf (MUT-366, D5)', () => {
     expect(recoveryPurposeOf({ ...person, status: 'DISABLED' })).toBeNull();
   });
 
+  it('MUT-367 (D9): resets an account waiting for review (the person owns the mailbox)', () => {
+    expect(recoveryPurposeOf({ ...person, status: 'PENDING_REVIEW', lastSignInAt: null })).toBe('RESET');
+  });
+
   it('resets an account that has a password', () => {
     expect(recoveryPurposeOf(person)).toBe('RESET');
   });
@@ -80,9 +86,29 @@ describe('recoveryPurposeOf (MUT-366, D5)', () => {
   });
 });
 
-describe('signupAccountOutcome (MUT-366, D1; MUT-367 seam)', () => {
-  it('opens the account at once and starts the trial at the redeem', () => {
-    expect(signupAccountOutcome(signupLink(), NOW)).toEqual({ status: 'ACTIVE', trialStartsAt: NOW });
+describe('signupAccountOutcome (MUT-366 D1, MUT-367)', () => {
+  it('opens a BUSINESS address at once and starts the trial at the redeem', () => {
+    expect(signupAccountOutcome(signupLink(), NOW)).toEqual({ status: 'ACTIVE', trialStartsAt: NOW, review: null });
+  });
+
+  it('sends webmail and unverified domains to review with no trial (it starts at approval)', () => {
+    expect(signupAccountOutcome(signupLink({ domainClass: 'WEBMAIL', domainReasons: ['webmail'] }), NOW)).toEqual({
+      status: 'PENDING_REVIEW',
+      trialStartsAt: null,
+      review: { domain: 'studio.example', classification: 'WEBMAIL', reasons: ['webmail'] },
+    });
+    expect(signupAccountOutcome(signupLink({ domainClass: 'BUSINESS_UNVERIFIED', domainReasons: ['rdap-age-12d'] }), NOW)).toMatchObject({
+      status: 'PENDING_REVIEW',
+      review: { classification: 'BUSINESS_UNVERIFIED', reasons: ['rdap-age-12d'] },
+    });
+  });
+
+  it('D19: a link issued before the screen existed waits for review', () => {
+    expect(signupAccountOutcome(signupLink({ domainClass: null, domainReasons: [] }), NOW)).toMatchObject({
+      status: 'PENDING_REVIEW',
+      trialStartsAt: null,
+      review: { classification: 'BUSINESS_UNVERIFIED', reasons: ['unclassified'] },
+    });
   });
 });
 

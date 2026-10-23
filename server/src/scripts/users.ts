@@ -20,6 +20,9 @@ import { MAX_PROFILE_OWNERS } from '../co-owners.js';
  *   npm run firm:enable  -- --organization-id <uuid> [--owner nour@firm.ps,omar@firm.ps]
  *   npm run firm:disable -- --organization-id <uuid>
  *   npm run firm:decline -- --organization-id <uuid>
+ *   npm run signups:review                                      (MUT-367: self-service signups waiting for review)
+ *   npm run signups:review -- --approve rana@gmail.com          (opens the account, starts its trial, mails them)
+ *   npm run signups:review -- --decline rana@gmail.com          (deletes the empty account, mails them)
  *
  * MUT-300 (ADR-099): `firm-enable` turns firm features on in place. An owned
  * Business profile stays its owner's, who becomes OWNER; an operator firm
@@ -45,7 +48,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'signup-reviews'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -76,6 +79,10 @@ const USAGE = [
   '  billing-unlinked   (Stripe customers not yet matched to a person)',
   '  billing-reconcile  (MUT-360: re-read every Stripe subscription now, as the nightly job does)',
   '  billing-status   --email <email> | --user-id <uuid>   (their Stripe mirror, and each profile with and without grants)',
+  '  signup-reviews [--approve <email> | --decline <email>]   (MUT-367: npm run signups:review)',
+  '          with neither: every self-service signup waiting for review, oldest first, with its domain and why it waits',
+  '          --approve: the account opens, its 14-day trial starts now, and the person is mailed',
+  '          --decline: the empty account and its personal profile are deleted, and the person is mailed',
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
 ].join('\n');
 
@@ -118,6 +125,8 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
         'grant-id': { type: 'string' },
         customer: { type: 'string' },
         active: { type: 'boolean' },
+        approve: { type: 'string' },
+        decline: { type: 'string' },
       },
     }).values;
   } catch (e) {
@@ -445,6 +454,7 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
   },
   ...FIRM_HANDLERS,
   ...BILLING_HANDLERS,
+  'signup-reviews': signupReviews,
 };
 
 
@@ -452,6 +462,42 @@ async function setStatus({ client, need, out }: HandlerContext, verb: 'disable' 
   const target = await client.userByEmail(need('email'));
   const { user } = await client.call<{ user: UserSummary }>('POST', `/admin/v1/users/${target.id}/${verb}`);
   out(`${user.email} is now ${user.status}`);
+}
+
+/** MUT-367: what GET /admin/v1/signup-reviews returns per row. */
+interface SignupReviewRow {
+  userId: string | null;
+  email: string | null;
+  domain: string;
+  classification: string;
+  reasons: string[];
+  createdAt: string;
+}
+
+/** MUT-367 (D17): lists the queue, or decides one signup by its address. */
+async function signupReviews({ client, optional, out }: HandlerContext): Promise<void> {
+  const approve = optional('approve');
+  const decline = optional('decline');
+  if (approve && decline) throw new CliError('Use --approve or --decline, not both');
+  const email = approve ?? decline;
+  if (email) {
+    const user = await client.userByEmail(email);
+    const verb = approve ? 'approve' : 'decline';
+    const { mail } = await client.call<{ mail: string }>('POST', `/admin/v1/signup-reviews/${user.id}/${verb}`);
+    const done = approve ? 'approved: the account is open and its trial started' : 'declined: the account and its profile were deleted';
+    out(`${email} ${done} (mail: ${mail})`);
+    return;
+  }
+  let cursor: string | null = null;
+  let printed = 0;
+  do {
+    const query: string = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
+    const page: { data: SignupReviewRow[]; nextCursor: string | null } = await client.call('GET', `/admin/v1/signup-reviews?state=pending${query}`);
+    for (const r of page.data) out(`${r.email ?? '(deleted)'} — ${r.classification} ${r.reasons.join(', ')} — waiting since ${r.createdAt}`);
+    printed += page.data.length;
+    cursor = page.nextCursor;
+  } while (cursor);
+  out(printed === 0 ? 'no signups waiting for review' : `${printed} waiting. Decide one: npm run signups:review -- --approve <email> | --decline <email>`);
 }
 
 function isCommand(value: string | undefined): value is Command {

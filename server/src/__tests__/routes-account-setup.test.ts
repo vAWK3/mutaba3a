@@ -129,7 +129,7 @@ describe('POST /v1/account-setup (MUT-235)', () => {
     const p = await provision(h);
     const res = await redeem(h, p.token);
     expect(res.status).toBe(200);
-    expect(await read(res)).toEqual({ email: p.email });
+    expect(await read(res)).toEqual({ email: p.email, status: 'ACTIVE' });
     expect(res.headers.get('set-cookie')).toBeNull();
     expect((await signIn(h, p.email, NEW_PASSWORD)).status).toBe(201);
     expect((await deviceSignIn(h, p.email, NEW_PASSWORD)).status).toBe(201);

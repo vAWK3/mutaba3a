@@ -10,7 +10,7 @@ import { MAX_PROFILE_OWNERS } from '../co-owners.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
 import { ForeignKeyViolation, StateConflict, UniqueViolation } from '../repositories/memory.js';
-import type { AuditEventInput, JsonObject, LedgerStore, Organization, PersonSetupLinkPurpose, UserRecord } from '../repositories/ports.js';
+import { SETUP_LINK_STATUSES, type AuditEventInput, type JsonObject, type LedgerStore, type Organization, type PersonSetupLinkPurpose, type UserRecord } from '../repositories/ports.js';
 import {
   CreateUserRequestSchema,
   CreateUserResponseSchema,
@@ -95,7 +95,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
   /** MUT-373 (ADR-163): the pilot's one way to add a co-owner (design review DR11: at most MAX_PROFILE_OWNERS). */
   async function grantCoOwner(c: Context<AppEnv>, user: UserRecord, organizationId: string) {
     // Basel (qa-reconcile D2): a disabled account can't sign in, so it never takes one of the profile's owner places.
-    if (user.status !== 'ACTIVE') throw new ApiError('CONFLICT', 'A disabled account can’t be made a co-owner; enable it first', { reason: 'USER_DISABLED' });
+    if (user.status !== 'ACTIVE') throw new ApiError('CONFLICT', 'Only an active account can be made a co-owner (enable it, or approve its signup, first)', { reason: 'USER_DISABLED' });
     // The audit commits with the membership (adversarial review 1): pre-roll recognizes a co-owner by this row.
     const [grantAudit] = auditEvents(c, [organizationId], user.id, 'membership.granted', { role: 'OWNER' }) as [AuditEventInput];
     const result = await store.memberships.grantOwner(user.id, organizationId, c.get('now')(), MAX_PROFILE_OWNERS, grantAudit);
@@ -399,14 +399,14 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       responses: {
         200: { description: 'Setup link issued; any earlier open link is cancelled', content: { 'application/json': { schema: IssueSetupLinkResponseSchema } } },
         404: notFound,
-        409: { description: 'The user is disabled (CONFLICT, details.reason USER_DISABLED); enable them first', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        409: { description: 'The user is disabled (CONFLICT, details.reason USER_DISABLED); enable them first. A user waiting for signup review may get one (MUT-367 D29)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         422: { description: 'Validation failed', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
       },
     }),
     async (c) => {
       const user = await mustGetUser(c.req.valid('param').userId);
-      if (user.status !== 'ACTIVE') throw new ApiError('CONFLICT', 'A disabled user cannot use a setup link; enable them first', { reason: 'USER_DISABLED' });
+      if (!SETUP_LINK_STATUSES.has(user.status)) throw new ApiError('CONFLICT', 'A disabled user cannot use a setup link; enable them first', { reason: 'USER_DISABLED' });
       // The body is optional: with none, the validator is skipped and nothing is defaulted, hence the explicit fallbacks.
       const body: { validHours?: number | undefined; lock?: boolean | undefined } = c.req.valid('json') ?? {};
       const purpose: PersonSetupLinkPurpose = user.passwordHash === null ? 'SETUP' : 'RESET';
@@ -438,11 +438,16 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
         responses: {
           200: { description: `User ${status}`, content: { 'application/json': { schema: UserStatusResponseSchema } } },
           404: notFound,
+          409: { description: 'The user is waiting for signup review (CONFLICT, details.reason USER_PENDING_REVIEW): approve or decline it instead (MUT-367)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
           ...adminErrors,
         },
       }),
       async (c) => {
         const existing = await mustGetUser(c.req.valid('param').userId);
+        // MUT-367 (D11): approve and decline are a pending signup's only ways out (the trial and the mail go with them).
+        if (existing.status === 'PENDING_REVIEW') {
+          throw new ApiError('CONFLICT', 'This signup is waiting for review; approve or decline it (signups:review)', { reason: 'USER_PENDING_REVIEW' });
+        }
         const now = c.get('now')();
         const user = await store.users.setStatus(existing.id, status, now);
         if (!user) throw new ApiError('NOT_FOUND', 'User not found');

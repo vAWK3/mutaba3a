@@ -21,6 +21,8 @@ export function describeLedgerStoreSignupContract(name: string, makeStore: () =>
     tokenDigest: digest(),
     at: at(1),
     expiresAt: at(25),
+    domainClass: 'BUSINESS',
+    domainReasons: [],
     ...overrides,
   });
 
@@ -35,6 +37,7 @@ export function describeLedgerStoreSignupContract(name: string, makeStore: () =>
     displayName: 'Rana',
     personal: { name: 'شخصي', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
     status: 'ACTIVE',
+    review: null,
     trialStartsAt: at(2),
     terms: TERMS,
     auditFor: signedUp,
@@ -57,7 +60,10 @@ export function describeLedgerStoreSignupContract(name: string, makeStore: () =>
       const store = await makeStore();
       const address = email();
       const link = await store.accountSetup.issueSignup(issueInput(address));
-      expect(link).toMatchObject({ purpose: 'SIGNUP', userId: null, email: address, locale: 'ar', mailed: true, usedAt: null, cancelledAt: null });
+      expect(link).toMatchObject({ purpose: 'SIGNUP', userId: null, email: address, locale: 'ar', mailed: true, usedAt: null, cancelledAt: null, domainClass: 'BUSINESS', domainReasons: [] });
+      // MUT-367: the screen's verdict comes back with the link.
+      const webmail = await store.accountSetup.issueSignup(issueInput(email(), { domainClass: 'WEBMAIL', domainReasons: ['webmail'] }));
+      expect(await store.accountSetup.findByDigest(webmail.tokenDigest)).toMatchObject({ domainClass: 'WEBMAIL', domainReasons: ['webmail'] });
       expect(await store.accountSetup.findByDigest(link.tokenDigest)).toMatchObject({ id: link.id, purpose: 'SIGNUP', email: address });
       expect(await store.users.findByEmail(address)).toBeNull();
     });

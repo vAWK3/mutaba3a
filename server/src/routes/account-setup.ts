@@ -10,6 +10,7 @@ import { ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
 import type { Mailer } from '../email/ports.js';
 import { sendPasswordNotice } from '../email/password-notice.js';
+import type { ReviewDigest } from '../email/review-digest.js';
 import type { Logger } from '../logger.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { AuditEventInput, LedgerStore, PersonSetupLinkRecord, SignupLinkRecord, UserRecord } from '../repositories/ports.js';
@@ -45,12 +46,14 @@ export interface AccountSetupRouteOptions {
   /** MUT-359: mails "your password is set/changed" after a redeem (never changes the answer). */
   mailer: Mailer;
   logger: Logger;
+  /** MUT-367: told after a SIGNUP redeem opens an account that waits for review. */
+  reviewDigest: ReviewDigest;
 }
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHono<AppEnv> {
-  const { store, passwordHasher, settings, ipLimiter, throttle, terms, mailer, logger } = options;
+  const { store, passwordHasher, settings, ipLimiter, throttle, terms, mailer, logger, reviewDigest } = options;
   const app = new OpenAPIHono<AppEnv>();
 
   async function guard(c: Context<AppEnv>): Promise<Date> {
@@ -147,8 +150,11 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
   );
 
   type RedeemBody = { token: string; password: string; termsLocale?: 'en' | 'ar' | undefined; clientRelease?: string | undefined; displayName?: string | undefined; defaultCurrency?: string | undefined; timezone?: string | undefined };
+  /** MUT-367 (D22): the account's status after the redeem; PENDING_REVIEW signs in to 403 ACCOUNT_UNDER_REVIEW. */
+  type Redeemed = { email: string; status: 'ACTIVE' | 'PENDING_REVIEW' };
+  const redeemedStatus = (status: UserRecord['status']): Redeemed['status'] => (status === 'PENDING_REVIEW' ? 'PENDING_REVIEW' : 'ACTIVE');
 
-  async function redeemPersonLink(c: Context<AppEnv>, link: PersonSetupLinkRecord, person: UserRecord, body: RedeemBody): Promise<{ email: string }> {
+  async function redeemPersonLink(c: Context<AppEnv>, link: PersonSetupLinkRecord, person: UserRecord, body: RedeemBody): Promise<Redeemed> {
     const tokenDigest = sessionDigest(settings.pepper, body.token);
     // Hash before claiming, so the slow part never runs inside the transaction.
     const passwordHash = await passwordHasher.hash(body.password);
@@ -168,14 +174,16 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       signInLink: signInLinkOf(settings, c.req.url),
       requestId: c.get('requestId'),
     });
-    return { email: redeemed.email };
+    return { email: redeemed.email, status: redeemedStatus(redeemed.status) };
   }
 
   /**
    * MUT-366: a SIGNUP link creates the account it was for: the user, their personal profile (in the page's currency
    * and timezone), the trial and the terms, in one transaction. No session (ADR-088 §5) and no password notice (D11).
+   * MUT-367: an address the screen didn't pass as BUSINESS opens PENDING_REVIEW with no trial and a review row; the
+   * person is told it's under review (D14) and the operator digest is nudged.
    */
-  async function redeemSignup(c: Context<AppEnv>, link: SignupLinkRecord, body: RedeemBody): Promise<{ email: string }> {
+  async function redeemSignup(c: Context<AppEnv>, link: SignupLinkRecord, body: RedeemBody): Promise<Redeemed> {
     const { defaultCurrency, timezone } = body;
     if (!defaultCurrency || !timezone) {
       throw new ApiError('VALIDATION_FAILED', 'A new account needs its currency and timezone', { fields: [...(defaultCurrency ? [] : ['defaultCurrency']), ...(timezone ? [] : ['timezone'])] });
@@ -192,6 +200,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       displayName: body.displayName ?? defaultDisplayName(link.email),
       personal: personalProfileFor(link.locale, { defaultCurrency, timezone }),
       status: outcome.status,
+      review: outcome.review,
       trialStartsAt: outcome.trialStartsAt,
       terms: acceptance,
       auditFor: ({ userId, personalOrganizationId }) => [
@@ -201,7 +210,19 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       ],
     });
     if (!created) throw unusable(await stateAfterLosing(body.token, at));
-    return { email: created.user.email };
+    if (outcome.status === 'PENDING_REVIEW') await afterPendingSignup(created.user);
+    return { email: created.user.email, status: redeemedStatus(created.user.status) };
+  }
+
+  /** After the commit, and never able to change the answer: the person's "we're reviewing" mail, then the digest. */
+  async function afterPendingSignup(user: UserRecord): Promise<void> {
+    try {
+      const sent = await mailer.send({ to: user.email, template: 'account-under-review', locale: user.locale, vars: {}, idempotencyKey: `account-under-review:${user.id}` });
+      if (sent.status !== 'sent') logger.info({ template: 'account-under-review', outcome: sent.status }, 'review mail not sent');
+    } catch (err) {
+      logger.error({ err, template: 'account-under-review' }, 'review mail failed');
+    }
+    await reviewDigest.announce();
   }
 
   /** Lost a race (another tab, a newer link, a disable, the account made meanwhile, expiry during hashing): say what the link is now. */

@@ -143,9 +143,11 @@ import type {
   ProfileExportField,
   ProfileExportRecords,
   RecordsExportRepository,
+  SignupReviewRecord,
+  SignupReviewRepository,
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
-import { CAPTURE_UNDO_REASON, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { createdAtCursorOf, isBeforeCursor, isBeforeMoneyDateCursor, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf, moneyDateOf } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, ownsProfile, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
@@ -265,6 +267,8 @@ export class MemoryLedgerStore implements LedgerStore {
   /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
   private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED' | 'UNCERTAIN'; createdAt: Date }>();
   private readonly emailSuppressions = new Map<string, { reason: string; eventId: string; createdAt: Date }>();
+  /** MUT-367: signup reviews by id; outside the snapshot (local mode has no signups). */
+  private readonly reviews = new Map<string, SignupReviewRecord>();
   /** MUT-360: Stripe webhook events by id (processedAt null until handled), also outside the snapshot. */
   private readonly stripeEvents = new Map<string, { type: string; receivedAt: Date; processedAt: Date | null; error: string | null }>();
 
@@ -646,7 +650,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const person = this.people.get(input.userId);
       if (!person) throw new ForeignKeyViolation('account_setup_tokens.userId');
       // Re-checked here, not only in the route, so a disable that lands first can never be followed by a fresh link.
-      if (person.status !== 'ACTIVE') throw new StateConflict('user', 'USER_DISABLED');
+      if (!SETUP_LINK_STATUSES.has(person.status)) throw new StateConflict('user', 'USER_DISABLED');
       this.assertSetupDigestFree(input.tokenDigest);
       if (input.lock) {
         // Stamping passwordChangedAt makes the session check refuse a session a racing sign-in inserts after the lock.
@@ -663,7 +667,7 @@ export class MemoryLedgerStore implements LedgerStore {
     redeem: async (input) => {
       const link = [...this.setupLinks.values()].find((l) => l.tokenDigest === input.tokenDigest);
       const person = link?.userId ? this.people.get(link.userId) : undefined;
-      const claimable = link && person && link.usedAt === null && link.cancelledAt === null && input.at < link.expiresAt && person.status === 'ACTIVE';
+      const claimable = link && person && link.usedAt === null && link.cancelledAt === null && input.at < link.expiresAt && SETUP_LINK_STATUSES.has(person.status);
       if (!claimable) return null;
       link.usedAt = input.at;
       // MUT-366 (review #2): the password is set; any other open link (operator or mailed) is spent with it.
@@ -683,7 +687,21 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const link of this.setupLinks.values()) {
         if (link.purpose === 'SIGNUP' && link.email === input.email && link.usedAt === null && link.cancelledAt === null) link.cancelledAt = input.at;
       }
-      const record: SignupLinkRecord = { id: randomUUID(), purpose: 'SIGNUP', userId: null, email: input.email, locale: input.locale, tokenDigest: input.tokenDigest, mailed: true, createdAt: input.at, expiresAt: input.expiresAt, usedAt: null, cancelledAt: null };
+      const record: SignupLinkRecord = {
+        id: randomUUID(),
+        purpose: 'SIGNUP',
+        userId: null,
+        email: input.email,
+        locale: input.locale,
+        tokenDigest: input.tokenDigest,
+        mailed: true,
+        createdAt: input.at,
+        expiresAt: input.expiresAt,
+        usedAt: null,
+        cancelledAt: null,
+        domainClass: input.domainClass,
+        domainReasons: [...input.domainReasons],
+      };
       this.setupLinks.set(record.id, record);
       return { ...record };
     },
@@ -704,6 +722,11 @@ export class MemoryLedgerStore implements LedgerStore {
       });
       link.usedAt = input.at;
       if (input.trialStartsAt) this.trialStarts.set(user.id, input.trialStartsAt);
+      // MUT-367: a PENDING_REVIEW account waits on its review row, written with it.
+      if (input.review) {
+        const review: SignupReviewRecord = { id: randomUUID(), userId: user.id, ...input.review, reasons: [...input.review.reasons], createdAt: input.at, notifiedAt: null, decidedAt: null, decision: null, decidedBy: null };
+        this.reviews.set(review.id, review);
+      }
       this.recordTermsAcceptance(user.id, input.terms, input.at);
       for (const event of input.auditFor({ userId: user.id, personalOrganizationId: personalOrganization.id })) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       return { user, personalOrganization };
@@ -2033,6 +2056,90 @@ export class MemoryLedgerStore implements LedgerStore {
     },
   };
 
+  // MUT-367 (ADR-177): the review queue. Each method runs without an await: the stand-in for Prisma's transaction and lock.
+  readonly signupReviews: SignupReviewRepository = {
+    list: async ({ state, limit, cursor }) => {
+      const rows = [...this.reviews.values()]
+        .filter((r) => (state === 'pending' ? r.decision === null : r.decision !== null))
+        .filter((r) => (cursor ? isAfterCursor(r, cursor) : true))
+        .sort(compareByCreatedAtThenId);
+      const items = rows.slice(0, limit).map((r) => {
+        const person = r.userId ? this.people.get(r.userId) : undefined;
+        return { ...cloneReview(r), person: person ? { email: person.email, displayName: person.displayName, locale: person.locale } : null };
+      });
+      const last = items.at(-1);
+      return { items, nextCursor: rows.length > limit && last ? { createdAt: last.createdAt, id: last.id } : null };
+    },
+    findByUser: async (userId) => {
+      const review = [...this.reviews.values()].find((r) => r.userId === userId);
+      return review ? cloneReview(review) : null;
+    },
+    digestFacts: async () => {
+      const open = [...this.reviews.values()].filter((r) => r.decision === null);
+      return { pending: open.length, unannounced: open.filter((r) => r.notifiedAt === null).sort(compareByCreatedAtThenId).map((r) => r.id) };
+    },
+    markNotified: async (ids, at) => {
+      let count = 0;
+      for (const id of ids) {
+        const review = this.reviews.get(id);
+        if (review && review.notifiedAt === null) {
+          review.notifiedAt = at;
+          count++;
+        }
+      }
+      return count;
+    },
+    approve: async ({ userId, at, decidedBy, auditFor }) => {
+      const review = [...this.reviews.values()].find((r) => r.userId === userId);
+      const person = this.people.get(userId);
+      if (!review || !person) return { kind: 'not_found' };
+      if (review.decision !== null || person.status !== 'PENDING_REVIEW') return { kind: 'already_decided', review: cloneReview(review) };
+      const personal = [...this.orgs.values()].find((o) => o.personalOwnerUserId === userId);
+      Object.assign(person, { status: 'ACTIVE', updatedAt: at });
+      this.trialStarts.set(userId, at);
+      Object.assign(review, { decision: 'APPROVED', decidedAt: at, decidedBy });
+      if (personal) for (const event of auditFor(personal.id)) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return { kind: 'approved', review: cloneReview(review), user: { ...person }, trialStartedAt: at };
+    },
+    decline: async ({ userId, at, decidedBy }) => {
+      const review = [...this.reviews.values()].find((r) => r.userId === userId);
+      const person = this.people.get(userId);
+      if (!review || !person) return { kind: 'not_found' };
+      if (review.decision !== null || person.status !== 'PENDING_REVIEW') return { kind: 'already_decided', review: cloneReview(review) };
+      const personal = [...this.orgs.values()].find((o) => o.personalOwnerUserId === userId);
+      if (this.holdsAnythingBut(userId, personal?.id ?? null)) return { kind: 'not_empty' };
+      // Every check passed: delete, as the Prisma transaction does (D12, D28).
+      for (const [id, link] of this.setupLinks) if (link.userId === userId || (link.purpose === 'SIGNUP' && link.email === person.email)) this.setupLinks.delete(id);
+      for (const [id, s] of this.sessionsById) if (s.userId === userId) this.sessionsById.delete(id);
+      for (const [key, m] of this.members) if (m.userId === userId) this.members.delete(key);
+      for (const [key, a] of this.termsAcceptances) if (a.userId === userId) this.termsAcceptances.delete(key);
+      this.trialStarts.delete(userId);
+      if (personal) {
+        for (let i = this.events.length - 1; i >= 0; i--) if (this.events[i]!.organizationId === personal.id) this.events.splice(i, 1);
+        this.orgs.delete(personal.id);
+      }
+      this.people.delete(userId);
+      Object.assign(review, { userId: null, decision: 'DECLINED', decidedAt: at, decidedBy });
+      return { kind: 'declined', review: cloneReview(review), person: { email: person.email, locale: person.locale } };
+    },
+  };
+
+  /**
+   * MUT-367 (D12): whether the account holds anything a decline would lose besides its empty personal profile. The
+   * Prisma store gets the same answer from its foreign keys (RESTRICT) plus explicit grant and billing checks.
+   */
+  private holdsAnythingBut(userId: string, personalOrganizationId: string | null): boolean {
+    if ([...this.members.values()].some((m) => m.userId === userId && m.organizationId !== personalOrganizationId)) return true;
+    if ([...this.orgs.values()].some((o) => o.ownerUserId === userId && o.id !== personalOrganizationId)) return true;
+    if ([...this.grants.values()].some((g) => g.userId === userId || (personalOrganizationId !== null && g.organizationId === personalOrganizationId))) return true;
+    if ([...this.billingAccounts.values()].some((a) => a.userId === userId)) return true;
+    if ([...this.inbox.values()].some((e) => e.userId === userId)) return true;
+    if ([...this.userIdem.values()].some((r) => (r as { userId?: string }).userId === userId)) return true;
+    if (personalOrganizationId === null) return false;
+    const scoped: Map<string, { organizationId: string }>[] = [this.keys, this.ints, this.custs, this.projs, this.refs, this.rates, this.agrs, this.insts, this.charges, this.recs, this.supps, this.versions, this.files, this.pays, this.allocs, this.credits, this.props, this.exps, this.expCats, this.expReceipts, this.convs, this.expGroups, this.groupMarks];
+    return scoped.some((map) => [...map.values()].some((row) => row.organizationId === personalOrganizationId));
+  }
+
   readonly billing: BillingRepository = {
     factsFor: async ({ ownerUserIds, organizationIds }) => {
       const owners = new Set(ownerUserIds);
@@ -2581,4 +2688,8 @@ function toReviewRefusal(r: ExpenseReceiptRecord | undefined, organizationId: st
   if (r.filingStatus === 'FILED') return { kind: 'already_filed' };
   if (r.status !== 'READY') return { kind: 'not_ready' };
   return null;
+}
+
+function cloneReview(review: SignupReviewRecord): SignupReviewRecord {
+  return { ...review, reasons: [...review.reasons] };
 }

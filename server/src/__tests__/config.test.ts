@@ -432,3 +432,12 @@ describe('loadConfig — signup and recovery (MUT-366)', () => {
     expect(loadConfig({ ...base, NODE_ENV: 'staging', ...resend, TURNSTILE_SECRET: LIVE_TURNSTILE }).TURNSTILE_SECRET).toBe(LIVE_TURNSTILE);
   });
 });
+
+describe('loadConfig — signup domain checker (MUT-367, D3)', () => {
+  it('asks DNS in production and the fixture elsewhere, unless told; production refuses the fixture', () => {
+    expect(loadConfig(base).EMAIL_DOMAIN_CHECKER).toBe('fixture');
+    expect(loadConfig({ ...base, EMAIL_DOMAIN_CHECKER: 'dns' }).EMAIL_DOMAIN_CHECKER).toBe('dns');
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).EMAIL_DOMAIN_CHECKER).toBe('dns');
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', EMAIL_DOMAIN_CHECKER: 'fixture' })).toThrow('EMAIL_DOMAIN_CHECKER');
+  });
+});

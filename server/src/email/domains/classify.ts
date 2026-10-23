@@ -4,7 +4,8 @@
  */
 
 /** Stored on the SIGNUP token and the review row (Prisma `EmailDomainClass`). */
-export type EmailDomainClass = 'BUSINESS' | 'BUSINESS_UNVERIFIED' | 'WEBMAIL';
+export type { EmailDomainClass } from '../../repositories/ports.js';
+import type { EmailDomainClass } from '../../repositories/ports.js';
 
 export type DomainRefusal = 'disposable' | 'no-mail';
 

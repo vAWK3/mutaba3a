@@ -146,7 +146,7 @@ describe('POST /v1/signups (MUT-366)', () => {
 
     const res = await redeem(h, token!, { ...SIGNUP_PROFILE, clientRelease: 'web-v0.1.21' });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ email });
+    expect(await res.json()).toEqual({ email, status: 'ACTIVE' });
     // No session: the portal signs in through POST /v1/sessions (ADR-088 §5).
     expect(res.headers.get('set-cookie')).toBeNull();
 

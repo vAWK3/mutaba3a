@@ -70,6 +70,11 @@ export async function signIn(
   const locked = throttle.isLocked(key, now) || (user?.lockedUntil ? user.lockedUntil.getTime() > now.getTime() : false);
   const matches = await passwordHasher.verify(user?.passwordHash ?? (await dummyHashFor(passwordHasher)), credentials.password);
 
+  // MUT-367 (ADR-159 §7a, D10): only the right password learns that a self-service account waits for the operator.
+  // No failure is recorded and no session is issued; every other refusal below is the usual 401.
+  if (user && !locked && matches && user.status === 'PENDING_REVIEW') {
+    throw new ApiError('ACCOUNT_UNDER_REVIEW', 'Your account is waiting for our review; we’ll email you when it’s ready');
+  }
   if (!user || locked || !matches || user.status !== 'ACTIVE') {
     if (!locked) {
       const lockUntil = throttle.recordFailure(key, now);

@@ -76,7 +76,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       responses: {
         201: { description: 'Signed in; the session cookie is set', content: { 'application/json': { schema: MeSchema } } },
         401: errorResponse('INVALID_CREDENTIALS — the same answer for every refusal'),
-        403: errorResponse('CROSS_SITE_REQUEST'),
+        403: errorResponse('CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no session'),
         422: errorResponse('Validation failed'),
         429: errorResponse('Too many attempts from this address'),
       },

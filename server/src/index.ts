@@ -25,6 +25,11 @@ import { NOOP_TRANSPORT } from './email/transports/noop.js';
 import { SELF_SERVICE_POLICY } from './auth/self-service.js';
 import { createTurnstileVerifier, UNCONFIGURED_TURNSTILE } from './auth/turnstile.js';
 import { defaultSelfServiceOptions } from './routes/self-service.js';
+import { CachedDomainChecker, createDomainScreen } from './email/domains/screen.js';
+import { createDnsDomainChecker } from './email/domains/dns-checker.js';
+import { createFixtureDomainChecker } from './email/domains/fixture-checker.js';
+import { createRdapClient } from './email/domains/rdap.js';
+import { createReviewDigest, msUntilNextSweep } from './email/review-digest.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -85,7 +90,18 @@ const selfService = {
   signupEnabled: config.SELF_SIGNUP_ENABLED,
   turnstile: config.TURNSTILE_SECRET ? createTurnstileVerifier({ secret: config.TURNSTILE_SECRET, logger }) : UNCONFIGURED_TURNSTILE,
   floors: { signupMs: config.SIGNUP_RESPONSE_FLOOR_MS, recoveryMs: config.RECOVERY_RESPONSE_FLOOR_MS },
+  // MUT-367 (ADR-159 §7a): DNS and RDAP in production (config refuses the fixture there), cached per domain.
+  domainScreen: createDomainScreen({
+    checker: new CachedDomainChecker(
+      config.EMAIL_DOMAIN_CHECKER === 'dns' ? createDnsDomainChecker({ rdap: createRdapClient({ fetch, now: () => new Date() }) }) : createFixtureDomainChecker(() => new Date()),
+      { now: () => new Date() },
+    ),
+    now: () => new Date(),
+    logger,
+  }),
 };
+// MUT-367 (D13, D27): the operator digest, nudged by each pending signup and swept a few minutes past each UTC hour.
+const reviewDigest = createReviewDigest({ store, mailer, logger, now: () => new Date(), to: config.OPERATOR_ALERT_EMAIL ?? null });
 /** D9: unredeemed SIGNUP links are deleted a week after they expire; checked hourly, like the mail log. */
 const SIGNUP_LINK_RETENTION_MS = SELF_SERVICE_POLICY.pruneAfterExpiryDays * 24 * 3_600_000;
 
@@ -135,6 +151,8 @@ const app = createApp({
   emailWebhookIpLimiter,
   devOutbox: config.NODE_ENV !== 'production' ? memoryOutbox : null,
   selfService,
+  // MUT-367: a declined person may write to the reply-to address (resend requires it; elsewhere a placeholder).
+  signupReview: { digest: reviewDigest, supportAddress: config.MAIL_REPLY_TO ?? config.MAIL_FROM_ADDRESS ?? 'help@example.invalid' },
   portal: config.PORTAL_DIST_DIR ? { distDir: config.PORTAL_DIST_DIR } : null,
   appAssociation:
     config.APPLE_TEAM_ID && config.APPLE_BUNDLE_ID && config.ANDROID_PACKAGE_NAME && config.ANDROID_SHA256_FINGERPRINTS
@@ -158,6 +176,8 @@ if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; t
 if (!config.MUTABA3A_JOB_TOKEN) logger.warn('MUTABA3A_JOB_TOKEN is not set; /jobs/* answers 503');
 if (config.MAILER === 'noop') logger.warn('MAILER is noop; no mail is sent (password notices included)');
 if (!config.SELF_SIGNUP_ENABLED) logger.info('SELF_SIGNUP_ENABLED is off; POST /v1/signups answers 404 (recovery still works)');
+if (!config.OPERATOR_ALERT_EMAIL) logger.warn('OPERATOR_ALERT_EMAIL is not set; no signup review digest is mailed');
+if (config.EMAIL_DOMAIN_CHECKER === 'fixture') logger.info('EMAIL_DOMAIN_CHECKER is fixture; signup domains are judged from the .example table, not DNS');
 if (!config.TURNSTILE_SECRET) logger.warn('TURNSTILE_SECRET is not set; signup and recovery fail their check (403 CHECK_FAILED)');
 if (!config.RESEND_WEBHOOK_SECRET) logger.warn('RESEND_WEBHOOK_SECRET is not set; the Resend webhook answers 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
@@ -190,11 +210,19 @@ const mailPruneTimer = setInterval(() => {
   void store.accountSetup.pruneSignupLinks(new Date(Date.now() - SIGNUP_LINK_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'signup link prune failed'));
 }, MAIL_PRUNE_EVERY_MS);
 mailPruneTimer.unref();
+// MUT-367 (D27): aligned to the UTC hour, so a review waits at most about an hour to be announced.
+let digestTimer: NodeJS.Timeout = setTimeout(function sweep() {
+  void reviewDigest.announce();
+  digestTimer = setTimeout(sweep, msUntilNextSweep(new Date()));
+  digestTimer.unref();
+}, msUntilNextSweep(new Date()));
+digestTimer.unref();
 
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'shutting down');
   clearInterval(pruneTimer);
   clearInterval(mailPruneTimer);
+  clearTimeout(digestTimer);
   await shutdownAndFlush({
     stopAccepting: () => server.close(),
     disconnect: () => store.disconnect(),

@@ -25,6 +25,9 @@ import type {
   CreateUserInput,
   PersonSetupLinkRecord,
   SignupLinkRecord,
+  SignupReviewRecord,
+  SignupReviewRepository,
+  SignupReviewRow,
   UserStatus,
   AttachmentFilter,
   AuditEventInput,
@@ -122,7 +125,7 @@ import type {
   MoneyDateCursor,
   PageCursor,
 } from './ports.js';
-import { CAPTURE_UNDO_REASON, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
 
@@ -441,7 +444,8 @@ export class PrismaLedgerStore implements LedgerStore {
           const [person] = await tx.$queryRaw<Array<{ status: string }>>`SELECT status FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
           if (!person) throw new ForeignKeyViolation('account_setup_tokens.userId');
           // Re-checked under the lock, not only in the route, so a disable that lands first can never be followed by a fresh link.
-          if (person.status !== 'ACTIVE') throw new StateConflict('user', 'USER_DISABLED');
+          // MUT-367 (D9): a PENDING_REVIEW person owns the mailbox and may recover.
+          if (!SETUP_LINK_STATUSES.has(person.status as UserStatus)) throw new StateConflict('user', 'USER_DISABLED');
           if (input.lock) {
             // Stamping passwordChangedAt makes the session check refuse a session a racing sign-in inserts after the lock.
             await tx.user.update({ where: { id: input.userId }, data: { passwordHash: null, passwordChangedAt: input.at, updatedAt: input.at } });
@@ -466,7 +470,7 @@ export class PrismaLedgerStore implements LedgerStore {
           if (!link?.userId) return null;
           const userId = link.userId;
           const [person] = await tx.$queryRaw<Array<{ status: string; emailVerifiedAt: Date | null }>>`SELECT status, "emailVerifiedAt" FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
-          if (person?.status !== 'ACTIVE') return null;
+          if (!person || !SETUP_LINK_STATUSES.has(person.status as UserStatus)) return null;
           const { count } = await tx.accountSetupToken.updateMany({
             where: { id: link.id, usedAt: null, cancelledAt: null, expiresAt: { gt: input.at } },
             data: { usedAt: input.at },
@@ -502,7 +506,17 @@ export class PrismaLedgerStore implements LedgerStore {
           await lockSignupAddress(tx, input.email);
           await tx.accountSetupToken.updateMany({ where: { purpose: 'SIGNUP', email: input.email, usedAt: null, cancelledAt: null }, data: { cancelledAt: input.at } });
           const row = await tx.accountSetupToken.create({
-            data: { email: input.email, locale: input.locale, tokenDigest: input.tokenDigest, purpose: 'SIGNUP', mailed: true, createdAt: input.at, expiresAt: input.expiresAt },
+            data: {
+              email: input.email,
+              locale: input.locale,
+              tokenDigest: input.tokenDigest,
+              purpose: 'SIGNUP',
+              mailed: true,
+              createdAt: input.at,
+              expiresAt: input.expiresAt,
+              domainClass: input.domainClass,
+              domainReasons: input.domainReasons,
+            },
           });
           return toSignupLink(row);
         }),
@@ -532,6 +546,10 @@ export class PrismaLedgerStore implements LedgerStore {
               emailVerifiedAt: input.at,
               trialStartedAt: input.trialStartsAt,
             });
+            // MUT-367: a PENDING_REVIEW account waits on its review row, written with it.
+            if (input.review) {
+              await tx.signupReview.create({ data: { userId: user.id, domain: input.review.domain, classification: input.review.classification, reasons: input.review.reasons, createdAt: input.at } });
+            }
             await insertTermsAcceptance(tx, user.id, input.terms, input.at);
             const audit = input.auditFor({ userId: user.id, personalOrganizationId: personalOrganization.id });
             if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, input.at) });
@@ -1956,6 +1974,91 @@ export class PrismaLedgerStore implements LedgerStore {
    * MUT-359 (D2). Count then insert, without a database lock: the mailer serializes its claims, and production runs
    * one instance (TD-017). A concurrent claim of the same key loses on the unique keyDigest and is a duplicate.
    */
+  // MUT-367 (ADR-177): the operator's signup review queue.
+  readonly signupReviews: SignupReviewRepository = {
+    list: async ({ state, limit, cursor }) => {
+      const rows = await this.prisma.signupReview.findMany({
+        where: {
+          decision: state === 'pending' ? null : { not: null },
+          ...(cursor ? { OR: [{ createdAt: { gt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { gt: cursor.id } }] } : {}),
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: limit + 1,
+        include: { user: { select: { email: true, displayName: true, locale: true } } },
+      });
+      const items: SignupReviewRow[] = rows.slice(0, limit).map(({ user, ...row }) => ({
+        ...toSignupReview(row),
+        person: user ? { email: user.email, displayName: user.displayName, locale: user.locale as UserLocale } : null,
+      }));
+      const last = items.at(-1);
+      return { items, nextCursor: rows.length > limit && last ? { createdAt: last.createdAt, id: last.id } : null };
+    },
+    findByUser: async (userId) => mapNullable(await this.prisma.signupReview.findUnique({ where: { userId } }), toSignupReview),
+    digestFacts: async () => {
+      const [pending, unannounced] = await Promise.all([
+        this.prisma.signupReview.count({ where: { decision: null } }),
+        this.prisma.signupReview.findMany({ where: { decision: null, notifiedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true } }),
+      ]);
+      return { pending, unannounced: unannounced.map((r) => r.id) };
+    },
+    markNotified: async (ids, at) =>
+      ids.length === 0 ? 0 : (await this.prisma.signupReview.updateMany({ where: { id: { in: [...ids] }, notifiedAt: null }, data: { notifiedAt: at } })).count,
+    approve: ({ userId, at, decidedBy, auditFor }) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // D28: one decision at a time per person; recovery's issue and redeem take the same row lock.
+          const [person] = await tx.$queryRaw<Array<{ status: string }>>`SELECT status FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+          const review = await tx.signupReview.findUnique({ where: { userId } });
+          if (!person || !review) return { kind: 'not_found' as const };
+          if (review.decision !== null || person.status !== 'PENDING_REVIEW') return { kind: 'already_decided' as const, review: toSignupReview(review) };
+          // D1: the trial starts at approval, in this transaction (the column billing.setTrialStart writes).
+          const user = await tx.user.update({ where: { id: userId }, data: { status: 'ACTIVE', trialStartedAt: at, updatedAt: at } });
+          const decided = await tx.signupReview.update({ where: { id: review.id }, data: { decision: 'APPROVED', decidedAt: at, decidedBy } });
+          const personal = await tx.organization.findFirst({ where: { personalOwnerUserId: userId }, select: { id: true } });
+          const audit = personal ? auditFor(personal.id) : [];
+          if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+          return { kind: 'approved' as const, review: toSignupReview(decided), user: toUser(user), trialStartedAt: at };
+        }),
+      ),
+    decline: async ({ userId, at, decidedBy }) => {
+      try {
+        return await translate(() =>
+          this.prisma.$transaction(async (tx) => {
+            const [person] = await tx.$queryRaw<Array<{ status: string; email: string; locale: string }>>`SELECT status, email, locale FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+            const review = await tx.signupReview.findUnique({ where: { userId } });
+            if (!person || !review) return { kind: 'not_found' as const };
+            if (review.decision !== null || person.status !== 'PENDING_REVIEW') return { kind: 'already_decided' as const, review: toSignupReview(review) };
+            const personal = await tx.organization.findFirst({ where: { personalOwnerUserId: userId }, select: { id: true } });
+            // These cascade or carry no foreign key to the profile, so they're checked rather than left to RESTRICT.
+            const [otherMemberships, grants, billingAccounts] = await Promise.all([
+              tx.membership.count({ where: { userId, ...(personal ? { organizationId: { not: personal.id } } : {}) } }),
+              tx.entitlementGrant.count({ where: { OR: [{ userId }, ...(personal ? [{ organizationId: personal.id }] : [])] } }),
+              tx.billingAccount.count({ where: { userId } }),
+            ]);
+            if (otherMemberships + grants + billingAccounts > 0) throw new AccountNotEmpty();
+            // Every link of theirs (used ones too: RESTRICT), and the SIGNUP rows that still name the address (D28).
+            await tx.accountSetupToken.deleteMany({ where: { OR: [{ userId }, { purpose: 'SIGNUP', email: person.email }] } });
+            await tx.session.deleteMany({ where: { userId } });
+            await tx.membership.deleteMany({ where: { userId } });
+            if (personal) {
+              await tx.auditEvent.deleteMany({ where: { organizationId: personal.id } });
+              // Any record in the profile fails this delete (RESTRICT): AccountNotEmpty via ForeignKeyViolation below.
+              await tx.organization.delete({ where: { id: personal.id } });
+            }
+            // Decided first, so the open-review CHECK holds when the user's delete sets userId null.
+            await tx.signupReview.update({ where: { id: review.id }, data: { decision: 'DECLINED', decidedAt: at, decidedBy } });
+            await tx.user.delete({ where: { id: userId } });
+            const declined = await tx.signupReview.findUniqueOrThrow({ where: { id: review.id } });
+            return { kind: 'declined' as const, review: toSignupReview(declined), person: { email: person.email, locale: person.locale as UserLocale } };
+          }),
+        );
+      } catch (err) {
+        if (err instanceof AccountNotEmpty || err instanceof ForeignKeyViolation) return { kind: 'not_empty' };
+        throw err;
+      }
+    },
+  };
+
   readonly email: EmailRepository = {
     isSuppressed: async (email) => (await this.prisma.emailSuppression.count({ where: { email } })) > 0,
     suppress: async ({ email, reason, eventId, at }) => {
@@ -2632,8 +2735,26 @@ function toPersonSetupLink(row: Prisma.AccountSetupTokenGetPayload<object>): Per
 
 function toSignupLink(row: Prisma.AccountSetupTokenGetPayload<object>): SignupLinkRecord {
   if (row.purpose !== 'SIGNUP' || row.email === null || row.locale === null) throw new Error(`account_setup_tokens ${row.id} is not a signup link`);
-  return { ...setupLinkFields(row), purpose: 'SIGNUP', userId: null, email: row.email, locale: row.locale as UserLocale };
+  return { ...setupLinkFields(row), purpose: 'SIGNUP', userId: null, email: row.email, locale: row.locale as UserLocale, domainClass: row.domainClass, domainReasons: row.domainReasons ?? [] };
 }
+
+function toSignupReview(row: Prisma.SignupReviewGetPayload<object>): SignupReviewRecord {
+  return {
+    id: row.id,
+    userId: row.userId,
+    domain: row.domain,
+    classification: row.classification,
+    reasons: row.reasons ?? [],
+    createdAt: row.createdAt,
+    notifiedAt: row.notifiedAt,
+    decidedAt: row.decidedAt,
+    decision: row.decision,
+    decidedBy: row.decidedBy,
+  };
+}
+
+/** MUT-367 (D12): thrown inside a decline's transaction to roll it back when the account holds more than its shell. */
+class AccountNotEmpty extends Error {}
 
 function toSession(row: Prisma.SessionGetPayload<object>): SessionRecord {
   return {

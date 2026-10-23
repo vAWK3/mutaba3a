@@ -14,6 +14,8 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 export const ERROR_CODES = {
   /** MUT-360: a Stripe webhook whose Stripe-Signature doesn't verify against this endpoint's secret (or is too old). */
   INVALID_SIGNATURE: 400,
+  /** MUT-367: a signup address this service won't mail: `details.reason` is disposable or no-mail. Depends only on the input. */
+  EMAIL_NOT_ACCEPTED: 400,
   UNAUTHENTICATED: 401,
   INVALID_API_KEY: 401,
   API_KEY_REVOKED: 401,
@@ -32,6 +34,8 @@ export const ERROR_CODES = {
   CROSS_SITE_REQUEST: 403,
   /** MUT-366: the Turnstile check on signup or recovery was missing, failed, or Cloudflare couldn't be asked (fails closed). */
   CHECK_FAILED: 403,
+  /** MUT-367: the right password for a self-service account the operator hasn't approved yet; no session is issued. */
+  ACCOUNT_UNDER_REVIEW: 403,
   /** MUT-237: the typed current password is wrong, or the account is locked. Not 401 — the session is still valid; a
    * 401 here would trip the portal's generic "session expired" handler and sign the person out mid-form. */
   CURRENT_PASSWORD_WRONG: 403,

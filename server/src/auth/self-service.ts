@@ -1,4 +1,4 @@
-import type { SignupLinkRecord, UserRecord, UserStatus } from '../repositories/ports.js';
+import { SETUP_LINK_STATUSES, type EmailDomainClass, type SignupLinkRecord, type UserRecord, type UserStatus } from '../repositories/ports.js';
 import type { SetupLinkState } from './account-setup.js';
 
 /**
@@ -41,20 +41,33 @@ export function signupLinkState(link: SignupLinkRecord | null, holder: Pick<User
 /**
  * Which link recovery mails (D5), or null for none. A disabled account gets nothing. An account with no password
  * that never signed in is an operator-created one waiting for its first: SETUP. Everything else, an operator `--lock`
- * included, is a RESET.
+ * included, is a RESET. MUT-367 (D9): an account waiting for review recovers too (the person owns the mailbox); a
+ * new password still can't sign in until the operator approves.
  */
 export function recoveryPurposeOf(person: Pick<UserRecord, 'status' | 'passwordHash' | 'lastSignInAt'>): 'SETUP' | 'RESET' | null {
-  if (person.status !== 'ACTIVE') return null;
+  if (!SETUP_LINK_STATUSES.has(person.status)) return null;
   return person.passwordHash === null && person.lastSignInAt === null ? 'SETUP' : 'RESET';
 }
 
+export interface SignupAccountOutcome {
+  status: UserStatus;
+  trialStartsAt: Date | null;
+  /** The review row a PENDING_REVIEW account waits on; null for an account that opens at once. */
+  review: { domain: string; classification: EmailDomainClass; reasons: string[] } | null;
+}
+
 /**
- * The account a redeemed SIGNUP link opens (D1). Today every signup is ACTIVE and its trial starts at once.
- * MUT-367 seam: the link will carry the domain classification, and webmail or unverified domains will answer
- * PENDING_REVIEW with no trial (it starts at approval, through `billing.setTrialStart`).
+ * The account a redeemed SIGNUP link opens (MUT-366 D1, MUT-367). A BUSINESS domain opens at once and its trial
+ * starts now. Anything else (webmail, relay, a young or unverifiable domain, or a link issued before the screen
+ * existed, D19) waits for the operator as PENDING_REVIEW with no trial: approval starts it.
  */
-export function signupAccountOutcome(_link: SignupLinkRecord, at: Date): { status: UserStatus; trialStartsAt: Date | null } {
-  return { status: 'ACTIVE', trialStartsAt: at };
+export function signupAccountOutcome(link: SignupLinkRecord, at: Date): SignupAccountOutcome {
+  if (link.domainClass === 'BUSINESS') return { status: 'ACTIVE', trialStartsAt: at, review: null };
+  const domain = link.email.slice(link.email.lastIndexOf('@') + 1);
+  const review = link.domainClass
+    ? { domain, classification: link.domainClass, reasons: [...link.domainReasons] }
+    : { domain, classification: 'BUSINESS_UNVERIFIED' as const, reasons: ['unclassified'] };
+  return { status: 'PENDING_REVIEW', trialStartsAt: null, review };
 }
 
 /** D3: a signup that names no one is called by its address's local part, which the person can change later. */
