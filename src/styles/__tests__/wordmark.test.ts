@@ -78,7 +78,11 @@ const PATH_TOKEN = /[a-zA-Z]|[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g;
  * Anything it can't read throws, so a bad export fails instead of hanging.
  */
 function pathPoints(d: string): { ends: Point[]; hull: Point[] } {
-  if (d.replace(PATH_TOKEN, '').replace(/[\s,]/g, '') !== '') throw new Error(`unreadable path data: "${d.slice(0, 40)}"`);
+  // Only SVG's own whitespace (space, tab, LF, FF, CR) and single commas between numbers; a browser stops drawing at anything else.
+  const leftover = d.replace(PATH_TOKEN, ' ').replace(/[\x20\x09\x0A\x0C\x0D]+/g, '');
+  if (leftover.replace(/,/g, '') !== '' || /,[\x20\x09\x0A\x0C\x0D]*(,|[a-zA-Z]|$)|(^|[a-zA-Z])[\x20\x09\x0A\x0C\x0D]*,/.test(d)) {
+    throw new Error(`unreadable path data: "${d.slice(0, 40)}"`);
+  }
   const tokens = d.match(PATH_TOKEN) ?? [];
   const ends: Point[] = [];
   const hull: Point[] = [];
@@ -143,11 +147,18 @@ function allowedHere(node: Element, root: Element): boolean {
 /** Elements and attributes outside the allowlist, as `<name>` or `<name attr>`. */
 function offendingNodes(doc: Document): string[] {
   const root = doc.documentElement;
-  return allElements(doc).flatMap((node) => {
+  // Outside the root only comments may stand: a processing instruction can link a stylesheet, a doctype can declare entities.
+  const outside = [...doc.childNodes].flatMap((node) => {
+    if (node === root || node.nodeType === node.COMMENT_NODE) return [];
+    if (node.nodeType === node.PROCESSING_INSTRUCTION_NODE) return [`<?${node.nodeName}>`];
+    if (node.nodeType === node.DOCUMENT_TYPE_NODE) return [`<!DOCTYPE ${node.nodeName}>`];
+    return [`<#${node.nodeName}>`];
+  });
+  return [...outside, ...allElements(doc).flatMap((node) => {
     if (!allowedHere(node, root)) return [`<${node.localName}>`];
     const allowed = ALLOWED_ELEMENTS[node.localName];
     return [...node.attributes].filter((attr) => !allowed.includes(attr.name)).map((attr) => `<${node.localName} ${attr.name}>`);
-  });
+  })];
 }
 
 /** Anything in `<metadata>` that is not the single C2PA manifest as base64 text (whitespace aside). */
@@ -238,10 +249,14 @@ describe('pathPoints (the frame check reads these)', () => {
     expect(() => pathPoints('M0 0 L1')).toThrow(/mid-command/);
     expect(() => pathPoints('M0 0 A5 5 0 0 1 10 0')).toThrow(/arcs/);
     expect(() => pathPoints('M0 0 L1 1 # ; L5 5')).toThrow(/unreadable/);
+    expect(() => pathPoints('M0 0 L1 1 L2 2')).toThrow(/unreadable/);
+    expect(() => pathPoints('M0 0,,L1 1')).toThrow(/unreadable/);
+    expect(() => pathPoints('M0 0 L1 1,L2 2')).toThrow(/unreadable/);
   });
 
-  it('accepts commas and signs between numbers, as SVG allows', () => {
+  it('accepts commas, signs, packed decimals and SVG whitespace, as the grammar allows', () => {
     expect(pathPoints('M0,0L1-2,3+4').ends).toEqual([[0, 0], [1, -2], [3, 4]]);
+    expect(pathPoints('M.5.5\n\tl-.5-.5 1e-3,0z').ends).toEqual([[0.5, 0.5], [0, 0], [0.001, 0]]);
   });
 });
 
@@ -261,12 +276,21 @@ describe('the logotype checks fail on what they guard against', () => {
     expect(offendingNodes(fixture(`<svg ${SVG} xmlns:c2pa="${C2PA_NAMESPACE}"><c2pa:manifest>AA==</c2pa:manifest></svg>`))).toEqual(['<manifest>']);
   });
 
+  it('rejects a stylesheet instruction or doctype outside the root', () => {
+    expect(offendingNodes(fixture(`<?xml-stylesheet href="x.css"?><svg ${SVG}/>`))).toEqual(['<?xml-stylesheet>']);
+    expect(offendingNodes(fixture(`<!DOCTYPE svg><svg ${SVG}/>`))).toEqual(['<!DOCTYPE svg>']);
+  });
+
   it('rejects anything in <metadata> beyond the base64 manifest', () => {
     const wrap = (inner: string) => fixture(`<svg ${SVG} xmlns:c2pa="${C2PA_NAMESPACE}"><metadata>${inner}</metadata></svg>`);
     expect(metadataProblems(wrap('<c2pa:manifest>AAAA</c2pa:manifest>'))).toEqual([]);
     expect(metadataProblems(wrap('loose text<c2pa:manifest>AAAA</c2pa:manifest>'))).not.toEqual([]);
     expect(metadataProblems(wrap('<c2pa:manifest>AAAA</c2pa:manifest><![CDATA[x]]>'))).not.toEqual([]);
     expect(metadataProblems(wrap('<c2pa:manifest>not base64!</c2pa:manifest>'))).not.toEqual([]);
+    expect(metadataProblems(wrap('\n  <c2pa:manifest>AA\nAA</c2pa:manifest>\n'))).toEqual([]);
+    expect(metadataProblems(wrap(''))).toEqual(['metadata holds 0 manifests']);
+    expect(metadataProblems(wrap('<c2pa:manifest>AAAA</c2pa:manifest><c2pa:manifest>AAAA</c2pa:manifest>'))).toEqual(['metadata holds 2 manifests']);
+    expect(metadataProblems(wrap('<c2pa:manifest><![CDATA[AAAA]]></c2pa:manifest>'))).toEqual(['the manifest holds more than text']);
   });
 
   it('rejects a feature graphic with alpha, a palette, or 16-bit channels', () => {
@@ -275,6 +299,7 @@ describe('the logotype checks fail on what they guard against', () => {
     expect(pngProblems(pngHeader(16, 2))).not.toEqual([]);
     expect(pngProblems(pngHeader(8, 0))).not.toEqual([]);
     expect(pngProblems(pngHeader(8, 3))).not.toEqual([]);
+    expect(pngProblems(Buffer.concat([pngHeader(8, 2), Buffer.from('tRNS')]))).toEqual(['a tRNS chunk adds transparency']);
   });
 
   it('reports a symlink in a scanned folder instead of skipping it', () => {
