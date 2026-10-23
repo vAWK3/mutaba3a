@@ -25,6 +25,7 @@ This runbook doesn't repeat those; it links to them.
 - [8. The restore drill](#8-the-restore-drill)
 - [9. Walk log](#9-walk-log)
 - [10. Drill results](#10-drill-results)
+- [11. Retire a currency](#11-retire-a-currency-mut-388-adr-166)
 
 ---
 
@@ -734,8 +735,9 @@ scripts/restore-drill.sh --project $GCP_PROJECT_ID --receipt-id <a receipt you k
    Restore it per §4.4, and check that the window the drill printed is `1209600` (14 days). Anything
    shorter means DEPLOYMENT.md §6c isn't applied.
 
-Run the drill again after any change to backups or the database tier, and before the pilot opens
-beyond 10 users.
+Run the drill again **every 60 days**, after any change to backups or the database tier, and before the
+pilot opens beyond 10 users. `make release server` reminds you: it reads the newest `Drill date (UTC)` in
+§10 and lists the drill as an open operator step when there's none, or when it's more than 60 days old.
 
 ## 9. Walk log
 
@@ -775,9 +777,12 @@ AC2: each step walked once on staging or a scratch database. There's no staging 
 
 Filled in by Basel after running §8 against production backups (AC1).
 
+Each drill adds its own block, newest first; keep the old ones. `make release server` reads the newest
+`Drill date (UTC)` here (`YYYY-MM-DD`) to tell when the next drill is due (every 60 days).
+
 | | |
 |---|---|
-| Date (UTC) | |
+| Drill date (UTC) | |
 | Operator | |
 | Backup restored (id, window start) | |
 | Point in time restored | |
@@ -805,7 +810,7 @@ Problems found and tickets opened:
 
 -
 
-## 10. Retire a currency (MUT-388, ADR-166)
+## 11. Retire a currency (MUT-388, ADR-166)
 
 The database doesn't refuse a currency the API no longer supports: a row stored while it was supported reads back
 with a blank amount. So a server release that drops a currency (MUT-388 dropped AED, SAR, QAR, BHD and OMR) runs this

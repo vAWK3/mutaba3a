@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-23 — `make release server` reminds you when the restore drill is due (MUT-327)
+
+**Why:** a backup is only proven by restoring it. Basel chose to re-run the restore drill against production every
+60 days, and wanted a reminder that can't be forgotten. `make release server` already prints the operator steps still
+owed, so the drill joins that list. A reminder, never a gate.
+
+### Added
+- `scripts/before-release.sh server` reads the newest `| Drill date (UTC) |` row under the pilot runbook's "Drill
+  results" heading. None yet, or more than 60 days old, adds an open operator step naming the date and how many days
+  ago. `RESTORE_DRILL_RUNBOOK` and `BEFORE_RELEASE_TODAY` override the file and today's date for tests.
+- 9 tests in `scripts/__tests__/before-release.test.ts`.
+
+### Changed
+- Pilot runbook: §8 says every 60 days and how the reminder works; §10's row is now `Drill date (UTC)`, and each drill
+  adds its own block, newest first. Only that row counts, so the CMEK cutover's results (also in §10) don't reset it.
+- Pilot runbook: the second §10, "Retire a currency" (MUT-388), is now §11, and is in the contents. ADR-166's and the
+  MUT-388 design's references follow.
+
 ## [Unreleased] - 2026-10-22 — Log Owed income and expenses with a future date (MUT-392, ADR-169, API 1.51.0)
 
 **Why:** Basel wants to log money that hasn't moved yet: Owed income dated next month, a bill due in three days. Income

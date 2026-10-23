@@ -166,7 +166,7 @@ Commands:
 | Phone capture in JOD | Capture an expense, pick JOD, type 3 decimals | It saves at 3 decimals | `ios.capture.jod-decimals` (Flutter) |
 | Phone profile currency | Account › a profile › Currency | The picker offers the four codes; JOD saves | `ios.account.profile-currency-picker` (Flutter) |
 
-The gate (`currency-rows.sh`) and the 0.1.7 live check are operator steps, not catalog flows: runbook §10 and the
+The gate (`currency-rows.sh`) and the 0.1.7 live check are operator steps, not catalog flows: runbook §11 and the
 MUT-388 acceptance criteria.
 
 ## Review amendments (/qa-reconcile + /review, 2026-10-22, Basel)
