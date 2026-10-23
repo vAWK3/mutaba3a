@@ -520,7 +520,7 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
 
   // DR10: entering the step puts focus on its heading: the drawer's own title, which already reads the step's name.
   useEffect(() => {
-    const titleHeading = body.current?.closest('[role="dialog"]')?.querySelector<HTMLElement>('.drawer-title');
+    const titleHeading = body.current?.closest('.drawer')?.querySelector<HTMLElement>('.drawer-title');
     if (!titleHeading) return;
     titleHeading.tabIndex = -1;
     titleHeading.focus();
