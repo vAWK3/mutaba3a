@@ -159,6 +159,24 @@ Every money rule runs on both stores (memory and `test:db`).
 
 ## Current Test Coverage
 
+### MTB3A logotype (MUT-401, added 2026-10-23)
+| File | Type | Covers |
+|------|------|--------|
+| `src/styles/__tests__/wordmark.test.ts` › pathPoints | Unit (node) | Absolute and relative M/L/H/V/Z, end points vs. the control-point hull, S/T reflection, implicit lines after a move, upper-case exponents; throws on a leading number, an unknown command, a number after Z, a truncated command and arcs |
+| `src/styles/__tests__/wordmark.test.ts` › wordmark.svg | Unit (node, jsdom) | One file with a viewBox and no dark variant (eng D7); elements and attributes from an allowlist only (eng D4); `<metadata>` holds only the C2PA manifest as base64 text; every path has one opaque fill; the outline touches all four viewBox edges within 1% and no end or control point leaves it (eng D8); no copy of its bytes, and no SVG named wordmark or MTB3A, under docs/brand, public or src/hosted/public (eng D3) |
+| `src/styles/__tests__/wordmark.test.ts` › feature graphic | Unit (node) | `store/feature-graphic-en-1024x500.png` is 1024 × 500, 8-bit RGB (colour type 2), no tRNS chunk |
+| `src/styles/__tests__/wordmark.test.ts` › the checks fail on what they guard against | Unit (node, jsdom fixtures) | Allowlist rejects `<constructor>`/`<toString>` (Object.prototype names), a nested svg, `<set>`, a path in another namespace, metadata outside the root, a manifest outside metadata; metadata rejects loose text, CDATA and non-base64; the PNG check rejects RGBA, 16-bit, grey and palette; the copy scan reports symlinks, dangling ones included. S/T reflect only C/S and Q/T controls; unreadable characters in path data throw |
+| `src/styles/__tests__/wordmark.test.ts` › pins | Unit (node) | `brand.sha256.json` lists exactly the mark, nine web icons and the logotype, and each matches (eng D5, D9) |
+
+Checked by mutation on 2026-10-23:
+- a padded viewBox with a `style` attribute failed the viewBox, attribute, frame and pin tests;
+- a path with no fill failed the fill and pin tests;
+- a control point at y = −50 plus a `<set>` element failed the frame, allowlist and pin tests;
+- a renamed copy in `public/` failed the one-copy test;
+- the RGBA feature graphic failed the alpha test.
+
+No release-QA spec: nothing renders the file until MUT-402, whose spec covers the landing header and portal.
+
 ### Landing header and motion (MUT-77, added 2026-10-14)
 | File | Type | Covers |
 |------|------|--------|

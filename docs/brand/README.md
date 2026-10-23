@@ -5,6 +5,7 @@ Delivered 2026-10-12. Tracked in Jira as epic **MUT-101**:
 MUT-102 (foundation: tokens, fonts and the type scale), MUT-103 (app sweep), MUT-104 (icons and browser chrome),
 MUT-105 (iPhone app) and MUT-106 (invoice PDFs; obsolete since MUT-145 retired document generation). MUT-77 (landing) and MUT-91 (portal) are re-cut to build on MUT-102.
 The loader and splash were delivered on 2026-10-14 (`Loader & Splash.dc.html`) and committed here as received (MUT-203). They are wired in by MUT-204/205 (iPhone) and MUT-206/207 (web and portal). The export stamps a C2PA manifest into every file; the copies here keep it, and none of them ships in a build.
+The MTB3A wordmark was delivered on 2026-10-23 (`Wordmark Kit.dc.html`, MUT-401; epic MUT-400 renames the service MTB3A in English, متابعة in Arabic). Its kit, with the lockup numbers and the running-text rule, is [`wordmark/README.md`](wordmark/README.md).
 
 ## Source of truth
 
@@ -45,6 +46,10 @@ Change a value in the JSON first, then in both platform files. `src/styles/__tes
 | `og-card-ar-1200x630.png` | `public/` | link-preview card (`og:image`, `summary_large_image`), web build only, kept out of the SW precache (MUT-104) |
 | `og-card-en-1200x630.png`, `og-mark-1200.png` | `docs/brand/` | kit references, not shipped (the English card; the original square mark) |
 | `mark.svg`, `mark-dark.svg` | `src/assets/brand/` | `BrandMark` (theme-aware) in the sidebar and the portal `Wordmark`; the landing header is MUT-77 (bundled, so all builds get it); the boot splash in `index.html`/`hosted.html` and `BootSplash` (MUT-207: a `<picture>` picks the dark file by OS before JS), and the portal's boot screen (`BrandMark` 80) |
+| `wordmark.svg` (the MTB3A logotype: outlines, one fill, viewBox tight to the ink) | `src/assets/brand/` | the only copy (MUT-401, D3). MUT-402 shows it as a CSS mask over `var(--ink)` in the landing header and the portal `Wordmark`, so there is no dark file (D7). Nothing imports it until MUT-402. `wordmark.test.ts` checks its shape, styles and frame |
+| `brand.sha256.json` | `src/assets/brand/` | sha256 pins for the mark, the nine web icons above and `wordmark.svg`, checked by `wordmark.test.ts` (MUT-401 D5, D9). A deliberate replacement re-pins in the same commit |
+| `feature-graphic-en-1024x500.png` | `docs/brand/wordmark/store/` | the English Play feature graphic, uploaded by MUT-404; not shipped |
+| `Wordmark Kit.dc.html` | `docs/brand/wordmark/claude-design/` | the Claude Design page: lockup previews, numbers, the screenshot header template. Reference only: it loads Thmanyah from jsDelivr and Plex Mono from Google Fonts, so never ship or import it |
 | Thmanyah Sans 400/500/700, Thmanyah Serif Display 400/700 (`.otf`, delivered bytes) | `src/assets/fonts/` | UI in every build: declared once in `src/styles/brand/fonts.css` and bundled, so web, desktop (offline) and portal all serve hashed copies under `/assets/` (MUT-102, D4). sha256-pinned in `brand.test.ts` and checked in every dist by `check-bundles` |
 | IBM Plex Mono 400/500, UI | `@fontsource/ibm-plex-mono` (OFL woff2), imported by `fonts.css` | figures in every build, portal included |
 | iOS AppIcon set, Android mipmaps | Flutter repo (`ios/Runner/Assets.xcassets`, `android/app/src/main/res`) | iPhone/Android app |
@@ -62,6 +67,7 @@ Change a value in the JSON first, then in both platform files. `src/styles/__tes
 - **Thmanyah Sans:** body and UI text, in **both** Arabic and English. It has full Latin letter coverage, but **no ₪ glyph and no tabular figures (`tnum`)**. Set amounts in IBM Plex Mono, which has both.
 - **Thmanyah Serif Display 700:** display and titles.
 - **IBM Plex Mono:** figures and labels, with tabular numerals.
+- **The name in running text (MUT-401):** "MTB3A" in plain capitals, in the sentence's own face and weight, letter-spacing 0, no wrapper element. Arabic sentences always write متابعة. Full rule: [`wordmark/README.md`](wordmark/README.md#running-text).
 - **Type scale**, applied everywhere including the dense app screens (decided 2026-10-12):
 
   | Role | Size | Weight |
