@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-23 — A personal profile's logging streak, and entries logged on the day the phone saved them (MUT-339, ADR-176)
+
+**Why:** MUT-339 shows personal users a streak from 3 days of logging in a row (Basel's S1–S3), and an entry saved offline must count on the day it was logged, not the day it uploaded (S4). Plan and eng review R1–R12: mutaba3a-flutter `.claude/designs/mut-339-logging-streaks.md` (Jira comment 12456).
+
+### Added
+- **`GET /v1/expenses/streak`** (session-only, `expenses:read`): `{ today, current, startedOn, lastLoggedOn, aliveUntil, previous }` for a personal profile the caller owns; 409 CONFLICT `NOT_PERSONAL` elsewhere. Alive through yesterday; `previous` is a run of 3+ days that ended within 7.
+- **`capturedAt`** on `POST /v1/expenses` and `POST /v1/income`: kept as the row's `createdAt`, clamped to [now − 48 h, now] (`loggedAtOf`).
+- `entries.loggedDays(organizationId, since, timezone)`: distinct logged days in the zone over the feed's live rows (expenses not deleted, payments not undone, Owed not deleted), one bounded query on the existing `(organizationId, createdAt)` indexes. `expenses/streak.ts` works the run out (`computeStreak`, `zonedMidnightUtc`).
+- **API `1.55.0-mut339`**.
+
+### Technical
+- `streak.test.ts` (runs, gaps, previous window, DST midnight, the 48 h clamp); `streak-routes.test.ts` (any entry counts, deleted and undone don't, the offline 23:50 case, backdating clamped, 409 on business and firm, no API key); `store-contract-entries.ts` loggedDays on memory and Postgres (zone shift, live rows, conversions out, the bound). `route-security`, `writability-routes` and `routes-expenses` inventories take the new read.
+
 ## [Unreleased] - 2026-10-23 — A Received capture answers the profile's payment count (MUT-340, ADR-175)
 
 **Why:** MUT-340 celebrates income milestones on the phone (the 1st, 10th, 50th, 100th, 250th, 500th and 1000th payment received, Basel's M1). Nothing exposed a payment count, and the phone saves through an outbox, so the count has to come back with the upload. Plan and eng review R1–R12: mutaba3a-flutter `.claude/designs/mut-340-income-milestones.md` (Jira comment 12455).

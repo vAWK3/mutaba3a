@@ -252,7 +252,7 @@ export const STORE_ACCESS: StoreAccess = {
    * `sessionOnly`, as the inbox. The route resolves the organizations from the person's memberships; an API key has
    * no person behind it and so no feed.
    */
-  entries: { list: 'sessionOnly', settledOwedIds: 'sessionOnly' },
+  entries: { list: 'sessionOnly', loggedDays: 'sessionOnly', settledOwedIds: 'sessionOnly' },
   /**
    * MUT-358: a signed-in person's /v1/me reads the billing facts of their own profiles (`sessionOnly`: an API key has no
    * person behind it, and MUT-361's gate runs on sessions only). Grants, links and Stripe's mirror are written by the

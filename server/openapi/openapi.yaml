@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.54.0-mut340
+  version: 1.55.0-mut339
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -4811,6 +4811,54 @@ components:
       required:
         - items
         - nextCursor
+    Streak:
+      type: object
+      properties:
+        today:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        current:
+          type: integer
+          minimum: 0
+        startedOn:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        lastLoggedOn:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        aliveUntil:
+          type: string
+          nullable: true
+          format: date-time
+          description: The instant the current streak ends unless something is logged (end of lastLoggedOn + 1 in the profile’s timezone)
+        previous:
+          type: object
+          nullable: true
+          properties:
+            days:
+              type: integer
+              minimum: 0
+              exclusiveMinimum: true
+            lastDay:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+          required:
+            - days
+            - lastDay
+          description: The run before the gap, at least 3 days, ended within the last 7
+      required:
+        - today
+        - current
+        - startedOn
+        - lastLoggedOn
+        - aliveUntil
+        - previous
     ExpenseDetail:
       allOf:
         - $ref: "#/components/schemas/Expense"
@@ -5156,6 +5204,10 @@ components:
           maxLength: 4000
         captureSource:
           $ref: "#/components/schemas/CaptureSource"
+        capturedAt:
+          type: string
+          format: date-time
+          description: When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
       required:
         - occurredOn
         - amount
@@ -5435,6 +5487,10 @@ components:
           $ref: "#/components/schemas/PaymentMethod"
         captureSource:
           $ref: "#/components/schemas/CaptureSource"
+        capturedAt:
+          type: string
+          format: date-time
+          description: When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
       required:
         - kind
         - amount
@@ -6222,6 +6278,10 @@ components:
           maxLength: 4000
         captureSource:
           $ref: "#/components/schemas/CaptureSource"
+        capturedAt:
+          type: string
+          format: date-time
+          description: When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
         suggested:
           allOf:
             - $ref: "#/components/schemas/ReceiptSuggestion"
@@ -12280,6 +12340,46 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expenses/streak:
+    get:
+      tags:
+        - Expenses
+      summary: This personal profile’s logging streak
+      description: "MUT-339 (ADR-176): consecutive days, in the profile’s timezone, on which the profile logged an entry — an expense, money received or an Owed, by when it was logged (createdAt; a capture’s capturedAt within 48 hours). Live rows by the entries feed’s rules; conversions don’t count. Alive through yesterday (D3). Only on a personal profile the caller owns: 409 CONFLICT, details.reason NOT_PERSONAL, elsewhere."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Streak
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Streak"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
           content:
             application/json:
               schema:

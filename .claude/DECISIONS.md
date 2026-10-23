@@ -4774,3 +4774,17 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Consequences**: Filing an Unsorted income, Malafat's API-key payments and Siri's direct posts count toward the total but carry no count, so they never trigger a celebration. The count uses the `(organizationId, …)` prefix indexes; a personal profile's payments are in the thousands at most.
 
+## ADR-176: A Logging Streak Is Read From Logged Days; an Entry Is Logged When the Phone Saved It, Within 48 Hours (MUT-339)
+
+**Status**: Accepted (2026-10-23, MUT-339). Basel's S1–S4, eng review R1–R12. ADR-174 is MUT-359's, ADR-175 MUT-340's.
+
+**Context**: MUT-339 shows a personal profile's streak of consecutive days with at least one entry. Nothing on the server returned entry days, and the phone has no timezone library. The phone saves through an outbox, so the server's own write time can put an offline entry on the next day.
+
+**Decision**:
+1. **Read, not stored.** `GET /v1/expenses/streak` works the streak out from `entries.loggedDays`: distinct `(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE tz)::date` over the entries feed's live rows, bounded 400 days back from the request's clock. No streak table while it stays one indexed query.
+2. **Logged = createdAt, from the phone within 48 hours.** `capturedAt` on the two create routes becomes `createdAt`, clamped to [now − 48 h, now]. Offline logging lands on its day; nobody backdates a streak beyond two days. The money date (`occurredOn`) never counts.
+3. **Instants for the phone.** `aliveUntil` is the end of `lastLoggedOn + 1` in the profile's zone, as UTC, so the phone never does zone math.
+4. **Personal books only.** `profileTypeOf(org) === 'PERSONAL' && ownsProfile(...)`; under `/v1/expenses*`, so it stays session-only by the writability matrix.
+
+**Consequences**: A settled Owed creates a payment, so settling counts as logging. A `capturedAt` moves the feed's "logged" order the same way, which is the order Recent already shows. Conversions don't count. Past 400 days the count stops at what fits.
+

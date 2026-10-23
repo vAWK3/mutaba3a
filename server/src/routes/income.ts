@@ -8,6 +8,7 @@ import { OWED_REDATED } from './audit.js';
 import { redateOwnCapture } from './payments.js';
 import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
+import { loggedAtOf } from '../expenses/streak.js';
 import { idempotent } from '../idempotency.js';
 import { CAPTURE_UNDO_REASON, type LedgerStore } from '../repositories/ports.js';
 import { CreateIncomeRequestSchema, IfMatchHeaderSchema, IncomeCaptureResponseSchema, IncomeIdParamSchema, IncomeResponseSchema, UpdateIncomeRequestSchema } from '../schemas.js';
@@ -73,7 +74,8 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
             createdByUserId: user.id,
             captureSource: body.captureSource ?? null,
           },
-          now,
+          // MUT-339 (S4): kept as when it was logged on the phone, within 48 hours.
+          loggedAtOf(body.capturedAt, now),
         );
         await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'income.received', entityType: 'payment', entityId: payment.id, metadata, requestId: c.get('requestId') });
         return c.json({ ...serializeIncomeEntry({ kind: 'received', payment }), receivedCount: postedCount }, 201);
@@ -100,7 +102,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           createdByUserId: user.id,
           requestId: c.get('requestId'),
         },
-        now,
+        loggedAtOf(body.capturedAt, now),
       );
       await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'income.owed', entityType: 'receivable', entityId: created.id, metadata, requestId: c.get('requestId') });
       return c.json(serializeIncomeEntry({ kind: 'owed', receivable: created }), 201);

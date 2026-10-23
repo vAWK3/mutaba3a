@@ -142,6 +142,7 @@ import type {
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { todayIn } from '../dates.js';
 import { createdAtCursorOf, isBeforeCursor, isBeforeMoneyDateCursor, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf, moneyDateOf } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, ownsProfile, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
@@ -2126,6 +2127,14 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       const cursor = createdAtCursorOf(page.cursor);
       return mergeNewestFirst([rows.filter((row) => !cursor || isBeforeCursor(row.record, cursor))], page.limit, (row) => row.record);
+    },
+    loggedDays: async (organizationId, since, timezone) => {
+      const at = [
+        ...[...this.exps.values()].filter((e) => !e.deletedAt).map((e) => ({ org: e.organizationId, createdAt: e.createdAt })),
+        ...[...this.pays.values()].filter((p) => p.reversalReason !== CAPTURE_UNDO_REASON).map((p) => ({ org: p.organizationId, createdAt: p.createdAt })),
+        ...[...this.recs.values()].filter((r) => r.origin === 'ADJUSTMENT' && !r.deletedAt).map((r) => ({ org: r.organizationId, createdAt: r.createdAt })),
+      ].filter((row) => row.org === organizationId && row.createdAt.getTime() >= since.getTime());
+      return [...new Set(at.map((row) => todayIn(timezone, row.createdAt)))].sort().reverse();
     },
     settledOwedIds: async (organizationIds, paymentIds) => {
       const byPayment = new Map<string, AllocationRecord[]>();

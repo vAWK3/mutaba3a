@@ -1928,6 +1928,8 @@ export const CreateIncomeRequestSchema = z
     /** `received` only; defaults CASH. */
     method: PaymentMethodSchema.optional(),
     captureSource: CaptureSourceSchema.optional(),
+    /** MUT-339 (S4): when the phone saved it; the server keeps it as when it was logged, clamped to the last 48 hours. */
+    capturedAt: z.string().datetime({ offset: true }).optional().openapi({ description: 'When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.' }),
   })
   .strict()
   .openapi('CreateIncomeRequest');
@@ -2315,9 +2317,23 @@ export const CreateExpenseRequestSchema = z
     notes: expenseNotes.optional(),
     /** MUT-65: where the write came from; audit metadata only, never persisted on the row. */
     captureSource: CaptureSourceSchema.optional(),
+    /** MUT-339 (S4): when the phone saved it; the server keeps it as when it was logged, clamped to the last 48 hours. */
+    capturedAt: z.string().datetime({ offset: true }).optional().openapi({ description: 'When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.' }),
   })
   .strict()
   .openapi('CreateExpenseRequest');
+
+/** MUT-339 (ADR-176): a personal profile's logging streak. */
+export const StreakResponseSchema = z
+  .object({
+    today: IsoDateSchema,
+    current: z.number().int().nonnegative(),
+    startedOn: IsoDateSchema.nullable(),
+    lastLoggedOn: IsoDateSchema.nullable(),
+    aliveUntil: z.string().datetime().nullable().openapi({ description: 'The instant the current streak ends unless something is logged (end of lastLoggedOn + 1 in the profile’s timezone)' }),
+    previous: z.object({ days: z.number().int().positive(), lastDay: IsoDateSchema }).nullable().openapi({ description: 'The run before the gap, at least 3 days, ended within the last 7' }),
+  })
+  .openapi('Streak');
 
 /** MUT-272: `currency` only together with `amount` (ADR-096); the amount is never converted, only re-read in the new currency's digits. Null clears an optional field. */
 export const UpdateExpenseRequestSchema = z

@@ -3531,3 +3531,10 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 - OpenAPI: `npm run openapi:check` with `IncomeCaptureResponse`.
 - Release-QA: the phone's `ios.capture.milestone-*` flows (mutaba3a-flutter) cover it end to end.
 
+## MUT-339 — logging streak and capturedAt (2026-10-23, ADR-176)
+- Unit: `src/expenses/__tests__/streak.test.ts`: runs and gaps, alive through yesterday, previous (3+ days, within 7), DST midnight, the 48 h clamp.
+- Route: `src/__tests__/streak-routes.test.ts`: any entry counts (S1); deleted and undone don't; the 23:50-offline case counts on its day (S4); an old capturedAt is clamped; 409 NOT_PERSONAL on business and firm; no API key.
+- Store contract (memory and Postgres): `store-contract-entries.ts` loggedDays: zone shift, live rows only, conversions out, the since bound, Owed counted.
+- Inventories: `route-security`, `writability-routes`, `routes-expenses`.
+- Release-QA: the phone's `ios.capture.streak-*` flows (mutaba3a-flutter).
+

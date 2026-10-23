@@ -1907,6 +1907,22 @@ export class PrismaLedgerStore implements LedgerStore {
   };
 
   readonly entries: EntriesRepository = {
+    // MUT-339: one query over the three kinds' live rows, each bounded by its (organizationId, createdAt) index. The
+    // columns are UTC without a zone, so they are read as UTC before they are shifted into the profile's zone.
+    loggedDays: async (organizationId, since, timezone) => {
+      const rows = await this.prisma.$queryRaw<Array<{ day: Date }>>`
+        SELECT DISTINCT day FROM (
+          SELECT (("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::date AS day FROM "expenses"
+            WHERE "organizationId" = ${organizationId}::uuid AND "deletedAt" IS NULL AND "createdAt" >= ${since}
+          UNION
+          SELECT (("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::date FROM "payments"
+            WHERE "organizationId" = ${organizationId}::uuid AND ("reversalReason" IS NULL OR "reversalReason" <> ${CAPTURE_UNDO_REASON}) AND "createdAt" >= ${since}
+          UNION
+          SELECT (("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::date FROM "receivables"
+            WHERE "organizationId" = ${organizationId}::uuid AND "origin" = 'ADJUSTMENT' AND "deletedAt" IS NULL AND "createdAt" >= ${since}
+        ) logged ORDER BY day DESC`;
+      return rows.map((row) => row.day.toISOString().slice(0, 10));
+    },
     // D3: one typed, index-bounded query per organization and kind (limit + 1 rows each), merged in memory. Review D1:
     // one organization at a time, its 4 kinds in parallel, so a request holds at most 4 pooled connections.
     // MUT-390: `order=occurredOn` reads the same branches by each kind's money date column (`moneyDateOf`), on its own

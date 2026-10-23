@@ -2344,6 +2344,12 @@ export interface EntriesRepository {
    */
   list(organizationIds: readonly string[], page: FeedPageRequest): Promise<FeedPage<EntryRow>>;
   /**
+   * MUT-339 (ADR-176): the distinct days, in `timezone`, on which the organization logged an entry since `since`,
+   * newest first. "Logged" is `createdAt`; live rows by the feed's own rules (an expense not deleted, a payment not
+   * undone, an Owed not deleted), so a streak day is a day that shows in Recent. Conversions don't count.
+   */
+  loggedDays(organizationId: string, since: Date, timezone: string): Promise<IsoDate[]>;
+  /**
    * MUT-270 review (D2): for each payment with exactly one allocation, to an Owed (ADJUSTMENT) receivable, that
    * receivable's id: the Owed it paid toward, which a settle (full or partial) is. Judged by shape, not by which route
    * made it. Other payments are absent. Same trust in `organizationIds` as `list`.
