@@ -1701,6 +1701,11 @@ export interface BillingRepository {
   getAccount(stripeCustomerId: string): Promise<BillingAccountRecord | null>;
   /** Oldest first; `linked: false` lists the unlinked customers the operator still has to match. */
   listAccounts(filter: { linked?: boolean | undefined }): Promise<BillingAccountRecord[]>;
+  /**
+   * MUT-362: the signed-in person's own billing: the customer linked to them (never an unlinked one), its subscriptions
+   * latest period end first, and their trial start. Nothing linked: `account: null, subscriptions: []`.
+   */
+  summaryOf(userId: string): Promise<{ account: BillingAccountRecord | null; subscriptions: BillingSubscriptionRecord[]; trialStartedAt: Date | null }>;
   /** MUT-360's Stripe sync: upsert by stripeCustomerId; a link conflict is reported, never thrown and never overwritten. */
   saveAccount(input: SaveBillingAccountInput): Promise<SaveBillingAccountResult>;
   /**

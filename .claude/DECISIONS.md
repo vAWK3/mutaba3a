@@ -4675,6 +4675,38 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Release the API before the phone: an older API refuses a future Owed with 422, which the phone shows and keeps in its outbox.
 - API 1.51.0-mut392.
 
+## ADR-170: Self-Service Billing: Server-Made Checkout on the Person's Own Customer, Refusals Before Stripe, Prices from Stripe Lookup Keys, Countries from a Server File (MUT-362)
+
+**Status**: Active
+**Date**: 2026-10-22
+**Context**: After MUT-358 (entitlements) and MUT-360 (the Stripe mirror), nobody could start, change or cancel a subscription without the operator. Stripe's hosted pages have no Arabic. Plan, eng review (D1–D9) and design review (DR1–DR13): `.claude/designs/mut-362-self-service-billing.md`.
+**Decision**:
+1. **Three person-level, session-only routes** in `server/src/routes/billing.ts`, outside `PORTAL_ROUTES` and never billing-gated: `GET /v1/billing` (one read: subscription, trial, catalog, country rules), `POST /v1/billing/checkout-session`, `POST /v1/billing/portal-session`. Ten session requests a minute per person.
+2. **A separate write door** (`billing/stripe/checkout-gateway.ts`); MUT-360's read-only `StripeGateway` is unchanged (D1). The one restricted key gains Write on Customers, Checkout Sessions and Customer portal (D2).
+3. **The person's own customer** (D3): the linked account's, else one listed by exact email whose `metadata.mutaba3a_user_id` is the person, else created with that metadata and idempotency key `mut362-customer-<userId>`. No `billing_accounts` row is written there (ADR-165 D6 holds: only `syncSubscription` creates one).
+4. **Refusals before Stripe**, in this order: a live subscription (`active`, `trialing`, `past_due`, `incomplete`); `unpaid` (pay the open invoice in the portal, D6); `paused` (contact us); no owned profile; all Malafat; all under a no-expiry grant (D5); a person outside the consumer countries (AC2). Each is an existing code plus `details.reason` (the PATTERNS rule), registered in `CONFLICT_REASONS` / `VALIDATION_REASONS`; `BILLING_NOT_CONFIGURED` + `PRICES_NOT_SET`; the one new code is `STRIPE_UNAVAILABLE` (502). A linked customer Stripe no longer has is `BILLING_ACCOUNT_NEEDS_HELP` with an ids-only warn (D7).
+5. **Prices are the Stripe catalog**: lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`, a currency sold only with both prices in that currency and interval, cached ten minutes. ILS for Israel, USD elsewhere.
+6. **Countries**: `server/src/billing/billing-countries.json` (`consumerCountries`, `customTaxIdCountries`), parsed at boot. It lives beside the code, not in the repo's `config/`, because the API image's build context is `server/` and only `src/` reaches it. It ships with no consumer country until MUT-355.
+7. **Checkout parameters**: `mode=subscription`, `customer_update` address/name auto, `automatic_tax`, `billing_address_collection=required`, `client_reference_id` and `subscription_data.metadata.mutaba3a_user_id`, `locale=auto`, an Arabic + English `custom_text`, `expires_at` one hour, tax IDs required (`if_supported`) for a business outside the consumer list, a required `business_tax_number` field for IL/JO businesses outside it (optional inside).
+8. **Return from Checkout** polls `/v1/billing` and `/v1/me` (2 s, up to 30 s); no confirm endpoint (D4). The webhook and reconcile stay the only writers. The Customer Portal's return (`?billing=true&portal=returned`) refetches the same way and stops at the first change (release-QA saw the first read beat the webhook by ~0.7 s).
+11. **A Customer Portal cancel is `cancel_at`** (amends MUT-360's mirror): since `2026-02-25.clover` the portal sets `cancel_at` to the period end with `cancel_at_period_end` false, so `cancelAtPeriodEnd` mirrors either; a `cancel_at` past the period renews once more first.
+9. **Operator flag** (D9): `GET /admin/v1/billing/status` `countryCheck` flags a linked payer billed outside the consumer countries with no tax ID.
+10. **Portal**: Settings › Billing is the account menu's drawer (DR1–DR13), Arabic first; Stripe's English pages come only after our own explanation (AC4).
+**Consequences**:
+- API 1.52.0-mut362 (MUT-392 holds 1.51.0).
+- Nothing is sold until Basel creates the four prices, configures the Customer Portal, widens the key and fills `consumerCountries` (before-release.md); until then the drawer says "Subscriptions open soon" and the POSTs refuse.
+- Release-QA drives Stripe's real hosted pages in the sandbox (`portal-live` app, D8 B); TD-201.
+- A person's own card path can't run live while the consumer list is empty; TD-202.
+
+**Amendment (2026-10-23, /qa-reconcile review, Basel's answers D1–D4)**:
+- **Stripe decides before money moves.** Once the customer is known, the route reads Stripe's own subscriptions for it (`subscriptionsOf`, status all) and applies the refusals again, then expires the customer's other open Checkouts (`expireOpenCheckouts`) before creating one. The mirror alone could be late (a webhook over 30 s, a failed one) or blind (an untagged product), and two tabs could each pay. A live mirror row past its period plus PERIOD_GRACE_DAYS is stale and no longer refuses (the entitlement's own rule).
+- **What Billing shows:** `currentSubscription` picks the most current open subscription (active, trialing, past_due, incomplete, unpaid, paused, in that order), never a cancelled row over a live one. `incomplete` is its own "payment pending" panel. A paid entitlement with no row to show still offers Manage billing.
+- **Sellable prices** (`sellableFactOf`): recurring every 1 month or 1 year, VAT-exclusive, on a product tagged `tier: freelancer`, with an amount; the session sets `adaptive_pricing: { enabled: false }`. The catalog caches a failure for a minute and makes one Stripe call at a time.
+- **D2 Keep the trial:** subscribing during the free trial sets `subscription_data.trial_end` to the person's trial end when that is at least 48 h away (Stripe's minimum); the Subscribe step says when the first charge falls.
+- **D3 Tax number on invoices:** on `checkout.session.completed` the sync copies the `business_tax_number` custom field to the customer's `invoice_settings.custom_fields` ("Business tax number") through the write door; a failed copy is an error, so Stripe redelivers. The D9 check counts it as a tax ID.
+- **D4 Follow the server:** `GET /v1/billing` carries `coveredProfileIds` (the profiles the person created); the drawer uses it, and tells a co-owner that shared profiles are covered by their creator's plan (TD-193 stays open for co-owner billing).
+- **Errors:** a refusal Stripe will repeat (invalid request, permission, authentication, idempotency) is `CONFLICT` + `BILLING_ACCOUNT_NEEDS_HELP`, logged at error level; `resource_missing` blames the linked customer only when Stripe names `customer`; only the rest is `STRIPE_UNAVAILABLE`. The audit after Stripe made a session is best effort (logged), and the customer idempotency key carries a hash of the email and name.
+
 ---
 
 ## ADR-171: The MTB3A Logotype Is One Outlined SVG, Shipped Once From src/assets/brand and Shown as a Mask Over the Ink (MUT-401)

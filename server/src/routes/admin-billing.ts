@@ -4,6 +4,9 @@ import type { AppEnv } from '../auth/middleware.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import { billingStatusOf, serializeEntitlement } from '../billing/coverage.js';
+import { consumerCountryCheck, type BillingCountries } from '../billing/checkout.js';
+import type { CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
+import { StripeGatewayError } from '../billing/stripe/gateway.js';
 import { ownedProfilesOf } from '../personal-profile.js';
 import { ForeignKeyViolation, StateConflict } from '../repositories/memory.js';
 import type { AuditEventInput, JsonObject, LedgerStore } from '../repositories/ports.js';
@@ -31,8 +34,25 @@ const GRANTED_BY = 'admin';
 
 const GrantIdParam = z.object({ grantId: z.string().uuid().openapi({ param: { name: 'grantId', in: 'path' } }) });
 
-export function adminBillingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
+export interface AdminBillingOptions {
+  /** MUT-362 (eng review D9): asked for each linked customer's tax IDs in the status check; null = not configured. */
+  checkout: CheckoutGateway | null;
+  countries: BillingCountries;
+}
+
+export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOptions): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
+
+  /** A customer's tax IDs plus a Checkout tax number on its invoices (review D3), or null when Stripe can't be asked. */
+  async function taxIdsOf(customer: string): Promise<number | null> {
+    if (!options.checkout) return null;
+    try {
+      return await options.checkout.businessTaxIdCount(customer);
+    } catch (err) {
+      if (err instanceof StripeGatewayError) return null;
+      throw err;
+    }
+  }
 
   /** The person named by id or email; NOT_FOUND if there is no such person. */
   async function personId(body: { userId?: string | undefined; userEmail?: string | undefined }): Promise<string> {
@@ -198,7 +218,9 @@ export function adminBillingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/admin/v1/billing/status',
       tags: ['Admin'],
       summary: 'One person’s Stripe mirror and entitlement, with and without operator grants (MUT-360)',
-      description: 'The pilot cutover check: revoke a person’s grant only once `billingWithoutGrants` shows ACTIVE / STRIPE. Exactly one of userId and email.',
+      description:
+        'The pilot cutover check: revoke a person’s grant only once `billingWithoutGrants` shows ACTIVE / STRIPE. MUT-362: `countryCheck` flags a ' +
+        'linked payer billed outside the consumer countries with no tax ID (asks Stripe for the customer’s tax IDs). Exactly one of userId and email.',
       security: [{ adminToken: [] }],
       request: { query: z.object({ userId: z.string().uuid().optional(), email: z.string().min(3).max(320).optional() }) },
       responses: {
@@ -222,6 +244,12 @@ export function adminBillingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       );
       const { subscriptions, entitlements } = await billingStatusOf(store, profiles, c.get('now')());
       const accounts = (await store.billing.listAccounts({ linked: true })).filter((a) => a.userId === userId);
+      const countryCheck = await Promise.all(
+        accounts.map(async (a) => {
+          const taxIds = await taxIdsOf(a.stripeCustomerId);
+          return { stripeCustomerId: a.stripeCustomerId, country: a.country, taxIds, ...consumerCountryCheck(a.country, taxIds, options.countries) };
+        }),
+      );
       return c.json(
         {
           user: { id: user.id, email: user.email },
@@ -240,6 +268,7 @@ export function adminBillingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
             const e = entitlements.get(o.id)!;
             return { id: o.id, name: o.name, billing: serializeEntitlement(e.current), billingWithoutGrants: serializeEntitlement(e.withoutGrants) };
           }),
+          countryCheck,
         },
         200,
       );

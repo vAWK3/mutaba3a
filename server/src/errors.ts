@@ -50,6 +50,8 @@ export const ERROR_CODES = {
   INTERNAL: 500,
   /** MUT-360 review: a reconcile that could not list Stripe at all (bad or under-scoped key, Stripe down); details carry the summary. */
   RECONCILE_FAILED: 502,
+  /** MUT-362: Stripe didn't answer a Checkout, Customer Portal or customer call in time; trying again shortly may work. */
+  STRIPE_UNAVAILABLE: 502,
   ATTACHMENTS_NOT_CONFIGURED: 503,
   /** MUT-360: no Stripe keys on this server, so neither the webhook nor reconcile can run. */
   BILLING_NOT_CONFIGURED: 503,

@@ -93,7 +93,8 @@ const envSchema = z.object({
   RECEIPTS_LIBRARY: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
    * MUT-360: Stripe (Secret Manager, mounted only once stripe_enabled is applied). A restricted key, read-only on
-   * billing objects; both or neither — unset, the webhook and reconcile answer 503. A live key only where
+   * billing objects except, from MUT-362 (eng review D2), Write on Customers, Checkout Sessions and Customer portal;
+   * both or neither — unset, the webhook, reconcile and billing sessions answer 503. A live key only where
    * API_KEY_ENVIRONMENT is live, so a test server can never read the real account.
    */
   STRIPE_SECRET_KEY: z.string().regex(/^(rk|sk)_(test|live)_[A-Za-z0-9_]+$/, 'must be a Stripe secret or restricted key (sk_/rk_)').optional(),

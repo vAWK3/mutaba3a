@@ -101,6 +101,46 @@
 **Impact**: `npm run typecheck` only checks `tsconfig.app.json`/`tsconfig.hosted.json`/`tsconfig.hosted-local.json`. `tsconfig.node.json` (the only config with `types: ["node"]`, which `scripts/` would need) includes only `vite.config.ts`. `npm run build`'s `tsc -b` builds every referenced project, but `tsconfig.node.json`'s narrow include means it still never typechecks `scripts/`. `vitest` transpiles via esbuild without type-checking. A type error in any `scripts/*.ts` file (including this ticket's `icon-set.ts`/`generate-icons.ts`/`validate-icon-set.ts`) would only surface as a runtime failure the next time someone runs that script, not in CI.
 **Fix**: add `"scripts"` (or `"scripts/**/*.ts"`, excluding `__tests__`) to `tsconfig.node.json`'s `include`, confirm it builds clean, then add `tsconfig.node.json` to `npm run typecheck`'s chain.
 
+### TD-203: A cancel set before the period end shows the period end as the end date
+**Status**: Open
+**Ticket**: MUT-362 review
+**Added**: 2026-10-23
+**Priority**: Low
+**Impact**: the mirror reads `cancel_at` on or before the period end as "ending" (the Customer Portal sets it to the period end), but keeps `currentPeriodEnd` as the date Billing shows. A `cancel_at` set earlier (only from the Stripe dashboard) ends access sooner than the drawer says; the entitlement is right once Stripe ends the subscription.
+**Fix**: mirror an `endsAt` (the earlier of `cancel_at` and the period end) and show it.
+
+### TD-204: The subscription's interval is read from its lookup key's name
+**Status**: Open
+**Ticket**: MUT-362 review
+**Added**: 2026-10-23
+**Priority**: Low
+**Impact**: `subscriptionView` (routes/billing.ts) finds `_monthly_` / `_yearly_` in `priceLookupKey`; a price without that infix shows no interval ("Billed monthly" is left out). Display only.
+**Fix**: mirror the price's `recurring.interval` beside `priceLookupKey`.
+
+### TD-205: The sync trusts `client_reference_id` on any Checkout but a Payment Link's
+**Status**: Open
+**Ticket**: MUT-362 review (MUT-360's code)
+**Added**: 2026-10-23
+**Priority**: Low while only the server makes Checkouts
+**Impact**: a client-made Checkout (a Pricing Table, if one is ever turned on) could carry any user id and link an unlinked person's customer to someone else's.
+**Fix**: link by the hint only when the session's subscription metadata `mutaba3a_user_id` (which the server sets) agrees, or when the customer's metadata does.
+
+### TD-201: Billing release-QA can't pay on Stripe's Checkout page, and the sandbox is set up by hand
+**Status**: Open (mitigated 2026-10-23)
+**Ticket**: MUT-362 (eng review D8 B)
+**Added**: 2026-10-22
+**Priority**: Low
+**Impact**: Stripe's Checkout runs an hCaptcha on Subscribe that never passes under automation (seen 2026-10-23: the session stays open and unpaid behind "Processing"). QA doesn't work around bot checks, so `portal-live.billing.subscribe` and `subscribe-usd` fill the real page and check what we put on it (price, our bilingual tax-number field, the Arabic + English note), then pay on that Checkout's own customer and price through Stripe's API and follow its success URL. What a recording does not show is Stripe's own Subscribe click and `checkout.session.completed`; the subscription events the sync reads still arrive through `stripe listen`. The Customer Portal steps run for real. Field ids and steps are Stripe's (Card vs Amazon Pay in USD, the cancel-reason dialog) and can change without a product bug. The app needs the sandbox key in the Keychain (`release-kit` / `barmajiyat/MUTABA3A_STRIPE_SANDBOX_KEY`; the Stripe CLI gets it through STRIPE_API_KEY) and the sandbox's default Customer Portal configuration saved once in the dashboard.
+**Fix**: before GA, one paid Checkout by hand in the sandbox per release (a person clicking Subscribe), or Stripe's test-mode guidance if it ever offers an automation path. Nothing to change in code.
+
+### TD-202: A person's own Checkout never runs live while no country is open to consumers
+**Status**: Open
+**Ticket**: MUT-362; MUT-355 opens the first countries
+**Added**: 2026-10-22
+**Priority**: Low until `consumerCountries` is filled
+**Impact**: `billing-countries.json` ships empty, so live QA pays as a business (Israel with the tax-number field, the Emirates with a tax ID). The person path (no tax ID, optional number field) is proven only by `checkout.test.ts` and `billing-routes.test.ts`.
+**Fix**: when MUT-355 opens a country, add a `portal-live.billing.subscribe-person` flow for it.
+
 ### TD-200: Sentry keys have no daily cap, so one surface can use up the month's quota
 **Status**: Accepted (Basel, 2026-10-22: Developer plan, caps gated)
 **Ticket**: none (MUT-147, ADR-091 amendment 8)

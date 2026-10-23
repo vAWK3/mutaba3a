@@ -311,6 +311,44 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       const rows = (await store.audit.list(personalOrganization.id, {}, { limit: 50, cursor: null })).items.filter((e) => e.action === 'billing.subscription_changed');
       expect(rows).toHaveLength(1);
     });
+
+    it('summaryOf returns the person’s trial start, linked account and its subscriptions, latest period first (MUT-362)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      expect(await store.billing.summaryOf(user.id)).toEqual({ account: null, subscriptions: [], trialStartedAt: null });
+      await store.billing.setTrialStart(user.id, at(5));
+
+      const customer = `cus_${unique()}`;
+      await store.billing.saveAccount(account(customer, user.id, { country: 'IL', currency: 'ILS' }));
+      const older = { ...subscription(customer), status: 'canceled', currentPeriodEnd: at(10) };
+      const newer = { ...subscription(customer), currentPeriodEnd: at(40) };
+      await store.billing.saveSubscription(older);
+      await store.billing.saveSubscription(newer);
+
+      const summary = await store.billing.summaryOf(user.id);
+      expect(summary.trialStartedAt).toEqual(at(5));
+      expect(summary.account).toMatchObject({ userId: user.id, stripeCustomerId: customer, country: 'IL', currency: 'ILS' });
+      expect(summary.subscriptions.map((s) => [s.stripeSubscriptionId, s.status])).toEqual([
+        [newer.stripeSubscriptionId, 'active'],
+        [older.stripeSubscriptionId, 'canceled'],
+      ]);
+    });
+
+    it('summaryOf never returns an unlinked customer or another person’s account (MUT-362)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const { user: other } = await store.users.create(userInput());
+      const unlinked = `cus_${unique()}`;
+      await store.billing.saveAccount(account(unlinked, null));
+      await store.billing.saveSubscription(subscription(unlinked));
+      const others = `cus_${unique()}`;
+      await store.billing.saveAccount(account(others, other.id));
+      await store.billing.saveSubscription(subscription(others));
+
+      expect(await store.billing.summaryOf(user.id)).toEqual({ account: null, subscriptions: [], trialStartedAt: null });
+      expect((await store.billing.summaryOf(other.id)).account?.stripeCustomerId).toBe(others);
+      expect(await store.billing.summaryOf(randomUUID())).toEqual({ account: null, subscriptions: [], trialStartedAt: null });
+    });
   });
 }
 

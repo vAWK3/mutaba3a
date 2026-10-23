@@ -3477,3 +3477,27 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 |---|---|
 | `src/hosted/components/__tests__/IncomeCaptureDrawer.test.tsx` › MUT-408 (3) | Owed → More details → Received → Save posts Received with `method: CASH` and no Owed fields; Owed (what for + due date) → Received (Bank) → Owed posts the title and due date; Received (Bank) → Owed → Received posts `method: BANK`. Red before the keyed Due date / Method groups (`dueDate` or `method` dropped by the Controller rename) |
 | Release-QA `@portal.income.switch-kind` | Receivables → + Add income (Owed) → 500, Client 1, More details → Received, Bank transfer → Save: drawer closes, "Saved · ₪500.00 received from Client 1", POST body `{kind received, 500.00, ILS, today, C1, BANK}` |
+
+## MUT-362 — Self-service billing (2026-10-22, ADR-170)
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit (server) | `server/src/billing/__tests__/checkout.test.ts` | every refusal in order (live statuses, unpaid D6, paused, no owned profile, Malafat, no-expiry grant D5, expiring grant allowed, consumer countries AC2, prices, malformed country); params (ILS/USD, three tax-ID variants, custom field optional/required, return URLs, `expires_at`, metadata), copy limits, `catalogFrom`, the shipped country file, `consumerCountryCheck`, return paths |
+| Adapter (server) | `server/src/billing/stripe/__tests__/checkout-gateway.test.ts` | real SDK over a fake fetch: customer lookup order and idempotency key, Checkout and portal bodies, no-URL session, `resource_missing` not transient, one retry with the same idempotency key, price lookup + 10-minute cache (failures not cached), non-recurring prices skipped, tax-ID count |
+| Route (server) | `server/src/__tests__/billing-routes.test.ts` | GET shapes (trial, subscription, unconfigured, Stripe failing on prices); POST checkout (customer made with the person's id and audited, linked customer reused, 409 reasons, 422 country/return path/body, 503 prices/not configured, 502, `BILLING_ACCOUNT_NEEDS_HELP` warn, 10/min); POST portal (redirect + audit, `NO_BILLING_ACCOUNT`, deleted customer, 502); admin `countryCheck` |
+| Store contract | `store-contract-billing.ts` (memory + Prisma) | `summaryOf`: trial start, linked account, subscriptions latest first; never an unlinked or another person's account |
+| Sync / CLI / security | `sync.test.ts`, `users-cli.test.ts`, `route-security.test.ts` | a Checkout-made subscription on our customer links and covers; `billing-status` CHECK line; the three routes session-only and refused to API keys |
+| Portal unit | `data/__tests__/billingView.test.ts`, `countries.test.ts`, `filters.test.ts` | every panel and action, open soon, DR3 list, checkout route, currency, computed saving, days left; country order and the Palestine name; the `billing`/`step`/`checkout` URL keys |
+| Portal component | `components/__tests__/BillingDrawer.test.tsx` | menu → URL, status first with focus, both prices, open soon, covered by grant, load error + retry, Arabic; Subscribe step (no default country, ILS, saving label, POST body, redirect), contact us vs business, Palestine + back, session failure keeps choices; return confirming → subscribed, cancelled; Manage billing, ending, unpaid, deleted customer |
+| Release-QA | `portal.billing.open-soon` (stubbed); `portal-live.billing.subscribe`, `subscribe-usd`, `business-only`, `manage`, `manage-ended`, `rtl-375` (Stripe sandbox, D8 B) | all seven pass 2026-10-23 (the six live ones in one recorded run at ad1d5d97); Checkout pays through the API behind Stripe's hCaptcha (TD-201) |
+| Mirror (server) | `server/src/billing/stripe/__tests__/mirror.test.ts` | a Customer Portal cancel (`cancel_at` on or before the period end) reads as ending; past the period it renews; none is not ending |
+
+### MUT-362 — the /qa-reconcile review fixes (2026-10-23)
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit (server) | `checkout.test.ts` | `currentSubscription` (live first, stale live rows never shown); stale rows don't refuse, unpaid always does; `trial_end` carried at ≥ 48 h only; `adaptive_pricing` off |
+| Adapter (server) | `checkout-gateway.test.ts` | Stripe's own subscriptions; expiring open Checkouts; sellable prices only (tier, VAT-exclusive, interval count 1); failure cache and one call in flight; idempotency key follows email and name; tax IDs + invoice tax number; writing it |
+| Route (server) | `billing-routes.test.ts` | live subscription over a later cancelled one (proven red on the old route); `coveredProfileIds` for a creator and a co-owner; Stripe's live subscription refuses; a second Checkout expires the first; trial carried; Malafat refusal before Stripe; stale row; permanent errors → NEEDS_HELP at error level; non-customer `resource_missing`; best-effort audit; cross-site 403 on both POSTs; portal shares the limit; the IL/JO tax number clears D9 |
+| Sync (server) | `sync.test.ts` | the Checkout tax number is copied to the customer's invoices; a failed copy is an error |
+| Portal | `billingView.test.ts`, `billingQueries.test.ts`, `BillingDrawer.test.tsx`, `Button.test.tsx` | pending panel; paid-entitlement manage; `isConfirmed`; `firstChargeOf`; return paths and the Stripe-only redirect; focus and one live region per phase; slow hides Subscribe and stops at 30 s (fake timers); portal return stops at 30 s; DR6 note under Manage billing; failures under their button; refusal copy and refresh; co-owner note; step Back replaces history; busy button keeps label and focus |

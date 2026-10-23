@@ -153,6 +153,11 @@
   visibility: hidden;
 }
 
+/* keepLabelWhileLoading: the spinner sits beside the label (the .btn gap) instead of over it. */
+.btn-loading-labelled .btn-spinner {
+  position: static;
+}
+
 @keyframes btn-spin {
   to {
     transform: rotate(360deg);

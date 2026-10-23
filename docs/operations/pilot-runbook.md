@@ -196,7 +196,20 @@ Do each step only when the one before it checks out. Nothing changes for anyone 
 2. **Existing pilot customers.** Set `mutaba3a_user_id` on every pilot Customer and `mutaba3a_organization_id`
    on every firm's Subscription (§1.5).
 3. **Keys.** Create a **restricted key** with read access to Customers, Subscriptions, Products, Prices, Checkout
-   Sessions, Invoices and Events. Add it to Secret Manager (`server/DEPLOYMENT.md` §6e).
+   Sessions, Invoices and Events, plus **Write** on Customers, Checkout Sessions and Customer portal (MUT-362's
+   Settings › Billing). Add it to Secret Manager (`server/DEPLOYMENT.md` §6e).
+3a. **Customer Portal (MUT-362).** Settings › Billing › Customer portal, in the Mutaba3a account: allow updating the
+   payment method, show invoice history, allow cancelling **at the end of the billing period** (never immediately),
+   no plan switching, no pausing; business name and tax ID editable. Default return URL: the portal origin. Save, and
+   check a portal session opens from Billing in the portal (test mode first).
+3b. **GA prices (MUT-362).** When Basel sets the GA list prices, add four Prices on the Freelancer product with lookup
+   keys `freelancer_list_monthly_ils`, `freelancer_list_yearly_ils`, `freelancer_list_monthly_usd` and
+   `freelancer_list_yearly_usd` (each in its own currency and interval: a mismatch keeps that currency unsold). Each
+   price must be **tax behaviour: exclusive** (Billing promises "Prices exclude VAT") and bill every 1 month or every
+   1 year, on the product tagged `tier: freelancer`; a price that isn't is never sold (MUT-362 review: it would be paid
+   but never mirrored, or break the VAT promise). Don't turn on Adaptive Pricing or add currency options to them: the
+   server pins Checkout to the price's own currency. Until both of a currency's prices exist, Billing says
+   "Subscriptions open soon". A changed price shows within 10 minutes.
 4. **Webhook endpoint.** In the Mutaba3a Stripe account, add the endpoint `https://<api host>/v1/billing/stripe/webhook`
    with exactly these 9 events (`HANDLED_EVENT_TYPES` in `server/src/billing/stripe/sync.ts`):
    `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`,

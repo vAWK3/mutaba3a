@@ -7,7 +7,7 @@ import type { CreateUserInput } from '../../../repositories/ports.js';
 import { entitlementsFor } from '../../coverage.js';
 import { StripeGatewayError, type StripeGateway } from '../gateway.js';
 import { createStripeSync, HANDLED_EVENT_TYPES, ReconcileRunning } from '../sync.js';
-import { FakeStripeGateway, stripeObjects } from './fake.js';
+import { FakeCheckoutGateway, FakeStripeGateway, stripeObjects } from './fake.js';
 
 /** MUT-360 §2.3: events and the nightly reconcile through one sync path, on the memory store and a fake Stripe. */
 const NOW = new Date('2026-11-01T09:00:00.000Z');
@@ -21,10 +21,12 @@ function harness(options: { reconcileGateway?: StripeGateway; reconcileTimeBudge
   stripe.products.set('prod_F', stripeObjects.product('prod_F', 'freelancer'));
   stripe.products.set('prod_FIRM', stripeObjects.product('prod_FIRM', 'firm'));
   stripe.products.set('prod_NOTIER', stripeObjects.product('prod_NOTIER', null));
+  const checkoutGateway = new FakeCheckoutGateway();
   const sync = createStripeSync({
     store,
     webhookGateway: stripe,
     reconcileGateway: options.reconcileGateway ?? stripe,
+    invoiceTaxNumbers: checkoutGateway,
     ...(options.reconcileTimeBudgetMs !== undefined ? { reconcileTimeBudgetMs: options.reconcileTimeBudgetMs } : {}),
     logger: pino({ level: 'silent' }),
     now: () => clock.now,
@@ -52,7 +54,7 @@ function harness(options: { reconcileGateway?: StripeGateway; reconcileTimeBudge
   };
   const changes = async (organizationId: string) =>
     (await store.audit.list(organizationId, {}, { limit: 100, cursor: null })).items.filter((e) => e.action === 'billing.subscription_changed');
-  return { store, stripe, sync, tick, person, event, billingOf, changes, clock };
+  return { store, stripe, checkoutGateway, sync, tick, person, event, billingOf, changes, clock };
 }
 
 describe('Stripe sync (MUT-360)', () => {
@@ -107,6 +109,43 @@ describe('Stripe sync (MUT-360)', () => {
     const linked = (await h.store.audit.list(u.personalId, {}, { limit: 50, cursor: null })).items.filter((e) => e.action === 'billing.account_linked');
     expect(linked).toHaveLength(1);
     expect(linked[0]).toMatchObject({ actorType: 'SYSTEM', entityType: 'user', entityId: u.userId, metadata: { stripeCustomerId: 'cus_new', userId: u.userId, source: 'stripe' } });
+  });
+
+  it('a Checkout from Settings › Billing (MUT-362) links the customer CheckoutGateway made and covers the person’s profiles', async () => {
+    const h = await harness();
+    const u = await h.person();
+    // As findOrCreateCustomer leaves it: our metadata, no billing_accounts row (ADR-165 D6), and a GA list price.
+    h.stripe.customers.set('cus_m362', stripeObjects.customer('cus_m362', { mutaba3a_user_id: u.userId }, 'IL'));
+    h.stripe.subscriptions.set('sub_m362', stripeObjects.subscription({ id: 'sub_m362', customer: 'cus_m362', product: 'prod_F', lookupKey: 'freelancer_list_monthly_ils' }));
+    const checkout = h.event('checkout.session.completed', { id: 'cs_m362', mode: 'subscription', subscription: 'sub_m362', customer: 'cus_m362', client_reference_id: u.userId });
+    expect(await h.sync.handleEvent(checkout, null)).toMatchObject({ status: 200, result: 'processed' });
+    expect(await h.store.billing.summaryOf(u.userId)).toMatchObject({
+      account: { stripeCustomerId: 'cus_m362', userId: u.userId, country: 'IL', currency: 'ILS' },
+      subscriptions: [{ stripeSubscriptionId: 'sub_m362', status: 'active', tier: 'FREELANCER', priceLookupKey: 'freelancer_list_monthly_ils' }],
+    });
+  });
+
+  it('a business tax number typed on Checkout is copied to the customer’s invoices (MUT-362 review D3)', async () => {
+    const h = await harness();
+    const u = await h.person();
+    h.stripe.customers.set('cus_m362', stripeObjects.customer('cus_m362', { mutaba3a_user_id: u.userId }, 'IL'));
+    h.stripe.subscriptions.set('sub_m362', stripeObjects.subscription({ id: 'sub_m362', customer: 'cus_m362', product: 'prod_F', lookupKey: 'freelancer_list_monthly_ils' }));
+    const field = { key: 'business_tax_number', type: 'text', text: { value: ' 516000000 ' } };
+    const checkout = h.event('checkout.session.completed', { id: 'cs_tax', mode: 'subscription', subscription: 'sub_m362', customer: 'cus_m362', client_reference_id: u.userId, custom_fields: [field] });
+    expect(await h.sync.handleEvent(checkout, null)).toMatchObject({ status: 200, result: 'processed' });
+    expect(h.checkoutGateway.taxNumbers.get('cus_m362')).toBe('516000000');
+  });
+
+  it('a failed tax-number copy is an error, so Stripe redelivers; a session without one writes nothing', async () => {
+    const h = await harness();
+    const u = await h.person();
+    h.stripe.customers.set('cus_m362', stripeObjects.customer('cus_m362', { mutaba3a_user_id: u.userId }, 'IL'));
+    h.stripe.subscriptions.set('sub_m362', stripeObjects.subscription({ id: 'sub_m362', customer: 'cus_m362', product: 'prod_F', lookupKey: 'freelancer_list_monthly_ils' }));
+    const withNumber = { id: 'cs_t1', mode: 'subscription', subscription: 'sub_m362', customer: 'cus_m362', client_reference_id: u.userId, custom_fields: [{ key: 'business_tax_number', type: 'text', text: { value: '516000000' } }] };
+    h.checkoutGateway.failNext();
+    expect(await h.sync.handleEvent(h.event('checkout.session.completed', withNumber), null)).toMatchObject({ result: 'error' });
+    expect(await h.sync.handleEvent(h.event('checkout.session.completed', { ...withNumber, id: 'cs_t2', custom_fields: [] }), null)).toMatchObject({ result: 'processed' });
+    expect(h.checkoutGateway.calls).toEqual(['taxNumber:cus_m362']);
   });
 
   it('customer.updated refreshes an existing account and never creates one', async () => {

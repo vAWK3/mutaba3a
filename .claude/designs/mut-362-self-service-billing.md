@@ -315,7 +315,7 @@ Numbered Q1–Q5 so they don't clash with the eng review's D-numbers. **Answered
 
 - **Self-declared country (built here, eng review D9 C):** Stripe can't restrict a billing address's country, so a consumer could pick a listed country and enter another address. Stripe Tax then computes on the real address. `billing:status` and its admin route flag each linked account whose `country ∉ consumerCountries` and that carries no tax ID, so Basel can follow up.
 - **Currency follows the picked country, not the address:** an IL pick with a foreign address pays ILS. Accepted (spike §0 is "Israeli customers pay ILS").
-- **ADR/TD numbers:** ADR-169 and the next TD at build time; three sessions raced on numbers before (MUT-325).
+- **ADR/TD numbers:** built as ADR-170, TD-201 and TD-202 (MUT-392 holds ADR-169 and API 1.51.0, so this ships as 1.52.0-mut362); three sessions raced on numbers before (MUT-325).
 
 ## 9. Business / product impact
 
@@ -1000,3 +1000,16 @@ Unresolved design decisions: none.
 - **VERDICT:** DESIGN CLEARED. Eng review logged `issues_open` with all 9 findings answered (D1–D9); eng review required by the dashboard rule, its decisions are complete.
 
 NO UNRESOLVED DECISIONS
+
+## /qa-reconcile review (2026-10-23)
+
+Eight reviewers (testing, maintainability, security, performance, API contract, design, simplification, red team) plus an adversarial pass found two money bugs (a second Checkout could be paid; a cancelled row could hide the live one and strand a payer) and a set of smaller ones. Basel's answers:
+
+| # | Question | Answer |
+|---|---|---|
+| R-D1 | Apply the review's fix set before review? | **All fixes**, design polish and test gaps included |
+| R-D2 | A person who subscribes during the trial: first charge when? | **Keep the trial**: `trial_end` = their trial end when ≥ 48 h away; the step says when |
+| R-D3 | The IL/JO business tax number typed on Checkout | **Onto the customer + invoices** (the webhook copies it); D9 counts it |
+| R-D4 | A co-owner opening Billing | **Follow the server**: `coveredProfileIds` (profiles they created); a note for shared profiles |
+
+Recorded in ADR-170's amendment; what stays open is TD-203 (an early `cancel_at` date), TD-204 (interval from the lookup key) and TD-205 (`client_reference_id` trust).

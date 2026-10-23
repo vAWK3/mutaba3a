@@ -71,6 +71,10 @@ export type UpdateProfileRequest = Schemas['UpdateProfileRequest'];
 export type UpdateProfileResponse = Schemas['UpdateProfileResponse'];
 export type ProfileTypeChange = Schemas['ProfileTypeChange'];
 export type SetupLinkCheck = Schemas['SetupLinkCheckResponse'];
+export type BillingOverview = Schemas['BillingOverview'];
+export type CheckoutSessionRequest = Schemas['CheckoutSessionRequest'];
+export type BillingRedirect = Schemas['BillingRedirect'];
+export type BillingEntitlement = Schemas['BillingEntitlement'];
 /** Why a setup link can't be used (MUT-235): the check's non-valid states, and `details.state` on a 410. */
 export type SetupLinkRefusal = Exclude<SetupLinkCheck['state'], 'valid'>;
 
@@ -371,6 +375,10 @@ export const api = {
   changeMalafatSuggestions: (body: MalafatSuggestionsChange) => request<MalafatSuggestions>('PATCH', '/v1/me/malafat-suggestions', { body }),
   /** MUT-324: the signed-in person accepts the current terms, read in `locale`. Idempotent per version. */
   acceptTerms: (body: Schemas['TermsAcceptanceRequest']) => request<Schemas['TermsStatus']>('POST', '/v1/me/terms-acceptance', { body }),
+  /** MUT-362: Settings › Billing. Person-level: no profile header; signed in only. */
+  billing: (options: { signal?: AbortSignal } = {}) => request<BillingOverview>('GET', '/v1/billing', { signal: options.signal }),
+  startCheckout: (body: CheckoutSessionRequest) => request<BillingRedirect>('POST', '/v1/billing/checkout-session', { body }),
+  openBillingPortal: (body: Schemas['PortalSessionRequest']) => request<BillingRedirect>('POST', '/v1/billing/portal-session', { body }),
 
   organizationSummary: (profileId: string, query: Query<'/v1/summaries/organization'> = {}) =>
     request<Get<'/v1/summaries/organization'>>('GET', '/v1/summaries/organization', { profileId, query }),

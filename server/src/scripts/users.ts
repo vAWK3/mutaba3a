@@ -343,6 +343,7 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
       accounts: { stripeCustomerId: string; currency: string; country: string | null }[];
       subscriptions: { stripeSubscriptionId: string; tier: string; status: string; currentPeriodEnd: string; cancelAtPeriodEnd: boolean; priceLookupKey: string | null; payerUserId: string | null }[];
       profiles: { name: string; billing: Entitlement; billingWithoutGrants: Entitlement }[];
+      countryCheck: { stripeCustomerId: string; country: string | null; taxIds: number | null; flagged: boolean | null }[];
     }>('GET', `/admin/v1/billing/status?${query}`);
     out(`${s.user.email} (${s.user.id})`);
     if (s.accounts.length === 0) out('  no Stripe customer linked');
@@ -353,6 +354,11 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
       out(`  subscription ${sub.stripeSubscriptionId} ${sub.tier} ${sub.status} until ${sub.currentPeriodEnd.slice(0, 10)}${extras.length > 0 ? ` (${extras.join(', ')})` : ''}`);
     }
     for (const p of s.profiles) out(`  profile ${p.name}: now ${p.billing.state} ${p.billing.source} · without grants ${p.billingWithoutGrants.state} ${p.billingWithoutGrants.source}`);
+    // MUT-362 (eng review D9): a consumer may have paid from a country not open to consumers.
+    for (const check of s.countryCheck) {
+      if (check.flagged) out(`  CHECK ${check.stripeCustomerId}: billed in ${check.country}, not open to consumers, and no tax ID — confirm it is a business`);
+      else if (check.flagged === null && check.country !== null) out(`  ${check.stripeCustomerId}: couldn't ask Stripe for tax IDs; country check skipped`);
+    }
   },
 };
 

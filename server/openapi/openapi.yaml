@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: Mutaba3a Financial API
-  version: 1.51.0-mut392
+  version: 1.52.0-mut362
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CURRENT_PASSWORD_WRONG, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CURRENT_PASSWORD_WRONG, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -15,9 +15,9 @@ info:
 
     Minimum app version (MUT-293): a phone client sends `X-App-Platform: ios|android` and `X-App-Build: <int>` on every request. Below the configured floor for that platform, every endpoint except sign-in (`POST /v1/sessions`, `POST /v1/device-sessions`) and `/health` answers 426 APP_UPDATE_REQUIRED with `details: { platform, minimumBuild }`. Between the floor and the configured recommended build, the request still succeeds but carries `X-Update-Available: true` and `X-Recommended-Build: <int>`. A request with no `X-App-Platform` header (the portal, or any build older than this contract version) is untouched — this is scoped to the phone API only, not enforced against it.
 
-    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, RECEIPT_ALREADY_FILED, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS.
+    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, RECEIPT_ALREADY_FILED, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS, ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS (schema failures carry the zod issues in details instead).
     A DATE_INVALID on a range check also carries details.bound: past when the date is more than ten years (3660 days) before the organization's today (the floor on every money date, MUT-227), future when it is later than allowed.
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
@@ -477,6 +477,7 @@ components:
                 - RATE_LIMITED
                 - INTERNAL
                 - RECONCILE_FAILED
+                - STRIPE_UNAVAILABLE
                 - ATTACHMENTS_NOT_CONFIGURED
                 - BILLING_NOT_CONFIGURED
                 - JOBS_NOT_CONFIGURED
@@ -5955,6 +5956,171 @@ components:
         - savedAt
         - origin
         - maps
+    BillingOverview:
+      type: object
+      properties:
+        configured:
+          type: boolean
+        subscription:
+          type: object
+          nullable: true
+          properties:
+            tier:
+              type: string
+              enum:
+                - FREELANCER
+                - FIRM
+            status:
+              type: string
+            interval:
+              type: string
+              nullable: true
+              enum:
+                - month
+                - year
+                - null
+            currency:
+              type: string
+            currentPeriodEnd:
+              type: string
+              format: date-time
+            cancelAtPeriodEnd:
+              type: boolean
+          required:
+            - tier
+            - status
+            - interval
+            - currency
+            - currentPeriodEnd
+            - cancelAtPeriodEnd
+        canManage:
+          type: boolean
+        trial:
+          type: object
+          nullable: true
+          properties:
+            startedAt:
+              type: string
+              format: date-time
+            endsAt:
+              type: string
+              format: date-time
+            lockAt:
+              type: string
+              format: date-time
+          required:
+            - startedAt
+            - endsAt
+            - lockAt
+        catalog:
+          type: object
+          properties:
+            ILS:
+              type: object
+              nullable: true
+              properties:
+                month:
+                  type: integer
+                  minimum: 0
+                  exclusiveMinimum: true
+                year:
+                  type: integer
+                  minimum: 0
+                  exclusiveMinimum: true
+              required:
+                - month
+                - year
+              description: "Minor units. Null: this currency has no complete pair of GA prices yet, so it is not sold."
+            USD:
+              type: object
+              nullable: true
+              properties:
+                month:
+                  type: integer
+                  minimum: 0
+                  exclusiveMinimum: true
+                year:
+                  type: integer
+                  minimum: 0
+                  exclusiveMinimum: true
+              required:
+                - month
+                - year
+              description: "Minor units. Null: this currency has no complete pair of GA prices yet, so it is not sold."
+          required:
+            - ILS
+            - USD
+        countries:
+          type: object
+          properties:
+            consumer:
+              type: array
+              items:
+                type: string
+            customTaxId:
+              type: array
+              items:
+                type: string
+          required:
+            - consumer
+            - customTaxId
+        coveredProfileIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+        - configured
+        - subscription
+        - canManage
+        - trial
+        - catalog
+        - countries
+        - coveredProfileIds
+    BillingRedirect:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+      required:
+        - url
+    CheckoutSessionRequest:
+      type: object
+      properties:
+        interval:
+          type: string
+          enum:
+            - month
+            - year
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+        buyer:
+          type: string
+          enum:
+            - person
+            - business
+        returnPath:
+          type: string
+          maxLength: 200
+          description: "Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin."
+      required:
+        - interval
+        - country
+        - buyer
+        - returnPath
+      additionalProperties: false
+    PortalSessionRequest:
+      type: object
+      properties:
+        returnPath:
+          type: string
+          maxLength: 200
+          description: "Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin."
+      required:
+        - returnPath
+      additionalProperties: false
     CreateLibraryReceiptUploadRequest:
       type: object
       properties:
@@ -6889,11 +7055,37 @@ components:
               - name
               - billing
               - billingWithoutGrants
+        countryCheck:
+          type: array
+          items:
+            type: object
+            properties:
+              stripeCustomerId:
+                type: string
+              country:
+                type: string
+                nullable: true
+              openToConsumers:
+                type: boolean
+                nullable: true
+              taxIds:
+                type: integer
+                nullable: true
+              flagged:
+                type: boolean
+                nullable: true
+            required:
+              - stripeCustomerId
+              - country
+              - openToConsumers
+              - taxIds
+              - flagged
       required:
         - user
         - accounts
         - subscriptions
         - profiles
+        - countryCheck
     BillingEntitlement:
       type: object
       properties:
@@ -14213,6 +14405,162 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing:
+    get:
+      tags:
+        - Billing
+      summary: The signed-in person's subscription, trial, prices and country rules
+      description: "One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Billing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingOverview"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/checkout-session:
+    post:
+      tags:
+        - Billing
+      summary: Open Stripe Checkout for the Freelancer plan
+      description: Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) only in a country open to consumers. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns.
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutSessionRequest"
+      responses:
+        "200":
+          description: The Checkout page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingRedirect"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, or BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/portal-session:
+    post:
+      tags:
+        - Billing
+      summary: Open the Stripe Customer Portal (card, invoices, cancel at period end)
+      description: Needs a Stripe customer linked to the person (409 NO_BILLING_ACCOUNT otherwise). Audited `billing.portal_opened` on each profile the person owns.
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalSessionRequest"
+      responses:
+        "200":
+          description: The Customer Portal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingRedirect"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, or BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/receipts/uploads:
     post:
       tags:
@@ -15900,7 +16248,7 @@ paths:
       tags:
         - Admin
       summary: One person’s Stripe mirror and entitlement, with and without operator grants (MUT-360)
-      description: "The pilot cutover check: revoke a person’s grant only once `billingWithoutGrants` shows ACTIVE / STRIPE. Exactly one of userId and email."
+      description: "The pilot cutover check: revoke a person’s grant only once `billingWithoutGrants` shows ACTIVE / STRIPE. MUT-362: `countryCheck` flags a linked payer billed outside the consumer countries with no tax ID (asks Stripe for the customer’s tax IDs). Exactly one of userId and email."
       security:
         - adminToken: []
       parameters:

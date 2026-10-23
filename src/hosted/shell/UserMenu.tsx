@@ -51,6 +51,11 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
     accountDrawers.openYourData();
   }
 
+  function openBilling() {
+    close(false);
+    accountDrawers.openBilling();
+  }
+
   function goToSignIn() {
     close(false);
     void navigate({ to: '/sign-in' });
@@ -102,6 +107,10 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
               {/* MUT-325: the account's own Download my records */}
               <button type="button" role="menuitem" className="hp-menu-item press" onClick={openYourData}>
                 {t('hosted.yourData.title')}
+              </button>
+              {/* MUT-362 (DR5): Settings › Billing, for everyone signed in; "open soon" until Stripe and prices are set */}
+              <button type="button" role="menuitem" className="hp-menu-item press" onClick={openBilling}>
+                {t('hosted.billing.title')}
               </button>
               {/* After Sign out, so Sign out stays the menu's first item (focus on open) */}
               <MalafatMenuItems profile={profile} />

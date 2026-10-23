@@ -2007,6 +2007,16 @@ export class MemoryLedgerStore implements LedgerStore {
         .filter((a) => linked === undefined || (a.userId !== null) === linked)
         .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
         .map((a) => ({ ...a })),
+    summaryOf: async (userId) => {
+      const trialStartedAt = this.trialStarts.get(userId) ?? null;
+      const account = [...this.billingAccounts.values()].find((a) => a.userId === userId);
+      if (!account) return { account: null, subscriptions: [], trialStartedAt };
+      const subscriptions = [...this.billingSubs.values()]
+        .filter((s) => s.billingAccountId === account.id)
+        .sort((a, b) => b.currentPeriodEnd.getTime() - a.currentPeriodEnd.getTime())
+        .map((s) => ({ ...s }));
+      return { account: { ...account }, subscriptions, trialStartedAt };
+    },
     saveAccount: async (input) => {
       const accounts = [...this.billingAccounts.values()];
       const existing = accounts.find((a) => a.stripeCustomerId === input.stripeCustomerId);

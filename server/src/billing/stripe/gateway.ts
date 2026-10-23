@@ -47,14 +47,17 @@ export class StripeGatewayError extends Error {
   readonly type: string;
   readonly requestId: string | null;
   readonly transient: boolean;
+  /** The request parameter Stripe blamed (`customer` on a deleted customer), when it named one. */
+  readonly param: string | null;
 
-  constructor(fields: { code: string | null; type: string; requestId: string | null; transient: boolean }) {
+  constructor(fields: { code: string | null; type: string; requestId: string | null; transient: boolean; param?: string | null }) {
     super(`Stripe ${fields.type}${fields.code ? ` (${fields.code})` : ''}`);
     this.name = 'StripeGatewayError';
     this.code = fields.code;
     this.type = fields.type;
     this.requestId = fields.requestId;
     this.transient = fields.transient;
+    this.param = fields.param ?? null;
   }
 }
 
@@ -139,6 +142,7 @@ export function toGatewayError(err: unknown): StripeGatewayError {
       code: err.code ?? null,
       type: err.type,
       requestId: err.requestId ?? null,
+      param: err.param ?? null,
       transient: TRANSIENT_TYPES.has(err.type) || status === 401 || status === 403 || status === 429 || status >= 500,
     });
   }

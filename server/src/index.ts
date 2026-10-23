@@ -12,7 +12,9 @@ import { createArgon2Hasher } from './auth/users.js';
 import { CachedFxRates, FrankfurterSource } from './fx-rates.js';
 import { PUBLIC_FX_POLICY } from './routes/fx-rates.js';
 import { createStripeGateway, RECONCILE_BUDGET, WEBHOOK_BUDGET } from './billing/stripe/gateway.js';
+import { CHECKOUT_BUDGET, createCheckoutGateway } from './billing/stripe/checkout-gateway.js';
 import { STRIPE_WEBHOOK_POLICY } from './routes/stripe-billing.js';
+import { BILLING_SESSION_POLICY } from './routes/billing.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -32,7 +34,15 @@ const stripeWebhookIpLimiter = new SlidingWindowRateLimiter(STRIPE_WEBHOOK_POLIC
 // MUT-360 D7: one gateway per budget; config refuses a key without its webhook secret, so both or neither exist.
 const stripeGateway = (budget: { timeoutMs: number; maxNetworkRetries: number }) =>
   createStripeGateway({ secretKey: config.STRIPE_SECRET_KEY!, webhookSecret: config.STRIPE_WEBHOOK_SECRET!, ...budget, now: () => new Date() });
-const stripe = config.STRIPE_SECRET_KEY ? { webhookGateway: stripeGateway(WEBHOOK_BUDGET), reconcileGateway: stripeGateway(RECONCILE_BUDGET) } : null;
+// MUT-362 (eng review D2): the same restricted key, widened with Write on Customers, Checkout Sessions and Customer portal.
+const stripe = config.STRIPE_SECRET_KEY
+  ? {
+      webhookGateway: stripeGateway(WEBHOOK_BUDGET),
+      reconcileGateway: stripeGateway(RECONCILE_BUDGET),
+      checkoutGateway: createCheckoutGateway({ secretKey: config.STRIPE_SECRET_KEY, ...CHECKOUT_BUDGET, now: () => new Date() }),
+    }
+  : null;
+const billingSessionLimiter = new SlidingWindowRateLimiter(BILLING_SESSION_POLICY.perMinute);
 
 const fxRates = new CachedFxRates({
   source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
@@ -74,6 +84,7 @@ const app = createApp({
   stripe,
   jobToken: config.MUTABA3A_JOB_TOKEN ?? null,
   stripeWebhookIpLimiter,
+  billingSessionLimiter,
   portal: config.PORTAL_DIST_DIR ? { distDir: config.PORTAL_DIST_DIR } : null,
   appAssociation:
     config.APPLE_TEAM_ID && config.APPLE_BUNDLE_ID && config.ANDROID_PACKAGE_NAME && config.ANDROID_SHA256_FINGERPRINTS
@@ -93,7 +104,7 @@ const app = createApp({
   },
 });
 if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; attachments routes answer 503');
-if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; the Stripe webhook and reconcile answer 503');
+if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; the Stripe webhook, reconcile and billing sessions answer 503');
 if (!config.MUTABA3A_JOB_TOKEN) logger.warn('MUTABA3A_JOB_TOKEN is not set; /jobs/* answers 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
 if (!reporter.enabled) logger.warn('SENTRY_DSN is not set; errors are logged but not reported');
@@ -113,6 +124,7 @@ const pruneTimer = setInterval(() => {
   signInIpLimiter.prune(now);
   publicFxIpLimiter.prune(now);
   stripeWebhookIpLimiter.prune(now);
+  billingSessionLimiter.prune(now);
 }, 60_000);
 pruneTimer.unref();
 

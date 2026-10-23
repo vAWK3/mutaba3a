@@ -1,0 +1,285 @@
+import { describe, expect, it } from 'vitest';
+import type { Entitlement } from '../entitlement.js';
+import {
+  BILLING_COUNTRIES,
+  CHECKOUT_SESSION_TTL_SECONDS,
+  CHECKOUT_SUBMIT_MESSAGE,
+  GA_PRICE_LOOKUP_KEYS,
+  catalogFrom,
+  consumerCountryCheck,
+  currencyOf,
+  currentSubscription,
+  isReturnPath,
+  parseBillingCountries,
+  planCheckout,
+  type Catalog,
+  type CheckoutInput,
+  type PersonBilling,
+} from '../checkout.js';
+
+/**
+ * MUT-362 (plan §2.3, eng review D5/D6): who may start a Checkout, and the exact Stripe parameters. Pure: no Stripe,
+ * no store. The rows run in the order planCheckout checks them.
+ */
+
+const NOW = new Date('2026-11-01T09:00:00.000Z');
+const USER = '11111111-1111-4111-8111-111111111111';
+const PROFILE = '22222222-2222-4222-8222-222222222222';
+const COUNTRIES = parseBillingCountries({ consumerCountries: ['IL', 'GB'], customTaxIdCountries: ['IL', 'JO'] });
+const CATALOG: Catalog = {
+  ILS: { month: { id: 'price_ils_m', unitAmount: 3900 }, year: { id: 'price_ils_y', unitAmount: 39000 } },
+  USD: { month: { id: 'price_usd_m', unitAmount: 1000 }, year: { id: 'price_usd_y', unitAmount: 10000 } },
+};
+const DAY = 24 * 60 * 60 * 1000;
+const LATER = new Date(NOW.getTime() + 20 * DAY);
+const trial: Entitlement = { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: new Date('2026-11-10T00:00:00.000Z') };
+const malafat: Entitlement = { state: 'ACTIVE', source: 'MALAFAT', tier: null, until: null };
+const foreverGrant: Entitlement = { state: 'ACTIVE', source: 'OPERATOR', tier: 'FREELANCER', until: null };
+const expiringGrant: Entitlement = { state: 'ACTIVE', source: 'OPERATOR', tier: 'FREELANCER', until: new Date('2026-12-01T00:00:00.000Z') };
+
+const input = (over: Partial<CheckoutInput> = {}): CheckoutInput => ({
+  userId: USER,
+  interval: 'month',
+  country: 'IL',
+  buyer: 'person',
+  returnUrl: `https://portal.example/p/${PROFILE}`,
+  now: NOW,
+  trialEndsAt: null,
+  ...over,
+});
+const person = (over: Partial<PersonBilling> = {}): PersonBilling => ({ subscriptions: [], owned: [trial], ...over });
+const plan = (over: Partial<CheckoutInput> = {}, who: Partial<PersonBilling> = {}, catalog: Catalog = CATALOG) =>
+  planCheckout(input(over), person(who), COUNTRIES, catalog);
+
+describe('planCheckout refusals (MUT-362 §2.3)', () => {
+  it.each(['active', 'trialing', 'past_due', 'incomplete'])('a %s subscription is ALREADY_SUBSCRIBED', (status) => {
+    expect(plan({}, { subscriptions: [{ status, currentPeriodEnd: LATER }] })).toEqual({ ok: false, code: 'ALREADY_SUBSCRIBED' });
+  });
+
+  it('an unpaid subscription sends the person to pay the open invoice (eng review D6)', () => {
+    expect(plan({}, { subscriptions: [{ status: 'unpaid', currentPeriodEnd: LATER }] })).toEqual({ ok: false, code: 'RESUME_IN_PORTAL' });
+  });
+
+  it('a paused subscription (never made by our flow) is CONTACT_US', () => {
+    expect(plan({}, { subscriptions: [{ status: 'paused', currentPeriodEnd: LATER }] })).toEqual({ ok: false, code: 'CONTACT_US' });
+  });
+
+  it('a cancelled or abandoned subscription does not block a new Checkout', () => {
+    expect(plan({}, { subscriptions: [{ status: 'canceled', currentPeriodEnd: LATER }, { status: 'incomplete_expired', currentPeriodEnd: LATER }] })).toMatchObject({ ok: true });
+  });
+
+  it('a person who owns no profile has nothing to cover', () => {
+    expect(plan({}, { owned: [] })).toEqual({ ok: false, code: 'NOTHING_TO_COVER' });
+  });
+
+  it('profiles all covered by Malafat are never priced here', () => {
+    expect(plan({}, { owned: [malafat, malafat] })).toEqual({ ok: false, code: 'COVERED_BY_MALAFAT' });
+  });
+
+  it('a no-expiry operator grant on every owned profile is COVERED_BY_GRANT (eng review D5)', () => {
+    expect(plan({}, { owned: [foreverGrant] })).toEqual({ ok: false, code: 'COVERED_BY_GRANT' });
+    expect(plan({}, { owned: [foreverGrant, malafat] })).toEqual({ ok: false, code: 'COVERED_BY_GRANT' });
+  });
+
+  it('an expiring grant, or one profile still on its trial, may subscribe', () => {
+    expect(plan({}, { owned: [expiringGrant] })).toMatchObject({ ok: true });
+    expect(plan({}, { owned: [foreverGrant, trial] })).toMatchObject({ ok: true });
+  });
+
+  it('a person in a country not open to consumers is COUNTRY_NEEDS_BUSINESS (AC2)', () => {
+    expect(plan({ country: 'JO' })).toEqual({ ok: false, code: 'COUNTRY_NEEDS_BUSINESS' });
+    expect(plan({ country: 'US' })).toEqual({ ok: false, code: 'COUNTRY_NEEDS_BUSINESS' });
+  });
+
+  it('a currency without both GA prices is PRICES_NOT_SET', () => {
+    expect(plan({}, {}, { ...CATALOG, ILS: null })).toEqual({ ok: false, code: 'PRICES_NOT_SET' });
+    expect(plan({ country: 'GB' }, {}, { ...CATALOG, USD: null })).toEqual({ ok: false, code: 'PRICES_NOT_SET' });
+  });
+
+  it('a malformed country is VALIDATION_FAILED', () => {
+    expect(plan({ country: 'il' })).toEqual({ ok: false, code: 'VALIDATION_FAILED' });
+    expect(plan({ country: 'ISR' })).toEqual({ ok: false, code: 'VALIDATION_FAILED' });
+  });
+});
+
+describe('stale mirror rows (MUT-362 review)', () => {
+  it('an active row whose period ended over a week ago no longer blocks Checkout (the entitlement already lapsed)', () => {
+    const stale = new Date(NOW.getTime() - 8 * DAY);
+    expect(plan({}, { subscriptions: [{ status: 'active', currentPeriodEnd: stale }] })).toMatchObject({ ok: true });
+    expect(plan({}, { subscriptions: [{ status: 'past_due', currentPeriodEnd: new Date(NOW.getTime() - 6 * DAY) }] })).toEqual({ ok: false, code: 'ALREADY_SUBSCRIBED' });
+  });
+
+  it('an unpaid subscription still waits on its open invoice, however old its period', () => {
+    expect(plan({}, { subscriptions: [{ status: 'unpaid', currentPeriodEnd: new Date(NOW.getTime() - 60 * DAY) }] })).toEqual({ ok: false, code: 'RESUME_IN_PORTAL' });
+  });
+});
+
+describe('currentSubscription: the one Billing shows (MUT-362 review)', () => {
+  const sub = (status: string, days: number) => ({ status, currentPeriodEnd: new Date(NOW.getTime() + days * DAY) });
+
+  it('a live subscription wins over a cancelled one with a later period end', () => {
+    const live = sub('active', 5);
+    expect(currentSubscription([sub('canceled', 300), live], NOW)).toBe(live);
+  });
+
+  it('active before past_due before incomplete before unpaid before paused, then the later period end', () => {
+    const subs = [sub('paused', 90), sub('unpaid', 80), sub('incomplete', 70), sub('past_due', 60), sub('active', 3), sub('active', 4)];
+    expect(currentSubscription(subs, NOW)).toBe(subs[5]);
+    expect(currentSubscription(subs.slice(0, 4), NOW)).toBe(subs[3]);
+  });
+
+  it('a stale live row never shows; with no open one, the latest ended one does; none, nothing', () => {
+    const ended = sub('canceled', -3);
+    expect(currentSubscription([sub('active', -9), ended], NOW)).toBe(ended);
+    expect(currentSubscription([], NOW)).toBeUndefined();
+  });
+});
+
+describe('planCheckout parameters (MUT-362 §2.3)', () => {
+  it('a person in Israel pays the monthly ILS price, linked to them three ways', () => {
+    const result = plan();
+    expect(result.ok && result.currency).toBe('ILS');
+    if (!result.ok) throw new Error('expected a plan');
+    expect(result.params).toMatchObject({
+      mode: 'subscription',
+      line_items: [{ price: 'price_ils_m', quantity: 1 }],
+      client_reference_id: USER,
+      subscription_data: { metadata: { mutaba3a_user_id: USER } },
+      customer_update: { address: 'auto', name: 'auto' },
+      automatic_tax: { enabled: true },
+      billing_address_collection: 'required',
+      locale: 'auto',
+      tax_id_collection: { enabled: true, required: 'never' },
+      success_url: `https://portal.example/p/${PROFILE}?billing=true&checkout=success`,
+      cancel_url: `https://portal.example/p/${PROFILE}?billing=true&checkout=cancelled`,
+      expires_at: Math.floor(NOW.getTime() / 1000) + CHECKOUT_SESSION_TTL_SECONDS,
+      custom_text: { submit: { message: CHECKOUT_SUBMIT_MESSAGE } },
+      // The charge stays in the price's own currency: a local-currency subscription couldn't be mirrored.
+      adaptive_pricing: { enabled: false },
+    });
+    expect(result.params.subscription_data).not.toHaveProperty('trial_end');
+    // A person in a consumer country with no Stripe tax-ID type: an optional number field, never required.
+    expect(result.params.custom_fields).toEqual([expect.objectContaining({ key: 'business_tax_number', optional: true })]);
+  });
+
+  it('subscribing during the trial keeps the rest of it: Stripe first charges on the trial end (review D2)', () => {
+    const trialEndsAt = new Date(NOW.getTime() + 10 * DAY);
+    const result = plan({ trialEndsAt });
+    if (!result.ok) throw new Error('expected a plan');
+    expect(result.params.subscription_data).toEqual({ metadata: { mutaba3a_user_id: USER }, trial_end: Math.floor(trialEndsAt.getTime() / 1000) });
+  });
+
+  it('a trial ending within 48 hours (Stripe’s minimum), or already over, is charged at once', () => {
+    for (const hours of [47, -5]) {
+      const result = plan({ trialEndsAt: new Date(NOW.getTime() + hours * 60 * 60 * 1000) });
+      if (!result.ok) throw new Error('expected a plan');
+      expect(result.params.subscription_data).not.toHaveProperty('trial_end');
+    }
+  });
+
+  it('yearly picks the yearly price; anywhere but Israel is USD', () => {
+    const result = plan({ interval: 'year', country: 'GB' });
+    if (!result.ok) throw new Error('expected a plan');
+    expect(result.currency).toBe('USD');
+    expect(result.params.line_items).toEqual([{ price: 'price_usd_y', quantity: 1 }]);
+    expect(result.params.custom_fields).toEqual([]);
+  });
+
+  it('a business where Stripe has a tax-ID type must give one', () => {
+    const result = plan({ country: 'AE', buyer: 'business' });
+    if (!result.ok) throw new Error('expected a plan');
+    expect(result.params.tax_id_collection).toEqual({ enabled: true, required: 'if_supported' });
+    expect(result.params.custom_fields).toEqual([]);
+  });
+
+  it('a business in Jordan (no Stripe type, not open to consumers) must fill the tax number field', () => {
+    const result = plan({ country: 'JO', buyer: 'business' });
+    if (!result.ok) throw new Error('expected a plan');
+    expect(result.params.custom_fields).toEqual([
+      expect.objectContaining({ key: 'business_tax_number', type: 'text', optional: false, label: { type: 'custom', custom: expect.any(String) } }),
+    ]);
+    expect(result.params.tax_id_collection).toEqual({ enabled: true, required: 'never' });
+  });
+
+  it('a business in a consumer country gives its number only if it wants to', () => {
+    const result = plan({ country: 'GB', buyer: 'business' });
+    if (!result.ok) throw new Error('expected a plan');
+    expect(result.params.tax_id_collection).toEqual({ enabled: true, required: 'never' });
+  });
+
+  it('the custom field label fits Stripe’s 50 characters and the message its 1200', () => {
+    const result = plan({ country: 'JO', buyer: 'business' });
+    if (!result.ok) throw new Error('expected a plan');
+    const label = result.params.custom_fields?.[0]?.label;
+    expect(label && 'custom' in label ? label.custom.length : 0).toBeLessThanOrEqual(50);
+    expect(CHECKOUT_SUBMIT_MESSAGE.length).toBeLessThanOrEqual(1200);
+    expect(CHECKOUT_SUBMIT_MESSAGE).toMatch(/[؀-ۿ]/);
+  });
+});
+
+describe('consumerCountryCheck (MUT-362 eng review D9: the operator’s flag)', () => {
+  it('flags a payer outside the consumer countries with no tax ID on their customer', () => {
+    expect(consumerCountryCheck('JO', 0, COUNTRIES)).toEqual({ openToConsumers: false, flagged: true });
+  });
+
+  it('a tax ID, or a country open to consumers, clears it', () => {
+    expect(consumerCountryCheck('JO', 1, COUNTRIES)).toEqual({ openToConsumers: false, flagged: false });
+    expect(consumerCountryCheck('IL', 0, COUNTRIES)).toEqual({ openToConsumers: true, flagged: false });
+  });
+
+  it('says it doesn’t know when Stripe has no country or couldn’t be asked', () => {
+    expect(consumerCountryCheck(null, 0, COUNTRIES)).toEqual({ openToConsumers: null, flagged: null });
+    expect(consumerCountryCheck('JO', null, COUNTRIES)).toEqual({ openToConsumers: false, flagged: null });
+  });
+});
+
+describe('billing countries, currency and return paths', () => {
+  it('ILS for Israel, USD everywhere else', () => {
+    expect(currencyOf('IL')).toBe('ILS');
+    expect(['PS', 'JO', 'AE', 'GB', 'US'].map(currencyOf)).toEqual(['USD', 'USD', 'USD', 'USD', 'USD']);
+  });
+
+  it('a currency is in the catalog only with both prices, each in its own currency and interval', () => {
+    const fact = (id: string, currency: string, unitAmount: number, interval: 'month' | 'year') => ({ id, currency, unitAmount, interval });
+    const prices = new Map([
+      ['freelancer_list_monthly_ils', fact('p1', 'ILS', 3900, 'month')],
+      ['freelancer_list_yearly_ils', fact('p2', 'ILS', 39000, 'year')],
+      ['freelancer_list_monthly_usd', fact('p3', 'USD', 1000, 'month')],
+    ]);
+    expect(catalogFrom(prices)).toEqual({ ILS: { month: { id: 'p1', unitAmount: 3900 }, year: { id: 'p2', unitAmount: 39000 } }, USD: null });
+    // A key pointing at the wrong currency or interval is a dashboard mistake: never sell it.
+    prices.set('freelancer_list_yearly_usd', fact('p4', 'EUR', 10000, 'year'));
+    expect(catalogFrom(prices).USD).toBeNull();
+    prices.set('freelancer_list_yearly_usd', fact('p4', 'USD', 10000, 'month'));
+    expect(catalogFrom(prices).USD).toBeNull();
+    prices.set('freelancer_list_yearly_usd', fact('p4', 'USD', 10000, 'year'));
+    expect(catalogFrom(prices).USD).toEqual({ month: { id: 'p3', unitAmount: 1000 }, year: { id: 'p4', unitAmount: 10000 } });
+  });
+
+  it('the lookup keys follow the spike’s convention', () => {
+    expect(GA_PRICE_LOOKUP_KEYS).toEqual({
+      ILS: { month: 'freelancer_list_monthly_ils', year: 'freelancer_list_yearly_ils' },
+      USD: { month: 'freelancer_list_monthly_usd', year: 'freelancer_list_yearly_usd' },
+    });
+  });
+
+  it('the shipped file parses and opens no consumer country until MUT-355 is answered', () => {
+    expect(BILLING_COUNTRIES).toEqual({ consumer: [], customTaxId: ['IL', 'JO'] });
+  });
+
+  it('the country file is validated: ISO-2 upper case, no duplicates', () => {
+    expect(parseBillingCountries({ consumerCountries: [], customTaxIdCountries: ['IL', 'JO'] })).toEqual({ consumer: [], customTaxId: ['IL', 'JO'] });
+    expect(() => parseBillingCountries({ consumerCountries: ['il'], customTaxIdCountries: [] })).toThrow(/consumerCountries/);
+    expect(() => parseBillingCountries({ consumerCountries: ['IL', 'IL'], customTaxIdCountries: [] })).toThrow(/duplicate/);
+    expect(() => parseBillingCountries({ consumerCountries: ['IL'] })).toThrow(/customTaxIdCountries/);
+  });
+
+  it('a return path is one of ours, never another origin', () => {
+    expect(isReturnPath('/')).toBe(true);
+    expect(isReturnPath(`/p/${PROFILE}`)).toBe(true);
+    expect(isReturnPath(`/p/${PROFILE}/expenses/groups`)).toBe(true);
+    for (const bad of ['https://evil.example', '//evil.example', '/p/not-a-uuid', `/p/${PROFILE}?x=1`, `/p/${PROFILE}/../..`, '', 'p/x']) {
+      expect(isReturnPath(bad), bad).toBe(false);
+    }
+  });
+});

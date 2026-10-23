@@ -28,6 +28,35 @@
 
 ---
 
+## [Unreleased] - 2026-10-22 — Settings › Billing: subscribe, manage and cancel without the operator (MUT-362, ADR-170)
+
+**Why:** the GA gate is "anyone can pay and leave with no help". After MUT-358/360 the server could mirror a subscription, but nobody could start one, change a card or cancel without Basel.
+
+### Added
+- `GET /v1/billing`, `POST /v1/billing/checkout-session`, `POST /v1/billing/portal-session` (`server/src/routes/billing.ts`); API 1.52.0-mut362, `STRIPE_UNAVAILABLE`, eight conflict reasons and `COUNTRY_NEEDS_BUSINESS`.
+- `billing/checkout.ts` (the decision and the Checkout params), `billing/stripe/checkout-gateway.ts` (the write door), `billing/billing-countries.json` (no consumer country yet), `billing.summaryOf`.
+- `billing:status` `countryCheck` (D9).
+- Portal: the account menu's Billing drawer (`BillingDrawer`, `billingView`, `billingQueries`, `countries`), Arabic first; `RadioCards` extracted from `ProfileTypeCards`.
+- Release-QA: `portal-live` app on the Stripe sandbox (six flows, all passing 2026-10-23; Checkout pays through the API behind Stripe's hCaptcha, TD-201), `portal.billing.open-soon`.
+
+### Fixed (the /qa-reconcile review, 2026-10-23)
+- No double charge: Checkout asks Stripe for the customer's subscriptions first and expires its other open Checkouts; a stale mirror row no longer blocks paying.
+- Billing shows the live subscription, never a cancelled one over it; `incomplete` is "payment pending"; a paid entitlement always offers Manage billing; a slow payment hides Subscribe.
+- Only Freelancer-tagged, VAT-exclusive monthly/yearly prices are sold, in their own currency; price lookups cache a failure for a minute.
+- Subscribing during the trial keeps the rest of it (D2); a Checkout business tax number prints on invoices and clears the D9 flag (D3); covered profiles come from the server (D4).
+- Permanent Stripe refusals are "needs a hand" (logged as errors), not "try again"; the drawer names each refusal, refreshes its view and leaves only for Stripe; focus and announcements follow each phase; DR4/DR6 placement; 44 px select.
+- `Button` gains `keepLabelWhileLoading`.
+
+### Fixed (found by the live release-QA)
+- The Stripe mirror reads a Customer Portal cancel (`cancel_at` on the period end, `cancel_at_period_end` false) as ending; Billing kept saying "renews" after a cancel (`billing/stripe/mirror.ts`).
+- Back from the Customer Portal, Billing refetches until the webhook's change lands (`?portal=returned`).
+
+### Changed
+- The restricted Stripe key gains Write on Customers, Checkout Sessions and Customer portal (DEPLOYMENT.md §6e, pilot-runbook §1.7 steps 3a–3b, before-release.md).
+
+### Files
+`server/src/routes/billing.ts`, `server/src/billing/{checkout.ts,billing-countries.json,stripe/checkout-gateway.ts}`, `server/src/routes/admin-billing.ts`, `server/src/{app.ts,index.ts,config.ts,errors.ts,schemas.ts}`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/auth/store-guard.ts`, `server/src/scripts/users.ts`, `server/openapi/openapi.yaml`, `src/hosted/{components/BillingDrawer.tsx,components/RadioCards.tsx,components/ProfileTypeCards.tsx,data/billingView.ts,data/billingQueries.ts,data/countries.ts,data/filters.ts,shell/AccountDrawers.tsx,shell/UserMenu.tsx,api/client.ts,api/schema.d.ts,i18n/*.json,hosted.css}`, `qa/**`.
+
 ## [Unreleased] - 2026-10-23 — The MTB3A logotype and its kit (MUT-401, ADR-171)
 
 **Why:** epic MUT-400 renames the service MTB3A in English (متابعة stays in Arabic). MUT-401 brings in the logotype Basel drew in Claude Design, with the lockup and running-text rules, so MUT-402 (web), MUT-404 (stores) build on one file. Plan and eng review D1–D9: `.claude/designs/mut-401-mtb3a-wordmark.md` (Jira comment 12417). Nothing renders it yet.
