@@ -34,6 +34,22 @@
 **Impact**: the only support address today is on Malafat's domain, so `mail_reply_to` would send MTB3A replies to Malafat's inbox; a DMARC `rua` off the apex needs that domain to authorize ours, so DMARC ships without reports.
 **Fix**: Cloudflare Email Routing on the apex in the frontdoor stack (`support@`, `dmarc@` → a real inbox), then set `mail_reply_to` and `dmarc_report_address` to them.
 
+### TD-211: A SIGNUP link opens the setup page with "set up your account" copy
+**Status**: Open
+**Ticket**: MUT-366 (seam for MUT-368)
+**Added**: 2026-10-23
+**Priority**: Medium (before signup opens)
+**Impact**: `SetupPage.tsx` accepts the `SIGNUP` purpose but shows the SETUP copy and doesn't send `defaultCurrency`/`timezone`, so redeeming a SIGNUP link from today's portal answers 422. No SIGNUP link can exist while `SELF_SIGNUP_ENABLED` is off.
+**Fix**: MUT-368 gives SIGNUP its own copy and sends the browser's currency and timezone (and an optional name) with the redeem.
+
+### TD-212: Turnstile accepts a token whose widget named no action
+**Status**: Open
+**Ticket**: MUT-366 (D7)
+**Added**: 2026-10-23
+**Priority**: Low
+**Impact**: `createTurnstileVerifier` refuses a token minted for the other form, but accepts one whose action is empty, so a widget rendered without `action` still passes.
+**Fix**: once MUT-368 renders both widgets with `action: "signup"` / `"recover"`, require the action to match exactly.
+
 ### TD-210: Arabic mail is sent from "MTB3A", not "متابعة"
 **Status**: Open
 **Ticket**: MUT-359 (D5 as built)
