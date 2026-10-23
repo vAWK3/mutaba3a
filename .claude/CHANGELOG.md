@@ -33,8 +33,8 @@
 **Why:** epic MUT-400 renames the service MTB3A in English (متابعة stays in Arabic). MUT-401 brings in the logotype Basel drew in Claude Design, with the lockup and running-text rules, so MUT-402 (web), MUT-404 (stores) build on one file. Plan and eng review D1–D9: `.claude/designs/mut-401-mtb3a-wordmark.md` (Jira comment 12417). Nothing renders it yet.
 
 ### Added
-- `src/assets/brand/wordmark.svg`: the MTB3A logotype as delivered (outlined Thmanyah Serif Display Bold, viewBox 3695 × 724, one fill). The only copy (D3); MUT-402 shows it as a mask over `var(--ink)` (D7).
-- `src/assets/brand/brand.sha256.json`: sha256 pins for the mark, the nine web icons and the logotype (D5, D9).
+- `src/assets/brand/wordmark.svg`: the MTB3A logotype as delivered (outlined Thmanyah Serif Display Bold, viewBox 3695 × 724, one fill). The only copy (eng D3); MUT-402 shows it as a mask over `var(--ink)` (eng D7).
+- `src/assets/brand/brand.sha256.json`: sha256 pins for the mark, the nine web icons and the logotype (eng D5, D9).
 - `src/styles/__tests__/wordmark.test.ts`: allowlisted elements and attributes only (eng D4), metadata holding only the C2PA base64, one opaque fill, a frame tight to the ink with no curve outside it (eng D8), no copy of the bytes under docs/brand, public or the portal (eng D3), pins, and a Play feature graphic with no alpha. The path parser throws on data it can't read.
 - `docs/brand/wordmark/README.md`: the kit (lockup numbers, order, clear space, minimum size, running-text rule, origin and licence note, what MUT-402 must add); `store/feature-graphic-en-1024x500.png` (24-bit RGB; Google Play refuses alpha); `claude-design/Wordmark Kit.dc.html` (reference only).
 - `.gitattributes`: the pinned SVGs keep LF on every checkout.
@@ -44,6 +44,40 @@
 
 ### Not imported
 - The export's `tokens/` and `favicon.svg` (older than the repo's), the duplicate feature graphic under `icons/android/`, `export/illustrations/` (MUT-406), and `Feature Graphic.dc.html` (the pre-rename page: "Mutaba3a" in Bitter, invoices). MUT-404 still needs the current feature-graphic page and an Arabic graphic.
+
+## [Unreleased] - 2026-10-23 — The restore drill runs on standard gcloud (MUT-327)
+
+**Why:** the first production run stopped at `gcloud sql instances create`: `--labels` exists only in gcloud alpha and
+beta (Cloud SDK 557), and so does `patch --update-labels`. The tests' fake gcloud accepts any flag. Nothing was created.
+
+### Fixed
+- `server/scripts/restore-drill.sh` and runbook §4.1 drop `--labels` / `--update-labels`. The labels were only tags;
+  the `mutaba3a-pg-drill-*` name is what the drill and teardown match on.
+- Teardown, and the drill's own cleanup, list the instance first and skip one that was never created, instead of
+  a delete that Cloud SQL answers with PERMISSION_DENIED. If the list fails, the delete is tried as before.
+
+### Technical
+- 3 tests in `server/src/scripts/__tests__/restore-drill.test.ts`: no alpha/beta-only flag in the dry run; teardown
+  skips a missing instance and deletes an existing one (fake gcloud). Every other flag was checked by hand against
+  the installed `gcloud … --help`. Runbook §9 records the run.
+
+## [Unreleased] - 2026-10-23 — `make release server` reminds you when the restore drill is due (MUT-327)
+
+**Why:** a backup is only proven by restoring it. Basel chose to re-run the restore drill against production every
+60 days, and wanted a reminder that can't be forgotten. `make release server` already prints the operator steps still
+owed, so the drill joins that list. A reminder, never a gate.
+
+### Added
+- `scripts/before-release.sh server` reads the newest `| Drill date (UTC) |` row under the pilot runbook's "Drill
+  results" heading. None yet, or more than 60 days old, adds an open operator step naming the date and how many days
+  ago. `RESTORE_DRILL_RUNBOOK` and `BEFORE_RELEASE_TODAY` override the file and today's date for tests.
+- 9 tests in `scripts/__tests__/before-release.test.ts`.
+
+### Changed
+- Pilot runbook: §8 says every 60 days and how the reminder works; §10's row is now `Drill date (UTC)`, and each drill
+  adds its own block, newest first. Only that row counts, so the CMEK cutover's results (also in §10) don't reset it.
+- Pilot runbook: the second §10, "Retire a currency" (MUT-388), is now §11, and is in the contents. ADR-166's and the
+  MUT-388 design's references follow.
 
 ## [Unreleased] - 2026-10-22 — Log Owed income and expenses with a future date (MUT-392, ADR-169, API 1.51.0)
 
