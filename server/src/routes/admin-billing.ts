@@ -4,7 +4,7 @@ import type { AppEnv } from '../auth/middleware.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import { billingStatusOf, serializeEntitlement } from '../billing/coverage.js';
-import { BILLING_COUNTRIES, consumerCountryCheck, type BillingCountries } from '../billing/checkout.js';
+import { consumerCountryCheck, type BillingCountries } from '../billing/checkout.js';
 import type { CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
 import { StripeGatewayError } from '../billing/stripe/gateway.js';
 import { ownedProfilesOf } from '../personal-profile.js';
@@ -40,14 +40,14 @@ export interface AdminBillingOptions {
   countries: BillingCountries;
 }
 
-export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOptions = { checkout: null, countries: BILLING_COUNTRIES }): OpenAPIHono<AppEnv> {
+export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOptions): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
-  /** A customer's tax-ID count, or null when Stripe isn't configured or can't answer (the check then says it can't tell). */
+  /** A customer's tax IDs plus a Checkout tax number on its invoices (review D3), or null when Stripe can't be asked. */
   async function taxIdsOf(customer: string): Promise<number | null> {
     if (!options.checkout) return null;
     try {
-      return await options.checkout.taxIdCount(customer);
+      return await options.checkout.businessTaxIdCount(customer);
     } catch (err) {
       if (err instanceof StripeGatewayError) return null;
       throw err;

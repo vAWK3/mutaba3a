@@ -7,7 +7,7 @@
  *      a test key only, never printed, never written to disk;
  *   2. a QA database on the test Postgres (`mutaba3a-test-pg`), migrated;
  *   3. the sandbox catalog: the Freelancer product (metadata tier=freelancer) and the four GA test prices by lookup
- *      key; the Customer Portal's default configuration must already exist (pilot-runbook §1.7 step 3a);
+ *      key, VAT-exclusive; the Customer Portal's default configuration must already exist (pilot-runbook §1.7 step 3a);
  *   4. `stripe listen` forwarding to the API, for the webhook secret; the CLI gets the same sandbox key through
  *      STRIPE_API_KEY (never argv), so its own `stripe login`, which expires, is not needed;
  *   5. the API on 127.0.0.1:8790 and the portal (`vite --mode hosted`) on 127.0.0.1:5176, proxying /v1 to it.
@@ -87,7 +87,11 @@ async function ensureCatalog(key) {
   const listed = await fetch(`https://api.stripe.com/v1/prices?${query}`, { headers: { authorization: `Bearer ${key}` } }).then((r) => r.json());
   const have = new Set((listed.data ?? []).map((p) => p.lookup_key));
   for (const p of PRICES.filter((x) => !have.has(x.lookup_key))) {
-    await stripe(key, 'POST', 'prices', { product: PRODUCT_ID, currency: p.currency, unit_amount: String(p.unit_amount), 'recurring[interval]': p.interval, lookup_key: p.lookup_key });
+    await stripe(key, 'POST', 'prices', { product: PRODUCT_ID, currency: p.currency, unit_amount: String(p.unit_amount), 'recurring[interval]': p.interval, lookup_key: p.lookup_key, tax_behavior: 'exclusive' });
+  }
+  // The server sells only VAT-exclusive prices (MUT-362 review); Stripe lets an unspecified one be set once.
+  for (const p of (listed.data ?? []).filter((x) => x.tax_behavior === 'unspecified')) {
+    await stripe(key, 'POST', `prices/${p.id}`, { tax_behavior: 'exclusive' });
   }
   const portal = await stripe(key, 'GET', 'billing_portal/configurations', { is_default: 'true', limit: '1' });
   if (!portal.json.data?.length) {

@@ -10207,7 +10207,7 @@ export interface paths {
         };
         /**
          * The signed-in person's subscription, trial, prices and country rules
-         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for ten minutes; a currency without both prices is null, and a Stripe failure here makes both null rather than failing the read. Person-level: no X-Mutaba3a-Profile.
+         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile.
          */
         get: {
             parameters: {
@@ -10266,7 +10266,7 @@ export interface paths {
         put?: never;
         /**
          * Open Stripe Checkout for the Freelancer plan
-         * @description Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) only in a country open to consumers. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns.
+         * @description Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) only in a country open to consumers. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns.
          */
         post: {
             parameters: {
@@ -10308,7 +10308,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT or BILLING_ACCOUNT_NEEDS_HELP */
+                /** @description CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, or BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -10326,7 +10326,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description RATE_LIMITED: more than ten billing sessions a minute; `Retry-After` says when */
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -10335,7 +10335,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time; try again shortly */
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
                 502: {
                     headers: {
                         [name: string]: unknown;
@@ -10414,7 +10414,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT or BILLING_ACCOUNT_NEEDS_HELP */
+                /** @description CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, or BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -10432,7 +10432,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description RATE_LIMITED: more than ten billing sessions a minute; `Retry-After` says when */
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -10441,7 +10441,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time; try again shortly */
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
                 502: {
                     headers: {
                         [name: string]: unknown;
@@ -15567,6 +15567,7 @@ export interface components {
                 consumer: string[];
                 customTaxId: string[];
             };
+            coveredProfileIds: string[];
         };
         BillingRedirect: {
             /** Format: uri */

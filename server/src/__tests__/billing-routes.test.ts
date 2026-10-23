@@ -9,7 +9,7 @@ import { MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
- * MUT-362 (plan §2.4, ADR-169): GET /v1/billing, POST /v1/billing/checkout-session and POST /v1/billing/portal-session
+ * MUT-362 (plan §2.4, ADR-170): GET /v1/billing, POST /v1/billing/checkout-session and POST /v1/billing/portal-session
  * through the real app and session auth, with Stripe's write door faked. Person-level: no X-Mutaba3a-Profile anywhere.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,23 +55,30 @@ async function person(h: Harness) {
   const headers = { cookie: `${COOKIE}=${token}`, ...SAME_ORIGIN };
   const get = () => h.app.request('/v1/billing', { headers });
   const post = (path: string, body: unknown) => h.app.request(path, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  return { get, post, email, userId: created.user.id as string, personalId: created.personalProfile.id as string };
+  return { get, post, email, password: created.password as string, userId: created.user.id as string, personalId: created.personalProfile.id as string };
+}
+
+/** The person's session headers again (the harness's `person` keeps them private). */
+async function sessionHeaders(h: Harness, u: { email: string }) {
+  const res = await h.app.request('/v1/sessions', { method: 'POST', headers: { 'content-type': 'application/json', ...SAME_ORIGIN }, body: JSON.stringify({ email: u.email, password: (u as Loose).password }) });
+  const token = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
+  return { cookie: `${COOKIE}=${token}`, ...SAME_ORIGIN };
 }
 
 const checkoutBody = (over: Record<string, unknown> = {}) => ({ interval: 'month', country: 'IL', buyer: 'person', returnPath: '/', ...over });
 const CHECKOUT = '/v1/billing/checkout-session';
 const PORTAL = '/v1/billing/portal-session';
 
-async function linkSubscription(h: Harness, userId: string, status = 'active', lookupKey = 'freelancer_list_monthly_ils') {
-  const customer = `cus_${++seq}`;
+async function linkSubscription(h: Harness, userId: string, status = 'active', lookupKey = 'freelancer_list_monthly_ils', periodEnd = new Date(NOW.getTime() + 20 * DAY), existing?: string) {
+  const customer = existing ?? `cus_${++seq}`;
   await h.store.billing.saveAccount({ stripeCustomerId: customer, userId, country: 'IL', currency: 'ILS', at: NOW, linkAudit: [] });
   await h.store.billing.saveSubscription({
     stripeCustomerId: customer,
-    stripeSubscriptionId: `sub_${seq}`,
+    stripeSubscriptionId: `sub_${++seq}`,
     tier: 'FREELANCER',
     organizationId: null,
     status,
-    currentPeriodEnd: new Date(NOW.getTime() + 20 * DAY),
+    currentPeriodEnd: periodEnd,
     cancelAtPeriodEnd: false,
     priceLookupKey: lookupKey,
     founderUntil: null,
@@ -98,7 +105,37 @@ describe('GET /v1/billing (MUT-362)', () => {
       trial: null,
       catalog: { ILS: { month: 3900, year: 39000 }, USD: { month: 1000, year: 10000 } },
       countries: { consumer: ['IL', 'GB'], customTaxId: ['IL', 'JO'] },
+      coveredProfileIds: [u.personalId],
     });
+  });
+
+  it('a live subscription wins over a cancelled one with a later period end (review: never strand a payer)', async () => {
+    const h = harness();
+    const u = await person(h);
+    const customer = await linkSubscription(h, u.userId, 'canceled', 'freelancer_list_yearly_ils', new Date(NOW.getTime() + 300 * DAY));
+    await linkSubscription(h, u.userId, 'active', 'freelancer_list_monthly_ils', new Date(NOW.getTime() + 5 * DAY), customer);
+    expect((await read(await u.get())).subscription).toMatchObject({ status: 'active', interval: 'month' });
+  });
+
+  it('lists only the profiles a payment would cover: the ones the person created (review D4, TD-193)', async () => {
+    const h = harness();
+    const owner = await person(h);
+    const coOwner = await person(h);
+    const shared = await h.app.request('/v1/profiles', {
+      method: 'POST',
+      headers: { ...(await sessionHeaders(h, owner)), 'content-type': 'application/json', 'idempotency-key': randomUUID() },
+      body: JSON.stringify({ name: 'Shared Studio', type: 'BUSINESS', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }),
+    });
+    expect(shared.status).toBe(201);
+    const sharedId = (await read(shared)).id as string;
+    const coOwned = await h.app.request(`/admin/v1/users/${coOwner.userId}/memberships`, {
+      method: 'POST',
+      headers: { 'x-admin-token': ADMIN_TOKEN, 'content-type': 'application/json' },
+      body: JSON.stringify({ organizationId: sharedId, role: 'OWNER' }),
+    });
+    expect(coOwned.status).toBe(201);
+    expect((await read(await owner.get())).coveredProfileIds.sort()).toEqual([owner.personalId, sharedId].sort());
+    expect((await read(await coOwner.get())).coveredProfileIds).toEqual([coOwner.personalId]);
   });
 
   it('shows the trial: its start, end (day 14) and lock date (day 30)', async () => {
@@ -152,7 +189,7 @@ describe('POST /v1/billing/checkout-session (MUT-362)', () => {
     const res = await u.post(CHECKOUT, checkoutBody({ returnPath: `/p/${u.personalId}` }));
     expect(res.status).toBe(200);
     expect(await read(res)).toEqual({ url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
-    expect(h.checkout.calls).toEqual(['prices', `customer:${u.userId}`, 'checkout:cus_new_1']);
+    expect(h.checkout.calls).toEqual(['prices', `customer:${u.userId}`, 'subscriptions:cus_new_1', 'expire:cus_new_1', 'checkout:cus_new_1']);
     const params = h.checkout.checkoutSessions[0]!;
     expect(params).toMatchObject({
       customer: 'cus_new_1',
@@ -170,7 +207,54 @@ describe('POST /v1/billing/checkout-session (MUT-362)', () => {
     const u = await person(h);
     const customer = await linkSubscription(h, u.userId, 'canceled');
     expect((await u.post(CHECKOUT, checkoutBody())).status).toBe(200);
-    expect(h.checkout.calls).toEqual(['prices', `checkout:${customer}`]);
+    expect(h.checkout.calls).toEqual(['prices', `subscriptions:${customer}`, `expire:${customer}`, `checkout:${customer}`]);
+  });
+
+  it('asks Stripe itself: a paid subscription the webhook hasn’t mirrored yet is ALREADY_SUBSCRIBED (review: no double charge)', async () => {
+    const h = harness();
+    const u = await person(h);
+    const customer = await linkSubscription(h, u.userId, 'canceled');
+    h.checkout.stripeSubscriptions.set(customer, [{ status: 'active', currentPeriodEnd: new Date(NOW.getTime() + 30 * DAY) }]);
+    const res = await u.post(CHECKOUT, checkoutBody());
+    expect(res.status).toBe(409);
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'ALREADY_SUBSCRIBED' } });
+    expect(h.checkout.checkoutSessions).toEqual([]);
+  });
+
+  it('a second Checkout expires the first, so two tabs can’t both be paid', async () => {
+    const h = harness();
+    const u = await person(h);
+    expect((await u.post(CHECKOUT, checkoutBody())).status).toBe(200);
+    expect((await u.post(CHECKOUT, checkoutBody())).status).toBe(200);
+    expect(h.checkout.expiredCheckouts).toBe(1);
+    expect(h.checkout.openCheckouts.get('cus_new_1')).toBe(1);
+  });
+
+  it('subscribing during the trial keeps the rest of it: Stripe first charges on the trial end (review D2)', async () => {
+    const h = harness();
+    const u = await person(h);
+    await h.store.billing.setTrialStart(u.userId, new Date(NOW.getTime() - 4 * DAY));
+    expect((await u.post(CHECKOUT, checkoutBody())).status).toBe(200);
+    expect(h.checkout.checkoutSessions[0]!.subscription_data).toEqual({
+      metadata: { mutaba3a_user_id: u.userId },
+      trial_end: Math.floor((NOW.getTime() + 10 * DAY) / 1000),
+    });
+  });
+
+  it('a person whose only profile is covered by Malafat is COVERED_BY_MALAFAT, before any Stripe call', async () => {
+    const h = harness();
+    const u = await person(h);
+    await h.store.integrations.connect({ organizationId: u.personalId, provider: 'MALAFAT', externalTenantId: `t-${++seq}`, displayName: 'Firm', connectedByApiKeyId: null, at: NOW } as Loose);
+    const res = await u.post(CHECKOUT, checkoutBody());
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'COVERED_BY_MALAFAT' } });
+    expect(h.checkout.calls).toEqual([]);
+  });
+
+  it('a stale mirror row (period over by more than the grace) no longer blocks paying', async () => {
+    const h = harness();
+    const u = await person(h);
+    await linkSubscription(h, u.userId, 'active', 'freelancer_list_monthly_ils', new Date(NOW.getTime() - 9 * DAY));
+    expect((await u.post(CHECKOUT, checkoutBody())).status).toBe(200);
   });
 
   it.each([
@@ -230,14 +314,60 @@ describe('POST /v1/billing/checkout-session (MUT-362)', () => {
     expect((await read(offRes)).error.code).toBe('BILLING_NOT_CONFIGURED');
   });
 
-  it('Stripe failing is 502 STRIPE_UNAVAILABLE, logged without the request', async () => {
+  it('Stripe failing is 502 STRIPE_UNAVAILABLE, logged by ids only (never the person’s email)', async () => {
     const h = harness();
     const u = await person(h);
     h.checkout.failNext();
     const res = await u.post(CHECKOUT, checkoutBody());
     expect(res.status).toBe(502);
     expect((await read(res)).error.code).toBe('STRIPE_UNAVAILABLE');
-    expect(h.logs.join('\n')).not.toContain('rk_');
+    const warn = h.logs.find((l) => l.includes('"level":40') && l.includes('Stripe billing call failed'));
+    expect(warn).toContain(u.userId);
+    expect(h.logs.join('\n')).not.toContain(u.email);
+  });
+
+  it('a refusal Stripe will repeat (a key missing D2’s scopes, a bad request) is BILLING_ACCOUNT_NEEDS_HELP, logged as an error', async () => {
+    const h = harness();
+    const u = await person(h);
+    h.checkout.failPermissionNext();
+    const res = await u.post(CHECKOUT, checkoutBody());
+    expect(res.status).toBe(409);
+    expect((await read(res)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'BILLING_ACCOUNT_NEEDS_HELP' } });
+    expect(h.logs.some((l) => l.includes('"level":50') && l.includes('StripePermissionError'))).toBe(true);
+  });
+
+  it('a missing object that isn’t the customer (a price deleted in the dashboard) never blames the customer link', async () => {
+    const h = harness();
+    const u = await person(h);
+    await linkSubscription(h, u.userId, 'canceled');
+    h.checkout.failNext('resource_missing', 'line_items[0][price]');
+    const res = await u.post(CHECKOUT, checkoutBody());
+    expect((await read(res)).error).toMatchObject({ details: { reason: 'BILLING_ACCOUNT_NEEDS_HELP' } });
+    expect(h.logs.some((l) => l.includes('relink'))).toBe(false);
+  });
+
+  it('a failed audit after Stripe made the session still hands the person their Checkout (logged)', async () => {
+    const h = harness();
+    const u = await person(h);
+    const append = h.store.audit.append.bind(h.store.audit);
+    h.store.audit.append = async () => {
+      throw new Error('audit store down');
+    };
+    const res = await u.post(CHECKOUT, checkoutBody());
+    h.store.audit.append = append;
+    expect(res.status).toBe(200);
+    expect(h.logs.some((l) => l.includes('"level":50') && l.includes('billing audit'))).toBe(true);
+  });
+
+  it('refuses both POSTs from another site, before any Stripe call', async () => {
+    const h = harness();
+    const u = await person(h);
+    const cookie = (await sessionHeaders(h, u)).cookie;
+    for (const path of [CHECKOUT, PORTAL]) {
+      const res = await h.app.request(path, { method: 'POST', headers: { cookie, origin: 'https://evil.example', 'content-type': 'application/json' }, body: JSON.stringify(checkoutBody()) });
+      expect(res.status, path).toBe(403);
+    }
+    expect(h.checkout.calls).toEqual([]);
   });
 
   it('a linked customer deleted in Stripe is 409 BILLING_ACCOUNT_NEEDS_HELP with an ids-only warn (eng review D7)', async () => {
@@ -275,6 +405,15 @@ describe('GET /admin/v1/billing/status country check (MUT-362 eng review D9)', (
     h.checkout.taxIds.set(customer, 0);
     expect((await status(h, u.email)).countryCheck).toEqual([{ stripeCustomerId: customer, country: 'JO', openToConsumers: false, taxIds: 0, flagged: true }]);
     h.checkout.taxIds.set(customer, 1);
+    expect((await status(h, u.email)).countryCheck).toEqual([{ stripeCustomerId: customer, country: 'JO', openToConsumers: false, taxIds: 1, flagged: false }]);
+  });
+
+  it('a Jordanian business’s Checkout tax number counts as its tax ID (review D3: no false flag)', async () => {
+    const h = harness();
+    const u = await person(h);
+    const customer = await linkSubscription(h, u.userId);
+    await h.store.billing.saveAccount({ stripeCustomerId: customer, userId: null, country: 'JO', currency: null, at: NOW, linkAudit: [] });
+    h.checkout.taxNumbers.set(customer, '516000000');
     expect((await status(h, u.email)).countryCheck).toEqual([{ stripeCustomerId: customer, country: 'JO', openToConsumers: false, taxIds: 1, flagged: false }]);
   });
 
@@ -320,5 +459,15 @@ describe('POST /v1/billing/portal-session (MUT-362)', () => {
     expect((await read(await u.post(PORTAL, { returnPath: '/' }))).error).toMatchObject({ details: { reason: 'BILLING_ACCOUNT_NEEDS_HELP' } });
     h.checkout.failNext();
     expect((await u.post(PORTAL, { returnPath: '/' })).status).toBe(502);
+  });
+
+  it('shares the ten-a-minute limit with Checkout', async () => {
+    const h = harness();
+    const u = await person(h);
+    await linkSubscription(h, u.userId);
+    const statuses: number[] = [];
+    for (let i = 0; i < 11; i++) statuses.push((await u.post(PORTAL, { returnPath: '/' })).status);
+    expect(statuses.slice(0, 10).every((s) => s === 200)).toBe(true);
+    expect(statuses[10]).toBe(429);
   });
 });

@@ -407,7 +407,7 @@ export const BillingOverviewSchema = z
   .object({
     /** False on a server without Stripe keys: the portal shows "Subscriptions open soon" (design review DR5). */
     configured: z.boolean(),
-    /** The person's latest subscription (by period end), or null if they never had one. */
+    /** The subscription Billing shows: the most current open one (live first), else the latest that ended; null if none. */
     subscription: z
       .object({
         tier: z.enum(['FREELANCER', 'FIRM']),
@@ -425,6 +425,8 @@ export const BillingOverviewSchema = z
     catalog: z.object({ ILS: CatalogPairSchema, USD: CatalogPairSchema }),
     /** billing-countries.json: where a person may buy without a tax ID, and where a business types its number. */
     countries: z.object({ consumer: z.array(z.string()), customTaxId: z.array(z.string()) }),
+    /** The profiles a payment would cover: the ones the person created (a co-owner's shared profile is its creator's, TD-193). */
+    coveredProfileIds: z.array(z.string().uuid()),
   })
   .openapi('BillingOverview');
 

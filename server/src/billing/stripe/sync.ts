@@ -2,6 +2,8 @@ import type Stripe from 'stripe';
 import type { Logger } from '../../logger.js';
 import { ownedProfilesOf, profileOwnerOf } from '../../personal-profile.js';
 import type { AuditEventInput, BillingSyncSource, LedgerStore, SaveBillingAccountConflict, SaveBillingSubscriptionOutcome } from '../../repositories/ports.js';
+import { BUSINESS_TAX_NUMBER_KEY } from '../checkout.js';
+import type { CheckoutGateway } from './checkout-gateway.js';
 import { StripeGatewayError, type Fetched, type StripeGateway } from './gateway.js';
 import { customerIdOf, mirrorOf, stateOf, subscriptionIdOfInvoice, type MirrorError, type MirrorNote } from './mirror.js';
 
@@ -76,6 +78,8 @@ export interface StripeSyncDependencies {
   webhookGateway: StripeGateway;
   /** D7: patient (10 s, two retries). */
   reconcileGateway: StripeGateway;
+  /** MUT-362 review D3: the write door, to print a Checkout business tax number on the customer's invoices. */
+  invoiceTaxNumbers?: Pick<CheckoutGateway, 'setInvoiceTaxNumber'>;
   logger: Logger;
   now: () => Date;
   /** Defaults to RECONCILE_TIME_BUDGET_MS; tests pass a small one. */
@@ -238,6 +242,24 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
     return { result: 'processed', codes: saved.conflict ? [saved.conflict] : [] };
   }
 
+  /**
+   * MUT-362 review D3: a business tax number typed on Checkout lives only on the session; copy it to the customer's
+   * invoice fields so it prints on every invoice. A failed write is an error, so Stripe redelivers and it's tried again.
+   */
+  async function copyTaxNumber(session: Stripe.Checkout.Session, synced: { result: 'noop' | 'processed' | 'error'; codes: SyncCode[] }) {
+    const value = session.custom_fields?.find((f) => f.key === BUSINESS_TAX_NUMBER_KEY)?.text?.value?.trim();
+    const customer = session.customer ? customerIdOf(session.customer) : null;
+    if (!value || !customer || !deps.invoiceTaxNumbers) return synced;
+    try {
+      await deps.invoiceTaxNumbers.setInvoiceTaxNumber(customer, value);
+      return synced;
+    } catch (err) {
+      if (!(err instanceof StripeGatewayError)) throw err;
+      deps.logger.warn({ stripeCustomerId: customer, code: err.code, stripeRequestId: err.requestId }, 'Checkout tax number not copied to the customer; Stripe will redeliver');
+      return { result: 'error' as const, codes: [...synced.codes, 'STRIPE_TAX_NUMBER_NOT_SAVED' as const] };
+    }
+  }
+
   async function dispatch(event: Stripe.Event, requestId: string | null): Promise<{ result: 'noop' | 'processed' | 'error'; codes: SyncCode[] }> {
     const context = (linkHint: string | null): SyncContext => ({ linkHint, source: 'webhook', eventId: event.id, requestId });
     const sync = async (id: string, linkHint: string | null = null) => {
@@ -251,7 +273,8 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
         const id = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
         // A Payment Link takes client_reference_id from its URL: anyone could name anyone. Only a session the server
         // created (MUT-362) may link by it; otherwise the customer's metadata decides.
-        return sync(id, session.payment_link ? null : (session.client_reference_id ?? null));
+        const synced = await sync(id, session.payment_link ? null : (session.client_reference_id ?? null));
+        return synced.result === 'error' ? synced : copyTaxNumber(session, synced);
       }
       case 'invoice.paid':
       case 'invoice.payment_failed': {

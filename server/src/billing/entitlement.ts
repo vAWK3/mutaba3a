@@ -144,7 +144,7 @@ function bestSubscription(subscriptions: readonly SubscriptionFact[]): Subscript
 }
 
 /** Past the period end plus PERIOD_GRACE_DAYS: Stripe would have renewed or ended it by now, so the row is stale. */
-function periodOver(subscription: SubscriptionFact, now: Date): boolean {
+export function periodOver(subscription: Pick<SubscriptionFact, 'currentPeriodEnd'>, now: Date): boolean {
   return addDays(subscription.currentPeriodEnd, PERIOD_GRACE_DAYS) <= now;
 }
 

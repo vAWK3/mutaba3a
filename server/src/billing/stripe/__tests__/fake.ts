@@ -138,8 +138,14 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     return this;
   }
 
-  failNext(code: string | null = null): void {
-    this.failures.push(new StripeGatewayError({ code, type: code === null ? 'StripeAPIError' : 'StripeInvalidRequestError', requestId: 'req_fake', transient: code === null }));
+  /** A transient API error by default; with a code, Stripe's invalid-request error (with `param` when it names one). */
+  failNext(code: string | null = null, param: string | null = code === 'resource_missing' ? 'customer' : null): void {
+    this.failures.push(new StripeGatewayError({ code, type: code === null ? 'StripeAPIError' : 'StripeInvalidRequestError', requestId: 'req_fake', transient: code === null, param }));
+  }
+
+  /** The next call fails as a key without the right permission would (a deploy that skipped D2). */
+  failPermissionNext(): void {
+    this.failures.push(new StripeGatewayError({ code: null, type: 'StripePermissionError', requestId: 'req_fake', transient: true }));
   }
 
   /** The next price lookup fails (transiently); `failNext` leaves lookups alone, as the real gateway's cache would. */
@@ -168,6 +174,7 @@ export class FakeCheckoutGateway implements CheckoutGateway {
   async createCheckoutSession(params: Stripe.Checkout.SessionCreateParams): Promise<{ url: string }> {
     this.take(`checkout:${String(params.customer)}`);
     this.checkoutSessions.push(params);
+    this.openCheckouts.set(String(params.customer), (this.openCheckouts.get(String(params.customer)) ?? 0) + 1);
     return { url: `https://checkout.stripe.com/c/pay/cs_test_${this.checkoutSessions.length}` };
   }
 
@@ -177,12 +184,38 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     return { url: `https://billing.stripe.com/p/session/test_${this.portalSessions.length}` };
   }
 
+  /** Stripe's own subscriptions per customer (review: Checkout asks Stripe, not only the mirror). */
+  readonly stripeSubscriptions = new Map<string, { status: string; currentPeriodEnd: Date }[]>();
+  /** Open Checkout sessions per customer, and the ones expired. */
+  readonly openCheckouts = new Map<string, number>();
+  expiredCheckouts = 0;
+
+  async subscriptionsOf(customer: string): Promise<{ status: string; currentPeriodEnd: Date }[]> {
+    this.take(`subscriptions:${customer}`);
+    return this.stripeSubscriptions.get(customer) ?? [];
+  }
+
+  async expireOpenCheckouts(customer: string): Promise<number> {
+    this.take(`expire:${customer}`);
+    const open = this.openCheckouts.get(customer) ?? 0;
+    this.openCheckouts.set(customer, 0);
+    this.expiredCheckouts += open;
+    return open;
+  }
+
   /** Tax IDs per customer (MUT-362 D9); unknown customers have none. */
   readonly taxIds = new Map<string, number>();
+  /** Invoice tax numbers per customer (review D3). */
+  readonly taxNumbers = new Map<string, string>();
 
-  async taxIdCount(customer: string): Promise<number> {
+  async businessTaxIdCount(customer: string): Promise<number> {
     this.take(`taxIds:${customer}`);
-    return this.taxIds.get(customer) ?? 0;
+    return (this.taxIds.get(customer) ?? 0) + (this.taxNumbers.has(customer) ? 1 : 0);
+  }
+
+  async setInvoiceTaxNumber(customer: string, value: string): Promise<void> {
+    this.take(`taxNumber:${customer}`);
+    this.taxNumbers.set(customer, value);
   }
 
   private take(call: string): void {

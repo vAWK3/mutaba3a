@@ -92,7 +92,7 @@ function endsByPeriodEnd(sub: Stripe.Subscription, periodEnd: Date | null): bool
 }
 
 /** Since 2025-03-31.basil the period lives on each item; the latest end is when the subscription runs out. */
-function periodEndOf(sub: Stripe.Subscription): Date | null {
+export function periodEndOf(sub: Stripe.Subscription): Date | null {
   const ends = sub.items.data.map((item) => item.current_period_end).filter((end): end is number => typeof end === 'number');
   const legacy = (sub as unknown as { current_period_end?: number }).current_period_end;
   const end = ends.length > 0 ? Math.max(...ends) : typeof legacy === 'number' ? legacy : null;
