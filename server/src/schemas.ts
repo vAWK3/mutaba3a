@@ -456,6 +456,11 @@ export const StripeWebhookResponseSchema = z
   .object({ received: z.literal(true), result: z.enum(['ignored', 'duplicate', 'noop', 'processed', 'error']) })
   .openapi('StripeWebhookResponse');
 
+/** MUT-359: what the Resend webhook did with a verified event. */
+export const EmailWebhookResponseSchema = z
+  .object({ received: z.literal(true), result: z.enum(['suppressed', 'ignored']) })
+  .openapi('EmailWebhookResponse');
+
 /** MUT-360: one reconcile run. Always 200; `errors` lists what needs the operator (subscriptionId null: listing failed). */
 export const StripeReconcileSummarySchema = z
   .object({

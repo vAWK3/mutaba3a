@@ -20,7 +20,7 @@ const MAIL: OutgoingMail = {
 };
 
 function stubFetch(response: Response | Error) {
-  return vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => {
+  return vi.fn<typeof fetch>(async () => {
     if (response instanceof Error) throw response;
     return response;
   });

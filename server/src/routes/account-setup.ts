@@ -6,6 +6,9 @@ import { isSamePortalOrigin, requestClientIp, sessionDigest, type SignInThrottle
 import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
+import type { Mailer } from '../email/ports.js';
+import { sendPasswordNotice } from '../email/password-notice.js';
+import type { Logger } from '../logger.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { AccountSetupTokenRecord, AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
 import {
@@ -37,12 +40,15 @@ export interface AccountSetupRouteOptions {
   throttle: SignInThrottle;
   /** MUT-324: the terms a person must accept to finish setting up. */
   terms: CurrentTerms;
+  /** MUT-359: mails "your password is set/changed" after a redeem (never changes the answer). */
+  mailer: Mailer;
+  logger: Logger;
 }
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHono<AppEnv> {
-  const { store, passwordHasher, settings, ipLimiter, throttle, terms } = options;
+  const { store, passwordHasher, settings, ipLimiter, throttle, terms, mailer, logger } = options;
   const app = new OpenAPIHono<AppEnv>();
 
   async function guard(c: Context<AppEnv>): Promise<Date> {
@@ -135,6 +141,12 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       }
       // The database lockout is cleared by the redeem; the in-process sign-in throttle is cleared here, so the sign-in that follows works.
       throttle.clear(normalizeEmail(redeemed.email));
+      // MUT-359 (A5): after the commit, and never able to change this answer. "Set" when the person had no password.
+      await sendPasswordNotice(mailer, logger, { id: person.id, email: redeemed.email, locale: person.locale }, {
+        first: person.passwordHash === null,
+        signInLink: signInLinkOf(settings, c.req.url),
+        requestId: c.get('requestId'),
+      });
       return c.json({ email: redeemed.email }, 200);
     },
   );
@@ -165,4 +177,9 @@ function refusalOf(state: SetupLinkState): SetupLinkRefusal {
 
 function unusable(state: SetupLinkRefusal): ApiError {
   return new ApiError('SETUP_LINK_UNUSABLE', 'This setup link can no longer be used; ask for a new one', { state });
+}
+
+/** MUT-359: where a password notice's "Sign in" goes: the portal's public origin, else this request's own. */
+export function signInLinkOf(settings: Pick<SessionSettings, 'portalOrigin'>, requestUrl: string): string {
+  return `${settings.portalOrigin ?? new URL(requestUrl).origin}/`;
 }

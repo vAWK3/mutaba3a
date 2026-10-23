@@ -22,6 +22,10 @@ import {
 import { staleTerms, termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { buildMe } from './me.js';
+import { signInLinkOf } from './account-setup.js';
+import type { Mailer } from '../email/ports.js';
+import { sendPasswordNotice } from '../email/password-notice.js';
+import type { Logger } from '../logger.js';
 
 /**
  * Sign-in, sign-out and the signed-in person (MUT-38, hosted-portal.md §4, §6).
@@ -39,6 +43,9 @@ export interface SessionRouteOptions {
   ipLimiter: RateLimiter;
   /** MUT-324: the current terms, reported by sign-in's Me and accepted through POST /v1/me/terms-acceptance. */
   terms: CurrentTerms;
+  /** MUT-359: mails "your password was changed" after POST /v1/me/password (never changes the answer). */
+  mailer: Mailer;
+  logger: Logger;
 }
 
 /** Session routes that act on the person rather than an organization: no X-Mutaba3a-Profile. */
@@ -52,7 +59,7 @@ export const ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv> {
-  const { store, passwordHasher, settings, throttle, ipLimiter, terms } = options;
+  const { store, passwordHasher, settings, throttle, ipLimiter, terms, mailer, logger } = options;
   const app = new OpenAPIHono<AppEnv>();
   const cookieName = sessionCookieName(settings.secureCookie);
   const cookieOptions = { path: '/', httpOnly: true, secure: settings.secureCookie, sameSite: 'Strict' } as const;
@@ -224,6 +231,8 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         if (err instanceof StateConflict) throw new ApiError('CURRENT_PASSWORD_WRONG', 'Current password is wrong');
         throw err;
       }
+      // MUT-359 (A5): after the commit, and never able to change this answer.
+      await sendPasswordNotice(mailer, logger, user, { first: false, signInLink: signInLinkOf(settings, c.req.url), requestId: c.get('requestId') });
       return c.body(null, 204);
     },
   );
