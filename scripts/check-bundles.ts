@@ -13,11 +13,19 @@
  * Boot splash (MUT-207): every built entry HTML opens #root with the splash,
  * and its mark, dark mark and stylesheets resolve inside the dist (or are
  * data: URIs).
+ *
+ * Crash reports (MUT-149): the Sentry SDK is in no local build and only in the
+ * portal's lazy chunk; no build carries the contract fixtures or an upload
+ * token, and dist-hosted ships no source map.
+ *
+ * `--dist <dir>` checks one dist only: `deploy.sh` runs `--dist dist-hosted`
+ * right after building the portal it ships (TD-084).
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { HOSTS } from '../config/hosts';
+import { SENTRY_INGEST_ORIGIN } from '../server/src/observability/sentry-ingest';
 import {
   HOSTED_RULES,
   LOCAL_RULES,
@@ -33,16 +41,31 @@ import {
   originsNeedingReview,
   posthogInEntryGraph,
   posthogPrecached,
+  sentryInEntryGraph,
+  sentryLeaks,
+  sentrySecrets,
+  sourceMaps,
   unresolvedUrls,
   type Rule,
 } from './bundle-rules';
+
+const DISTS = ['dist-web', 'dist-desktop', 'dist-hosted'] as const;
+const distFlag = process.argv.indexOf('--dist');
+const only = distFlag === -1 ? null : process.argv[distFlag + 1];
+if (only !== null && !(DISTS as readonly string[]).includes(only)) {
+  console.error(`--dist must be one of ${DISTS.join(', ')}`);
+  process.exit(2);
+}
+/** Whether this run checks `dir`: every dist, or the one `--dist` names. */
+const wanted = (dir: string) => only === null || only === dir;
 
 const TEXT_FILE = /\.(js|mjs|html|css|json|webmanifest)$/;
 const FONT_FILE = /\.(otf|ttf|woff2?)$/;
 const THMANYAH_PINS = 'src/assets/fonts/thmanyah.sha256.json';
 const reviewed = JSON.parse(readFileSync('scripts/bundle-origins.json', 'utf8')) as { local: string[]; hosted: string[] };
 // Our own hosts come from the one hosts config (MUT-326), new and legacy, so moving the domain needs no allowlist edit
-const allowlist = { local: [...reviewed.local, ...HOSTS.allOrigins], hosted: [...reviewed.hosted, ...HOSTS.allOrigins] };
+// The portal's crash reports go to the one ingest host PORTAL_CSP names (MUT-149): the same constant, never a copy
+const allowlist = { local: [...reviewed.local, ...HOSTS.allOrigins], hosted: [...reviewed.hosted, ...HOSTS.allOrigins, SENTRY_INGEST_ORIGIN] };
 
 function allFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -107,19 +130,19 @@ const POSTHOG_LAZY_ONLY: Record<string, string> = {
 function checkPosthog(): string[] {
   const problems: string[] = [];
   for (const [dir, why] of Object.entries(POSTHOG_LAZY_ONLY)) {
-    if (!existsSync(dir)) continue;
+    if (!wanted(dir) || !existsSync(dir)) continue;
     const read = (path: string) => (existsSync(join(dir, path)) ? readFileSync(join(dir, path), 'utf8') : '');
     for (const name of ENTRY_HTML[dir]) {
       for (const path of posthogInEntryGraph(read(name), read)) problems.push(`${dir}/${path}: PostHog is statically reachable from ${name}, ${why}`);
     }
   }
-  if (existsSync('dist-web/sw.js')) {
+  if (wanted('dist-web') && existsSync('dist-web/sw.js')) {
     const read = (path: string) => (existsSync(join('dist-web', path)) ? readFileSync(join('dist-web', path), 'utf8') : '');
     for (const path of posthogPrecached(read('sw.js'), read)) {
       problems.push(`dist-web/${path}: the service worker precaches PostHog, so it would be stored on every local-app device (add it to PWA_WORKBOX.globIgnores)`);
     }
   }
-  if (existsSync('dist-desktop')) {
+  if (wanted('dist-desktop') && existsSync('dist-desktop')) {
     for (const file of files('dist-desktop')) {
       if (POSTHOG_MARKER.test(readFileSync(file, 'utf8'))) problems.push(`${file}: the desktop build must never carry PostHog (ADR-024, ADR-090)`);
     }
@@ -130,7 +153,7 @@ function checkPosthog(): string[] {
 /** ADR-097: the local backend stays a lazy chunk, out of every page a signed-in person loads. */
 function checkLocalBackendLazy(): string[] {
   const dir = 'dist-hosted';
-  if (!existsSync(dir)) return [];
+  if (!wanted(dir) || !existsSync(dir)) return [];
   const read = (path: string) => (existsSync(join(dir, path)) ? readFileSync(join(dir, path), 'utf8') : '');
   const outside = indexedDbOutsideLocalBackend(
     files(dir).filter((file) => file.endsWith('.js')).map((file) => file.slice(dir.length + 1)),
@@ -161,20 +184,45 @@ function check(dir: string, rules: Rule[], origins: string[]): string[] {
   return problems;
 }
 
+/** MUT-149 (ADR-091 am.11): the Sentry SDK, its fixtures, upload tokens and source maps. */
+function checkSentry(): string[] {
+  const problems: string[] = [];
+  for (const dir of DISTS.filter((d) => wanted(d) && existsSync(d))) {
+    for (const file of files(dir)) {
+      const text = readFileSync(file, 'utf8');
+      for (const finding of sentrySecrets(text)) problems.push(`${file}: ${finding.rule} ("${finding.match.slice(0, 12)}…") must never ship (MUT-149 AC8)`);
+      if (dir !== 'dist-hosted' && sentryLeaks(text)) problems.push(`${file}: the Sentry SDK is in a local build; only the portal reports crashes (MUT-149 AC1)`);
+    }
+  }
+  const dir = 'dist-hosted';
+  if (!wanted(dir) || !existsSync(dir)) return problems;
+  const read = (path: string) => (existsSync(join(dir, path)) ? readFileSync(join(dir, path), 'utf8') : '');
+  for (const name of ENTRY_HTML[dir]) {
+    for (const path of sentryInEntryGraph(read(name), read)) problems.push(`${dir}/${path}: the Sentry SDK is statically reachable from ${name}; it loads lazily, signed in only (ADR-097 §10)`);
+  }
+  for (const path of sourceMaps(allFiles(dir).map((file) => relative(dir, file).split(sep).join('/')))) {
+    problems.push(`${dir}/${path}: a source map would ship; the Sentry plugin uploads and deletes them (MUT-149 AC4)`);
+  }
+  return problems;
+}
+
 const problems = [
-  ...check('dist-web', LOCAL_RULES, allowlist.local),
-  ...check('dist-desktop', LOCAL_RULES, allowlist.local),
-  ...check('dist-hosted', HOSTED_RULES, allowlist.hosted),
-  ...['dist-web', 'dist-desktop', 'dist-hosted'].flatMap(checkBrandFonts),
-  ...['dist-web', 'dist-desktop', 'dist-hosted'].flatMap(checkBootSplash),
+  ...(wanted('dist-web') ? check('dist-web', LOCAL_RULES, allowlist.local) : []),
+  ...(wanted('dist-desktop') ? check('dist-desktop', LOCAL_RULES, allowlist.local) : []),
+  ...(wanted('dist-hosted') ? check('dist-hosted', HOSTED_RULES, allowlist.hosted) : []),
+  ...DISTS.filter(wanted).flatMap(checkBrandFonts),
+  ...DISTS.filter(wanted).flatMap(checkBootSplash),
   ...checkPosthog(),
   ...checkLocalBackendLazy(),
+  ...checkSentry(),
 ];
 
 if (problems.length > 0) {
   console.error(`Bundle check failed:\n${problems.map((p) => `  - ${p}`).join('\n')}`);
   process.exit(1);
 }
-console.log(
-  'Bundle check passed: dist-web and dist-desktop carry no portal code; PostHog is unreachable from the local app (lazy landing chunks only, never precached), lazy in the portal, and absent from desktop; dist-hosted opens IndexedDB only from its lazy local backend, loads jszip only on demand, and carries no self-service account door; every dist ships Thmanyah unmodified, preloads no font, resolves every CSS url(), and opens on a boot splash whose assets resolve.',
-);
+if (only !== null) console.log(`Bundle check passed for ${only}.`);
+else
+  console.log(
+    'Bundle check passed: dist-web and dist-desktop carry no portal code; PostHog is unreachable from the local app (lazy landing chunks only, never precached), lazy in the portal, and absent from desktop; dist-hosted opens IndexedDB only from its lazy local backend, loads jszip only on demand, and carries no self-service account door; every dist ships Thmanyah unmodified, preloads no font, resolves every CSS url(), and opens on a boot splash whose assets resolve; Sentry is only in the portal\'s lazy chunk, with no fixtures, token or source map anywhere.',
+  );

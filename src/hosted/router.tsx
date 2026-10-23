@@ -7,6 +7,8 @@ import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './sessio
 import { SessionBridge } from './session/SessionBridge';
 import { useLocalStop } from './session/localStop';
 import { ReloadToContinue } from './pages/auth/BootScreens';
+import { CrashCard } from './components/QueryView';
+import { reportBoundaryError } from './observability/errorReporting';
 import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceivablesPage, pickShellOverlay } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
 import { ClientsPage } from './pages/views/ClientsPage';
@@ -60,6 +62,14 @@ function RootLayout() {
   );
 }
 
+/** MUT-149 design D3: the frame itself crashed (no shell to keep), so the whole page asks for a reload. */
+function FrameCrash() {
+  return <ReloadToContinue stop="CRASH" />;
+}
+
+/** A page inside a profile crashed: the card takes the page's place; the shell and its navigation stay. */
+const PAGE_CRASH = { errorComponent: CrashCard } as const;
+
 export function createPortalRouter(queryClient: QueryClient, history?: RouterHistory) {
   const rootRoute = createRootRoute({ component: RootLayout, notFoundComponent: () => <Navigate to="/" replace /> });
 
@@ -94,6 +104,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   const overviewRoute = createRoute({
     getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
     path: '/',
     validateSearch: parseOverview,
     component: function Overview() {
@@ -103,6 +114,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   const clientsRoute = createRoute({
     getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
     path: '/clients',
     validateSearch: parseClients,
     component: function Clients() {
@@ -112,6 +124,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   const clientRoute = createRoute({
     getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
     path: '/clients/$customerId',
     validateSearch: parseClientDetail,
     component: function Client() {
@@ -122,6 +135,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   const receivablesRoute = createRoute({
     getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
     path: '/receivables',
     validateSearch: parseReceivablesPage,
     component: function Receivables() {
@@ -131,6 +145,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   const paymentsRoute = createRoute({
     getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
     path: '/payments',
     validateSearch: parsePaymentsPage,
     component: function Payments() {
@@ -140,6 +155,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   const documentsRoute = createRoute({
     getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
     path: '/documents',
     validateSearch: parseDocuments,
     component: function Documents() {
@@ -149,6 +165,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   const expensesRoute = createRoute({
     getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
     path: '/expenses',
     validateSearch: parseExpensesPage,
     component: function Expenses() {
@@ -159,6 +176,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
   /** Expenses › Groups (MUT-268, 1A): a tab inside Expenses, so the sidebar's Expenses stays lit. */
   const groupsRoute = createRoute({
     getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
     path: '/expenses/groups',
     validateSearch: parseGroupsPage,
     component: function Groups() {
@@ -168,6 +186,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   const groupRoute = createRoute({
     getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
     path: '/expenses/groups/$groupId',
     validateSearch: parseGroupDetail,
     component: function Group() {
@@ -179,6 +198,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   const conversionsRoute = createRoute({
     getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
     path: '/conversions',
     validateSearch: parseConversionsPage,
     component: function Conversions() {
@@ -196,7 +216,15 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     ]),
   ]);
 
-  return createRouter({ routeTree, history, context: { queryClient }, defaultPreload: false });
+  return createRouter({
+    routeTree,
+    history,
+    context: { queryClient },
+    defaultPreload: false,
+    // MUT-149 (eng R2): the router catches render errors itself, so it reports them, and shows our translated screen
+    defaultErrorComponent: FrameCrash,
+    defaultOnCatch: (error, info) => reportBoundaryError(error, info?.componentStack ?? undefined),
+  });
 }
 
 export type PortalRouter = ReturnType<typeof createPortalRouter>;

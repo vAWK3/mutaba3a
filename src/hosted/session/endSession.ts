@@ -4,6 +4,7 @@ import type { AnyRouter } from '@tanstack/react-router';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useMalafatPortalMoments } from './malafatMoments';
 import { endPortalUsage } from '../analytics/portalAnalytics';
+import { setReporterUser } from '../observability/errorReporting';
 
 /**
  * End the session on this tab (mut-43-auth-states.md E1–E3): drop every cached
@@ -19,5 +20,7 @@ export function endSession(queryClient: QueryClient, router: AnyRouter, search: 
   // MUT-155: sign-out (this tab or another) forgets the usage choice and its random ID, sending
   // nothing; an expired session is the same person, so the choice stays (rule 6, B4)
   if (search.reason === 'signed_out') endPortalUsage();
+  // MUT-149: whoever signs in next is not this person
+  setReporterUser(null);
   void router.navigate({ to: '/sign-in', search, replace: true });
 }

@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-23 — The hosted portal reports crashes to Sentry, signed in only (MUT-149, ADR-091 am.11)
+
+**Why:** MUT-329's pilot release needs "Sentry receives a test event from the portal"; until now a portal crash was a white screen nobody heard about.
+
+### Added
+- `src/hosted/observability/errorReporting.ts` (the gate: remote mode only, early-error queue of 10, chunk-load failure swallowed), `portalSentry.ts` (the lazy SDK chunk: `dropHandled`, user id only, `locale`/`route` read at send time), `LastResortBoundary.tsx` (static ar+en screen above every provider).
+- `src/lib/observability/browserSentry.ts`: the contract's options and MUT-148's scrubber for any browser surface (MUT-150 next). SDK 11's `dataCollection` spells out the contract's no-PII rule.
+- Crash screens: `CrashCard` (inline, `components/QueryView.tsx`), the `CRASH` stop on `ReloadToContinue`, `useFocusOnMount`; router `defaultErrorComponent`/`defaultOnCatch`; `hosted.crash` en/ar.
+- Build: `MUTABA3A_SENTRY_DSN` / `_RELEASE` / `_ENVIRONMENT` hosted-only defines; hidden maps uploaded by `@sentry/vite-plugin` and deleted, with `SENTRY_AUTH_TOKEN` only. `server/src/observability/sentry-ingest.ts` pins the org's ingest host.
+- Server: `PORTAL_CSP` connect-src adds that host only; `*.map` answers 404. API 1.53.0-mut149.
+- `check-bundles`: Sentry markers out of web/desktop and the portal's entry graph; fixtures marker and `sntrys_`/`sntryu_` banned everywhere; no `.map` in dist-hosted; `--dist <dir>`, run by deploy.sh on dist-hosted (TD-084 partly).
+- Release: the Makefile exports the DSN and passes the token (shell, else Keychain) to deploy.sh only; deploy.sh stops on a DSN without the token.
+- Privacy policy (en, ar): the portal is named as a sender.
+- Release-QA: `portal.error-reports` (5 flows, all passing 2026-10-23), `qa/support/sentry.ts` auto fixture; `web.legal.privacy-error-reports` updated.
+
+### Changed
+- `@sentry/react` (unused) replaced by `@sentry/browser` 11.8.0.
+- `HOSTED_RULES` no longer bans `اشترك` (Basel, 2026-10-23): MUT-362's billing copy made `test:bundles` fail on main.
+- A DSN's public key no longer reads as an origin in `extractOrigins`.
+
+**Files:** `src/hosted/observability/**`, `src/lib/observability/**`, `src/hosted/{main,HostedApp,router}.tsx`, `src/hosted/components/{QueryView,focusOnMount}.tsx?`, `src/hosted/pages/auth/BootScreens.tsx`, `src/hosted/shell/HostedShell.tsx`, `src/hosted/session/{endSession,mode}.ts`, `src/hosted/i18n/{en,ar}.json`, `vite.config.ts`, `eslint.config.js`, `scripts/{bundle-rules,check-bundles}.ts`, `scripts/bundle-origins.json`, `server/src/app.ts`, `server/src/observability/sentry-ingest.ts`, `server/scripts/deploy.sh`, `Makefile`, `deploy.env.example`, `src/lib/i18n/translations/{en,ar}/landing.json`, `qa/**`, docs.
 ## [Unreleased] - 2026-10-23 — The landing page, portal, web app and server say MTB3A in English (MUT-402, ADR-173)
 
 **Why:** the service is renamed MTB3A in English and stays متابعة in Arabic (MUT-400). MUT-401 delivered the outlined logotype; this ships it and the copy on the web.

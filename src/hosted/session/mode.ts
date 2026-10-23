@@ -68,6 +68,9 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+/** Called after every mode change in this tab, and in another one while `onModeChangedElsewhere` listens (MUT-149). */
+export const subscribeMode = subscribe;
+
 /**
  * Another tab changed the mode (MUT-286 review): it signed in, or continued
  * on this device. This tab's requests follow the hint at once, so its screen

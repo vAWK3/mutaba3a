@@ -9,6 +9,11 @@
  */
 /** Valid in shape, never a real project key: QA builds run the analytics code, and qa/support/posthog.ts answers it. */
 export const QA_POSTHOG_KEY = 'phc_releaseQaDummyKeyNeverSent000000';
+/**
+ * MUT-149: a dummy key on the org's real ingest host (the build refuses any other host): the portal's crash
+ * reporting runs, and qa/support/sentry.ts answers every Sentry request, so nothing is ever sent.
+ */
+export const QA_SENTRY_DSN = 'https://00000000000000000000000000000000@o4512029835526144.ingest.de.sentry.io/1';
 
 // Heap cap for the QA dev servers. Node's default lets each one grow to ~4 GB, and a long recorded run
 // alongside Playwright and an iOS Simulator can push a laptop into swap until the disk fills (it happened
@@ -40,6 +45,8 @@ export default {
         '!src/hooks/useTauriUpdater.ts',
         // Only the hosted portal renders it; it is in the portal app's watch instead.
         '!src/components/filters/SegmentedTabs.tsx',
+        // MUT-149: only the portal reports crashes until the landing does (MUT-150); in the portal app's watch instead.
+        '!src/lib/observability/**',
       ],
       baseURL: 'http://localhost:5173',
       attachURL: 'http://localhost:5173',
@@ -58,12 +65,12 @@ export default {
       // so its last release is the last `make release server`: api-v<version>.
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
       // The portal's own code, plus the shared token and font files it renders with (MUT-102)
-      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/components/filters/SegmentedTabs.tsx', '!src/hosted/**/__tests__/**', '!src/**/*.test.{ts,tsx}'],
+      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/components/filters/SegmentedTabs.tsx', 'src/lib/observability/**', '!src/hosted/**/__tests__/**', '!src/**/*.test.{ts,tsx}'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
       attachURL: 'http://127.0.0.1:5175',
-      start: { cmd: `${HEAP_CAPPED} npm run dev:hosted`, env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY } },
+      start: { cmd: `${HEAP_CAPPED} npm run dev:hosted`, env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_SENTRY_DSN: QA_SENTRY_DSN } },
       ready: 'http://127.0.0.1:5175',
       personas: {},
     },

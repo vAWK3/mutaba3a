@@ -66,6 +66,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/components/drawers/BusinessProfileDrawer.tsx': { rtl: 1 }, // the Arabic business name input
   // F: a legal text in the language a /terms?lang link names, when it isn't the page's (MUT-324 review fix 1)
   'src/pages/landing/LegalPage.tsx': { ltr: 1, rtl: 1 },
+  // G: the portal's last-resort crash screen, above the language provider: Arabic, then English (MUT-149 design D8)
+  'src/hosted/observability/LastResortBoundary.tsx': { ltr: 1, rtl: 1 },
 };
 
 /**

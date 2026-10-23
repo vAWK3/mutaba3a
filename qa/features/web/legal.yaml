@@ -48,9 +48,9 @@ features:
       - The Arabic policy shows, reading right to left, and the site stays in English
       - An unknown language shows the site's own language
   - id: privacy-error-reports
-    title: The privacy policy says our servers and the phone apps send error reports, what a report holds, that Sentry keeps them in the EU, and that the free apps never send them (MUT-148, MUT-151, ADR-091)
+    title: The privacy policy says our servers, the hosted portal and the phone apps send error reports, what a report holds, that Sentry keeps them in the EU, and that the free apps never send them (MUT-148, MUT-149, MUT-151, ADR-091)
     tier: secondary
-    legacy: [MUT-148, MUT-151]
+    legacy: [MUT-148, MUT-149, MUT-151]
     paths:
       - src/pages/landing/PrivacyPolicyPage.tsx
       - src/lib/i18n/translations/en/landing.json
@@ -59,8 +59,8 @@ features:
       - Open the privacy policy in English, then in Arabic
     expect:
       - An "Error reports" section follows "Anonymous usage counts" and says a report never holds amounts, names, notes, contact details, request contents, an IP address or anything typed
-      - It says our servers and the iPhone and Android apps send reports, and that the apps never attach screenshots; the portal and the website aren't named as senders yet
-      - '"What reaches the network" says the mobile apps connect to Sentry for error reports'
+      - It says our servers, the hosted portal (when a page crashes) and the iPhone and Android apps send reports, and that the apps never attach screenshots; the website isn't named as a sender yet
+      - '"What reaches the network" says the mobile apps connect to Sentry for error reports, and the hosted portal sends its error reports to Sentry'
       - '"No ads, no tracking" no longer says the apps use no crash reporting, and says the free Mac, Windows and browser apps never send reports'
       - '"Who else handles your data" names Sentry, hosted in the EU'
       - The Arabic page says the same, right to left

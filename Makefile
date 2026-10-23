@@ -61,6 +61,12 @@ export GCP_PROJECT_ID TF_STATE_BUCKET GCP_REGION ARTIFACT_REPO
 export IMAGE_TAG PROXY_PORT AUTO_APPROVE
 # MUT-155: the portal's PostHog key reaches `npm run build:hosted` inside deploy.sh
 export MUTABA3A_POSTHOG_KEY
+# MUT-149: and the portal's Sentry DSN. The upload token is not exported here: release-server passes it to deploy.sh only
+export MUTABA3A_SENTRY_DSN
+# Where release-server finds the source-map upload token when SENTRY_AUTH_TOKEN isn't set (release-kit Keychain rule).
+# Looked up only when the portal has a DSN: with no DSN the build needs no token.
+SENTRY_TOKEN_KEYCHAIN_SERVICE := release-kit
+SENTRY_TOKEN_KEYCHAIN_ACCOUNT := barmajiyat/SENTRY_AUTH_TOKEN
 
 C_BOLD  := \033[1m
 C_DIM   := \033[2m
@@ -323,6 +329,15 @@ release-server: preflight-server
 	printf '\n$(C_DIM)deploy.sh will: build dist-hosted → push the image → prisma migrate deploy\n  → terraform apply → smoke. Migrations are forward-only.$(C_OFF)\n'; \
 	scripts/ci-reminder.sh server; \
 	scripts/before-release.sh server; \
+	token="$${SENTRY_AUTH_TOKEN:-}"; \
+	if [ -n "$${MUTABA3A_SENTRY_DSN:-}" ] && [ -z "$$token" ]; then \
+	  token=$$(security find-generic-password -s '$(SENTRY_TOKEN_KEYCHAIN_SERVICE)' -a '$(SENTRY_TOKEN_KEYCHAIN_ACCOUNT)' -w 2>/dev/null || true); \
+	  if [ -z "$$token" ]; then \
+	    printf '\n$(C_YEL)MUTABA3A_SENTRY_DSN is set but there is no upload token (SENTRY_AUTH_TOKEN, or Keychain %s / %s): the portal would ship unreadable crash stacks. Nothing was committed or pushed.$(C_OFF)\n' '$(SENTRY_TOKEN_KEYCHAIN_SERVICE)' '$(SENTRY_TOKEN_KEYCHAIN_ACCOUNT)'; \
+	    if [ $$bumped = yes ]; then printf '$(C_DIM)The version bump is still in your working tree — undo it or re-run.$(C_OFF)\n'; fi; \
+	    exit 1; \
+	  fi; \
+	fi; \
 	if ! scripts/confirm.sh 'Deploy to Cloud Run now?'; then \
 	  if [ $$bumped = yes ]; then printf '$(C_YEL)The version bump is still in your working tree — undo it or re-run.$(C_OFF)\n'; fi; \
 	  exit 0; \
@@ -343,7 +358,7 @@ release-server: preflight-server
 	  printf '$(C_CYAN)▶ pushing %s so %s is reachable by everyone else$(C_OFF)\n' '$(RELEASE_BRANCH)' "$$sha"; \
 	  git push origin $(RELEASE_BRANCH); \
 	fi; \
-	(cd server && ./scripts/deploy.sh) && \
+	(cd server && SENTRY_AUTH_TOKEN="$$token" ./scripts/deploy.sh) && \
 	scripts/tag-release.sh api "$$version" --push && \
 	$(CI_REMINDER) server
 

@@ -2150,7 +2150,19 @@ Since MUT-325 its Restore confirm also says when the file came from an account (
 **Purpose**: `request()`'s routing and error handling without reading the body, for responses read as text or bytes; `request()` is `send()` + JSON.
 
 ### ReloadToContinue — `src/hosted/pages/auth/BootScreens.tsx`
-**Purpose**: the D1 screen when another tab saved this device's records with a newer build (`ApiError` code `LOCAL_FORMAT_TOO_NEW`), shown by `AuthGate`.
+**Purpose**: the D1 screen when another tab saved this device's records with a newer build (`ApiError` code `LOCAL_FORMAT_TOO_NEW`), shown by `AuthGate`. MUT-149: `stop="CRASH"` is also the full-page crash screen (the router's `defaultErrorComponent`, and `PortalProviders`' `ErrorBoundary` fallback); each stop names its copy and button key in `STOP_COPY`. The title takes focus on mount. Tests: `observability/__tests__/crashScreens.test.tsx`.
+
+### CrashCard — `src/hosted/components/QueryView.tsx` (new, MUT-149)
+**Purpose**: a page inside a profile crashed. The router shows it in place of the page (`errorComponent` on every profile child route), so the shell stays; leaving the page clears it. `Unreachable`'s markup, one Reload, `hosted.crash` copy, never the error's text; the title takes focus. Tests: `observability/__tests__/crashScreens.test.tsx`.
+
+### useFocusOnMount — `src/hosted/components/focusOnMount.ts` (new, MUT-149)
+**Purpose**: returns a ref that is focused once on mount, for a screen that replaces the page (give the element `tabIndex={-1}`). Used by `ReloadToContinue` and `CrashCard`.
+
+### LastResortBoundary — `src/hosted/observability/LastResortBoundary.tsx` (new, MUT-149)
+**Purpose**: the portal's outermost boundary in `main.tsx`, above every provider: reuses `ErrorBoundary` with a static Arabic-then-English screen read straight from the dictionaries, and reports through the crash gate. Tests: `observability/__tests__/LastResortBoundary.test.tsx`.
+
+### browserSentryOptions — `src/lib/observability/browserSentry.ts` (new, MUT-149)
+**Purpose**: Sentry init options for a browser surface (`portal`, `landing`): the ADR-091 contract's SDK options, `dataCollection` off, and `beforeSend`/`beforeBreadcrumb` through MUT-148's `scrubEvent`; takes the surface's `dropEvent` and lazy `tags`. Types-only SDK import. Tests: `src/lib/observability/__tests__/browserSentry.test.ts`.
 
 ### ProjectPicker `canCreate` / `currency` — `src/hosted/components/ProjectPicker.tsx` (extended, MUT-318)
 **Purpose**: the portal's matter field offers "Add matter: «name»" when `canCreate` (`canAddClient(profile)`), a client is chosen (`customerId`) and the client has no matter of that name; picking creates it in `currency` through `useCreateProject` (`data/projectQueries.ts`) and picks it. With no client chosen: no Add row, a polite hint (`describedBy`), and each row names its client. Used by IncomeCaptureDrawer and ExpenseDrawer. Tests: `components/__tests__/ProjectPicker.test.tsx`.

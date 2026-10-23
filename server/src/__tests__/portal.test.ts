@@ -101,7 +101,7 @@ describe('portal serving — app association enabled', () => {
       expect(ready.status).toBe(200);
 
       const expectedCsp =
-        "default-src 'self'; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
+        "default-src 'self'; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com https://o4512029835526144.ingest.de.sentry.io; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
       expect(aasa.headers.get('content-security-policy')).toBe(expectedCsp);
     } finally {
       await rm(distDir, { recursive: true, force: true });
@@ -191,14 +191,29 @@ describe('portal serving — enabled', () => {
     expect((await read(res)).error.code).toBe('NOT_FOUND');
   });
 
+  // MUT-149 AC4 (D6 layer 3): source maps are uploaded to Sentry, never served, even if one reached the dist
+  it('answers 404 for a source map, even when the file exists', async () => {
+    await writeFile(join(distDir, 'assets', 'app-abc123.js.map'), '{"version":3,"sources":["src/hosted/main.tsx"]}');
+    const res = await app.request('/assets/app-abc123.js.map');
+    expect(res.status).toBe(404);
+    expect(await res.text()).not.toContain('sources');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('still serves the asset next to a source map', async () => {
+    const res = await app.request('/assets/app-abc123.js');
+    expect(res.status).toBe(200);
+  });
+
   it('adds the CSP header to both API and portal responses', async () => {
     const api = await app.request('/health');
     const portalPage = await app.request('/');
     // connect-src includes the GCS signed-URL host: receipt uploads (MUT-44)
     // PUT bytes directly to it via fetch(), which connect-src governs — unlike
-    // downloads, which are top-level navigations and need no entry here.
+    // downloads, which are top-level navigations and need no entry here. MUT-149
+    // adds the Sentry org's EU ingest host, and nothing else (AC5).
     const expected =
-      "default-src 'self'; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
+      "default-src 'self'; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com https://o4512029835526144.ingest.de.sentry.io; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
     expect(api.headers.get('content-security-policy')).toBe(expected);
     expect(portalPage.headers.get('content-security-policy')).toBe(expected);
   });

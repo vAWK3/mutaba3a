@@ -15,6 +15,7 @@ import { CURRENT_TERMS, type CurrentTerms } from './legal.js';
 import type { CachedFxRates } from './fx-rates.js';
 import type { Logger } from './logger.js';
 import { NOOP_REPORTER, type ErrorReporter } from './observability/reporter.js';
+import { SENTRY_INGEST_ORIGIN } from './observability/sentry-ingest.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
 import type { LedgerStore } from './repositories/ports.js';
 import type { AttachmentStorage } from './attachments/storage.js';
@@ -154,8 +155,11 @@ function isLegacyPageVisit(method: string, path: string): boolean {
 // top-level navigations instead, so they need no entry here. It also names
 // PostHog's EU ingestion host for the portal's opt-in usage counts (MUT-155,
 // ADR-090): the SDK loads from the portal's own bundle, so script-src stays 'self'.
-const PORTAL_CSP =
-  "default-src 'self'; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
+// And the Sentry org's EU ingest host, for the portal's crash reports (MUT-149 AC5).
+const PORTAL_CSP = `default-src 'self'; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com ${SENTRY_INGEST_ORIGIN}; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'`;
+
+/** A source map: uploaded to Sentry at build time, never served (MUT-149 AC4, D6 layer 3). */
+const isSourceMap = (path: string) => path.endsWith('.map');
 
 function defaultSessionSettings(): SessionSettings {
   return {
@@ -170,7 +174,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.52.1-mut402';
+export const API_VERSION = '1.53.0-mut149';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -459,6 +463,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     // instead of being cached as a broken response for a year.
     app.use('*', async (c, next) => {
       if (isPortalExcludedPath(c.req.path)) return next();
+      if (isSourceMap(c.req.path)) return c.notFound();
       let foundUnderAssets = false;
       const result = await serveStatic({
         root: distDir,

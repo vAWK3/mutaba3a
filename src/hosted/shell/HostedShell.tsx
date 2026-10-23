@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n/core';
 import { syncPortalUsage } from '../analytics/portalAnalytics';
+import { setReporterUser } from '../observability/errorReporting';
 import type { HostedProfile } from '../api/client';
 import { Wordmark } from '../components/Brand';
 import { UsagePrompt } from '../components/UsagePrompt';
@@ -43,6 +44,10 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
   // MUT-155: another account's choice is reset; a stored "on" starts counting this visit. Never signed out (brief §10).
   useEffect(() => {
     if (!local) void syncPortalUsage(userId);
+  }, [userId, local]);
+  // MUT-149: crash reports carry the internal user id, nothing else about the person (AC3, eng D5)
+  useEffect(() => {
+    if (!local) setReporterUser(userId);
   }, [userId, local]);
 
   return (

@@ -79,6 +79,38 @@ describe('portal lint guards', () => {
     }, 30_000);
   });
 
+  // MUT-149 (ADR-091 am.11): the browser Sentry setup reuses MUT-148's contract and scrubber, and nothing else of the server.
+  describe('crash reporting', () => {
+    const SHARED = 'src/lib/observability/__probe__.ts';
+    const RULE = '@typescript-eslint/no-restricted-imports';
+
+    it('lets the shared browser setup import the contract and the scrubber, and the SDK types', async () => {
+      const code =
+        "import type { BrowserOptions } from '@sentry/browser';\nimport { SENTRY_RULES } from '../../../server/src/observability/sentry-rules';\nimport { scrubEvent } from '../../../server/src/observability/sentry-scrub';\nexport const x: [BrowserOptions, unknown, unknown] = [{}, SENTRY_RULES, scrubEvent];\n";
+      expect(await rulesFor(code, SHARED)).not.toContain(RULE);
+    }, 30_000);
+
+    it.each([
+      ["import { createSentryReporter } from '../../../server/src/observability/sentry-node';"],
+      ["import { createApp } from '../../../server/src/app';"],
+      ["import * as Sentry from '@sentry/browser';"],
+    ])('forbids the shared browser setup %s', async (line) => {
+      expect(await rulesFor(`${line}\nexport const x = 1;\n`, SHARED)).toContain(RULE);
+    }, 30_000);
+
+    it.each([['src/hosted/pages/__probe__.tsx'], ['src/hosted/observability/errorReporting.ts'], ['src/hosted/analytics/__probe__.ts'], ['src/pages/landing/__probe__.tsx'], ['src/components/__probe__.tsx']])(
+      'loads the SDK only from the portal lazy chunk, not %s',
+      async (path) => {
+        expect(await rulesFor("import * as Sentry from '@sentry/browser';\nexport const x = Sentry;\n", path)).toContain(RULE);
+      },
+      30_000,
+    );
+
+    it('lets the portal lazy chunk load the SDK', async () => {
+      expect(await rulesFor("import * as Sentry from '@sentry/browser';\nexport const x = Sentry;\n", 'src/hosted/observability/portalSentry.ts')).not.toContain(RULE);
+    }, 30_000);
+  });
+
   it('leaves the local app alone', async () => {
     expect(await rulesFor("export const n = Number('1');\n", 'src/lib/__probe__.ts')).not.toContain('no-restricted-syntax');
   }, 30_000);

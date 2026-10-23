@@ -1,5 +1,5 @@
 {
-  "$comment": "Origins each build may reference (hosted-portal.md §8; MUT-43). Most are library error links, XML namespaces and the app's own known services. A new origin fails `npm run test:bundles` until it is reviewed and added here. The *.posthog.com, sentry.io and yandex.com entries are strings inside posthog-js (MUT-154/155): the landing's lazy chunk and the portal only ever send to eu.i.posthog.com, external script loading is off, and check-bundles separately proves PostHog is never statically reachable from the local app's entry. stuk.github.io is a jszip documentation link inside an error message; the portal loads jszip only for Your data's records zip (MUT-287). Our own hosts are not listed: check-bundles adds every origin config/hosts.json names (MUT-326). The Malafat OAuth client identity origin is allowed only inside .well-known/oauth-client.json (bundle-rules FILE_SCOPED_ORIGINS, MUT-387), never here: it is a fixed literal that must not follow the config, and must not open the rest of the bundle to that host.",
+  "$comment": "Origins each build may reference (hosted-portal.md §8; MUT-43). Most are library error links, XML namespaces and the app's own known services. A new origin fails `npm run test:bundles` until it is reviewed and added here. The *.posthog.com, sentry.io and yandex.com entries are strings inside posthog-js (MUT-154/155): the landing's lazy chunk and the portal only ever send to eu.i.posthog.com, external script loading is off, and check-bundles separately proves PostHog is never statically reachable from the local app's entry. stuk.github.io is a jszip documentation link inside an error message; the portal loads jszip only for Your data's records zip (MUT-287). Our own hosts are not listed: check-bundles adds every origin config/hosts.json names (MUT-326). docs.sentry.io is a documentation link inside @sentry/browser, in the portal's lazy crash-reporting chunk only (MUT-149); the chunk sends only to the org's ingest host, which check-bundles adds from server/src/observability/sentry-ingest.ts, the same constant PORTAL_CSP names. The Malafat OAuth client identity origin is allowed only inside .well-known/oauth-client.json (bundle-rules FILE_SCOPED_ORIGINS, MUT-387), never here: it is a fixed literal that must not follow the config, and must not open the rest of the bundle to that host.",
   "local": [
     "http://127.0.0.1:14100",
     "http://127.0.0.1:14101",
@@ -45,6 +45,7 @@
   ],
   "hosted": [
     "http://json-schema.org",
+    "https://docs.sentry.io",
     "http://localhost",
     "http://www.w3.org",
     "http://yandex.com",
