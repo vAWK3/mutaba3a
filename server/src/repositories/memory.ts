@@ -7,6 +7,7 @@ import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js
 import type {
   BillingAccountRecord,
   BillingRepository,
+  EmailRepository,
   BillingSubscriptionRecord,
   SaveBillingAccountConflict,
   EntitlementGrantRecord,
@@ -257,6 +258,9 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly billingSubs = new Map<string, BillingSubscriptionRecord>();
   private readonly grants = new Map<string, EntitlementGrantRecord>();
   private readonly trialStarts = new Map<string, Date>();
+  /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
+  private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED'; createdAt: Date }>();
+  private readonly emailSuppressions = new Map<string, { reason: string; eventId: string; createdAt: Date }>();
   /** MUT-360: Stripe webhook events by id (processedAt null until handled), also outside the snapshot. */
   private readonly stripeEvents = new Map<string, { type: string; receivedAt: Date; processedAt: Date | null; error: string | null }>();
 
@@ -1929,6 +1933,41 @@ export class MemoryLedgerStore implements LedgerStore {
       const row = this.expReceipts.get(id);
       if (!row || row.organizationId !== organizationId || row.status !== 'READY' || row.deletedAt || !row.storageKey) return null;
       return { storageKey: row.storageKey, mimeType: row.mimeType, sizeBytes: row.sizeBytes };
+    },
+  };
+
+  /** MUT-359. Synchronous inside each method, so concurrent claims of one key resolve to exactly one claim. */
+  readonly email: EmailRepository = {
+    isSuppressed: async (email) => this.emailSuppressions.has(email),
+    suppress: async ({ email, reason, eventId, at }) => {
+      if (this.emailSuppressions.has(email)) return { created: false };
+      this.emailSuppressions.set(email, { reason, eventId, createdAt: at });
+      return { created: true };
+    },
+    claimDelivery: async (input) => {
+      const existing = this.emailDeliveries.get(input.keyDigest);
+      if (existing && (existing.status === 'SENT' || (existing.status === 'PENDING' && existing.createdAt >= input.staleBefore))) return { status: 'duplicate' };
+      const counted = [...this.emailDeliveries.entries()]
+        .filter(([key, row]) => key !== input.keyDigest && row.status !== 'FAILED' && row.createdAt >= input.since && row.createdAt <= input.at)
+        .map(([, row]) => row);
+      if (counted.length >= input.limit.total) return { status: 'capped', scope: 'global' };
+      if (counted.filter((row) => row.recipientDigest === input.recipientDigest).length >= input.limit.perRecipient) return { status: 'capped', scope: 'recipient' };
+      const id = existing?.id ?? randomUUID();
+      this.emailDeliveries.set(input.keyDigest, { id, recipientDigest: input.recipientDigest, status: 'PENDING', createdAt: input.at });
+      return { status: 'claimed', id };
+    },
+    finishDelivery: async (id, outcome) => {
+      for (const row of this.emailDeliveries.values()) if (row.id === id) row.status = 'providerId' in outcome ? 'SENT' : 'FAILED';
+    },
+    pruneDeliveries: async (before) => {
+      let removed = 0;
+      for (const [key, row] of this.emailDeliveries) {
+        if (row.createdAt < before) {
+          this.emailDeliveries.delete(key);
+          removed++;
+        }
+      }
+      return removed;
     },
   };
 

@@ -1721,6 +1721,59 @@ export interface BillingRepository {
   pruneStripeEvents(before: Date): Promise<number>;
 }
 
+// ---- MUT-359: transactional mail (ADR-159 §5) -------------------------------
+
+export type EmailSuppressionReason = 'HARD_BOUNCE' | 'COMPLAINT';
+
+export interface EmailSuppressionInput {
+  /** normalizeEmail()'d. */
+  email: string;
+  reason: EmailSuppressionReason;
+  /** The svix-id of the webhook delivery that suppressed it. */
+  eventId: string;
+  at: Date;
+}
+
+export interface ClaimDeliveryInput {
+  /** sha256 hex of the caller's idempotency key. */
+  keyDigest: string;
+  /** sha256 hex of the normalized recipient: counts per address without storing it. */
+  recipientDigest: string;
+  template: string;
+  locale: UserLocale;
+  at: Date;
+  /** Start of the counting window (24 h before `at`). Rows after `at` never count. */
+  since: Date;
+  /** A PENDING claim created before this is a crashed send and may be claimed again. */
+  staleBefore: Date;
+  /** `total`: rows in the window this claim may not reach (the mailer passes the cap less the reserve for non-security mail). */
+  limit: { total: number; perRecipient: number };
+}
+
+export type ClaimDeliveryResult =
+  | { status: 'claimed'; id: string }
+  | { status: 'duplicate' }
+  | { status: 'capped'; scope: 'global' | 'recipient' };
+
+/**
+ * MUT-359: the send log behind the caps and idempotency (D2, D16), and the suppression list the Resend webhook
+ * writes (D10). Holds digests, never an address or a body, except the suppression list, which must name addresses.
+ */
+export interface EmailRepository {
+  isSuppressed(email: string): Promise<boolean>;
+  /** Keeps the first row for an address (a redelivered or later event changes nothing). */
+  suppress(input: EmailSuppressionInput): Promise<{ created: boolean }>;
+  /**
+   * Claims a send. A SENT key, or a PENDING one newer than `staleBefore`, is a duplicate; a FAILED or stale PENDING
+   * one is claimed again with `createdAt = at`. Then the window's non-FAILED rows are counted, globally and for the
+   * recipient. No lock: one instance (TD-017), and an overshoot of a mail or two during a deploy is harmless.
+   */
+  claimDelivery(input: ClaimDeliveryInput): Promise<ClaimDeliveryResult>;
+  finishDelivery(id: string, outcome: { providerId: string; at: Date } | { error: string; at: Date }): Promise<void>;
+  /** Deletes send-log rows created before `before`; returns how many. */
+  pruneDeliveries(before: Date): Promise<number>;
+}
+
 export interface LedgerStore {
   organizations: OrganizationRepository;
   apiKeys: ApiKeyRepository;
@@ -1761,6 +1814,8 @@ export interface LedgerStore {
   recordsExport: RecordsExportRepository;
   /** MUT-358: billing state; `/v1/me` reads it (`sessionOnly`), the operator and Stripe write it. */
   billing: BillingRepository;
+  /** MUT-359: the mail send log and suppression list; the mailer and the Resend webhook use the unguarded store. */
+  email: EmailRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------

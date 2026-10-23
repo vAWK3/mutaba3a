@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { KeyScope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
@@ -16,6 +17,7 @@ import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision }
 import type {
   SaveBillingAccountConflict,
   BillingRepository,
+  EmailRepository,
   TermsAcceptanceInput,
   TermsAcceptanceRecord,
   AccountSetupRepository,
@@ -1895,6 +1897,47 @@ export class PrismaLedgerStore implements LedgerStore {
       });
     },
     pruneStripeEvents: async (before) => (await this.prisma.stripeEvent.deleteMany({ where: { receivedAt: { lt: before } } })).count,
+  };
+
+  /**
+   * MUT-359 (D2). No lock: production runs one instance (TD-017), so two claims racing past the count can overshoot
+   * a cap by a mail or two during a deploy, which is harmless for an abuse cap. A concurrent claim of the same key
+   * loses on the unique keyDigest and is answered as a duplicate.
+   */
+  readonly email: EmailRepository = {
+    isSuppressed: async (email) => (await this.prisma.emailSuppression.count({ where: { email } })) > 0,
+    suppress: async ({ email, reason, eventId, at }) => {
+      const { count } = await this.prisma.emailSuppression.createMany({ data: [{ email, reason, eventId: eventId.slice(0, 100), createdAt: at }], skipDuplicates: true });
+      return { created: count > 0 };
+    },
+    claimDelivery: async (input) => {
+      const existing = await this.prisma.emailDelivery.findUnique({ where: { keyDigest: input.keyDigest }, select: { id: true, status: true, createdAt: true } });
+      if (existing && (existing.status === 'SENT' || (existing.status === 'PENDING' && existing.createdAt >= input.staleBefore))) return { status: 'duplicate' };
+      const window = { createdAt: { gte: input.since, lte: input.at }, status: { not: 'FAILED' as const }, keyDigest: { not: input.keyDigest } };
+      if ((await this.prisma.emailDelivery.count({ where: window })) >= input.limit.total) return { status: 'capped', scope: 'global' };
+      if ((await this.prisma.emailDelivery.count({ where: { ...window, recipientDigest: input.recipientDigest } })) >= input.limit.perRecipient) return { status: 'capped', scope: 'recipient' };
+      const row = { recipientDigest: input.recipientDigest, template: input.template, locale: input.locale, status: 'PENDING' as const, providerId: null, error: null, createdAt: input.at, finishedAt: null };
+      if (existing) {
+        // Re-claim only the row as it was read: a concurrent re-claim changes status or createdAt first and wins.
+        const { count } = await this.prisma.emailDelivery.updateMany({ where: { id: existing.id, status: existing.status, createdAt: existing.createdAt }, data: row });
+        return count === 1 ? { status: 'claimed', id: existing.id } : { status: 'duplicate' };
+      }
+      const id = randomUUID();
+      try {
+        await this.prisma.emailDelivery.create({ data: { id, keyDigest: input.keyDigest, ...row } });
+      } catch (err) {
+        if (isUniqueViolation(err)) return { status: 'duplicate' };
+        throw err;
+      }
+      return { status: 'claimed', id };
+    },
+    finishDelivery: async (id, outcome) => {
+      await this.prisma.emailDelivery.update({
+        where: { id },
+        data: 'providerId' in outcome ? { status: 'SENT', providerId: outcome.providerId.slice(0, 100), finishedAt: outcome.at } : { status: 'FAILED', error: outcome.error.slice(0, 200), finishedAt: outcome.at },
+      });
+    },
+    pruneDeliveries: async (before) => (await this.prisma.emailDelivery.deleteMany({ where: { createdAt: { lt: before } } })).count,
   };
 
   readonly entries: EntriesRepository = {
