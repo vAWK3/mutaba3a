@@ -137,3 +137,45 @@ Business / product impact
 - Strangers can create an account and anyone can recover a password without Basel: the GA promise of MUT-322.
 - Unblocks MUT-367 (review queue) and MUT-368 (portal pages); recovery helps pilot users as soon as mail is live.
 - Off by default (switch + noop mailer): merging changes nothing in production until the end-of-run keys.
+
+## 10. Eng review (plan-eng-review, unattended; findings folded in)
+
+Scope Challenge: ~20 changed files and 3 new modules (`self-service.ts`, `turnstile.ts`, `routes/self-service.ts`), all
+required by the ticket's scope list; no smaller arrangement keeps the ACs. **Scope accepted as-is.** Outside voice:
+not run in this unattended pass (no Codex CLI configured for the run); the independent read happens at qa-reconcile's code review.
+
+| # | Finding | Disposition |
+|---|---|---|
+| R1 | [P1] (9/10) Postgres can't use an enum value added by `ALTER TYPE … ADD VALUE` in the same transaction, and the migration's CHECK names `'SIGNUP'`. | Accepted: the CHECKs compare `purpose::text`, so the new value is never used as an enum in that transaction. |
+| R2 | [P1] (9/10) `src/hosted/api/schema.d.ts` is generated from the contract (`check-hosted-types.ts`); `SetupLinkPurpose` gains `SIGNUP` and `SetupPage.tsx:145` types `purpose: 'SETUP' \| 'RESET'`, so root typecheck breaks. | Accepted: regenerate the types and widen the prop; a SIGNUP link shows the `setup` copy until MUT-368 writes its own (no SIGNUP link can exist while the switch is off). |
+| R3 | [P2] (8/10) The floor must not use the injectable `now` (tests freeze it; a frozen clock would wait forever or never). | Accepted (D8): `performance.now()` behind an injectable `sleep`/`clock`. |
+| R4 | [P2] (8/10) A send slower than the floor makes that branch measurably slower. | Accepted: log `warn` with the overshoot; the answer stays 202. |
+| R5 | [P2] (7/10) 24 h address windows held in memory grow with distinct addresses. | Accepted as bounded: the per-IP budget caps new keys per address; pruned each minute. Shared store stays TD-017. |
+| R6 | [P2] (8/10) Advisory-lock key collisions only serialize unrelated emails; never wrong. | Accepted: two-key form `pg_advisory_xact_lock(366, hashtext(email))`. |
+| R7 | [P3] (7/10) `account-exists` can be sent to any existing address 5×/day by someone holding Turnstile tokens. | Accepted by ADR-159 (the per-address limit is the bound). |
+
+Test plan (every AC to a named test; written first):
+- `server/src/auth/__tests__/self-service.test.ts`: `signupLinkState`, `recoveryPurposeOf`, `signupAccountOutcome`, `answerNoEarlierThan`.
+- `server/src/auth/__tests__/turnstile.test.ts`: test secrets answer locally (pass/fail/spent, no fetch); real secret → siteverify body (secret, response, remoteip, idempotency_key); fails closed on `success:false`, non-200, timeout, network error, bad JSON, wrong action.
+- `server/src/__tests__/routes-self-service.test.ts`: A1 (three addresses, same status/body, each ≥ floor, outbox differs), A2 (create → one user + one personal profile + trial + emailVerifiedAt; second use 410 used; SIGNUP needs currency/timezone 422; stale terms 409; sign-in works), A3 (recovery changes nothing until redeem; redeem revokes sessions, clears lockout; pending account gets SETUP; disabled/unknown nothing), A4 (missing/failed Turnstile → 403, nothing sent; IP 429; address 429), A5 (switch off 404; recovery works), cross-site 403, malformed 422, mail failure still 202.
+- `server/src/repositories/__tests__/store-contract-signup.ts` (+ memory and Prisma runners): issue supersedes; redeem creates exactly one user/profile/membership/terms/audit; race of two links → one account; existing user → null and nothing written; expired/used/cancelled → null; mailed redeem sets emailVerifiedAt; prune deletes only stale unredeemed SIGNUP links.
+- `server/src/repositories/__tests__/migration-mut366.test.ts` (test:db): the CHECKs refuse a SIGNUP row with a userId, a SETUP row with an email, an email without a locale.
+- `config.test.ts`: TURNSTILE_SECRET refusals; floors' defaults. `rate-limit.test.ts`: custom window. `no-self-registration.test.ts`: re-pinned.
+- Terraform `tests/email.tftest.hcl`: turnstile secret exists empty; mounted only with mail or signup on; `self_signup_enabled` needs `mailer = "resend"`.
+
+Failure modes: Turnstile down → 403 CHECK_FAILED (fails closed; recovery unavailable while Cloudflare is down, accepted); mail provider down → 202, logged (person retries after 60 s); DB error mid-redeem → transaction rolls back, 500, link still usable; two tabs redeem → one account, other 410. 0 critical gaps.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | not run | parent design MUT-331 approved by Basel |
+| Outside Review | none | Independent 2nd opinion | 0 | skipped | deferred to qa-reconcile code review |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | issues_open | 7 issues, 0 critical gaps (all accepted into the plan) |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | n/a | server-only |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | n/a | |
+
+- **OUTSIDE COVERAGE:** none in this pass (unattended); qa-reconcile runs the independent review.
+- **VERDICT:** ENG reviewed; findings folded into the plan; ready to implement. D1–D18 pending Basel's confirmation.
+
+NO UNRESOLVED DECISIONS
