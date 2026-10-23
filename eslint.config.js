@@ -51,6 +51,17 @@ const STORAGE_SEAM_PATTERNS = [
   },
 ]
 
+/**
+ * MUT-149 (ADR-091 am.11): the Sentry browser SDK loads only in the portal's
+ * lazy crash-reporting chunk, so the local app, desktop and the landing never
+ * carry it. Types stay importable for the shared, pure options builder.
+ */
+const SENTRY_SDK_PATH = {
+  name: '@sentry/browser',
+  allowTypeImports: true,
+  message: 'Only src/hosted/observability/portalSentry.ts loads the Sentry SDK, lazily and signed in only (ADR-091 am.11).',
+}
+
 /** The portal's import bans (MUT-43, hosted-portal.md §8), shared by the portal and its local backend (ADR-097). */
 const PORTAL_RESTRICTED_PATHS = [{ name: 'dexie', message: 'The portal never uses Dexie; local mode stores API-shaped records itself (ADR-097).' }]
 const PORTAL_RESTRICTED_PATTERNS = [
@@ -126,7 +137,7 @@ export default defineConfig([
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/db/**', 'src/hosted/**', 'src/**/__tests__/**', 'src/test/**'],
     rules: {
-      '@typescript-eslint/no-restricted-imports': ['error', { patterns: STORAGE_SEAM_PATTERNS }],
+      '@typescript-eslint/no-restricted-imports': ['error', { paths: [SENTRY_SDK_PATH], patterns: STORAGE_SEAM_PATTERNS }],
     },
   },
   {
@@ -175,8 +186,30 @@ export default defineConfig([
       '@typescript-eslint/no-restricted-imports': [
         'error',
         {
-          paths: [{ name: 'posthog-js', allowTypeImports: true, message: 'src/lib/analytics is shared code: types only from posthog-js (ADR-090).' }],
+          paths: [{ name: 'posthog-js', allowTypeImports: true, message: 'src/lib/analytics is shared code: types only from posthog-js (ADR-090).' }, SENTRY_SDK_PATH],
           patterns: STORAGE_SEAM_PATTERNS,
+        },
+      ],
+    },
+  },
+  {
+    // MUT-149 (ADR-091 am.11, eng D4): the browser Sentry options reuse MUT-148's
+    // contract and scrubber, both pure and Node-free, and nothing else of the
+    // server. The TypeScript variant, so it repeats the storage seam it replaces.
+    files: ['src/lib/observability/**/*.{ts,tsx}'],
+    ignores: ['src/lib/observability/**/__tests__/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [SENTRY_SDK_PATH],
+          patterns: [
+            ...STORAGE_SEAM_PATTERNS,
+            {
+              regex: '(^|/)server/src/(?!observability/(sentry-rules|sentry-scrub)(\\.js)?$)',
+              message: 'The browser Sentry setup imports only the contract and the scrubber from the server (ADR-091 am.6).',
+            },
+          ],
         },
       ],
     },
@@ -193,8 +226,20 @@ export default defineConfig([
         {
           paths: [
             { name: 'posthog-js', allowTypeImports: true, message: 'Only src/hosted/analytics may load PostHog in the portal (ADR-090).' },
+            SENTRY_SDK_PATH,
           ],
         },
+      ],
+    },
+  },
+  {
+    // The portal's lazy crash-reporting chunk (MUT-149): the one file that loads
+    // the Sentry SDK. It keeps the PostHog half of the block above.
+    files: ['src/hosted/observability/portalSentry.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        { paths: [{ name: 'posthog-js', allowTypeImports: true, message: 'Only src/hosted/analytics may load PostHog in the portal (ADR-090).' }] },
       ],
     },
   },
